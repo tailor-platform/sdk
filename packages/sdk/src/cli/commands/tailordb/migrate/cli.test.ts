@@ -2,10 +2,12 @@ import { describe, expect, test } from "vitest";
 import {
   generateCommand,
   migrationCommand,
+  rebaselineCommand,
   scriptCommand,
   setCommand,
   statusCommand,
   syncCommand,
+  testCommand,
   validateCommand,
 } from "./index";
 
@@ -16,12 +18,24 @@ describe("migration CLI commands", () => {
       expect(migrationCommand.description).toContain("migration");
     });
 
-    test.each(["generate", "script", "set", "status", "sync", "validate"])(
+    test.each(["generate", "rebaseline", "script", "set", "status", "sync", "test", "validate"])(
       "should have %s subcommand",
       (subCommand) => {
         expect(migrationCommand.subCommands).toHaveProperty(subCommand);
       },
     );
+  });
+
+  describe("rebaselineCommand", () => {
+    test("should expose the deployment target and confirmation args", () => {
+      expect(rebaselineCommand.name).toBe("rebaseline");
+      const shape = rebaselineCommand.args.shape;
+      expect(shape).toHaveProperty("namespace");
+      expect(shape).toHaveProperty("workspace-id");
+      expect(shape).toHaveProperty("profile");
+      expect(shape).toHaveProperty("config");
+      expect(shape).toHaveProperty("yes");
+    });
   });
 
   describe("generateCommand", () => {
@@ -63,6 +77,7 @@ describe("migration CLI commands", () => {
       expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("no-script");
       expect(shape).toHaveProperty("reason");
+      expect(shape).toHaveProperty("with-test");
     });
   });
 
@@ -101,6 +116,22 @@ describe("migration CLI commands", () => {
         "migration and schema-drift checks used by 'deploy'",
       );
       expect(validateCommand.description).not.toContain("same checks as 'deploy'");
+    });
+  });
+
+  describe("testCommand", () => {
+    test("should expose the migration verification inputs", () => {
+      expect(testCommand.name).toBe("test");
+      expect(testCommand.description).toContain("temporary workspace");
+      expect(testCommand.description).toContain("pending migrations");
+
+      const shape = testCommand.args.shape;
+      expect(shape).toHaveProperty("data");
+      expect(shape).toHaveProperty("target-workspace-id");
+      expect(shape).toHaveProperty("assert");
+      expect(shape).toHaveProperty("assert-namespace");
+      expect(shape).toHaveProperty("machine-user");
+      expect(shape).toHaveProperty("yes");
     });
   });
 });

@@ -116,6 +116,7 @@ const snapshotFixtures = vi.hoisted(() => {
 
   return {
     reconstructSnapshotFromMigrations: baseSnapshot({
+      0: {},
       1: { SalesOrder: salesOrderAfterMigration1, User: userAfterMigration1 },
       5: { User: userAfterMigration5 },
     }),
@@ -219,6 +220,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
         executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        checkpointRepairs: [],
         namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
         migrationFileState: captureMigrationFileState([
           { namespace: "test-ns", migrationsDir: "/test/migrations" },

@@ -48,7 +48,7 @@ A complete inventory management system demonstrating real-world patterns.
 
 **Includes:**
 
-- TailorDB types: User, Product, Category, Order, Inventory, Contact, Notification
+- TailorDB tables: User, Product, Category, Order, Inventory, Contact, Notification
 - Role-based permissions (Manager, Staff)
 - Custom resolver for order registration with inventory updates
 - Executor for inventory threshold monitoring

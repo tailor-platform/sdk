@@ -6,7 +6,7 @@ Auth is a service for configuring authentication and authorization in your Tailo
 
 Auth provides:
 
-- User profile mapping to TailorDB types
+- User profile mapping to TailorDB tables
 - Machine users for service-to-service authentication
 - OAuth 2.0 client configuration
 - Identity provider integration
@@ -68,11 +68,11 @@ export default defineConfig({
 
 ## User Profile
 
-Maps authenticated identities to a TailorDB type:
+Maps authenticated identities to a TailorDB table:
 
 ```typescript
 userProfile: {
-  type: user,              // TailorDB type for user records
+  type: user,              // TailorDB table for user records
   usernameField: "email",  // Field used as username (must be unique)
   attributes: {
     role: true,            // Enable 'role' as a user attribute
@@ -80,7 +80,7 @@ userProfile: {
 },
 ```
 
-Example TailorDB type for user profile:
+Example TailorDB table for user profile:
 
 ```typescript
 // tailordb/user.ts
@@ -93,9 +93,9 @@ export const user = db.table("User", {
 });
 ```
 
-**type**: The TailorDB type that stores user records.
+**type**: The TailorDB table that stores user records.
 
-**namespace** (optional): The TailorDB namespace where the user type is defined. Usually auto-resolved from your `db` configuration, so you don't need to specify it. Required only when multiple TailorDB namespaces exist and the type lives in an external TailorDB:
+**namespace** (optional): The TailorDB namespace where the user table is defined. Usually auto-resolved from your `db` configuration, so you don't need to specify it. Required only when multiple TailorDB namespaces exist and the table lives in an external TailorDB:
 
 ```typescript
 userProfile: {
@@ -105,9 +105,9 @@ userProfile: {
 },
 ```
 
-**usernameField**: The field in the TailorDB type used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
+**usernameField**: The field in the TailorDB table used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 
-**attributes**: Specifies which fields from the TailorDB type are used as user attributes. Set to `true` to enable a field. Machine user definitions must assign values to attributes derived from required fields; attributes derived from optional fields may be omitted (see [Machine Users](#machine-users)). Only fields with ValueOperand types (string, boolean, string[], boolean[]) can be used as attributes. The `id` field and datetime/date/time types are excluded.
+**attributes**: Specifies which fields from the TailorDB table are used as user attributes. Set to `true` to enable a field. Machine user definitions must assign values to attributes derived from required fields; attributes derived from optional fields may be omitted (see [Machine Users](#machine-users)). Only fields with ValueOperand types (string, boolean, string[], boolean[]) can be used as attributes. The `id` field and datetime/date/time types are excluded.
 
 ## Attribute List
 
@@ -122,9 +122,9 @@ userProfile: {
 },
 ```
 
-**attributeList**: An array of field names from the TailorDB type. These fields will be exposed as an ordered list of UUIDs. Only UUID-type fields (non-array) can be included in the attribute list.
+**attributeList**: An array of field names from the TailorDB table. These fields will be exposed as an ordered list of UUIDs. Only UUID-type fields (non-array) can be included in the attribute list.
 
-Example TailorDB type with UUID fields for attribute list:
+Example TailorDB table with UUID fields for attribute list:
 
 ```typescript
 // tailordb/user.ts

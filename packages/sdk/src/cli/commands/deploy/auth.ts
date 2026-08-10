@@ -134,6 +134,12 @@ export async function applyAuth(
     ]);
   };
 
+  const applyUserProfileDeletes = async () => {
+    await Promise.all(
+      changeSet.userProfileConfig.deletes.map((del) => client.deleteUserProfileConfig(del.request)),
+    );
+  };
+
   const applyCreateUpdateDependents = async () => {
     await applyAuthConnections(
       client,
@@ -285,9 +291,7 @@ export async function applyAuth(
     );
 
     // UserProfileConfigs
-    await Promise.all(
-      changeSet.userProfileConfig.deletes.map((del) => client.deleteUserProfileConfig(del.request)),
-    );
+    await applyUserProfileDeletes();
 
     // IdPConfigs
     await Promise.all(
@@ -366,7 +370,6 @@ export async function planAuth(context: PlanContext) {
     planSCIMResources(client, workspaceId, auths, deletedServices),
     planAuthConnections(client, workspaceId, application.name, application.id, auths),
   ]);
-
   return {
     changeSet: {
       service: serviceChangeSet,

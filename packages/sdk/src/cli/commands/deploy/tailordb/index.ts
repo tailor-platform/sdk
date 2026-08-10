@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-import * as fs from "node:fs";
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
@@ -17,6 +15,7 @@ import {
   getNamespacesWithMigrations,
   type NamespaceWithMigrations,
 } from "#/cli/commands/tailordb/migrate/config";
+import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 import {
   applyPreMigrationFieldAdjustments,
   applyPreMigrationIndexAdjustments,
@@ -24,11 +23,11 @@ import {
   buildPreMigrationIndexChangesMap,
   createPreMigrationSnapshotType,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import { fetchRemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
   checkMigrationDiffs,
   formatMigrationCheckResults,
   formatRemoteVerificationResults,
-  getRemoteMigrationNumber,
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
@@ -39,7 +38,6 @@ import {
   assertValidMigrationFiles,
   formatMigrationNumber,
   getLatestMigrationNumber,
-  getMigrationFilePath,
   getMigrationFiles,
   INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
@@ -83,7 +81,10 @@ import type {
   FieldDiffChange,
   TypeScriptsModifiedChange,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
+import type {
+  MigrationCheckpointRepair,
+  PendingMigration,
+} from "#/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
@@ -95,44 +96,13 @@ import type { ApplyPhase, PlanContext } from "../types";
 
 type ValidateAndDetectResult = {
   pendingMigrations: PendingMigration[];
+  checkpointRepairs: MigrationCheckpointRepair[];
   namespacesWithMigrations: NamespaceWithMigrations[];
   migrationFileState: Record<string, string>;
+  migrationHistoryIds: Record<string, string | null>;
 };
 
-const MIGRATION_FILE_KINDS = ["schema", "diff", "migrate", "db"] as const;
-
-/**
- * Capture the migration files that a deployment plan depends on.
- * @param namespacesWithMigrations - Configured migration directories by namespace
- * @returns SHA-256 digest by namespace
- */
-export function captureMigrationFileState(
-  namespacesWithMigrations: ReadonlyArray<NamespaceWithMigrations>,
-): Record<string, string> {
-  const state: Record<string, string> = {};
-  for (const { namespace, migrationsDir } of namespacesWithMigrations.toSorted((a, b) =>
-    a.namespace.localeCompare(b.namespace),
-  )) {
-    const hash = createHash("sha256");
-    const migrationNumbers = [
-      ...new Set(getMigrationFiles(migrationsDir).map(({ number }) => number)),
-    ].toSorted((a, b) => a - b);
-    for (const migrationNumber of migrationNumbers) {
-      for (const kind of MIGRATION_FILE_KINDS) {
-        const filePath = getMigrationFilePath(migrationsDir, migrationNumber, kind);
-        hash.update(`${formatMigrationNumber(migrationNumber)}/${kind}\0`);
-        if (fs.existsSync(filePath)) {
-          hash.update(fs.readFileSync(filePath));
-        } else {
-          hash.update("<missing>");
-        }
-        hash.update("\0");
-      }
-    }
-    state[namespace] = hash.digest("hex");
-  }
-  return state;
-}
+export { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
 
 function migrationFileStatesEqual(
   planned: Readonly<Record<string, string>>,
@@ -170,11 +140,15 @@ export async function validateAndDetectMigrations(
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   let pendingMigrations: PendingMigration[] = [];
+  let checkpointRepairs: MigrationCheckpointRepair[] = [];
+  const migrationHistoryIds = Object.create(null) as Record<string, string | null>;
 
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
     for (const { namespace, migrationsDir } of namespacesWithMigrations) {
       assertValidMigrationFiles(migrationsDir, namespace);
+      migrationHistoryIds[namespace] =
+        reconstructSnapshotFromMigrations(migrationsDir)?.rebaseline?.historyId ?? null;
     }
 
     // Check for schema diffs if not skipped
@@ -203,6 +177,11 @@ export async function validateAndDetectMigrations(
         config,
         tailorDBInputs,
       );
+      checkpointRepairs = remoteVerificationResults.flatMap((result) =>
+        result.checkpointRepair
+          ? [{ namespace: result.namespace, ...result.checkpointRepair }]
+          : [],
+      );
       const missingCheckpointResults = remoteVerificationResults.filter(
         (result) => result.checkpointMissingLocal,
       );
@@ -230,14 +209,23 @@ export async function validateAndDetectMigrations(
         logger.info("Use '--no-schema-check' to skip this check (not recommended).");
         throw new Error("Remote schema verification failed");
       }
+      for (const repair of checkpointRepairs) {
+        logger.warn(
+          `Remote migration checkpoint for ${repair.namespace} will be reset to 0000 after confirmation (${formatMigrationNumber(repair.from)} → 0000); the remote schema already matches the local baseline.`,
+        );
+      }
     }
 
     // Detect pending migrations (migration scripts that haven't been executed yet)
+    const currentMigrationOverrides = new Map(
+      checkpointRepairs.map((repair) => [repair.namespace, repair.to]),
+    );
     pendingMigrations = await detectPendingMigrations(
       client,
       workspaceId,
       namespacesWithMigrations,
       config.path,
+      currentMigrationOverrides,
     );
 
     if (pendingMigrations.length > 0) {
@@ -265,14 +253,16 @@ export async function validateAndDetectMigrations(
 
   return {
     pendingMigrations,
+    checkpointRepairs,
     namespacesWithMigrations,
     migrationFileState: captureMigrationFileState(namespacesWithMigrations),
+    migrationHistoryIds,
   };
 }
 
 /**
- * Force each namespace's `sdk-migration` label to the working tree's latest
- * migration number after a create-update apply.
+ * Reconcile each namespace's migration checkpoint and history ID to
+ * the working tree after a create-update apply.
  *
  * This records the initial baseline (`0000`), which is deployed via the normal
  * flow and never bumps the label itself, and keeps the label `<= working_tree_max`
@@ -281,28 +271,45 @@ export async function validateAndDetectMigrations(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
+ * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
  */
 async function reconcileMigrationLabels(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
+  migrationHistoryIds: Readonly<Record<string, string | null>>,
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     if (getMigrationFiles(migrationsDir).length === 0) {
       continue;
     }
     const targetVersion = getLatestMigrationNumber(migrationsDir);
-    const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace).catch(
-      () => null,
-    );
-    if (currentVersion === targetVersion) {
+    const historyId = migrationHistoryIds[namespace] ?? null;
+    const remoteState = await fetchRemoteMigrationState(
+      client,
+      resourceTrn(workspaceId, "tailordb", namespace),
+    ).catch(() => null);
+    const currentVersion = remoteState?.number ?? null;
+    if (remoteState && currentVersion === targetVersion && remoteState.historyId === historyId) {
       continue;
     }
-    await updateMigrationLabel(client, workspaceId, namespace, targetVersion);
-    const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
-    logger.info(
-      `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+    await updateMigrationLabel(
+      client,
+      workspaceId,
+      namespace,
+      targetVersion,
+      historyId ?? undefined,
     );
+    if (remoteState) {
+      const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
+      logger.info(
+        `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+      );
+    } else {
+      logger.info(
+        `Migration label for namespace ${namespace} reconciled to ${formatMigrationNumber(targetVersion)}.`,
+      );
+    }
   }
 }
 
@@ -352,6 +359,23 @@ async function validateTailorDBMigrationState(
   result: TailorDBPlanResult,
 ): Promise<ValidateAndDetectResult> {
   const { context } = result;
+  if (context.migrationTestBaselines) {
+    const currentMigrationFileState = captureMigrationFileState(
+      getNamespacesWithMigrations(context.config, path.dirname(context.config.path)),
+    );
+    if (!migrationFileStatesEqual(context.migrationFileState, currentMigrationFileState)) {
+      throw new Error(
+        "Migration files changed after deployment planning. Run the migration test again to create a fresh plan.",
+      );
+    }
+    return {
+      pendingMigrations: [],
+      checkpointRepairs: [],
+      namespacesWithMigrations: [],
+      migrationFileState: currentMigrationFileState,
+      migrationHistoryIds: {},
+    };
+  }
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
   for (const tailordb of context.tailorDBInputs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
@@ -365,6 +389,24 @@ async function validateTailorDBMigrationState(
     context.noSchemaCheck,
     context.tailorDBInputs,
   );
+  const approvedRepairs = context.checkpointRepairs;
+  const repairPlanChanged =
+    approvedRepairs.length !== validation.checkpointRepairs.length ||
+    validation.checkpointRepairs.some(
+      (repair) =>
+        !approvedRepairs.some(
+          (approved) =>
+            approved.namespace === repair.namespace &&
+            approved.from === repair.from &&
+            approved.fromHistoryId === repair.fromHistoryId &&
+            approved.toHistoryId === repair.toHistoryId,
+        ),
+    );
+  if (repairPlanChanged) {
+    throw new Error(
+      "Remote migration checkpoint repair changed after deployment planning. Run the deployment again to review the updated repair.",
+    );
+  }
   if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
     throw new Error(
       "Migration files changed after deployment planning. Run the deployment again to create a fresh plan.",
@@ -402,10 +444,21 @@ export async function applyTailorDB(
     // Plan-time validation makes dry runs fail fast. Repeat the full validation
     // at the apply boundary because migration files, remote checkpoints, or the
     // remote schema may have changed while waiting for confirmation.
-    const { pendingMigrations, namespacesWithMigrations } = await validateTailorDBMigrationState(
-      client,
-      result,
-    );
+    const { pendingMigrations, checkpointRepairs, namespacesWithMigrations, migrationHistoryIds } =
+      await validateTailorDBMigrationState(client, result);
+
+    for (const repair of checkpointRepairs) {
+      await updateMigrationLabel(
+        client,
+        migrationContext.workspaceId,
+        repair.namespace,
+        repair.to,
+        repair.toHistoryId,
+      );
+      logger.info(
+        `Migration checkpoint for namespace ${repair.namespace} reset: ${formatMigrationNumber(repair.from)} → 0000.`,
+      );
+    }
 
     if (pendingMigrations.length > 0) {
       // Migration flow: Execute each migration sequentially (pre -> script -> post)
@@ -519,16 +572,18 @@ export async function applyTailorDB(
             migrationContext.workspaceId,
             migration.namespace,
             migration.number,
+            migrationHistoryIds[migration.namespace] ?? undefined,
           );
         } catch (error) {
           let remoteMigrationNumber: number | undefined;
           try {
             remoteMigrationNumber =
-              (await getRemoteMigrationNumber(
-                client,
-                migrationContext.workspaceId,
-                migration.namespace,
-              )) ?? undefined;
+              (
+                await fetchRemoteMigrationState(
+                  client,
+                  resourceTrn(migrationContext.workspaceId, "tailordb", migration.namespace),
+                )
+              ).number ?? undefined;
           } catch (readbackError) {
             logger.warn(
               `Could not verify migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} after its update failed: ` +
@@ -682,6 +737,7 @@ export async function applyTailorDB(
         client,
         migrationContext.workspaceId,
         namespacesWithMigrations,
+        migrationHistoryIds,
       );
     }
   } else if (phase === "delete-resources") {
@@ -1259,10 +1315,22 @@ export async function planTailorDB(context: PlanContext) {
     forceApplyAll = false,
   } = context;
   const tailordbs: TailorDBDeployInput[] = [];
+  const migrationTestSnapshots =
+    context.migrationTestSnapshots ??
+    (context.migrationTestBaselines
+      ? new Map(
+          [...context.migrationTestBaselines].map(([namespace, baseline]) => [
+            namespace,
+            baseline.snapshot,
+          ]),
+        )
+      : undefined);
   if (!forRemoval) {
     for (const tailordb of application.tailorDBServices) {
       await tailordb.loadTypes();
-      tailordbs.push(toTailorDBDeployInput(tailordb));
+      const input = toTailorDBDeployInput(tailordb);
+      const snapshot = migrationTestSnapshots?.get(tailordb.namespace);
+      tailordbs.push(snapshot ? { ...input, types: snapshot.types } : input);
     }
   }
   const executors = forRemoval
@@ -1281,16 +1349,45 @@ export async function planTailorDB(context: PlanContext) {
   for (const tailordb of tailordbs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
   }
-  const { namespacesWithMigrations, migrationFileState } = forRemoval
-    ? { namespacesWithMigrations: [], migrationFileState: {} }
-    : await validateAndDetectMigrations(
-        client,
-        workspaceId,
-        typesByNamespace,
-        config,
-        noSchemaCheck ?? false,
-        tailordbs,
-      );
+  const migrationTestBaselines = context.migrationTestBaselines;
+  if (migrationTestSnapshots) {
+    for (const namespace of migrationTestSnapshots.keys()) {
+      if (!tailordbs.some((tailordb) => tailordb.namespace === namespace)) {
+        throw new Error(
+          `Migration test snapshot targets unknown TailorDB namespace "${namespace}".`,
+        );
+      }
+    }
+    const namespaceByType = new Map<string, string>();
+    for (const tailordb of tailordbs) {
+      for (const typeName of Object.keys(tailordb.types)) {
+        const existingNamespace = namespaceByType.get(typeName);
+        if (existingNamespace) {
+          throw new Error(
+            `Migration test snapshot has duplicate TailorDB type name "${typeName}" in namespaces "${existingNamespace}" and "${tailordb.namespace}".`,
+          );
+        }
+        namespaceByType.set(typeName, tailordb.namespace);
+      }
+    }
+  }
+  const migrationConfig = getNamespacesWithMigrations(config, path.dirname(config.path));
+  const { namespacesWithMigrations, migrationFileState, checkpointRepairs } = forRemoval
+    ? { namespacesWithMigrations: [], migrationFileState: {}, checkpointRepairs: [] }
+    : migrationTestBaselines
+      ? {
+          namespacesWithMigrations: migrationConfig,
+          migrationFileState: captureMigrationFileState(migrationConfig),
+          checkpointRepairs: [],
+        }
+      : await validateAndDetectMigrations(
+          client,
+          workspaceId,
+          typesByNamespace,
+          config,
+          noSchemaCheck ?? false,
+          tailordbs,
+        );
 
   const {
     changeSet: serviceChangeSet,
@@ -1340,8 +1437,10 @@ export async function planTailorDB(context: PlanContext) {
       executorUsedTypes,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
+      ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
       namespacesWithMigrations,
       migrationFileState,
+      checkpointRepairs,
     },
   };
 }

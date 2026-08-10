@@ -1,10 +1,29 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
-import { clearMigrationScriptSkipped, markMigrationScriptSkipped } from "./script";
-import { formatMigrationNumber, loadDiff, DIFF_FILE_NAME, MIGRATE_FILE_NAME } from "./snapshot";
+import { runCommand } from "politty";
+import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { loadConfig } from "#/cli/shared/config-loader";
+import {
+  addMigrationScriptFiles,
+  clearMigrationScriptSkipped,
+  markMigrationScriptSkipped,
+  scriptCommand,
+} from "./script";
+import {
+  formatMigrationNumber,
+  loadDiff,
+  DB_TYPES_FILE_NAME,
+  DIFF_FILE_NAME,
+  MIGRATE_FILE_NAME,
+  MIGRATE_TEST_FILE_NAME,
+} from "./snapshot";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+import { snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
 import type { MigrationDiff } from "./diff-calculator";
+
+vi.mock("#/cli/shared/config-loader", () => ({
+  loadConfig: vi.fn(),
+}));
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_script__");
 
@@ -31,19 +50,166 @@ function writeMigrateFile(baseDir: string, migrationNumber: number): void {
   fs.writeFileSync(path.join(migDir, MIGRATE_FILE_NAME), "export async function main() {}");
 }
 
+afterAll(() => {
+  try {
+    fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
+  } catch {
+    // best-effort cleanup
+  }
+});
+
+describe("addMigrationScriptFiles", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = makeTestDir("add");
+  });
+
+  function setupMigration(diffOverrides: Partial<MigrationDiff> = {}): void {
+    writeInitialSchema(testDir, { User: snapshotType("User") });
+    writeDiffFile(testDir, 1, createMockMigrationDiff(diffOverrides));
+  }
+
+  function migrationFile(name: string): string {
+    return path.join(testDir, formatMigrationNumber(1), name);
+  }
+
+  test("creates migrate.ts and db.ts without a test file by default", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
+
+    expect(result.migratePath).toBe(migrationFile(MIGRATE_FILE_NAME));
+    expect(result.dbTypesPath).toBe(migrationFile(DB_TYPES_FILE_NAME));
+    expect(result.testPath).toBeUndefined();
+    expect(fs.existsSync(migrationFile(MIGRATE_FILE_NAME))).toBe(true);
+    expect(fs.existsSync(migrationFile(DB_TYPES_FILE_NAME))).toBe(true);
+    expect(fs.existsSync(migrationFile(MIGRATE_TEST_FILE_NAME))).toBe(false);
+  });
+
+  test("creates migrate.test.ts alongside the script with withTest", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(result.migratePath).toBe(migrationFile(MIGRATE_FILE_NAME));
+    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
+    const content = fs.readFileSync(result.testPath!, "utf-8");
+    expect(content).toContain('import { main } from "./migrate"');
+  });
+
+  test("adds only the test when migrate.ts already exists and withTest is set", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+    const scriptBefore = fs.readFileSync(migrationFile(MIGRATE_FILE_NAME), "utf-8");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(result.migratePath).toBeUndefined();
+    expect(result.dbTypesPath).toBeUndefined();
+    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
+    expect(fs.readFileSync(migrationFile(MIGRATE_FILE_NAME), "utf-8")).toBe(scriptBefore);
+  });
+
+  test("throws when migrate.ts exists and withTest is not set", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+
+    await expect(
+      addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 }),
+    ).rejects.toThrow(/already exists/);
+  });
+
+  test("leaves db.ts unchanged when adding only the test", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+    const dbTypes = "export interface Database {\n  User: {\n    id: string;\n  };\n}\n";
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), dbTypes);
+
+    await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(fs.readFileSync(migrationFile(DB_TYPES_FILE_NAME), "utf-8")).toBe(dbTypes);
+  });
+
+  test("throws when db.ts is missing in test-only mode", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+
+    await expect(
+      addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, withTest: true }),
+    ).rejects.toThrow(/db\.ts/);
+  });
+
+  test("throws when migrate.test.ts already exists", async () => {
+    setupMigration();
+    fs.writeFileSync(migrationFile(MIGRATE_TEST_FILE_NAME), "// existing test");
+
+    await expect(
+      addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, withTest: true }),
+    ).rejects.toThrow(/already exists/);
+  });
+
+  test("throws when diff.json does not exist", async () => {
+    await expect(
+      addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 }),
+    ).rejects.toThrow(/not found/);
+  });
+
+  test("clears a recorded script skip when creating the script", async () => {
+    setupMigration({
+      hasBreakingChanges: true,
+      requiresMigrationScript: true,
+      scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+    });
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
+
+    const raw = JSON.parse(fs.readFileSync(migrationFile(DIFF_FILE_NAME), "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    expect(raw).not.toHaveProperty("scriptSkipped");
+  });
+
+  test("clears a stale skip record and adds the test when migrate.ts exists with withTest", async () => {
+    setupMigration({
+      hasBreakingChanges: true,
+      requiresMigrationScript: true,
+      scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+    });
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(result.clearedScriptSkip).toBe(true);
+    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
+    expect(loadDiff(migrationFile(DIFF_FILE_NAME)).scriptSkipped).toBeUndefined();
+  });
+});
+
 describe("markMigrationScriptSkipped", () => {
   let testDir: string;
 
   beforeEach(() => {
     testDir = makeTestDir("test");
-  });
-
-  afterAll(() => {
-    try {
-      fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
-    } catch {
-      // best-effort cleanup
-    }
   });
 
   test("writes scriptSkipped with reason and timestamp into diff.json", () => {
@@ -115,6 +281,26 @@ describe("markMigrationScriptSkipped", () => {
     ).toThrow(/does not require a migration script/);
   });
 
+  test("accepts a warning-tier migration that does not require a script", () => {
+    const diffPath = writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({
+        hasWarnings: true,
+        warnings: [{ typeName: "User", fieldName: "email", reason: "Field removed" }],
+      }),
+    );
+
+    markMigrationScriptSkipped({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      reason: "column no longer needed, data can be dropped",
+    });
+
+    const diff = loadDiff(diffPath);
+    expect(diff.scriptSkipped?.reason).toBe("column no longer needed, data can be dropped");
+  });
+
   test("throws when a skip is already recorded", () => {
     writeDiffFile(
       testDir,
@@ -156,5 +342,61 @@ describe("markMigrationScriptSkipped", () => {
     const cleared = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
     expect(cleared).not.toHaveProperty("scriptSkipped");
     expect(cleared.futureField).toBe("preserve-me");
+  });
+});
+
+describe("script command with an existing migrate.ts", () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    testDir = makeTestDir("command");
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        path: path.join(path.dirname(testDir), "tailor.config.ts"),
+        db: { tailordb: { migration: { directory: testDir } } },
+      },
+      plugins: [],
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("clears a stale skip record instead of failing", async () => {
+    const diffPath = writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+        scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+      }),
+    );
+    writeMigrateFile(testDir, 1);
+    const migratePath = path.join(testDir, "0001", MIGRATE_FILE_NAME);
+    const migrateContent = fs.readFileSync(migratePath, "utf-8");
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(true);
+    expect(loadDiff(diffPath).scriptSkipped).toBeUndefined();
+    expect(fs.readFileSync(migratePath, "utf-8")).toBe(migrateContent);
+  });
+
+  test("still rejects when no skip record exists", async () => {
+    writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+    );
+    writeMigrateFile(testDir, 1);
+
+    const result = await runCommand(scriptCommand, ["0001"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/already exists/);
   });
 });

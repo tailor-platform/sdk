@@ -1,6 +1,7 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   confirmMissingDependentApps,
+  confirmMigrationCheckpointRepairs,
   confirmOwnerConflict,
   type MissingDependentApp,
   type OwnerConflict,
@@ -142,6 +143,83 @@ describe("confirmOwnerConflict", () => {
     await expect(confirmOwnerConflict(conflicts, "new-app", false)).rejects.toThrow(
       /managed by their current applications/,
     );
+  });
+});
+
+describe("confirmMigrationCheckpointRepairs", () => {
+  let prompt: typeof promptModule;
+
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    ({ prompt } = await import("#/cli/shared/prompt"));
+    await runTest();
+    vi.restoreAllMocks();
+  });
+
+  test("does not prompt when there are no checkpoint repairs", async () => {
+    await confirmMigrationCheckpointRepairs([], false);
+    expect(prompt.confirm).not.toHaveBeenCalled();
+  });
+
+  test("prompts once for all checkpoint repairs", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+    const { logger } = await import("#/cli/shared/logger");
+
+    await confirmMigrationCheckpointRepairs(
+      [
+        {
+          namespace: "analytics",
+          from: 8,
+          to: 0,
+          fromHistoryId: null,
+          toHistoryId: "hanalytics",
+        },
+        {
+          namespace: "tailordb",
+          from: 5,
+          to: 0,
+          fromHistoryId: null,
+          toHistoryId: "htailordb",
+        },
+      ],
+      false,
+    );
+
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(prompt.confirm).mock.calls[0]![0]!.message).toContain(
+      "Reset these migration checkpoints",
+    );
+    expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
+      "The checkpoint reset itself changes only metadata",
+    );
+    expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
+      "Migration history ID: <unset> → hanalytics",
+    );
+    expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
+      "Migration history ID: <unset> → htailordb",
+    );
+    expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
+      "pending schema or data migrations",
+    );
+  });
+
+  test("rejects the deployment when the checkpoint repair is declined", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    await expect(
+      confirmMigrationCheckpointRepairs(
+        [
+          {
+            namespace: "tailordb",
+            from: 5,
+            to: 0,
+            fromHistoryId: null,
+            toHistoryId: "htailordb",
+          },
+        ],
+        false,
+      ),
+    ).rejects.toThrow(/Apply cancelled/);
   });
 });
 

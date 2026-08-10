@@ -96,6 +96,88 @@ describe("tailordb migration set", () => {
     );
   });
 
+  test("sets the current migration history ID from a re-baselined snapshot", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: null,
+          replacedLatestMigration: 2,
+        },
+      }),
+    );
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-migration-history": "hcurrent",
+          "sdk-name": "my-app",
+        },
+      }),
+    );
+  });
+
+  test("shows the migration history ID change before updating metadata", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: "hprevious",
+          replacedLatestMigration: 2,
+        },
+      }),
+    );
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0002",
+          "sdk-migration-history": "hprevious",
+        },
+      },
+    });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    const output = stderr.mock.calls.map((call) => String(call[0])).join("");
+    expect(output).toContain("Current migration history ID: hprevious");
+    expect(output).toContain("New migration history ID: hcurrent");
+  });
+
+  test("removes a stale remote history ID for a markerless local history", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0002",
+          "sdk-migration-history": "hstale",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
+      }),
+    );
+  });
+
   test("accepts 4-digit migration numbers", async () => {
     const result = await runCommand(setCommand, ["0001", "--yes"]);
 

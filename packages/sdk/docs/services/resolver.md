@@ -150,11 +150,11 @@ createResolver({
 
 This is useful when the same logical type appears in multiple resolvers or when you want a predictable, human-readable name in the generated GraphQL schema.
 
-**Warning:** Do not set `typeName` to an existing TailorDB type name on an `object()` that contains enum or nested fields. Child fields without an explicit `typeName` auto-generate names using `{parentTypeName}{FieldName}`, which can collide with the TailorDB type's own enum/nested type names.
+**Warning:** Do not set `typeName` to an existing TailorDB table name on an `object()` that contains enum or nested fields. Child fields without an explicit `typeName` auto-generate names using `{parentTypeName}{FieldName}`, which can collide with the TailorDB table's own enum/nested type names.
 
 ```typescript
 // Collision — "Item" + "status" auto-generates "ItemStatus",
-//   which collides with the TailorDB Item type's status enum
+//   which collides with the TailorDB Item table's status enum
 output: t
   .object({
     id: t.uuid(),

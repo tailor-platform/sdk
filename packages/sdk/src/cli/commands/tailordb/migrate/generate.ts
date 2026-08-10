@@ -28,6 +28,7 @@ import {
   hasChanges,
   type MigrationDiff,
 } from "./diff-calculator";
+import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
   findRenameCandidates,
@@ -38,12 +39,14 @@ import {
   type FieldRenameCandidate,
   type FieldRenameSpec,
 } from "./rename-detection";
+import { markMigrationScriptSkipped } from "./script";
 import {
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
   compareSnapshots,
   getNextMigrationNumber,
   assertValidMigrationFiles,
+  formatMigrationNumber,
   INITIAL_SCHEMA_NUMBER,
   type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
@@ -588,7 +591,7 @@ async function generateDiffFromSnapshot(
   );
 
   logger.success(
-    `Generated migration ${styles.bold(result.migrationNumber.toString().padStart(4, "0"))}`,
+    `Generated migration ${styles.bold(formatMigrationNumber(result.migrationNumber))}`,
   );
   logger.info(`  Diff file: ${result.diffFilePath}`);
 
@@ -621,14 +624,62 @@ async function generateDiffFromSnapshot(
       return;
     }
   } else if (diff.hasWarnings) {
-    logger.newline();
-    logger.log(
-      `Data loss is possible for this migration but no script was generated. To add a custom migrate.ts, run:`,
-    );
-    logger.log(
-      `  ${styles.bold(`tailor tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
-    );
+    await acknowledgeWarnings({
+      namespace: diff.namespace,
+      migrationsDir,
+      migrationNumber: result.migrationNumber,
+      skipPrompt: options.yes,
+      configPath: options.configPath,
+    });
   }
+}
+
+interface AcknowledgeWarningsOptions {
+  namespace: string;
+  migrationsDir: string;
+  migrationNumber: number;
+  skipPrompt?: boolean;
+  configPath?: string;
+}
+
+/**
+ * Offer to record a --no-script acknowledgment for a warning-only migration,
+ * or print the follow-up commands when the session is non-interactive
+ * @param {AcknowledgeWarningsOptions} options - Target migration and prompt behavior
+ */
+async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise<void> {
+  const { namespace, migrationsDir, migrationNumber, skipPrompt, configPath } = options;
+  const label = formatMigrationNumber(migrationNumber);
+
+  logger.newline();
+  logger.log("Data loss is possible for this migration but no script was generated.");
+
+  if (!skipPrompt && canPrompt()) {
+    const record = await prompt.confirm({
+      message: "Record a reason acknowledging that this migration intentionally has no script?",
+      default: true,
+    });
+    if (record) {
+      const reason = await prompt.text({
+        message: "Reason:",
+        validate: (value) => value.trim() !== "" || "Reason must not be empty.",
+      });
+      const scriptSkipped = markMigrationScriptSkipped({ migrationsDir, migrationNumber, reason });
+      logger.success(
+        `Recorded that migration ${styles.bold(label)} intentionally has no migration script`,
+      );
+      logger.info(`  Reason: ${scriptSkipped.reason}`);
+      return;
+    }
+  }
+
+  const commandOptions = { migrationNumber, namespace, configPath };
+  logger.log("To add a custom migrate.ts, run:");
+  logger.log(`  ${styles.bold(formatMigrationScriptCommand(commandOptions))}`);
+  logger.log("To record that this migration intentionally has no script, run:");
+  logger.log(
+    `  ${styles.bold(formatMigrationScriptCommand({ ...commandOptions, noScript: true }))}`,
+  );
 }
 
 /**

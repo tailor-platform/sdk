@@ -18,7 +18,7 @@ const myPlugin: Plugin = {
 export default myPlugin; // Required: must be default export
 ```
 
-This is required so that other plugins and generation-time hooks can use plugin-generated TailorDB types via `getGeneratedType()`.
+This is required so that other plugins and generation-time hooks can use plugin-generated TailorDB tables via `getGeneratedType()`.
 
 ## Plugin Interface
 
@@ -56,38 +56,38 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
 | `id`                 | Yes                              | Unique plugin identifier (e.g., `"@my-company/soft-delete"`)                                     |
 | `description`        | Yes                              | Human-readable description                                                                       |
 | `importPath`         | When using definition-time hooks | Path resolvable from `tailor.config.ts` directory. Used for import statements in generated code. |
-| `typeConfigRequired` | No                               | Whether per-type config is required when attaching via `.plugin()`. Default: optional.           |
+| `typeConfigRequired` | No                               | Whether per-table config is required when attaching via `.plugin()`. Default: optional.          |
 | `pluginConfig`       | No                               | Plugin-level config passed via `definePlugins()`. Set via factory function.                      |
 
 ## Hook Reference
 
 ### onTypeLoaded
 
-**Trigger**: Called once for each TailorDB type that has `.plugin({ pluginId: config })` attached.
+**Trigger**: Called once for each TailorDB table that has `.plugin({ pluginId: config })` attached.
 
 **Context** (`PluginProcessContext`):
 
 | Field          | Type              | Description                                |
 | -------------- | ----------------- | ------------------------------------------ |
-| `type`         | `TailorAnyDBType` | The TailorDB type being processed          |
-| `typeConfig`   | `TypeConfig`      | Per-type config from `.plugin()`           |
+| `type`         | `TailorAnyDBType` | The TailorDB table being processed         |
+| `typeConfig`   | `TypeConfig`      | Per-table config from `.plugin()`          |
 | `pluginConfig` | `PluginConfig`    | Plugin-level config from `definePlugins()` |
-| `namespace`    | `string`          | Namespace of the TailorDB type             |
+| `namespace`    | `string`          | Namespace of the TailorDB table            |
 
 **Returns** (`TypePluginOutput`):
 
-| Field       | Type                                            | Description                                           |
-| ----------- | ----------------------------------------------- | ----------------------------------------------------- |
-| `types`     | `Record<string, TailorAnyDBType>`               | Additional TailorDB types to generate (keyed by kind) |
-| `resolvers` | `PluginGeneratedResolver[]`                     | Additional resolvers to generate                      |
-| `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                      |
-| `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source type                      |
+| Field       | Type                                            | Description                                            |
+| ----------- | ----------------------------------------------- | ------------------------------------------------------ |
+| `types`     | `Record<string, TailorAnyDBType>`               | Additional TailorDB tables to generate (keyed by kind) |
+| `resolvers` | `PluginGeneratedResolver[]`                     | Additional resolvers to generate                       |
+| `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                       |
+| `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source table                      |
 
 **Use cases**:
 
-- Generate derived types (e.g., archive tables, history tables) from user-defined types
-- Add fields to existing types (e.g., `deletedAt` for soft delete)
-- Generate executors triggered by record events on the source type
+- Generate derived tables (e.g., archive tables, history tables) from user-defined tables
+- Add fields to existing tables (e.g., `deletedAt` for soft delete)
+- Generate executors triggered by record events on the source table
 
 ```typescript
 onTypeLoaded(context) {
@@ -102,7 +102,7 @@ onTypeLoaded(context) {
 
 ### onNamespaceLoaded
 
-**Trigger**: Called once per namespace for plugins that do not require a source type.
+**Trigger**: Called once per namespace for plugins that do not require a source table.
 
 **Context** (`PluginNamespaceProcessContext`):
 
@@ -113,11 +113,11 @@ onTypeLoaded(context) {
 
 **Returns** (`PluginOutput`):
 
-Same as `TypePluginOutput` but without `extends` (namespace plugins cannot extend a source type).
+Same as `TypePluginOutput` but without `extends` (namespace plugins cannot extend a source table).
 
 **Use cases**:
 
-- Generate types that don't derive from a specific user type (e.g., audit log, settings table)
+- Generate tables that don't derive from a specific user table (e.g., audit log, settings table)
 
 ```typescript
 onNamespaceLoaded(context) {
@@ -129,26 +129,26 @@ onNamespaceLoaded(context) {
 
 ### onTailorDBReady
 
-**Trigger**: Called once after all TailorDB types are loaded and auth is resolved.
+**Trigger**: Called once after all TailorDB tables are loaded and auth is resolved.
 
 **Context** (`TailorDBReadyContext`):
 
-| Field          | Type                      | Description                                                    |
-| -------------- | ------------------------- | -------------------------------------------------------------- |
-| `tailordb`     | `TailorDBNamespaceData[]` | All namespaces with types, source info, and plugin attachments |
-| `auth`         | `GeneratorAuthInput?`     | Auth configuration (machine users, OAuth2 clients, etc.)       |
-| `baseDir`      | `string`                  | Output directory for generated files                           |
-| `configPath`   | `string`                  | Path to `tailor.config.ts`                                     |
-| `pluginConfig` | `PluginConfig`            | Plugin-level config from `definePlugins()`                     |
+| Field          | Type                      | Description                                                     |
+| -------------- | ------------------------- | --------------------------------------------------------------- |
+| `tailordb`     | `TailorDBNamespaceData[]` | All namespaces with tables, source info, and plugin attachments |
+| `auth`         | `GeneratorAuthInput?`     | Auth configuration (machine users, OAuth2 clients, etc.)        |
+| `baseDir`      | `string`                  | Output directory for generated files                            |
+| `configPath`   | `string`                  | Path to `tailor.config.ts`                                      |
+| `pluginConfig` | `PluginConfig`            | Plugin-level config from `definePlugins()`                      |
 
 `TailorDBNamespaceData` contains:
 
-| Field               | Type                                       | Description                          |
-| ------------------- | ------------------------------------------ | ------------------------------------ |
-| `namespace`         | `string`                                   | Namespace name                       |
-| `types`             | `Record<string, TailorDBType>`             | All finalized types in the namespace |
-| `sourceInfo`        | `ReadonlyMap<string, TypeSourceInfoEntry>` | Source file info for each type       |
-| `pluginAttachments` | `ReadonlyMap<string, PluginAttachment[]>`  | Plugin configs attached to each type |
+| Field               | Type                                       | Description                           |
+| ------------------- | ------------------------------------------ | ------------------------------------- |
+| `namespace`         | `string`                                   | Namespace name                        |
+| `types`             | `Record<string, TailorDBType>`             | All finalized tables in the namespace |
+| `sourceInfo`        | `ReadonlyMap<string, TypeSourceInfoEntry>` | Source file info for each table       |
+| `pluginAttachments` | `ReadonlyMap<string, PluginAttachment[]>`  | Plugin configs attached to each table |
 
 **Returns** (`GeneratorResult`):
 
@@ -159,9 +159,9 @@ onNamespaceLoaded(context) {
 
 **Use cases**:
 
-- Generate type definitions (e.g., Kysely types, enum constants)
-- Generate seed data scaffolding from type schemas
-- Generate type lists or metadata files
+- Generate table definitions (e.g., Kysely types, enum constants)
+- Generate seed data scaffolding from table schemas
+- Generate table lists or metadata files
 
 ```typescript
 onTailorDBReady(ctx) {
@@ -276,7 +276,7 @@ import type {
 
 ## getGeneratedType Helper
 
-The SDK provides an async `getGeneratedType()` helper function to retrieve plugin-generated TailorDB types. This enables plugins and other tools to work with types generated by plugins.
+The SDK provides an async `getGeneratedType()` helper function to retrieve plugin-generated TailorDB tables. This enables plugins and other tools to work with tables generated by plugins.
 
 ```typescript
 import { join } from "node:path";
@@ -285,7 +285,7 @@ import { customer } from "./tailordb/customer";
 
 const configPath = join(import.meta.dirname, "./tailor.config.ts");
 
-// Type-attached plugin
+// Table-attached plugin
 const DeletedCustomer = await getGeneratedType(
   configPath,
   "@example/soft-delete",
@@ -301,8 +301,8 @@ const AuditLog = await getGeneratedType(configPath, "@example/audit-log", null, 
 
 - `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
 - `pluginId`: The plugin's unique identifier (e.g., `"@example/soft-delete"`)
-- `sourceType`: The TailorDB type that the plugin is attached to (`null` for namespace plugins)
-- `kind`: The generated type kind (e.g., `"archive"`, `"auditLog"`)
+- `sourceType`: The TailorDB table that the plugin is attached to (`null` for namespace plugins)
+- `kind`: The generated table kind (e.g., `"archive"`, `"auditLog"`)
 
 **How it works:**
 
@@ -311,7 +311,7 @@ const AuditLog = await getGeneratedType(configPath, "@example/audit-log", null, 
 3. Auto-resolves the namespace from config
 4. Calls the plugin's `onTypeLoaded()` or `onNamespaceLoaded()` method
 5. Caches the result to avoid redundant processing
-6. Returns the generated type matching the specified kind
+6. Returns the generated table matching the specified kind
 
 ## Examples
 
@@ -341,7 +341,7 @@ function processSoftDelete(
   const { type, typeConfig, pluginConfig, namespace } = context;
   const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted_";
 
-  // Generate archive type
+  // Generate archive table
   const archiveType = db
     .table(`${prefix}${type.name}`, {
       originalId: db.uuid().description("ID of the deleted record"),
@@ -355,7 +355,7 @@ function processSoftDelete(
     })
     .description(`Archive for deleted ${type.name} records`);
 
-  // Extend source type with deletedAt field
+  // Extend source table with deletedAt field
   const extendFields = {
     deletedAt: db.datetime({ optional: true }).description("Soft delete timestamp"),
   };
@@ -470,7 +470,7 @@ import type { Plugin, GeneratorResult } from "@tailor-platform/sdk";
 
 const typeListPlugin: Plugin = {
   id: "@example/type-list",
-  description: "Generates a list of all TailorDB type names",
+  description: "Generates a list of all TailorDB table names",
 
   onTailorDBReady(ctx): GeneratorResult {
     const allTypes = ctx.tailordb.flatMap((ns) =>
@@ -495,15 +495,15 @@ A plugin that uses both definition-time and generation-time hooks:
 ```typescript
 const plugin: Plugin = {
   id: "@example/hybrid",
-  description: "Generates derived types and produces output files",
+  description: "Generates derived tables and produces output files",
   importPath: "./plugins/hybrid",
 
-  // Definition-time: Generate additional types from attached source types
+  // Definition-time: Generate additional tables from attached source tables
   onTypeLoaded(context) {
     return { types: { derived: createDerivedType(context.type) } };
   },
 
-  // Generation-time: Generate output files from all finalized types
+  // Generation-time: Generate output files from all finalized tables
   onTailorDBReady(ctx) {
     const allTypes = ctx.tailordb.flatMap((ns) => Object.values(ns.types).map((t) => t.name));
     return {
@@ -539,7 +539,7 @@ const plugin: Plugin<MyTypeConfig, MyPluginConfig> = {
 };
 ```
 
-### Per-type `.plugin()` type safety (declaration merging)
+### Per-table `.plugin()` type safety (declaration merging)
 
 To enable type checking when users attach plugins via `.plugin()`, provide a declaration merge
 for the `PluginConfigs` interface. Plugin authors should ship this in their package's type definitions:
@@ -556,7 +556,7 @@ declare module "@tailor-platform/sdk" {
 }
 ```
 
-The `Fields` type parameter provides field names from the type being configured, enabling field-aware configurations:
+The `Fields` type parameter provides field names from the table being configured, enabling field-aware configurations:
 
 ```typescript
 declare module "@tailor-platform/sdk" {

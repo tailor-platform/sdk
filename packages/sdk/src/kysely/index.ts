@@ -2,8 +2,13 @@
  * Kysely integration module for generated TailorDB code.
  *
  * Re-exports kysely and function-kysely-tailordb types through a single import path
- * to avoid phantom dependency issues with pnpm, and provides namespace-aware
- * utility types and factory functions used by the code generator.
+ * to avoid phantom dependency issues with pnpm, and provides the namespace-aware
+ * utility types and factory functions the code generator emits against.
+ *
+ * It also holds the `TailorDB*` input types, which hand-written code uses to derive
+ * create/read/update shapes straight from a table or field collection. They live here
+ * rather than in the main entry point because they are built out of kysely's column
+ * types, which the main entry point does not otherwise depend on.
  */
 
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
@@ -16,6 +21,13 @@ import {
   type Transaction as KyselyTransaction,
   type Updateable,
 } from "kysely";
+import type {
+  IsAutoFilledDBField,
+  IsReadOnlyDBField,
+  TailorAnyDBField,
+  TailorAnyDBType,
+} from "#/configure/services/tailordb/types";
+import type { output, TypeLevelError } from "#/types/helpers";
 
 export {
   type ColumnType,
@@ -48,7 +60,19 @@ export type Generated<T> =
   T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>;
-export type Serial<T = string | number> = ColumnType<T, never, never>;
+// The insert/update types carry the reason as a string literal so that supplying a
+// value fails with it, instead of the bare "does not exist" an absent key produces.
+// `| undefined` is what makes the column omittable; Kysely drops undefined columns
+// from the statement, so passing it explicitly is the same as leaving it out.
+export type Serial<T = string | number> = ColumnType<
+  T,
+  TypeLevelError<"assigned by .serial(); remove it from the input"> | undefined,
+  TypeLevelError<"assigned by .serial(); remove it from the input"> | undefined
+>;
+
+// Kysely composes its input types out of intersections. Flattening them keeps the
+// shape readable in assignability errors and editor tooltips.
+type FlattenColumns<T> = { [K in keyof T]: T[K] } & {};
 
 export type TailordbKysely<DB> = Kysely<DB>;
 export type NamespaceDB<NS, N extends keyof NS = keyof NS> = TailordbKysely<NS[N]>;
@@ -85,12 +109,142 @@ export type NamespaceTable<NS, T extends NamespaceTableName<NS>> = {
   [N in keyof NS]: T extends keyof NS[N] ? NS[N][T] : never;
 }[keyof NS];
 
-export type NamespaceInsertable<NS, T extends NamespaceTableName<NS>> = Insertable<
-  NamespaceTable<NS, T>
+export type NamespaceInsertable<NS, T extends NamespaceTableName<NS>> = FlattenColumns<
+  Insertable<NamespaceTable<NS, T>>
 >;
-export type NamespaceSelectable<NS, T extends NamespaceTableName<NS>> = Selectable<
-  NamespaceTable<NS, T>
+export type NamespaceSelectable<NS, T extends NamespaceTableName<NS>> = FlattenColumns<
+  Selectable<NamespaceTable<NS, T>>
 >;
-export type NamespaceUpdateable<NS, T extends NamespaceTableName<NS>> = Updateable<
-  NamespaceTable<NS, T>
+export type NamespaceUpdateable<NS, T extends NamespaceTableName<NS>> = FlattenColumns<
+  Updateable<NamespaceTable<NS, T>>
+>;
+
+/** What the derived input types accept: a table (`typeof myTable`) or a field collection. */
+type TailorDBColumnsSource = TailorAnyDBType | Record<string, TailorAnyDBField>;
+
+type DBFieldsOf<T> = T extends TailorAnyDBType ? T["fields"] : T;
+
+// The column mapping below mirrors the one `kyselyTypePlugin` applies when it writes a
+// table interface (`plugin/builtin/kysely-type/type-processor.ts`), so both surfaces
+// resolve a field to the same column type — including inside nested objects, where the
+// function runtime also hands back a Date for a date/datetime.
+// `example/tests/kysely-parity.ts` pins the two against each other on real generator output.
+type DBFieldType<F> = F extends TailorAnyDBField ? F["_defined"]["type"] : never;
+type IsArrayDBField<F> = F extends TailorAnyDBField
+  ? F["_defined"]["array"] extends true
+    ? true
+    : false
+  : false;
+
+type Unwrapped<F> = Exclude<output<F>, null>;
+type ElementOutput<F> =
+  IsArrayDBField<F> extends true
+    ? Unwrapped<F> extends readonly (infer E)[]
+      ? E
+      : Unwrapped<F>
+    : Unwrapped<F>;
+
+type NestedFieldsOf<F> = F extends TailorAnyDBField ? F["fields"] : never;
+
+// Nested props carry the same column mapping as top-level ones, so a datetime inside an
+// object also resolves to Timestamp. The optional marker matches what the output type
+// gives them, which is what the generator emits too.
+// `-readonly` because a field collection is inferred with `const`, and the generated
+// table interfaces declare their nested props mutable.
+type NestedProps<Fields> = {
+  -readonly [K in keyof Fields as null extends output<Fields[K]> ? never : K]: DBColumn<Fields[K]>;
+} & {
+  -readonly [K in keyof Fields as null extends output<Fields[K]> ? K : never]?: DBColumn<Fields[K]>;
+};
+
+// The generator reaches for ObjectColumnType only when the object holds something whose
+// select and insert types differ: a timestamp, an optional prop, or a filled-in one.
+type NestedNeedsColumnType<Fields> = true extends {
+  [K in keyof Fields]: DBFieldType<Fields[K]> extends "date" | "datetime"
+    ? true
+    : null extends output<Fields[K]>
+      ? true
+      : DBFieldType<Fields[K]> extends "nested"
+        ? NestedNeedsColumnType<NestedFieldsOf<Fields[K]>>
+        : Fields[K] extends TailorAnyDBField
+          ? IsAutoFilledDBField<Fields[K]>
+          : false;
+}[keyof Fields]
+  ? true
+  : false;
+
+type NestedColumn<F> =
+  NestedNeedsColumnType<NestedFieldsOf<F>> extends true
+    ? ObjectColumnType<FlattenColumns<NestedProps<NestedFieldsOf<F>>>>
+    : FlattenColumns<NestedProps<NestedFieldsOf<F>>>;
+
+type ElementColumn<F> =
+  DBFieldType<F> extends "date" | "datetime"
+    ? Timestamp
+    : DBFieldType<F> extends "nested"
+      ? NestedColumn<F>
+      : ElementOutput<F>;
+
+// A ColumnType cannot sit inside an array — Kysely only unwraps it at the top level of a
+// table property — so an array of them keeps the ColumnType outermost.
+type ArrayedColumn<F> =
+  IsArrayDBField<F> extends true
+    ? ElementColumn<F> extends ColumnType<unknown, unknown, unknown>
+      ? ArrayColumnType<ElementColumn<F>>
+      : ElementColumn<F>[]
+    : ElementColumn<F>;
+
+type NullableColumn<F> = null extends output<F> ? ArrayedColumn<F> | null : ArrayedColumn<F>;
+
+type DBColumn<F> = F extends TailorAnyDBField
+  ? IsReadOnlyDBField<F> extends true
+    ? Serial<NullableColumn<F>>
+    : IsAutoFilledDBField<F> extends true
+      ? Generated<NullableColumn<F>>
+      : NullableColumn<F>
+  : never;
+
+// The column map the three derived types are built from. Not exported: it is how the
+// mapping is expressed, not something callers need to name.
+type TailorDBColumns<T extends TailorDBColumnsSource> = {
+  [K in keyof DBFieldsOf<T>]: K extends "id"
+    ? Generated<output<DBFieldsOf<T>[K]>>
+    : DBColumn<DBFieldsOf<T>[K]>;
+};
+
+/**
+ * Create input derived from a TailorDB table (`typeof myTable`) or a field collection.
+ *
+ * Each field resolves to the column type `kyselyTypePlugin` writes for it, so this and
+ * the generated table types agree: `.serial()` fields are never caller-supplied,
+ * `.default()` / `.hooks({ create })` fields may be omitted, optional fields stay
+ * optional, `id` is platform-generated, and a date or datetime reads back as `Date`.
+ *
+ * Pass a field collection when the fields are a type parameter — a shared module that
+ * lets each project extend a table with its own fields cannot name a generated table
+ * type. Declare it as `<const F extends Record<string, TailorAnyDBField>>` so the field
+ * types are inferred; a bare `Record<string, TailorAnyDBField>` erases them and nothing
+ * is checked.
+ *
+ * Hand the result to callers rather than consuming it inside the generic that declares
+ * it: while `F` is still an unresolved type parameter the mapping stays deferred, so
+ * assigning to it inside the function body reports the unevaluated conditional rather
+ * than a readable shape.
+ * @example
+ * function createInput<const F extends Record<string, TailorAnyDBField>>(fields: F) {
+ *   return (input: TailorDBInsertable<F>) => { ... };
+ * }
+ */
+export type TailorDBInsertable<T extends TailorDBColumnsSource> = FlattenColumns<
+  Insertable<TailorDBColumns<T>>
+>;
+
+/** Read shape of a TailorDB table or field collection. See {@link TailorDBInsertable}. */
+export type TailorDBSelectable<T extends TailorDBColumnsSource> = FlattenColumns<
+  Selectable<TailorDBColumns<T>>
+>;
+
+/** Update input for a TailorDB table or field collection. See {@link TailorDBInsertable}. */
+export type TailorDBUpdateable<T extends TailorDBColumnsSource> = FlattenColumns<
+  Updateable<TailorDBColumns<T>>
 >;

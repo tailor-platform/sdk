@@ -1,3 +1,4 @@
+import type { NormalizedSchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
@@ -5,6 +6,14 @@ import type { DependentAppsByResource } from "./label";
 import type { ApplyPhase } from "./phase";
 
 export type { ApplyPhase };
+
+export interface TailorDBMigrationTestBaseline {
+  migrationNumber: number;
+  snapshot: NormalizedSchemaSnapshot;
+  historyId: string | null;
+}
+
+export type TailorDBMigrationTestSnapshots = ReadonlyMap<string, NormalizedSchemaSnapshot>;
 
 export interface PlanContext {
   client: OperatorClient;
@@ -45,4 +54,12 @@ export interface PlanContext {
    * is at stake rather than on the application.
    */
   dependentApps?: DependentAppsByResource;
+  /**
+   * Baseline snapshots used internally by `tailordb migration test`. Consumed
+   * by TailorDB planning only; other plan modules receive an `application`
+   * already adjusted for the migration test deploy by the deploy pipeline.
+   */
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  /** Committed schema snapshots used internally by `tailordb migration test`. Consumed by TailorDB planning only. */
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
 }

@@ -36,6 +36,7 @@ import {
   type SnapshotTypeSettingsState,
   type TypeScriptsState,
   type WarningChangeInfo,
+  MIN_SUPPORTED_MIGRATION_FILE_VERSION,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import { supportsInPlaceFieldTypeChange } from "./field-type-change";
@@ -84,6 +85,8 @@ export const SCHEMA_FILE_NAME = "schema.json";
 export const DIFF_FILE_NAME = "diff.json";
 /** File name for migration script. */
 export const MIGRATE_FILE_NAME = "migrate.ts";
+/** File name for migration script unit test. */
+export const MIGRATE_TEST_FILE_NAME = "migrate.test.ts";
 /** File name for generated DB type definitions. */
 export const DB_TYPES_FILE_NAME = "db.ts";
 
@@ -98,6 +101,36 @@ export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
  * Must stay in sync with the platform's default decimal scale.
  */
 export const DEFAULT_DECIMAL_SCALE = 6;
+
+export class UnsupportedMigrationFileVersionError extends Error {}
+
+function assertSupportedMigrationFileVersion(filePath: string, raw: unknown): void {
+  if (typeof raw !== "object" || raw === null || !("version" in raw)) return;
+  const version = raw.version;
+  if (typeof version !== "number") return;
+  if (
+    Number.isInteger(version) &&
+    version >= MIN_SUPPORTED_MIGRATION_FILE_VERSION &&
+    version <= SCHEMA_SNAPSHOT_VERSION
+  ) {
+    return;
+  }
+
+  const supportedRange = `${MIN_SUPPORTED_MIGRATION_FILE_VERSION}-${SCHEMA_SNAPSHOT_VERSION}`;
+  let guidance: string;
+  if (version > SCHEMA_SNAPSHOT_VERSION) {
+    guidance = `Upgrade to an SDK that supports migration file format version ${version}.`;
+  } else if (version < MIN_SUPPORTED_MIGRATION_FILE_VERSION) {
+    guidance =
+      "Re-baseline with an SDK that still supports this migration history, then upgrade the SDK.";
+  } else {
+    guidance = "Restore the migration file from version control or regenerate it.";
+  }
+  throw new UnsupportedMigrationFileVersionError(
+    `Unsupported migration file format version ${version} at ${filePath}. ` +
+      `This SDK supports migration file format versions ${supportedRange}. ${guidance}`,
+  );
+}
 
 function createSnapshotRecord<T>(): Record<string, T> {
   return Object.create(null) as Record<string, T>;
@@ -201,12 +234,13 @@ export type {
   TailorDBSnapshotType,
   SchemaSnapshot,
   NormalizedSchemaSnapshot,
+  RebaselineMarker,
 } from "./snapshot-types";
 
 /**
  * Migration file type
  */
-export type MigrationFileType = "schema" | "diff" | "migrate" | "db";
+export type MigrationFileType = "schema" | "diff" | "migrate" | "test" | "db";
 
 // ============================================================================
 // Migration Number Helpers
@@ -232,6 +266,7 @@ const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
   schema: SCHEMA_FILE_NAME,
   diff: DIFF_FILE_NAME,
   migrate: MIGRATE_FILE_NAME,
+  test: MIGRATE_TEST_FILE_NAME,
   db: DB_TYPES_FILE_NAME,
 };
 
@@ -515,6 +550,7 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
   } catch (error) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${String(error)}`, { cause: error });
   }
+  assertSupportedMigrationFileVersion(filePath, raw);
   const result = schemaSnapshotSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`, {
@@ -538,6 +574,7 @@ export function loadDiff(filePath: string): MigrationDiff {
   } catch (error) {
     throw new Error(`Invalid migration diff at ${filePath}: ${String(error)}`, { cause: error });
   }
+  assertSupportedMigrationFileVersion(filePath, raw);
   const result = migrationDiffSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`, {
@@ -546,17 +583,46 @@ export function loadDiff(filePath: string): MigrationDiff {
   }
   const parsed = result.data;
   // Backfill fields introduced after the initial diff.json schema so that older
-  // migrations on disk remain readable without manual edits. hasWarnings is
-  // derived from the warnings array to stay consistent even if a hand-edited
-  // diff.json sets one side without the other.
+  // migrations on disk remain readable without manual edits. A missing warnings
+  // field (pre-warning-tier diff.json) is reconstructed from the recorded
+  // removal changes so those migrations keep their data-loss classification.
+  // hasWarnings is derived from the warnings array to stay consistent even if
+  // a hand-edited diff.json sets one side without the other.
   // `warnings` is optional in the schema (backcompat) but cast to required; guard for safety
   // oxlint-disable-next-line typescript/no-unnecessary-condition
-  const warnings = parsed.warnings ?? [];
+  const warnings = parsed.warnings ?? deriveWarningsFromChanges(parsed);
   return {
     ...parsed,
     warnings,
     hasWarnings: warnings.length > 0,
   };
+}
+
+const FIELD_REMOVED_WARNING_REASON =
+  "Field removed (existing data will no longer be accessible through the schema)";
+const TYPE_REMOVED_WARNING_REASON =
+  "Type removed (all records of this type will be deleted during post-migration cleanup)";
+
+/**
+ * Reconstruct data-loss warnings from removal changes for diff.json files
+ * written before the warning tier existed
+ * @param {MigrationDiff} diff - Parsed legacy migration diff
+ * @returns {WarningChangeInfo[]} Warnings equivalent to what diff generation would have recorded
+ */
+function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInfo[] {
+  const warnings: WarningChangeInfo[] = [];
+  for (const change of diff.changes) {
+    if (change.kind === "field_removed") {
+      warnings.push({
+        typeName: change.typeName,
+        fieldName: change.fieldName,
+        reason: FIELD_REMOVED_WARNING_REASON,
+      });
+    } else if (change.kind === "type_removed") {
+      warnings.push({ typeName: change.typeName, reason: TYPE_REMOVED_WARNING_REASON });
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -1178,7 +1244,7 @@ function addChange(
     ctx.warnings.push({
       typeName: change.typeName,
       fieldName: change.fieldName,
-      reason: "Field removed (existing data will no longer be accessible through the schema)",
+      reason: FIELD_REMOVED_WARNING_REASON,
     });
   }
 }
@@ -1813,8 +1879,7 @@ export function compareSnapshots(
       });
       ctx.warnings.push({
         typeName,
-        reason:
-          "Type removed (all records of this type will be deleted during post-migration cleanup)",
+        reason: TYPE_REMOVED_WARNING_REASON,
       });
     }
   }

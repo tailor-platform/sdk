@@ -21,7 +21,10 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 2 as const;
+
+/** Oldest migration file format this SDK can replay. */
+export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
 
 /**
  * Change kind in migration diff
@@ -293,12 +296,12 @@ export interface MigrationDiff {
   warnings: WarningChangeInfo[];
   /** Whether a migration script is required to handle data migration */
   requiresMigrationScript: boolean;
-  /** Explicit acknowledgment that this migration needs no script despite breaking changes */
+  /** Explicit acknowledgment that this migration needs no script despite breaking changes or data-loss warnings */
   scriptSkipped?: ScriptSkippedInfo;
 }
 
 /**
- * Acknowledgment that a migration requiring a script intentionally has none.
+ * Acknowledgment that a migration requiring or recommending a script intentionally has none.
  * Recorded by `tailordb migration script <n> --no-script --reason "..."`.
  */
 export interface ScriptSkippedInfo {
