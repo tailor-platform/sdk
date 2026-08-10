@@ -96,6 +96,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 );
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
+const V2_NEXT_3 = "2.0.0-next.3";
 const V2_NEXT_4 = "2.0.0-next.4";
 const V2_NEXT_5 = "2.0.0-next.5";
 const V2_NEXT_6 = "2.0.0-next.6";
@@ -115,6 +116,52 @@ export const V2_NEXT_PENDING = "pending";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
+  {
+    id: "v2/type-only-imports",
+    name: "Type-only imports → `import type`",
+    description: [
+      "The v2 CLI runs TypeScript by stripping types from each file in isolation,",
+      "with no cross-file type information. A plain (non-`type`) import of a",
+      "type-only export therefore survives stripping and fails when the module",
+      "loads:",
+      "",
+      "```",
+      "SyntaxError: The requested module './types.ts' does not provide an export named 'Row'",
+      "```",
+      "",
+      "`tailor generate` / `tailor deploy` stop at this error before doing any work.",
+      "Import types with `import type` (or the inline `type` modifier), and",
+      "re-export them with `export type`, in every module the CLI loads. Generated",
+      "Kysely types (`DB`, `Insertable`, `Selectable`, table row types) are almost",
+      "entirely type-only, so v1 projects typically hit this in many files at once.",
+      'Set `"verbatimModuleSyntax": true` in tsconfig.json to catch every violation',
+      "at typecheck; projects scaffolded by v2 `tailor init` enable it by default.",
+    ].join("\n"),
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    examples: [
+      {
+        before: 'import { DB, getDB } from "./generated/db";',
+        after: 'import { type DB, getDB } from "./generated/db";',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2 the CLI loads TypeScript by stripping types from each file",
+      "in isolation, so type-only exports do not exist at runtime and plain imports",
+      "of them fail to load with \"does not provide an export named '<name>'\".",
+      "Migrate the project so every type-only import and re-export is marked:",
+      "",
+      '1. Add `"verbatimModuleSyntax": true` to compilerOptions in tsconfig.json.',
+      "2. Run `tsc --noEmit` and fix every reported violation: add the `type`",
+      "   modifier to type-only named imports (`import type { Row }` or",
+      "   `import { type Row, marker }`) and change type-only re-exports to",
+      "   `export type { ... }`.",
+      "",
+      "Only add `type` modifiers; do not reorder, remove, or otherwise change",
+      "imports that are used as values.",
+    ].join("\n"),
+  },
   {
     id: "v2/define-generators-to-plugins",
     name: "defineGenerators → definePlugins",

@@ -139,5 +139,25 @@ export function isCLIError(error: unknown): error is CLIError {
   return error instanceof Error && error.name === "CLIError";
 }
 
+const MISSING_NAMED_EXPORT_PATTERN = /does not provide an export named '(?!default')([^']+)'/;
+
+/**
+ * Suggest `import type` when importing user code fails on a missing named
+ * export. The CLI strips types from each file in isolation, so a type-only
+ * export does not exist at runtime and a plain import of it fails to link.
+ * @param error - Error thrown while importing user modules
+ * @returns Suggestion text, or undefined when the error is not that failure
+ */
+export function typeOnlyImportHint(error: unknown): string | undefined {
+  if (!(error instanceof SyntaxError)) return undefined;
+  const name = MISSING_NAMED_EXPORT_PATTERN.exec(error.message)?.[1];
+  if (!name) return undefined;
+  return (
+    `If '${name}' is a type, import it with \`import type\` (or the inline \`type\` modifier). ` +
+    "The CLI runs TypeScript by stripping types from each file in isolation, so type-only exports do not exist at runtime. " +
+    'Set "verbatimModuleSyntax": true in tsconfig.json to catch this at typecheck.'
+  );
+}
+
 // Re-export createCLIError as CLIError for backward compatibility
 export { createCLIError as CLIError };

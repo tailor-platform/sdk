@@ -1,8 +1,50 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
 import { errorToJson, serializeError } from "./error-json";
-import { CLIError, formatCopyableCommand } from "./errors";
+import { CLIError, formatCopyableCommand, typeOnlyImportHint } from "./errors";
 import { CIPromptError } from "./logger";
+
+describe("typeOnlyImportHint", () => {
+  test("suggests import type for a missing named export", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'Row'",
+    );
+
+    const hint = typeOnlyImportHint(error);
+
+    expect(hint).toContain("import type");
+    expect(hint).toContain("'Row'");
+    expect(hint).toContain("verbatimModuleSyntax");
+  });
+
+  test("ignores a missing default export", () => {
+    const error = new SyntaxError(
+      "The requested module './config.ts' does not provide an export named 'default'",
+    );
+
+    expect(typeOnlyImportHint(error)).toBeUndefined();
+  });
+
+  test("suggests for a name that merely starts with 'default'", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'defaultRow'",
+    );
+
+    expect(typeOnlyImportHint(error)).toContain("'defaultRow'");
+  });
+
+  test("ignores unrelated syntax errors", () => {
+    expect(typeOnlyImportHint(new SyntaxError("Unexpected token '}'"))).toBeUndefined();
+  });
+
+  test("ignores non-syntax errors with a matching message", () => {
+    const error = new Error(
+      "The requested module './types.ts' does not provide an export named 'Row'",
+    );
+
+    expect(typeOnlyImportHint(error)).toBeUndefined();
+  });
+});
 
 describe("errorToJson", () => {
   test("preserves machine-actionable CLI error fields", () => {
@@ -138,6 +180,14 @@ describe("errorToJson", () => {
 
     expect(errorToJson(error, { includeStack: true }).error.stack).toBe(error.stack);
     expect(errorToJson(error).error).not.toHaveProperty("stack");
+  });
+
+  test("carries the type-only import suggestion for a missing named export", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'Row'",
+    );
+
+    expect(errorToJson(error).error.suggestion).toContain("import type");
   });
 
   test("includes a Connect RPC stack trace when requested", () => {
