@@ -173,15 +173,17 @@ function assertMigrationScriptsReady(
   }
   if (conflicting.length > 0) {
     const clearCommands = conflicting
-      .map((migrationNumber) =>
-        formatMigrationScriptCommand({ migrationNumber, namespace, configPath }),
+      .map(
+        (migrationNumber) =>
+          `  ${formatMigrationScriptCommand({ migrationNumber, namespace, configPath })}`,
       )
-      .join(", ");
+      .join("\n");
     throw new Error(
       `Migration(s) ${conflicting.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
         "have both a --no-script skip acknowledgment and migrate.ts. " +
-        `Run ${clearCommands} to clear the stale acknowledgment, ` +
-        "or delete migrate.ts to keep the skip.",
+        "Clear the stale acknowledgment(s):\n" +
+        `${clearCommands}\n` +
+        "Or delete migrate.ts to keep the skip.",
     );
   }
   if (unreviewed.length > 0) {
