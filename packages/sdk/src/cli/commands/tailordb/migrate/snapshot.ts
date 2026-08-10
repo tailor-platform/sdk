@@ -1843,9 +1843,7 @@ export function compareSnapshots(
   options?: CompareSnapshotsOptions,
 ): MigrationDiff {
   const fieldRenames = options?.fieldRenames ?? [];
-  if (fieldRenames.length > 0) {
-    assertValidFieldRenames(previous, current, fieldRenames);
-  }
+  assertValidFieldRenames(previous, current, fieldRenames);
   const renamesByType = new Map<string, FieldRenameSpec[]>();
   for (const rename of fieldRenames) {
     const list = renamesByType.get(rename.typeName) ?? [];
