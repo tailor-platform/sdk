@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  assertValidFieldRenames,
   dropSpecApplies,
   findRenameCandidates,
   isRenameCompatible,
@@ -7,6 +8,7 @@ import {
   parseRenameOption,
   renameSpecApplies,
 } from "./rename-detection";
+import { normalizeSchemaSnapshot } from "./snapshot";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
@@ -108,6 +110,29 @@ describe("isRenameCompatible", () => {
     });
     expect(isRenameCompatible(before, shrunk)).toBe(false);
     expect(isRenameCompatible(before, grown)).toBe(true);
+  });
+});
+
+describe("assertValidFieldRenames", () => {
+  const snapshot = (fields: Record<string, SnapshotFieldConfig>) =>
+    normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "tailordb",
+      createdAt: new Date().toISOString(),
+      types: { User: { name: "User", pluralForm: "Users", fields } },
+    });
+
+  test("explains nested member structure incompatibility", () => {
+    const nested = (fields: Record<string, SnapshotFieldConfig>): SnapshotFieldConfig =>
+      stringField({ type: "nested", fields });
+
+    expect(() =>
+      assertValidFieldRenames(
+        snapshot({ fullName: nested({ legacy: stringField() }) }),
+        snapshot({ displayName: nested({ replacement: stringField() }) }),
+        [{ typeName: "User", previousFieldName: "fullName", fieldName: "displayName" }],
+      ),
+    ).toThrow("nested member names, requiredness, and types must match recursively");
   });
 });
 

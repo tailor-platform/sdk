@@ -206,7 +206,8 @@ export function assertValidFieldRenames(
       throw new Error(
         `Cannot rename ${label}: the fields are not rename-compatible ` +
           `(the field type, array-ness, and foreign key target must match, ` +
-          `enum values must not be removed, and serial fields cannot be renamed).`,
+          `enum values must not be removed, nested member names, requiredness, and types must ` +
+          `match recursively, and serial fields cannot be renamed).`,
       );
     }
   }
