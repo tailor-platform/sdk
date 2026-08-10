@@ -520,8 +520,8 @@ importers:
         specifier: 0.1.3
         version: 0.1.3(kysely@0.29.4)
       '@toiroakr/lines-db':
-        specifier: 0.11.0
-        version: 0.11.0
+        specifier: 0.12.0
+        version: 0.12.0
       '@toiroakr/read-multiline':
         specifier: 0.4.1
         version: 0.4.1
@@ -2347,8 +2347,8 @@ packages:
     peerDependencies:
       kysely: '>= 0.24.0 < 1'
 
-  '@toiroakr/lines-db@0.11.0':
-    resolution: {integrity: sha512-ae37jSjjgdodDt9aBHaqtob5NbcVRCqBxkUwLVjP8zPz33XBMEwdnc0PQd6UkE33KhQMk8AC2Hbyx4/nGH4B4w==}
+  '@toiroakr/lines-db@0.12.0':
+    resolution: {integrity: sha512-GRCHbSICqqwODI9Fv5Tm6gMKTJKzJXEF+RouMlD5BjpYYvzQe1o6X6pydGHbzHEcBdUtFH3vUDwNenmY33a0GQ==}
     engines: {node: '>=22.12.0'}
     hasBin: true
 
@@ -5382,7 +5382,7 @@ snapshots:
     dependencies:
       kysely: 0.29.4
 
-  '@toiroakr/lines-db@0.11.0':
+  '@toiroakr/lines-db@0.12.0':
     dependencies:
       '@standard-schema/spec': 1.1.0
       amaro: 1.1.11
