@@ -401,6 +401,24 @@ describe("tailordb migration validate", () => {
     expect(report.migrationFiles).toEqual({ valid: true });
   });
 
+  test("fails when a migration has both a skip acknowledgment and migrate.ts", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], {
+      requiresMigrationScript: true,
+      scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-01-01T00:00:00.000Z" },
+    });
+    writeMigrationFile(1, "migrate.ts", "export async function main() {}");
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.migrationFiles.valid).toBe(false);
+    expect(report.migrationFiles.error).toMatch(/skip acknowledgment and migrate\.ts/);
+  });
+
   test("fails when a migration script still contains a generated review marker", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();

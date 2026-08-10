@@ -124,9 +124,10 @@ interface CollectedValidationReports {
 
 /**
  * Walk the local migration history once to assert that every required
- * migration script exists and generated normalization logic has been
- * reviewed, and to collect migrations with data-loss warnings that have
- * neither a migrate.ts nor a recorded --no-script acknowledgment
+ * migration script exists, no migration carries both a --no-script
+ * acknowledgment and a migrate.ts, and generated normalization logic has
+ * been reviewed, and to collect migrations with data-loss warnings that
+ * have neither a migrate.ts nor a recorded --no-script acknowledgment
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
  * @returns {UnacknowledgedWarningMigration[]} Unacknowledged warning migrations in the local history
@@ -136,6 +137,7 @@ function assertMigrationScriptsReady(
   namespace: string,
 ): UnacknowledgedWarningMigration[] {
   const missing: number[] = [];
+  const conflicting: number[] = [];
   const unreviewed: number[] = [];
   const unacknowledgedWarnings: UnacknowledgedWarningMigration[] = [];
   for (const file of getMigrationFiles(migrationsDir)) {
@@ -145,6 +147,9 @@ function assertMigrationScriptsReady(
     const hasScript = fs.existsSync(migrateFilePath);
     if (diff.requiresMigrationScript && !diff.scriptSkipped && !hasScript) {
       missing.push(file.number);
+    }
+    if (diff.scriptSkipped && hasScript) {
+      conflicting.push(file.number);
     }
     if (
       hasScript &&
@@ -162,6 +167,14 @@ function assertMigrationScriptsReady(
         "require a migration script but have no migrate.ts. " +
         "Add one with 'tailor tailordb migration script <number>', or record that no script " +
         `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
+    );
+  }
+  if (conflicting.length > 0) {
+    throw new Error(
+      `Migration(s) ${conflicting.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
+        "have both a --no-script skip acknowledgment and migrate.ts. " +
+        "Run 'tailor tailordb migration script <number>' to run the script and clear the stale " +
+        "acknowledgment, or delete migrate.ts to keep the skip.",
     );
   }
   if (unreviewed.length > 0) {

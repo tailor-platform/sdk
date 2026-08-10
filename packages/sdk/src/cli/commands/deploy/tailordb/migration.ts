@@ -162,14 +162,16 @@ export async function detectPendingMigrations(
       if (diff.scriptSkipped) {
         const migrationLabel = `${namespace}/${formatMigrationNumber(file.number)}`;
         if (hasScript) {
-          logger.warn(
-            `Migration ${migrationLabel} has both a skip acknowledgment and migrate.ts; executing migrate.ts.`,
-          );
-        } else {
-          logger.info(
-            `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
+          throw new Error(
+            `Migration ${migrationLabel} has both a skip acknowledgment and migrate.ts.\n` +
+              `To resolve, either:\n` +
+              `  - Run the script and clear the stale acknowledgment: ${formatMigrationScriptCommand({ migrationNumber: file.number, namespace, configPath })}\n` +
+              `  - Or keep the skip: delete migrate.ts`,
           );
         }
+        logger.info(
+          `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
+        );
       }
 
       pendingMigrations.push({
