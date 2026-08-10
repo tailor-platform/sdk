@@ -10,6 +10,7 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
+import { isBreakingForeignKeyRetarget } from "./rename-detection";
 import {
   DEFAULT_DECIMAL_SCALE,
   getMigrationDirPath,
@@ -384,12 +385,7 @@ function generateChangeScripts(
 
   // Foreign key relationship changed. A retarget that follows a confirmed
   // type rename needs no fixup: record ids are preserved by the rename copy.
-  if (
-    before.foreignKeyType &&
-    after.foreignKeyType &&
-    before.foreignKeyType !== after.foreignKeyType &&
-    typeRenameTargets?.get(before.foreignKeyType) !== after.foreignKeyType
-  ) {
+  if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
     scripts.push(`  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
   // Find records that don't have a valid reference in the new target table
   {
@@ -445,6 +441,8 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
 
 function generateTypeRenameCopyScript(change: TypeRenamedChange): string {
   const { typeName, previousTypeName } = change;
+  const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
+  const columnList = columns.map((name) => JSON.stringify(name)).join(", ");
   return `  // Copy every ${previousTypeName} row into ${typeName}, preserving ids so that
   // stored foreign key references remain valid. ${previousTypeName} stays readable
   // until the post-migration phase drops it.
@@ -453,7 +451,7 @@ function generateTypeRenameCopyScript(change: TypeRenamedChange): string {
     while (true) {
       let query = trx
         .selectFrom("${previousTypeName}")
-        .selectAll()
+        .select([${columnList}])
         .orderBy("id", "asc")
         .limit(100);
       if (lastId) {

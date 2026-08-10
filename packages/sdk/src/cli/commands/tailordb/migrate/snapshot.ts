@@ -44,6 +44,7 @@ import { formatMigrationNumber } from "./migration-number";
 import {
   assertValidFieldRenames,
   assertValidTypeRenames,
+  isBreakingForeignKeyRetarget,
   type FieldRenameSpec,
   type TypeRenameSpec,
 } from "./rename-detection";
@@ -1166,21 +1167,12 @@ function getBreakingFieldChanges(
   // Foreign key relationship changed - breaking (existing references may become
   // invalid), unless it retargets a confirmed type rename: record ids are
   // preserved by the rename copy, so the stored references stay valid.
-  if (oldField && newField) {
-    const oldForeignKeyType = oldField.foreignKeyType;
-    const newForeignKeyType = newField.foreignKeyType;
-    if (
-      oldForeignKeyType &&
-      newForeignKeyType &&
-      oldForeignKeyType !== newForeignKeyType &&
-      typeRenameTargets?.get(oldForeignKeyType) !== newForeignKeyType
-    ) {
-      breakingChanges.push({
-        typeName,
-        fieldName,
-        reason: `Foreign key target type changed from ${oldForeignKeyType} to ${newForeignKeyType}`,
-      });
-    }
+  if (oldField && newField && isBreakingForeignKeyRetarget(oldField, newField, typeRenameTargets)) {
+    breakingChanges.push({
+      typeName,
+      fieldName,
+      reason: `Foreign key target type changed from ${oldField.foreignKeyType} to ${newField.foreignKeyType}`,
+    });
   }
 
   // Unique constraint added - breaking (existing duplicate values would violate constraint)

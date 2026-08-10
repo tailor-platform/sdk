@@ -473,7 +473,7 @@ describe("template-generator", () => {
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
       expect(scriptContent).toContain("Copy every User row into Person, preserving ids");
       expect(scriptContent).toContain('.selectFrom("User")');
-      expect(scriptContent).toContain(".selectAll()");
+      expect(scriptContent).toContain('.select(["id", "email"])');
       expect(scriptContent).toContain('.orderBy("id", "asc")');
       expect(scriptContent).toContain(".limit(100)");
       expect(scriptContent).toContain('trx.insertInto("Person").values(rows).execute()');
