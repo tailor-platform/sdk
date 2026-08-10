@@ -70,6 +70,10 @@ describe("tailordb migration generate with warning-tier changes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    // A configured editor would be spawned after a migrate.ts is scaffolded
+    // and block the test run.
+    vi.stubEnv("EDITOR", undefined);
+    vi.stubEnv("VISUAL", undefined);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-test-"));
     state.namespaces = [];
@@ -168,6 +172,10 @@ describe("tailordb migration generate field rename preflight", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    // A configured editor would be spawned after a migrate.ts is scaffolded
+    // and block the test run.
+    vi.stubEnv("EDITOR", undefined);
+    vi.stubEnv("VISUAL", undefined);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-rename-test-"));
     state.namespaces = [];

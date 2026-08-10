@@ -602,6 +602,21 @@ describe("findTypeRenameCandidates", () => {
 
     expect(findTypeRenameCandidates(diff)).toHaveLength(0);
   });
+
+  test("lists multiple compatible added types for one removed type", () => {
+    const diff = createMockMigrationDiff({
+      changes: [
+        { kind: "type_removed", typeName: "User", before: snapshotType("User") },
+        { kind: "type_added", typeName: "Person", after: snapshotType("Person") },
+        { kind: "type_added", typeName: "Member", after: snapshotType("Member") },
+      ],
+    });
+
+    const candidates = findTypeRenameCandidates(diff);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]!.added.map((a) => a.typeName)).toEqual(["Person", "Member"]);
+  });
 });
 
 describe("typeRenameSpecApplies", () => {
