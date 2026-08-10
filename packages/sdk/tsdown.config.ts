@@ -3,6 +3,7 @@ import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
+import { stripDeadNodeBuiltinImports } from "./scripts/lib/strip-dead-node-imports.js";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
 const runtimeGlobalsBanner = '/// <reference types="@tailor-platform/sdk/runtime/globals" />';
@@ -25,6 +26,23 @@ function copyTsconfigPathsHook(outDir: string): void {
     path.resolve("src/cli/tsconfig-paths-hook.d.mts"),
     path.join(outDir, "cli/tsconfig-paths-hook.d.mts"),
   );
+}
+
+function stripDeadNodeBuiltinImportsFromDist(outDir: string): void {
+  const root = path.resolve(outDir);
+  const walk = (current: string): void => {
+    for (const dirent of readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, dirent.name);
+      if (dirent.isDirectory()) {
+        walk(full);
+      } else if (dirent.isFile() && dirent.name.endsWith(".mjs")) {
+        const content = readFileSync(full, "utf-8");
+        const cleaned = stripDeadNodeBuiltinImports(content);
+        if (cleaned !== content) writeFileSync(full, cleaned, "utf-8");
+      }
+    }
+  };
+  walk(root);
 }
 
 function stripBannerExceptConfigureEntry(outDir: string): void {
@@ -101,6 +119,7 @@ export default defineConfig([
     onSuccess: (config) => {
       copyErdViewerAssets(config.outDir);
       copyTsconfigPathsHook(config.outDir);
+      stripDeadNodeBuiltinImportsFromDist(config.outDir);
     },
   },
   {
