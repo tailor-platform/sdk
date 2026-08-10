@@ -1,7 +1,7 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { isSdkBranded } from "#/utils/brand";
 import { parseResolverDefaultPermission } from "./default-permission";
@@ -34,7 +34,7 @@ export function createResolverService(
 
   const loadResolverForFile = async (resolverFile: string): Promise<Resolver | undefined> => {
     try {
-      const resolverModule = await import(pathToFileURL(resolverFile).href);
+      const resolverModule = await importUserModule(resolverFile);
       const result = ResolverSchema.safeParse(resolverModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), resolverFile);

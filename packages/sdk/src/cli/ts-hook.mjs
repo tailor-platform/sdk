@@ -163,9 +163,39 @@ function tryResolveWithExtensionsSync(base, context, nextResolve) {
   return null;
 }
 
+// --- import-nonce propagation ---
+
+const IMPORT_NONCE_PARAM = "tailorImportNonce";
+
+// Carries a parent's cache-busting nonce onto project-local resolutions, so a
+// nonce'd entry module gets a fresh evaluation of its whole project subgraph.
+// Bare specifiers are left alone: node_modules packages (and workspace-linked
+// ones resolving outside node_modules) must stay singletons.
+function propagateImportNonce(resolved, context) {
+  if (!resolved?.url?.startsWith("file:")) return resolved;
+  if (!context.parentURL?.startsWith("file:")) return resolved;
+  const nonce = new URL(context.parentURL).searchParams.get(IMPORT_NONCE_PARAM);
+  if (!nonce) return resolved;
+  const url = new URL(resolved.url);
+  if (url.searchParams.has(IMPORT_NONCE_PARAM) || url.pathname.includes("/node_modules/")) {
+    return resolved;
+  }
+  url.searchParams.set(IMPORT_NONCE_PARAM, nonce);
+  return { ...resolved, url: url.href };
+}
+
+function isProjectLocalSpecifier(specifier) {
+  return specifier.startsWith(".") || specifier.startsWith("/");
+}
+
 // --- module hooks ---
 
 export async function resolve(specifier, context, nextResolve) {
+  const resolved = await resolveTs(specifier, context, nextResolve);
+  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, context) : resolved;
+}
+
+async function resolveTs(specifier, context, nextResolve) {
   try {
     return await nextResolve(specifier, context);
   } catch (err) {
@@ -197,7 +227,7 @@ export async function resolve(specifier, context, nextResolve) {
         if (candidates) {
           for (const candidate of candidates) {
             const result = await tryResolveWithExtensions(candidate, context, nextResolve);
-            if (result) return result;
+            if (result) return propagateImportNonce(result, context);
           }
         }
       }
@@ -250,6 +280,11 @@ export async function load(url, context, nextLoad) {
 
 // Sync hooks for module.registerHooks() (Node >= 22.15.0).
 export function resolveSync(specifier, context, nextResolve) {
+  const resolved = resolveTsSync(specifier, context, nextResolve);
+  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, context) : resolved;
+}
+
+function resolveTsSync(specifier, context, nextResolve) {
   try {
     return nextResolve(specifier, context);
   } catch (err) {
@@ -281,7 +316,7 @@ export function resolveSync(specifier, context, nextResolve) {
         if (candidates) {
           for (const candidate of candidates) {
             const result = tryResolveWithExtensionsSync(candidate, context, nextResolve);
-            if (result) return result;
+            if (result) return propagateImportNonce(result, context);
           }
         }
       }

@@ -8,7 +8,7 @@ export default {
   ignore: [
     "scripts/**",
     "e2e/fixtures/**",
-    "src/cli/commands/deploy/__test_fixtures__/**",
+    "src/cli/**/__test_fixtures__/**",
     "src/cli/ts-hook.d.mts",
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
