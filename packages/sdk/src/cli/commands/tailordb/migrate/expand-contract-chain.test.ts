@@ -1,0 +1,166 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { afterEach, describe, expect, test } from "vitest";
+import { planExpandContract } from "./expand-contract";
+import {
+  buildIntermediateSnapshot,
+  compareSnapshots,
+  normalizeSchemaSnapshot,
+  reconstructSnapshotFromMigrations,
+} from "./snapshot";
+import { snapshotType, writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import type { MigrationDiff } from "./diff-calculator";
+import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function migrationsDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "expand-contract-chain-"));
+  tempDirs.push(dir);
+  return path.join(dir, "migrations");
+}
+
+function field(type: string, overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig {
+  return { type, required: false, ...overrides };
+}
+
+function snapshot(fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot {
+  return {
+    version: 1,
+    namespace: "testdb",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    types: { User: { ...snapshotType("User"), fields } },
+  };
+}
+
+/**
+ * Produce the two diffs a single generate run would write for one type change.
+ * @param previousFields - Fields before the change
+ * @param currentFields - Fields the user now declares
+ * @returns Both diffs plus the intermediate snapshot between them
+ */
+function generatePair(
+  previousFields: Record<string, SnapshotFieldConfig>,
+  currentFields: Record<string, SnapshotFieldConfig>,
+) {
+  const previous = normalizeSchemaSnapshot(snapshot(previousFields));
+  const current = normalizeSchemaSnapshot(snapshot(currentFields));
+  const { plans } = planExpandContract({
+    previous,
+    current,
+    diff: compareSnapshots(previous, current),
+    confirmed: new Set(["User.price"]),
+  });
+  const intermediate = buildIntermediateSnapshot(previous, plans);
+  const expand = compareSnapshots(previous, intermediate);
+  const contract = compareSnapshots(intermediate, current, {
+    fieldRenames: plans.map((plan) => ({
+      typeName: plan.typeName,
+      previousFieldName: plan.tempFieldName,
+      fieldName: plan.fieldName,
+    })),
+  });
+  return { previous, current, intermediate, plans, expand, contract };
+}
+
+function writePair(
+  dir: string,
+  previous: SchemaSnapshot,
+  expand: MigrationDiff,
+  contract: MigrationDiff,
+) {
+  writeInitialSchema(dir, previous.types);
+  writeDiff(dir, 1, expand.changes, expand);
+  writeDiff(dir, 2, contract.changes, contract);
+}
+
+describe("expand-contract migration chain", () => {
+  test("replays to exactly the schema the user declared", () => {
+    const { previous, current, expand, contract } = generatePair(
+      { price: field("integer", { required: true }) },
+      { price: field("string", { required: true }) },
+    );
+    const dir = migrationsDir();
+    writePair(dir, previous, expand, contract);
+
+    expect(reconstructSnapshotFromMigrations(dir)?.types).toEqual(current.types);
+  });
+
+  test("replays the expand migration alone to the intermediate schema", () => {
+    const { previous, intermediate, expand, contract } = generatePair(
+      { price: field("integer", { required: true }) },
+      { price: field("string", { required: true }) },
+    );
+    const dir = migrationsDir();
+    writePair(dir, previous, expand, contract);
+
+    expect(reconstructSnapshotFromMigrations(dir, 1)?.types).toEqual(intermediate.types);
+  });
+
+  test("frees the original name so the contract can reuse it", () => {
+    const { intermediate } = generatePair(
+      { price: field("integer", { required: true }) },
+      { price: field("string", { required: true }) },
+    );
+
+    expect(intermediate.types.User?.fields.price).toBeUndefined();
+    expect(intermediate.types.User?.fields.priceMigrate?.type).toBe("string");
+  });
+
+  test("removes the original field in the expand migration, which keeps it readable there", () => {
+    const { expand } = generatePair(
+      { price: field("integer", { required: true }) },
+      { price: field("string", { required: true }) },
+    );
+
+    expect(expand.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "field_added", fieldName: "priceMigrate" }),
+        expect.objectContaining({ kind: "field_removed", fieldName: "price" }),
+      ]),
+    );
+  });
+
+  test("relaxes the temporary field so the expand script can fill it in batches", () => {
+    const { intermediate } = generatePair(
+      { price: field("integer", { required: true, unique: true }) },
+      { price: field("string", { required: true, unique: true }) },
+    );
+
+    expect(intermediate.types.User?.fields.priceMigrate?.required).toBe(false);
+    expect(intermediate.types.User?.fields.priceMigrate?.unique).toBe(false);
+  });
+
+  test("contracts through a single rename that restores the final contract", () => {
+    const { contract } = generatePair(
+      { price: field("integer", { required: true }) },
+      { price: field("string", { required: true }) },
+    );
+
+    expect(contract.changes).toEqual([
+      expect.objectContaining({
+        kind: "field_renamed",
+        fieldName: "price",
+        previousFieldName: "priceMigrate",
+      }),
+    ]);
+    expect(contract.requiresMigrationScript).toBe(true);
+  });
+
+  test("carries the post-expand state as the contract's starting point", () => {
+    const { contract } = generatePair(
+      { price: field("integer", { required: true }) },
+      { price: field("string", { required: true }) },
+    );
+
+    const renamed = contract.changes.find((change) => change.kind === "field_renamed");
+    expect(renamed && "before" in renamed && renamed.before.type).toBe("string");
+  });
+});

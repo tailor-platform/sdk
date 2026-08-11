@@ -66,6 +66,7 @@ import type {
   OperatorFieldConfig,
   StandardActionPermission,
 } from "#/parser/service/tailordb/types";
+import type { ExpandContractPlan } from "./expand-contract";
 import type { SchemaDrift } from "./types";
 
 // ============================================================================
@@ -1816,6 +1817,37 @@ function compareTypeScripts(
     before: prevState,
     after: currState,
   });
+}
+
+/**
+ * Build the schema state that sits between an expand and a contract migration:
+ * each converted field is replaced by its temporary counterpart.
+ *
+ * The original field is dropped here rather than in the contract migration so
+ * the contract can reuse its name. It stays readable while the expand script
+ * runs, because a field removed by a migration is retained until that same
+ * migration's post phase.
+ *
+ * The temporary field is optional and non-unique regardless of its final
+ * contract, since the expand script fills it in batches.
+ * @param previous - Snapshot the expand migration starts from
+ * @param plans - Field changes carried through temporary fields
+ * @returns Snapshot the contract migration compares against
+ */
+export function buildIntermediateSnapshot(
+  previous: NormalizedSchemaSnapshot,
+  plans: readonly ExpandContractPlan[],
+): NormalizedSchemaSnapshot {
+  const types = copySnapshotRecord(previous.types);
+  for (const plan of plans) {
+    const type = types[plan.typeName];
+    if (!type) continue;
+    const fields = copySnapshotRecord(type.fields);
+    fields[plan.tempFieldName] = { ...plan.after, required: false, unique: false };
+    delete fields[plan.fieldName];
+    types[plan.typeName] = { ...type, fields };
+  }
+  return normalizeSchemaSnapshot({ ...previous, types });
 }
 
 /**

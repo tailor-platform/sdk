@@ -33,3 +33,31 @@ export function supportsInPlaceFieldTypeChange(
 
   return IN_PLACE_TYPE_CHANGES.has(`${before.type}:${after.type}`);
 }
+
+/**
+ * Determine whether a field type change can be carried by a pair of migrations
+ * that move values through a temporary field.
+ *
+ * The copy is a whole-value overwrite, so it can only carry a field whose value
+ * stands on its own: a serial number belongs to a sequence the copy cannot
+ * reproduce, a foreign key would dangle while both fields exist, a vector
+ * belongs to an index built from it, and a nested value would need its members
+ * converted individually. Arrays are excluded because collapsing one into a
+ * single value has no answer the generated script could choose.
+ * @param before - Previous field configuration
+ * @param after - Target field configuration
+ * @returns Whether the change can be split into expand and contract migrations
+ */
+export function supportsExpandContractFieldChange(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): boolean {
+  if (before.type === after.type) return false;
+  if (before.array || after.array) return false;
+  if (before.type === "nested" || after.type === "nested") return false;
+  if (before.serial || after.serial) return false;
+  if (before.vector || after.vector) return false;
+  if (before.foreignKey || after.foreignKey) return false;
+
+  return true;
+}
