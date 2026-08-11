@@ -98,11 +98,22 @@ export async function setupRenovate(options: SetupRenovateOptions): Promise<void
 
   fs.writeFileSync(outputPath, renderRenovateConfig(), "utf-8");
   const setups: SetupRegistration[] = [{ kind: "renovate", file: RENOVATE_CONFIG_FILE }];
-  writeLock(options.outputDir, {
-    version: LOCK_VERSION,
-    targets: lock?.targets ?? [],
-    setups,
-  });
+  try {
+    writeLock(options.outputDir, {
+      version: LOCK_VERSION,
+      targets: lock?.targets ?? [],
+      setups,
+    });
+  } catch (cause) {
+    try {
+      fs.rmSync(outputPath);
+    } catch (rollbackCause) {
+      throw new Error(`Failed to record Renovate setup and remove ${RENOVATE_CONFIG_FILE}.`, {
+        cause: rollbackCause,
+      });
+    }
+    throw cause;
+  }
 
   logger.success(`Generated ${styles.path(RENOVATE_CONFIG_FILE)}`);
   logger.success("Recorded Renovate setup in .github/tailor.lock");

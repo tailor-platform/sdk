@@ -109,6 +109,17 @@ describe("setupRenovate", () => {
     expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
   });
 
+  test("removes the generated config when recording the setup fails", async () => {
+    const lockPath = path.join(testDir, ".github/tailor.lock");
+    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+    fs.symlinkSync(path.join(outsideDir, "missing/tailor.lock"), lockPath);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/ENOENT/);
+
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
+    expect(fs.lstatSync(lockPath).isSymbolicLink()).toBe(true);
+  });
+
   test("refuses a dangling config symlink without writing outside the repository", async () => {
     fs.mkdirSync(outsideDir, { recursive: true });
     const outsideConfig = path.join(outsideDir, RENOVATE_CONFIG_FILE);

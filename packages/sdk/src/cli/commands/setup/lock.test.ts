@@ -166,6 +166,23 @@ describe("readLock / writeLock", () => {
       error: /no valid 'setups'/,
     },
     {
+      title: "throws with restore guidance when a setup registration is duplicated",
+      content: () =>
+        `${JSON.stringify(
+          {
+            version: LOCK_VERSION,
+            targets: [],
+            setups: [
+              { kind: "renovate", file: "renovate.json" },
+              { kind: "renovate", file: "renovate.json" },
+            ],
+          },
+          null,
+          2,
+        )}\n`,
+      error: /no valid 'setups'/,
+    },
+    {
       title: "throws on invalid JSON",
       content: () => "{ not json",
       error: /not valid JSON/,

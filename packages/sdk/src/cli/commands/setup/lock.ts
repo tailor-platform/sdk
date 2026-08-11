@@ -76,6 +76,12 @@ function isSetupRegistration(value: unknown): value is SetupRegistration {
   );
 }
 
+function isSetupRegistrations(value: unknown): value is SetupRegistration[] {
+  if (!Array.isArray(value) || !value.every(isSetupRegistration)) return false;
+  const keys = value.map((setup) => `${setup.kind}:${setup.file}`);
+  return new Set(keys).size === keys.length;
+}
+
 /**
  * Compute the lock content hash for a rendered workflow file.
  * @param content - File content to hash
@@ -135,16 +141,13 @@ export function readLock(outputDir: string): LockFile | null {
         "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
-  if (
-    parsed.version >= 2 &&
-    (!Array.isArray(parsed.setups) || !parsed.setups.every(isSetupRegistration))
-  ) {
+  if (parsed.version >= 2 && !isSetupRegistrations(parsed.setups)) {
     throw new Error(
       `${LOCK_FILENAME} has no valid 'setups' array. The lock file is machine-owned; ` +
         "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
-  const setups = parsed.version >= 2 && Array.isArray(parsed.setups) ? parsed.setups : [];
+  const setups = parsed.version >= 2 && isSetupRegistrations(parsed.setups) ? parsed.setups : [];
   return { ...parsed, setups } as LockFile;
 }
 
