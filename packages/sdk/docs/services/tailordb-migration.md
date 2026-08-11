@@ -317,10 +317,31 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Add table                         | No        | No                | Schema change only                                                                                                                                                                                                                      |
 | Remove table                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the table leaves the active schema. The table stays readable from `migrate.ts` during Pre-migration.           |
 | Change foreign key target table   | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                             |
-| Change field type (verified pair) | Yes       | Yes               | In-place for `uuid` → `string`, `enum` → `string`, `decimal` → `string`, and `integer` → `float`; review the generated normalization scaffold and customize it only when existing values need transformation                            |
+| Change field type (verified pair) | Yes       | Yes               | In-place for the pairs listed under [Field type changes](#field-type-changes); review the generated normalization scaffold and customize it only when existing values need transformation                                               |
 | Change field type (other pair)    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
 | Change array → single value       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
 | Change single value → array       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
+
+### Field type changes
+
+These pairs change in place, in a single migration:
+
+| From      | To                                               |
+| --------- | ------------------------------------------------ |
+| `string`  | `integer`, `float`, `decimal`, `boolean`, `uuid` |
+| `integer` | `string`, `float`, `decimal`, `boolean`          |
+| `float`   | `string`, `decimal`                              |
+| `decimal` | `string`, `float`                                |
+| `boolean` | `string`                                         |
+| `uuid`    | `string`                                         |
+| `enum`    | `string`                                         |
+
+Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-changes). Two groups are worth calling out:
+
+- `boolean` → `integer`, `float` → `integer`, and `string` → `date` are rejected at deploy time because the stored values cannot be cast to the new type. The previous schema stays intact, so you can fix the data and deploy again.
+- `date`, `datetime`, and `time` fields are not stored in the textual form you wrote them in. Converting them to or from another type reads back as a different instant, so these pairs are excluded even though the schema change itself would succeed. Convert them through a temporary field where your script controls the formatting.
+
+Converting to `decimal` pads values to the field's scale, so `42` reads back as `42.000000`. The numeric value is unchanged.
 
 ### Generated normalization script for field type changes
 
@@ -369,7 +390,7 @@ The generated `never` annotation intentionally causes a TypeScript error until y
 
 ### 3-step migration for unsupported changes
 
-Field type changes outside the verified in-place pairs (for example, `string` → `integer`) and array-cardinality changes are detected but rejected by the diff engine. Use an expand-contract strategy:
+Field type changes outside the verified in-place pairs (for example, `datetime` → `string`) and array-cardinality changes are detected but rejected by the diff engine. Use an expand-contract strategy:
 
 1. **Migration N**: Add an optional field with the desired type (e.g., `fieldName_new`). If the old field is required, make it optional in the same migration. Write a script that copies and converts every non-null old value into the temporary field, then sets the old field to `null` in the same row update.
 2. **Migration N+1**: Remove the old field.

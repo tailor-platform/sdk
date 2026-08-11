@@ -6,11 +6,29 @@ import type { SnapshotFieldConfig } from "./snapshot-types";
  *
  * Keep this list deliberately narrow. Pair-specific platform experiments can
  * extend it once both indexed and unindexed read paths have been verified.
+ *
+ * A pair qualifies only when existing values read back with their meaning
+ * intact. Date, datetime, and time values are not stored in the textual form
+ * they were written in, so converting them to or from another type reads back
+ * as a different instant — those pairs stay off this list even though the
+ * platform accepts the schema change.
  */
 const IN_PLACE_TYPE_CHANGES = new Set([
+  "boolean:string",
+  "decimal:float",
   "decimal:string",
   "enum:string",
+  "float:decimal",
+  "float:string",
+  "integer:boolean",
+  "integer:decimal",
   "integer:float",
+  "integer:string",
+  "string:boolean",
+  "string:decimal",
+  "string:float",
+  "string:integer",
+  "string:uuid",
   "uuid:string",
 ]);
 
