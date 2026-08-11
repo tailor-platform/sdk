@@ -145,6 +145,7 @@ describe("planExpandContract", () => {
     ["vector", { vector: true }],
     ["foreign keys", { foreignKey: true }],
     ["arrays", { array: true }],
+    ["unique fields", { unique: true }],
   ] satisfies [string, Partial<SnapshotFieldConfig>][])("blocks %s", (_name, overrides) => {
     const { plans, blocked } = planning([
       typeChange("price", snapshotField("integer", overrides), snapshotField("string", overrides)),

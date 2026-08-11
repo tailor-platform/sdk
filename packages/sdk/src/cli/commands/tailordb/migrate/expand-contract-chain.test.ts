@@ -153,8 +153,8 @@ describe("expand-contract migration chain", () => {
 
   test("relaxes the temporary field so the expand script can fill it in batches", () => {
     const { intermediate } = generatePair(
-      { price: snapshotField("integer", { required: true, unique: true }) },
-      { price: snapshotField("string", { required: true, unique: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
 
     expect(intermediate.types.User?.fields.priceMigrate?.required).toBe(false);

@@ -474,24 +474,26 @@ function generateFieldTypeChangeScript(
 function generateExpandConversionScript(plan: ExpandContractPlan): string {
   return `  // Convert ${plan.typeName}.${plan.fieldName} into ${plan.tempFieldName}, which the next migration renames back to ${plan.fieldName}
   {
+    let lastId: string | undefined;
     while (true) {
-      const rows = await trx
+      let query = trx
         .selectFrom("${plan.typeName}")
         .select(["id", "${plan.fieldName}"])
         .where("${plan.fieldName}", "is not", null)
         .orderBy("id", "asc")
-        .limit(100)
-        .execute();
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
       if (rows.length === 0) break;
 
       for (const row of rows) {
         // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the conversion.
         // Produce a value accepted by the ${plan.after.type} type from the stored ${plan.before.type} value.
         const sourceValue = row.${plan.fieldName};
-        if (sourceValue === null) continue;
         const convertedValue: never = sourceValue;
-        // Clearing ${plan.fieldName} in the same update is what removes it from the
-        // batch filter, so a re-run cannot overwrite an already converted row.
+        // Clearing ${plan.fieldName} keeps a re-run from converting the row twice.
         await trx
           .updateTable("${plan.typeName}")
           .set({
@@ -501,6 +503,7 @@ function generateExpandConversionScript(plan: ExpandContractPlan): string {
           .where("id", "=", row.id)
           .execute();
       }
+      lastId = rows[rows.length - 1]!.id;
     }
   }`;
 }

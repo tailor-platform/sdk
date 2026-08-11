@@ -41,6 +41,13 @@ describe("expand conversion script", () => {
     expect(expandScript()).toContain(`.where("price", "is not", null)`);
   });
 
+  test("advances by id, so an edited body cannot loop on the same batch", () => {
+    const script = expandScript();
+
+    expect(script).toContain(`query = query.where("id", ">", lastId)`);
+    expect(script).toContain("lastId = rows[rows.length - 1]!.id;");
+  });
+
   test("marks the conversion as needing review", () => {
     const script = expandScript();
 

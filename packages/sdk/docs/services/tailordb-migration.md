@@ -378,10 +378,12 @@ User.price changes from integer to string, which cannot be applied in one step.
 
 Confirming writes two migrations:
 
-1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears the original field in the same update. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there.
-2. **The rename.** Removes the original field and renames the temporary field back to `price`. This one needs no changes.
+1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there.
+2. **The rename.** Renames the temporary field back to `price`. This one needs no changes.
 
-Run `tailor deploy` after each. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than overwriting rows it already converted.
+`tailor deploy` applies both. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than converting a row twice.
+
+The original field is removed in the first migration rather than the second, because the rename needs its name free. Your script can still read it while the conversion runs.
 
 In a non-interactive run — `--yes`, or CI — name each field explicitly:
 
@@ -393,7 +395,10 @@ Without the flag the command fails rather than converting anything, so a scripte
 
 > **Why the conversion clears the original field.** Removing a field from the schema does not necessarily remove its stored value. Reusing the name for an incompatible type while a stale value remains can deploy successfully and then make subsequent reads fail. Clearing the original in the same update is what prevents that, which is why the generated script writes both fields at once.
 
-Array-to-scalar and scalar-to-array changes are still rejected, since collapsing an array has no answer the generated script could choose for you. Convert those through a temporary field you add yourself: add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration.
+Some changes are still rejected and need a temporary field you add yourself — add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration:
+
+- Array-to-scalar and scalar-to-array, since collapsing an array has no answer the generated script could choose for you.
+- A field that is unique, or that an index, relationship, permission, or type-level script names. Those keep pointing at the original name, which the conversion removes.
 
 ## Testing Pending Migrations
 

@@ -43,7 +43,9 @@ export function supportsInPlaceFieldTypeChange(
  * reproduce, a foreign key would dangle while both fields exist, a vector
  * belongs to an index built from it, and a nested value would need its members
  * converted individually. Arrays are excluded because collapsing one into a
- * single value has no answer the generated script could choose.
+ * single value has no answer the generated script could choose, and unique
+ * fields because the duplicate-resolution scaffold the rename half would emit
+ * only produces string values.
  * @param before - Previous field configuration
  * @param after - Target field configuration
  * @returns Whether the change can be split into expand and contract migrations
@@ -54,6 +56,7 @@ export function supportsExpandContractFieldChange(
 ): boolean {
   if (before.type === after.type) return false;
   if (supportsInPlaceFieldTypeChange(before, after)) return false;
+  if (before.unique || after.unique) return false;
   if (before.array || after.array) return false;
   if (before.type === "nested" || after.type === "nested") return false;
   if (before.serial || after.serial) return false;
