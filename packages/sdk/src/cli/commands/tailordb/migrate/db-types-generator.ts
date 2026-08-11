@@ -14,6 +14,7 @@ import {
   type TailorDBSnapshotType,
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
+import type { ExpandContractPlan } from "./expand-contract";
 
 /**
  * Information about enum value changes
@@ -127,9 +128,14 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
  * Generate the complete db.ts file content from a schema snapshot
  * @param {SchemaSnapshot} snapshot - Schema snapshot to generate types from
  * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
+ * @param expandPlans - Field changes carried through temporary fields
  * @returns {string} Generated db.ts file contents
  */
-function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationDiff): string {
+function generateDbTypesFromSnapshot(
+  snapshot: SchemaSnapshot,
+  diff?: MigrationDiff,
+  expandPlans: readonly ExpandContractPlan[] = [],
+): string {
   const types = Object.values(snapshot.types);
   if (types.length === 0) {
     return generateEmptyDbTypes(snapshot.namespace);
@@ -142,8 +148,24 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
         optionalToRequired: new Map(),
         addedRequiredFields: new Map(),
         enumValueChanges: new Map(),
-        renamedFields: new Map(),
+        renamedFields: new Map<string, Map<string, SnapshotFieldConfig>>(),
       };
+
+  // The temporary field is absent from the pre-migration snapshot; inject it so
+  // the conversion script can write it, as a renamed field's new name is. The
+  // source field is widened the same way an optional→required field is, because
+  // the script clears it once the value has been carried across.
+  for (const plan of expandPlans) {
+    const injected =
+      breakingChangeFields.renamedFields.get(plan.typeName) ??
+      new Map<string, SnapshotFieldConfig>();
+    injected.set(plan.tempFieldName, { ...plan.after, required: false, unique: false });
+    breakingChangeFields.renamedFields.set(plan.typeName, injected);
+
+    const widened = breakingChangeFields.optionalToRequired.get(plan.typeName) ?? new Set<string>();
+    widened.add(plan.fieldName);
+    breakingChangeFields.optionalToRequired.set(plan.typeName, widened);
+  }
 
   // Track which utility types are used
   const usedUtilityTypes = new Set<"Timestamp" | "Serial">();
@@ -449,6 +471,7 @@ function generateFieldType(
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} migrationNumber - Migration number
  * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
+ * @param expandPlans - Field changes carried through temporary fields
  * @returns {Promise<string>} Path to the written file
  */
 export async function writeDbTypesFile(
@@ -456,8 +479,9 @@ export async function writeDbTypesFile(
   migrationsDir: string,
   migrationNumber: number,
   diff?: MigrationDiff,
+  expandPlans: readonly ExpandContractPlan[] = [],
 ): Promise<string> {
-  const content = generateDbTypesFromSnapshot(snapshot, diff);
+  const content = generateDbTypesFromSnapshot(snapshot, diff, expandPlans);
   const filePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
   await fs.writeFile(filePath, content);
   return filePath;

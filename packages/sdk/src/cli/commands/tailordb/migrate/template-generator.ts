@@ -18,6 +18,7 @@ import {
   type SchemaSnapshot,
 } from "./snapshot";
 import type { MigrationDiff, DiffChange, FieldRenamedChange } from "./diff-calculator";
+import type { ExpandContractPlan } from "./expand-contract";
 
 /** Marker left in generated migration scripts until their normalization logic is reviewed. */
 export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
@@ -95,6 +96,7 @@ export async function generateSchemaFile(
  * @param {number} migrationNumber - Migration number
  * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot (for db.ts generation)
  * @param {string} [description] - Optional description for the migration
+ * @param expandPlans - Field changes carried through temporary fields
  * @returns {Promise<GenerateDiffResult>} Generated file info
  */
 export async function generateDiffFiles(
@@ -103,6 +105,7 @@ export async function generateDiffFiles(
   migrationNumber: number,
   previousSnapshot: SchemaSnapshot,
   description?: string,
+  expandPlans: readonly ExpandContractPlan[] = [],
 ): Promise<GenerateDiffResult> {
   // Create migration directory
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
@@ -113,9 +116,14 @@ export async function generateDiffFiles(
   const migrateFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   const dbTypesFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
 
+  // The expand migration only adds an optional field and removes the original,
+  // neither of which is breaking, but its conversion script is what carries the
+  // data across.
+  const writeScript = diff.requiresMigrationScript || expandPlans.length > 0;
+
   // Check if files already exist to prevent accidental overwrite
   await ensureFileNotExists(diffFilePath);
-  if (diff.requiresMigrationScript) {
+  if (writeScript) {
     await ensureFileNotExists(migrateFilePath);
     await ensureFileNotExists(dbTypesFilePath);
   }
@@ -133,16 +141,15 @@ export async function generateDiffFiles(
     migrationNumber,
   };
 
-  // Generate migration script and db types only if migration script is required
-  if (diff.requiresMigrationScript) {
-    const scriptContent = generateMigrationScript(diff);
+  if (writeScript) {
+    const scriptContent = generateMigrationScript(diff, expandPlans);
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
     // Generate db.ts with types based on the PREVIOUS schema state
     // (the state before this migration runs)
     // Pass diff to generate ColumnType for optional->required fields
-    await writeDbTypesFile(previousSnapshot, migrationsDir, migrationNumber, diff);
+    await writeDbTypesFile(previousSnapshot, migrationsDir, migrationNumber, diff, expandPlans);
     result.dbTypesFilePath = dbTypesFilePath;
   }
 
@@ -152,10 +159,18 @@ export async function generateDiffFiles(
 /**
  * Generate migration script content based on diff
  * @param {MigrationDiff} diff - Migration diff
+ * @param expandPlans - Field changes carried through temporary fields
  * @returns {string} Migration script content
  */
-export function generateMigrationScript(diff: MigrationDiff): string {
+export function generateMigrationScript(
+  diff: MigrationDiff,
+  expandPlans: readonly ExpandContractPlan[] = [],
+): string {
   const updates: string[] = [];
+
+  for (const plan of expandPlans) {
+    updates.push(generateExpandConversionScript(plan));
+  }
 
   for (const change of diff.changes) {
     const decimalScaleScript = generateDecimalScaleChangeScript(change);
@@ -455,6 +470,40 @@ function generateFieldTypeChangeScript(
           .execute();
       }
       lastId = rows[rows.length - 1]!.id;
+    }
+  }`;
+}
+
+function generateExpandConversionScript(plan: ExpandContractPlan): string {
+  return `  // Convert ${plan.typeName}.${plan.fieldName} into ${plan.tempFieldName}, which the next migration renames back to ${plan.fieldName}
+  {
+    while (true) {
+      const rows = await trx
+        .selectFrom("${plan.typeName}")
+        .select(["id", "${plan.fieldName}"])
+        .where("${plan.fieldName}", "is not", null)
+        .orderBy("id", "asc")
+        .limit(100)
+        .execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the conversion.
+        // Produce a value accepted by the ${plan.after.type} type from the stored ${plan.before.type} value.
+        const sourceValue = row.${plan.fieldName};
+        if (sourceValue === null) continue;
+        const convertedValue: never = sourceValue;
+        // Clearing ${plan.fieldName} in the same update is what removes it from the
+        // batch filter, so a re-run cannot overwrite an already converted row.
+        await trx
+          .updateTable("${plan.typeName}")
+          .set({
+            [${JSON.stringify(plan.tempFieldName)}]: convertedValue,
+            [${JSON.stringify(plan.fieldName)}]: null,
+          })
+          .where("id", "=", row.id)
+          .execute();
+      }
     }
   }`;
 }
