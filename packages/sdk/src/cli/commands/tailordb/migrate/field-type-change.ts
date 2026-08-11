@@ -13,7 +13,7 @@ import type { SnapshotFieldConfig } from "./snapshot-types";
  * as a different instant — those pairs stay off this list even though the
  * platform accepts the schema change.
  */
-const IN_PLACE_TYPE_CHANGES = new Set([
+export const IN_PLACE_TYPE_CHANGES: ReadonlySet<string> = new Set([
   "boolean:string",
   "decimal:float",
   "decimal:string",

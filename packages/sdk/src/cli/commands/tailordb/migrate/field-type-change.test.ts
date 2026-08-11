@@ -1,9 +1,41 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { supportsInPlaceFieldTypeChange } from "./field-type-change";
+import { IN_PLACE_TYPE_CHANGES, supportsInPlaceFieldTypeChange } from "./field-type-change";
 import type { SnapshotFieldConfig } from "./snapshot-types";
+
+const MIGRATION_DOC = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../../../docs/services/tailordb-migration.md",
+);
 
 function field(type: string, overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig {
   return { type, required: false, ...overrides };
+}
+
+/**
+ * Read the documented in-place pairs out of the "Field type changes" table.
+ * @returns Documented pairs as `from:to` keys
+ */
+function documentedPairs(): Set<string> {
+  const doc = fs.readFileSync(MIGRATION_DOC, "utf-8");
+  const section = doc.split("### Field type changes")[1];
+  if (!section) throw new Error("Field type changes section not found");
+  const table = section.split("\n\n").find((block) => block.startsWith("| From"));
+  if (!table) throw new Error("Field type changes table not found");
+
+  const pairs = new Set<string>();
+  for (const line of table.split("\n").slice(2)) {
+    const cells = line.split("|").map((cell) => cell.trim());
+    const from = cells[1]?.replaceAll("`", "");
+    if (!from) continue;
+    for (const to of (cells[2] ?? "").split(",")) {
+      const target = to.trim().replaceAll("`", "");
+      if (target) pairs.add(`${from}:${target}`);
+    }
+  }
+  return pairs;
 }
 
 describe("supportsInPlaceFieldTypeChange", () => {
@@ -43,6 +75,10 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["date", "datetime"],
   ])("rejects %s to %s, which deploys but changes the stored instant", (before, after) => {
     expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(false);
+  });
+
+  test("matches the pairs documented in the migration guide", () => {
+    expect([...documentedPairs()].toSorted()).toEqual([...IN_PLACE_TYPE_CHANGES].toSorted());
   });
 
   test.each([

@@ -338,8 +338,8 @@ These pairs change in place, in a single migration:
 
 Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-changes). Two groups are worth calling out:
 
-- `boolean` → `integer`, `float` → `integer`, and `string` → `date` are rejected at deploy time because the stored values cannot be cast to the new type. The previous schema stays intact, so you can fix the data and deploy again.
-- `date`, `datetime`, and `time` fields are not stored in the textual form you wrote them in. Converting them to or from another type reads back as a different instant, so these pairs are excluded even though the schema change itself would succeed. Convert them through a temporary field where your script controls the formatting.
+- `boolean` → `integer`, `float` → `integer`, and `string` → `date` are excluded because the stored values cannot be cast to the new type.
+- `date`, `datetime`, and `time` fields are not stored in the textual form you wrote them in, so converting them to or from another type reads back as a different instant. Convert them through a temporary field where your script controls the formatting.
 
 Converting to `decimal` pads values to the field's scale, so `42` reads back as `42.000000`. The numeric value is unchanged.
 
