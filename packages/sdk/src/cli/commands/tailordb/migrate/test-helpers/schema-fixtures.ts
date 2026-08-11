@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "../diff-calculator";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { SchemaSnapshot, TailorDBSnapshotType } from "../snapshot";
+import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "../snapshot";
 
 /**
  * Parsed-type shape consumed by createSnapshotFromLocalTypes / createSnapshotType;
@@ -23,6 +23,19 @@ export function parsedType(name: string): TailorDBType {
     backwardRelationships: {},
     permissions: {},
   };
+}
+
+/**
+ * Snapshot field config with the given type, optional unless overridden.
+ * @param type - Field type name
+ * @param overrides - Properties to set on top of the default
+ * @returns {SnapshotFieldConfig} Snapshot field config
+ */
+export function snapshotField(
+  type: string,
+  overrides: Partial<SnapshotFieldConfig> = {},
+): SnapshotFieldConfig {
+  return { type, required: false, ...overrides };
 }
 
 /**

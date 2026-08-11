@@ -10,7 +10,12 @@ import {
   normalizeSchemaSnapshot,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import { snapshotType, writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
+import {
+  snapshotField,
+  snapshotType,
+  writeDiff,
+  writeInitialSchema,
+} from "./test-helpers/schema-fixtures";
 import type { MigrationDiff } from "./diff-calculator";
 import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
 
@@ -26,10 +31,6 @@ function migrationsDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "expand-contract-chain-"));
   tempDirs.push(dir);
   return path.join(dir, "migrations");
-}
-
-function field(type: string, overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig {
-  return { type, required: false, ...overrides };
 }
 
 function snapshot(fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot {
@@ -85,8 +86,8 @@ function writePair(
 describe("expand-contract migration chain", () => {
   test("replays to exactly the schema the user declared", () => {
     const { previous, current, expand, contract } = generatePair(
-      { price: field("integer", { required: true }) },
-      { price: field("string", { required: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
     const dir = migrationsDir();
     writePair(dir, previous, expand, contract);
@@ -96,8 +97,8 @@ describe("expand-contract migration chain", () => {
 
   test("replays the expand migration alone to the intermediate schema", () => {
     const { previous, intermediate, expand, contract } = generatePair(
-      { price: field("integer", { required: true }) },
-      { price: field("string", { required: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
     const dir = migrationsDir();
     writePair(dir, previous, expand, contract);
@@ -107,8 +108,8 @@ describe("expand-contract migration chain", () => {
 
   test("frees the original name so the contract can reuse it", () => {
     const { intermediate } = generatePair(
-      { price: field("integer", { required: true }) },
-      { price: field("string", { required: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
 
     expect(intermediate.types.User?.fields.price).toBeUndefined();
@@ -117,8 +118,8 @@ describe("expand-contract migration chain", () => {
 
   test("removes the original field in the expand migration, which keeps it readable there", () => {
     const { expand } = generatePair(
-      { price: field("integer", { required: true }) },
-      { price: field("string", { required: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
 
     expect(expand.changes).toEqual(
@@ -131,8 +132,8 @@ describe("expand-contract migration chain", () => {
 
   test("records the removed field as optional so the script can clear it", () => {
     const { expand } = generatePair(
-      { price: field("integer", { required: true }) },
-      { price: field("string", { required: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
 
     const removed = expand.changes.find((change) => change.kind === "field_removed");
@@ -143,8 +144,8 @@ describe("expand-contract migration chain", () => {
 
   test("relaxes the temporary field so the expand script can fill it in batches", () => {
     const { intermediate } = generatePair(
-      { price: field("integer", { required: true, unique: true }) },
-      { price: field("string", { required: true, unique: true }) },
+      { price: snapshotField("integer", { required: true, unique: true }) },
+      { price: snapshotField("string", { required: true, unique: true }) },
     );
 
     expect(intermediate.types.User?.fields.priceMigrate?.required).toBe(false);
@@ -153,8 +154,8 @@ describe("expand-contract migration chain", () => {
 
   test("contracts through a single rename that restores the final contract", () => {
     const { contract } = generatePair(
-      { price: field("integer", { required: true }) },
-      { price: field("string", { required: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
 
     expect(contract.changes).toEqual([
@@ -169,8 +170,8 @@ describe("expand-contract migration chain", () => {
 
   test("carries the post-expand state as the contract's starting point", () => {
     const { contract } = generatePair(
-      { price: field("integer", { required: true }) },
-      { price: field("string", { required: true }) },
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
     );
 
     const renamed = contract.changes.find((change) => change.kind === "field_renamed");

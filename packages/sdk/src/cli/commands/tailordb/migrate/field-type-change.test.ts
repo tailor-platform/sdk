@@ -1,10 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { supportsInPlaceFieldTypeChange } from "./field-type-change";
+import { snapshotField } from "./test-helpers/schema-fixtures";
 import type { SnapshotFieldConfig } from "./snapshot-types";
-
-function field(type: string, overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig {
-  return { type, required: false, ...overrides };
-}
 
 describe("supportsInPlaceFieldTypeChange", () => {
   test.each([
@@ -13,7 +10,7 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["decimal", "string"],
     ["integer", "float"],
   ])("allows %s to %s", (before, after) => {
-    expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(true);
+    expect(supportsInPlaceFieldTypeChange(snapshotField(before), snapshotField(after))).toBe(true);
   });
 
   test.each([
@@ -23,7 +20,7 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["float", "integer"],
     ["date", "string"],
   ])("rejects unverified %s to %s", (before, after) => {
-    expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(false);
+    expect(supportsInPlaceFieldTypeChange(snapshotField(before), snapshotField(after))).toBe(false);
   });
 
   test.each([
@@ -32,6 +29,8 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["vector fields", { vector: true }],
     ["foreign keys", { foreignKey: true }],
   ] satisfies [string, Partial<SnapshotFieldConfig>][])("rejects $0", (_name, overrides) => {
-    expect(supportsInPlaceFieldTypeChange(field("integer", overrides), field("float"))).toBe(false);
+    expect(
+      supportsInPlaceFieldTypeChange(snapshotField("integer", overrides), snapshotField("float")),
+    ).toBe(false);
   });
 });

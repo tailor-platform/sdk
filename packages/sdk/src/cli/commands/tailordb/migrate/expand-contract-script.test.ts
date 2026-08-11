@@ -5,20 +5,16 @@ import { afterEach, describe, expect, test } from "vitest";
 import { writeDbTypesFile } from "./db-types-generator";
 import { MIGRATION_REVIEW_REQUIRED_MARKER, generateMigrationScript } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
-import { snapshotType } from "./test-helpers/schema-fixtures";
+import { snapshotField, snapshotType } from "./test-helpers/schema-fixtures";
 import type { ExpandContractPlan } from "./expand-contract";
-import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
-
-function field(type: string, overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig {
-  return { type, required: false, ...overrides };
-}
+import type { SchemaSnapshot } from "./snapshot-types";
 
 const plan: ExpandContractPlan = {
   typeName: "User",
   fieldName: "price",
   tempFieldName: "priceMigrate",
-  before: field("integer", { required: true }),
-  after: field("string", { required: true }),
+  before: snapshotField("integer", { required: true }),
+  after: snapshotField("string", { required: true }),
 };
 
 function expandScript(plans: ExpandContractPlan[] = [plan]): string {

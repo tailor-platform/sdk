@@ -1,13 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { buildTempFieldName, planExpandContract } from "./expand-contract";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
-import { snapshotType } from "./test-helpers/schema-fixtures";
+import { snapshotField, snapshotType } from "./test-helpers/schema-fixtures";
 import type { DiffChange } from "./diff-calculator";
 import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
-
-function field(type: string, overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig {
-  return { type, required: false, ...overrides };
-}
 
 function snapshot(fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot {
   return {
@@ -49,8 +45,8 @@ describe("buildTempFieldName", () => {
 });
 
 describe("planExpandContract", () => {
-  const previous = snapshot({ price: field("integer") });
-  const current = snapshot({ price: field("string") });
+  const previous = snapshot({ price: snapshotField("integer") });
+  const current = snapshot({ price: snapshotField("string") });
   const confirmed = new Set(["User.price"]);
 
   function planning(changes: DiffChange[], breaking = unsupportedPrice()) {
@@ -75,15 +71,17 @@ describe("planExpandContract", () => {
   }
 
   test("plans a confirmed scalar type change and clears it from blocked", () => {
-    const { plans, blocked } = planning([typeChange("price", field("integer"), field("string"))]);
+    const { plans, blocked } = planning([
+      typeChange("price", snapshotField("integer"), snapshotField("string")),
+    ]);
 
     expect(plans).toEqual([
       {
         typeName: "User",
         fieldName: "price",
         tempFieldName: "priceMigrate",
-        before: field("integer"),
-        after: field("string"),
+        before: snapshotField("integer"),
+        after: snapshotField("string"),
       },
     ]);
     expect(blocked).toEqual([]);
@@ -94,7 +92,7 @@ describe("planExpandContract", () => {
       previous,
       current,
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", field("integer"), field("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed: new Set(),
@@ -111,7 +109,7 @@ describe("planExpandContract", () => {
     ["arrays", { array: true }],
   ] satisfies [string, Partial<SnapshotFieldConfig>][])("blocks %s", (_name, overrides) => {
     const { plans, blocked } = planning([
-      typeChange("price", field("integer", overrides), field("string", overrides)),
+      typeChange("price", snapshotField("integer", overrides), snapshotField("string", overrides)),
     ]);
 
     expect(plans).toEqual([]);
@@ -120,10 +118,13 @@ describe("planExpandContract", () => {
 
   test("avoids a temporary name the user already defined", () => {
     const { plans } = planExpandContract({
-      previous: snapshot({ price: field("integer"), priceMigrate: field("string") }),
-      current: snapshot({ price: field("string"), priceMigrate: field("string") }),
+      previous: snapshot({
+        price: snapshotField("integer"),
+        priceMigrate: snapshotField("string"),
+      }),
+      current: snapshot({ price: snapshotField("string"), priceMigrate: snapshotField("string") }),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", field("integer"), field("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -134,7 +135,7 @@ describe("planExpandContract", () => {
 
   test("keeps unrelated unsupported changes blocked", () => {
     const { plans, blocked } = planning(
-      [typeChange("price", field("integer"), field("string"))],
+      [typeChange("price", snapshotField("integer"), snapshotField("string"))],
       [
         ...unsupportedPrice(),
         {
