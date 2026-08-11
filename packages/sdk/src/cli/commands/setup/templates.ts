@@ -9,7 +9,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 9;
+export const TEMPLATE_VERSION = 10;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -390,6 +390,7 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "tailor-preview-deploy/tailor-setup",
     "tailor-preview-deploy/tailor-install",
     "tailor-preview-deploy/tailor-generate-check",
+    "tailor-preview-deploy/tailor-drift-check",
     "tailor-preview-deploy/tailor-preview-deploy",
     "tailor-preview-deploy/tailor-preview-comment",
     "tailor-preview-cleanup",
