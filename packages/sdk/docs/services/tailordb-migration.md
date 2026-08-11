@@ -326,18 +326,20 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 
 These pairs change in place, in a single migration:
 
-| From      | To                                               |
-| --------- | ------------------------------------------------ |
-| `string`  | `integer`, `float`, `decimal`, `boolean`, `uuid` |
-| `integer` | `string`, `float`, `decimal`, `boolean`          |
-| `float`   | `string`, `decimal`                              |
-| `decimal` | `string`, `float`                                |
-| `boolean` | `string`                                         |
-| `uuid`    | `string`                                         |
-| `enum`    | `string`                                         |
+| From      | To                           |
+| --------- | ---------------------------- |
+| `integer` | `string`, `float`, `decimal` |
+| `float`   | `string`, `decimal`          |
+| `decimal` | `string`, `float`            |
+| `boolean` | `string`                     |
+| `uuid`    | `string`                     |
+| `enum`    | `string`                     |
 
-Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-changes). Two groups are worth calling out:
+Every pair here accepts every value its source type allows, which is what lets the change happen in one migration: the field keeps its previous type until the migration finishes, so your application can keep writing to it throughout.
 
+Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-changes). Three groups are worth calling out:
+
+- Converting to a narrower type — `string` → `integer`, `string` → `uuid`, `integer` → `boolean` and similar — is excluded because values the source type still accepts, such as `"abc"` in a `string` field, cannot be cast. Your script could clean up the rows it sees, but the field goes on accepting new uncastable values until the migration completes.
 - `boolean` → `integer`, `float` → `integer`, and `string` → `date` are excluded because the stored values cannot be cast to the new type.
 - `date`, `datetime`, and `time` fields are not stored in the textual form you wrote them in, so converting them to or from another type reads back as a different instant. Convert them through a temporary field where your script controls the formatting.
 

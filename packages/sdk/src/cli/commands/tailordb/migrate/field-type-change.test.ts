@@ -50,12 +50,6 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["integer", "decimal"],
     ["float", "decimal"],
     ["decimal", "float"],
-    ["integer", "boolean"],
-    ["string", "integer"],
-    ["string", "float"],
-    ["string", "boolean"],
-    ["string", "uuid"],
-    ["string", "decimal"],
   ])("allows %s to %s", (before, after) => {
     expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(true);
   });
@@ -65,6 +59,17 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["float", "integer"],
     ["string", "date"],
   ])("rejects %s to %s, which the platform refuses to cast", (before, after) => {
+    expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(false);
+  });
+
+  test.each([
+    ["string", "integer"],
+    ["string", "float"],
+    ["string", "boolean"],
+    ["string", "uuid"],
+    ["string", "decimal"],
+    ["integer", "boolean"],
+  ])("rejects %s to %s, whose source domain does not fully cast", (before, after) => {
     expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(false);
   });
 
@@ -93,18 +98,17 @@ describe("supportsInPlaceFieldTypeChange", () => {
   describe("already-unique fields whose values can collapse", () => {
     test.each([
       ["float", "decimal"],
-      ["string", "decimal"],
-      ["float", "integer"],
+      ["integer", "decimal"],
     ])("rejects unique %s to %s", (before, after) => {
       expect(supportsInPlaceFieldTypeChange(field(before, { unique: true }), field(after))).toBe(
         false,
       );
     });
 
-    test("rejects a unique string narrowing to a scaled decimal", () => {
+    test("rejects a unique float narrowing to a scaled decimal", () => {
       expect(
         supportsInPlaceFieldTypeChange(
-          field("string", { unique: true }),
+          field("float", { unique: true }),
           field("decimal", { scale: 2 }),
         ),
       ).toBe(false);
@@ -113,7 +117,7 @@ describe("supportsInPlaceFieldTypeChange", () => {
     test.each([
       ["integer", "string"],
       ["decimal", "string"],
-      ["string", "uuid"],
+      ["integer", "float"],
     ])("allows unique %s to %s, which keeps values distinct", (before, after) => {
       expect(supportsInPlaceFieldTypeChange(field(before, { unique: true }), field(after))).toBe(
         true,
