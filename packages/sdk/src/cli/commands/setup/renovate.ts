@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { logger, styles } from "#/cli/shared/logger";
-import { LOCK_VERSION, readLock, writeLock } from "./lock";
+import { LOCK_VERSION, readLock, writeLock, type SetupRegistration } from "./lock";
 
 export const RENOVATE_CONFIG_FILE = "renovate.json";
 export const RENOVATE_PRESET = "github>tailor-inc/renovate-config";
@@ -97,7 +97,7 @@ export async function setupRenovate(options: SetupRenovateOptions): Promise<void
   }
 
   fs.writeFileSync(outputPath, renderRenovateConfig(), "utf-8");
-  const setups = [{ kind: "renovate" as const, file: RENOVATE_CONFIG_FILE }];
+  const setups: SetupRegistration[] = [{ kind: "renovate", file: RENOVATE_CONFIG_FILE }];
   writeLock(options.outputDir, {
     version: LOCK_VERSION,
     targets: lock?.targets ?? [],

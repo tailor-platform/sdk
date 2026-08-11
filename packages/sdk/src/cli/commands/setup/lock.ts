@@ -54,7 +54,7 @@ export type LockTarget = {
 
 export type SetupRegistration = {
   kind: "renovate";
-  file: string;
+  file: "renovate.json";
 };
 
 export type LockFile = {
@@ -72,8 +72,7 @@ function isSetupRegistration(value: unknown): value is SetupRegistration {
     "kind" in value &&
     value.kind === "renovate" &&
     "file" in value &&
-    typeof value.file === "string" &&
-    value.file.length > 0
+    value.file === "renovate.json"
   );
 }
 

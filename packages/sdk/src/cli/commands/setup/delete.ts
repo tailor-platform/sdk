@@ -155,8 +155,7 @@ export async function setupDelete(options: DeleteOptions): Promise<void> {
           `Deleted ${styles.path(match.relPath)} (${match.target.kind} ${match.target.workspaceName})`,
         );
       } else {
-        const index = remainingSetups.findIndex((setup) => setup.file === match.setup.file);
-        if (index !== -1) remainingSetups.splice(index, 1);
+        remainingSetups.shift();
         logger.success(`Deleted ${styles.path(match.relPath)} (${match.setup.kind} setup)`);
       }
     }

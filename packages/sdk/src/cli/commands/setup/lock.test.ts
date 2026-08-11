@@ -152,6 +152,20 @@ describe("readLock / writeLock", () => {
       error: /no valid 'setups'/,
     },
     {
+      title: "throws with restore guidance when a Renovate registration has another file",
+      content: () =>
+        `${JSON.stringify(
+          {
+            version: LOCK_VERSION,
+            targets: [],
+            setups: [{ kind: "renovate", file: "README.md" }],
+          },
+          null,
+          2,
+        )}\n`,
+      error: /no valid 'setups'/,
+    },
+    {
       title: "throws on invalid JSON",
       content: () => "{ not json",
       error: /not valid JSON/,
