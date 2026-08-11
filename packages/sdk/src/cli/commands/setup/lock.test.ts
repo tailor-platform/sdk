@@ -6,6 +6,7 @@ import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock, type LockFi
 function makeLock(): LockFile {
   return {
     version: LOCK_VERSION,
+    setups: [],
     targets: [
       {
         kind: "branch",
@@ -56,8 +57,19 @@ describe("readLock / writeLock", () => {
     writeLock(testDir, lock);
     const raw = fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8");
     expect(raw.endsWith("\n")).toBe(true);
-    expect(raw).toContain('  "version": 1');
+    expect(raw).toContain('  "version": 2');
     expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("round-trips setup registrations separately from hash-guarded targets", () => {
+    const lock: LockFile = {
+      ...makeLock(),
+      setups: [{ kind: "renovate", file: "renovate.json" }],
+    };
+    writeLock(testDir, lock);
+
+    expect(readLock(testDir)).toEqual(lock);
+    expect(readLock(testDir)!.setups[0]).not.toHaveProperty("contentHash");
   });
 
   test("throws on a forward-incompatible version", () => {
@@ -65,6 +77,18 @@ describe("readLock / writeLock", () => {
     lock.version = LOCK_VERSION + 1;
     writeLock(testDir, lock);
     expect(() => readLock(testDir)).toThrow(/newer SDK/);
+  });
+
+  test("reads a version 1 lock as having no setup registrations", () => {
+    const lock = makeLock();
+    const legacyLock = { version: 1, targets: lock.targets };
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, ".github/tailor.lock"),
+      `${JSON.stringify(legacyLock, null, 2)}\n`,
+    );
+
+    expect(readLock(testDir)).toEqual({ ...legacyLock, setups: [] });
   });
 
   test.each([
@@ -79,8 +103,53 @@ describe("readLock / writeLock", () => {
     },
     {
       title: "throws with restore guidance when targets is not an array",
-      content: () => `${JSON.stringify({ version: LOCK_VERSION }, null, 2)}\n`,
+      content: () => `${JSON.stringify({ version: LOCK_VERSION, setups: [] }, null, 2)}\n`,
       error: /no valid 'targets'/,
+    },
+    {
+      title: "throws with restore guidance when setups is missing from a version 2 lock",
+      content: () => `${JSON.stringify({ version: LOCK_VERSION, targets: [] }, null, 2)}\n`,
+      error: /no valid 'setups'/,
+    },
+    {
+      title: "throws with restore guidance when setups is not an array",
+      content: () =>
+        `${JSON.stringify({ version: LOCK_VERSION, targets: [], setups: {} }, null, 2)}\n`,
+      error: /no valid 'setups'/,
+    },
+    {
+      title: "throws with restore guidance when a setup registration is null",
+      content: () =>
+        `${JSON.stringify({ version: LOCK_VERSION, targets: [], setups: [null] }, null, 2)}\n`,
+      error: /no valid 'setups'/,
+    },
+    {
+      title: "throws with restore guidance when a setup registration has an unknown kind",
+      content: () =>
+        `${JSON.stringify(
+          {
+            version: LOCK_VERSION,
+            targets: [],
+            setups: [{ kind: "unknown", file: "renovate.json" }],
+          },
+          null,
+          2,
+        )}\n`,
+      error: /no valid 'setups'/,
+    },
+    {
+      title: "throws with restore guidance when a setup registration has an empty file",
+      content: () =>
+        `${JSON.stringify(
+          {
+            version: LOCK_VERSION,
+            targets: [],
+            setups: [{ kind: "renovate", file: "" }],
+          },
+          null,
+          2,
+        )}\n`,
+      error: /no valid 'setups'/,
     },
     {
       title: "throws on invalid JSON",

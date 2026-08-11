@@ -5,6 +5,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { setupDelete } from "./delete";
 import { type CoordinateSetupOptions, setupCoordinate, setupTarget } from "./generate";
 import { readLock } from "./lock";
+import { setupRenovate } from "./renovate";
 
 vi.mock("#/cli/shared/prompt", () => ({
   prompt: {
@@ -89,6 +90,46 @@ describe("setupDelete", () => {
     expect(fs.existsSync(wf)).toBe(false);
     expect(prompt.confirm).not.toHaveBeenCalled();
     expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
+  test("deletes the registered Renovate config without requiring a workflow target", async () => {
+    await setupRenovate({ outputDir: testDir });
+    const configPath = path.join(testDir, "renovate.json");
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+    config.packageRules = [{ matchPackageNames: ["example"], enabled: false }];
+    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    await setupDelete({ files: ["renovate.json"], yes: true, outputDir: testDir });
+
+    expect(fs.existsSync(configPath)).toBe(false);
+    expect(readLock(testDir)?.setups).toHaveLength(0);
+  });
+
+  test("warns that deleting the Renovate config also deletes user customizations", async () => {
+    await setupRenovate({ outputDir: testDir });
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    await setupDelete({ files: ["renovate.json"], yes: false, outputDir: testDir });
+
+    expect(prompt.confirm).toHaveBeenCalledWith({
+      message: expect.stringMatching(/Renovate customizations.*deleted/),
+      default: false,
+    });
+    expect(fs.existsSync(path.join(testDir, "renovate.json"))).toBe(true);
+  });
+
+  test("preserves the Renovate setup registration when deleting a workflow", async () => {
+    await setupRenovate({ outputDir: testDir });
+    await setupTarget(branchOpts("my-app"));
+
+    await setupDelete({
+      files: [".github/workflows/tailor-my-app.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    expect(readLock(testDir)?.setups).toEqual([{ kind: "renovate", file: "renovate.json" }]);
+    expect(fs.existsSync(path.join(testDir, "renovate.json"))).toBe(true);
   });
 
   test("prompts for confirmation and aborts when declined", async () => {

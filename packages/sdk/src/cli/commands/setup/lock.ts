@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 
 /** Current lock schema version. Bumped only on breaking lock-format changes. */
-export const LOCK_VERSION = 1;
+export const LOCK_VERSION = 2;
 
 /** Lock file path, relative to the repository root. */
 const LOCK_FILENAME = ".github/tailor.lock";
@@ -52,10 +52,30 @@ export type LockTarget = {
   contentHash: string;
 };
 
+export type SetupRegistration = {
+  kind: "renovate";
+  file: string;
+};
+
 export type LockFile = {
   version: number;
   targets: LockTarget[];
+  setups: SetupRegistration[];
 };
+
+type RawLockFile = Omit<LockFile, "setups"> & { setups?: unknown };
+
+function isSetupRegistration(value: unknown): value is SetupRegistration {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    value.kind === "renovate" &&
+    "file" in value &&
+    typeof value.file === "string" &&
+    value.file.length > 0
+  );
+}
 
 /**
  * Compute the lock content hash for a rendered workflow file.
@@ -88,9 +108,9 @@ export function readLock(outputDir: string): LockFile | null {
   if (!fs.existsSync(file)) {
     return null;
   }
-  let parsed: LockFile;
+  let parsed: RawLockFile;
   try {
-    parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as LockFile;
+    parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as RawLockFile;
   } catch (cause) {
     throw new Error(
       `${LOCK_FILENAME} is not valid JSON. The lock file is machine-owned; ` +
@@ -116,7 +136,17 @@ export function readLock(outputDir: string): LockFile | null {
         "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
-  return parsed;
+  if (
+    parsed.version >= 2 &&
+    (!Array.isArray(parsed.setups) || !parsed.setups.every(isSetupRegistration))
+  ) {
+    throw new Error(
+      `${LOCK_FILENAME} has no valid 'setups' array. The lock file is machine-owned; ` +
+        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
+    );
+  }
+  const setups = parsed.version >= 2 && Array.isArray(parsed.setups) ? parsed.setups : [];
+  return { ...parsed, setups } as LockFile;
 }
 
 /**

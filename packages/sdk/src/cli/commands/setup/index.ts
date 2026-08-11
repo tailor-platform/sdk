@@ -5,6 +5,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupCoordinate, setupTarget } from "./generate";
+import { setupRenovate } from "./renovate";
 
 const checkCommand = defineAppCommand({
   name: "check",
@@ -214,15 +215,23 @@ const previewCommand = defineAppCommand({
   },
 });
 
+const renovateCommand = defineAppCommand({
+  name: "renovate",
+  description: "Generate a Renovate config for Tailor dependency and workflow updates.",
+  args: z.strictObject({}),
+  run: async () => {
+    await setupRenovate({ outputDir: process.cwd() });
+  },
+});
+
 const deleteCommand = defineAppCommand({
   name: "delete",
-  description: "Delete managed workflow/action file(s) and their .github/tailor.lock entries.",
+  description: "Delete files registered by setup and their .github/tailor.lock entries.",
   args: z.strictObject({
     ...confirmationArgs,
     files: arg(z.string().array().min(1), {
       positional: true,
-      description:
-        "Workflow/action file(s) to delete, as generated under .github/workflows or .github/actions",
+      description: "File(s) registered by tailor setup",
     }),
   }),
   run: async (args) => {
@@ -232,13 +241,14 @@ const deleteCommand = defineAppCommand({
 
 export const setupCommand = defineCommand({
   name: "setup",
-  description: "Generate CI deploy workflows for your project. (beta)",
+  description: "Set up repository automation for your project. (beta)",
   subCommands: {
     branch: branchCommand,
     tag: tagCommand,
     preview: previewCommand,
     action: actionCommand,
     coordinate: coordinateCommand,
+    renovate: renovateCommand,
     check: checkCommand,
     delete: deleteCommand,
   },
