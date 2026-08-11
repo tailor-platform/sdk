@@ -343,6 +343,8 @@ Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-
 
 Converting to `decimal` reformats values to the field's scale, so `42` reads back as `42.000000`. Values with more decimal places than the scale allows are rounded half-up, so `1.1234567` becomes `1.123457` at the default scale of 6.
 
+A field that is already unique cannot convert to `decimal` or `integer` in place, because rounding can turn two distinct values into the same one and the existing constraint leaves no room to resolve the collision. Use the 3-step migration for those.
+
 ### Generated normalization script for field type changes
 
 For example, changing `User.age` from `integer` to `float` generates a `migrate.ts` that scans non-null values in batches of 100:

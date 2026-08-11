@@ -89,4 +89,35 @@ describe("supportsInPlaceFieldTypeChange", () => {
   ] satisfies [string, Partial<SnapshotFieldConfig>][])("rejects $0", (_name, overrides) => {
     expect(supportsInPlaceFieldTypeChange(field("integer", overrides), field("float"))).toBe(false);
   });
+
+  describe("already-unique fields whose values can collapse", () => {
+    test.each([
+      ["float", "decimal"],
+      ["string", "decimal"],
+      ["float", "integer"],
+    ])("rejects unique %s to %s", (before, after) => {
+      expect(supportsInPlaceFieldTypeChange(field(before, { unique: true }), field(after))).toBe(
+        false,
+      );
+    });
+
+    test("rejects a unique string narrowing to a scaled decimal", () => {
+      expect(
+        supportsInPlaceFieldTypeChange(
+          field("string", { unique: true }),
+          field("decimal", { scale: 2 }),
+        ),
+      ).toBe(false);
+    });
+
+    test.each([
+      ["integer", "string"],
+      ["decimal", "string"],
+      ["string", "uuid"],
+    ])("allows unique %s to %s, which keeps values distinct", (before, after) => {
+      expect(supportsInPlaceFieldTypeChange(field(before, { unique: true }), field(after))).toBe(
+        true,
+      );
+    });
+  });
 });
