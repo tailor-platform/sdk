@@ -29,19 +29,25 @@ import {
   hasChanges,
   type MigrationDiff,
 } from "./diff-calculator";
+import { fieldKey, planExpandContract, type ExpandContractPlan } from "./expand-contract";
+import { supportsExpandContractFieldChange } from "./field-type-change";
 import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
+  expandContractSpecApplies,
   findRenameCandidates,
   parseDropOption,
+  parseExpandContractOption,
   parseRenameOption,
   renameSpecApplies,
   type FieldDropSpec,
+  type FieldExpandContractSpec,
   type FieldRenameCandidate,
   type FieldRenameSpec,
 } from "./rename-detection";
 import { markMigrationScriptSkipped } from "./script";
 import {
+  buildIntermediateSnapshot,
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
   compareSnapshots,
@@ -63,6 +69,8 @@ export interface GenerateOptions {
   renames?: string[];
   /** `--drop Type.field` values confirming field removals non-interactively. */
   drops?: string[];
+  /** `--expand-contract Type.field` values approving a field type conversion. */
+  expandContracts?: string[];
 }
 
 /**
@@ -176,10 +184,17 @@ export async function generate(options: GenerateOptions): Promise<void> {
     raw,
     spec: parseDropOption(raw),
   }));
+  const expandContractFlags: ExpandContractFlag[] = (options.expandContracts ?? []).map((raw) => ({
+    raw,
+    spec: parseExpandContractOption(raw),
+  }));
   // --init regenerates the baseline from scratch, so there is no previous
-  // schema a rename or drop could apply to
-  if (options.init && (renameFlags.length > 0 || dropFlags.length > 0)) {
-    throw new Error("--rename and --drop cannot be used together with --init.");
+  // schema a rename, drop, or field conversion could apply to
+  if (
+    options.init &&
+    (renameFlags.length > 0 || dropFlags.length > 0 || expandContractFlags.length > 0)
+  ) {
+    throw new Error("--rename, --drop, and --expand-contract cannot be used together with --init.");
   }
   const droppedFieldKeys = new Set(
     dropFlags.map(({ spec }) => `${spec.typeName}.${spec.fieldName}`),
@@ -287,6 +302,32 @@ export async function generate(options: GenerateOptions): Promise<void> {
     );
   }
 
+  const expandContractKeysByNamespace = new Map<string, Set<string>>();
+  const matchedExpandContractFlags = new Set<ExpandContractFlag>();
+  for (const { namespace, previousSnapshot, currentSnapshot } of generations) {
+    if (!previousSnapshot) continue;
+    const applicable = expandContractFlags.filter(({ spec }) =>
+      expandContractSpecApplies(spec, previousSnapshot, currentSnapshot),
+    );
+    for (const flag of applicable) {
+      matchedExpandContractFlags.add(flag);
+    }
+    expandContractKeysByNamespace.set(
+      namespace,
+      new Set(applicable.map(({ spec }) => fieldKey(spec.typeName, spec.fieldName))),
+    );
+  }
+  const unusedExpandContracts = expandContractFlags.filter(
+    (flag) => !matchedExpandContractFlags.has(flag),
+  );
+  if (unusedExpandContracts.length > 0) {
+    throw new Error(
+      `--expand-contract does not match a field whose type changed: ${unusedExpandContracts
+        .map((flag) => flag.raw)
+        .join(", ")}`,
+    );
+  }
+
   // Resolve renames for every namespace before any migration file is written,
   // so all candidates are reported in one run and an abort (a decline, an
   // unresolved candidate, or an invalid spec in a later namespace) leaves no
@@ -310,6 +351,13 @@ export async function generate(options: GenerateOptions): Promise<void> {
     );
     generation.diff = resolution.diff;
     unresolvedCandidates.push(...resolution.unresolved);
+    generation.expandPlans = await resolveExpandContractPlans({
+      previousSnapshot,
+      currentSnapshot,
+      diff: resolution.diff,
+      options,
+      confirmedKeys: expandContractKeysByNamespace.get(namespace) ?? new Set(),
+    });
   }
 
   // Failing beats warning here: a candidate left unresolved in a
@@ -329,7 +377,13 @@ export async function generate(options: GenerateOptions): Promise<void> {
     );
   }
 
-  for (const { migrationsDir, currentSnapshot, previousSnapshot, diff } of generations) {
+  for (const {
+    migrationsDir,
+    currentSnapshot,
+    previousSnapshot,
+    diff,
+    expandPlans,
+  } of generations) {
     if (!previousSnapshot) {
       // First migration - generate initial schema snapshot
       await generateInitialSnapshot(currentSnapshot, migrationsDir);
@@ -339,9 +393,59 @@ export async function generate(options: GenerateOptions): Promise<void> {
         assertDefined(diff, "Migration diff was not resolved during preflight"),
         migrationsDir,
         options,
+        currentSnapshot,
+        expandPlans ?? [],
       );
     }
   }
+}
+
+/** Inputs for {@link resolveExpandContractPlans}. */
+interface ResolveExpandContractOptions {
+  previousSnapshot: NormalizedSchemaSnapshot;
+  currentSnapshot: NormalizedSchemaSnapshot;
+  diff: MigrationDiff;
+  options: GenerateOptions;
+  confirmedKeys: ReadonlySet<string>;
+}
+
+/**
+ * Decide which unsupported field type changes to carry through a migration
+ * pair, asking about each one that was not already named by a flag.
+ * @param input - Snapshots, diff, command options, and flag-approved fields
+ * @returns Approved plans, empty when nothing was confirmed
+ */
+async function resolveExpandContractPlans(
+  input: ResolveExpandContractOptions,
+): Promise<ExpandContractPlan[]> {
+  const { previousSnapshot, currentSnapshot, diff, options, confirmedKeys } = input;
+  const confirmed = new Set(confirmedKeys);
+
+  if (!options.yes && canPrompt()) {
+    for (const change of diff.changes) {
+      if (change.kind !== "field_type_modified") continue;
+      const key = fieldKey(change.typeName, change.fieldName);
+      if (confirmed.has(key)) continue;
+      if (!supportsExpandContractFieldChange(change.before, change.after)) continue;
+
+      logger.newline();
+      logger.info(
+        `${change.typeName}.${change.fieldName} changes from ${change.before.type} to ${change.after.type}, which cannot be applied in one step.`,
+      );
+      const approved = await prompt.confirm({
+        message: `Generate two migrations to convert ${change.typeName}.${change.fieldName} through a temporary field?`,
+        default: true,
+      });
+      if (approved) confirmed.add(key);
+    }
+  }
+
+  return planExpandContract({
+    previous: previousSnapshot,
+    current: currentSnapshot,
+    diff,
+    confirmed,
+  }).plans;
 }
 
 /**
@@ -375,6 +479,12 @@ interface DropFlag {
   spec: FieldDropSpec;
 }
 
+/** A parsed `--expand-contract` flag together with its raw value. */
+interface ExpandContractFlag {
+  raw: string;
+  spec: FieldExpandContractSpec;
+}
+
 /** Snapshots collected for one namespace before any migration file is written. */
 interface NamespaceGeneration {
   namespace: string;
@@ -383,6 +493,8 @@ interface NamespaceGeneration {
   previousSnapshot: NormalizedSchemaSnapshot | null;
   /** Diff with confirmed renames, set during preflight when a previous snapshot exists. */
   diff?: MigrationDiff;
+  /** Field type changes confirmed for a migration pair during preflight. */
+  expandPlans?: ExpandContractPlan[];
 }
 
 /** A rename candidate that a non-interactive run could not resolve. */
@@ -517,13 +629,17 @@ async function resolveFieldRenames(
  * @param {MigrationDiff} diff - Diff with confirmed renames recorded
  * @param {string} migrationsDir - Migrations directory path
  * @param {GenerateOptions} options - Generate options
+ * @param currentSnapshot - Schema the user now declares
+ * @param expandPlans - Field changes confirmed for a migration pair
  * @returns {Promise<void>} Promise that resolves when diff is generated
  */
 async function generateDiffFromSnapshot(
-  previousSnapshot: SchemaSnapshot,
+  previousSnapshot: NormalizedSchemaSnapshot,
   diff: MigrationDiff,
   migrationsDir: string,
   options: GenerateOptions,
+  currentSnapshot: NormalizedSchemaSnapshot,
+  expandPlans: readonly ExpandContractPlan[] = [],
 ): Promise<void> {
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
@@ -536,8 +652,12 @@ async function generateDiffFromSnapshot(
   logger.newline();
   logger.info(`Summary: ${formatDiffSummary(diff)}`);
 
-  // Check for unsupported changes
-  const unsupportedChanges = diff.breakingChanges.filter((change) => change.unsupported);
+  const plannedKeys = new Set(expandPlans.map((plan) => fieldKey(plan.typeName, plan.fieldName)));
+  const unsupportedChanges = diff.breakingChanges.filter(
+    (change) =>
+      change.unsupported &&
+      !(change.fieldName && plannedKeys.has(fieldKey(change.typeName, change.fieldName))),
+  );
   if (unsupportedChanges.length > 0) {
     for (const change of unsupportedChanges) {
       logger.newline();
@@ -582,6 +702,17 @@ async function generateDiffFromSnapshot(
   if (diff.hasWarnings) {
     logger.newline();
     logger.warn(formatWarnings(diff.warnings));
+  }
+
+  if (expandPlans.length > 0) {
+    await generateExpandContractMigrations({
+      previousSnapshot,
+      currentSnapshot,
+      plans: expandPlans,
+      migrationsDir,
+      description: options.name,
+    });
+    return;
   }
 
   // Get next migration number
@@ -638,6 +769,71 @@ async function generateDiffFromSnapshot(
       configPath: options.configPath,
     });
   }
+}
+
+/** Inputs for {@link generateExpandContractMigrations}. */
+interface GenerateExpandContractOptions {
+  previousSnapshot: NormalizedSchemaSnapshot;
+  currentSnapshot: NormalizedSchemaSnapshot;
+  plans: readonly ExpandContractPlan[];
+  migrationsDir: string;
+  description?: string;
+}
+
+/**
+ * Write the two migrations that carry a field type change: one that converts
+ * values into a temporary field, and one that renames it back.
+ * @param input - Snapshots, confirmed plans, and output location
+ * @returns {Promise<void>} Promise that resolves when both migrations are written
+ */
+async function generateExpandContractMigrations(
+  input: GenerateExpandContractOptions,
+): Promise<void> {
+  const { previousSnapshot, currentSnapshot, plans, migrationsDir, description } = input;
+  const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
+  const expandDiff = compareSnapshots(previousSnapshot, intermediateSnapshot);
+  const contractDiff = compareSnapshots(intermediateSnapshot, currentSnapshot, {
+    fieldRenames: plans.map((plan) => ({
+      typeName: plan.typeName,
+      previousFieldName: plan.tempFieldName,
+      fieldName: plan.fieldName,
+    })),
+  });
+
+  const expandNumber = getNextMigrationNumber(migrationsDir);
+  const expand = await generateDiffFiles(
+    expandDiff,
+    migrationsDir,
+    expandNumber,
+    previousSnapshot,
+    description,
+    plans,
+  );
+  const contract = await generateDiffFiles(
+    contractDiff,
+    migrationsDir,
+    expandNumber + 1,
+    intermediateSnapshot,
+    description,
+  );
+
+  const fields = plans.map((plan) => `${plan.typeName}.${plan.fieldName}`).join(", ");
+  logger.success(
+    `Generated migrations ${styles.bold(formatMigrationNumber(expand.migrationNumber))} and ${styles.bold(
+      formatMigrationNumber(contract.migrationNumber),
+    )} to convert ${fields}`,
+  );
+  if (expand.migrateFilePath) {
+    logger.info(`  Conversion script: ${expand.migrateFilePath}`);
+  }
+  if (contract.migrateFilePath) {
+    logger.info(`  Copy script: ${contract.migrateFilePath}`);
+  }
+  logger.newline();
+  logger.log(
+    `Edit the conversion in ${formatMigrationNumber(expand.migrationNumber)} before deploying; the second migration needs no changes.`,
+  );
+  logger.log("Both migrations are applied by 'tailor deploy'.");
 }
 
 interface AcknowledgeWarningsOptions {
@@ -713,6 +909,10 @@ export const generateCommand = defineAppCommand({
       description:
         'Confirm that a removed field is a genuine removal, not a rename (format: "Type.field"; repeatable). Required in non-interactive runs for a removed field with rename candidates.',
     }),
+    "expand-contract": arg(z.array(z.string()).optional(), {
+      description:
+        'Convert a field type through a temporary field (format: "Type.field"; repeatable). Generates two migrations.',
+    }),
   }),
   run: async (args) => {
     await generate({
@@ -722,6 +922,7 @@ export const generateCommand = defineAppCommand({
       init: args.init,
       renames: args.rename,
       drops: args.drop,
+      expandContracts: args["expand-contract"],
     });
   },
 });

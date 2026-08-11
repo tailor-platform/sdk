@@ -7,7 +7,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { generateCommand } from "./generate";
-import { loadDiff } from "./snapshot";
+import { loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
 interface TestNamespace {
@@ -275,5 +275,117 @@ describe("tailordb migration generate field rename preflight", () => {
     expect(loadDiff(path.join(dropped.migrationsDir, "0001", "diff.json")).changes).toEqual(
       expect.arrayContaining([expect.objectContaining({ kind: "field_removed" })]),
     );
+  });
+});
+
+describe("tailordb migration generate with an unsupported field type change", () => {
+  let tmpDir: string;
+
+  function retypedType(typeName: string, type: string): ReturnType<typeof parsedType> {
+    const parsed = parsedType(typeName);
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, type } };
+    return parsed;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("EDITOR", undefined);
+    vi.stubEnv("VISUAL", undefined);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-expand-test-"));
+    state.namespaces = [];
+    vi.mocked(loadConfig).mockImplementation(
+      async () =>
+        ({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: Object.fromEntries(
+              state.namespaces.map(({ namespace, migrationsDir }) => [
+                namespace,
+                { migration: { directory: migrationsDir } },
+              ]),
+            ),
+          },
+          plugins: [],
+        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    );
+    vi.mocked(canPrompt).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("still fails with the manual guidance when the conversion is not requested", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Unsupported schema changes detected");
+    expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("writes a conversion migration and a rename migration when requested", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+
+    const result = await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    expect(result.success).toBe(true);
+    expect(loadDiff(path.join(ns.migrationsDir, "0001", "diff.json")).changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "field_added", fieldName: "nameMigrate" }),
+        expect.objectContaining({ kind: "field_removed", fieldName: "name" }),
+      ]),
+    );
+    expect(loadDiff(path.join(ns.migrationsDir, "0002", "diff.json")).changes).toEqual([
+      expect.objectContaining({
+        kind: "field_renamed",
+        fieldName: "name",
+        previousFieldName: "nameMigrate",
+      }),
+    ]);
+  });
+
+  test("scaffolds a conversion script for the first migration only", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+
+    await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    const expandScript = fs.readFileSync(path.join(ns.migrationsDir, "0001", "migrate.ts"), "utf8");
+    const contractScript = fs.readFileSync(
+      path.join(ns.migrationsDir, "0002", "migrate.ts"),
+      "utf8",
+    );
+    expect(expandScript).toContain("convertedValue");
+    expect(contractScript).not.toContain("convertedValue");
+  });
+
+  test("replays both migrations back to the declared schema", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+
+    await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    const replayed = reconstructSnapshotFromMigrations(ns.migrationsDir);
+    expect(replayed?.types.User?.fields.name?.type).toBe("integer");
+    expect(replayed?.types.User?.fields.nameMigrate).toBeUndefined();
+  });
+
+  test("rejects a flag that names a field whose type did not change", async () => {
+    const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--expand-contract",
+      "User.missing",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("--expand-contract does not match");
+    expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
   });
 });

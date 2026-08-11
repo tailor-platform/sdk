@@ -276,3 +276,40 @@ export function dropSpecApplies(
   const currFields = currentSnapshot.types[spec.typeName]?.fields;
   return Boolean(prevFields?.[spec.fieldName] && !currFields?.[spec.fieldName]);
 }
+
+/** A field the user approved for conversion through a temporary field. */
+export interface FieldExpandContractSpec {
+  typeName: string;
+  fieldName: string;
+}
+
+/**
+ * Parse an `--expand-contract` option value of the form `Type.field`.
+ * @param {string} value - Raw option value
+ * @returns {FieldExpandContractSpec} Parsed spec
+ */
+export function parseExpandContractOption(value: string): FieldExpandContractSpec {
+  const match = value.match(DROP_OPTION_PATTERN);
+  const [, typeName, fieldName] = match ?? [];
+  if (!typeName || !fieldName) {
+    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Type.field".`);
+  }
+  return { typeName, fieldName };
+}
+
+/**
+ * Whether a spec matches a field whose type changed between two snapshots.
+ * @param {FieldExpandContractSpec} spec - Spec to test
+ * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
+ * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * @returns {boolean} True if the spec matches a field whose type changed
+ */
+export function expandContractSpecApplies(
+  spec: FieldExpandContractSpec,
+  previousSnapshot: SchemaSnapshot,
+  currentSnapshot: SchemaSnapshot,
+): boolean {
+  const before = previousSnapshot.types[spec.typeName]?.fields[spec.fieldName];
+  const after = currentSnapshot.types[spec.typeName]?.fields[spec.fieldName];
+  return Boolean(before && after && before.type !== after.type);
+}
