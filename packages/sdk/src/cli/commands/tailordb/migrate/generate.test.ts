@@ -330,6 +330,15 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
   });
 
+  test("names the flag that would convert the field", async () => {
+    using stderr = captureStderr();
+    addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+
+    await runCommand(generateCommand, ["--yes"]);
+
+    expect(stderr.output).toContain('--expand-contract "User.name"');
+  });
+
   test("writes a conversion migration and a rename migration when requested", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
 

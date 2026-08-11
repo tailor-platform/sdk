@@ -665,6 +665,20 @@ async function generateDiffFromSnapshot(
       logger.error(`  ${change.reason}`);
     }
 
+    const convertible = unsupportedChanges.filter(({ typeName, fieldName }) => {
+      if (!fieldName) return false;
+      const before = previousSnapshot.types[typeName]?.fields[fieldName];
+      const after = currentSnapshot.types[typeName]?.fields[fieldName];
+      return Boolean(before && after && supportsExpandContractFieldChange(before, after));
+    });
+    if (convertible.length > 0) {
+      logger.newline();
+      logger.info("Convert these fields through a temporary field with:");
+      for (const { typeName, fieldName } of convertible) {
+        logger.info(`  --expand-contract "${typeName}.${fieldName}"`);
+      }
+    }
+
     // Show 3-step migration hint if any unsupported change requires it
     if (unsupportedChanges.some((change) => change.showThreeStepHint)) {
       logger.newline();
