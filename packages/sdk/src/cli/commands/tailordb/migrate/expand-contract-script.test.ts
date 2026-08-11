@@ -45,7 +45,7 @@ describe("expand conversion script", () => {
     expect(expandScript()).toContain(`.where("price", "is not", null)`);
   });
 
-  test("blocks deploy until the conversion is reviewed", () => {
+  test("marks the conversion as needing review", () => {
     const script = expandScript();
 
     expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);

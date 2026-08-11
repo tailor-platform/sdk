@@ -1820,6 +1820,34 @@ function compareTypeScripts(
 }
 
 /**
+ * Restate the schema an expand migration starts from, with each converted field
+ * relaxed to optional.
+ *
+ * The expand script clears the original field once it has carried the value
+ * across. That write reaches the field under the contract recorded on the
+ * removal, which the deploy restores for the duration of the migration, so a
+ * field left required would reject it.
+ * @param previous - Snapshot the expand migration starts from
+ * @param plans - Field changes carried through temporary fields
+ * @returns Snapshot to compare the expand migration against
+ */
+export function buildExpandBaseSnapshot(
+  previous: NormalizedSchemaSnapshot,
+  plans: readonly ExpandContractPlan[],
+): NormalizedSchemaSnapshot {
+  const types = copySnapshotRecord(previous.types);
+  for (const plan of plans) {
+    const type = types[plan.typeName];
+    const original = type?.fields[plan.fieldName];
+    if (!type || !original) continue;
+    const fields = copySnapshotRecord(type.fields);
+    fields[plan.fieldName] = { ...original, required: false };
+    types[plan.typeName] = { ...type, fields };
+  }
+  return normalizeSchemaSnapshot({ ...previous, types });
+}
+
+/**
  * Build the schema state that sits between an expand and a contract migration:
  * each converted field is replaced by its temporary counterpart.
  *

@@ -47,6 +47,7 @@ import {
 } from "./rename-detection";
 import { markMigrationScriptSkipped } from "./script";
 import {
+  buildExpandBaseSnapshot,
   buildIntermediateSnapshot,
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
@@ -805,7 +806,12 @@ async function generateExpandContractMigrations(
 ): Promise<void> {
   const { previousSnapshot, currentSnapshot, plans, migrationsDir, description } = input;
   const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
-  const expandDiff = compareSnapshots(previousSnapshot, intermediateSnapshot);
+  // Comparing from the relaxed base records the removal with an optional
+  // contract, which is what the deploy restores while the script clears it.
+  const expandDiff = compareSnapshots(
+    buildExpandBaseSnapshot(previousSnapshot, plans),
+    intermediateSnapshot,
+  );
   const contractDiff = compareSnapshots(intermediateSnapshot, currentSnapshot, {
     fieldRenames: plans.map((plan) => ({
       typeName: plan.typeName,

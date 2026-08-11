@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { planExpandContract } from "./expand-contract";
 import {
+  buildExpandBaseSnapshot,
   buildIntermediateSnapshot,
   compareSnapshots,
   normalizeSchemaSnapshot,
@@ -59,7 +60,7 @@ function generatePair(
     confirmed: new Set(["User.price"]),
   });
   const intermediate = buildIntermediateSnapshot(previous, plans);
-  const expand = compareSnapshots(previous, intermediate);
+  const expand = compareSnapshots(buildExpandBaseSnapshot(previous, plans), intermediate);
   const contract = compareSnapshots(intermediate, current, {
     fieldRenames: plans.map((plan) => ({
       typeName: plan.typeName,
@@ -126,6 +127,18 @@ describe("expand-contract migration chain", () => {
         expect.objectContaining({ kind: "field_removed", fieldName: "price" }),
       ]),
     );
+  });
+
+  test("records the removed field as optional so the script can clear it", () => {
+    const { expand } = generatePair(
+      { price: field("integer", { required: true }) },
+      { price: field("string", { required: true }) },
+    );
+
+    const removed = expand.changes.find((change) => change.kind === "field_removed");
+    // The deploy restores this contract while the script runs; a required one
+    // rejects the null the script writes.
+    expect(removed && "before" in removed && removed.before.required).toBe(false);
   });
 
   test("relaxes the temporary field so the expand script can fill it in batches", () => {
