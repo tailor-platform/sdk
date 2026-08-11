@@ -8,7 +8,7 @@
 
 import { supportsExpandContractFieldChange } from "./field-type-change";
 import type { BreakingChangeInfo, MigrationDiff } from "./diff-calculator";
-import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
+import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
 
 /** Longest field name the platform accepts. */
 const MAX_FIELD_NAME_LENGTH = 63;
@@ -73,6 +73,37 @@ export interface PlanExpandContractOptions {
 }
 
 /**
+ * Whether anything other than the field list names this field.
+ *
+ * The pair moves values through a differently named field, and only the field
+ * list is rewritten. An index, relationship, permission, or script naming the
+ * field would keep pointing at the name the pair drops.
+ * @param type - Type holding the field
+ * @param fieldName - Field being converted
+ * @returns Whether another part of the type names the field
+ */
+function isFieldReferenced(type: TailorDBSnapshotType | undefined, fieldName: string): boolean {
+  if (!type) return false;
+  const indexed = Object.values(type.indexes ?? {}).some((index) =>
+    index.fields.includes(fieldName),
+  );
+  if (indexed) return true;
+  const related = [
+    ...Object.values(type.forwardRelationships ?? {}),
+    ...Object.values(type.backwardRelationships ?? {}),
+  ].some(
+    (relationship) =>
+      relationship.sourceField === fieldName || relationship.targetField === fieldName,
+  );
+  if (related) return true;
+  const scripts = [type.typeHookExpr, type.typeValidateExpr, type.permissions]
+    .filter(Boolean)
+    .map((value) => JSON.stringify(value))
+    .join("");
+  return scripts.includes(fieldName);
+}
+
+/**
  * Split unsupported field type changes into the ones a migration pair can carry
  * and the ones that must still fail.
  * @param options - Snapshots, diff, and the changes the user approved
@@ -88,6 +119,7 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
     const key = fieldKey(change.typeName, change.fieldName);
     if (!confirmed.has(key)) continue;
     if (!supportsExpandContractFieldChange(change.before, change.after)) continue;
+    if (isFieldReferenced(current.types[change.typeName], change.fieldName)) continue;
 
     const taken = new Set([
       ...Object.keys(previous.types[change.typeName]?.fields ?? {}),

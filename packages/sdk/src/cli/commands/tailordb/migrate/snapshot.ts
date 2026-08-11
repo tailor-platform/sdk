@@ -1831,7 +1831,7 @@ function compareTypeScripts(
  * @param plans - Field changes carried through temporary fields
  * @returns Snapshot to compare the expand migration against
  */
-export function buildExpandBaseSnapshot(
+function buildExpandBaseSnapshot(
   previous: NormalizedSchemaSnapshot,
   plans: readonly ExpandContractPlan[],
 ): NormalizedSchemaSnapshot {
@@ -1845,6 +1845,26 @@ export function buildExpandBaseSnapshot(
     types[plan.typeName] = { ...type, fields };
   }
   return normalizeSchemaSnapshot({ ...previous, types });
+}
+
+/**
+ * Build the diff for the migration that converts values into temporary fields.
+ *
+ * Adding an optional field and removing one are both non-breaking, so nothing
+ * in the comparison marks the script as required — yet it is the only thing
+ * carrying the values across before the original field is dropped.
+ * @param previous - Snapshot the expand migration starts from
+ * @param intermediate - Snapshot the expand migration produces
+ * @param plans - Field changes carried through temporary fields
+ * @returns Diff to write for the expand migration
+ */
+export function buildExpandDiff(
+  previous: NormalizedSchemaSnapshot,
+  intermediate: NormalizedSchemaSnapshot,
+  plans: readonly ExpandContractPlan[],
+): MigrationDiff {
+  const diff = compareSnapshots(buildExpandBaseSnapshot(previous, plans), intermediate);
+  return { ...diff, requiresMigrationScript: true };
 }
 
 /**

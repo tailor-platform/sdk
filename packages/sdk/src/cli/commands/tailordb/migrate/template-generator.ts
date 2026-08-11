@@ -116,10 +116,7 @@ export async function generateDiffFiles(
   const migrateFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   const dbTypesFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
 
-  // The expand migration only adds an optional field and removes the original,
-  // neither of which is breaking, but its conversion script is what carries the
-  // data across.
-  const writeScript = diff.requiresMigrationScript || expandPlans.length > 0;
+  const writeScript = diff.requiresMigrationScript;
 
   // Check if files already exist to prevent accidental overwrite
   await ensureFileNotExists(diffFilePath);

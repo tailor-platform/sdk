@@ -102,6 +102,44 @@ describe("planExpandContract", () => {
     expect(blocked).toHaveLength(1);
   });
 
+  test("blocks a pair the SDK already converts in one migration", () => {
+    const { plans, blocked } = planExpandContract({
+      previous: snapshot({ price: snapshotField("integer") }),
+      current: snapshot({ price: snapshotField("float") }),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("float"))],
+        breakingChanges: [],
+      }),
+      confirmed,
+    });
+
+    expect(plans).toEqual([]);
+    expect(blocked).toEqual([]);
+  });
+
+  test("blocks a field an index still points at", () => {
+    const withIndex = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => {
+      const base = snapshot(fields);
+      base.types.User = {
+        ...base.types.User!,
+        indexes: { byPrice: { fields: ["price"] } },
+      };
+      return base;
+    };
+    const { plans, blocked } = planExpandContract({
+      previous: withIndex({ price: snapshotField("integer") }),
+      current: withIndex({ price: snapshotField("string") }),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        breakingChanges: unsupportedPrice(),
+      }),
+      confirmed,
+    });
+
+    expect(plans).toEqual([]);
+    expect(blocked).toHaveLength(1);
+  });
+
   test.each([
     ["serial", { serial: { start: 1 } }],
     ["vector", { vector: true }],

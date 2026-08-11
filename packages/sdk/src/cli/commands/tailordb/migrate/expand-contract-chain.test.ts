@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { planExpandContract } from "./expand-contract";
 import {
-  buildExpandBaseSnapshot,
+  buildExpandDiff,
   buildIntermediateSnapshot,
   compareSnapshots,
   normalizeSchemaSnapshot,
@@ -61,7 +61,7 @@ function generatePair(
     confirmed: new Set(["User.price"]),
   });
   const intermediate = buildIntermediateSnapshot(previous, plans);
-  const expand = compareSnapshots(buildExpandBaseSnapshot(previous, plans), intermediate);
+  const expand = buildExpandDiff(previous, intermediate, plans);
   const contract = compareSnapshots(intermediate, current, {
     fieldRenames: plans.map((plan) => ({
       typeName: plan.typeName,
@@ -128,6 +128,15 @@ describe("expand-contract migration chain", () => {
         expect.objectContaining({ kind: "field_removed", fieldName: "price" }),
       ]),
     );
+  });
+
+  test("requires the conversion script, which is the only thing carrying the data", () => {
+    const { expand } = generatePair(
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("string", { required: true }) },
+    );
+
+    expect(expand.requiresMigrationScript).toBe(true);
   });
 
   test("records the removed field as optional so the script can clear it", () => {

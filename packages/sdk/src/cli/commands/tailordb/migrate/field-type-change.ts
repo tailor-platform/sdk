@@ -53,6 +53,7 @@ export function supportsExpandContractFieldChange(
   after: SnapshotFieldConfig,
 ): boolean {
   if (before.type === after.type) return false;
+  if (supportsInPlaceFieldTypeChange(before, after)) return false;
   if (before.array || after.array) return false;
   if (before.type === "nested" || after.type === "nested") return false;
   if (before.serial || after.serial) return false;
