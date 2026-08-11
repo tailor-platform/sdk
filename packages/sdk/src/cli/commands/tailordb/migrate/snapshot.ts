@@ -1894,7 +1894,11 @@ export function buildIntermediateSnapshot(
     const type = types[plan.typeName];
     if (!type) continue;
     const fields = copySnapshotRecord(type.fields);
-    fields[plan.tempFieldName] = { ...plan.after, required: false, unique: false };
+    // Hooks and validation stay off the temporary field: the rename re-applies
+    // the real contract, and a non-idempotent update hook would otherwise run
+    // once on the conversion and again on the copy.
+    const { hooks: _hooks, validate: _validate, ...carried } = plan.after;
+    fields[plan.tempFieldName] = { ...carried, required: false, unique: false };
     delete fields[plan.fieldName];
     types[plan.typeName] = { ...type, fields };
   }

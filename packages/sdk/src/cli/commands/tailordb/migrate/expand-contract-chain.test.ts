@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import { assertDefined } from "#/utils/assert";
 import { planExpandContract } from "./expand-contract";
 import {
   buildExpandDiff,
@@ -149,6 +150,31 @@ describe("expand-contract migration chain", () => {
     // The deploy restores this contract while the script runs; a required one
     // rejects the null the script writes.
     expect(removed && "before" in removed && removed.before.required).toBe(false);
+  });
+
+  test("keeps hooks and validation off the temporary field", () => {
+    const { intermediate } = generatePair(
+      { price: snapshotField("integer", { required: true }) },
+      {
+        // The hooks belong to the target contract, which is what the temporary
+        // field is copied from.
+        price: snapshotField("string", {
+          required: true,
+          hooks: { update: { expr: "value + '!'" } },
+          validate: [{ script: { expr: "value !== ''" }, errorMessage: "non-empty only" }],
+        }),
+      },
+    );
+
+    const temp = assertDefined(
+      intermediate.types.User?.fields.priceMigrate,
+      "temporary field missing",
+    );
+    // The rename re-applies the real contract; running an update hook here
+    // would apply it once on the conversion and again on the copy.
+    expect(temp.type).toBe("string");
+    expect(temp.hooks).toBeUndefined();
+    expect(temp.validate).toBeUndefined();
   });
 
   test("relaxes the temporary field so the expand script can fill it in batches", () => {
