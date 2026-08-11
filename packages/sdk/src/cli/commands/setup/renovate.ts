@@ -27,14 +27,17 @@ export type SetupRenovateOptions = {
   outputDir: string;
 };
 
-function pathEntryExists(filePath: string): boolean {
+function getPathEntry(filePath: string): fs.Stats | null {
   try {
-    fs.lstatSync(filePath);
-    return true;
+    return fs.lstatSync(filePath);
   } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
     throw error;
   }
+}
+
+function pathEntryExists(filePath: string): boolean {
+  return getPathEntry(filePath) !== null;
 }
 
 function findExistingConfig(outputDir: string): string | null {
@@ -83,7 +86,7 @@ export async function setupRenovate(options: SetupRenovateOptions): Promise<void
   const lock = readLock(options.outputDir);
   const registration = lock?.setups[0];
   const outputPath = path.join(options.outputDir, RENOVATE_CONFIG_FILE);
-  if (registration && fs.existsSync(outputPath)) {
+  if (registration && getPathEntry(outputPath)?.isFile()) {
     logger.info(`Renovate is already set up at ${styles.path(RENOVATE_CONFIG_FILE)}.`);
     return;
   }

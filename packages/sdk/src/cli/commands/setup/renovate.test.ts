@@ -63,6 +63,32 @@ describe("setupRenovate", () => {
     expect(readLock(testDir)?.setups).toEqual([{ kind: "renovate", file: RENOVATE_CONFIG_FILE }]);
   });
 
+  test("does not treat a registered directory as a valid config", async () => {
+    await setupRenovate({ outputDir: testDir });
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    fs.rmSync(configPath);
+    fs.mkdirSync(configPath);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/already exists/);
+
+    expect(fs.lstatSync(configPath).isDirectory()).toBe(true);
+  });
+
+  test("does not treat a registered symbolic link as a valid config", async () => {
+    await setupRenovate({ outputDir: testDir });
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    const outsideConfig = path.join(outsideDir, RENOVATE_CONFIG_FILE);
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.writeFileSync(outsideConfig, "{}\n");
+    fs.rmSync(configPath);
+    fs.symlinkSync(outsideConfig, configPath);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/already exists/);
+
+    expect(fs.lstatSync(configPath).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(outsideConfig, "utf-8")).toBe("{}\n");
+  });
+
   test("restores a missing config that is still recorded", async () => {
     await setupRenovate({ outputDir: testDir });
     fs.rmSync(path.join(testDir, RENOVATE_CONFIG_FILE));
