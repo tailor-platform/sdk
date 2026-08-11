@@ -1,8 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { readLock } from "./lock";
 import { RENOVATE_CONFIG_FILE, RENOVATE_PRESET, setupRenovate } from "./renovate";
+
+vi.mock("node:fs", async (importOriginal) => {
+  const original = await importOriginal<typeof fs>();
+  return { ...original, writeFileSync: vi.fn(original.writeFileSync) };
+});
 
 describe("setupRenovate", () => {
   const testDir = path.join(
@@ -110,14 +115,24 @@ describe("setupRenovate", () => {
   });
 
   test("removes the generated config when recording the setup fails", async () => {
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
     const lockPath = path.join(testDir, ".github/tailor.lock");
-    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
-    fs.symlinkSync(path.join(outsideDir, "missing/tailor.lock"), lockPath);
+    const mockedWriteFileSync = vi.mocked(fs.writeFileSync);
+    const originalWriteFileSync = mockedWriteFileSync.getMockImplementation()!;
+    mockedWriteFileSync.mockImplementation((file, ...args) => {
+      if (file === lockPath) throw new Error("simulated lock write failure");
+      return originalWriteFileSync(file, ...args);
+    });
 
-    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/ENOENT/);
+    try {
+      await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+        /simulated lock write failure/,
+      );
+    } finally {
+      mockedWriteFileSync.mockImplementation(originalWriteFileSync);
+    }
 
-    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
-    expect(fs.lstatSync(lockPath).isSymbolicLink()).toBe(true);
+    expect(fs.existsSync(configPath)).toBe(false);
   });
 
   test("refuses a dangling config symlink without writing outside the repository", async () => {

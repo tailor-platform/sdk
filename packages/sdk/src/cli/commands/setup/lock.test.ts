@@ -41,11 +41,13 @@ describe("readLock / writeLock", () => {
     "/tmp",
     `lock-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
+  const outsideDir = `${testDir}-outside`;
 
   aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     await runTest();
     fs.rmSync(testDir, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
   });
 
   test("returns null when no lock exists", () => {
@@ -70,6 +72,36 @@ describe("readLock / writeLock", () => {
 
     expect(readLock(testDir)).toEqual(lock);
     expect(readLock(testDir)!.setups[0]).not.toHaveProperty("contentHash");
+  });
+
+  test("refuses to read a lock through a symbolic link", () => {
+    const outsideLock = path.join(outsideDir, "tailor.lock");
+    const content = `${JSON.stringify(makeLock(), null, 2)}\n`;
+    fs.mkdirSync(path.dirname(outsideLock), { recursive: true });
+    fs.writeFileSync(outsideLock, content);
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.symlinkSync(outsideLock, path.join(testDir, ".github/tailor.lock"));
+
+    expect(() => readLock(testDir)).toThrow(/symbolic link/);
+    expect(fs.readFileSync(outsideLock, "utf-8")).toBe(content);
+  });
+
+  test("refuses to write a lock through a symbolic link", () => {
+    const outsideLock = path.join(outsideDir, "tailor.lock");
+    fs.mkdirSync(path.dirname(outsideLock), { recursive: true });
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.symlinkSync(outsideLock, path.join(testDir, ".github/tailor.lock"));
+
+    expect(() => writeLock(testDir, makeLock())).toThrow(/symbolic link/);
+    expect(fs.existsSync(outsideLock)).toBe(false);
+  });
+
+  test("refuses to write a lock through a symbolic-link directory", () => {
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.symlinkSync(outsideDir, path.join(testDir, ".github"));
+
+    expect(() => writeLock(testDir, makeLock())).toThrow(/symbolic link/);
+    expect(fs.existsSync(path.join(outsideDir, "tailor.lock"))).toBe(false);
   });
 
   test("throws on a forward-incompatible version", () => {
