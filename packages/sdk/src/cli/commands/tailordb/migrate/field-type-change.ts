@@ -34,16 +34,6 @@ export const IN_PLACE_TYPE_CHANGES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Whether a conversion into this type can map two distinct source values onto
- * one target value, by rounding to a decimal scale or dropping a fraction.
- * @param after - Target field configuration
- * @returns Whether distinct values can converge
- */
-function conversionCanCollapseValues(after: SnapshotFieldConfig): boolean {
-  return after.type === "decimal" || after.type === "integer";
-}
-
-/**
  * Determine whether a field type change can use a single phased migration.
  * @param before - Previous field configuration
  * @param after - Target field configuration
@@ -60,10 +50,11 @@ export function supportsInPlaceFieldTypeChange(
   if (before.vector || after.vector) return false;
   if (before.foreignKey || after.foreignKey) return false;
 
-  // A field that is already unique gets no generated dedupe script, so a
-  // conversion that can merge distinct values would fail the constraint after
-  // the migration instead of surfacing the collision while it can be fixed.
-  if ((before.unique ?? false) && conversionCanCollapseValues(after)) return false;
+  if (!IN_PLACE_TYPE_CHANGES.has(`${before.type}:${after.type}`)) return false;
 
-  return IN_PLACE_TYPE_CHANGES.has(`${before.type}:${after.type}`);
+  // Rounding to the target scale can merge two distinct values. A field that is
+  // already unique gets no generated dedupe script, so the collision would fail
+  // the constraint after the migration instead of surfacing while it can still
+  // be resolved.
+  return !(before.unique ?? false) || after.type !== "decimal";
 }

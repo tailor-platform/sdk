@@ -96,10 +96,12 @@ describe("supportsInPlaceFieldTypeChange", () => {
   });
 
   describe("already-unique fields whose values can collapse", () => {
+    // Every pair here is otherwise allowed, so only the unique guard can reject it.
     test.each([
       ["float", "decimal"],
       ["integer", "decimal"],
     ])("rejects unique %s to %s", (before, after) => {
+      expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(true);
       expect(supportsInPlaceFieldTypeChange(field(before, { unique: true }), field(after))).toBe(
         false,
       );
@@ -118,6 +120,7 @@ describe("supportsInPlaceFieldTypeChange", () => {
       ["integer", "string"],
       ["decimal", "string"],
       ["integer", "float"],
+      ["decimal", "float"],
     ])("allows unique %s to %s, which keeps values distinct", (before, after) => {
       expect(supportsInPlaceFieldTypeChange(field(before, { unique: true }), field(after))).toBe(
         true,
