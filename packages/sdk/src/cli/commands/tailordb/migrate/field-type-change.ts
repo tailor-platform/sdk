@@ -1,17 +1,20 @@
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
 /**
- * Scalar type changes whose complete source domain is accepted by the target
- * representation without relying on per-row index recreation.
+ * Scalar type changes a normalized value can survive: every value the script
+ * leaves behind is castable to the target, and reads back with its meaning
+ * intact.
+ *
+ * Values are not required to cast as-is — `"abc"` in a `string` field still
+ * fails to become an `integer`, and the generated script is where the user
+ * normalizes it. What the pair must guarantee is that a representation valid
+ * under both types exists. Date, datetime, and time values are not stored in
+ * the textual form they were written in, so no such representation exists for
+ * them; those pairs stay off this list even though the platform accepts the
+ * schema change.
  *
  * Keep this list deliberately narrow. Pair-specific platform experiments can
  * extend it once both indexed and unindexed read paths have been verified.
- *
- * A pair qualifies only when existing values read back with their meaning
- * intact. Date, datetime, and time values are not stored in the textual form
- * they were written in, so converting them to or from another type reads back
- * as a different instant — those pairs stay off this list even though the
- * platform accepts the schema change.
  */
 export const IN_PLACE_TYPE_CHANGES: ReadonlySet<string> = new Set([
   "boolean:string",

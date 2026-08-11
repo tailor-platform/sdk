@@ -341,7 +341,7 @@ Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-
 - `boolean` → `integer`, `float` → `integer`, and `string` → `date` are excluded because the stored values cannot be cast to the new type.
 - `date`, `datetime`, and `time` fields are not stored in the textual form you wrote them in, so converting them to or from another type reads back as a different instant. Convert them through a temporary field where your script controls the formatting.
 
-Converting to `decimal` pads values to the field's scale, so `42` reads back as `42.000000`. The numeric value is unchanged.
+Converting to `decimal` reformats values to the field's scale, so `42` reads back as `42.000000`. Values with more decimal places than the scale allows are rounded half-up, so `1.1234567` becomes `1.123457` at the default scale of 6.
 
 ### Generated normalization script for field type changes
 
