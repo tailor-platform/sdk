@@ -1,12 +1,17 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { setupTarget } from "./generate";
 import { readLock } from "./lock";
 import { RENOVATE_CONFIG_FILE, RENOVATE_PRESET, setupRenovate } from "./renovate";
 
 vi.mock("node:fs", async (importOriginal) => {
   const original = await importOriginal<typeof fs>();
-  return { ...original, writeFileSync: vi.fn(original.writeFileSync) };
+  return {
+    ...original,
+    rmSync: vi.fn(original.rmSync),
+    writeFileSync: vi.fn(original.writeFileSync),
+  };
 });
 
 describe("setupRenovate", () => {
@@ -30,7 +35,7 @@ describe("setupRenovate", () => {
       `${JSON.stringify(
         {
           $schema: "https://docs.renovatebot.com/renovate-schema.json",
-          extends: [RENOVATE_PRESET],
+          extends: ["github>tailor-inc/renovate-config"],
         },
         null,
         2,
@@ -42,6 +47,31 @@ describe("setupRenovate", () => {
       setups: [{ kind: "renovate", file: RENOVATE_CONFIG_FILE }],
     });
     expect(readLock(testDir)!.setups[0]).not.toHaveProperty("contentHash");
+  });
+
+  test("preserves existing workflow targets when recording setup", async () => {
+    fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
+    fs.writeFileSync(
+      path.join(testDir, "tailor.config.ts"),
+      'import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "my-app" });\n',
+    );
+    await setupTarget({
+      kind: "branch",
+      workspaceName: "my-app",
+      branch: "main",
+      erdPreview: false,
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+    });
+    const targets = readLock(testDir)?.targets;
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(readLock(testDir)?.targets).toEqual(targets);
+    expect(readLock(testDir)?.setups).toEqual([{ kind: "renovate", file: RENOVATE_CONFIG_FILE }]);
   });
 
   test("does not overwrite user edits when rerun", async () => {
@@ -159,6 +189,39 @@ describe("setupRenovate", () => {
     }
 
     expect(fs.existsSync(configPath)).toBe(false);
+  });
+
+  test("reports both failures when recording and rollback fail", async () => {
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    const lockPath = path.join(testDir, ".github/tailor.lock");
+    const lockError = new Error("simulated lock write failure");
+    const rollbackError = new Error("simulated rollback failure");
+    const mockedWriteFileSync = vi.mocked(fs.writeFileSync);
+    const originalWriteFileSync = mockedWriteFileSync.getMockImplementation()!;
+    const mockedRmSync = vi.mocked(fs.rmSync);
+    const originalRmSync = mockedRmSync.getMockImplementation()!;
+    mockedWriteFileSync.mockImplementation((file, ...args) => {
+      if (file === lockPath) throw lockError;
+      return originalWriteFileSync(file, ...args);
+    });
+    mockedRmSync.mockImplementation((file, ...args) => {
+      if (file === configPath) throw rollbackError;
+      return originalRmSync(file, ...args);
+    });
+
+    let error: unknown;
+    try {
+      await setupRenovate({ outputDir: testDir });
+    } catch (cause) {
+      error = cause;
+    } finally {
+      mockedWriteFileSync.mockImplementation(originalWriteFileSync);
+      mockedRmSync.mockImplementation(originalRmSync);
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).cause).toBeInstanceOf(AggregateError);
+    expect(((error as Error).cause as AggregateError).errors).toEqual([lockError, rollbackError]);
   });
 
   test("refuses a dangling config symlink without writing outside the repository", async () => {

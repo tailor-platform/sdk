@@ -76,6 +76,12 @@ function renderRenovateConfig(): string {
   )}\n`;
 }
 
+function setupRollbackError(recordingCause: unknown, rollbackCause: unknown): Error {
+  return new Error(`Failed to record Renovate setup and remove ${RENOVATE_CONFIG_FILE}.`, {
+    cause: new AggregateError([recordingCause, rollbackCause]),
+  });
+}
+
 /**
  * Generate a repository-level Renovate config that extends Tailor's shared preset.
  * @param options - Renovate setup options
@@ -111,9 +117,7 @@ export async function setupRenovate(options: SetupRenovateOptions): Promise<void
     try {
       fs.rmSync(outputPath);
     } catch (rollbackCause) {
-      throw new Error(`Failed to record Renovate setup and remove ${RENOVATE_CONFIG_FILE}.`, {
-        cause: rollbackCause,
-      });
+      throw setupRollbackError(cause, rollbackCause);
     }
     throw cause;
   }
