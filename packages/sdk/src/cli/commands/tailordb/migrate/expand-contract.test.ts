@@ -190,6 +190,38 @@ describe("planExpandContract", () => {
     expect(plans).toEqual([]);
   });
 
+  test("avoids a temporary name a file or relationship already exposes", () => {
+    const withMembers = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => {
+      const base = snapshot(fields);
+      base.types.User = {
+        ...base.types.User!,
+        files: { priceMigrate: "text/csv" },
+        forwardRelationships: {
+          priceMigrate2: {
+            targetType: "Other",
+            targetField: "id",
+            sourceField: "otherId",
+            isArray: false,
+            description: "",
+          },
+        },
+      };
+      return base;
+    };
+    const { plans } = planExpandContract({
+      previous: withMembers({ price: snapshotField("integer") }),
+      current: withMembers({ price: snapshotField("string") }),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        breakingChanges: unsupportedPrice(),
+      }),
+      confirmed,
+    });
+
+    // Both share the type's GraphQL namespace with fields.
+    expect(plans[0]?.tempFieldName).toBe("priceMigrate3");
+  });
+
   test("avoids a temporary name the user already defined", () => {
     const { plans } = planExpandContract({
       previous: snapshot({

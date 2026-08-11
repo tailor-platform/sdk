@@ -395,6 +395,8 @@ Without the flag the command fails rather than converting anything, so a scripte
 
 > **Why the conversion clears the original field.** Removing a field from the schema does not necessarily remove its stored value. Reusing the name for an incompatible type while a stale value remains can deploy successfully and then make subsequent reads fail. Clearing the original in the same update is what prevents that, which is why the generated script writes both fields at once.
 
+> **Writes that land while the conversion runs are not carried across.** The original field keeps its old type until the conversion finishes, so an application can still write to it after the script has read the last row — and that value is dropped with the field rather than converted. Stop writes to the field, or accept the loss, before deploying a conversion on a live workspace.
+
 Some changes are still rejected and need a temporary field you add yourself — add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration:
 
 - Array-to-scalar and scalar-to-array, since collapsing an array has no answer the generated script could choose for you.
