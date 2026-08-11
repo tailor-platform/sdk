@@ -147,12 +147,47 @@ describe("planExpandContract", () => {
     ["arrays", { array: true }],
     ["unique fields", { unique: true }],
   ] satisfies [string, Partial<SnapshotFieldConfig>][])("blocks %s", (_name, overrides) => {
-    const { plans, blocked } = planning([
-      typeChange("price", snapshotField("integer", overrides), snapshotField("string", overrides)),
-    ]);
+    const { plans, blocked } = planExpandContract({
+      previous: snapshot({ price: snapshotField("integer", overrides) }),
+      current: snapshot({ price: snapshotField("string", overrides) }),
+      diff: createMockMigrationDiff({
+        changes: [
+          typeChange(
+            "price",
+            snapshotField("integer", overrides),
+            snapshotField("string", overrides),
+          ),
+        ],
+        breakingChanges: unsupportedPrice(),
+      }),
+      confirmed,
+    });
 
     expect(plans).toEqual([]);
     expect(blocked).toHaveLength(1);
+  });
+
+  test("blocks a field a reference in the previous schema still names", () => {
+    const withIndex = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => {
+      const base = snapshot(fields);
+      base.types.User = {
+        ...base.types.User!,
+        indexes: { byPrice: { fields: ["price"] } },
+      };
+      return base;
+    };
+    const { plans } = planExpandContract({
+      previous: withIndex({ price: snapshotField("integer") }),
+      // The same edit drops the index, so only the previous snapshot names it.
+      current: snapshot({ price: snapshotField("string") }),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        breakingChanges: unsupportedPrice(),
+      }),
+      confirmed,
+    });
+
+    expect(plans).toEqual([]);
   });
 
   test("avoids a temporary name the user already defined", () => {

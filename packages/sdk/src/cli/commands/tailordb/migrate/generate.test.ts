@@ -403,6 +403,17 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(added(contract)).toContain("nickname");
   });
 
+  test("converts only the namespace whose field changed", async () => {
+    const converted = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
+    const untouched = addNamespace(tmpDir, "analyticsdb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(converted.migrationsDir, "0002"))).toBe(true);
+    expect(fs.existsSync(path.join(untouched.migrationsDir, "0001"))).toBe(false);
+  });
+
   test("rejects a flag that names a field whose type did not change", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
 

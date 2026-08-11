@@ -97,6 +97,9 @@ export const DB_TYPES_FILE_NAME = "db.ts";
  */
 export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
 
+/** Highest migration number the four-digit directory name can hold. */
+export const MAX_MIGRATION_NUMBER = 9999;
+
 /**
  * Platform default scale for decimal fields when scale is not explicitly specified.
  * Must stay in sync with the platform's default decimal scale.

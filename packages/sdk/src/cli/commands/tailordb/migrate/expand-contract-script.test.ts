@@ -123,6 +123,8 @@ describe("db.ts for an expand migration", () => {
   test("keeps the original field readable and nullable so the script can clear it", async () => {
     const content = await generate();
 
-    expect(content).toMatch(/\bprice: [^;]*null[^;]*;/);
+    // Kysely reads the third ColumnType slot for updates, which is what the
+    // conversion writes null through.
+    expect(content).toContain("price: ColumnType<number | null, number | null, number | null>;");
   });
 });

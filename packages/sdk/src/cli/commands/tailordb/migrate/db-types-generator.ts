@@ -38,6 +38,8 @@ interface BreakingChangeFieldInfo {
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
   /** Map of typeName -> Map of new fieldName -> SnapshotFieldConfig for renamed fields */
   renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
+  /** Map of typeName -> Set of fieldNames a conversion script clears */
+  clearedFields: Map<string, Set<string>>;
 }
 
 /**
@@ -121,7 +123,13 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
     }
   }
 
-  return { optionalToRequired, addedRequiredFields, enumValueChanges, renamedFields };
+  return {
+    optionalToRequired,
+    addedRequiredFields,
+    enumValueChanges,
+    renamedFields,
+    clearedFields: new Map<string, Set<string>>(),
+  };
 }
 
 /**
@@ -149,12 +157,11 @@ function generateDbTypesFromSnapshot(
         addedRequiredFields: new Map(),
         enumValueChanges: new Map(),
         renamedFields: new Map<string, Map<string, SnapshotFieldConfig>>(),
+        clearedFields: new Map<string, Set<string>>(),
       };
 
   // The temporary field is absent from the pre-migration snapshot; inject it so
-  // the conversion script can write it, as a renamed field's new name is. The
-  // source field is widened the same way an optional→required field is, because
-  // the script clears it once the value has been carried across.
+  // the conversion script can write it, as a renamed field's new name is.
   for (const plan of expandPlans) {
     const injected =
       breakingChangeFields.renamedFields.get(plan.typeName) ??
@@ -162,9 +169,9 @@ function generateDbTypesFromSnapshot(
     injected.set(plan.tempFieldName, { ...plan.after, required: false, unique: false });
     breakingChangeFields.renamedFields.set(plan.typeName, injected);
 
-    const widened = breakingChangeFields.optionalToRequired.get(plan.typeName) ?? new Set<string>();
-    widened.add(plan.fieldName);
-    breakingChangeFields.optionalToRequired.set(plan.typeName, widened);
+    const cleared = breakingChangeFields.clearedFields.get(plan.typeName) ?? new Set<string>();
+    cleared.add(plan.fieldName);
+    breakingChangeFields.clearedFields.set(plan.typeName, cleared);
   }
 
   // Track which utility types are used
@@ -287,15 +294,24 @@ function generateTableType(
   // Get enum value changes for this type
   const enumValueChangesForType = breakingChangeFields.enumValueChanges.get(type.name) || new Map();
 
+  // Fields a conversion script clears once it has carried the value across
+  const clearedFieldsForType =
+    breakingChangeFields.clearedFields.get(type.name) ?? new Set<string>();
+
   for (const [fieldName, fieldConfig] of Object.entries(type.fields)) {
     if (fieldName === "id") continue;
 
     const isOptionalToRequired = optionalToRequiredFields.has(fieldName);
     const enumValueChange = enumValueChangesForType.get(fieldName);
     const result = generateFieldType(fieldConfig, isOptionalToRequired, enumValueChange);
-    fieldLines.push(`    ${fieldName}: ${result.type};`);
+    // A conversion script clears its source field, and Kysely reads the third
+    // ColumnType slot for updates.
+    const clearable = clearedFieldsForType.has(fieldName);
+    fieldLines.push(
+      `    ${fieldName}: ${clearable ? generateClearableFieldType(fieldConfig) : result.type};`,
+    );
     usedTimestamp = usedTimestamp || result.usedTimestamp;
-    usedColumnType = usedColumnType || result.usedColumnType;
+    usedColumnType = usedColumnType || result.usedColumnType || clearable;
   }
 
   // Add newly added required fields with ColumnType (same as optional→required)
@@ -371,6 +387,20 @@ function generateEnumChangeColumnType(
     return `ColumnType<(${selectType}) | null, (${afterType}) | null, (${afterType}) | null>`;
   }
   return `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
+}
+
+/**
+ * Column type for a field the migration script both reads and clears.
+ *
+ * Kysely takes the select, insert, and update types from the three slots in
+ * turn, so the update slot has to accept the null the script writes.
+ * @param config - Field configuration in the pre-migration snapshot
+ * @returns {string} Generated column type
+ */
+function generateClearableFieldType(config: SnapshotFieldConfig): string {
+  const { type } = mapToTsType(config.type);
+  const base = config.array ? `${type}[]` : type;
+  return `ColumnType<${base} | null, ${base} | null, ${base} | null>`;
 }
 
 function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {

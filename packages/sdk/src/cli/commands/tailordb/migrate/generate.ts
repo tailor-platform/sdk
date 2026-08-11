@@ -29,8 +29,12 @@ import {
   hasChanges,
   type MigrationDiff,
 } from "./diff-calculator";
-import { fieldKey, planExpandContract, type ExpandContractPlan } from "./expand-contract";
-import { supportsExpandContractFieldChange } from "./field-type-change";
+import {
+  canConvertField,
+  fieldKey,
+  planExpandContract,
+  type ExpandContractPlan,
+} from "./expand-contract";
 import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
@@ -56,6 +60,7 @@ import {
   assertValidMigrationFiles,
   formatMigrationNumber,
   INITIAL_SCHEMA_NUMBER,
+  MAX_MIGRATION_NUMBER,
   type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
@@ -427,7 +432,16 @@ async function resolveExpandContractPlans(
       if (change.kind !== "field_type_modified") continue;
       const key = fieldKey(change.typeName, change.fieldName);
       if (confirmed.has(key)) continue;
-      if (!supportsExpandContractFieldChange(change.before, change.after)) continue;
+      if (
+        !canConvertField({
+          previous: previousSnapshot,
+          current: currentSnapshot,
+          typeName: change.typeName,
+          fieldName: change.fieldName,
+        })
+      ) {
+        continue;
+      }
 
       logger.newline();
       logger.info(
@@ -666,12 +680,16 @@ async function generateDiffFromSnapshot(
       logger.error(`  ${change.reason}`);
     }
 
-    const convertible = unsupportedChanges.filter(({ typeName, fieldName }) => {
-      if (!fieldName) return false;
-      const before = previousSnapshot.types[typeName]?.fields[fieldName];
-      const after = currentSnapshot.types[typeName]?.fields[fieldName];
-      return Boolean(before && after && supportsExpandContractFieldChange(before, after));
-    });
+    const convertible = unsupportedChanges.filter(
+      ({ typeName, fieldName }) =>
+        fieldName !== undefined &&
+        canConvertField({
+          previous: previousSnapshot,
+          current: currentSnapshot,
+          typeName,
+          fieldName,
+        }),
+    );
     if (convertible.length > 0) {
       logger.newline();
       logger.info("Convert these fields through a temporary field with:");
@@ -818,6 +836,11 @@ async function generateExpandContractMigrations(
   });
 
   const expandNumber = getNextMigrationNumber(migrationsDir);
+  if (expandNumber + 1 > MAX_MIGRATION_NUMBER) {
+    throw new Error(
+      `Converting a field type needs two migration numbers, and ${formatMigrationNumber(MAX_MIGRATION_NUMBER)} is the last one available. Re-baseline the history first.`,
+    );
+  }
   const expand = await generateDiffFiles(
     expandDiff,
     migrationsDir,

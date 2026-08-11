@@ -73,6 +73,49 @@ export interface PlanExpandContractOptions {
 }
 
 /**
+ * Whether a field type change can be carried by a generated migration pair.
+ *
+ * The single answer behind the prompt, the flag hint, and planning, so a run
+ * cannot recommend a conversion it would then reject.
+ * @param options - Snapshots and the field to test
+ * @returns Whether the conversion can be generated
+ */
+export function canConvertField(options: CanConvertFieldOptions): boolean {
+  const { previous, current, typeName, fieldName } = options;
+  const before = previous.types[typeName]?.fields[fieldName];
+  const after = current.types[typeName]?.fields[fieldName];
+  if (!before || !after) return false;
+  if (!supportsExpandContractFieldChange(before, after)) return false;
+  return (
+    !isFieldReferenced(previous.types[typeName], fieldName) &&
+    !isFieldReferenced(current.types[typeName], fieldName)
+  );
+}
+
+/** Inputs for {@link canConvertField}. */
+export interface CanConvertFieldOptions {
+  previous: SchemaSnapshot;
+  current: SchemaSnapshot;
+  typeName: string;
+  fieldName: string;
+}
+
+/**
+ * Names a type already exposes, which a temporary field cannot reuse.
+ * @param type - Type to enumerate
+ * @returns Field, file, and relationship names
+ */
+function typeMemberNames(type: TailorDBSnapshotType | undefined): string[] {
+  if (!type) return [];
+  return [
+    ...Object.keys(type.fields),
+    ...Object.keys(type.files ?? {}),
+    ...Object.keys(type.forwardRelationships ?? {}),
+    ...Object.keys(type.backwardRelationships ?? {}),
+  ];
+}
+
+/**
  * Whether anything other than the field list names this field.
  *
  * The pair moves values through a differently named field, and only the field
@@ -118,12 +161,22 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
     if (change.kind !== "field_type_modified") continue;
     const key = fieldKey(change.typeName, change.fieldName);
     if (!confirmed.has(key)) continue;
-    if (!supportsExpandContractFieldChange(change.before, change.after)) continue;
-    if (isFieldReferenced(current.types[change.typeName], change.fieldName)) continue;
+    if (
+      !canConvertField({
+        previous,
+        current,
+        typeName: change.typeName,
+        fieldName: change.fieldName,
+      })
+    ) {
+      continue;
+    }
 
+    // A temporary field shares the type's GraphQL namespace with its files and
+    // relationships, so a name taken by either is not available.
     const taken = new Set([
-      ...Object.keys(previous.types[change.typeName]?.fields ?? {}),
-      ...Object.keys(current.types[change.typeName]?.fields ?? {}),
+      ...typeMemberNames(previous.types[change.typeName]),
+      ...typeMemberNames(current.types[change.typeName]),
       ...plans
         .filter((plan) => plan.typeName === change.typeName)
         .map((plan) => plan.tempFieldName),
