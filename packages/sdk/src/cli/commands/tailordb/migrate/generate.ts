@@ -840,6 +840,7 @@ async function generateExpandContractMigrations(
       formatMigrationNumber(contract.migrationNumber),
     )} to convert ${fields}`,
   );
+  logger.info(`  Diff files: ${expand.diffFilePath}, ${contract.diffFilePath}`);
   if (expand.migrateFilePath) {
     logger.info(`  Conversion script: ${expand.migrateFilePath}`);
   }
@@ -847,10 +848,13 @@ async function generateExpandContractMigrations(
     logger.info(`  Copy script: ${contract.migrateFilePath}`);
   }
   logger.newline();
-  logger.log(
-    `Edit the conversion in ${formatMigrationNumber(expand.migrationNumber)} before deploying; the second migration needs no changes.`,
+  logger.info(
+    `Edit the conversion in ${formatMigrationNumber(expand.migrationNumber)} before deploying. The copy script in ${formatMigrationNumber(
+      contract.migrationNumber,
+    )} is complete, though that migration also carries any other change in this run.`,
+    { mode: "plain" },
   );
-  logger.log("Both migrations are applied by 'tailor deploy'.");
+  logger.info("Both migrations are applied by 'tailor deploy'.", { mode: "plain" });
 }
 
 interface AcknowledgeWarningsOptions {

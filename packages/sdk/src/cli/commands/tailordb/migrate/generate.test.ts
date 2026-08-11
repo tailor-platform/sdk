@@ -384,6 +384,25 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(replayed?.types.User?.fields.nameMigrate).toBeUndefined();
   });
 
+  test("keeps an unrelated change out of the conversion migration", async () => {
+    const withExtra = retypedType("User", "integer");
+    withExtra.fields.nickname = {
+      name: "nickname",
+      config: { type: "string", required: false },
+    };
+    const ns = addNamespace(tmpDir, "tailordb", "User", withExtra);
+
+    await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    const expand = loadDiff(path.join(ns.migrationsDir, "0001", "diff.json"));
+    const contract = loadDiff(path.join(ns.migrationsDir, "0002", "diff.json"));
+    const added = (diff: typeof expand) =>
+      diff.changes.filter((change) => change.kind === "field_added").map((c) => c.fieldName);
+
+    expect(added(expand)).toEqual(["nameMigrate"]);
+    expect(added(contract)).toContain("nickname");
+  });
+
   test("rejects a flag that names a field whose type did not change", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
 

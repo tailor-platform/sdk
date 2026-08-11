@@ -379,7 +379,7 @@ User.price changes from integer to string, which cannot be applied in one step.
 Confirming writes two migrations:
 
 1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there.
-2. **The rename.** Renames the temporary field back to `price`. This one needs no changes.
+2. **The rename.** Renames the temporary field back to `price`. Its copy script is complete, but this migration also carries every other schema change the same run picked up, so review it as you would any generated migration.
 
 `tailor deploy` applies both. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than converting a row twice.
 
