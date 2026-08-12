@@ -610,10 +610,10 @@ describe("findTypeRenameCandidates", () => {
   test("pairs a removed type with compatible added types", () => {
     const diff = createMockMigrationDiff({
       changes: [
-        { kind: "type_removed", typeName: "User", before: snapshotType("User") },
-        { kind: "type_added", typeName: "Person", after: snapshotType("Person") },
+        { kind: "table_removed", typeName: "User", before: snapshotType("User") },
+        { kind: "table_added", typeName: "Person", after: snapshotType("Person") },
         {
-          kind: "type_added",
+          kind: "table_added",
           typeName: "Order",
           after: snapshotType("Order", {
             fields: { id: { type: "uuid", required: true }, total: stringField() },
@@ -632,9 +632,9 @@ describe("findTypeRenameCandidates", () => {
   test("returns no candidates when nothing is compatible", () => {
     const diff = createMockMigrationDiff({
       changes: [
-        { kind: "type_removed", typeName: "User", before: snapshotType("User") },
+        { kind: "table_removed", typeName: "User", before: snapshotType("User") },
         {
-          kind: "type_added",
+          kind: "table_added",
           typeName: "Order",
           after: snapshotType("Order", {
             fields: { id: { type: "uuid", required: true }, total: stringField() },
@@ -649,9 +649,9 @@ describe("findTypeRenameCandidates", () => {
   test("lists multiple compatible added types for one removed type", () => {
     const diff = createMockMigrationDiff({
       changes: [
-        { kind: "type_removed", typeName: "User", before: snapshotType("User") },
-        { kind: "type_added", typeName: "Person", after: snapshotType("Person") },
-        { kind: "type_added", typeName: "Member", after: snapshotType("Member") },
+        { kind: "table_removed", typeName: "User", before: snapshotType("User") },
+        { kind: "table_added", typeName: "Person", after: snapshotType("Person") },
+        { kind: "table_added", typeName: "Member", after: snapshotType("Member") },
       ],
     });
 

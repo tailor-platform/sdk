@@ -480,7 +480,7 @@ describe("tailordb migration generate with an unsupported field type change", ()
           fieldName: "displayName",
         }),
         expect.objectContaining({
-          kind: "type_renamed",
+          kind: "table_renamed",
           previousTypeName: "User",
           typeName: "Person",
         }),
@@ -567,7 +567,7 @@ describe("tailordb migration generate type rename preflight", () => {
     const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
     expect(diff.changes).toEqual([
       expect.objectContaining({
-        kind: "type_renamed",
+        kind: "table_renamed",
         typeName: "Person",
         previousTypeName: "User",
       }),
@@ -584,7 +584,7 @@ describe("tailordb migration generate type rename preflight", () => {
 
     expect(result.success).toBe(true);
     const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
-    expect(diff.changes.map((c) => c.kind).toSorted()).toEqual(["type_added", "type_removed"]);
+    expect(diff.changes.map((c) => c.kind).toSorted()).toEqual(["table_added", "table_removed"]);
     expect(diff.requiresMigrationScript).toBe(false);
   });
 

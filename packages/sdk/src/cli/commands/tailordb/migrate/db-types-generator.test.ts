@@ -411,7 +411,7 @@ describe("db-types-generator", () => {
       const diff = createMockMigrationDiff({
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Person",
             previousTypeName: "User",
             before: {
@@ -444,7 +444,7 @@ describe("db-types-generator", () => {
       const diff = createMockMigrationDiff({
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Person",
             previousTypeName: "User",
             before: { name: "User", pluralForm: "Users", fields: {} },

@@ -233,7 +233,7 @@ describe("migration flow: namespaces without pending migrations", () => {
         createdAt: "2026-01-01T00:00:00.000Z",
         changes: [
           {
-            kind: "type_added",
+            kind: "table_added",
             typeName: "User",
           },
         ],

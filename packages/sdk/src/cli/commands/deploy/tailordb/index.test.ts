@@ -32,7 +32,7 @@ import {
 import type {
   FieldDiffChange,
   IndexDiffChange,
-  TypeScriptsModifiedChange,
+  TableScriptsModifiedChange,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
@@ -1371,8 +1371,8 @@ describe("applyPreMigrationFieldAdjustments", () => {
         },
       ],
     ]);
-    const typeScriptsChange: TypeScriptsModifiedChange = {
-      kind: "type_scripts_modified",
+    const typeScriptsChange: TableScriptsModifiedChange = {
+      kind: "table_scripts_modified",
       typeName: "User",
       before: {
         typeHookExpr: { update: "return { age: 1 }" },
@@ -1861,7 +1861,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: 3,
+        version: 4,
       }),
     );
     const planResult = makePlanResult(true);
@@ -1869,7 +1869,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0001" });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /supports migration file format versions 1-2/,
+      /supports migration file format versions 1-3/,
     );
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();
@@ -2108,7 +2108,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       JSON.stringify(
         createMockMigrationDiff({
           namespace: "test-tailordb",
-          changes: [{ kind: "type_removed", typeName: "User", before: userType }],
+          changes: [{ kind: "table_removed", typeName: "User", before: userType }],
           hasWarnings: true,
           warnings: [{ typeName: "User", reason: "Type removed" }],
         }),
@@ -2144,7 +2144,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       JSON.stringify(
         createMockMigrationDiff({
           namespace: "test-tailordb",
-          changes: [{ kind: "type_removed", typeName: "User", before: userType }],
+          changes: [{ kind: "table_removed", typeName: "User", before: userType }],
           hasWarnings: true,
           warnings: [{ typeName: "User", reason: "Type removed" }],
         }),
@@ -2159,7 +2159,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       JSON.stringify(
         createMockMigrationDiff({
           namespace: "test-tailordb",
-          changes: [{ kind: "type_added", typeName: "User", after: userType }],
+          changes: [{ kind: "table_added", typeName: "User", after: userType }],
         }),
         null,
         2,

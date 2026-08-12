@@ -281,7 +281,7 @@ describe("applyTailorDB: type rename migration flow", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Person",
             previousTypeName: "User",
             before: snapshotFixtures.userType,

@@ -131,7 +131,7 @@ describe("tailordb migration rebaseline", () => {
 
     writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
     writeDiff(state.migrationsDir, 1, [
-      { kind: "type_added", typeName: "Post", after: snapshotType("Post") },
+      { kind: "table_added", typeName: "Post", after: snapshotType("Post") },
     ]);
     fs.writeFileSync(path.join(state.migrationsDir, "0001", "migrate.ts"), "export {};");
     fs.writeFileSync(path.join(state.migrationsDir, "0001", "db.ts"), "export {};");
@@ -191,7 +191,7 @@ describe("tailordb migration rebaseline", () => {
         replacedLatestMigration: number;
       };
     };
-    expect(baseline.version).toBe(2);
+    expect(baseline.version).toBe(3);
     expect(Object.keys(baseline.types).toSorted()).toEqual(["Post", "User"]);
     expect(baseline).toMatchObject({ namespace: "tailordb" });
     expect(baseline.rebaseline).toEqual({

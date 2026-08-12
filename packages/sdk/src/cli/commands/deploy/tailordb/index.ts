@@ -79,7 +79,7 @@ import {
 } from "./migration";
 import type {
   FieldDiffChange,
-  TypeScriptsModifiedChange,
+  TableScriptsModifiedChange,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type {
   MigrationCheckpointRepair,
@@ -787,9 +787,9 @@ function getAffectedTypeNames(migration: PendingMigration): Set<string> {
 function getDeletedTypeNames(migration: PendingMigration): Set<string> {
   const typeNames = new Set<string>();
   for (const change of migration.diff.changes) {
-    if (change.kind === "type_removed") {
+    if (change.kind === "table_removed") {
       typeNames.add(change.typeName);
-    } else if (change.kind === "type_renamed") {
+    } else if (change.kind === "table_renamed") {
       typeNames.add(change.previousTypeName);
     }
   }
@@ -874,8 +874,8 @@ function buildSnapshotTypeManifest(
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   const typeScriptsChange = migration.diff.changes.find(
-    (change): change is TypeScriptsModifiedChange =>
-      change.kind === "type_scripts_modified" && change.typeName === typeName,
+    (change): change is TableScriptsModifiedChange =>
+      change.kind === "table_scripts_modified" && change.typeName === typeName,
   );
   const manifestSnapshotType = typeChanges
     ? createPreMigrationSnapshotType(snapshotType, typeChanges, typeScriptsChange)

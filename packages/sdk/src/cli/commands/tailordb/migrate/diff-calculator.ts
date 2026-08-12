@@ -21,7 +21,7 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 2 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 3 as const;
 
 /** Oldest migration file format this SDK can replay. */
 export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
@@ -64,44 +64,44 @@ export interface SnapshotPermissionState {
   gqlPermission?: SnapshotGqlPermission;
 }
 
-/** A new type was added to the schema. */
-export interface TypeAddedChange extends DiffChangeBase {
-  kind: "type_added";
+/** A new table was added to the schema. */
+export interface TableAddedChange extends DiffChangeBase {
+  kind: "table_added";
   after: TailorDBSnapshotType;
 }
 
-/** An existing type was removed from the schema. */
-export interface TypeRemovedChange extends DiffChangeBase {
-  kind: "type_removed";
+/** An existing table was removed from the schema. */
+export interface TableRemovedChange extends DiffChangeBase {
+  kind: "table_removed";
   before: TailorDBSnapshotType;
 }
 
 /**
- * A type was renamed. Recorded when the user confirms that a removed + added
- * type pair is a rename (interactively or via `--rename`).
+ * A table was renamed. Recorded when the user confirms that a removed + added
+ * table pair is a rename (interactively or via `--rename`).
  * `typeName` is the new name; `previousTypeName` is the old name.
  */
-export interface TypeRenamedChange extends DiffChangeBase {
-  kind: "type_renamed";
+export interface TableRenamedChange extends DiffChangeBase {
+  kind: "table_renamed";
   previousTypeName: string;
   before: TailorDBSnapshotType;
   after: TailorDBSnapshotType;
 }
 
 /**
- * Legacy type-level settings change. Kept for backward compatibility with
+ * Legacy table-level settings change. Kept for backward compatibility with
  * diff.json files written by older SDK versions; `before`/`after` may be
  * absent in those files, hence optional.
  */
-export interface TypeModifiedChange extends DiffChangeBase {
-  kind: "type_modified";
+export interface TableModifiedChange extends DiffChangeBase {
+  kind: "table_modified";
   before?: TypeSettingsPatch;
   after?: TypeSettingsPatch;
 }
 
-/** Type-level settings or metadata changed. */
-export interface TypeSettingsModifiedChange extends DiffChangeBase {
-  kind: "type_settings_modified";
+/** Table-level settings or metadata changed. */
+export interface TableSettingsModifiedChange extends DiffChangeBase {
+  kind: "table_settings_modified";
   before: SnapshotTypeSettingsState;
   after: SnapshotTypeSettingsState;
 }
@@ -239,9 +239,9 @@ export interface TypeScriptsState {
   typeValidateExpr?: string;
 }
 
-/** Type-level hook/validate scripts changed. */
-export interface TypeScriptsModifiedChange extends DiffChangeBase {
-  kind: "type_scripts_modified";
+/** Table-level hook/validate scripts changed. */
+export interface TableScriptsModifiedChange extends DiffChangeBase {
+  kind: "table_scripts_modified";
   before: TypeScriptsState;
   after: TypeScriptsState;
 }
@@ -251,11 +251,11 @@ export interface TypeScriptsModifiedChange extends DiffChangeBase {
  * `before`/`after` are typed per change kind.
  */
 export type DiffChange =
-  | TypeAddedChange
-  | TypeRemovedChange
-  | TypeRenamedChange
-  | TypeModifiedChange
-  | TypeSettingsModifiedChange
+  | TableAddedChange
+  | TableRemovedChange
+  | TableRenamedChange
+  | TableModifiedChange
+  | TableSettingsModifiedChange
   | FieldAddedChange
   | FieldRemovedChange
   | FieldModifiedChange
@@ -271,7 +271,7 @@ export type DiffChange =
   | RelationshipRemovedChange
   | RelationshipModifiedChange
   | PermissionModifiedChange
-  | TypeScriptsModifiedChange;
+  | TableScriptsModifiedChange;
 
 /**
  * Field-level diff change (added / removed / modified / renamed).
@@ -396,16 +396,16 @@ export function formatMigrationDiff(diff: MigrationDiff): string {
  */
 function formatDiffChange(change: DiffChange): string {
   switch (change.kind) {
-    case "type_added":
-      return `  + [Type] ${change.typeName} (new type)`;
-    case "type_removed":
-      return `  - [Type] ${change.typeName} (removed)`;
-    case "type_renamed":
-      return `  ~ [Type] ${change.previousTypeName} → ${change.typeName} (renamed)`;
-    case "type_modified":
-      return `  ~ [Type] ${change.typeName}: ${change.reason}`;
-    case "type_settings_modified":
-      return `  ~ [Type Settings] ${change.typeName}: ${change.reason ?? "settings changed"}`;
+    case "table_added":
+      return `  + [Table] ${change.typeName} (new table)`;
+    case "table_removed":
+      return `  - [Table] ${change.typeName} (removed)`;
+    case "table_renamed":
+      return `  ~ [Table] ${change.previousTypeName} → ${change.typeName} (renamed)`;
+    case "table_modified":
+      return `  ~ [Table] ${change.typeName}: ${change.reason}`;
+    case "table_settings_modified":
+      return `  ~ [Table Settings] ${change.typeName}: ${change.reason ?? "settings changed"}`;
     case "field_added": {
       const typeStr = formatFieldType(change.after);
       return `  + ${change.fieldName}: ${typeStr}`;
@@ -437,8 +437,8 @@ function formatDiffChange(change: DiffChange): string {
       return `  ~ [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}: ${change.reason ?? "modified"}`;
     case "permission_modified":
       return `  ~ [Permission] ${change.reason ?? "modified"}`;
-    case "type_scripts_modified":
-      return `  ~ [Type Scripts] ${change.typeName}: ${change.reason ?? "type-level hooks/validate changed"}`;
+    case "table_scripts_modified":
+      return `  ~ [Table Scripts] ${change.typeName}: ${change.reason ?? "table-level hooks/validate changed"}`;
     default: {
       // Runtime fallback: diff.json is parsed without validation, so
       // hand-edited or future-version files may carry unknown kinds.
@@ -566,11 +566,11 @@ export function formatWarnings(warnings: WarningChangeInfo[]): string {
 }
 
 const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
-  type_added: "type(s) added",
-  type_removed: "type(s) removed",
-  type_renamed: "type(s) renamed",
-  type_modified: "type(s) modified",
-  type_settings_modified: "type setting(s) modified",
+  table_added: "table(s) added",
+  table_removed: "table(s) removed",
+  table_renamed: "table(s) renamed",
+  table_modified: "table(s) modified",
+  table_settings_modified: "table setting(s) modified",
   field_added: "field(s) added",
   field_removed: "field(s) removed",
   field_modified: "field(s) modified",
@@ -586,7 +586,7 @@ const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
   relationship_removed: "relationship(s) removed",
   relationship_modified: "relationship(s) modified",
   permission_modified: "permission(s) modified",
-  type_scripts_modified: "type script(s) modified",
+  table_scripts_modified: "table script(s) modified",
 };
 
 /**

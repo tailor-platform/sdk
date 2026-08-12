@@ -123,7 +123,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         change.fieldName,
         change.after,
       );
-    } else if (change.kind === "type_renamed") {
+    } else if (change.kind === "table_renamed") {
       // The new type is missing from the pre-migration snapshot; inject it so
       // the copy script can insert into it (the old type stays readable as-is).
       renamedTypes.set(change.typeName, change.after);

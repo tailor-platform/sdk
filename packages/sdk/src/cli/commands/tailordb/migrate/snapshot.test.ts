@@ -296,7 +296,7 @@ describe("snapshot", () => {
       const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0]!.kind).toBe("type_added");
+      expect(diff.changes[0]!.kind).toBe("table_added");
       expect(diff.changes[0]!.typeName).toBe("NewType");
       expect(diff.hasBreakingChanges).toBe(false);
     });
@@ -316,7 +316,7 @@ describe("snapshot", () => {
 
       const diff = compareRawSnapshots(previous, current);
 
-      expect(diff.changes[0]!.kind).toBe("type_removed");
+      expect(diff.changes[0]!.kind).toBe("table_removed");
       expect(diff.hasBreakingChanges).toBe(false);
       expect(diff.requiresMigrationScript).toBe(false);
       expect(diff.hasWarnings).toBe(true);
@@ -793,7 +793,7 @@ describe("snapshot", () => {
 
         expect(diff.changes).toHaveLength(1);
         expect(diff.changes[0]).toMatchObject({
-          kind: "type_renamed",
+          kind: "table_renamed",
           typeName: "Person",
           previousTypeName: "User",
           before: { name: "User" },
@@ -814,7 +814,10 @@ describe("snapshot", () => {
       test("without rename specs the same pair stays remove + add with a warning", () => {
         const diff = compareRawSnapshots(previous(), current());
 
-        expect(diff.changes.map((c) => c.kind).toSorted()).toEqual(["type_added", "type_removed"]);
+        expect(diff.changes.map((c) => c.kind).toSorted()).toEqual([
+          "table_added",
+          "table_removed",
+        ]);
         expect(diff.hasBreakingChanges).toBe(false);
         expect(diff.requiresMigrationScript).toBe(false);
         expect(diff.warnings).toHaveLength(1);
@@ -1261,7 +1264,7 @@ describe("snapshot", () => {
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
-          kind: "type_settings_modified",
+          kind: "table_settings_modified",
           typeName: "User",
           reason: expect.stringContaining("settings changed"),
         }),
@@ -1295,7 +1298,7 @@ describe("snapshot", () => {
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
-          kind: "type_settings_modified",
+          kind: "table_settings_modified",
           typeName: "User",
           reason: expect.stringContaining("settings changed"),
         }),
@@ -1329,7 +1332,7 @@ describe("snapshot", () => {
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
-          kind: "type_settings_modified",
+          kind: "table_settings_modified",
           typeName: "User",
           reason: expect.stringContaining("settings changed"),
         }),
@@ -1488,7 +1491,7 @@ describe("snapshot", () => {
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
-          kind: "type_scripts_modified",
+          kind: "table_scripts_modified",
           typeName: "User",
           before: {},
           after: {
@@ -1527,7 +1530,7 @@ describe("snapshot", () => {
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
-          kind: "type_scripts_modified",
+          kind: "table_scripts_modified",
           typeName: "User",
           before: { typeHookExpr: { create: "old-expr" } },
           after: {},
@@ -1563,7 +1566,7 @@ describe("snapshot", () => {
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
-          kind: "type_scripts_modified",
+          kind: "table_scripts_modified",
           typeName: "User",
           before: { typeValidateExpr: "old-validate" },
           after: { typeValidateExpr: "new-validate" },
@@ -1842,7 +1845,7 @@ describe("snapshot", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_added",
+            kind: "table_added",
             typeName: "NewType",
             after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
           },
@@ -1860,7 +1863,7 @@ describe("snapshot", () => {
       const loaded = loadDiff(filePath);
 
       expect(loaded.changes.length).toBe(1);
-      expect(loaded.changes[0]!.kind).toBe("type_added");
+      expect(loaded.changes[0]!.kind).toBe("table_added");
     });
 
     test("loads a phased field type change", () => {
@@ -1905,7 +1908,7 @@ describe("snapshot", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_added",
+            kind: "table_added",
             typeName: "NewType",
             after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
           },
@@ -1940,7 +1943,7 @@ describe("snapshot", () => {
             before: { type: "string" },
           },
           {
-            kind: "type_removed",
+            kind: "table_removed",
             typeName: "OldType",
             before: { name: "OldType", pluralForm: "OldTypes", fields: {} },
           },
@@ -2036,7 +2039,7 @@ describe("snapshot", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Person",
             previousTypeName: "User",
             before: { name: "User", pluralForm: "Users", fields: {} },
@@ -2100,10 +2103,64 @@ describe("snapshot", () => {
       expect(loaded.changes).toEqual(renameDiff.changes);
       expect(loaded.requiresMigrationScript).toBe(true);
     });
+
+    describe("legacy type_* change kinds", () => {
+      const snapshotType = (name: string) => ({ name, pluralForm: `${name}s`, fields: {} });
+      const settingsState = (pluralForm: string) => ({ pluralForm });
+
+      const LEGACY_CHANGES = [
+        ["type_added", "table_added", { typeName: "User", after: snapshotType("User") }],
+        ["type_removed", "table_removed", { typeName: "OldUser", before: snapshotType("OldUser") }],
+        [
+          "type_renamed",
+          "table_renamed",
+          {
+            typeName: "Person",
+            previousTypeName: "User",
+            before: snapshotType("User"),
+            after: snapshotType("Person"),
+          },
+        ],
+        ["type_modified", "table_modified", { typeName: "User" }],
+        [
+          "type_settings_modified",
+          "table_settings_modified",
+          {
+            typeName: "User",
+            before: settingsState("Users"),
+            after: settingsState("People"),
+          },
+        ],
+        [
+          "type_scripts_modified",
+          "table_scripts_modified",
+          { typeName: "User", before: {}, after: { typeValidateExpr: "() => true" } },
+        ],
+      ] as const;
+
+      test.each(LEGACY_CHANGES)("normalizes %s to %s", (legacyKind, currentKind, changePayload) => {
+        const legacyDiff = {
+          version: 2,
+          namespace,
+          createdAt: new Date().toISOString(),
+          changes: [{ kind: legacyKind, ...changePayload }],
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          hasWarnings: false,
+          warnings: [],
+          requiresMigrationScript: false,
+        };
+
+        const filePath = path.join(testDir, `legacy_${legacyKind}_diff.json`);
+        fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+        expect(loadDiff(filePath).changes[0]!.kind).toBe(currentKind);
+      });
+    });
   });
 
   describe("loadSnapshot validation", () => {
-    test.each([1, 2])("loads supported snapshot format version %s", (version) => {
+    test.each([1, 2, 3])("loads supported snapshot format version %s", (version) => {
       const filePath = path.join(testDir, `v${version}_schema.json`);
       fs.writeFileSync(
         filePath,
@@ -2173,20 +2230,20 @@ describe("snapshot", () => {
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-3/);
       expect(() => loadSnapshot(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects snapshot formats newer than the supported window", () => {
-      const version = 3;
+      const version = 4;
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-3/);
       expect(() => loadSnapshot(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 3/i,
+        /upgrade to an SDK that supports migration file format version 4/i,
       );
     });
 
@@ -2463,7 +2520,7 @@ describe("snapshot", () => {
   });
 
   describe("loadDiff validation", () => {
-    test.each([1, 2])("loads supported diff format version %s", (version) => {
+    test.each([1, 2, 3])("loads supported diff format version %s", (version) => {
       const filePath = path.join(testDir, `v${version}_diff.json`);
       fs.writeFileSync(
         filePath,
@@ -2497,20 +2554,20 @@ describe("snapshot", () => {
         }),
       );
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-3/);
       expect(() => loadDiff(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects diff formats newer than the supported window", () => {
-      const version = 3;
+      const version = 4;
       const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-3/);
       expect(() => loadDiff(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 3/i,
+        /upgrade to an SDK that supports migration file format version 4/i,
       );
     });
 
@@ -2576,8 +2633,8 @@ describe("snapshot", () => {
       expect(fs.existsSync(filePath)).toBe(true);
 
       const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(SCHEMA_SNAPSHOT_VERSION).toBe(2);
-      expect(loaded.version).toBe(2);
+      expect(SCHEMA_SNAPSHOT_VERSION).toBe(3);
+      expect(loaded.version).toBe(3);
     });
   });
 
@@ -2751,7 +2808,7 @@ describe("snapshot", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Person",
             previousTypeName: "User",
             before: {
@@ -2846,7 +2903,7 @@ describe("snapshot", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_added",
+            kind: "table_added",
             typeName: "__proto__",
             after: {
               name: "__proto__",
@@ -2954,7 +3011,7 @@ describe("snapshot", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_added",
+            kind: "table_added",
             typeName: "Post",
             after: {
               name: "Post",
@@ -3008,7 +3065,7 @@ describe("snapshot", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_removed",
+            kind: "table_removed",
             typeName: "OldType",
             before: {
               name: "OldType",

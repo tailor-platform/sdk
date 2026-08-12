@@ -115,7 +115,7 @@ A typical change cycle:
 
 ### Warnings and optional migration scripts
 
-Some non-breaking changes can still cause data loss — most notably removing a field (`field_removed`) or removing a table (`type_removed`). `migration generate` reports these as **warnings**:
+Some non-breaking changes can still cause data loss — most notably removing a field (`field_removed`) or removing a table (`table_removed`). `migration generate` reports these as **warnings**:
 
 ```
 Warning: data loss possible:
@@ -183,7 +183,7 @@ tailor tailordb migration generate --drop "User"
 
 Two types qualify as a rename pair only when copying every row preserves the data: every field must keep its name, type, array-ness, required/unique constraints, foreign key target, and decimal scale; enum fields may gain values but not lose them; indexes must match. A self-referential foreign key is compared against the new type name and must be optional. Types with serial fields (their values cannot be written by a script) or file fields (file contents are not copied) are never candidates. Name-derived and data-independent settings — `pluralForm`, description, type settings, permissions, hooks, and validations — may differ.
 
-A confirmed rename is recorded as a single `type_renamed` change and treated as **breaking** for two reasons: existing records must be copied by the migration script, and the type's GraphQL API names (derived from the type name and `pluralForm`) change, which breaks API clients. The generated `migrate.ts` copies every row from the old type into the new one in id-ordered batches, preserving ids so stored foreign key references stay valid, and the generated `db.ts` exposes both the old table (readable) and the new table (writable). Self-referential foreign keys are inserted as null and backfilled after every row exists, so a reference to a row in a later batch cannot fail the copy.
+A confirmed rename is recorded as a single `table_renamed` change and treated as **breaking** for two reasons: existing records must be copied by the migration script, and the type's GraphQL API names (derived from the type name and `pluralForm`) change, which breaks API clients. The generated `migrate.ts` copies every row from the old type into the new one in id-ordered batches, preserving ids so stored foreign key references stay valid, and the generated `db.ts` exposes both the old table (readable) and the new table (writable). Self-referential foreign keys are inserted as null and backfilled after every row exists, so a reference to a row in a later batch cannot fail the copy.
 
 Two caveats apply to the copy. The old type is not write-protected: rows written to it after the script's transaction commits — and before post-migration cleanup drops it — are not carried over, so pause writers to the renamed type for the duration of the deploy. And platform-managed record metadata (creation/update timestamps and actors) cannot be written by the script, so the new type's records carry the migration run's metadata instead of the original values.
 
@@ -239,7 +239,7 @@ export default defineConfig({
 
 ### Migration file format compatibility
 
-Migration files are versioned independently of the SDK package. This SDK writes format version `2` and reads versions `1` through `2`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk.
+Migration files are versioned independently of the SDK package. This SDK writes format version `3` and reads versions `1` through `3`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk.
 
 If a future SDK can no longer replay an old migration format, re-baseline while using an SDK version that still supports the complete history, commit the new baseline, deploy it to every environment, and then upgrade the SDK. A file from a newer unsupported format instead requires upgrading the SDK first. The CLI rejects both cases with guidance rather than attempting a best-effort replay.
 
