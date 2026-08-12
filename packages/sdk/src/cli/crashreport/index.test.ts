@@ -2,21 +2,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { parseCrashReportConfig } from "./config";
+import { reportCrash } from "./index";
 
 vi.mock("std-env", () => ({
   isCI: false,
 }));
 
-async function importReportCrash(config: {
-  localEnabled: boolean;
-  remoteEnabled: boolean;
-  localDir: string;
-}) {
-  vi.doMock("./config", () => ({
-    parseCrashReportConfig: () => config,
-  }));
-  return (await import("./index")).reportCrash;
-}
+vi.mock("./config", () => ({
+  parseCrashReportConfig: vi.fn(),
+}));
 
 describe("reportCrash", () => {
   const originalEnv = process.env;
@@ -27,14 +22,14 @@ describe("reportCrash", () => {
     delete process.env.TAILOR_CRASH_REPORTS_LOCAL;
     delete process.env.TAILOR_CRASH_REPORTS_REMOTE;
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "crash-report-index-test-"));
-    vi.resetModules();
     await runTest();
     process.env = originalEnv;
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    vi.mocked(parseCrashReportConfig).mockReset();
   });
 
   test("writes a crash log file for unexpected errors", async () => {
-    const reportCrash = await importReportCrash({
+    vi.mocked(parseCrashReportConfig).mockReturnValue({
       localEnabled: true,
       remoteEnabled: false,
       localDir: tmpDir,
@@ -49,7 +44,7 @@ describe("reportCrash", () => {
   });
 
   test("does not write when disabled", async () => {
-    const reportCrash = await importReportCrash({
+    vi.mocked(parseCrashReportConfig).mockReturnValue({
       localEnabled: false,
       remoteEnabled: false,
       localDir: tmpDir,
@@ -67,7 +62,7 @@ describe("reportCrash", () => {
     });
     globalThis.fetch = mockFetch;
 
-    const reportCrash = await importReportCrash({
+    vi.mocked(parseCrashReportConfig).mockReturnValue({
       localEnabled: true,
       remoteEnabled: true,
       localDir: tmpDir,
@@ -92,7 +87,7 @@ describe("reportCrash", () => {
   });
 
   test("never throws even if writing fails", async () => {
-    const reportCrash = await importReportCrash({
+    vi.mocked(parseCrashReportConfig).mockReturnValue({
       localEnabled: true,
       remoteEnabled: false,
       localDir: "/nonexistent/\0/invalid-path",

@@ -5,10 +5,16 @@ import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
+const cliEntry = path.join(packageRoot, "bin/cli.mjs");
 const CLI_TEST_TIMEOUT_MS = 15_000;
 
 function runCli(args: string[]) {
-  return spawnSync(process.execPath, ["--import", "tsx", "src/index.ts", ...args], {
+  if (!existsSync(path.join(packageRoot, "dist/index.js"))) {
+    throw new Error(
+      "packages/sdk-plugin-seed is not built. Run `pnpm --filter @tailor-platform/sdk-plugin-seed build` first.",
+    );
+  }
+  return spawnSync(process.execPath, [cliEntry, ...args], {
     cwd: packageRoot,
     encoding: "utf8",
     env: { ...process.env, FORCE_COLOR: "0" },
