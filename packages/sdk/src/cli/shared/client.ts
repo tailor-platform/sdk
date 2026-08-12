@@ -748,14 +748,30 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   formData.append("client_id", clientId);
   formData.append("client_secret", clientSecret);
 
-  const resp = await fetch(tokenEndpoint, {
+  const request = {
     method: "POST",
     headers: {
       "User-Agent": await userAgent(),
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: formData,
-  });
+  };
+  const resp = await (async () => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await fetch(tokenEndpoint, request);
+      } catch (error) {
+        if (!isUndiciConnectTimeout(error) || attempt >= 3) {
+          throw error;
+        }
+        logger.debug(
+          `retry: machine user token request attempt ${attempt} failed with ` +
+            "UND_ERR_CONNECT_TIMEOUT; retrying",
+        );
+        await waitRetryBackoff(attempt);
+      }
+    }
+  })();
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
     throw new Error(
@@ -771,6 +787,14 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
     expires_in: z.number(),
   });
   return schema.parse(rawJson);
+}
+
+function isUndiciConnectTimeout(error: unknown): boolean {
+  if (!(error instanceof TypeError)) {
+    return false;
+  }
+  const cause = error.cause;
+  return cause instanceof Error && "code" in cause && cause.code === "UND_ERR_CONNECT_TIMEOUT";
 }
 
 /**

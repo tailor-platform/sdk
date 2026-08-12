@@ -814,11 +814,22 @@ describe("resolveStaticWebsiteUrls", () => {
 
 describe("fetchMachineUserToken", () => {
   const fetchMock = vi.fn();
+  const connectTimeoutError = () =>
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Connect Timeout Error"), {
+        code: "UND_ERR_CONNECT_TIMEOUT",
+      }),
+    });
 
   aroundEach(async (runTest) => {
+    fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
-    await runTest();
-    vi.unstubAllGlobals();
+    try {
+      await runTest();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 
   test("returns the parsed token on success", async () => {
@@ -833,6 +844,74 @@ describe("fetchMachineUserToken", () => {
     expect(result).toEqual({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 });
   });
 
+  test("retries a connection timeout after 500ms", async () => {
+    vi.useFakeTimers();
+    using randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    fetchMock.mockRejectedValueOnce(connectTimeoutError()).mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 }),
+    });
+
+    const token = fetchMachineUserToken("https://example.com", "client-id", "client-secret");
+    const result = token.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(result).resolves.toEqual({
+      ok: true,
+      value: { token_type: "Bearer", access_token: "token-1", expires_in: 3600 },
+    });
+
+    expect(fetchMock.mock.calls[1]).toEqual(fetchMock.mock.calls[0]);
+    expect(randomSpy).toHaveBeenCalledOnce();
+  });
+
+  test("stops after three connection timeouts and preserves the last error", async () => {
+    vi.useFakeTimers();
+    using randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const errors = [connectTimeoutError(), connectTimeoutError(), connectTimeoutError()];
+    for (const error of errors) {
+      fetchMock.mockRejectedValueOnce(error);
+    }
+
+    const token = fetchMachineUserToken("https://example.com", "client-id", "client-secret");
+    const result = token.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await expect(result).resolves.toEqual({ ok: false, error: errors[2] });
+    expect(randomSpy).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry other fetch failures", async () => {
+    const socketError = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Socket Error"), { code: "UND_ERR_SOCKET" }),
+    });
+    fetchMock.mockRejectedValue(socketError);
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toBe(socketError);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   test("includes status, statusText, and response body in the error on failure", async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -844,6 +923,7 @@ describe("fetchMachineUserToken", () => {
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
     ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   test("falls back to an empty body when reading the response body fails", async () => {
