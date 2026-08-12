@@ -3,7 +3,7 @@ import { buildTempFieldName, planExpandContract } from "./expand-contract";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import { snapshotField, snapshotType } from "./test-helpers/schema-fixtures";
 import type { DiffChange } from "./diff-calculator";
-import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
+import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
 
 function snapshot(fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot {
   return {
@@ -12,6 +12,15 @@ function snapshot(fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot {
     createdAt: "2026-01-01T00:00:00.000Z",
     types: { User: { ...snapshotType("User"), fields } },
   };
+}
+
+function snapshotWithType(
+  fields: Record<string, SnapshotFieldConfig>,
+  options: Partial<Omit<TailorDBSnapshotType, "fields" | "name" | "pluralForm">>,
+): SchemaSnapshot {
+  const base = snapshot(fields);
+  base.types.User = { ...base.types.User!, ...options };
+  return base;
 }
 
 function typeChange(
@@ -180,6 +189,252 @@ describe("planExpandContract", () => {
       previous: withIndex({ price: snapshotField("integer") }),
       // The same edit drops the index, so only the previous snapshot names it.
       current: snapshot({ price: snapshotField("string") }),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        breakingChanges: unsupportedPrice(),
+      }),
+      confirmed,
+    });
+
+    expect(plans).toEqual([]);
+  });
+
+  test("ignores longer field names and text in type scripts", () => {
+    const typeValidateExpr =
+      '(({ newRecord }, issues) => { if (!newRecord.wholesalePrice) issues("wholesalePrice", "price"); })({ newRecord: _newRecord, oldRecord: _oldRecord }, __issues)';
+    const fields = {
+      price: snapshotField("integer"),
+      wholesalePrice: snapshotField("string"),
+    };
+    const { plans } = planExpandContract({
+      previous: snapshotWithType(fields, { typeValidateExpr }),
+      current: snapshotWithType(
+        { ...fields, price: snapshotField("string") },
+        { typeValidateExpr },
+      ),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        breakingChanges: unsupportedPrice(),
+      }),
+      confirmed,
+    });
+
+    expect(plans).toHaveLength(1);
+  });
+
+  test("ignores generated context plumbing that matches the field name", () => {
+    const typeHookExpr = {
+      update:
+        "(({ input }) => ({ total: input.wholesalePrice }))({ input: _input, oldRecord: _oldRecord })",
+    };
+    const { plans } = planExpandContract({
+      previous: snapshotWithType(
+        { input: snapshotField("integer"), wholesalePrice: snapshotField("string") },
+        { typeHookExpr },
+      ),
+      current: snapshotWithType(
+        { input: snapshotField("string"), wholesalePrice: snapshotField("string") },
+        { typeHookExpr },
+      ),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("input", snapshotField("integer"), snapshotField("string"))],
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "input",
+            reason: "Field type changed from integer to string",
+            unsupported: true,
+            showThreeStepHint: true,
+          },
+        ],
+      }),
+      confirmed: new Set(["User.input"]),
+    });
+
+    expect(plans).toHaveLength(1);
+  });
+
+  test("ignores permission users, literals, and descriptions that match the field name", () => {
+    const permissions: NonNullable<TailorDBSnapshotType["permissions"]> = {
+      record: {
+        create: [
+          {
+            conditions: [[{ user: "price" }, "eq", "price"]],
+            description: "Controls access to price updates",
+            permit: "allow",
+          },
+        ],
+        read: [],
+        update: [],
+        delete: [],
+      },
+    };
+    const { plans } = planExpandContract({
+      previous: snapshotWithType({ price: snapshotField("integer") }, { permissions }),
+      current: snapshotWithType({ price: snapshotField("string") }, { permissions }),
+      diff: createMockMigrationDiff({
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        breakingChanges: unsupportedPrice(),
+      }),
+      confirmed,
+    });
+
+    expect(plans).toHaveLength(1);
+  });
+
+  test.each([
+    [
+      "dot property",
+      {
+        typeHookExpr: {
+          update:
+            "(({ input }) => ({ total: input.price }))({ input: _input, oldRecord: _oldRecord })",
+        },
+      },
+    ],
+    [
+      "computed property",
+      {
+        typeValidateExpr:
+          '(({ newRecord }) => newRecord["price"] !== "")({ newRecord: _newRecord, oldRecord: _oldRecord })',
+      },
+    ],
+    [
+      "hook output",
+      {
+        typeHookExpr: {
+          update: "(({ input }) => ({ price: input.wholesalePrice }))({ input: _input })",
+        },
+      },
+    ],
+    [
+      "validation issue",
+      {
+        typeValidateExpr:
+          '((_args, report) => { report("price", "Invalid value"); })({ newRecord: _newRecord }, __issues)',
+      },
+    ],
+    [
+      "helper alias",
+      {
+        typeHookExpr: {
+          update:
+            "(({ input }) => { const read = (record) => record.price; return { total: read(input) }; })({ input: _input })",
+        },
+      },
+    ],
+    [
+      "derived object",
+      {
+        typeHookExpr: {
+          update: "(({ input }) => ({ total: Object.assign({}, input).price }))({ input: _input })",
+        },
+      },
+    ],
+    [
+      "template property",
+      {
+        typeValidateExpr:
+          "(({ newRecord }) => newRecord[`price`] !== '')({ newRecord: _newRecord })",
+      },
+    ],
+    [
+      "Reflect.get",
+      {
+        typeValidateExpr:
+          '(({ newRecord }) => Reflect.get(newRecord, "price") !== "")({ newRecord: _newRecord })',
+      },
+    ],
+    [
+      "computed key binding",
+      {
+        typeHookExpr: {
+          update:
+            '(({ input }) => { const key = "price"; return { total: input[key] }; })({ input: _input })',
+        },
+      },
+    ],
+    [
+      "computed output key",
+      {
+        typeHookExpr: {
+          update:
+            '(({ input }) => { const key = "price"; return { [key]: input.wholesalePrice }; })({ input: _input })',
+        },
+      },
+    ],
+    [
+      "Reflect.deleteProperty",
+      {
+        typeHookExpr: {
+          update:
+            '(({ input }) => { Reflect.deleteProperty(input, "price"); return input; })({ input: _input })',
+        },
+      },
+    ],
+    [
+      "in operator",
+      {
+        typeValidateExpr: '(({ newRecord }) => "price" in newRecord)({ newRecord: _newRecord })',
+      },
+    ],
+    [
+      "hasOwnProperty.call",
+      {
+        typeValidateExpr:
+          '(({ newRecord }) => Object.prototype.hasOwnProperty.call(newRecord, "price"))({ newRecord: _newRecord })',
+      },
+    ],
+    [
+      "Object.fromEntries",
+      {
+        typeHookExpr: {
+          update:
+            '(({ input }) => Object.fromEntries([["price", input.wholesalePrice]]))({ input: _input })',
+        },
+      },
+    ],
+    [
+      "template validation issue",
+      {
+        typeValidateExpr:
+          "((_args, report) => { report(`price`, 'Invalid value'); })({ newRecord: _newRecord }, __issues)",
+      },
+    ],
+  ] satisfies [string, Partial<Omit<TailorDBSnapshotType, "fields" | "name" | "pluralForm">>][])(
+    "blocks an exact field reference through a type script: %s",
+    (_name, options) => {
+      const { plans } = planExpandContract({
+        previous: snapshotWithType({ price: snapshotField("integer") }, options),
+        current: snapshotWithType({ price: snapshotField("string") }, options),
+        diff: createMockMigrationDiff({
+          changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+          breakingChanges: unsupportedPrice(),
+        }),
+        confirmed,
+      });
+
+      expect(plans).toEqual([]);
+    },
+  );
+
+  test("blocks an exact record field reference in permissions", () => {
+    const permissions: NonNullable<TailorDBSnapshotType["permissions"]> = {
+      record: {
+        create: [],
+        read: [
+          {
+            conditions: [[{ record: "price" }, "eq", "visible"]],
+            permit: "allow",
+          },
+        ],
+        update: [],
+        delete: [],
+      },
+    };
+    const { plans } = planExpandContract({
+      previous: snapshotWithType({ price: snapshotField("integer") }, { permissions }),
+      current: snapshotWithType({ price: snapshotField("string") }, { permissions }),
       diff: createMockMigrationDiff({
         changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
         breakingChanges: unsupportedPrice(),

@@ -6,9 +6,17 @@
  * that field back over the original.
  */
 
+import { parseSync } from "oxc-parser";
 import { getExpandContractFieldChangeEligibility } from "./field-type-change";
+import { isSnapshotFieldRefOperand } from "./snapshot-types";
 import type { BreakingChangeInfo, MigrationDiff } from "./diff-calculator";
-import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
+import type {
+  SchemaSnapshot,
+  SnapshotFieldConfig,
+  SnapshotPermissionCondition,
+  TailorDBSnapshotType,
+} from "./snapshot-types";
+import type { Node, PropertyKey } from "@oxc-project/types";
 
 /** Longest field name the platform accepts. */
 const MAX_FIELD_NAME_LENGTH = 63;
@@ -135,6 +143,210 @@ function typeMemberNames(type: TailorDBSnapshotType | undefined): string[] {
   ];
 }
 
+function staticPropertyName(key: PropertyKey, computed: boolean): string | undefined {
+  if (!computed && key.type === "Identifier") return key.name;
+  if (key.type === "Literal" && typeof key.value === "string") return key.value;
+  if (key.type === "TemplateLiteral" && key.expressions.length === 0) {
+    return key.quasis[0]?.value.cooked ?? undefined;
+  }
+  return undefined;
+}
+
+const SCRIPT_CONTEXT_ARGUMENTS = new Set(["input", "newRecord", "oldRecord", "invoker", "now"]);
+
+function walkScriptAst(
+  node: Node | null | undefined,
+  visit: (node: Node, ancestors: readonly Node[]) => void,
+  ancestors: readonly Node[] = [],
+): void {
+  if (!node) return;
+  visit(node, ancestors);
+  const nestedAncestors = [...ancestors, node];
+  const record = node as unknown as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    if (key === "type" || key === "parent") continue;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item && typeof item === "object" && "type" in item) {
+          walkScriptAst(item as Node, visit, nestedAncestors);
+        }
+      }
+    } else if (value && typeof value === "object" && "type" in value) {
+      walkScriptAst(value as Node, visit, nestedAncestors);
+    }
+  }
+}
+
+function unwrapFunction(node: Node): Node {
+  return node.type === "ParenthesizedExpression" ? unwrapFunction(node.expression) : node;
+}
+
+function collectIssueBindings(program: Node): Set<string> {
+  const issueBindings = new Set(["__issues"]);
+  walkScriptAst(program, (node) => {
+    if (node.type !== "CallExpression") return;
+    const callee = unwrapFunction(node.callee);
+    if (
+      (callee.type !== "ArrowFunctionExpression" && callee.type !== "FunctionExpression") ||
+      node.arguments[1]?.type !== "Identifier" ||
+      node.arguments[1].name !== "__issues"
+    ) {
+      return;
+    }
+    const issueParameter = callee.params[1];
+    if (issueParameter?.type === "Identifier") issueBindings.add(issueParameter.name);
+  });
+
+  let addedBinding: boolean;
+  do {
+    const previousSize = issueBindings.size;
+    walkScriptAst(program, (node) => {
+      if (
+        node.type === "VariableDeclarator" &&
+        node.id.type === "Identifier" &&
+        node.init?.type === "Identifier" &&
+        issueBindings.has(node.init.name)
+      ) {
+        issueBindings.add(node.id.name);
+      }
+    });
+    addedBinding = issueBindings.size > previousSize;
+  } while (addedBinding);
+  return issueBindings;
+}
+
+function isWrapperArgumentProperty(node: Node, ancestors: readonly Node[]): boolean {
+  if (node.type !== "Property") return false;
+  const propertyName = staticPropertyName(node.key, node.computed);
+  if (!propertyName || !SCRIPT_CONTEXT_ARGUMENTS.has(propertyName)) return false;
+  const object = ancestors.at(-1);
+  const call = ancestors.at(-2);
+  if (object?.type !== "ObjectExpression" || call?.type !== "CallExpression") return false;
+  return (
+    call.arguments[0] === object &&
+    ["ArrowFunctionExpression", "FunctionExpression"].includes(unwrapFunction(call.callee).type)
+  );
+}
+
+function isWrapperParameterProperty(node: Node, ancestors: readonly Node[]): boolean {
+  if (node.type !== "Property") return false;
+  const propertyName = staticPropertyName(node.key, node.computed);
+  if (!propertyName || !SCRIPT_CONTEXT_ARGUMENTS.has(propertyName)) return false;
+  const pattern = ancestors.at(-1);
+  if (pattern?.type !== "ObjectPattern") return false;
+
+  for (let index = ancestors.length - 2; index >= 0; index--) {
+    const candidate = ancestors[index];
+    if (
+      candidate &&
+      (candidate.type === "ArrowFunctionExpression" || candidate.type === "FunctionExpression") &&
+      candidate.params[0] === pattern
+    ) {
+      return ancestors
+        .slice(0, index)
+        .some(
+          (ancestor) =>
+            ancestor.type === "CallExpression" &&
+            unwrapFunction(ancestor.callee) === candidate &&
+            ancestor.arguments[0]?.type === "ObjectExpression" &&
+            ancestor.arguments[0].properties.some(
+              (property) =>
+                property.type === "Property" &&
+                staticPropertyName(property.key, property.computed) === propertyName,
+            ),
+        );
+    }
+  }
+  return false;
+}
+
+function isIssueMessage(
+  node: Node,
+  ancestors: readonly Node[],
+  issueBindings: ReadonlySet<string>,
+): boolean {
+  const call = ancestors.at(-1);
+  return (
+    call?.type === "CallExpression" &&
+    call.callee.type === "Identifier" &&
+    issueBindings.has(call.callee.name) &&
+    call.arguments.findIndex((argument) => argument === node) > 0
+  );
+}
+
+function scriptReferencesField(script: string, fieldName: string): boolean {
+  try {
+    const { program, errors } = parseSync("expand-contract-reference.js", script, {
+      sourceType: "module",
+    });
+    if (errors.length > 0) return true;
+
+    const issueBindings = collectIssueBindings(program);
+
+    let referenced = false;
+    walkScriptAst(program, (node, ancestors) => {
+      if (referenced) return;
+      if (
+        node.type === "MemberExpression" &&
+        (staticPropertyName(node.property, node.computed) === fieldName ||
+          (node.computed && staticPropertyName(node.property, true) === undefined))
+      ) {
+        referenced = true;
+      } else if (
+        node.type === "Property" &&
+        (staticPropertyName(node.key, node.computed) === fieldName ||
+          (node.computed && staticPropertyName(node.key, true) === undefined)) &&
+        (node.computed ||
+          (!isWrapperArgumentProperty(node, ancestors) &&
+            !isWrapperParameterProperty(node, ancestors)))
+      ) {
+        referenced = true;
+      } else if (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        issueBindings.has(node.callee.name) &&
+        node.arguments[0] !== undefined &&
+        node.arguments[0].type !== "SpreadElement" &&
+        staticPropertyName(node.arguments[0], true) === fieldName
+      ) {
+        referenced = true;
+      } else if (
+        (node.type === "Literal" || node.type === "TemplateLiteral") &&
+        staticPropertyName(node, true) === fieldName &&
+        !isIssueMessage(node, ancestors, issueBindings)
+      ) {
+        referenced = true;
+      }
+    });
+    return referenced;
+  } catch {
+    return true;
+  }
+}
+
+function permissionsReferenceField(
+  permissions: TailorDBSnapshotType["permissions"],
+  fieldName: string,
+): boolean {
+  if (!permissions) return false;
+  const recordPolicies = permissions.record
+    ? Object.values(permissions.record).flatMap((policies) => policies)
+    : [];
+  const policies = [...recordPolicies, ...(permissions.gql ?? [])];
+  return policies.some((policy) =>
+    policy.conditions.some((condition: SnapshotPermissionCondition) => {
+      const [left, , right] = condition;
+      return [left, right].some(
+        (operand) =>
+          isSnapshotFieldRefOperand(operand) &&
+          (("record" in operand && operand.record === fieldName) ||
+            ("newRecord" in operand && operand.newRecord === fieldName) ||
+            ("oldRecord" in operand && operand.oldRecord === fieldName)),
+      );
+    }),
+  );
+}
+
 /**
  * Whether anything other than the field list names this field.
  *
@@ -159,11 +371,10 @@ function isFieldReferenced(type: TailorDBSnapshotType | undefined, fieldName: st
       relationship.sourceField === fieldName || relationship.targetField === fieldName,
   );
   if (related) return true;
-  const scripts = [type.typeHookExpr, type.typeValidateExpr, type.permissions]
-    .filter(Boolean)
-    .map((value) => JSON.stringify(value))
-    .join("");
-  return scripts.includes(fieldName);
+  if (permissionsReferenceField(type.permissions, fieldName)) return true;
+  return [type.typeHookExpr?.create, type.typeHookExpr?.update, type.typeValidateExpr]
+    .filter((script): script is string => script !== undefined)
+    .some((script) => scriptReferencesField(script, fieldName));
 }
 
 /**
