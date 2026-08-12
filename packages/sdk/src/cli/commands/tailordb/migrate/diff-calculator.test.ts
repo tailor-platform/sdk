@@ -124,13 +124,13 @@ describe("diff-calculator", () => {
       },
       {
         name: "type addition",
-        changes: [{ kind: "type_added", typeName: "NewType", after: snapshotType("NewType") }],
-        expected: ["+ [Type] NewType (new type)"],
+        changes: [{ kind: "table_added", typeName: "NewType", after: snapshotType("NewType") }],
+        expected: ["+ [Table] NewType (new table)"],
       },
       {
         name: "type removal",
-        changes: [{ kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") }],
-        expected: ["- [Type] OldType (removed)"],
+        changes: [{ kind: "table_removed", typeName: "OldType", before: snapshotType("OldType") }],
+        expected: ["- [Table] OldType (removed)"],
       },
       {
         name: "array field",
@@ -259,17 +259,17 @@ describe("diff-calculator", () => {
 
     test.each<{ name: string; changes: MigrationDiff["changes"]; expected: string[] }>([
       {
-        name: "types added",
+        name: "tables added",
         changes: [
-          { kind: "type_added", typeName: "NewType1", after: snapshotType("NewType1") },
-          { kind: "type_added", typeName: "NewType2", after: snapshotType("NewType2") },
+          { kind: "table_added", typeName: "NewType1", after: snapshotType("NewType1") },
+          { kind: "table_added", typeName: "NewType2", after: snapshotType("NewType2") },
         ],
-        expected: ["2 type(s) added"],
+        expected: ["2 table(s) added"],
       },
       {
-        name: "types removed",
-        changes: [{ kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") }],
-        expected: ["1 type(s) removed"],
+        name: "tables removed",
+        changes: [{ kind: "table_removed", typeName: "OldType", before: snapshotType("OldType") }],
+        expected: ["1 table(s) removed"],
       },
       {
         name: "fields added",
@@ -324,7 +324,7 @@ describe("diff-calculator", () => {
       {
         name: "multiple counts",
         changes: [
-          { kind: "type_added", typeName: "NewType", after: snapshotType("NewType") },
+          { kind: "table_added", typeName: "NewType", after: snapshotType("NewType") },
           {
             kind: "field_added",
             typeName: "User",
@@ -338,7 +338,7 @@ describe("diff-calculator", () => {
             before: { type: "string", required: false },
           },
         ],
-        expected: ["1 type(s) added", "1 field(s) added", "1 field(s) removed"],
+        expected: ["1 table(s) added", "1 field(s) added", "1 field(s) removed"],
       },
     ])("should count $name", ({ changes, expected }) => {
       const result = formatDiffSummary(createDiff(changes));

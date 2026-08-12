@@ -448,7 +448,7 @@ describe("template-generator", () => {
       const diff = createMockMigrationDiff({
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Person",
             previousTypeName: "User",
             before: {
@@ -509,7 +509,7 @@ describe("template-generator", () => {
       const diff = createMockMigrationDiff({
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Section",
             previousTypeName: "Category",
             before: {
@@ -567,7 +567,7 @@ describe("template-generator", () => {
       const diff = createMockMigrationDiff({
         changes: [
           {
-            kind: "type_renamed",
+            kind: "table_renamed",
             typeName: "Person",
             previousTypeName: "User",
             before: { name: "User", pluralForm: "Users", fields: {} },

@@ -719,7 +719,9 @@ export type user = typeof user;
       const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
       const diff = loadDiff(diffPath);
       expect(diff.hasBreakingChanges).toBe(false);
-      expect(diff.changes.some((c) => c.kind === "type_added" && c.typeName === "Post")).toBe(true);
+      expect(diff.changes.some((c) => c.kind === "table_added" && c.typeName === "Post")).toBe(
+        true,
+      );
     }, 60000);
 
     /**

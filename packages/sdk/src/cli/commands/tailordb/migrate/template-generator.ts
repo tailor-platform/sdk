@@ -22,7 +22,7 @@ import type {
   MigrationDiff,
   DiffChange,
   FieldRenamedChange,
-  TypeRenamedChange,
+  TableRenamedChange,
 } from "./diff-calculator";
 
 /** Marker left in generated migration scripts until their normalization logic is reviewed. */
@@ -164,7 +164,7 @@ export function generateMigrationScript(diff: MigrationDiff): string {
   const updates: string[] = [];
   const typeRenameTargets = new Map(
     diff.changes
-      .filter((change): change is TypeRenamedChange => change.kind === "type_renamed")
+      .filter((change): change is TableRenamedChange => change.kind === "table_renamed")
       .map((change) => [change.previousTypeName, change.typeName]),
   );
 
@@ -328,12 +328,12 @@ function generateChangeScripts(
     return scripts;
   }
 
-  if (change.kind === "type_renamed") {
+  if (change.kind === "table_renamed") {
     return [generateTypeRenameCopyScript(change)];
   }
 
   if (change.kind !== "field_modified" && change.kind !== "field_type_modified") {
-    // No data migration needed for type_added, type_removed, or field_removed
+    // No data migration needed for table_added, table_removed, or field_removed
     return [];
   }
 
@@ -439,7 +439,7 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
     .execute();`;
 }
 
-function generateTypeRenameCopyScript(change: TypeRenamedChange): string {
+function generateTypeRenameCopyScript(change: TableRenamedChange): string {
   const { typeName, previousTypeName } = change;
   const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
   const columnList = columns.map((name) => JSON.stringify(name)).join(", ");

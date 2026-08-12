@@ -21,7 +21,7 @@
  * - `index_modified` that gains a unique constraint or re-points a unique
  *   index at different fields: keep the previous definition until Post-phase.
  *
- * Type-level deletions (`type_removed`) and renames (`type_renamed`) are
+ * Type-level deletions (`table_removed`) and renames (`table_renamed`) are
  * handled by the deploy flow rather than via this module: the old type is
  * retained until Post-phase, and a renamed type's new type is created with
  * its full constraints in the Pre-phase (the copy script writes complete
@@ -37,7 +37,7 @@ import type {
   DiffChange,
   FieldDiffChange,
   IndexDiffChange,
-  TypeScriptsModifiedChange,
+  TableScriptsModifiedChange,
 } from "./diff-calculator";
 import type { TailorDBSnapshotType } from "./snapshot-types";
 import type { PendingMigration } from "./types";
@@ -93,7 +93,7 @@ export type PreMigrationChangesMap = Map<string, Map<string, FieldDiffChange>>;
 export function createPreMigrationSnapshotType(
   snapshotType: TailorDBSnapshotType,
   typeChanges: Map<string, FieldDiffChange>,
-  typeScriptsChange?: TypeScriptsModifiedChange,
+  typeScriptsChange?: TableScriptsModifiedChange,
 ): TailorDBSnapshotType {
   const fields = structuredClone(snapshotType.fields);
   let hasFieldTypeChange = false;

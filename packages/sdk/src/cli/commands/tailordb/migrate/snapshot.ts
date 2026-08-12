@@ -31,6 +31,7 @@ import { assertDefined } from "#/utils/assert";
 import {
   type MigrationDiff,
   type DiffChange,
+  type DiffChangeKind,
   type FieldDiffChange,
   type BreakingChangeInfo,
   type SnapshotTypeSettingsState,
@@ -136,6 +137,42 @@ function assertSupportedMigrationFileVersion(filePath: string, raw: unknown): vo
     `Unsupported migration file format version ${version} at ${filePath}. ` +
       `This SDK supports migration file format versions ${supportedRange}. ${guidance}`,
   );
+}
+
+/**
+ * Diff change kinds renamed when TailorDB table terminology replaced "type".
+ * Migration histories written before the rename persist the old names, so
+ * diff.json files keep being read through this mapping.
+ */
+const LEGACY_CHANGE_KINDS: Record<string, DiffChangeKind> = {
+  type_added: "table_added",
+  type_removed: "table_removed",
+  type_renamed: "table_renamed",
+  type_modified: "table_modified",
+  type_settings_modified: "table_settings_modified",
+  type_scripts_modified: "table_scripts_modified",
+};
+
+/**
+ * Rewrite pre-rename `type_*` change kinds to their current `table_*` names
+ * so that the diff schema, which only knows the current names, accepts them.
+ * @param {unknown} raw - Parsed diff.json contents
+ * @returns {unknown} Diff contents with legacy change kinds rewritten
+ */
+function normalizeLegacyChangeKinds(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null || !("changes" in raw)) return raw;
+  const changes = (raw as { changes: unknown }).changes;
+  if (!Array.isArray(changes)) return raw;
+
+  const normalized = changes.map((change) => {
+    if (typeof change !== "object" || change === null || !("kind" in change)) return change;
+    const kind = (change as { kind: unknown }).kind;
+    if (typeof kind !== "string") return change;
+    const currentKind = LEGACY_CHANGE_KINDS[kind];
+    return currentKind === undefined ? change : { ...change, kind: currentKind };
+  });
+
+  return { ...raw, changes: normalized };
 }
 
 function createSnapshotRecord<T>(): Record<string, T> {
@@ -581,7 +618,7 @@ export function loadDiff(filePath: string): MigrationDiff {
     throw new Error(`Invalid migration diff at ${filePath}: ${String(error)}`, { cause: error });
   }
   assertSupportedMigrationFileVersion(filePath, raw);
-  const result = migrationDiffSchema.safeParse(raw);
+  const result = migrationDiffSchema.safeParse(normalizeLegacyChangeKinds(raw));
   if (!result.success) {
     throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`, {
       cause: result.error,
@@ -624,7 +661,7 @@ function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInfo[] {
         fieldName: change.fieldName,
         reason: FIELD_REMOVED_WARNING_REASON,
       });
-    } else if (change.kind === "type_removed") {
+    } else if (change.kind === "table_removed") {
       warnings.push({ typeName: change.typeName, reason: TYPE_REMOVED_WARNING_REASON });
     }
   }
@@ -709,13 +746,13 @@ function applyDiffToSnapshot(
 
   for (const change of diff.changes) {
     switch (change.kind) {
-      case "type_added":
+      case "table_added":
         types[change.typeName] = change.after;
         break;
-      case "type_removed":
+      case "table_removed":
         delete types[change.typeName];
         break;
-      case "type_modified": {
+      case "table_modified": {
         const existing = types[change.typeName];
         if (existing && change.after) {
           const after = change.after;
@@ -727,7 +764,7 @@ function applyDiffToSnapshot(
         }
         break;
       }
-      case "type_settings_modified": {
+      case "table_settings_modified": {
         const existing = types[change.typeName];
         if (existing) {
           types[change.typeName] = {
@@ -739,7 +776,7 @@ function applyDiffToSnapshot(
         }
         break;
       }
-      case "type_scripts_modified": {
+      case "table_scripts_modified": {
         const existing = types[change.typeName];
         if (existing) {
           const { typeHookExpr: _, typeValidateExpr: __, ...rest } = existing;
@@ -792,7 +829,7 @@ function applyDiffToSnapshot(
         }
         break;
       }
-      case "type_renamed":
+      case "table_renamed":
         delete types[change.previousTypeName];
         types[change.typeName] = change.after;
         break;
@@ -1796,7 +1833,7 @@ function compareTypeSettings(
   if (JSON.stringify(previousComparable) === JSON.stringify(currentComparable)) return;
 
   ctx.changes.push({
-    kind: "type_settings_modified",
+    kind: "table_settings_modified",
     typeName,
     reason: "settings changed",
     before: snapshotTypeSettingsState(previous),
@@ -1823,7 +1860,7 @@ function compareTypeScripts(
   if (JSON.stringify(prevState) === JSON.stringify(currState)) return;
 
   ctx.changes.push({
-    kind: "type_scripts_modified",
+    kind: "table_scripts_modified",
     typeName,
     reason: "type-level scripts changed",
     before: prevState,
@@ -1843,8 +1880,8 @@ export interface CompareSnapshotsOptions {
   fieldRenames?: readonly FieldRenameSpec[];
   /**
    * Confirmed type renames. Each spec replaces the corresponding
-   * `type_removed` + `type_added` pair with a single breaking
-   * `type_renamed` change. Specs are validated against both snapshots.
+   * `table_removed` + `table_added` pair with a single breaking
+   * `table_renamed` change. Specs are validated against both snapshots.
    */
   typeRenames?: readonly TypeRenameSpec[];
 }
@@ -1895,7 +1932,7 @@ export function compareSnapshots(
       `renamed type "${rename.typeName}" missing from current snapshot`,
     );
     ctx.changes.push({
-      kind: "type_renamed",
+      kind: "table_renamed",
       typeName: rename.typeName,
       previousTypeName: rename.previousTypeName,
       before: prevType,
@@ -1918,7 +1955,7 @@ export function compareSnapshots(
     if (renamedToTypeNames.has(typeName)) continue;
     if (!previousTypeNames.has(typeName)) {
       ctx.changes.push({
-        kind: "type_added",
+        kind: "table_added",
         typeName,
         after: type,
       });
@@ -1930,7 +1967,7 @@ export function compareSnapshots(
     if (typeRenameTargets.has(typeName)) continue;
     if (!currentTypeNames.has(typeName)) {
       ctx.changes.push({
-        kind: "type_removed",
+        kind: "table_removed",
         typeName,
         before: type,
       });
@@ -3108,13 +3145,13 @@ function fieldDriftFromChange(
 
 function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
   switch (change.kind) {
-    case "type_added":
+    case "table_added":
       return {
         typeName: change.typeName,
         kind: "type_missing_remote",
         details: `Type '${change.typeName}' exists in snapshot but not in remote`,
       };
-    case "type_removed":
+    case "table_removed":
       return {
         typeName: change.typeName,
         kind: "type_missing_local",
@@ -3122,14 +3159,14 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
       };
     // Drift comparison never confirms renames, so this kind cannot occur here;
     // report it as a plain type mismatch if it ever does.
-    case "type_renamed":
+    case "table_renamed":
       return {
         typeName: change.typeName,
         kind: "type_settings_mismatch",
         details: `Type '${change.previousTypeName}' was renamed to '${change.typeName}'`,
       };
-    case "type_settings_modified":
-    case "type_modified":
+    case "table_settings_modified":
+    case "table_modified":
       return {
         typeName: change.typeName,
         kind: "type_settings_mismatch",
@@ -3235,7 +3272,7 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
         kind: "permission_mismatch",
         details: change.reason ?? "Permissions differ between remote and snapshot",
       };
-    case "type_scripts_modified":
+    case "table_scripts_modified":
       return {
         typeName: change.typeName,
         kind: "script_mismatch",

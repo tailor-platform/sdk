@@ -14,11 +14,11 @@ import { MIGRATION_HISTORY_ID_PATTERN } from "./types";
 import type {
   TypeSettingsPatch,
   SnapshotPermissionState,
-  TypeAddedChange,
-  TypeRemovedChange,
-  TypeRenamedChange,
-  TypeModifiedChange,
-  TypeSettingsModifiedChange,
+  TableAddedChange,
+  TableRemovedChange,
+  TableRenamedChange,
+  TableModifiedChange,
+  TableSettingsModifiedChange,
   SnapshotTypeSettingsState,
   FieldAddedChange,
   FieldRemovedChange,
@@ -35,7 +35,7 @@ import type {
   RelationshipRemovedChange,
   RelationshipModifiedChange,
   PermissionModifiedChange,
-  TypeScriptsModifiedChange,
+  TableScriptsModifiedChange,
   TypeScriptsState,
   DiffChange,
   BreakingChangeInfo,
@@ -322,43 +322,43 @@ const snapshotPermissionStateSchema: z.ZodType<SnapshotPermissionState> = z.loos
 // Individual change schemas are typed as z.ZodType<T> after the looseObject
 // cast so that z.discriminatedUnion can accept them.
 const typeAddedChangeSchema = z.looseObject({
-  kind: z.literal("type_added"),
+  kind: z.literal("table_added"),
   typeName: z.string(),
   reason: z.string().optional(),
   after: tailorDBSnapshotTypeSchema,
-}) as unknown as z.ZodType<TypeAddedChange>;
+}) as unknown as z.ZodType<TableAddedChange>;
 
 const typeRemovedChangeSchema = z.looseObject({
-  kind: z.literal("type_removed"),
+  kind: z.literal("table_removed"),
   typeName: z.string(),
   reason: z.string().optional(),
   before: tailorDBSnapshotTypeSchema,
-}) as unknown as z.ZodType<TypeRemovedChange>;
+}) as unknown as z.ZodType<TableRemovedChange>;
 
 const typeRenamedChangeSchema = z.looseObject({
-  kind: z.literal("type_renamed"),
+  kind: z.literal("table_renamed"),
   typeName: z.string(),
   reason: z.string().optional(),
   previousTypeName: z.string(),
   before: tailorDBSnapshotTypeSchema,
   after: tailorDBSnapshotTypeSchema,
-}) as unknown as z.ZodType<TypeRenamedChange>;
+}) as unknown as z.ZodType<TableRenamedChange>;
 
 const typeModifiedChangeSchema = z.looseObject({
-  kind: z.literal("type_modified"),
+  kind: z.literal("table_modified"),
   typeName: z.string(),
   reason: z.string().optional(),
   before: typeSettingsPatchSchema.optional(),
   after: typeSettingsPatchSchema.optional(),
-}) as unknown as z.ZodType<TypeModifiedChange>;
+}) as unknown as z.ZodType<TableModifiedChange>;
 
 const typeSettingsModifiedChangeSchema = z.looseObject({
-  kind: z.literal("type_settings_modified"),
+  kind: z.literal("table_settings_modified"),
   typeName: z.string(),
   reason: z.string().optional(),
   before: snapshotTypeSettingsStateSchema,
   after: snapshotTypeSettingsStateSchema,
-}) as unknown as z.ZodType<TypeSettingsModifiedChange>;
+}) as unknown as z.ZodType<TableSettingsModifiedChange>;
 
 const fieldAddedChangeSchema = z.looseObject({
   kind: z.literal("field_added"),
@@ -501,12 +501,12 @@ const typeScriptsStateSchema: z.ZodType<TypeScriptsState> = z.looseObject({
 });
 
 const typeScriptsModifiedChangeSchema = z.looseObject({
-  kind: z.literal("type_scripts_modified"),
+  kind: z.literal("table_scripts_modified"),
   typeName: z.string(),
   reason: z.string().optional(),
   before: typeScriptsStateSchema,
   after: typeScriptsStateSchema,
-}) as unknown as z.ZodType<TypeScriptsModifiedChange>;
+}) as unknown as z.ZodType<TableScriptsModifiedChange>;
 
 type DiscriminableSchema = Parameters<typeof z.discriminatedUnion>[1][number];
 

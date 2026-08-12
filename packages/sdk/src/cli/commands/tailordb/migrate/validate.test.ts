@@ -193,7 +193,7 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.localSchema.hasDiff).toBe(true);
     expect(report.localSchema.diff.changes).toEqual([
-      expect.objectContaining({ kind: "type_added", typeName: "Post" }),
+      expect.objectContaining({ kind: "table_added", typeName: "Post" }),
     ]);
     expect(report.remoteSchema.hasDrift).toBe(false);
   });
@@ -570,7 +570,7 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.localSchema.hasDiff).toBe(true);
     expect(report.localSchema.diff.changes).toEqual([
-      expect.objectContaining({ kind: "type_added", typeName: "Post" }),
+      expect.objectContaining({ kind: "table_added", typeName: "Post" }),
     ]);
     expect(report.remoteSchema).toEqual({ skipped: "check_failed" });
   });

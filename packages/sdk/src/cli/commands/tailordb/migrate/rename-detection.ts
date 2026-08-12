@@ -2,11 +2,11 @@
  * Field and type rename detection for TailorDB migrations
  *
  * A rename has no dedicated platform API, so the diff decomposes it into
- * `field_removed` + `field_added` (`type_removed` + `type_added` for types).
+ * `field_removed` + `field_added` (`table_removed` + `table_added` for types).
  * This module detects removed/added pairs that are compatible enough to be a
  * rename so that `migration generate` can ask the user (or accept
  * `--rename Type.old:new` / `--rename OldType:NewType`) and record a single
- * `field_renamed` / `type_renamed` change instead.
+ * `field_renamed` / `table_renamed` change instead.
  */
 
 import {
@@ -21,8 +21,8 @@ import type {
   FieldAddedChange,
   FieldRemovedChange,
   MigrationDiff,
-  TypeAddedChange,
-  TypeRemovedChange,
+  TableAddedChange,
+  TableRemovedChange,
 } from "./diff-calculator";
 
 /**
@@ -303,9 +303,9 @@ export interface TypeRenameSpec {
  * A removed type together with the added types it could have been renamed to.
  */
 export interface TypeRenameCandidate {
-  removed: TypeRemovedChange;
+  removed: TableRemovedChange;
   /** Compatible added types, in diff order. */
-  added: TypeAddedChange[];
+  added: TableAddedChange[];
 }
 
 /**
@@ -422,10 +422,10 @@ export function isTypeRenameCompatible(
  */
 export function findTypeRenameCandidates(diff: MigrationDiff): TypeRenameCandidate[] {
   const removedChanges = diff.changes.filter(
-    (change): change is TypeRemovedChange => change.kind === "type_removed",
+    (change): change is TableRemovedChange => change.kind === "table_removed",
   );
   const addedChanges = diff.changes.filter(
-    (change): change is TypeAddedChange => change.kind === "type_added",
+    (change): change is TableAddedChange => change.kind === "table_added",
   );
 
   const candidates: TypeRenameCandidate[] = [];

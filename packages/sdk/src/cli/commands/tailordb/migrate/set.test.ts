@@ -59,7 +59,7 @@ describe("tailordb migration set", () => {
 
     writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
     writeDiff(state.migrationsDir, 1, [
-      { kind: "type_added", typeName: "Post", after: snapshotType("Post") },
+      { kind: "table_added", typeName: "Post", after: snapshotType("Post") },
     ]);
     writeDiff(state.migrationsDir, 2, []);
     mockConfig();

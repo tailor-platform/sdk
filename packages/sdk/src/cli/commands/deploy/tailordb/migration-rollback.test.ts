@@ -300,7 +300,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_added",
+            kind: "table_added",
             typeName,
           },
         ],
@@ -358,7 +358,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_removed",
+            kind: "table_removed",
             typeName,
             before: {
               name: typeName,

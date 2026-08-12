@@ -286,7 +286,7 @@ async function script(options: ScriptOptions): Promise<void> {
   );
   if (result.migratePath) {
     logger.info(`  Migration script: ${result.migratePath}`);
-    logger.info(`  DB types: ${result.dbTypesPath}`);
+    logger.info(`  DB tables: ${result.dbTypesPath}`);
   }
   if (result.testPath) {
     logger.info(`  Migration test: ${result.testPath}`);
