@@ -63,6 +63,7 @@ jobs:
           commitMode: "github-api"
           publish: "pnpm changeset publish --no-git-tag --tag v1"
           createGithubReleases: false
+          title: "Release - ${{ github.ref_name }}"
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
 
