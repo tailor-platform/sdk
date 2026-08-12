@@ -26,6 +26,7 @@ describe("reportCrash", () => {
     process.env = originalEnv;
     fs.rmSync(tmpDir, { recursive: true, force: true });
     vi.mocked(parseCrashReportConfig).mockReset();
+    vi.unstubAllGlobals();
   });
 
   test("writes a crash log file for unexpected errors", async () => {
@@ -60,7 +61,7 @@ describe("reportCrash", () => {
       ok: true,
       json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
     });
-    globalThis.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     vi.mocked(parseCrashReportConfig).mockReturnValue({
       localEnabled: true,
