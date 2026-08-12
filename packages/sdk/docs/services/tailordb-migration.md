@@ -341,10 +341,35 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Remove table                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the table leaves the active schema. The table stays readable from `migrate.ts` during Pre-migration.           |
 | Rename table                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "OldType:NewType"` — see [Renaming a type](#renaming-a-type). Auto-generated script copies all rows preserving ids; both tables coexist until post-migration cleanup.         |
 | Change foreign key target table   | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                             |
-| Change field type (verified pair) | Yes       | Yes               | In-place for `uuid` → `string`, `enum` → `string`, `decimal` → `string`, and `integer` → `float`; review the generated normalization scaffold and customize it only when existing values need transformation                            |
+| Change field type (verified pair) | Yes       | Yes               | In-place for the pairs listed under [Field type changes](#field-type-changes); review the generated normalization scaffold and customize it only when existing values need transformation                                               |
 | Change field type (other pair)    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
 | Change array → single value       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
 | Change single value → array       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
+
+### Field type changes
+
+These pairs change in place, in a single migration:
+
+| From      | To                           |
+| --------- | ---------------------------- |
+| `integer` | `string`, `float`, `decimal` |
+| `float`   | `string`, `decimal`          |
+| `decimal` | `string`, `float`            |
+| `boolean` | `string`                     |
+| `uuid`    | `string`                     |
+| `enum`    | `string`                     |
+
+Every pair here accepts every value its source type allows, which is what lets the change happen in one migration: the field keeps its previous type until the migration finishes, so your application can keep writing to it throughout.
+
+Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-changes). Three groups are worth calling out:
+
+- Converting to a narrower type — `string` → `integer`, `string` → `uuid`, `integer` → `boolean` and similar — is excluded because values the source type still accepts, such as `"abc"` in a `string` field, cannot be cast. Your script could clean up the rows it sees, but the field goes on accepting new uncastable values until the migration completes.
+- `boolean` → `integer`, `float` → `integer`, and `string` → `date` are excluded because the stored values cannot be cast to the new type.
+- `date`, `datetime`, and `time` fields are not stored in the textual form you wrote them in, so converting them to or from another type reads back as a different instant. Convert them through a temporary field where your script controls the formatting.
+
+Converting to `decimal` reformats values to the field's scale, so `42` reads back as `42.000000`. Values with more decimal places than the scale allows are rounded half-up, so `1.1234567` becomes `1.123457` at the default scale of 6.
+
+A `float` field that is already unique cannot convert to `decimal` in place, because rounding can turn two distinct values into the same one and the existing constraint leaves no room to resolve the collision. Use the 3-step migration for those.
 
 ### Generated normalization script for field type changes
 
@@ -393,7 +418,7 @@ The generated `never` annotation intentionally causes a TypeScript error until y
 
 ### 3-step migration for unsupported changes
 
-Field type changes outside the verified in-place pairs (for example, `string` → `integer`) and array-cardinality changes are detected but rejected by the diff engine. Use an expand-contract strategy:
+Field type changes outside the verified in-place pairs (for example, `datetime` → `string`) and array-cardinality changes are detected but rejected by the diff engine. Use an expand-contract strategy:
 
 1. **Migration N**: Add an optional field with the desired type (e.g., `fieldName_new`). If the old field is required, make it optional in the same migration. Write a script that copies and converts every non-null old value into the temporary field, then sets the old field to `null` in the same row update.
 2. **Migration N+1**: Remove the old field.
