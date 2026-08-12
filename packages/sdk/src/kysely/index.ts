@@ -60,14 +60,17 @@ export type Generated<T> =
   T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>;
-// The insert/update types carry the reason as a string literal so that supplying a
-// value fails with it, instead of the bare "does not exist" an absent key produces.
+// The insert/update types carry the reason so that supplying a value fails with it,
+// instead of the bare "does not exist" an absent key produces. The named alias is
+// what survives in nested positions (values()/set()), where tsc elides the marker's
+// type argument and only the name reaches the user.
 // `| undefined` is what makes the column omittable; Kysely drops undefined columns
 // from the statement, so passing it explicitly is the same as leaving it out.
+type SerialColumnMustBeOmitted = TypeLevelError<"assigned by .serial(); remove it from the input">;
 export type Serial<T = string | number> = ColumnType<
   T,
-  TypeLevelError<"assigned by .serial(); remove it from the input"> | undefined,
-  TypeLevelError<"assigned by .serial(); remove it from the input"> | undefined
+  SerialColumnMustBeOmitted | undefined,
+  SerialColumnMustBeOmitted | undefined
 >;
 
 // Kysely composes its input types out of intersections. Flattening them keeps the
