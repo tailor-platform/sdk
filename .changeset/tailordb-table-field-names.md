@@ -13,4 +13,6 @@ Code that imports `MigrationDiff` / `DiffChange` / `BreakingChangeInfo` from `@t
 | `breakingChanges[].typeName` | `breakingChanges[].tableName` |
 | `warnings[].typeName`        | `warnings[].tableName`        |
 
-Update those reads to the new spelling. The `typeName` field on executor record triggers, the `.typeName()` field builder, and the file-runtime `typeName` argument are unrelated and unchanged.
+Update those reads to the new spelling. `tailor tailordb migration validate --json` renames the same key wherever it appears in its output, so anything parsing that JSON needs the same update.
+
+The `typeName` field on executor record triggers, the `.typeName()` field builder, and the file-runtime `typeName` argument are unrelated and unchanged.

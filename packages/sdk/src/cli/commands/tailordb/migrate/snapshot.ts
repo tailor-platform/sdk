@@ -697,7 +697,7 @@ export function loadDiff(filePath: string): MigrationDiff {
 
 const FIELD_REMOVED_WARNING_REASON =
   "Field removed (existing data will no longer be accessible through the schema)";
-const TYPE_REMOVED_WARNING_REASON =
+const TABLE_REMOVED_WARNING_REASON =
   "Type removed (all records of this type will be deleted during post-migration cleanup)";
 
 /**
@@ -716,7 +716,7 @@ function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInfo[] {
         reason: FIELD_REMOVED_WARNING_REASON,
       });
     } else if (change.kind === "table_removed") {
-      warnings.push({ tableName: change.tableName, reason: TYPE_REMOVED_WARNING_REASON });
+      warnings.push({ tableName: change.tableName, reason: TABLE_REMOVED_WARNING_REASON });
     }
   }
   return warnings;
@@ -2110,7 +2110,7 @@ export function compareSnapshots(
       });
       ctx.warnings.push({
         tableName,
-        reason: TYPE_REMOVED_WARNING_REASON,
+        reason: TABLE_REMOVED_WARNING_REASON,
       });
     }
   }
