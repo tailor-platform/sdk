@@ -389,7 +389,9 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   for (const finding of findings) {
     logger.warn(`[${finding.target}] ${finding.message} (ignore key: ${finding.rule})`);
   }
-  logger.log(`${DRIFT_COUNT_MARKER}=${String(findings.length)}`);
+  if (options.ci) {
+    logger.log(`${DRIFT_COUNT_MARKER}=${String(findings.length)}`);
+  }
   throw new Error(
     `Detected ${String(findings.length)} drift finding(s) across ${String(count)} target(s). ` +
       "Re-run `tailor setup` to regenerate, or address each finding above.",

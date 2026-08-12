@@ -315,6 +315,32 @@ describe("checkGitHub (integration)", () => {
     expect(markerOrder).toBeGreaterThan(findingOrder);
   });
 
+  test("does not emit the drift count marker outside CI", async () => {
+    await setupTarget({
+      kind: "preview",
+      workspaceName: "my-app",
+      region: "us-west",
+      dir: ".",
+      force: false,
+      outputDir: testDir,
+      gitRunner: () => "origin/main",
+      loadConfigName: async () => "my-app",
+    });
+    fs.appendFileSync(
+      path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
+      "\n# hand edit\n",
+    );
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    await expect(
+      checkGitHub({ outputDir: testDir, ci: false, gitRunner: () => "origin/main" }),
+    ).rejects.toThrow(/drift/);
+
+    expect(
+      logSpy.mock.calls.some(([message]) => message.startsWith("TAILOR_SETUP_CHECK_DRIFT_COUNT=")),
+    ).toBe(false);
+  });
+
   test("detects a default-branch change for auto-detected branch", async () => {
     await setupTarget(
       setupOptions({ workspaceName: "my-app", branch: undefined, gitRunner: () => "origin/main" }),
