@@ -1,7 +1,7 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { type HttpAdapterServiceInput } from "#/configure/config/types";
 import {
   HTTP_METHOD_KEYS,
@@ -110,7 +110,7 @@ async function loadAdapterFiles(
 
 async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter | null> {
   try {
-    const module = (await import(pathToFileURL(filePath).href)) as Record<string, unknown>;
+    const module = await importUserModule(filePath);
     // Only a createHttpAdapter() result is a valid default export; a plain
     // object that happens to match the schema is rejected by the brand check.
     if (!isSdkBranded(module.default, "http-adapter")) {

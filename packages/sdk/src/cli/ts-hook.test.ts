@@ -265,17 +265,16 @@ describe("resolve", () => {
       if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
       return "const x: number = 1;" as unknown as string;
     });
-    const resolved = { url: "file:///alias-project/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
       .mockRejectedValueOnce(notFound("@/tailordb/user"))
-      .mockResolvedValueOnce(resolved);
+      .mockResolvedValueOnce({ url: "file:///alias-project/tailordb/user.ts" });
     const result = await resolve(
       "@/tailordb/user",
       { parentURL: "file:///alias-project/tailor.config.ts?tailorImportNonce=1" },
       nextResolve,
     );
-    expect(result).toEqual(resolved);
+    expect(result).toEqual({ url: "file:///alias-project/tailordb/user.ts?tailorImportNonce=1" });
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 
@@ -595,19 +594,20 @@ describe("resolveSync", () => {
       if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
       return "const x: number = 1;" as unknown as string;
     });
-    const resolved = { url: "file:///alias-sync-project/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
       .mockImplementationOnce(() => {
         throw notFound("@/tailordb/user");
       })
-      .mockReturnValueOnce(resolved);
+      .mockReturnValueOnce({ url: "file:///alias-sync-project/tailordb/user.ts" });
     const result = resolveSync(
       "@/tailordb/user",
       { parentURL: "file:///alias-sync-project/tailor.config.ts?tailorImportNonce=1" },
       nextResolve,
     );
-    expect(result).toEqual(resolved);
+    expect(result).toEqual({
+      url: "file:///alias-sync-project/tailordb/user.ts?tailorImportNonce=1",
+    });
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 
@@ -848,6 +848,118 @@ describe("resolveSync", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+});
+
+describe("import nonce propagation", () => {
+  const noncedParent = { parentURL: "file:///proj/workflows/approval.ts?tailorImportNonce=2" };
+
+  test("resolve carries the parent's nonce onto a relative resolution", async () => {
+    const nextResolve = vi.fn().mockResolvedValue({ url: "file:///proj/workflows/points.ts" });
+    const result = await resolve("./points.ts", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/workflows/points.ts?tailorImportNonce=2" });
+  });
+
+  test("resolveSync carries the parent's nonce onto a relative resolution", () => {
+    const nextResolve = vi.fn().mockReturnValue({ url: "file:///proj/workflows/points.ts" });
+    const result = resolveSync("./points.ts", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/workflows/points.ts?tailorImportNonce=2" });
+  });
+
+  test("leaves the resolution alone when the parent has no nonce", async () => {
+    const nextResolve = vi.fn().mockResolvedValue({ url: "file:///proj/workflows/points.ts" });
+    const result = await resolve(
+      "./points.ts",
+      { parentURL: "file:///proj/workflows/approval.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual({ url: "file:///proj/workflows/points.ts" });
+  });
+
+  test("carries the parent's nonce onto a file: URL specifier", async () => {
+    const nextResolve = vi.fn().mockResolvedValue({ url: "file:///proj/workflows/points.ts" });
+    const result = await resolve("file:///proj/workflows/points.ts", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/workflows/points.ts?tailorImportNonce=2" });
+  });
+
+  test("carries the parent's nonce onto a package-imports specifier", async () => {
+    const nextResolve = vi.fn().mockResolvedValue({ url: "file:///proj/lib/points.ts" });
+    const result = await resolve("#lib/points", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/lib/points.ts?tailorImportNonce=2" });
+  });
+
+  test("does not propagate onto a package-imports specifier resolving into node_modules", async () => {
+    const nextResolve = vi
+      .fn()
+      .mockResolvedValue({ url: "file:///proj/node_modules/dep/index.mjs" });
+    const result = await resolve("#dep", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/node_modules/dep/index.mjs" });
+  });
+
+  test("does not propagate onto bare specifiers", async () => {
+    const nextResolve = vi
+      .fn()
+      .mockResolvedValue({ url: "file:///proj/packages/sdk/dist/index.mjs" });
+    const result = await resolve("@tailor-platform/sdk", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/packages/sdk/dist/index.mjs" });
+  });
+
+  test("does not propagate onto node_modules resolutions", async () => {
+    const nextResolve = vi
+      .fn()
+      .mockResolvedValue({ url: "file:///proj/node_modules/dep/index.mjs" });
+    const result = await resolve("../node_modules/dep/index.mjs", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/node_modules/dep/index.mjs" });
+  });
+
+  test("keeps an existing nonce on the resolved URL", async () => {
+    const nextResolve = vi
+      .fn()
+      .mockResolvedValue({ url: "file:///proj/workflows/points.ts?tailorImportNonce=1" });
+    const result = await resolve("./points.ts", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/workflows/points.ts?tailorImportNonce=1" });
+  });
+
+  test("does not propagate onto non-file resolutions", async () => {
+    const nextResolve = vi.fn().mockResolvedValue({ url: "node:path" });
+    const result = await resolve("./points.ts", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "node:path" });
+  });
+
+  test("re-reads tsconfig paths when the parent import nonce changes", async () => {
+    const tsconfigFor = (dir: string) =>
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@gen/*": [`./${dir}/*`] } } });
+    const nextResolve = vi.fn().mockImplementation((spec: string) => {
+      if (spec.startsWith("file:")) return { url: spec };
+      throw notFound(spec);
+    });
+
+    vi.mocked(readFileSync).mockImplementation(
+      (path) =>
+        (String(path).endsWith("tsconfig.json")
+          ? tsconfigFor("a")
+          : "const x: number = 1;") as unknown as string,
+    );
+    const first = await resolve(
+      "@gen/user",
+      { parentURL: "file:///gen-project/tailor.config.ts?tailorImportNonce=1" },
+      nextResolve,
+    );
+    expect(first).toEqual({ url: "file:///gen-project/a/user.ts?tailorImportNonce=1" });
+
+    vi.mocked(readFileSync).mockImplementation(
+      (path) =>
+        (String(path).endsWith("tsconfig.json")
+          ? tsconfigFor("b")
+          : "const x: number = 1;") as unknown as string,
+    );
+    const second = await resolve(
+      "@gen/user",
+      { parentURL: "file:///gen-project/tailor.config.ts?tailorImportNonce=2" },
+      nextResolve,
+    );
+    expect(second).toEqual({ url: "file:///gen-project/b/user.ts?tailorImportNonce=2" });
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 });

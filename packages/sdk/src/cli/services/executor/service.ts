@@ -1,7 +1,7 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { isSdkBranded } from "#/utils/brand";
 import { stripExecutorTriggerArgs } from "./loader";
@@ -51,7 +51,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
 
   const loadExecutorForFile = async (executorFile: string): Promise<Executor | undefined> => {
     try {
-      const executorModule = await import(pathToFileURL(executorFile).href);
+      const executorModule = await importUserModule(executorFile);
       const result = ExecutorSchema.safeParse(stripExecutorTriggerArgs(executorModule.default));
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
