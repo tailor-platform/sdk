@@ -164,9 +164,32 @@ During deploy, the pre-migration phase keeps the old field and adds the new fiel
 
 If you decline the prompt (or confirm the removal with `--drop`), the change stays a plain removal + addition with the usual data-loss warning.
 
-Renaming a **type** is not yet detected; it is still a type removal plus a type addition.
+Renaming a member inside a **nested field** is not detected, and it is quieter: `User.address.zip` → `zipCode` becomes a single `field_modified` on `address` with no breaking change, no warning, and no generated script, so the member's values are not carried over. Copy them with a custom `tailordb migration script` if they must survive.
 
-Renaming a member inside a **nested field** is not detected either, and it is quieter: `User.address.zip` → `zipCode` becomes a single `field_modified` on `address` with no breaking change, no warning, and no generated script, so the member's values are not carried over. Copy them with a custom `tailordb migration script` if they must survive.
+### Renaming a type
+
+Renaming a whole type is detected the same way: when `migration generate` finds a removed type and an added type with a matching shape, it asks whether the change is a rename:
+
+```
+? User was removed and Person was added with a compatible schema. Was it renamed to Person? (Y/n)
+```
+
+In non-interactive environments the command fails while a candidate is left unresolved, exactly like field renames. Resolve it with the type forms of the same flags (a value without a `.` targets a type):
+
+```bash
+tailor tailordb migration generate --rename "User:Person"
+tailor tailordb migration generate --drop "User"
+```
+
+Two types qualify as a rename pair only when copying every row preserves the data: every field must keep its name, type, array-ness, required/unique constraints, foreign key target, and decimal scale; enum fields may gain values but not lose them; indexes must match. A self-referential foreign key is compared against the new type name and must be optional. Types with serial fields (their values cannot be written by a script) or file fields (file contents are not copied) are never candidates. Name-derived and data-independent settings — `pluralForm`, description, type settings, permissions, hooks, and validations — may differ.
+
+A confirmed rename is recorded as a single `type_renamed` change and treated as **breaking** for two reasons: existing records must be copied by the migration script, and the type's GraphQL API names (derived from the type name and `pluralForm`) change, which breaks API clients. The generated `migrate.ts` copies every row from the old type into the new one in id-ordered batches, preserving ids so stored foreign key references stay valid, and the generated `db.ts` exposes both the old table (readable) and the new table (writable). Self-referential foreign keys are inserted as null and backfilled after every row exists, so a reference to a row in a later batch cannot fail the copy.
+
+Two caveats apply to the copy. The old type is not write-protected: rows written to it after the script's transaction commits — and before post-migration cleanup drops it — are not carried over, so pause writers to the renamed type for the duration of the deploy. And platform-managed record metadata (creation/update timestamps and actors) cannot be written by the script, so the new type's records carry the migration run's metadata instead of the original values.
+
+Fields on other types that reference the renamed type via `foreignKeyType` must be retargeted at the new name in the same change. That retarget is recognized as part of the rename: it is not flagged as a breaking foreign-key change and needs no reference fixup, because record ids are preserved by the copy.
+
+During deploy, the pre-migration phase creates the new type with its full constraints while the old type stays on the namespace, the script copies the rows, and the old type is dropped in post-migration cleanup after the checkpoint advances — all within a single `tailor deploy`.
 
 ### Breaking changes without a script
 
@@ -316,6 +339,7 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Remove enum value                 | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                             |
 | Add table                         | No        | No                | Schema change only                                                                                                                                                                                                                      |
 | Remove table                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the table leaves the active schema. The table stays readable from `migrate.ts` during Pre-migration.           |
+| Rename table                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "OldType:NewType"` — see [Renaming a type](#renaming-a-type). Auto-generated script copies all rows preserving ids; both tables coexist until post-migration cleanup.         |
 | Change foreign key target table   | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                             |
 | Change field type (verified pair) | Yes       | Yes               | In-place for `uuid` → `string`, `enum` → `string`, `decimal` → `string`, and `integer` → `float`; review the generated normalization scaffold and customize it only when existing values need transformation                            |
 | Change field type (other pair)    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
@@ -458,10 +482,10 @@ When you run `tailor deploy`, the SDK detects pending migrations (anything past 
 
 For each pending migration:
 
-1. **Pre-migration**: Schema changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and type-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the table so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
+1. **Pre-migration**: Schema changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and type-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the table so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. For a renamed type, the new type is created with its full constraints while the old type stays on the namespace until post-migration cleanup, so the script can copy rows between them. Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
 2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
 3. **Post-migration schema**: Required constraints and the target field definitions are applied. Do not assume that removing a field clears its underlying stored JSON value.
-4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and tables are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.
+4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and tables — including a renamed type's old table — are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.
 
 This split is what allows existing rows to be backfilled before the database starts rejecting nulls, and what lets `migrate.ts` traverse foreign-key fields that the same migration removes.
 

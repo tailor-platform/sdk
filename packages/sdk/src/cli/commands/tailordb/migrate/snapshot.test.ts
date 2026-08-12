@@ -767,6 +767,157 @@ describe("snapshot", () => {
       });
     });
 
+    describe("type renames", () => {
+      function snapshotWithType(name: string, pluralForm: string): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            [name]: {
+              name,
+              pluralForm,
+              fields: {
+                id: { type: "uuid", required: true },
+                email: { type: "string", required: false },
+              },
+            },
+          },
+        };
+      }
+
+      const previous = () => snapshotWithType("User", "Users");
+      const current = () => snapshotWithType("Person", "People");
+      const rename = { previousTypeName: "User", typeName: "Person" };
+
+      test("records a single breaking type_renamed change", () => {
+        const diff = compareRawSnapshots(previous(), current(), { typeRenames: [rename] });
+
+        expect(diff.changes).toHaveLength(1);
+        expect(diff.changes[0]).toMatchObject({
+          kind: "type_renamed",
+          typeName: "Person",
+          previousTypeName: "User",
+          before: { name: "User" },
+          after: { name: "Person" },
+        });
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(true);
+        expect(diff.breakingChanges).toHaveLength(2);
+        expect(diff.breakingChanges[0]!.reason).toContain(
+          "Type renamed from User to Person (existing records must be copied by the migration script)",
+        );
+        expect(diff.breakingChanges[1]!.reason).toContain("GraphQL API names");
+        expect(diff.breakingChanges[1]!.reason).toContain("User/Users");
+        expect(diff.breakingChanges[1]!.reason).toContain("Person/People");
+        expect(diff.warnings).toEqual([]);
+      });
+
+      test("without rename specs the same pair stays remove + add with a warning", () => {
+        const diff = compareRawSnapshots(previous(), current());
+
+        expect(diff.changes.map((c) => c.kind).toSorted()).toEqual(["type_added", "type_removed"]);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+        expect(diff.warnings).toHaveLength(1);
+      });
+
+      test("does not flag a foreign key retarget that follows the rename", () => {
+        const withOrder = (base: SchemaSnapshot, target: string): SchemaSnapshot => ({
+          ...base,
+          types: {
+            ...base.types,
+            Order: {
+              name: "Order",
+              pluralForm: "Orders",
+              fields: {
+                id: { type: "uuid", required: true },
+                ownerId: {
+                  type: "uuid",
+                  required: false,
+                  foreignKey: true,
+                  foreignKeyType: target,
+                  foreignKeyField: "id",
+                },
+              },
+            },
+          },
+        });
+
+        const diff = compareRawSnapshots(
+          withOrder(previous(), "User"),
+          withOrder(current(), "Person"),
+          { typeRenames: [rename] },
+        );
+
+        const orderChanges = diff.changes.filter((c) => c.typeName === "Order");
+        expect(orderChanges.map((c) => c.kind)).toEqual(["field_modified"]);
+        expect(diff.breakingChanges.filter((bc) => bc.typeName === "Order")).toEqual([]);
+      });
+
+      test("still flags a foreign key retarget unrelated to the rename", () => {
+        const withOrder = (base: SchemaSnapshot, target: string): SchemaSnapshot => ({
+          ...base,
+          types: {
+            ...base.types,
+            Team: {
+              name: "Team",
+              pluralForm: "Teams",
+              fields: { id: { type: "uuid", required: true } },
+            },
+            Order: {
+              name: "Order",
+              pluralForm: "Orders",
+              fields: {
+                id: { type: "uuid", required: true },
+                ownerId: {
+                  type: "uuid",
+                  required: false,
+                  foreignKey: true,
+                  foreignKeyType: target,
+                  foreignKeyField: "id",
+                },
+              },
+            },
+          },
+        });
+
+        const diff = compareRawSnapshots(
+          withOrder(previous(), "Team"),
+          withOrder(current(), "Team2"),
+          { typeRenames: [rename] },
+        );
+
+        expect(
+          diff.breakingChanges.some(
+            (bc) => bc.typeName === "Order" && bc.reason.includes("Foreign key target type"),
+          ),
+        ).toBe(true);
+      });
+
+      test("rejects a rename between incompatible type shapes", () => {
+        const incompatible: SchemaSnapshot = {
+          ...createEmptySnapshot(),
+          types: {
+            Person: {
+              name: "Person",
+              pluralForm: "People",
+              fields: { id: { type: "uuid", required: true } },
+            },
+          },
+        };
+        expect(() =>
+          compareRawSnapshots(previous(), incompatible, { typeRenames: [rename] }),
+        ).toThrow("not rename-compatible");
+      });
+
+      test("rejects a rename whose old type is missing from the previous schema", () => {
+        expect(() =>
+          compareRawSnapshots(previous(), current(), {
+            typeRenames: [{ previousTypeName: "Ghost", typeName: "Person" }],
+          }),
+        ).toThrow('type "Ghost" does not exist in the previous schema');
+      });
+    });
+
     describe("decimal scale changes", () => {
       function snapshotWithPrice(scale: number | undefined): SchemaSnapshot {
         return {
@@ -1878,6 +2029,41 @@ describe("snapshot", () => {
       expect(loaded.hasWarnings).toBe(true);
     });
 
+    test("loads a diff containing a type_renamed change", () => {
+      const renameDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "type_renamed",
+            typeName: "Person",
+            previousTypeName: "User",
+            before: { name: "User", pluralForm: "Users", fields: {} },
+            after: { name: "Person", pluralForm: "People", fields: {} },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "Person",
+            reason: "Type renamed from User to Person",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "type_rename_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(renameDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.changes).toEqual(renameDiff.changes);
+      expect(loaded.requiresMigrationScript).toBe(true);
+    });
+
     test("loads a diff containing a field_renamed change", () => {
       const renameDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
@@ -2543,6 +2729,57 @@ describe("snapshot", () => {
         type: "string",
         required: false,
       });
+    });
+
+    test("applies type_renamed diff (old type dropped, new type added)", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "type_renamed",
+            typeName: "Person",
+            previousTypeName: "User",
+            before: {
+              name: "User",
+              pluralForm: "Users",
+              fields: { id: { type: "uuid", required: true } },
+            },
+            after: {
+              name: "Person",
+              pluralForm: "People",
+              fields: { id: { type: "uuid", required: true } },
+            },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      expect(reconstructed?.types.User).toBeUndefined();
+      expect(reconstructed?.types.Person).toMatchObject({ name: "Person", pluralForm: "People" });
     });
 
     test("reconstructs the target field type from a phased type change", () => {

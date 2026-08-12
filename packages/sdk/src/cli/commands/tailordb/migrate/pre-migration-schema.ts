@@ -21,8 +21,11 @@
  * - `index_modified` that gains a unique constraint or re-points a unique
  *   index at different fields: keep the previous definition until Post-phase.
  *
- * Type-level deletions (`type_removed`) are handled by the deploy flow,
- * which retains the type until Post-phase rather than via this module.
+ * Type-level deletions (`type_removed`) and renames (`type_renamed`) are
+ * handled by the deploy flow rather than via this module: the old type is
+ * retained until Post-phase, and a renamed type's new type is created with
+ * its full constraints in the Pre-phase (the copy script writes complete
+ * rows, so nothing needs relaxing).
  *
  * Post-phase then sends the final schema, after migrate.ts has had a chance
  * to fix up data.
