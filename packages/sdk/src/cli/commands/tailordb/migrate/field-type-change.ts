@@ -52,9 +52,9 @@ export function supportsInPlaceFieldTypeChange(
 
   if (!IN_PLACE_TYPE_CHANGES.has(`${before.type}:${after.type}`)) return false;
 
-  // Rounding to the target scale can merge two distinct values. A field that is
-  // already unique gets no generated dedupe script, so the collision would fail
-  // the constraint after the migration instead of surfacing while it can still
-  // be resolved.
-  return !(before.unique ?? false) || after.type !== "decimal";
+  // Rounding a float to the target scale can merge two distinct values. A field
+  // that is already unique gets no generated dedupe script, so the collision
+  // would fail the constraint after the migration instead of surfacing while it
+  // can still be resolved.
+  return !(before.unique ?? false) || after.type !== "decimal" || before.type !== "float";
 }
