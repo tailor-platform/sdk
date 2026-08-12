@@ -88,7 +88,7 @@ A typical change cycle:
    Generated migration 0001
      Diff file: ./migrations/0001/diff.json
      Migration script: ./migrations/0001/migrate.ts
-     DB tables: ./migrations/0001/db.ts
+     DB types: ./migrations/0001/db.ts
    ```
 
    If `EDITOR` or `VISUAL` is set, `migrate.ts` opens automatically.
@@ -239,7 +239,7 @@ export default defineConfig({
 
 ### Migration file format compatibility
 
-Migration files are versioned independently of the SDK package. This SDK writes format version `2` and reads versions `1` through `2`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk.
+Migration files are versioned independently of the SDK package. This SDK writes format version `3` and reads versions `1` through `3`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk.
 
 If a future SDK can no longer replay an old migration format, re-baseline while using an SDK version that still supports the complete history, commit the new baseline, deploy it to every environment, and then upgrade the SDK. A file from a newer unsupported format instead requires upgrading the SDK first. The CLI rejects both cases with guidance rather than attempting a best-effort replay.
 

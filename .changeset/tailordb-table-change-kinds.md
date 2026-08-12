@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": minor
+"@tailor-platform/sdk": patch
 ---
 
-TailorDB migration diffs now describe table-level changes as `table_*` instead of `type_*`, matching `db.table()`. Migration histories written by earlier versions keep working: `type_*` change kinds in committed `diff.json` files are still read and normalized on load. Migration file format version is now 3, and CLI diff output reads `[Table]` and `table(s) added` where it previously read `[Type]` and `type(s) added`.
+TailorDB migration diffs now describe table-level changes as `table_*` instead of `type_*`, completing the `db.type()` → `db.table()` rename. Migration histories written by earlier versions keep working: `type_*` change kinds in committed `diff.json` files are still read and normalized on load, so no migration files need editing. Migration file format version is now 3 and this SDK reads versions 1 through 3. CLI diff output reads `[Table]` and `table(s) added` where it previously read `[Type]` and `type(s) added`.

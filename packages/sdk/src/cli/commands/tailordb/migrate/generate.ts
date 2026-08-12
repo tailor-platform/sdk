@@ -757,7 +757,7 @@ async function generateDiffFromSnapshot(
   if (result.migrateFilePath) {
     logger.info(`  Migration script: ${result.migrateFilePath}`);
     if (result.dbTypesFilePath) {
-      logger.info(`  DB tables: ${result.dbTypesFilePath}`);
+      logger.info(`  DB types: ${result.dbTypesFilePath}`);
     }
     logger.newline();
     logger.log("A migration script was generated for breaking changes.");
