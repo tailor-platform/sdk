@@ -247,7 +247,7 @@ describe("markMigrationScriptSkipped", () => {
     const original = createMockMigrationDiff({
       hasBreakingChanges: true,
       requiresMigrationScript: true,
-      breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Unique constraint" }],
+      breakingChanges: [{ tableName: "User", fieldName: "email", reason: "Unique constraint" }],
       description: "add unique email",
     });
     const diffPath = writeDiffFile(testDir, 1, original);
@@ -287,7 +287,7 @@ describe("markMigrationScriptSkipped", () => {
       1,
       createMockMigrationDiff({
         hasWarnings: true,
-        warnings: [{ typeName: "User", fieldName: "email", reason: "Field removed" }],
+        warnings: [{ tableName: "User", fieldName: "email", reason: "Field removed" }],
       }),
     );
 

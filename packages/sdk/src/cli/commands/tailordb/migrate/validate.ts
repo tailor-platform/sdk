@@ -464,7 +464,7 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
           const label = formatMigrationNumber(migration.migrationNumber);
           for (const warning of migration.warnings) {
             const field = warning.fieldName ? `.${warning.fieldName}` : "";
-            logger.log(`    ${label}: ${warning.typeName}${field}: ${warning.reason}`);
+            logger.log(`    ${label}: ${warning.tableName}${field}: ${warning.reason}`);
           }
         }
       }

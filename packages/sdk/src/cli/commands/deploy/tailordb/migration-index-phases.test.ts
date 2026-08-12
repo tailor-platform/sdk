@@ -213,7 +213,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
         createdAt: new Date().toISOString(),
         changes: [change],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "User", reason: "Unique constraint added to index" }],
+        breakingChanges: [{ tableName: "User", reason: "Unique constraint added to index" }],
         requiresMigrationScript: true,
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -238,7 +238,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkIndexMigration(1, {
         kind: "index_added",
-        typeName: "User",
+        tableName: "User",
         indexName: "name_org",
         after: { fields: ["name", "org"], unique: true },
       }),
@@ -263,7 +263,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkIndexMigration(2, {
         kind: "index_modified",
-        typeName: "User",
+        tableName: "User",
         indexName: "name_idx",
         before: { fields: ["name"], unique: false },
         after: { fields: ["name"], unique: true },

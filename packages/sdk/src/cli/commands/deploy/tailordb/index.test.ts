@@ -1091,7 +1091,7 @@ describe("planTailorDB (service level)", () => {
           createdAt: new Date().toISOString(),
           changes: [],
           hasBreakingChanges: true,
-          breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Unique" }],
+          breakingChanges: [{ tableName: "User", fieldName: "email", reason: "Unique" }],
           hasWarnings: false,
           warnings: [],
           requiresMigrationScript: true,
@@ -1227,7 +1227,7 @@ describe("applyTailorDB phase separation", () => {
               request: {
                 workspaceId: "test-workspace",
                 namespaceName: "test-tailordb",
-                typeName: "TestType",
+                tableName: "TestType",
               },
             },
           ],
@@ -1325,7 +1325,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
         "age",
         {
           kind: "field_type_modified",
-          typeName: "User",
+          tableName: "User",
           fieldName: "age",
           before: { type: "integer", required: false, unique: false },
           after: { type: "float", required: true, unique: true },
@@ -1364,7 +1364,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
         "age",
         {
           kind: "field_type_modified",
-          typeName: "User",
+          tableName: "User",
           fieldName: "age",
           before: previousAge,
           after: targetType.fields.age!,
@@ -1373,7 +1373,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
     ]);
     const typeScriptsChange: TableScriptsModifiedChange = {
       kind: "table_scripts_modified",
-      typeName: "User",
+      tableName: "User",
       before: {
         typeHookExpr: { update: "return { age: 1 }" },
         typeValidateExpr: "return Number.isInteger(value.age)",
@@ -1410,7 +1410,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
         "oldParentId",
         {
           kind: "field_removed",
-          typeName: "Child",
+          tableName: "Child",
           fieldName: "oldParentId",
           before: removedFieldBefore,
         },
@@ -1437,7 +1437,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
         "newField",
         {
           kind: "field_added",
-          typeName: "T",
+          tableName: "T",
           fieldName: "newField",
           after: { type: "string", required: true },
         },
@@ -1470,7 +1470,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
         "displayName",
         {
           kind: "field_renamed",
-          typeName: "User",
+          tableName: "User",
           fieldName: "displayName",
           previousFieldName: "fullName",
           before: { type: "string", required: false },
@@ -1499,7 +1499,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
         "code",
         {
           kind: "field_renamed",
-          typeName: "Item",
+          tableName: "Item",
           fieldName: "code",
           previousFieldName: "sku",
           before: { type: "string", required: true, unique: true },
@@ -1529,7 +1529,7 @@ describe("applyPreMigrationIndexAdjustments", () => {
         "name_org",
         {
           kind: "index_added",
-          typeName: "User",
+          tableName: "User",
           indexName: "name_org",
           after: { fields: ["name", "org"], unique: true },
         },
@@ -1551,7 +1551,7 @@ describe("applyPreMigrationIndexAdjustments", () => {
         "name_idx",
         {
           kind: "index_modified",
-          typeName: "User",
+          tableName: "User",
           indexName: "name_idx",
           before: { fields: ["name"], unique: false },
           after: { fields: ["name"], unique: true },
@@ -1573,7 +1573,7 @@ describe("applyPreMigrationIndexAdjustments", () => {
         "name_idx",
         {
           kind: "index_modified",
-          typeName: "User",
+          tableName: "User",
           indexName: "name_idx",
           before: { fields: ["name"], unique: true },
           after: { fields: ["name", "org"], unique: true },
@@ -1861,7 +1861,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: 4,
+        version: 5,
       }),
     );
     const planResult = makePlanResult(true);
@@ -1869,7 +1869,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0001" });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /supports migration file format versions 1-3/,
+      /supports migration file format versions 1-4/,
     );
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();
@@ -2044,7 +2044,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           changes: [
             {
               kind: "field_added",
-              typeName: "User",
+              tableName: "User",
               fieldName: "email",
               after: { type: "string", required: false },
             },
@@ -2108,9 +2108,9 @@ describe("applyTailorDB migration label reconciliation", () => {
       JSON.stringify(
         createMockMigrationDiff({
           namespace: "test-tailordb",
-          changes: [{ kind: "table_removed", typeName: "User", before: userType }],
+          changes: [{ kind: "table_removed", tableName: "User", before: userType }],
           hasWarnings: true,
-          warnings: [{ typeName: "User", reason: "Type removed" }],
+          warnings: [{ tableName: "User", reason: "Type removed" }],
         }),
         null,
         2,
@@ -2144,9 +2144,9 @@ describe("applyTailorDB migration label reconciliation", () => {
       JSON.stringify(
         createMockMigrationDiff({
           namespace: "test-tailordb",
-          changes: [{ kind: "table_removed", typeName: "User", before: userType }],
+          changes: [{ kind: "table_removed", tableName: "User", before: userType }],
           hasWarnings: true,
-          warnings: [{ typeName: "User", reason: "Type removed" }],
+          warnings: [{ tableName: "User", reason: "Type removed" }],
         }),
         null,
         2,
@@ -2159,7 +2159,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       JSON.stringify(
         createMockMigrationDiff({
           namespace: "test-tailordb",
-          changes: [{ kind: "table_added", typeName: "User", after: userType }],
+          changes: [{ kind: "table_added", tableName: "User", after: userType }],
         }),
         null,
         2,
@@ -2374,7 +2374,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           changes: [
             {
               kind: "field_added",
-              typeName: "User",
+              tableName: "User",
               fieldName: "email",
               after: { type: "string", required: false },
             },

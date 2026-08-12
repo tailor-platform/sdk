@@ -10,7 +10,7 @@ import type { ExpandContractPlan } from "./expand-contract";
 import type { SchemaSnapshot } from "./snapshot-types";
 
 const plan: ExpandContractPlan = {
-  typeName: "User",
+  tableName: "User",
   fieldName: "price",
   tempFieldName: "priceMigrate",
   before: snapshotField("integer", { required: true }),
@@ -21,8 +21,8 @@ function expandScript(plans: ExpandContractPlan[] = [plan]): string {
   return generateMigrationScript(
     createMockMigrationDiff({
       changes: [
-        { kind: "field_added", typeName: "User", fieldName: "priceMigrate", after: plan.after },
-        { kind: "field_removed", typeName: "User", fieldName: "price", before: plan.before },
+        { kind: "field_added", tableName: "User", fieldName: "priceMigrate", after: plan.after },
+        { kind: "field_removed", tableName: "User", fieldName: "price", before: plan.before },
       ],
     }),
     plans,
@@ -73,7 +73,7 @@ describe("expand conversion script", () => {
     const script = generateMigrationScript(
       createMockMigrationDiff({
         changes: [
-          { kind: "field_removed", typeName: "User", fieldName: "price", before: plan.before },
+          { kind: "field_removed", tableName: "User", fieldName: "price", before: plan.before },
         ],
       }),
     );

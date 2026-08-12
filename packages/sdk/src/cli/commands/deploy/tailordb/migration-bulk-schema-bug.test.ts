@@ -237,14 +237,14 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
   function mkFieldMigration(
     kind: "field_added" | "field_removed",
     number: number,
-    typeName: string,
+    tableName: string,
     fieldName: string,
   ): PendingMigration {
     const fieldSpec = { type: "string", array: true };
     const change =
       kind === "field_added"
-        ? { kind, typeName, fieldName, after: { ...fieldSpec, required: false } }
-        : { kind, typeName, fieldName, before: { ...fieldSpec, required: true } };
+        ? { kind, tableName, fieldName, after: { ...fieldSpec, required: false } }
+        : { kind, tableName, fieldName, before: { ...fieldSpec, required: true } };
 
     return {
       number,
@@ -327,9 +327,9 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
 
     const client = createMockClient();
     vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
-      const typeName = request.tailordbType?.name ?? "unknown";
-      createStarts.push(typeName);
-      if (typeName === "SalesOrder") {
+      const tableName = request.tailordbType?.name ?? "unknown";
+      createStarts.push(tableName);
+      if (tableName === "SalesOrder") {
         firstCreateStarted();
         await firstCreateReleasePromise;
       }
@@ -361,13 +361,13 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     migration.diff.changes = [
       {
         kind: "field_added",
-        typeName: "SalesOrder",
+        tableName: "SalesOrder",
         fieldName: "reference",
         after: { type: "string", required: false },
       },
       {
         kind: "field_added",
-        typeName: "User",
+        tableName: "User",
         fieldName: "permissions",
         after: { type: "string", required: false, array: true },
       },

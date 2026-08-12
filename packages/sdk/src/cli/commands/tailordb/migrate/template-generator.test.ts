@@ -160,7 +160,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: false },
           },
@@ -185,13 +185,15 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: true },
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Required field added" }],
+        breakingChanges: [
+          { tableName: "User", fieldName: "email", reason: "Required field added" },
+        ],
         requiresMigrationScript: true,
       });
 
@@ -224,7 +226,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_renamed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             previousFieldName: "fullName",
             before: { type: "string", required: false },
@@ -234,7 +236,7 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             reason: "Field renamed from fullName to displayName",
           },
@@ -270,7 +272,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_renamed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             previousFieldName: "fullName",
             before: { type: "string", required: false },
@@ -280,7 +282,7 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             reason: "Field renamed from fullName to displayName",
           },
@@ -318,7 +320,7 @@ describe("template-generator", () => {
           changes: [
             {
               kind: "field_renamed",
-              typeName: "Item",
+              tableName: "Item",
               fieldName: "unitPrice",
               previousFieldName: "price",
               before: { type: "decimal", required: true, unique: true, scale: 3 },
@@ -328,7 +330,7 @@ describe("template-generator", () => {
           hasBreakingChanges: true,
           breakingChanges: [
             {
-              typeName: "Item",
+              tableName: "Item",
               fieldName: "unitPrice",
               reason: "Field renamed from price to unitPrice",
             },
@@ -365,7 +367,7 @@ describe("template-generator", () => {
           changes: [
             {
               kind: "field_renamed",
-              typeName: "Item",
+              tableName: "Item",
               fieldName: "rate",
               previousFieldName: "ratio",
               before: { type: "decimal", required: false, scale: 3 },
@@ -375,7 +377,7 @@ describe("template-generator", () => {
           hasBreakingChanges: true,
           breakingChanges: [
             {
-              typeName: "Item",
+              tableName: "Item",
               fieldName: "rate",
               reason: "Field renamed from ratio to rate",
             },
@@ -407,7 +409,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_renamed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             previousFieldName: "fullName",
             before: { type: "string", required: false },
@@ -417,7 +419,7 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             reason: "Field renamed from fullName to displayName",
           },
@@ -449,8 +451,8 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: {
               name: "User",
               pluralForm: "Users",
@@ -464,7 +466,7 @@ describe("template-generator", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
         requiresMigrationScript: true,
       });
 
@@ -510,8 +512,8 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Section",
-            previousTypeName: "Category",
+            tableName: "Section",
+            previousTableName: "Category",
             before: {
               name: "Category",
               pluralForm: "Categories",
@@ -525,7 +527,9 @@ describe("template-generator", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "Section", reason: "Type renamed from Category to Section" }],
+        breakingChanges: [
+          { tableName: "Section", reason: "Type renamed from Category to Section" },
+        ],
         requiresMigrationScript: true,
       });
 
@@ -568,14 +572,14 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: { name: "User", pluralForm: "Users", fields: {} },
             after: { name: "Person", pluralForm: "People", fields: {} },
           },
           {
             kind: "field_modified",
-            typeName: "Order",
+            tableName: "Order",
             fieldName: "ownerId",
             before: {
               type: "uuid",
@@ -594,7 +598,7 @@ describe("template-generator", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
         requiresMigrationScript: true,
       });
 
@@ -637,7 +641,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_removed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "oldField",
             before: { type: "string", required: false },
           },
@@ -666,7 +670,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_type_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             before: { type: "integer", required: false },
             after: { type: "float", required: false },
@@ -675,7 +679,7 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             reason: "Field type changed from integer to float",
           },
@@ -729,7 +733,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_type_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "__proto__",
             before: { type: "integer", required: false },
             after: { type: "float", required: false },
@@ -738,7 +742,7 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "__proto__",
             reason: "Field type changed from integer to float",
           },
@@ -766,7 +770,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_type_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             before: { type: "integer", required: false, unique: false },
             after: { type: "float", required: false, unique: true },
@@ -775,12 +779,12 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             reason: "Field type changed from integer to float",
           },
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             reason: "Unique constraint added to field",
           },
@@ -815,7 +819,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             before: { type: "string", required: true, unique: false },
             after: { type: "string", required: true, unique: true },
@@ -823,7 +827,7 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "User", fieldName: "email", reason: "Unique constraint added to field" },
+          { tableName: "User", fieldName: "email", reason: "Unique constraint added to field" },
         ],
         requiresMigrationScript: true,
       });
@@ -853,14 +857,14 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "index_added",
-            typeName: "User",
+            tableName: "User",
             indexName: "name_org",
             after: { fields: ["name", "org"], unique: true },
           },
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "User", reason: 'Unique constraint added to index "name_org"' },
+          { tableName: "User", reason: 'Unique constraint added to index "name_org"' },
         ],
         requiresMigrationScript: true,
       });
@@ -894,7 +898,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "index_modified",
-            typeName: "User",
+            tableName: "User",
             indexName: "name_idx",
             before: { fields: ["name"], unique: false },
             after: { fields: ["name"], unique: true },
@@ -902,7 +906,7 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "User", reason: 'Unique constraint added to index "name_idx"' },
+          { tableName: "User", reason: 'Unique constraint added to index "name_idx"' },
         ],
         requiresMigrationScript: true,
       });
@@ -966,16 +970,16 @@ describe("template-generator", () => {
       const diff = createMockMigrationDiff({
         changes: ["email", "username"].map((fieldName) => ({
           kind: "field_modified" as const,
-          typeName: "User",
+          tableName: "User",
           fieldName,
           before: { type: "string" as const, required: true, unique: false },
           after: { type: "string" as const, required: true, unique: true },
         })),
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "User", fieldName: "email", reason: "Unique constraint added to field" },
+          { tableName: "User", fieldName: "email", reason: "Unique constraint added to field" },
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "username",
             reason: "Unique constraint added to field",
           },
@@ -1016,14 +1020,14 @@ describe("template-generator", () => {
       const diff = createMockMigrationDiff({
         changes: changes.map(({ fieldName, beforeType, afterType }) => ({
           kind: "field_modified" as const,
-          typeName: "Order",
+          tableName: "Order",
           fieldName,
           before: { type: "uuid" as const, required: true, foreignKeyType: beforeType },
           after: { type: "uuid" as const, required: true, foreignKeyType: afterType },
         })),
         hasBreakingChanges: true,
         breakingChanges: changes.map(({ fieldName, beforeType, afterType }) => ({
-          typeName: "Order",
+          tableName: "Order",
           fieldName,
           reason: `Foreign key target changed from ${beforeType} to ${afterType}`,
         })),
@@ -1051,7 +1055,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "Item",
+            tableName: "Item",
             fieldName: "price",
             before: { type: "decimal", required: true, scale: 4 },
             after: { type: "decimal", required: true, scale: 2 },
@@ -1059,7 +1063,7 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 4 to 2" },
+          { tableName: "Item", fieldName: "price", reason: "Decimal scale changed from 4 to 2" },
         ],
         requiresMigrationScript: true,
       });
@@ -1096,7 +1100,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "Item",
+            tableName: "Item",
             fieldName: "price",
             before: { type: "decimal", required: false, scale: 2 },
             after: { type: "decimal", required: true, scale: 4 },
@@ -1105,7 +1109,7 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "Item",
+            tableName: "Item",
             fieldName: "price",
             reason: "Field changed from optional to required",
           },
@@ -1135,7 +1139,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "Item",
+            tableName: "Item",
             fieldName: "price",
             before: { type: "decimal", required: true, unique: false, scale: 4 },
             after: { type: "decimal", required: true, unique: true, scale: 2 },
@@ -1143,7 +1147,7 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
+          { tableName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
         ],
         requiresMigrationScript: true,
       });
@@ -1173,7 +1177,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "Item",
+            tableName: "Item",
             fieldName: "price",
             before: { type: "decimal", required: false, unique: false, scale: 2 },
             after: { type: "decimal", required: true, unique: true, scale: 4 },
@@ -1182,12 +1186,12 @@ describe("template-generator", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "Item",
+            tableName: "Item",
             fieldName: "price",
             reason: "Field changed from optional to required",
           },
-          { typeName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
-          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 2 to 4" },
+          { tableName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
+          { tableName: "Item", fieldName: "price", reason: "Decimal scale changed from 2 to 4" },
         ],
         requiresMigrationScript: true,
       });
@@ -1221,7 +1225,7 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "Task",
+            tableName: "Task",
             fieldName: "status",
             before: { type: "enum", required: true, allowedValues: allEnumValues },
             after: {
@@ -1233,7 +1237,7 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "Task", fieldName: "status", reason: "Enum values removed: CANCELLED" },
+          { tableName: "Task", fieldName: "status", reason: "Enum values removed: CANCELLED" },
         ],
         requiresMigrationScript: true,
       });
@@ -1263,13 +1267,15 @@ describe("template-generator", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: true },
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Required field added" }],
+        breakingChanges: [
+          { tableName: "User", fieldName: "email", reason: "Required field added" },
+        ],
         requiresMigrationScript: true,
       });
 

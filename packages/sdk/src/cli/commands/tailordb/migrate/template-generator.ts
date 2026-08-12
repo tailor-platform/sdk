@@ -173,7 +173,7 @@ export function generateMigrationScript(
   const typeRenameTargets = new Map(
     diff.changes
       .filter((change): change is TableRenamedChange => change.kind === "table_renamed")
-      .map((change) => [change.previousTypeName, change.typeName]),
+      .map((change) => [change.previousTableName, change.tableName]),
   );
 
   for (const plan of expandPlans) {
@@ -274,7 +274,7 @@ function generateChangeScripts(
 ): string[] {
   if (change.kind === "index_added" || change.kind === "index_modified") {
     const before = change.kind === "index_modified" ? change.before : undefined;
-    if (!isBreakingIndexChange(change.typeName, change.indexName, before, change.after)) {
+    if (!isBreakingIndexChange(change.tableName, change.indexName, before, change.after)) {
       return [];
     }
     const fields = change.after.fields;
@@ -284,21 +284,21 @@ function generateChangeScripts(
       `  // Resolve duplicate (${fields.join(", ")}) combinations before unique index "${change.indexName}" is enforced
   {
     const duplicates = await trx
-      .selectFrom("${change.typeName}")
+      .selectFrom("${change.tableName}")
       .select([${fieldList}])
       .groupBy([${fieldList}])
       .having((eb) => eb.fn.count("id"), ">", 1)
       .execute();
     for (const dup of duplicates) {
       const records = await trx
-        .selectFrom("${change.typeName}")
+        .selectFrom("${change.tableName}")
         .select(["id"])
         ${whereClauses}
         .execute();
       // Keep the first record; update or delete the others so the combination becomes unique
       for (let i = 1; i < records.length; i++) {
         await trx
-          .updateTable("${change.typeName}")
+          .updateTable("${change.tableName}")
           .set({ ${fields[0]}: null }) // TODO: Set appropriate unique value
           .where("id", "=", records[i].id)
           .execute();
@@ -312,9 +312,9 @@ function generateChangeScripts(
     const field = change.after;
     if (field.required) {
       return [
-        `  // Populate ${change.fieldName} for existing ${change.typeName} records
+        `  // Populate ${change.fieldName} for existing ${change.tableName} records
   await trx
-    .updateTable("${change.typeName}")
+    .updateTable("${change.tableName}")
     .set({
       ${change.fieldName}: null, // TODO: Set appropriate default value
     })
@@ -335,7 +335,7 @@ function generateChangeScripts(
       (change.after.unique ?? false) &&
       (!(change.before.unique ?? false) || renameCopyCanCollapseValues(change))
     ) {
-      scripts.push(generateUniqueDedupeScript(change.typeName, change.fieldName, "suffix"));
+      scripts.push(generateUniqueDedupeScript(change.tableName, change.fieldName, "suffix"));
     }
     return scripts;
   }
@@ -358,9 +358,9 @@ function generateChangeScripts(
 
   // Optional to required
   if (!before.required && after.required) {
-    scripts.push(`  // Set ${change.fieldName} for ${change.typeName} records where it is null
+    scripts.push(`  // Set ${change.fieldName} for ${change.tableName} records where it is null
   await trx
-    .updateTable("${change.typeName}")
+    .updateTable("${change.tableName}")
     .set({
       ${change.fieldName}: null, // TODO: Set appropriate default value
     })
@@ -388,7 +388,7 @@ function generateChangeScripts(
       const defaultValue = afterValues[0] ?? "NEW_VALUE";
       scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
   await trx
-    .updateTable("${change.typeName}")
+    .updateTable("${change.tableName}")
     .set({ ${change.fieldName}: "${defaultValue}" }) // TODO: Set appropriate value
     .where("${change.fieldName}", "in", [${removedValues.map((v) => `"${v}"`).join(", ")}])
     .execute();`);
@@ -402,15 +402,15 @@ function generateChangeScripts(
   // Find records that don't have a valid reference in the new target table
   {
     const orphanedRecords = await trx
-      .selectFrom("${change.typeName}")
-      .leftJoin("${after.foreignKeyType}", "${change.typeName}.${change.fieldName}", "${after.foreignKeyType}.id")
-      .select(["${change.typeName}.id", "${change.typeName}.${change.fieldName}"])
+      .selectFrom("${change.tableName}")
+      .leftJoin("${after.foreignKeyType}", "${change.tableName}.${change.fieldName}", "${after.foreignKeyType}.id")
+      .select(["${change.tableName}.id", "${change.tableName}.${change.fieldName}"])
       .where("${after.foreignKeyType}.id", "is", null)
-      .where("${change.typeName}.${change.fieldName}", "is not", null)
+      .where("${change.tableName}.${change.fieldName}", "is not", null)
       .execute();
     for (const record of orphanedRecords) {
       await trx
-        .updateTable("${change.typeName}")
+        .updateTable("${change.tableName}")
         .set({ ${change.fieldName}: null }) // TODO: Set appropriate new reference
         .where("id", "=", record.id)
         .execute();
@@ -428,7 +428,7 @@ function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {
 }
 
 function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
-  const { typeName, fieldName, previousFieldName, before, after } = change;
+  const { tableName, fieldName, previousFieldName, before, after } = change;
   const requiredTodo =
     !before.required && after.required
       ? `
@@ -442,23 +442,23 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
   // precision before deploying.`
     : "";
 
-  return `  // Copy ${typeName}.${previousFieldName} into ${fieldName} for every row.
+  return `  // Copy ${tableName}.${previousFieldName} into ${fieldName} for every row.
   // Overwrite unconditionally: stored values of previously removed fields are
   // not pruned, so a stale value could otherwise resurface under ${fieldName}.${requiredTodo}${roundingWarning}
   await trx
-    .updateTable("${typeName}")
+    .updateTable("${tableName}")
     .set((eb) => ({ ${fieldName}: eb.ref("${previousFieldName}") }))
     .execute();`;
 }
 
 function generateTypeRenameCopyScript(change: TableRenamedChange): string {
-  const { typeName, previousTypeName } = change;
+  const { tableName, previousTableName } = change;
   const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
   const columnList = columns.map((name) => JSON.stringify(name)).join(", ");
   // Self-referential foreign keys may point at rows in later batches, so they
   // are inserted as null and backfilled once every row exists.
   const selfRefColumns = Object.entries(change.after.fields)
-    .filter(([, field]) => field.foreignKeyType === typeName)
+    .filter(([, field]) => field.foreignKeyType === tableName)
     .map(([name]) => name);
   const insertValues =
     selfRefColumns.length > 0
@@ -470,28 +470,28 @@ function generateTypeRenameCopyScript(change: TableRenamedChange): string {
 
   // Backfill the self-referential column(s) now that every row exists.
   await trx
-    .updateTable("${typeName}")
+    .updateTable("${tableName}")
     .set((eb) => ({
 ${selfRefColumns
   .map(
     (name) => `      ${name}: eb
-        .selectFrom("${previousTypeName}")
-        .select("${previousTypeName}.${name}")
-        .whereRef("${previousTypeName}.id", "=", "${typeName}.id"),`,
+        .selectFrom("${previousTableName}")
+        .select("${previousTableName}.${name}")
+        .whereRef("${previousTableName}.id", "=", "${tableName}.id"),`,
   )
   .join("\n")}
     }))
     .execute();`
       : "";
 
-  return `  // Copy every ${previousTypeName} row into ${typeName}, preserving ids so that
-  // stored foreign key references remain valid. ${previousTypeName} stays readable
+  return `  // Copy every ${previousTableName} row into ${tableName}, preserving ids so that
+  // stored foreign key references remain valid. ${previousTableName} stays readable
   // until the post-migration phase drops it.
   {
     let lastId: string | undefined;
     while (true) {
       let query = trx
-        .selectFrom("${previousTypeName}")
+        .selectFrom("${previousTableName}")
         .select([${columnList}])
         .orderBy("id", "asc")
         .limit(100);
@@ -501,7 +501,7 @@ ${selfRefColumns
       const rows = await query.execute();
       if (rows.length === 0) break;
 
-      await trx.insertInto("${typeName}").values(${insertValues}).execute();
+      await trx.insertInto("${tableName}").values(${insertValues}).execute();
       lastId = rows[rows.length - 1]!.id;
     }
   }${selfRefBackfill}`;
@@ -510,12 +510,12 @@ ${selfRefColumns
 function generateFieldTypeChangeScript(
   change: Extract<DiffChange, { kind: "field_type_modified" }>,
 ): string {
-  return `  // Normalize ${change.typeName}.${change.fieldName} from ${change.before.type} to ${change.after.type} while the previous type is still active
+  return `  // Normalize ${change.tableName}.${change.fieldName} from ${change.before.type} to ${change.after.type} while the previous type is still active
   {
     let lastId: string | undefined;
     while (true) {
       let query = trx
-        .selectFrom("${change.typeName}")
+        .selectFrom("${change.tableName}")
         .select(["id", "${change.fieldName}"])
         .where("${change.fieldName}", "is not", null)
         .orderBy("id", "asc")
@@ -534,7 +534,7 @@ function generateFieldTypeChangeScript(
         const normalizedValue: never = sourceValue;
         if (Object.is(normalizedValue, sourceValue)) continue;
         await trx
-          .updateTable("${change.typeName}")
+          .updateTable("${change.tableName}")
           .set({ [${JSON.stringify(change.fieldName)}]: normalizedValue })
           .where("id", "=", row.id)
           .execute();
@@ -545,12 +545,12 @@ function generateFieldTypeChangeScript(
 }
 
 function generateExpandConversionScript(plan: ExpandContractPlan): string {
-  return `  // Convert ${plan.typeName}.${plan.fieldName} into ${plan.tempFieldName}, which the next migration renames back to ${plan.fieldName}
+  return `  // Convert ${plan.tableName}.${plan.fieldName} into ${plan.tempFieldName}, which the next migration renames back to ${plan.fieldName}
   {
     let lastId: string | undefined;
     while (true) {
       let query = trx
-        .selectFrom("${plan.typeName}")
+        .selectFrom("${plan.tableName}")
         .select(["id", "${plan.fieldName}"])
         .where("${plan.fieldName}", "is not", null)
         .orderBy("id", "asc")
@@ -568,7 +568,7 @@ function generateExpandConversionScript(plan: ExpandContractPlan): string {
         const convertedValue: never = sourceValue;
         // Clearing ${plan.fieldName} keeps a re-run from converting the row twice.
         await trx
-          .updateTable("${plan.typeName}")
+          .updateTable("${plan.tableName}")
           .set({
             [${JSON.stringify(plan.tempFieldName)}]: convertedValue,
             [${JSON.stringify(plan.fieldName)}]: null,
@@ -588,14 +588,14 @@ function generateUniqueConstraintScript(change: DiffChange): string | null {
   if ((before.unique ?? false) || !(after.unique ?? false)) return null;
 
   return generateUniqueDedupeScript(
-    change.typeName,
+    change.tableName,
     change.fieldName,
     change.kind === "field_type_modified" ? "throw" : "suffix",
   );
 }
 
 function generateUniqueDedupeScript(
-  typeName: string,
+  tableName: string,
   fieldName: string,
   resolution: "suffix" | "throw",
 ): string {
@@ -603,13 +603,13 @@ function generateUniqueDedupeScript(
     resolution === "throw"
       ? `      if (records.length > 1) {
         throw new Error(
-          "TODO: Resolve duplicate ${typeName}.${fieldName} values before adding the unique constraint",
+          "TODO: Resolve duplicate ${tableName}.${fieldName} values before adding the unique constraint",
         );
       }`
       : `      // Keep first record, add suffix to others
       for (let i = 1; i < records.length; i++) {
         await trx
-          .updateTable("${typeName}")
+          .updateTable("${tableName}")
           .set({ ${fieldName}: \`\${records[i].${fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
           .where("id", "=", records[i].id)
           .execute();
@@ -618,7 +618,7 @@ function generateUniqueDedupeScript(
   return `  // Ensure ${fieldName} values are unique before adding constraint
   {
     const duplicates = await trx
-      .selectFrom("${typeName}")
+      .selectFrom("${tableName}")
       .select(["${fieldName}"])
       .groupBy("${fieldName}")
       .having((eb) => eb.fn.count("id"), ">", 1)
@@ -626,7 +626,7 @@ function generateUniqueDedupeScript(
     for (const dup of duplicates) {
       // Load every record in this duplicate group before resolving it
       const records = await trx
-        .selectFrom("${typeName}")
+        .selectFrom("${tableName}")
         .select(["id", "${fieldName}"])
         .where("${fieldName}", "=", dup.${fieldName})
         .execute();
@@ -653,7 +653,7 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
   // review the resulting precision before deploying.`
       : "";
 
-  return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.
+  return `  // Re-save existing ${change.tableName} rows so ${change.fieldName} is stored under the new scale.
   // This is a workaround for a platform-side gap where rows written under the
   // previous scale could fail on later updates until re-saved. Keep it unless
   // your platform is confirmed to handle stored values across scale changes.${roundingWarning}
@@ -661,7 +661,7 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
     let lastId: string | undefined;
     while (true) {
       let query = trx
-        .selectFrom("${change.typeName}")
+        .selectFrom("${change.tableName}")
         .select(["id", "${change.fieldName}"])
         .where("${change.fieldName}", "is not", null)
         .orderBy("id", "asc")
@@ -674,7 +674,7 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
 
       for (const row of rows) {
         await trx
-          .updateTable("${change.typeName}")
+          .updateTable("${change.tableName}")
           .set({ ${change.fieldName}: ${valueExpression} })
           .where("id", "=", row.id)
           .where("${change.fieldName}", "=", ${valueExpression})

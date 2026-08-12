@@ -297,7 +297,7 @@ describe("snapshot", () => {
 
       expect(diff.changes.length).toBe(1);
       expect(diff.changes[0]!.kind).toBe("table_added");
-      expect(diff.changes[0]!.typeName).toBe("NewType");
+      expect(diff.changes[0]!.tableName).toBe("NewType");
       expect(diff.hasBreakingChanges).toBe(false);
     });
 
@@ -322,7 +322,7 @@ describe("snapshot", () => {
       expect(diff.hasWarnings).toBe(true);
       expect(diff.warnings).toEqual([
         {
-          typeName: "OldType",
+          tableName: "OldType",
           reason:
             "Type removed (all records of this type will be deleted during post-migration cleanup)",
         },
@@ -424,7 +424,7 @@ describe("snapshot", () => {
       expect(diff.hasWarnings).toBe(true);
       expect(diff.warnings).toEqual([
         {
-          typeName: "User",
+          tableName: "User",
           fieldName: "name",
           reason: "Field removed (existing data will no longer be accessible through the schema)",
         },
@@ -663,14 +663,14 @@ describe("snapshot", () => {
       test("records a single breaking field_renamed change", () => {
         const diff = compareRawSnapshots(previous(), current(), {
           fieldRenames: [
-            { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+            { tableName: "User", previousFieldName: "fullName", fieldName: "displayName" },
           ],
         });
 
         expect(diff.changes).toEqual([
           {
             kind: "field_renamed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             previousFieldName: "fullName",
             before: { type: "string", required: false },
@@ -681,7 +681,7 @@ describe("snapshot", () => {
         expect(diff.requiresMigrationScript).toBe(true);
         expect(diff.breakingChanges).toEqual([
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             reason:
               "Field renamed from fullName to displayName (existing values must be copied by the migration script)",
@@ -705,7 +705,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
             fieldRenames: [
-              { typeName: "User", previousFieldName: "nickname", fieldName: "displayName" },
+              { tableName: "User", previousFieldName: "nickname", fieldName: "displayName" },
             ],
           }),
         ).toThrow('field "nickname" does not exist in the previous schema');
@@ -714,7 +714,9 @@ describe("snapshot", () => {
       test("rejects a rename whose new field is missing from the current schema", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
-            fieldRenames: [{ typeName: "User", previousFieldName: "fullName", fieldName: "alias" }],
+            fieldRenames: [
+              { tableName: "User", previousFieldName: "fullName", fieldName: "alias" },
+            ],
           }),
         ).toThrow('field "alias" does not exist in the current schema');
       });
@@ -726,7 +728,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), incompatibleCurrent, {
             fieldRenames: [
-              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+              { tableName: "User", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow("not rename-compatible");
@@ -739,7 +741,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), arrayCurrent, {
             fieldRenames: [
-              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+              { tableName: "User", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow("not rename-compatible");
@@ -749,8 +751,8 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
             fieldRenames: [
-              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
-              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+              { tableName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+              { tableName: "User", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow("appears in more than one rename");
@@ -760,7 +762,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
             fieldRenames: [
-              { typeName: "Ghost", previousFieldName: "fullName", fieldName: "displayName" },
+              { tableName: "Ghost", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow('type "Ghost" must exist');
@@ -786,7 +788,7 @@ describe("snapshot", () => {
 
       const previous = () => snapshotWithType("User", "Users");
       const current = () => snapshotWithType("Person", "People");
-      const rename = { previousTypeName: "User", typeName: "Person" };
+      const rename = { previousTableName: "User", tableName: "Person" };
 
       test("records a single breaking type_renamed change", () => {
         const diff = compareRawSnapshots(previous(), current(), { typeRenames: [rename] });
@@ -794,8 +796,8 @@ describe("snapshot", () => {
         expect(diff.changes).toHaveLength(1);
         expect(diff.changes[0]).toMatchObject({
           kind: "table_renamed",
-          typeName: "Person",
-          previousTypeName: "User",
+          tableName: "Person",
+          previousTableName: "User",
           before: { name: "User" },
           after: { name: "Person" },
         });
@@ -851,9 +853,9 @@ describe("snapshot", () => {
           { typeRenames: [rename] },
         );
 
-        const orderChanges = diff.changes.filter((c) => c.typeName === "Order");
+        const orderChanges = diff.changes.filter((c) => c.tableName === "Order");
         expect(orderChanges.map((c) => c.kind)).toEqual(["field_modified"]);
-        expect(diff.breakingChanges.filter((bc) => bc.typeName === "Order")).toEqual([]);
+        expect(diff.breakingChanges.filter((bc) => bc.tableName === "Order")).toEqual([]);
       });
 
       test("still flags a foreign key retarget unrelated to the rename", () => {
@@ -891,7 +893,7 @@ describe("snapshot", () => {
 
         expect(
           diff.breakingChanges.some(
-            (bc) => bc.typeName === "Order" && bc.reason.includes("Foreign key target type"),
+            (bc) => bc.tableName === "Order" && bc.reason.includes("Foreign key target type"),
           ),
         ).toBe(true);
       });
@@ -915,7 +917,7 @@ describe("snapshot", () => {
       test("rejects a rename whose old type is missing from the previous schema", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
-            typeRenames: [{ previousTypeName: "Ghost", typeName: "Person" }],
+            typeRenames: [{ previousTableName: "Ghost", tableName: "Person" }],
           }),
         ).toThrow('type "Ghost" does not exist in the previous schema');
       });
@@ -1265,7 +1267,7 @@ describe("snapshot", () => {
       expect(diff.changes).toEqual([
         expect.objectContaining({
           kind: "table_settings_modified",
-          typeName: "User",
+          tableName: "User",
           reason: expect.stringContaining("settings changed"),
         }),
       ]);
@@ -1299,7 +1301,7 @@ describe("snapshot", () => {
       expect(diff.changes).toEqual([
         expect.objectContaining({
           kind: "table_settings_modified",
-          typeName: "User",
+          tableName: "User",
           reason: expect.stringContaining("settings changed"),
         }),
       ]);
@@ -1333,7 +1335,7 @@ describe("snapshot", () => {
       expect(diff.changes).toEqual([
         expect.objectContaining({
           kind: "table_settings_modified",
-          typeName: "User",
+          tableName: "User",
           reason: expect.stringContaining("settings changed"),
         }),
       ]);
@@ -1456,7 +1458,7 @@ describe("snapshot", () => {
       expect(diff.changes).toEqual([
         expect.objectContaining({
           kind: "relationship_modified",
-          typeName: "User",
+          tableName: "User",
           relationshipName: "posts",
           relationshipType: "backward",
           reason: expect.stringContaining("description changed"),
@@ -1492,7 +1494,7 @@ describe("snapshot", () => {
       expect(diff.changes).toEqual([
         expect.objectContaining({
           kind: "table_scripts_modified",
-          typeName: "User",
+          tableName: "User",
           before: {},
           after: {
             typeHookExpr: {
@@ -1531,7 +1533,7 @@ describe("snapshot", () => {
       expect(diff.changes).toEqual([
         expect.objectContaining({
           kind: "table_scripts_modified",
-          typeName: "User",
+          tableName: "User",
           before: { typeHookExpr: { create: "old-expr" } },
           after: {},
         }),
@@ -1567,7 +1569,7 @@ describe("snapshot", () => {
       expect(diff.changes).toEqual([
         expect.objectContaining({
           kind: "table_scripts_modified",
-          typeName: "User",
+          tableName: "User",
           before: { typeValidateExpr: "old-validate" },
           after: { typeValidateExpr: "new-validate" },
         }),
@@ -1846,7 +1848,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "table_added",
-            typeName: "NewType",
+            tableName: "NewType",
             after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
           },
         ],
@@ -1874,7 +1876,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_type_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             before: { type: "integer", required: false },
             after: { type: "float", required: false },
@@ -1883,7 +1885,7 @@ describe("snapshot", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             reason: "Field type changed from integer to float",
           },
@@ -1909,7 +1911,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "table_added",
-            typeName: "NewType",
+            tableName: "NewType",
             after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
           },
         ],
@@ -1928,6 +1930,154 @@ describe("snapshot", () => {
       expect(loaded.changes.length).toBe(1);
     });
 
+    test("reads legacy typeName across changes, breakingChanges, and warnings", () => {
+      const legacyDiff = {
+        version: 3,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "legacyCode",
+            before: { type: "string" },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ typeName: "User", fieldName: "legacyCode", reason: "Field removed" }],
+        hasWarnings: true,
+        warnings: [{ typeName: "User", fieldName: "legacyCode", reason: "Field removed" }],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "legacy_type_name_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.changes[0]!.tableName).toBe("User");
+      expect(loaded.breakingChanges[0]!.tableName).toBe("User");
+      expect(loaded.warnings[0]!.tableName).toBe("User");
+    });
+
+    test("reads legacy previousTypeName on a rename change", () => {
+      const legacyDiff = {
+        version: 3,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "table_renamed",
+            typeName: "Member",
+            previousTypeName: "User",
+            before: { name: "User", pluralForm: "Users", fields: {} },
+            after: { name: "Member", pluralForm: "Members", fields: {} },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "legacy_previous_type_name_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const change = loadDiff(filePath).changes[0]!;
+
+      expect(change.tableName).toBe("Member");
+      expect(change.kind === "table_renamed" && change.previousTableName).toBe("User");
+    });
+
+    test("preserves unrecognized keys and version when normalizing legacy field names", () => {
+      const legacyDiff = {
+        version: 2,
+        namespace,
+        createdAt: new Date().toISOString(),
+        description: "hand-written note",
+        futureKey: { nested: true },
+        changes: [
+          {
+            kind: "type_added",
+            typeName: "NewType",
+            unknownChangeKey: 42,
+            after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "legacy_roundtrip_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath) as MigrationDiff & {
+        description?: string;
+        futureKey?: { nested: boolean };
+      };
+
+      expect(loaded.version).toBe(2);
+      expect(loaded.description).toBe("hand-written note");
+      expect(loaded.futureKey).toEqual({ nested: true });
+      expect(loaded.changes[0]!.kind).toBe("table_added");
+      expect(loaded.changes[0]!.tableName).toBe("NewType");
+      expect((loaded.changes[0] as { unknownChangeKey?: number }).unknownChangeKey).toBe(42);
+    });
+
+    test("keeps a current-format diff.json unchanged", () => {
+      const currentDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "table_added",
+            tableName: "NewType",
+            after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "current_table_name_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(currentDiff, null, 2));
+
+      expect(loadDiff(filePath).changes[0]!.tableName).toBe("NewType");
+    });
+
+    test("rejects a diff.json whose tableName is not a string", () => {
+      const malformed = {
+        version: 3,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "table_added",
+            tableName: 123,
+            after: { name: "NewType", pluralForm: "NewTypes", fields: {} },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "malformed_type_name_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(malformed, null, 2));
+
+      expect(() => loadDiff(filePath)).toThrow(/Invalid migration diff/);
+    });
+
     test("derives warnings from removal changes in a legacy diff.json", () => {
       // Legacy diff.json written before warning-tier support: removals are
       // recorded in changes but the warnings field does not exist yet.
@@ -1938,13 +2088,13 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_removed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "legacyCode",
             before: { type: "string" },
           },
           {
             kind: "table_removed",
-            typeName: "OldType",
+            tableName: "OldType",
             before: { name: "OldType", pluralForm: "OldTypes", fields: {} },
           },
         ],
@@ -1961,12 +2111,12 @@ describe("snapshot", () => {
       expect(loaded.hasWarnings).toBe(true);
       expect(loaded.warnings).toEqual([
         {
-          typeName: "User",
+          tableName: "User",
           fieldName: "legacyCode",
           reason: "Field removed (existing data will no longer be accessible through the schema)",
         },
         {
-          typeName: "OldType",
+          tableName: "OldType",
           reason:
             "Type removed (all records of this type will be deleted during post-migration cleanup)",
         },
@@ -1981,7 +2131,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_removed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "legacyCode",
             before: { type: "string" },
           },
@@ -2015,7 +2165,7 @@ describe("snapshot", () => {
         hasWarnings: false,
         warnings: [
           {
-            typeName: "Product",
+            tableName: "Product",
             fieldName: "legacyCode",
             reason: "Field was removed",
           },
@@ -2040,8 +2190,8 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: { name: "User", pluralForm: "Users", fields: {} },
             after: { name: "Person", pluralForm: "People", fields: {} },
           },
@@ -2049,7 +2199,7 @@ describe("snapshot", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "Person",
+            tableName: "Person",
             reason: "Type renamed from User to Person",
           },
         ],
@@ -2075,7 +2225,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_renamed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             previousFieldName: "fullName",
             before: { type: "string", required: false },
@@ -2085,7 +2235,7 @@ describe("snapshot", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             reason: "Field renamed from fullName to displayName",
           },
@@ -2109,24 +2259,28 @@ describe("snapshot", () => {
       const settingsState = (pluralForm: string) => ({ pluralForm });
 
       const LEGACY_CHANGES = [
-        ["type_added", "table_added", { typeName: "User", after: snapshotType("User") }],
-        ["type_removed", "table_removed", { typeName: "OldUser", before: snapshotType("OldUser") }],
+        ["type_added", "table_added", { tableName: "User", after: snapshotType("User") }],
+        [
+          "type_removed",
+          "table_removed",
+          { tableName: "OldUser", before: snapshotType("OldUser") },
+        ],
         [
           "type_renamed",
           "table_renamed",
           {
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: snapshotType("User"),
             after: snapshotType("Person"),
           },
         ],
-        ["type_modified", "table_modified", { typeName: "User" }],
+        ["type_modified", "table_modified", { tableName: "User" }],
         [
           "type_settings_modified",
           "table_settings_modified",
           {
-            typeName: "User",
+            tableName: "User",
             before: settingsState("Users"),
             after: settingsState("People"),
           },
@@ -2134,7 +2288,7 @@ describe("snapshot", () => {
         [
           "type_scripts_modified",
           "table_scripts_modified",
-          { typeName: "User", before: {}, after: { typeValidateExpr: "() => true" } },
+          { tableName: "User", before: {}, after: { typeValidateExpr: "() => true" } },
         ],
       ] as const;
 
@@ -2230,20 +2384,20 @@ describe("snapshot", () => {
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-3/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-4/);
       expect(() => loadSnapshot(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects snapshot formats newer than the supported window", () => {
-      const version = 4;
+      const version = 5;
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-3/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-4/);
       expect(() => loadSnapshot(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 4/i,
+        /upgrade to an SDK that supports migration file format version 5/i,
       );
     });
 
@@ -2554,20 +2708,20 @@ describe("snapshot", () => {
         }),
       );
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-3/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-4/);
       expect(() => loadDiff(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects diff formats newer than the supported window", () => {
-      const version = 4;
+      const version = 5;
       const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-3/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-4/);
       expect(() => loadDiff(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 4/i,
+        /upgrade to an SDK that supports migration file format version 5/i,
       );
     });
 
@@ -2633,8 +2787,8 @@ describe("snapshot", () => {
       expect(fs.existsSync(filePath)).toBe(true);
 
       const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(SCHEMA_SNAPSHOT_VERSION).toBe(3);
-      expect(loaded.version).toBe(3);
+      expect(SCHEMA_SNAPSHOT_VERSION).toBe(4);
+      expect(loaded.version).toBe(4);
     });
   });
 
@@ -2711,7 +2865,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: false },
           },
@@ -2756,7 +2910,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_renamed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             previousFieldName: "fullName",
             before: { type: "string", required: false },
@@ -2766,7 +2920,7 @@ describe("snapshot", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "displayName",
             reason: "Field renamed from fullName to displayName",
           },
@@ -2809,8 +2963,8 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: {
               name: "User",
               pluralForm: "Users",
@@ -2824,7 +2978,7 @@ describe("snapshot", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
         hasWarnings: false,
         warnings: [],
         requiresMigrationScript: true,
@@ -2862,7 +3016,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_type_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             before: { type: "integer", required: false },
             after: { type: "float", required: false },
@@ -2871,7 +3025,7 @@ describe("snapshot", () => {
         hasBreakingChanges: true,
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "age",
             reason: "Field type changed from integer to float",
           },
@@ -2904,7 +3058,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "table_added",
-            typeName: "__proto__",
+            tableName: "__proto__",
             after: {
               name: "__proto__",
               pluralForm: "__proto__",
@@ -2949,7 +3103,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "name",
             after: { type: "string", required: true },
           },
@@ -2968,7 +3122,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: false },
           },
@@ -3012,7 +3166,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "table_added",
-            typeName: "Post",
+            tableName: "Post",
             after: {
               name: "Post",
               pluralForm: "Posts",
@@ -3066,7 +3220,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "table_removed",
-            typeName: "OldType",
+            tableName: "OldType",
             before: {
               name: "OldType",
               pluralForm: "OldTypes",
@@ -3125,7 +3279,7 @@ describe("snapshot", () => {
         changes: [
           {
             kind: "relationship_added",
-            typeName: "Post",
+            tableName: "Post",
             relationshipName: "author",
             relationshipType: "forward",
             after: {
@@ -3138,7 +3292,7 @@ describe("snapshot", () => {
           },
           {
             kind: "relationship_added",
-            typeName: "User",
+            tableName: "User",
             relationshipName: "posts",
             relationshipType: "backward",
             after: {
@@ -3437,12 +3591,12 @@ describe("snapshot", () => {
     }
 
     function createMockRemoteGqlPermission(
-      typeName: string,
+      tableName: string,
       permit: TailorDBGQLPermission_Permit,
       actions: TailorDBGQLPermission_Action[] = [TailorDBGQLPermission_Action.READ],
     ): RemoteGqlPermission {
       return {
-        typeName,
+        typeName: tableName,
         permission: {
           id: "task-gql-permission",
           policies: [
@@ -3653,7 +3807,7 @@ describe("snapshot", () => {
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts).toEqual([
         {
-          typeName: "__proto__",
+          tableName: "__proto__",
           kind: "type_missing_local",
           details: "Type '__proto__' exists in remote but not in snapshot",
         },
@@ -3740,11 +3894,11 @@ describe("snapshot", () => {
 
       expect(drifts).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ typeName: "User", kind: "type_settings_mismatch" }),
-          expect.objectContaining({ typeName: "User", kind: "index_missing_remote" }),
-          expect.objectContaining({ typeName: "User", kind: "file_missing_remote" }),
-          expect.objectContaining({ typeName: "User", kind: "relationship_missing_remote" }),
-          expect.objectContaining({ typeName: "User", kind: "permission_mismatch" }),
+          expect.objectContaining({ tableName: "User", kind: "type_settings_mismatch" }),
+          expect.objectContaining({ tableName: "User", kind: "index_missing_remote" }),
+          expect.objectContaining({ tableName: "User", kind: "file_missing_remote" }),
+          expect.objectContaining({ tableName: "User", kind: "relationship_missing_remote" }),
+          expect.objectContaining({ tableName: "User", kind: "permission_mismatch" }),
         ]),
       );
     });
@@ -3809,9 +3963,9 @@ describe("snapshot", () => {
 
       expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ typeName: "User", kind: "index_mismatch" }),
-          expect.objectContaining({ typeName: "User", kind: "file_mismatch" }),
-          expect.objectContaining({ typeName: "User", kind: "relationship_mismatch" }),
+          expect.objectContaining({ tableName: "User", kind: "index_mismatch" }),
+          expect.objectContaining({ tableName: "User", kind: "file_mismatch" }),
+          expect.objectContaining({ tableName: "User", kind: "relationship_mismatch" }),
         ]),
       );
     });
@@ -3901,7 +4055,7 @@ describe("snapshot", () => {
 
       expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([
         expect.objectContaining({
-          typeName: "User",
+          tableName: "User",
           kind: "relationship_mismatch",
           relationshipName: "posts",
           details: expect.stringContaining("description changed"),
@@ -3999,7 +4153,7 @@ describe("snapshot", () => {
         compareRemoteWithSnapshot(remoteTypes, snapshot, [
           createMockRemoteGqlPermission("Task", TailorDBGQLPermission_Permit.DENY),
         ]),
-      ).toEqual([expect.objectContaining({ typeName: "Task", kind: "permission_mismatch" })]);
+      ).toEqual([expect.objectContaining({ tableName: "Task", kind: "permission_mismatch" })]);
     });
 
     test("ignores permission policy order when comparing remote snapshots", () => {
@@ -4173,7 +4327,7 @@ describe("snapshot", () => {
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
       expect(drifts[0]!.kind).toBe("type_missing_remote");
-      expect(drifts[0]!.typeName).toBe("Post");
+      expect(drifts[0]!.tableName).toBe("Post");
     });
 
     test("detects type missing in snapshot (unexpected type in remote)", () => {
@@ -4202,7 +4356,7 @@ describe("snapshot", () => {
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
       expect(drifts[0]!.kind).toBe("type_missing_local");
-      expect(drifts[0]!.typeName).toBe("ExtraType");
+      expect(drifts[0]!.tableName).toBe("ExtraType");
     });
 
     test("detects field missing in remote", () => {
@@ -4737,19 +4891,19 @@ describe("snapshot", () => {
     test("formats drifts grouped by type", () => {
       const drifts = [
         {
-          typeName: "User",
+          tableName: "User",
           kind: "field_missing_remote" as const,
           fieldName: "email",
           details: "Field 'email' exists in snapshot but not in remote",
         },
         {
-          typeName: "User",
+          tableName: "User",
           kind: "field_mismatch" as const,
           fieldName: "name",
           details: "type: remote=string, expected=text",
         },
         {
-          typeName: "Post",
+          tableName: "Post",
           kind: "type_missing_remote" as const,
           details: "Type 'Post' exists in snapshot but not in remote",
         },

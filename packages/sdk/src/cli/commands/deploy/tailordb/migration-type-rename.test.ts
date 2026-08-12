@@ -282,8 +282,8 @@ describe("applyTailorDB: type rename migration flow", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: snapshotFixtures.userType,
             after: snapshotFixtures.personType,
           },
@@ -291,7 +291,7 @@ describe("applyTailorDB: type rename migration flow", () => {
             ? [
                 {
                   kind: "field_modified",
-                  typeName: "Order",
+                  tableName: "Order",
                   fieldName: "ownerId",
                   before: {
                     type: "uuid",
@@ -312,7 +312,7 @@ describe("applyTailorDB: type rename migration flow", () => {
             : []),
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
         hasWarnings: false,
         warnings: [],
         requiresMigrationScript: true,

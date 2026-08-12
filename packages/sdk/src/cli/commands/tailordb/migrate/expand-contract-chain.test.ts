@@ -65,7 +65,7 @@ function generatePair(
   const expand = buildExpandDiff(previous, intermediate, plans);
   const contract = compareSnapshots(intermediate, current, {
     fieldRenames: plans.map((plan) => ({
-      typeName: plan.typeName,
+      tableName: plan.tableName,
       previousFieldName: plan.tempFieldName,
       fieldName: plan.fieldName,
     })),

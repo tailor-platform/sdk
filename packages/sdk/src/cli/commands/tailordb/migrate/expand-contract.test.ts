@@ -28,7 +28,7 @@ function typeChange(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
 ): DiffChange {
-  return { kind: "field_type_modified", typeName: "User", fieldName, before, after };
+  return { kind: "field_type_modified", tableName: "User", fieldName, before, after };
 }
 
 describe("buildTempFieldName", () => {
@@ -70,7 +70,7 @@ describe("planExpandContract", () => {
   function unsupportedPrice() {
     return [
       {
-        typeName: "User",
+        tableName: "User",
         fieldName: "price",
         reason: "Field type changed from integer to boolean",
         unsupported: true,
@@ -86,7 +86,7 @@ describe("planExpandContract", () => {
 
     expect(plans).toEqual([
       {
-        typeName: "User",
+        tableName: "User",
         fieldName: "price",
         tempFieldName: "priceMigrate",
         before: snapshotField("integer"),
@@ -240,7 +240,7 @@ describe("planExpandContract", () => {
         changes: [typeChange("input", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "input",
             reason: "Field type changed from integer to boolean",
             unsupported: true,
@@ -500,7 +500,7 @@ describe("planExpandContract", () => {
       [
         ...unsupportedPrice(),
         {
-          typeName: "User",
+          tableName: "User",
           fieldName: "tags",
           reason: "Field changed from single value to array",
           unsupported: true,
