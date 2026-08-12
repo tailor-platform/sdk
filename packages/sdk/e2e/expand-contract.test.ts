@@ -197,7 +197,7 @@ export async function main(trx: Transaction): Promise<void> {
   }, 900000);
 
   test("rejects the type change until the conversion is requested", async () => {
-    updateTypeFile("db.string()", "  seedMarker: db.string({ optional: true }),\n");
+    updateTypeFile("db.bool()", "  seedMarker: db.string({ optional: true }),\n");
     const configPath = createConfig();
 
     const result = tryCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
@@ -245,7 +245,7 @@ export async function main(trx: Transaction): Promise<void> {
       .join("\n")
       .replace(
         "const convertedValue: never = sourceValue;",
-        "const convertedValue = String(sourceValue);",
+        "const convertedValue = sourceValue > 0;",
       );
     expect(reviewed).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
     expect(reviewed).not.toContain(": never");
@@ -257,7 +257,7 @@ export async function main(trx: Transaction): Promise<void> {
   test("reads every row back through the new type", async () => {
     const configPath = createConfig();
     updateTypeFile(
-      "db.string()",
+      "db.bool()",
       "  seedMarker: db.string({ optional: true }),\n  readbackMarker: db.string({ optional: true }),\n",
     );
     runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
@@ -270,7 +270,7 @@ export async function main(trx: Transaction): Promise<void> {
 export async function main(trx: Transaction): Promise<void> {
   const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
   const seen = rows.map((row) => \`\${row.id}=\${typeof row.price}:\${String(row.price)}\`).join("|");
-  if (seen !== "${FIRST_ID}=string:1250|${SECOND_ID}=string:-7") {
+  if (seen !== "${FIRST_ID}=boolean:true|${SECOND_ID}=boolean:false") {
     throw new Error("PROBE_MISMATCH " + seen);
   }
   if ("priceMigrate" in rows[0]!) {
@@ -292,7 +292,7 @@ export async function main(trx: Transaction): Promise<void> {
   test("replays local history to the declared schema", () => {
     const replayed = reconstructSnapshotFromMigrations(migrationsDir);
 
-    expect(replayed?.types.User?.fields.price?.type).toBe("string");
+    expect(replayed?.types.User?.fields.price?.type).toBe("boolean");
     expect(replayed?.types.User?.fields.priceMigrate).toBeUndefined();
   });
 });
