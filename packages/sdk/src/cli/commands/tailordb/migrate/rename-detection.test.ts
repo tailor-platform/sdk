@@ -457,6 +457,29 @@ describe("isTypeRenameCompatible", () => {
     ).toBe(false);
   });
 
+  test("rejects nested required and unique constraint differences", () => {
+    const withNestedMember = (name: string, member: SnapshotFieldConfig) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          profile: stringField({ type: "nested", fields: { value: member } }),
+        },
+      });
+
+    expect(
+      isTypeRenameCompatible(
+        withNestedMember("User", stringField()),
+        withNestedMember("Person", stringField({ required: true })),
+      ),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(
+        withNestedMember("User", stringField()),
+        withNestedMember("Person", stringField({ unique: true })),
+      ),
+    ).toBe(false);
+  });
+
   test("rejects a required self-referential foreign key", () => {
     const withSelfFk = (name: string, required: boolean) =>
       snapshotType(name, {
@@ -528,6 +551,26 @@ describe("isTypeRenameCompatible", () => {
       });
     expect(isTypeRenameCompatible(withScale("User", 2), withScale("Person", 4))).toBe(false);
     expect(isTypeRenameCompatible(withScale("User", 2), withScale("Person", 2))).toBe(true);
+  });
+
+  test("rejects differing nested decimal scales", () => {
+    const withNestedScale = (name: string, scale: number) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          metrics: stringField({
+            type: "nested",
+            fields: { price: stringField({ type: "decimal", scale }) },
+          }),
+        },
+      });
+
+    expect(isTypeRenameCompatible(withNestedScale("User", 2), withNestedScale("Person", 4))).toBe(
+      false,
+    );
+    expect(isTypeRenameCompatible(withNestedScale("User", 2), withNestedScale("Person", 2))).toBe(
+      true,
+    );
   });
 });
 

@@ -356,6 +356,22 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function isTypeRenameFieldCompatible(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): boolean {
+  if (!isRenameCompatible(before, after)) return false;
+  if (before.required !== after.required) return false;
+  if ((before.unique ?? false) !== (after.unique ?? false)) return false;
+  if ((before.scale ?? null) !== (after.scale ?? null)) return false;
+
+  for (const [name, beforeMember] of Object.entries(before.fields ?? {})) {
+    const afterMember = after.fields?.[name];
+    if (!afterMember || !isTypeRenameFieldCompatible(beforeMember, afterMember)) return false;
+  }
+  return true;
+}
+
 /**
  * Whether copying every row of `before` into `after` preserves the data, i.e.
  * the removed + added type pair can be treated as a rename.
@@ -393,10 +409,7 @@ export function isTypeRenameCompatible(
     // backfill needs the column to accept null first.
     if (beforeField.foreignKeyType === before.name && beforeField.required) return false;
     const retargeted = retargetSelfReferences(beforeField, before.name, after.name);
-    if (!isRenameCompatible(retargeted, afterField)) return false;
-    if (retargeted.required !== afterField.required) return false;
-    if ((retargeted.unique ?? false) !== (afterField.unique ?? false)) return false;
-    if ((retargeted.scale ?? null) !== (afterField.scale ?? null)) return false;
+    if (!isTypeRenameFieldCompatible(retargeted, afterField)) return false;
   }
 
   return stableStringify(before.indexes ?? {}) === stableStringify(after.indexes ?? {});
