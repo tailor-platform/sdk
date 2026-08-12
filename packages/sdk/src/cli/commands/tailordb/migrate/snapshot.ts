@@ -1862,7 +1862,7 @@ function compareTypeScripts(
   ctx.changes.push({
     kind: "table_scripts_modified",
     typeName,
-    reason: "type-level scripts changed",
+    reason: "table-level scripts changed",
     before: prevState,
     after: currState,
   });
