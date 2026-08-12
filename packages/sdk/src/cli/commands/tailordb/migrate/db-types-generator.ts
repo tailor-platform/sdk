@@ -14,6 +14,7 @@ import {
   type TailorDBSnapshotType,
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
+import type { ExpandContractPlan } from "./expand-contract";
 
 /**
  * Information about enum value changes
@@ -37,6 +38,8 @@ interface BreakingChangeFieldInfo {
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
   /** Map of typeName -> Map of new fieldName -> SnapshotFieldConfig for renamed fields */
   renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
+  /** Map of typeName -> Set of fieldNames a conversion script clears */
+  clearedFields: Map<string, Set<string>>;
   /** Map of new typeName -> TailorDBSnapshotType for renamed types */
   renamedTypes: Map<string, TailorDBSnapshotType>;
 }
@@ -127,16 +130,28 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
     }
   }
 
-  return { optionalToRequired, addedRequiredFields, enumValueChanges, renamedFields, renamedTypes };
+  return {
+    optionalToRequired,
+    addedRequiredFields,
+    enumValueChanges,
+    renamedFields,
+    clearedFields: new Map<string, Set<string>>(),
+    renamedTypes,
+  };
 }
 
 /**
  * Generate the complete db.ts file content from a schema snapshot
  * @param {SchemaSnapshot} snapshot - Schema snapshot to generate types from
  * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
+ * @param expandPlans - Field changes carried through temporary fields
  * @returns {string} Generated db.ts file contents
  */
-function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationDiff): string {
+function generateDbTypesFromSnapshot(
+  snapshot: SchemaSnapshot,
+  diff?: MigrationDiff,
+  expandPlans: readonly ExpandContractPlan[] = [],
+): string {
   // Extract breaking change field information
   const breakingChangeFields = diff
     ? extractBreakingChangeFields(diff)
@@ -144,9 +159,24 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
         optionalToRequired: new Map(),
         addedRequiredFields: new Map(),
         enumValueChanges: new Map(),
-        renamedFields: new Map(),
-        renamedTypes: new Map(),
+        renamedFields: new Map<string, Map<string, SnapshotFieldConfig>>(),
+        clearedFields: new Map<string, Set<string>>(),
+        renamedTypes: new Map<string, TailorDBSnapshotType>(),
       };
+
+  // The temporary field is absent from the pre-migration snapshot; inject it so
+  // the conversion script can write it, as a renamed field's new name is.
+  for (const plan of expandPlans) {
+    const injected =
+      breakingChangeFields.renamedFields.get(plan.typeName) ??
+      new Map<string, SnapshotFieldConfig>();
+    injected.set(plan.tempFieldName, { ...plan.after, required: false, unique: false });
+    breakingChangeFields.renamedFields.set(plan.typeName, injected);
+
+    const cleared = breakingChangeFields.clearedFields.get(plan.typeName) ?? new Set<string>();
+    cleared.add(plan.fieldName);
+    breakingChangeFields.clearedFields.set(plan.typeName, cleared);
+  }
 
   const types = [...Object.values(snapshot.types), ...breakingChangeFields.renamedTypes.values()];
   if (types.length === 0) {
@@ -273,15 +303,24 @@ function generateTableType(
   // Get enum value changes for this type
   const enumValueChangesForType = breakingChangeFields.enumValueChanges.get(type.name) || new Map();
 
+  // Fields a conversion script clears once it has carried the value across
+  const clearedFieldsForType =
+    breakingChangeFields.clearedFields.get(type.name) ?? new Set<string>();
+
   for (const [fieldName, fieldConfig] of Object.entries(type.fields)) {
     if (fieldName === "id") continue;
 
     const isOptionalToRequired = optionalToRequiredFields.has(fieldName);
     const enumValueChange = enumValueChangesForType.get(fieldName);
     const result = generateFieldType(fieldConfig, isOptionalToRequired, enumValueChange);
-    fieldLines.push(`    ${fieldName}: ${result.type};`);
+    // A conversion script clears its source field, and Kysely reads the third
+    // ColumnType slot for updates.
+    const clearable = clearedFieldsForType.has(fieldName);
+    fieldLines.push(
+      `    ${fieldName}: ${clearable ? generateClearableFieldType(fieldConfig) : result.type};`,
+    );
     usedTimestamp = usedTimestamp || result.usedTimestamp;
-    usedColumnType = usedColumnType || result.usedColumnType;
+    usedColumnType = usedColumnType || result.usedColumnType || clearable;
   }
 
   // Add newly added required fields with ColumnType (same as optional→required)
@@ -357,6 +396,20 @@ function generateEnumChangeColumnType(
     return `ColumnType<(${selectType}) | null, (${afterType}) | null, (${afterType}) | null>`;
   }
   return `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
+}
+
+/**
+ * Column type for a field the migration script both reads and clears.
+ *
+ * Kysely takes the select, insert, and update types from the three slots in
+ * turn, so the update slot has to accept the null the script writes.
+ * @param config - Field configuration in the pre-migration snapshot
+ * @returns {string} Generated column type
+ */
+function generateClearableFieldType(config: SnapshotFieldConfig): string {
+  const { type } = mapToTsType(config.type);
+  const base = config.array ? `${type}[]` : type;
+  return `ColumnType<${base} | null, ${base} | null, ${base} | null>`;
 }
 
 function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
@@ -457,6 +510,7 @@ function generateFieldType(
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} migrationNumber - Migration number
  * @param {MigrationDiff} [diff] - Optional migration diff for breaking change info
+ * @param expandPlans - Field changes carried through temporary fields
  * @returns {Promise<string>} Path to the written file
  */
 export async function writeDbTypesFile(
@@ -464,8 +518,9 @@ export async function writeDbTypesFile(
   migrationsDir: string,
   migrationNumber: number,
   diff?: MigrationDiff,
+  expandPlans: readonly ExpandContractPlan[] = [],
 ): Promise<string> {
-  const content = generateDbTypesFromSnapshot(snapshot, diff);
+  const content = generateDbTypesFromSnapshot(snapshot, diff, expandPlans);
   const filePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
   await fs.writeFile(filePath, content);
   return filePath;

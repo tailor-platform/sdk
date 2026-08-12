@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { IN_PLACE_TYPE_CHANGES, supportsInPlaceFieldTypeChange } from "./field-type-change";
+import { snapshotField } from "./test-helpers/schema-fixtures";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
 const MIGRATION_DOC = path.join(
@@ -51,7 +52,7 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["float", "decimal"],
     ["decimal", "float"],
   ])("allows %s to %s", (before, after) => {
-    expect(supportsInPlaceFieldTypeChange(field(before), field(after))).toBe(true);
+    expect(supportsInPlaceFieldTypeChange(snapshotField(before), snapshotField(after))).toBe(true);
   });
 
   test.each([
@@ -92,7 +93,9 @@ describe("supportsInPlaceFieldTypeChange", () => {
     ["vector fields", { vector: true }],
     ["foreign keys", { foreignKey: true }],
   ] satisfies [string, Partial<SnapshotFieldConfig>][])("rejects $0", (_name, overrides) => {
-    expect(supportsInPlaceFieldTypeChange(field("integer", overrides), field("float"))).toBe(false);
+    expect(
+      supportsInPlaceFieldTypeChange(snapshotField("integer", overrides), snapshotField("float")),
+    ).toBe(false);
   });
 
   describe("already-unique fields whose values can collapse", () => {

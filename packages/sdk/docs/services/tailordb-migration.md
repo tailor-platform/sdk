@@ -342,9 +342,9 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Rename table                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "OldType:NewType"` — see [Renaming a type](#renaming-a-type). Auto-generated script copies all rows preserving ids; both tables coexist until post-migration cleanup.         |
 | Change foreign key target table   | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                             |
 | Change field type (verified pair) | Yes       | Yes               | In-place for the pairs listed under [Field type changes](#field-type-changes); review the generated normalization scaffold and customize it only when existing values need transformation                                               |
-| Change field type (other pair)    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
-| Change array → single value       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
-| Change single value → array       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                   |
+| Change field type (other pair)    | Yes       | Yes               | Two migrations, generated together after you confirm — see [Converting a field type](#converting-a-field-type). Edit the conversion in the first; the second needs no changes.                                                          |
+| Change array → single value       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                             |
+| Change single value → array       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                             |
 
 ### Field type changes
 
@@ -361,7 +361,7 @@ These pairs change in place, in a single migration:
 
 Every pair here accepts every value its source type allows, which is what lets the change happen in one migration: the field keeps its previous type until the migration finishes, so your application can keep writing to it throughout.
 
-Every other pair needs the [3-step migration](#3-step-migration-for-unsupported-changes). Three groups are worth calling out:
+Every other scalar pair needs a temporary field. Eligible fields can use the generated [expand-contract pair](#converting-a-field-type); fields the generator rejects still need the manual three-step sequence described below. Three groups are worth calling out:
 
 - Converting to a narrower type — `string` → `integer`, `string` → `uuid`, `integer` → `boolean` and similar — is excluded because values the source type still accepts, such as `"abc"` in a `string` field, cannot be cast. Your script could clean up the rows it sees, but the field goes on accepting new uncastable values until the migration completes.
 - `boolean` → `integer`, `float` → `integer`, and `string` → `date` are excluded because the stored values cannot be cast to the new type.
@@ -416,17 +416,40 @@ export async function main(trx: Transaction): Promise<void> {
 
 The generated `never` annotation intentionally causes a TypeScript error until you review the normalization. If the existing values are already suitable for the target type, remove the annotation and review marker to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace the expression and remove the annotation and marker while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
 
-### 3-step migration for unsupported changes
+### Converting a field type
 
-Field type changes outside the verified in-place pairs (for example, `datetime` → `string`) and array-cardinality changes are detected but rejected by the diff engine. Use an expand-contract strategy:
+A field type change outside the verified in-place pairs — `string` → `integer`, for example — cannot be applied in one step, because the field would have to hold both shapes at once. `migration generate` offers to carry the values through a temporary field instead:
 
-1. **Migration N**: Add an optional field with the desired type (e.g., `fieldName_new`). If the old field is required, make it optional in the same migration. Write a script that copies and converts every non-null old value into the temporary field, then sets the old field to `null` in the same row update.
-2. **Migration N+1**: Remove the old field.
-3. **Migration N+2**: Add the field back with the original name and the new type. Script copies from the temporary field, then remove the temporary field in migration N+3 (or in the same step if you can express it).
+```
+User.price changes from string to integer, which cannot be applied in one step.
+? Generate two migrations to convert User.price through a temporary field? (Y/n)
+```
 
-The same pattern works for switching between scalar and array.
+Confirming writes two migrations:
 
-> **Do not skip clearing the old field.** Removing a field from the schema does not necessarily remove its stored JSON value. Re-adding the same name with an incompatible type can deploy successfully while leaving stale values that make subsequent reads fail. Verify that every old value is `null` before removing and re-adding the field name.
+1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there.
+2. **The rename.** Renames the temporary field back to `price`. Its copy script is complete, but this migration also carries every other schema change the same run picked up, so review it as you would any generated migration.
+
+`tailor deploy` applies both. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than converting a row twice.
+
+The original field is removed in the first migration rather than the second, because the rename needs its name free. Your script can still read it while the conversion runs.
+
+In a non-interactive run — `--yes`, or CI — name each field explicitly:
+
+```bash
+tailor tailordb migration generate --yes --expand-contract "User.price"
+```
+
+Without the flag the command fails rather than converting anything, so a scripted run cannot start a two-migration change by accident.
+
+> **Why the conversion clears the original field.** Removing a field from the schema does not necessarily remove its stored value. Reusing the name for an incompatible type while a stale value remains can deploy successfully and then make subsequent reads fail. Clearing the original in the same update is what prevents that, which is why the generated script writes both fields at once.
+
+> **Writes that land while the conversion runs are not carried across.** The original field keeps its old type until the conversion finishes, so an application can still write to it after the script has read the last row — and that value is dropped with the field rather than converted. Stop writes to the field, or accept the loss, before deploying a conversion on a live workspace.
+
+Some changes are still rejected and need a temporary field you add yourself — add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration:
+
+- Array-to-scalar and scalar-to-array, since collapsing an array has no answer the generated script could choose for you.
+- A field that is unique, or that an index, relationship, permission, or type-level script names. Those keep pointing at the original name, which the conversion removes.
 
 ## Testing Pending Migrations
 

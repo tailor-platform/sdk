@@ -285,6 +285,26 @@ export function dropSpecApplies(
   return Boolean(prevFields?.[spec.fieldName] && !currFields?.[spec.fieldName]);
 }
 
+/** A field the user approved for conversion through a temporary field. */
+export interface FieldExpandContractSpec {
+  typeName: string;
+  fieldName: string;
+}
+
+/**
+ * Parse an `--expand-contract` option value of the form `Type.field`.
+ * @param {string} value - Raw option value
+ * @returns {FieldExpandContractSpec} Parsed spec
+ */
+export function parseExpandContractOption(value: string): FieldExpandContractSpec {
+  const match = value.match(DROP_OPTION_PATTERN);
+  const [, typeName, fieldName] = match ?? [];
+  if (!typeName || !fieldName) {
+    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Type.field".`);
+  }
+  return { typeName, fieldName };
+}
+
 // ============================================================================
 // Type Renames
 // ============================================================================

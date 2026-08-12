@@ -29,12 +29,20 @@ import {
   hasChanges,
   type MigrationDiff,
 } from "./diff-calculator";
+import {
+  canConvertField,
+  fieldKey,
+  getExpandContractEligibility,
+  planExpandContract,
+  type ExpandContractPlan,
+} from "./expand-contract";
 import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
   findRenameCandidates,
   findTypeRenameCandidates,
   parseDropOption,
+  parseExpandContractOption,
   parseRenameOption,
   parseTypeDropOption,
   parseTypeRenameOption,
@@ -42,6 +50,7 @@ import {
   typeDropSpecApplies,
   typeRenameSpecApplies,
   type FieldDropSpec,
+  type FieldExpandContractSpec,
   type FieldRenameCandidate,
   type FieldRenameSpec,
   type TypeDropSpec,
@@ -50,6 +59,8 @@ import {
 } from "./rename-detection";
 import { markMigrationScriptSkipped } from "./script";
 import {
+  buildExpandDiff,
+  buildIntermediateSnapshot,
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
   compareSnapshots,
@@ -57,6 +68,7 @@ import {
   assertValidMigrationFiles,
   formatMigrationNumber,
   INITIAL_SCHEMA_NUMBER,
+  MAX_MIGRATION_NUMBER,
   type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
@@ -71,6 +83,8 @@ export interface GenerateOptions {
   renames?: string[];
   /** `--drop Type.field` / `--drop Type` values confirming removals non-interactively. */
   drops?: string[];
+  /** `--expand-contract Type.field` values approving a field type conversion. */
+  expandContracts?: string[];
 }
 
 /**
@@ -196,16 +210,21 @@ export async function generate(options: GenerateOptions): Promise<void> {
       typeDropFlags.push({ raw, spec: parseTypeDropOption(raw) });
     }
   }
+  const expandContractFlags: ExpandContractFlag[] = (options.expandContracts ?? []).map((raw) => ({
+    raw,
+    spec: parseExpandContractOption(raw),
+  }));
   // --init regenerates the baseline from scratch, so there is no previous
-  // schema a rename or drop could apply to
+  // schema a rename, drop, or field conversion could apply to
   if (
     options.init &&
     (renameFlags.length > 0 ||
       typeRenameFlags.length > 0 ||
       dropFlags.length > 0 ||
-      typeDropFlags.length > 0)
+      typeDropFlags.length > 0 ||
+      expandContractFlags.length > 0)
   ) {
-    throw new Error("--rename and --drop cannot be used together with --init.");
+    throw new Error("--rename, --drop, and --expand-contract cannot be used together with --init.");
   }
   const droppedFieldKeys = new Set(
     dropFlags.map(({ spec }) => `${spec.typeName}.${spec.fieldName}`),
@@ -308,6 +327,51 @@ export async function generate(options: GenerateOptions): Promise<void> {
     "--drop does not match a removed type",
   );
 
+  const expandContractKeysByNamespace = new Map<string, Set<string>>();
+  const matchedExpandContractFlags = new Set<ExpandContractFlag>();
+  const ineligibleExpandContracts: string[] = [];
+  for (const { namespace, previousSnapshot, currentSnapshot } of generations) {
+    if (!previousSnapshot) continue;
+    const applicable: ExpandContractFlag[] = [];
+    for (const flag of expandContractFlags) {
+      const { spec } = flag;
+      const before = previousSnapshot.types[spec.typeName]?.fields[spec.fieldName];
+      const after = currentSnapshot.types[spec.typeName]?.fields[spec.fieldName];
+      if (!before || !after || before.type === after.type) continue;
+      matchedExpandContractFlags.add(flag);
+      const eligibility = getExpandContractEligibility({
+        previous: previousSnapshot,
+        current: currentSnapshot,
+        typeName: spec.typeName,
+        fieldName: spec.fieldName,
+      });
+      if (!eligibility.eligible) {
+        ineligibleExpandContracts.push(
+          `--expand-contract cannot convert ${flag.raw} (namespace: ${namespace}): ${eligibility.reason}`,
+        );
+        continue;
+      }
+      applicable.push(flag);
+    }
+    expandContractKeysByNamespace.set(
+      namespace,
+      new Set(applicable.map(({ spec }) => fieldKey(spec.typeName, spec.fieldName))),
+    );
+  }
+  const unusedExpandContracts = expandContractFlags.filter(
+    (flag) => !matchedExpandContractFlags.has(flag),
+  );
+  if (unusedExpandContracts.length > 0) {
+    throw new Error(
+      `--expand-contract does not match a field whose type changed: ${unusedExpandContracts
+        .map((flag) => flag.raw)
+        .join(", ")}`,
+    );
+  }
+  if (ineligibleExpandContracts.length > 0) {
+    throw new Error(ineligibleExpandContracts.join("\n"));
+  }
+
   // Resolve renames for every namespace before any migration file is written,
   // so all candidates are reported in one run and an abort (a decline, an
   // unresolved candidate, or an invalid spec in a later namespace) leaves no
@@ -329,6 +393,13 @@ export async function generate(options: GenerateOptions): Promise<void> {
     });
     generation.diff = resolution.diff;
     unresolvedCandidates.push(...resolution.unresolved);
+    generation.expandPlans = await resolveExpandContractPlans({
+      previousSnapshot,
+      currentSnapshot,
+      diff: resolution.diff,
+      options,
+      confirmedKeys: expandContractKeysByNamespace.get(namespace) ?? new Set(),
+    });
   }
 
   // Failing beats warning here: a candidate left unresolved in a
@@ -349,7 +420,13 @@ export async function generate(options: GenerateOptions): Promise<void> {
     );
   }
 
-  for (const { migrationsDir, currentSnapshot, previousSnapshot, diff } of generations) {
+  for (const {
+    migrationsDir,
+    currentSnapshot,
+    previousSnapshot,
+    diff,
+    expandPlans,
+  } of generations) {
     if (!previousSnapshot) {
       // First migration - generate initial schema snapshot
       await generateInitialSnapshot(currentSnapshot, migrationsDir);
@@ -359,9 +436,68 @@ export async function generate(options: GenerateOptions): Promise<void> {
         assertDefined(diff, "Migration diff was not resolved during preflight"),
         migrationsDir,
         options,
+        currentSnapshot,
+        expandPlans ?? [],
       );
     }
   }
+}
+
+/** Inputs for {@link resolveExpandContractPlans}. */
+interface ResolveExpandContractOptions {
+  previousSnapshot: NormalizedSchemaSnapshot;
+  currentSnapshot: NormalizedSchemaSnapshot;
+  diff: MigrationDiff;
+  options: GenerateOptions;
+  confirmedKeys: ReadonlySet<string>;
+}
+
+/**
+ * Decide which unsupported field type changes to carry through a migration
+ * pair, asking about each one that was not already named by a flag.
+ * @param input - Snapshots, diff, command options, and flag-approved fields
+ * @returns Approved plans, empty when nothing was confirmed
+ */
+async function resolveExpandContractPlans(
+  input: ResolveExpandContractOptions,
+): Promise<ExpandContractPlan[]> {
+  const { previousSnapshot, currentSnapshot, diff, options, confirmedKeys } = input;
+  const confirmed = new Set(confirmedKeys);
+
+  if (!options.yes && canPrompt()) {
+    for (const change of diff.changes) {
+      if (change.kind !== "field_type_modified") continue;
+      const key = fieldKey(change.typeName, change.fieldName);
+      if (confirmed.has(key)) continue;
+      if (
+        !canConvertField({
+          previous: previousSnapshot,
+          current: currentSnapshot,
+          typeName: change.typeName,
+          fieldName: change.fieldName,
+        })
+      ) {
+        continue;
+      }
+
+      logger.newline();
+      logger.info(
+        `${change.typeName}.${change.fieldName} changes from ${change.before.type} to ${change.after.type}, which cannot be applied in one step.`,
+      );
+      const approved = await prompt.confirm({
+        message: `Generate two migrations to convert ${change.typeName}.${change.fieldName} through a temporary field?`,
+        default: true,
+      });
+      if (approved) confirmed.add(key);
+    }
+  }
+
+  return planExpandContract({
+    previous: previousSnapshot,
+    current: currentSnapshot,
+    diff,
+    confirmed,
+  }).plans;
 }
 
 /**
@@ -437,6 +573,12 @@ interface DropFlag {
   spec: FieldDropSpec;
 }
 
+/** A parsed `--expand-contract` flag together with its raw value. */
+interface ExpandContractFlag {
+  raw: string;
+  spec: FieldExpandContractSpec;
+}
+
 /** A parsed type-form `--drop` flag together with its raw value. */
 interface TypeDropFlag {
   raw: string;
@@ -451,6 +593,8 @@ interface NamespaceGeneration {
   previousSnapshot: NormalizedSchemaSnapshot | null;
   /** Diff with confirmed renames, set during preflight when a previous snapshot exists. */
   diff?: MigrationDiff;
+  /** Field type changes confirmed for a migration pair during preflight. */
+  expandPlans?: ExpandContractPlan[];
 }
 
 /** A rename candidate that a non-interactive run could not resolve. */
@@ -670,13 +814,17 @@ async function resolveRenames(
  * @param {MigrationDiff} diff - Diff with confirmed renames recorded
  * @param {string} migrationsDir - Migrations directory path
  * @param {GenerateOptions} options - Generate options
+ * @param currentSnapshot - Schema the user now declares
+ * @param expandPlans - Field changes confirmed for a migration pair
  * @returns {Promise<void>} Promise that resolves when diff is generated
  */
 async function generateDiffFromSnapshot(
-  previousSnapshot: SchemaSnapshot,
+  previousSnapshot: NormalizedSchemaSnapshot,
   diff: MigrationDiff,
   migrationsDir: string,
   options: GenerateOptions,
+  currentSnapshot: NormalizedSchemaSnapshot,
+  expandPlans: readonly ExpandContractPlan[] = [],
 ): Promise<void> {
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
@@ -689,13 +837,35 @@ async function generateDiffFromSnapshot(
   logger.newline();
   logger.info(`Summary: ${formatDiffSummary(diff)}`);
 
-  // Check for unsupported changes
-  const unsupportedChanges = diff.breakingChanges.filter((change) => change.unsupported);
+  const plannedKeys = new Set(expandPlans.map((plan) => fieldKey(plan.typeName, plan.fieldName)));
+  const unsupportedChanges = diff.breakingChanges.filter(
+    (change) =>
+      change.unsupported &&
+      !(change.fieldName && plannedKeys.has(fieldKey(change.typeName, change.fieldName))),
+  );
   if (unsupportedChanges.length > 0) {
     for (const change of unsupportedChanges) {
       logger.newline();
       logger.error(`Unsupported change: ${change.typeName}.${change.fieldName}`);
       logger.error(`  ${change.reason}`);
+    }
+
+    const convertible = unsupportedChanges.filter(
+      ({ typeName, fieldName }) =>
+        fieldName !== undefined &&
+        canConvertField({
+          previous: previousSnapshot,
+          current: currentSnapshot,
+          typeName,
+          fieldName,
+        }),
+    );
+    if (convertible.length > 0) {
+      logger.newline();
+      logger.info("Convert these fields through a temporary field with:");
+      for (const { typeName, fieldName } of convertible) {
+        logger.info(`  --expand-contract "${typeName}.${fieldName}"`);
+      }
     }
 
     // Show 3-step migration hint if any unsupported change requires it
@@ -735,6 +905,18 @@ async function generateDiffFromSnapshot(
   if (diff.hasWarnings) {
     logger.newline();
     logger.warn(formatWarnings(diff.warnings));
+  }
+
+  if (expandPlans.length > 0) {
+    await generateExpandContractMigrations({
+      previousSnapshot,
+      currentSnapshot,
+      resolvedDiff: diff,
+      plans: expandPlans,
+      migrationsDir,
+      description: options.name,
+    });
+    return;
   }
 
   // Get next migration number
@@ -791,6 +973,98 @@ async function generateDiffFromSnapshot(
       configPath: options.configPath,
     });
   }
+}
+
+/** Inputs for {@link generateExpandContractMigrations}. */
+interface GenerateExpandContractOptions {
+  previousSnapshot: NormalizedSchemaSnapshot;
+  currentSnapshot: NormalizedSchemaSnapshot;
+  resolvedDiff: MigrationDiff;
+  plans: readonly ExpandContractPlan[];
+  migrationsDir: string;
+  description?: string;
+}
+
+/**
+ * Write the two migrations that carry a field type change: one that converts
+ * values into a temporary field, and one that renames it back.
+ * @param input - Snapshots, confirmed plans, and output location
+ * @returns {Promise<void>} Promise that resolves when both migrations are written
+ */
+async function generateExpandContractMigrations(
+  input: GenerateExpandContractOptions,
+): Promise<void> {
+  const { previousSnapshot, currentSnapshot, resolvedDiff, plans, migrationsDir, description } =
+    input;
+  const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
+  // Comparing from the relaxed base records the removal with an optional
+  // contract, which is what the deploy restores while the script clears it.
+  const expandDiff = buildExpandDiff(previousSnapshot, intermediateSnapshot, plans);
+  const confirmedFieldRenames: FieldRenameSpec[] = resolvedDiff.changes
+    .filter((change) => change.kind === "field_renamed")
+    .map(({ typeName, previousFieldName, fieldName }) => ({
+      typeName,
+      previousFieldName,
+      fieldName,
+    }));
+  const confirmedTypeRenames: TypeRenameSpec[] = resolvedDiff.changes
+    .filter((change) => change.kind === "type_renamed")
+    .map(({ previousTypeName, typeName }) => ({ previousTypeName, typeName }));
+  const contractDiff = compareSnapshots(intermediateSnapshot, currentSnapshot, {
+    fieldRenames: [
+      ...confirmedFieldRenames,
+      ...plans.map((plan) => ({
+        typeName: plan.typeName,
+        previousFieldName: plan.tempFieldName,
+        fieldName: plan.fieldName,
+      })),
+    ],
+    typeRenames: confirmedTypeRenames,
+  });
+
+  const expandNumber = getNextMigrationNumber(migrationsDir);
+  if (expandNumber + 1 > MAX_MIGRATION_NUMBER) {
+    throw new Error(
+      `Converting a field type needs two migration numbers, and ${formatMigrationNumber(MAX_MIGRATION_NUMBER)} is the last one available. Re-baseline the history first.`,
+    );
+  }
+  const expand = await generateDiffFiles(
+    expandDiff,
+    migrationsDir,
+    expandNumber,
+    previousSnapshot,
+    description,
+    plans,
+  );
+  const contract = await generateDiffFiles(
+    contractDiff,
+    migrationsDir,
+    expandNumber + 1,
+    intermediateSnapshot,
+    description,
+  );
+
+  const fields = plans.map((plan) => `${plan.typeName}.${plan.fieldName}`).join(", ");
+  logger.success(
+    `Generated migrations ${styles.bold(formatMigrationNumber(expand.migrationNumber))} and ${styles.bold(
+      formatMigrationNumber(contract.migrationNumber),
+    )} to convert ${fields}`,
+  );
+  logger.info(`  Diff files: ${expand.diffFilePath}, ${contract.diffFilePath}`);
+  if (expand.migrateFilePath) {
+    logger.info(`  Conversion script: ${expand.migrateFilePath}`);
+  }
+  if (contract.migrateFilePath) {
+    logger.info(`  Copy script: ${contract.migrateFilePath}`);
+  }
+  logger.newline();
+  logger.info(
+    `Edit the conversion in ${formatMigrationNumber(expand.migrationNumber)} before deploying. The copy script in ${formatMigrationNumber(
+      contract.migrationNumber,
+    )} is complete, though that migration also carries any other change in this run.`,
+    { mode: "plain" },
+  );
+  logger.info("Both migrations are applied by 'tailor deploy'.", { mode: "plain" });
 }
 
 interface AcknowledgeWarningsOptions {
@@ -866,6 +1140,10 @@ export const generateCommand = defineAppCommand({
       description:
         'Confirm that a removed field or type is a genuine removal, not a rename (format: "Type.field" or "Type"; repeatable). Required in non-interactive runs for a removal with rename candidates.',
     }),
+    "expand-contract": arg(z.array(z.string()).optional(), {
+      description:
+        'Convert a field type through a temporary field (format: "Type.field"; repeatable). Generates two migrations.',
+    }),
   }),
   run: async (args) => {
     await generate({
@@ -875,6 +1153,7 @@ export const generateCommand = defineAppCommand({
       init: args.init,
       renames: args.rename,
       drops: args.drop,
+      expandContracts: args["expand-contract"],
     });
   },
 });

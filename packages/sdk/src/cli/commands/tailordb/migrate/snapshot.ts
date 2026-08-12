@@ -72,6 +72,7 @@ import type {
   OperatorFieldConfig,
   StandardActionPermission,
 } from "#/parser/service/tailordb/types";
+import type { ExpandContractPlan } from "./expand-contract";
 import type { SchemaDrift } from "./types";
 
 // ============================================================================
@@ -101,6 +102,9 @@ export const DB_TYPES_FILE_NAME = "db.ts";
  * Examples: 0001, 0002, 0003, ...
  */
 export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
+
+/** Highest migration number the four-digit directory name can hold. */
+export const MAX_MIGRATION_NUMBER = 9999;
 
 /**
  * Platform default scale for decimal fields when scale is not explicitly specified.
@@ -1829,6 +1833,89 @@ function compareTypeScripts(
     before: prevState,
     after: currState,
   });
+}
+
+/**
+ * Restate the schema an expand migration starts from, with each converted field
+ * relaxed to optional.
+ *
+ * The expand script clears the original field once it has carried the value
+ * across. That write reaches the field under the contract recorded on the
+ * removal, which the deploy restores for the duration of the migration, so a
+ * field left required would reject it.
+ * @param previous - Snapshot the expand migration starts from
+ * @param plans - Field changes carried through temporary fields
+ * @returns Snapshot to compare the expand migration against
+ */
+function buildExpandBaseSnapshot(
+  previous: NormalizedSchemaSnapshot,
+  plans: readonly ExpandContractPlan[],
+): NormalizedSchemaSnapshot {
+  const types = copySnapshotRecord(previous.types);
+  for (const plan of plans) {
+    const type = types[plan.typeName];
+    const original = type?.fields[plan.fieldName];
+    if (!type || !original) continue;
+    const fields = copySnapshotRecord(type.fields);
+    fields[plan.fieldName] = { ...original, required: false };
+    types[plan.typeName] = { ...type, fields };
+  }
+  return normalizeSchemaSnapshot({ ...previous, types });
+}
+
+/**
+ * Build the diff for the migration that converts values into temporary fields.
+ *
+ * Adding an optional field and removing one are both non-breaking, so nothing
+ * in the comparison marks the script as required — yet it is the only thing
+ * carrying the values across before the original field is dropped.
+ * @param previous - Snapshot the expand migration starts from
+ * @param intermediate - Snapshot the expand migration produces
+ * @param plans - Field changes carried through temporary fields
+ * @returns Diff to write for the expand migration
+ */
+export function buildExpandDiff(
+  previous: NormalizedSchemaSnapshot,
+  intermediate: NormalizedSchemaSnapshot,
+  plans: readonly ExpandContractPlan[],
+): MigrationDiff {
+  const diff = compareSnapshots(buildExpandBaseSnapshot(previous, plans), intermediate);
+  return { ...diff, requiresMigrationScript: true };
+}
+
+/**
+ * Build the schema state that sits between an expand and a contract migration:
+ * each converted field is replaced by its temporary counterpart.
+ *
+ * The original field is dropped here rather than in the contract migration so
+ * the contract can reuse its name. It stays readable while the expand script
+ * runs, because a field removed by a migration is retained until that same
+ * migration's post phase.
+ *
+ * The temporary field is optional and non-unique regardless of its final
+ * contract, since the expand script fills it in batches.
+ * @param previous - Snapshot the expand migration starts from
+ * @param plans - Field changes carried through temporary fields
+ * @returns Snapshot the contract migration compares against
+ */
+export function buildIntermediateSnapshot(
+  previous: NormalizedSchemaSnapshot,
+  plans: readonly ExpandContractPlan[],
+): NormalizedSchemaSnapshot {
+  const types = copySnapshotRecord(previous.types);
+  for (const plan of plans) {
+    const type = types[plan.typeName];
+    if (!type) continue;
+    const fields = copySnapshotRecord(type.fields);
+    // Hooks and validation stay off the temporary field: the rename re-applies
+    // the real contract, and a non-idempotent update hook would otherwise run
+    // once on the conversion and again on the copy.
+    const { hooks: _hooks, validate: _validate, ...carried } = plan.after;
+    fields[plan.tempFieldName] = { ...carried, required: false, unique: false };
+    delete fields[plan.fieldName];
+    types[plan.typeName] = { ...type, fields };
+  }
+  return normalizeSchemaSnapshot({ ...previous, types });
 }
 
 /**
