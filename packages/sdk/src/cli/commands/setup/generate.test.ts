@@ -873,8 +873,10 @@ describe("setupTarget (integration)", () => {
     const content = fs.readFileSync(wf, "utf-8");
     expect(() => parseYAML(content)).not.toThrow();
     expect(content).not.toMatch(NO_MARKER);
+    expect(content).toContain("id: tailor-drift-check");
     const lock = readLock(testDir);
     expect(lock?.targets[0]).toMatchObject({ kind: "preview", workspaceName: "my-app" });
+    expect(lock?.targets[0]?.generatedIds).toContain("tailor-preview-deploy/tailor-drift-check");
   });
 
   test("preview: require-preview-label variant adds label filter to trigger", async () => {
