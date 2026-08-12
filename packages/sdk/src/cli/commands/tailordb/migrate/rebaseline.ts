@@ -30,15 +30,12 @@ import {
   assertValidMigrationFiles,
   compareLocalTypesWithSnapshot,
   createSnapshotFromLocalTypes,
-  DB_TYPES_FILE_NAME,
-  DIFF_FILE_NAME,
   formatMigrationNumber,
   getLatestMigrationNumber,
   loadSnapshot,
-  MIGRATE_FILE_NAME,
+  MIGRATION_FILE_NAMES,
   MIGRATION_NUMBER_PATTERN,
   reconstructSnapshotFromMigrations,
-  SCHEMA_FILE_NAME,
   SCHEMA_SNAPSHOT_VERSION,
   type NormalizedSchemaSnapshot,
   type RebaselineMarker,
@@ -54,12 +51,7 @@ export interface RebaselineOptions {
   profile?: string;
 }
 
-const MIGRATION_ARTIFACT_NAMES = new Set([
-  SCHEMA_FILE_NAME,
-  DIFF_FILE_NAME,
-  MIGRATE_FILE_NAME,
-  DB_TYPES_FILE_NAME,
-]);
+const MIGRATION_ARTIFACT_NAMES = new Set(Object.values(MIGRATION_FILE_NAMES));
 
 async function activateBaseline(
   migrationsDir: string,

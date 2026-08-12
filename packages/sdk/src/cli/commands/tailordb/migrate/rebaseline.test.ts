@@ -456,6 +456,22 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("rejects a test-only migration directory added while waiting for confirmation", async () => {
+    vi.mocked(prompt.confirm).mockImplementation(async () => {
+      const testOnlyDir = path.join(state.migrationsDir, "0005");
+      fs.mkdirSync(testOnlyDir);
+      fs.writeFileSync(path.join(testOnlyDir, "migrate.test.ts"), "export {};");
+      return true;
+    });
+
+    const result = await runCommand(rebaselineCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
+    expect(migrationDirectories()).toEqual(["0000", "0001", "0005"]);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("rejects extra files added to a migration directory while waiting for confirmation", async () => {
     const notesPath = path.join(state.migrationsDir, "0001", "notes.md");
     vi.mocked(prompt.confirm).mockImplementation(async () => {

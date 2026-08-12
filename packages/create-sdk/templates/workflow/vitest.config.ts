@@ -11,7 +11,7 @@ export default defineConfig({
         test: {
           name: { label: "unit", color: "blue" },
           environment: "tailor-runtime",
-          include: ["src/**/*.test.ts"],
+          include: ["src/**/*.test.ts", "migrations/**/*.test.ts"],
         },
       },
       {

@@ -262,7 +262,7 @@ export function isValidMigrationNumber(numberStr: string): boolean {
 /**
  * Map of migration file types to their file names
  */
-const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
+export const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
   schema: SCHEMA_FILE_NAME,
   diff: DIFF_FILE_NAME,
   migrate: MIGRATE_FILE_NAME,
