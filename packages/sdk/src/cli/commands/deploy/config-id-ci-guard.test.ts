@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import type { ensureConfigIdForDeploy as EnsureConfigIdForDeploy } from "./config-id-injector";
 
 const configWithId = `import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
@@ -23,8 +24,6 @@ describe("ensureConfigIdForDeploy", () => {
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "config-id-ci-"));
     await runTest();
     await fs.promises.rm(tempDir, { recursive: true, force: true });
-    vi.resetModules();
-    vi.doUnmock("std-env");
     vi.unstubAllEnvs();
   });
 
@@ -34,111 +33,121 @@ describe("ensureConfigIdForDeploy", () => {
     return filePath;
   }
 
-  async function load(isCI: boolean) {
-    vi.doMock("std-env", () => ({ isCI }));
-    return import("./config-id-injector");
-  }
+  describe("in CI", () => {
+    let ensureConfigIdForDeploy: typeof EnsureConfigIdForDeploy;
 
-  test("CI + missing id: throws with remediation guidance", async () => {
-    const filePath = await writeConfig(configWithoutId);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
-    ).rejects.toThrow(/missing an 'id'|tailor setup|deploy/);
-    // Must not have injected anything in CI.
-    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
-  });
+    aroundAll(async (runSuite) => {
+      vi.resetModules();
+      vi.doMock("std-env", () => ({ isCI: true }));
+      ({ ensureConfigIdForDeploy } = await import("./config-id-injector"));
+      await runSuite();
+      vi.doUnmock("std-env");
+      vi.resetModules();
+    });
 
-  test("CI + existing id: passes without mutating the file", async () => {
-    const filePath = await writeConfig(configWithId);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
-    ).resolves.toBeUndefined();
-    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithId);
-  });
+    test("missing id: throws with remediation guidance", async () => {
+      const filePath = await writeConfig(configWithoutId);
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+      ).rejects.toThrow(/missing an 'id'|tailor setup|deploy/);
+      // Must not have injected anything in CI.
+      expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
+    });
 
-  test("local + missing id: injects an id", async () => {
-    const filePath = await writeConfig(configWithoutId);
-    const { ensureConfigIdForDeploy } = await load(false);
-    await ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false });
-    expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
-  });
+    test("existing id: passes without mutating the file", async () => {
+      const filePath = await writeConfig(configWithId);
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+      ).resolves.toBeUndefined();
+      expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithId);
+    });
 
-  test("CI + wrapper config (no inline defineConfig): skips the check", async () => {
-    const filePath = await writeConfig(`export { default } from "./base.config";
+    test("wrapper config (no inline defineConfig): skips the check", async () => {
+      const filePath = await writeConfig(`export { default } from "./base.config";
 `);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
-    ).resolves.toBeUndefined();
-  });
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+      ).resolves.toBeUndefined();
+    });
 
-  test("CI + multiple defineConfig calls: throws instead of bypassing the check", async () => {
-    const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
+    test("multiple defineConfig calls: throws instead of bypassing the check", async () => {
+      const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
 const a = defineConfig({ name: "a" });
 export default defineConfig({ name: "b" });
 `);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
-    ).rejects.toThrow(/Only one is supported/);
-  });
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+      ).rejects.toThrow(/Only one is supported/);
+    });
 
-  test("CI + non-UUID id: throws", async () => {
-    const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
+    test("non-UUID id: throws", async () => {
+      const filePath = await writeConfig(`import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
   id: "not-a-uuid",
   name: "my-app",
 });
 `);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
-    ).rejects.toThrow(/must be a UUID/);
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false }),
+      ).rejects.toThrow(/must be a UUID/);
+    });
+
+    test("missing id + TAILOR_CI_ALLOW_ID_INJECTION: injects an id", async () => {
+      vi.stubEnv("TAILOR_CI_ALLOW_ID_INJECTION", "true");
+      const filePath = await writeConfig(configWithoutId);
+      await ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false });
+      expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
+    });
+
+    test("dry-run + missing id: throws so plan fails at PR time", async () => {
+      const filePath = await writeConfig(configWithoutId);
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
+      ).rejects.toThrow(/missing an 'id'/);
+      // Read-only: nothing is injected on a dry-run.
+      expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
+    });
+
+    test("dry-run + existing id: passes without mutating the file", async () => {
+      const filePath = await writeConfig(configWithId);
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
+      ).resolves.toBeUndefined();
+      expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithId);
+    });
+
+    test("build-only: skips the check entirely", async () => {
+      const filePath = await writeConfig(configWithoutId);
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: true }),
+      ).resolves.toBeUndefined();
+    });
   });
 
-  test("CI + missing id + TAILOR_CI_ALLOW_ID_INJECTION: injects an id", async () => {
-    vi.stubEnv("TAILOR_CI_ALLOW_ID_INJECTION", "true");
-    const filePath = await writeConfig(configWithoutId);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false });
-    expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
-  });
+  describe("local", () => {
+    let ensureConfigIdForDeploy: typeof EnsureConfigIdForDeploy;
 
-  test("CI + dry-run + missing id: throws so plan fails at PR time", async () => {
-    const filePath = await writeConfig(configWithoutId);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
-    ).rejects.toThrow(/missing an 'id'/);
-    // Read-only: nothing is injected on a dry-run.
-    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
-  });
+    aroundAll(async (runSuite) => {
+      vi.resetModules();
+      vi.doMock("std-env", () => ({ isCI: false }));
+      ({ ensureConfigIdForDeploy } = await import("./config-id-injector"));
+      await runSuite();
+      vi.doUnmock("std-env");
+      vi.resetModules();
+    });
 
-  test("CI + dry-run + existing id: passes without mutating the file", async () => {
-    const filePath = await writeConfig(configWithId);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
-    ).resolves.toBeUndefined();
-    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithId);
-  });
+    test("missing id: injects an id", async () => {
+      const filePath = await writeConfig(configWithoutId);
+      await ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: false });
+      expect(await fs.promises.readFile(filePath, "utf-8")).toMatch(/id:\s*"/);
+    });
 
-  test("local + dry-run + missing id: skips the check (no side effects)", async () => {
-    const filePath = await writeConfig(configWithoutId);
-    const { ensureConfigIdForDeploy } = await load(false);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
-    ).resolves.toBeUndefined();
-    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
-  });
-
-  test("CI + build-only: skips the check entirely", async () => {
-    const filePath = await writeConfig(configWithoutId);
-    const { ensureConfigIdForDeploy } = await load(true);
-    await expect(
-      ensureConfigIdForDeploy({ configPath: filePath, dryRun: false, buildOnly: true }),
-    ).resolves.toBeUndefined();
+    test("dry-run + missing id: skips the check (no side effects)", async () => {
+      const filePath = await writeConfig(configWithoutId);
+      await expect(
+        ensureConfigIdForDeploy({ configPath: filePath, dryRun: true, buildOnly: false }),
+      ).resolves.toBeUndefined();
+      expect(await fs.promises.readFile(filePath, "utf-8")).toBe(configWithoutId);
+    });
   });
 });
