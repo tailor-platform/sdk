@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
 import { setupTarget, type BranchSetupOptions } from "./generate";
 import { LOCK_VERSION, type LockTarget, hashContent, writeLock } from "./lock";
@@ -275,10 +276,43 @@ describe("checkGitHub (integration)", () => {
     await expect(checkGitHub({ outputDir: testDir })).rejects.toThrow(/No managed workflows/);
   });
 
+  test("does not emit a drift result marker for an operational error", async () => {
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    await expect(checkGitHub({ outputDir: testDir })).rejects.toThrow(/No managed workflows/);
+
+    expect(
+      logSpy.mock.calls.some(([message]) => message.startsWith("TAILOR_SETUP_CHECK_DRIFT_COUNT=")),
+    ).toBe(false);
+  });
+
   test("detects a hand-edited workflow file", async () => {
     await setupTarget(setupOptions({ workspaceName: "my-app" }));
     fs.appendFileSync(wfPath(), "\n# hand edit\n");
     await expect(check()).rejects.toThrow(/drift/);
+  });
+
+  test("emits the drift count marker after every finding", async () => {
+    await setupTarget(setupOptions({ workspaceName: "my-app" }));
+    fs.appendFileSync(wfPath(), "\n# hand edit\n");
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    await expect(check()).rejects.toThrow(/drift/);
+
+    expect(logSpy).toHaveBeenCalledWith("TAILOR_SETUP_CHECK_DRIFT_COUNT=1");
+    const findingIndex = warnSpy.mock.calls.findIndex(([message]) =>
+      message.includes("ignore key:"),
+    );
+    const markerIndex = logSpy.mock.calls.findIndex(
+      ([message]) => message === "TAILOR_SETUP_CHECK_DRIFT_COUNT=1",
+    );
+    const findingOrder = warnSpy.mock.invocationCallOrder[findingIndex];
+    const markerOrder = logSpy.mock.invocationCallOrder[markerIndex];
+    if (findingOrder === undefined || markerOrder === undefined) {
+      throw new Error("Expected both the drift finding and result marker to be logged.");
+    }
+    expect(markerOrder).toBeGreaterThan(findingOrder);
   });
 
   test("detects a default-branch change for auto-detected branch", async () => {

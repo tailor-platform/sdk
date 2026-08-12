@@ -9,7 +9,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 10;
+export const TEMPLATE_VERSION = 11;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -497,6 +497,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
     `  with:`,
     `    package-manager: ${packageManager}`,
+    `    fail-on-drift: \${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}`,
   ].join("\n");
   const configPath = (app: CoordinateApp) =>
     app.dir === "." ? "tailor.config.ts" : `${app.dir}/tailor.config.ts`;

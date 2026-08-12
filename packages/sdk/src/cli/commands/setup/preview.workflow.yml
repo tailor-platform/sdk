@@ -45,6 +45,7 @@ jobs:
         uses: tailor-platform/actions/drift-check@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
+          fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       - id: tailor-preview-deploy
         uses: tailor-platform/actions/preview-deploy@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
