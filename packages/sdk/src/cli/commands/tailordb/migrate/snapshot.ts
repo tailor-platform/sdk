@@ -144,14 +144,14 @@ function assertSupportedMigrationFileVersion(filePath: string, raw: unknown): vo
  * Migration histories written before the rename persist the old names, so
  * diff.json files keep being read through this mapping.
  */
-const LEGACY_CHANGE_KINDS: Record<string, DiffChangeKind> = {
-  type_added: "table_added",
-  type_removed: "table_removed",
-  type_renamed: "table_renamed",
-  type_modified: "table_modified",
-  type_settings_modified: "table_settings_modified",
-  type_scripts_modified: "table_scripts_modified",
-};
+const LEGACY_CHANGE_KINDS = new Map<string, DiffChangeKind>([
+  ["type_added", "table_added"],
+  ["type_removed", "table_removed"],
+  ["type_renamed", "table_renamed"],
+  ["type_modified", "table_modified"],
+  ["type_settings_modified", "table_settings_modified"],
+  ["type_scripts_modified", "table_scripts_modified"],
+]);
 
 /**
  * Rewrite pre-rename `type_*` change kinds to their current `table_*` names
@@ -168,7 +168,7 @@ function normalizeLegacyChangeKinds(raw: unknown): unknown {
     if (typeof change !== "object" || change === null || !("kind" in change)) return change;
     const kind = (change as { kind: unknown }).kind;
     if (typeof kind !== "string") return change;
-    const currentKind = LEGACY_CHANGE_KINDS[kind];
+    const currentKind = LEGACY_CHANGE_KINDS.get(kind);
     return currentKind === undefined ? change : { ...change, kind: currentKind };
   });
 
