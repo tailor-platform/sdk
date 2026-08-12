@@ -206,14 +206,8 @@ function renameLegacyEntryFields(entry: unknown): unknown {
   return changed ? renamed : entry;
 }
 
-function renameLegacyEntryFieldsIn(
-  raw: Record<string, unknown>,
-  key: string,
-): unknown[] | undefined {
-  const entries = raw[key];
-  if (!Array.isArray(entries)) return undefined;
-  return entries.map(renameLegacyEntryFields);
-}
+/** Persisted arrays whose entries carry a table name. */
+const LEGACY_FIELD_CARRIERS = ["changes", "breakingChanges", "warnings"] as const;
 
 /**
  * Rewrite the pre-rename `typeName` / `previousTypeName` keys to their current
@@ -225,14 +219,12 @@ function normalizeLegacyFieldNames(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null) return raw;
   const source = raw as Record<string, unknown>;
   const normalized: Record<string, unknown> = { ...source };
-  let changed = false;
-  for (const key of ["changes", "breakingChanges", "warnings"]) {
-    const entries = renameLegacyEntryFieldsIn(source, key);
-    if (entries === undefined) continue;
-    normalized[key] = entries;
-    changed = true;
+  for (const key of LEGACY_FIELD_CARRIERS) {
+    const entries = source[key];
+    if (!Array.isArray(entries)) continue;
+    normalized[key] = entries.map(renameLegacyEntryFields);
   }
-  return changed ? normalized : raw;
+  return normalized;
 }
 
 function createSnapshotRecord<T>(): Record<string, T> {
