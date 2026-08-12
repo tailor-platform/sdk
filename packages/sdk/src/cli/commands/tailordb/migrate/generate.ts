@@ -1008,7 +1008,7 @@ async function generateExpandContractMigrations(
       fieldName,
     }));
   const confirmedTypeRenames: TypeRenameSpec[] = resolvedDiff.changes
-    .filter((change) => change.kind === "type_renamed")
+    .filter((change) => change.kind === "table_renamed")
     .map(({ previousTypeName, typeName }) => ({ previousTypeName, typeName }));
   const contractDiff = compareSnapshots(intermediateSnapshot, currentSnapshot, {
     fieldRenames: [

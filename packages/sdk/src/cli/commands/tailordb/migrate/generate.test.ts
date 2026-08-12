@@ -480,7 +480,7 @@ describe("tailordb migration generate with an unsupported field type change", ()
           fieldName: "displayName",
         }),
         expect.objectContaining({
-          kind: "type_renamed",
+          kind: "table_renamed",
           previousTypeName: "User",
           typeName: "Person",
         }),
