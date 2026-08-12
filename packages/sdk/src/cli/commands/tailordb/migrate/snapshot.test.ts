@@ -2258,29 +2258,27 @@ describe("snapshot", () => {
       const snapshotType = (name: string) => ({ name, pluralForm: `${name}s`, fields: {} });
       const settingsState = (pluralForm: string) => ({ pluralForm });
 
+      // Payloads carry the legacy `typeName` spelling because that is the only
+      // shape a pre-rename diff.json actually has on disk.
       const LEGACY_CHANGES = [
-        ["type_added", "table_added", { tableName: "User", after: snapshotType("User") }],
-        [
-          "type_removed",
-          "table_removed",
-          { tableName: "OldUser", before: snapshotType("OldUser") },
-        ],
+        ["type_added", "table_added", { typeName: "User", after: snapshotType("User") }],
+        ["type_removed", "table_removed", { typeName: "OldUser", before: snapshotType("OldUser") }],
         [
           "type_renamed",
           "table_renamed",
           {
-            tableName: "Person",
-            previousTableName: "User",
+            typeName: "Person",
+            previousTypeName: "User",
             before: snapshotType("User"),
             after: snapshotType("Person"),
           },
         ],
-        ["type_modified", "table_modified", { tableName: "User" }],
+        ["type_modified", "table_modified", { typeName: "User" }],
         [
           "type_settings_modified",
           "table_settings_modified",
           {
-            tableName: "User",
+            typeName: "User",
             before: settingsState("Users"),
             after: settingsState("People"),
           },
@@ -2288,7 +2286,7 @@ describe("snapshot", () => {
         [
           "type_scripts_modified",
           "table_scripts_modified",
-          { tableName: "User", before: {}, after: { typeValidateExpr: "() => true" } },
+          { typeName: "User", before: {}, after: { typeValidateExpr: "() => true" } },
         ],
       ] as const;
 
@@ -2308,7 +2306,10 @@ describe("snapshot", () => {
         const filePath = path.join(testDir, `legacy_${legacyKind}_diff.json`);
         fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
 
-        expect(loadDiff(filePath).changes[0]!.kind).toBe(currentKind);
+        const change = loadDiff(filePath).changes[0]!;
+
+        expect(change.kind).toBe(currentKind);
+        expect(change.tableName).toBe(changePayload.typeName);
       });
     });
   });
@@ -2817,6 +2818,22 @@ describe("snapshot", () => {
   // reconstructSnapshotFromMigrations
   // ==========================================================================
   describe("reconstructSnapshotFromMigrations", () => {
+    test("replays the committed example history written before the rename", () => {
+      const exampleMigrations = path.join(
+        import.meta.dirname,
+        "../../../../../../../example/migrations",
+      );
+      const legacyDiff = JSON.parse(
+        fs.readFileSync(path.join(exampleMigrations, "0001", "diff.json"), "utf-8"),
+      ) as { changes: { typeName?: string }[] };
+      expect(legacyDiff.changes[0]?.typeName).toBeTypeOf("string");
+
+      const replayed = reconstructSnapshotFromMigrations(exampleMigrations);
+
+      expect(replayed).not.toBeNull();
+      expect(Object.keys(replayed!.types)).toContain("Customer");
+    });
+
     test("reconstructs from initial schema only (directory structure)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
