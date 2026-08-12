@@ -88,7 +88,7 @@ describe("expand-contract migration chain", () => {
   test("replays to exactly the schema the user declared", () => {
     const { previous, current, expand, contract } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
     const dir = migrationsDir();
     writePair(dir, previous, expand, contract);
@@ -99,7 +99,7 @@ describe("expand-contract migration chain", () => {
   test("replays the expand migration alone to the intermediate schema", () => {
     const { previous, intermediate, expand, contract } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
     const dir = migrationsDir();
     writePair(dir, previous, expand, contract);
@@ -110,17 +110,17 @@ describe("expand-contract migration chain", () => {
   test("frees the original name so the contract can reuse it", () => {
     const { intermediate } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
 
     expect(intermediate.types.User?.fields.price).toBeUndefined();
-    expect(intermediate.types.User?.fields.priceMigrate?.type).toBe("string");
+    expect(intermediate.types.User?.fields.priceMigrate?.type).toBe("boolean");
   });
 
   test("removes the original field in the expand migration, which keeps it readable there", () => {
     const { expand } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
 
     expect(expand.changes).toEqual(
@@ -134,7 +134,7 @@ describe("expand-contract migration chain", () => {
   test("requires the conversion script, which is the only thing carrying the data", () => {
     const { expand } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
 
     expect(expand.requiresMigrationScript).toBe(true);
@@ -143,7 +143,7 @@ describe("expand-contract migration chain", () => {
   test("records the removed field as optional so the script can clear it", () => {
     const { expand } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
 
     const removed = expand.changes.find((change) => change.kind === "field_removed");
@@ -158,7 +158,7 @@ describe("expand-contract migration chain", () => {
       {
         // The hooks belong to the target contract, which is what the temporary
         // field is copied from.
-        price: snapshotField("string", {
+        price: snapshotField("boolean", {
           required: true,
           hooks: { update: { expr: "value + '!'" } },
           validate: [{ script: { expr: "value !== ''" }, errorMessage: "non-empty only" }],
@@ -172,7 +172,7 @@ describe("expand-contract migration chain", () => {
     );
     // The rename re-applies the real contract; running an update hook here
     // would apply it once on the conversion and again on the copy.
-    expect(temp.type).toBe("string");
+    expect(temp.type).toBe("boolean");
     expect(temp.hooks).toBeUndefined();
     expect(temp.validate).toBeUndefined();
   });
@@ -180,7 +180,7 @@ describe("expand-contract migration chain", () => {
   test("relaxes the temporary field so the expand script can fill it in batches", () => {
     const { intermediate } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
 
     expect(intermediate.types.User?.fields.priceMigrate?.required).toBe(false);
@@ -190,7 +190,7 @@ describe("expand-contract migration chain", () => {
   test("contracts through a single rename that restores the final contract", () => {
     const { contract } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
 
     expect(contract.changes).toEqual([
@@ -206,10 +206,10 @@ describe("expand-contract migration chain", () => {
   test("carries the post-expand state as the contract's starting point", () => {
     const { contract } = generatePair(
       { price: snapshotField("integer", { required: true }) },
-      { price: snapshotField("string", { required: true }) },
+      { price: snapshotField("boolean", { required: true }) },
     );
 
     const renamed = contract.changes.find((change) => change.kind === "field_renamed");
-    expect(renamed && "before" in renamed && renamed.before.type).toBe("string");
+    expect(renamed && "before" in renamed && renamed.before.type).toBe("boolean");
   });
 });

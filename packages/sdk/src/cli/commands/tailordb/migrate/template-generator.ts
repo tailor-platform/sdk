@@ -10,6 +10,7 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
+import { isBreakingForeignKeyRetarget } from "./rename-detection";
 import {
   DEFAULT_DECIMAL_SCALE,
   getMigrationDirPath,
@@ -17,7 +18,12 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { MigrationDiff, DiffChange, FieldRenamedChange } from "./diff-calculator";
+import type {
+  MigrationDiff,
+  DiffChange,
+  FieldRenamedChange,
+  TypeRenamedChange,
+} from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 
 /** Marker left in generated migration scripts until their normalization logic is reviewed. */
@@ -164,6 +170,11 @@ export function generateMigrationScript(
   expandPlans: readonly ExpandContractPlan[] = [],
 ): string {
   const updates: string[] = [];
+  const typeRenameTargets = new Map(
+    diff.changes
+      .filter((change): change is TypeRenamedChange => change.kind === "type_renamed")
+      .map((change) => [change.previousTypeName, change.typeName]),
+  );
 
   for (const plan of expandPlans) {
     updates.push(generateExpandConversionScript(plan));
@@ -171,7 +182,7 @@ export function generateMigrationScript(
 
   for (const change of diff.changes) {
     const decimalScaleScript = generateDecimalScaleChangeScript(change);
-    updates.push(...generateChangeScripts(change, decimalScaleScript !== null));
+    updates.push(...generateChangeScripts(change, decimalScaleScript !== null, typeRenameTargets));
     if (decimalScaleScript) {
       updates.push(decimalScaleScript);
 
@@ -253,9 +264,14 @@ describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
  * Generate scripts for a single change
  * @param {DiffChange} change - Diff change to generate script for
  * @param {boolean} deferUniqueConstraint - Generate the unique check after decimal re-serialization
+ * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
  * @returns {string[]} Script contents, or an empty array if no script is needed
  */
-function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false): string[] {
+function generateChangeScripts(
+  change: DiffChange,
+  deferUniqueConstraint = false,
+  typeRenameTargets?: ReadonlyMap<string, string>,
+): string[] {
   if (change.kind === "index_added" || change.kind === "index_modified") {
     const before = change.kind === "index_modified" ? change.before : undefined;
     if (!isBreakingIndexChange(change.typeName, change.indexName, before, change.after)) {
@@ -324,6 +340,10 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     return scripts;
   }
 
+  if (change.kind === "type_renamed") {
+    return [generateTypeRenameCopyScript(change)];
+  }
+
   if (change.kind !== "field_modified" && change.kind !== "field_type_modified") {
     // No data migration needed for type_added, type_removed, or field_removed
     return [];
@@ -375,12 +395,9 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     }
   }
 
-  // Foreign key relationship changed
-  if (
-    before.foreignKeyType &&
-    after.foreignKeyType &&
-    before.foreignKeyType !== after.foreignKeyType
-  ) {
+  // Foreign key relationship changed. A retarget that follows a confirmed
+  // type rename needs no fixup: record ids are preserved by the rename copy.
+  if (isBreakingForeignKeyRetarget(before, after, typeRenameTargets)) {
     scripts.push(`  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
   // Find records that don't have a valid reference in the new target table
   {
@@ -432,6 +449,62 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
     .updateTable("${typeName}")
     .set((eb) => ({ ${fieldName}: eb.ref("${previousFieldName}") }))
     .execute();`;
+}
+
+function generateTypeRenameCopyScript(change: TypeRenamedChange): string {
+  const { typeName, previousTypeName } = change;
+  const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
+  const columnList = columns.map((name) => JSON.stringify(name)).join(", ");
+  // Self-referential foreign keys may point at rows in later batches, so they
+  // are inserted as null and backfilled once every row exists.
+  const selfRefColumns = Object.entries(change.after.fields)
+    .filter(([, field]) => field.foreignKeyType === typeName)
+    .map(([name]) => name);
+  const insertValues =
+    selfRefColumns.length > 0
+      ? `rows.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
+      : "rows";
+  const selfRefBackfill =
+    selfRefColumns.length > 0
+      ? `
+
+  // Backfill the self-referential column(s) now that every row exists.
+  await trx
+    .updateTable("${typeName}")
+    .set((eb) => ({
+${selfRefColumns
+  .map(
+    (name) => `      ${name}: eb
+        .selectFrom("${previousTypeName}")
+        .select("${previousTypeName}.${name}")
+        .whereRef("${previousTypeName}.id", "=", "${typeName}.id"),`,
+  )
+  .join("\n")}
+    }))
+    .execute();`
+      : "";
+
+  return `  // Copy every ${previousTypeName} row into ${typeName}, preserving ids so that
+  // stored foreign key references remain valid. ${previousTypeName} stays readable
+  // until the post-migration phase drops it.
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("${previousTypeName}")
+        .select([${columnList}])
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      await trx.insertInto("${typeName}").values(${insertValues}).execute();
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }${selfRefBackfill}`;
 }
 
 function generateFieldTypeChangeScript(

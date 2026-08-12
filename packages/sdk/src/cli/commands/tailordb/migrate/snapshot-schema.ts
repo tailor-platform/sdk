@@ -16,6 +16,7 @@ import type {
   SnapshotPermissionState,
   TypeAddedChange,
   TypeRemovedChange,
+  TypeRenamedChange,
   TypeModifiedChange,
   TypeSettingsModifiedChange,
   SnapshotTypeSettingsState,
@@ -334,6 +335,15 @@ const typeRemovedChangeSchema = z.looseObject({
   before: tailorDBSnapshotTypeSchema,
 }) as unknown as z.ZodType<TypeRemovedChange>;
 
+const typeRenamedChangeSchema = z.looseObject({
+  kind: z.literal("type_renamed"),
+  typeName: z.string(),
+  reason: z.string().optional(),
+  previousTypeName: z.string(),
+  before: tailorDBSnapshotTypeSchema,
+  after: tailorDBSnapshotTypeSchema,
+}) as unknown as z.ZodType<TypeRenamedChange>;
+
 const typeModifiedChangeSchema = z.looseObject({
   kind: z.literal("type_modified"),
   typeName: z.string(),
@@ -503,6 +513,7 @@ type DiscriminableSchema = Parameters<typeof z.discriminatedUnion>[1][number];
 export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kind", [
   typeAddedChangeSchema as unknown as DiscriminableSchema,
   typeRemovedChangeSchema as unknown as DiscriminableSchema,
+  typeRenamedChangeSchema as unknown as DiscriminableSchema,
   typeModifiedChangeSchema as unknown as DiscriminableSchema,
   typeSettingsModifiedChangeSchema as unknown as DiscriminableSchema,
   fieldAddedChangeSchema as unknown as DiscriminableSchema,

@@ -80,8 +80,11 @@ function collectPathsInto(out, configFilePath, content, visited) {
   }
 }
 
-function loadTsconfigPaths(startDir) {
-  if (tsconfigPathsCache.has(startDir)) return tsconfigPathsCache.get(startDir);
+// cacheGeneration partitions the cache per import-nonce run, so a tsconfig
+// edited between two in-process runs is re-read instead of served stale.
+function loadTsconfigPaths(startDir, cacheGeneration) {
+  const cacheKey = `${cacheGeneration}\u0000${startDir}`;
+  if (tsconfigPathsCache.has(cacheKey)) return tsconfigPathsCache.get(cacheKey);
 
   const paths = Object.create(null);
   let dir = startDir;
@@ -100,7 +103,7 @@ function loadTsconfigPaths(startDir) {
     dir = dirname(dir);
   }
 
-  tsconfigPathsCache.set(startDir, paths);
+  tsconfigPathsCache.set(cacheKey, paths);
   return paths;
 }
 
@@ -163,9 +166,44 @@ function tryResolveWithExtensionsSync(base, context, nextResolve) {
   return null;
 }
 
+// --- import-nonce propagation ---
+
+const IMPORT_NONCE_PARAM = "tailorImportNonce";
+
+// Carries a parent's cache-busting nonce onto project-local resolutions, so a
+// nonce'd entry module gets a fresh evaluation of its whole project subgraph.
+// Bare specifiers are left alone: node_modules packages (and workspace-linked
+// ones resolving outside node_modules) must stay singletons.
+function propagateImportNonce(resolved, context) {
+  if (!resolved?.url?.startsWith("file:")) return resolved;
+  if (!context.parentURL?.startsWith("file:")) return resolved;
+  const nonce = new URL(context.parentURL).searchParams.get(IMPORT_NONCE_PARAM);
+  if (!nonce) return resolved;
+  const url = new URL(resolved.url);
+  if (url.searchParams.has(IMPORT_NONCE_PARAM) || url.pathname.includes("/node_modules/")) {
+    return resolved;
+  }
+  url.searchParams.set(IMPORT_NONCE_PARAM, nonce);
+  return { ...resolved, url: url.href };
+}
+
+function isProjectLocalSpecifier(specifier) {
+  return (
+    specifier.startsWith(".") ||
+    specifier.startsWith("/") ||
+    specifier.startsWith("file:") ||
+    specifier.startsWith("#")
+  );
+}
+
 // --- module hooks ---
 
 export async function resolve(specifier, context, nextResolve) {
+  const resolved = await resolveTs(specifier, context, nextResolve);
+  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, context) : resolved;
+}
+
+async function resolveTs(specifier, context, nextResolve) {
   try {
     return await nextResolve(specifier, context);
   } catch (err) {
@@ -189,15 +227,16 @@ export async function resolve(specifier, context, nextResolve) {
       // Non-relative: try tsconfig path aliases
       if (context.parentURL?.startsWith("file://")) {
         const parentParsed = new URL(context.parentURL);
+        const parentNonce = parentParsed.searchParams.get(IMPORT_NONCE_PARAM) ?? "";
         parentParsed.search = "";
         parentParsed.hash = "";
         const parentDir = dirname(fileURLToPath(parentParsed));
-        const tsconfigPaths = loadTsconfigPaths(parentDir);
+        const tsconfigPaths = loadTsconfigPaths(parentDir, parentNonce);
         const candidates = matchTsconfigPaths(specifier, tsconfigPaths);
         if (candidates) {
           for (const candidate of candidates) {
             const result = await tryResolveWithExtensions(candidate, context, nextResolve);
-            if (result) return result;
+            if (result) return propagateImportNonce(result, context);
           }
         }
       }
@@ -250,6 +289,11 @@ export async function load(url, context, nextLoad) {
 
 // Sync hooks for module.registerHooks() (Node >= 22.15.0).
 export function resolveSync(specifier, context, nextResolve) {
+  const resolved = resolveTsSync(specifier, context, nextResolve);
+  return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, context) : resolved;
+}
+
+function resolveTsSync(specifier, context, nextResolve) {
   try {
     return nextResolve(specifier, context);
   } catch (err) {
@@ -273,15 +317,16 @@ export function resolveSync(specifier, context, nextResolve) {
       // Non-relative: try tsconfig path aliases
       if (context.parentURL?.startsWith("file://")) {
         const parentParsed = new URL(context.parentURL);
+        const parentNonce = parentParsed.searchParams.get(IMPORT_NONCE_PARAM) ?? "";
         parentParsed.search = "";
         parentParsed.hash = "";
         const parentDir = dirname(fileURLToPath(parentParsed));
-        const tsconfigPaths = loadTsconfigPaths(parentDir);
+        const tsconfigPaths = loadTsconfigPaths(parentDir, parentNonce);
         const candidates = matchTsconfigPaths(specifier, tsconfigPaths);
         if (candidates) {
           for (const candidate of candidates) {
             const result = tryResolveWithExtensionsSync(candidate, context, nextResolve);
-            if (result) return result;
+            if (result) return propagateImportNonce(result, context);
           }
         }
       }

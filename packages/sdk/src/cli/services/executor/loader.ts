@@ -1,4 +1,4 @@
-import { pathToFileURL } from "node:url";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { isSdkBranded } from "#/utils/brand";
 import type { Executor } from "#/types/executor.generated";
@@ -23,7 +23,7 @@ export function stripExecutorTriggerArgs(executor: unknown): unknown {
  * @returns Parsed executor or null if invalid
  */
 export async function loadExecutor(executorFilePath: string): Promise<Executor | null> {
-  const executorModule = await import(pathToFileURL(executorFilePath).href);
+  const executorModule = await importUserModule(executorFilePath);
   const executor = executorModule.default;
 
   const parseResult = ExecutorSchema.safeParse(stripExecutorTriggerArgs(executor));

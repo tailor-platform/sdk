@@ -400,6 +400,67 @@ describe("db-types-generator", () => {
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
     });
 
+    test("injects the new table for a renamed type alongside the old one", async () => {
+      const snapshot = createMockSnapshot({
+        User: {
+          fields: {
+            email: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "type_renamed",
+            typeName: "Person",
+            previousTypeName: "User",
+            before: {
+              name: "User",
+              pluralForm: "Users",
+              fields: { email: { type: "string", required: false } },
+            },
+            after: {
+              name: "Person",
+              pluralForm: "People",
+              fields: { email: { type: "string", required: false } },
+            },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain("User: {");
+      expect(content).toContain("Person: {");
+      const personBlock = content.slice(content.indexOf("Person: {"));
+      expect(personBlock).toContain("id: Generated<string>;");
+      expect(personBlock).toContain("email: string | null;");
+    });
+
+    test("injects a renamed type's table even when the previous snapshot is empty", async () => {
+      const snapshot = createMockSnapshot({}, "tailordb");
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "type_renamed",
+            typeName: "Person",
+            previousTypeName: "User",
+            before: { name: "User", pluralForm: "Users", fields: {} },
+            after: { name: "Person", pluralForm: "People", fields: {} },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).not.toContain("export interface Database {}");
+      expect(content).toContain("Person: {");
+    });
+
     test("generates ColumnType for enum value changes", async () => {
       const snapshot = createMockSnapshot({
         User: {

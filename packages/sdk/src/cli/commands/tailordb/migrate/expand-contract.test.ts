@@ -55,7 +55,7 @@ describe("buildTempFieldName", () => {
 
 describe("planExpandContract", () => {
   const previous = snapshot({ price: snapshotField("integer") });
-  const current = snapshot({ price: snapshotField("string") });
+  const current = snapshot({ price: snapshotField("boolean") });
   const confirmed = new Set(["User.price"]);
 
   function planning(changes: DiffChange[], breaking = unsupportedPrice()) {
@@ -72,7 +72,7 @@ describe("planExpandContract", () => {
       {
         typeName: "User",
         fieldName: "price",
-        reason: "Field type changed from integer to string",
+        reason: "Field type changed from integer to boolean",
         unsupported: true,
         showThreeStepHint: true,
       },
@@ -81,7 +81,7 @@ describe("planExpandContract", () => {
 
   test("plans a confirmed scalar type change and clears it from blocked", () => {
     const { plans, blocked } = planning([
-      typeChange("price", snapshotField("integer"), snapshotField("string")),
+      typeChange("price", snapshotField("integer"), snapshotField("boolean")),
     ]);
 
     expect(plans).toEqual([
@@ -90,7 +90,7 @@ describe("planExpandContract", () => {
         fieldName: "price",
         tempFieldName: "priceMigrate",
         before: snapshotField("integer"),
-        after: snapshotField("string"),
+        after: snapshotField("boolean"),
       },
     ]);
     expect(blocked).toEqual([]);
@@ -101,7 +101,7 @@ describe("planExpandContract", () => {
       previous,
       current,
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed: new Set(),
@@ -137,9 +137,9 @@ describe("planExpandContract", () => {
     };
     const { plans, blocked } = planExpandContract({
       previous: withIndex({ price: snapshotField("integer") }),
-      current: withIndex({ price: snapshotField("string") }),
+      current: withIndex({ price: snapshotField("boolean") }),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -158,13 +158,13 @@ describe("planExpandContract", () => {
   ] satisfies [string, Partial<SnapshotFieldConfig>][])("blocks %s", (_name, overrides) => {
     const { plans, blocked } = planExpandContract({
       previous: snapshot({ price: snapshotField("integer", overrides) }),
-      current: snapshot({ price: snapshotField("string", overrides) }),
+      current: snapshot({ price: snapshotField("boolean", overrides) }),
       diff: createMockMigrationDiff({
         changes: [
           typeChange(
             "price",
             snapshotField("integer", overrides),
-            snapshotField("string", overrides),
+            snapshotField("boolean", overrides),
           ),
         ],
         breakingChanges: unsupportedPrice(),
@@ -188,9 +188,9 @@ describe("planExpandContract", () => {
     const { plans } = planExpandContract({
       previous: withIndex({ price: snapshotField("integer") }),
       // The same edit drops the index, so only the previous snapshot names it.
-      current: snapshot({ price: snapshotField("string") }),
+      current: snapshot({ price: snapshotField("boolean") }),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -209,11 +209,11 @@ describe("planExpandContract", () => {
     const { plans } = planExpandContract({
       previous: snapshotWithType(fields, { typeValidateExpr }),
       current: snapshotWithType(
-        { ...fields, price: snapshotField("string") },
+        { ...fields, price: snapshotField("boolean") },
         { typeValidateExpr },
       ),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -233,16 +233,16 @@ describe("planExpandContract", () => {
         { typeHookExpr },
       ),
       current: snapshotWithType(
-        { input: snapshotField("string"), wholesalePrice: snapshotField("string") },
+        { input: snapshotField("boolean"), wholesalePrice: snapshotField("string") },
         { typeHookExpr },
       ),
       diff: createMockMigrationDiff({
-        changes: [typeChange("input", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("input", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: [
           {
             typeName: "User",
             fieldName: "input",
-            reason: "Field type changed from integer to string",
+            reason: "Field type changed from integer to boolean",
             unsupported: true,
             showThreeStepHint: true,
           },
@@ -271,9 +271,9 @@ describe("planExpandContract", () => {
     };
     const { plans } = planExpandContract({
       previous: snapshotWithType({ price: snapshotField("integer") }, { permissions }),
-      current: snapshotWithType({ price: snapshotField("string") }, { permissions }),
+      current: snapshotWithType({ price: snapshotField("boolean") }, { permissions }),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -406,9 +406,9 @@ describe("planExpandContract", () => {
     (_name, options) => {
       const { plans } = planExpandContract({
         previous: snapshotWithType({ price: snapshotField("integer") }, options),
-        current: snapshotWithType({ price: snapshotField("string") }, options),
+        current: snapshotWithType({ price: snapshotField("boolean") }, options),
         diff: createMockMigrationDiff({
-          changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+          changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
           breakingChanges: unsupportedPrice(),
         }),
         confirmed,
@@ -434,9 +434,9 @@ describe("planExpandContract", () => {
     };
     const { plans } = planExpandContract({
       previous: snapshotWithType({ price: snapshotField("integer") }, { permissions }),
-      current: snapshotWithType({ price: snapshotField("string") }, { permissions }),
+      current: snapshotWithType({ price: snapshotField("boolean") }, { permissions }),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -465,9 +465,9 @@ describe("planExpandContract", () => {
     };
     const { plans } = planExpandContract({
       previous: withMembers({ price: snapshotField("integer") }),
-      current: withMembers({ price: snapshotField("string") }),
+      current: withMembers({ price: snapshotField("boolean") }),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -483,9 +483,9 @@ describe("planExpandContract", () => {
         price: snapshotField("integer"),
         priceMigrate: snapshotField("string"),
       }),
-      current: snapshot({ price: snapshotField("string"), priceMigrate: snapshotField("string") }),
+      current: snapshot({ price: snapshotField("boolean"), priceMigrate: snapshotField("string") }),
       diff: createMockMigrationDiff({
-        changes: [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+        changes: [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: unsupportedPrice(),
       }),
       confirmed,
@@ -496,7 +496,7 @@ describe("planExpandContract", () => {
 
   test("keeps unrelated unsupported changes blocked", () => {
     const { plans, blocked } = planning(
-      [typeChange("price", snapshotField("integer"), snapshotField("string"))],
+      [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],
       [
         ...unsupportedPrice(),
         {

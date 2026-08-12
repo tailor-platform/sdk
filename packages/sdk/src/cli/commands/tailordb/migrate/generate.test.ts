@@ -70,8 +70,8 @@ describe("tailordb migration generate with warning-tier changes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would launch for the generated migrate.ts and block
-    // until the developer closes it.
+    // A configured editor would be spawned after a migrate.ts is scaffolded
+    // and block the test run.
     vi.stubEnv("EDITOR", undefined);
     vi.stubEnv("VISUAL", undefined);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -172,8 +172,8 @@ describe("tailordb migration generate field rename preflight", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
-    // A configured editor would launch for the generated migrate.ts and block
-    // until the developer closes it.
+    // A configured editor would be spawned after a migrate.ts is scaffolded
+    // and block the test run.
     vi.stubEnv("EDITOR", undefined);
     vi.stubEnv("VISUAL", undefined);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -210,7 +210,7 @@ describe("tailordb migration generate field rename preflight", () => {
     const result = await runCommand(generateCommand, ["--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toContain("Possible field rename(s) detected");
+    expect(String(result.error)).toContain("Possible rename(s) detected");
     expect(String(result.error)).toContain("namespace: tailordb");
     expect(String(result.error)).toContain("namespace: analyticsdb");
     expect(fs.existsSync(path.join(first.migrationsDir, "0001"))).toBe(false);
@@ -441,5 +441,188 @@ describe("tailordb migration generate with an unsupported field type change", ()
     );
     expect(String(result.error)).not.toContain("Unsupported schema changes detected");
     expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("preserves confirmed field and type renames in the contract migration", async () => {
+    const migrationsDir = path.join(tmpDir, "tailordb");
+    writeInitialSchema(migrationsDir, {
+      Account: snapshotType("Account"),
+      Product: snapshotType("Product"),
+      User: snapshotType("User"),
+    });
+    state.namespaces.push({
+      namespace: "tailordb",
+      migrationsDir,
+      localTypes: {
+        Account: renamedType("Account", "displayName"),
+        Person: parsedType("Person"),
+        Product: retypedType("Product", "boolean"),
+      },
+    });
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "Account.name:displayName",
+      "--rename",
+      "User:Person",
+      "--expand-contract",
+      "Product.name",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(loadDiff(path.join(migrationsDir, "0002", "diff.json")).changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "field_renamed",
+          typeName: "Account",
+          previousFieldName: "name",
+          fieldName: "displayName",
+        }),
+        expect.objectContaining({
+          kind: "type_renamed",
+          previousTypeName: "User",
+          typeName: "Person",
+        }),
+        expect.objectContaining({
+          kind: "field_renamed",
+          typeName: "Product",
+          previousFieldName: "nameMigrate",
+          fieldName: "name",
+        }),
+      ]),
+    );
+    const contractScript = fs.readFileSync(path.join(migrationsDir, "0002", "migrate.ts"), "utf8");
+    expect(contractScript).toContain('.updateTable("Account")');
+    expect(contractScript).toContain('displayName: eb.ref("name")');
+    expect(contractScript).toContain('.selectFrom("User")');
+    expect(contractScript).toContain('.insertInto("Person")');
+  });
+});
+
+describe("tailordb migration generate type rename preflight", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    // A configured editor would be spawned after a migrate.ts is scaffolded
+    // and block the test run.
+    vi.stubEnv("EDITOR", undefined);
+    vi.stubEnv("VISUAL", undefined);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-type-rename-test-"));
+    state.namespaces = [];
+    vi.mocked(loadConfig).mockImplementation(
+      async () =>
+        ({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: Object.fromEntries(
+              state.namespaces.map(({ namespace, migrationsDir }) => [
+                namespace,
+                { migration: { directory: migrationsDir } },
+              ]),
+            ),
+          },
+          plugins: [],
+        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    );
+    vi.mocked(canPrompt).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function addRenamedTypeNamespace(namespace: string): TestNamespace {
+    const migrationsDir = path.join(tmpDir, namespace);
+    writeInitialSchema(migrationsDir, { User: snapshotType("User") });
+    const person = parsedType("Person");
+    const entry = { namespace, migrationsDir, localTypes: { Person: person } };
+    state.namespaces.push(entry);
+    return entry;
+  }
+
+  test("fails on an unresolved type rename candidate and writes no migration", async () => {
+    const entry = addRenamedTypeNamespace("tailordb");
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Possible rename(s) detected");
+    expect(String(result.error)).toContain("- User → Person? (namespace: tailordb)");
+    expect(String(result.error)).toContain('--rename "OldType:NewType"');
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("records a type_renamed change with --rename Old:New", async () => {
+    const entry = addRenamedTypeNamespace("tailordb");
+
+    const result = await runCommand(generateCommand, ["--yes", "--rename", "User:Person"]);
+
+    expect(result.success).toBe(true);
+    const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
+    expect(diff.changes).toEqual([
+      expect.objectContaining({
+        kind: "type_renamed",
+        typeName: "Person",
+        previousTypeName: "User",
+      }),
+    ]);
+    expect(diff.requiresMigrationScript).toBe(true);
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "migrate.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.ts"))).toBe(true);
+  });
+
+  test("confirms a type removal with --drop Type", async () => {
+    const entry = addRenamedTypeNamespace("tailordb");
+
+    const result = await runCommand(generateCommand, ["--yes", "--drop", "User"]);
+
+    expect(result.success).toBe(true);
+    const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
+    expect(diff.changes.map((c) => c.kind).toSorted()).toEqual(["type_added", "type_removed"]);
+    expect(diff.requiresMigrationScript).toBe(false);
+  });
+
+  test("rejects conflicting type rename and drop flags before writing", async () => {
+    const entry = addRenamedTypeNamespace("tailordb");
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User:Person",
+      "--drop",
+      "User",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("--rename and --drop conflict for: User");
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("rejects an unmatched type rename flag before writing", async () => {
+    const entry = addRenamedTypeNamespace("tailordb");
+
+    const result = await runCommand(generateCommand, ["--yes", "--rename", "Ghost:Person"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain(
+      "--rename does not match a removed + added type pair: Ghost:Person",
+    );
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("rejects an unmatched type drop flag before writing", async () => {
+    const entry = addRenamedTypeNamespace("tailordb");
+
+    const result = await runCommand(generateCommand, ["--yes", "--drop", "Ghost"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("--drop does not match a removed type: Ghost");
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 });

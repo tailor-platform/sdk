@@ -1,8 +1,8 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import {
@@ -216,7 +216,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     rawTypes[typeFile] = createRawTypesByName();
     const loadedTypes = createRawTypesByName();
     try {
-      const module = await import(pathToFileURL(typeFile).href);
+      const module = await importUserModule(typeFile);
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
@@ -241,17 +241,16 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         });
 
         // Process plugins if any
-        if (
-          exportedValue.plugins &&
-          Array.isArray(exportedValue.plugins) &&
-          exportedValue.plugins.length > 0
-        ) {
-          pluginAttachments.set(exportedValue.name, [...exportedValue.plugins]);
+        const rawType = exportedValue as TailorDBTypeSchemaOutput & {
+          plugins?: PluginAttachment[];
+        };
+        if (rawType.plugins && Array.isArray(rawType.plugins) && rawType.plugins.length > 0) {
+          pluginAttachments.set(rawType.name, [...rawType.plugins]);
           logger.log(
-            `  Plugin attachments: ${styles.info(exportedValue.plugins.map((p: PluginAttachment) => p.pluginId).join(", "))}`,
+            `  Plugin attachments: ${styles.info(rawType.plugins.map((p) => p.pluginId).join(", "))}`,
           );
 
-          await processPluginsForType(exportedValue, exportedValue.plugins, typeFile);
+          await processPluginsForType(rawType, rawType.plugins, typeFile);
         }
       }
     } catch (error) {

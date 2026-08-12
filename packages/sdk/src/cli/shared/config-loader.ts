@@ -6,6 +6,7 @@ import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { installCliTailordbStub } from "./mock";
+import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
@@ -51,8 +52,9 @@ export async function loadConfig(
   }
 
   const configUrl = pathToFileURL(resolvedPath);
-  if (options.importNonce) {
-    configUrl.searchParams.set("tailorImportNonce", options.importNonce);
+  const importNonce = options.importNonce ?? currentImportNonce();
+  if (importNonce) {
+    configUrl.searchParams.set(IMPORT_NONCE_PARAM, importNonce);
   }
   const configModule = await import(configUrl.href);
   if (!configModule || !configModule.default) {

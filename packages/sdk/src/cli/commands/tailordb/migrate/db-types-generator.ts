@@ -40,6 +40,8 @@ interface BreakingChangeFieldInfo {
   renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
   /** Map of typeName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
+  /** Map of new typeName -> TailorDBSnapshotType for renamed types */
+  renamedTypes: Map<string, TailorDBSnapshotType>;
 }
 
 /**
@@ -52,6 +54,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
   const addedRequiredFields = new Map<string, Map<string, SnapshotFieldConfig>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
   const renamedFields = new Map<string, Map<string, SnapshotFieldConfig>>();
+  const renamedTypes = new Map<string, TailorDBSnapshotType>();
 
   for (const change of diff.changes) {
     if (change.kind === "field_modified" || change.kind === "field_type_modified") {
@@ -120,6 +123,10 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         change.fieldName,
         change.after,
       );
+    } else if (change.kind === "type_renamed") {
+      // The new type is missing from the pre-migration snapshot; inject it so
+      // the copy script can insert into it (the old type stays readable as-is).
+      renamedTypes.set(change.typeName, change.after);
     }
   }
 
@@ -129,6 +136,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
     enumValueChanges,
     renamedFields,
     clearedFields: new Map<string, Set<string>>(),
+    renamedTypes,
   };
 }
 
@@ -144,11 +152,6 @@ function generateDbTypesFromSnapshot(
   diff?: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
 ): string {
-  const types = Object.values(snapshot.types);
-  if (types.length === 0) {
-    return generateEmptyDbTypes(snapshot.namespace);
-  }
-
   // Extract breaking change field information
   const breakingChangeFields = diff
     ? extractBreakingChangeFields(diff)
@@ -158,6 +161,7 @@ function generateDbTypesFromSnapshot(
         enumValueChanges: new Map(),
         renamedFields: new Map<string, Map<string, SnapshotFieldConfig>>(),
         clearedFields: new Map<string, Set<string>>(),
+        renamedTypes: new Map<string, TailorDBSnapshotType>(),
       };
 
   // The temporary field is absent from the pre-migration snapshot; inject it so
@@ -172,6 +176,11 @@ function generateDbTypesFromSnapshot(
     const cleared = breakingChangeFields.clearedFields.get(plan.typeName) ?? new Set<string>();
     cleared.add(plan.fieldName);
     breakingChangeFields.clearedFields.set(plan.typeName, cleared);
+  }
+
+  const types = [...Object.values(snapshot.types), ...breakingChangeFields.renamedTypes.values()];
+  if (types.length === 0) {
+    return generateEmptyDbTypes(snapshot.namespace);
   }
 
   // Track which utility types are used

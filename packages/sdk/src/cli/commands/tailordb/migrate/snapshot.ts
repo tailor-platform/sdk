@@ -41,7 +41,13 @@ import {
 } from "./diff-calculator";
 import { supportsInPlaceFieldTypeChange } from "./field-type-change";
 import { formatMigrationNumber } from "./migration-number";
-import { assertValidFieldRenames, type FieldRenameSpec } from "./rename-detection";
+import {
+  assertValidFieldRenames,
+  assertValidTypeRenames,
+  isBreakingForeignKeyRetarget,
+  type FieldRenameSpec,
+  type TypeRenameSpec,
+} from "./rename-detection";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
 import {
   SNAPSHOT_FIELD_BOOLEAN_PROPS,
@@ -266,7 +272,7 @@ export function isValidMigrationNumber(numberStr: string): boolean {
 /**
  * Map of migration file types to their file names
  */
-const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
+export const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
   schema: SCHEMA_FILE_NAME,
   diff: DIFF_FILE_NAME,
   migrate: MIGRATE_FILE_NAME,
@@ -790,6 +796,10 @@ function applyDiffToSnapshot(
         }
         break;
       }
+      case "type_renamed":
+        delete types[change.previousTypeName];
+        types[change.typeName] = change.after;
+        break;
       case "index_added":
       case "index_modified": {
         const existing = types[change.typeName];
@@ -1102,6 +1112,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
  * @param {string} fieldName - Name of the field being changed
  * @param {SnapshotFieldConfig | undefined} oldField - Old field configuration
  * @param {SnapshotFieldConfig | undefined} newField - New field configuration
+ * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
  * @returns {BreakingChangeInfo[]} Breaking change information
  */
 function getBreakingFieldChanges(
@@ -1109,6 +1120,7 @@ function getBreakingFieldChanges(
   fieldName: string,
   oldField: SnapshotFieldConfig | undefined,
   newField: SnapshotFieldConfig | undefined,
+  typeRenameTargets?: ReadonlyMap<string, string>,
 ): BreakingChangeInfo[] {
   const breakingChanges: BreakingChangeInfo[] = [];
 
@@ -1156,17 +1168,15 @@ function getBreakingFieldChanges(
     });
   }
 
-  // Foreign key relationship changed - breaking (existing references may become invalid)
-  if (oldField && newField) {
-    const oldForeignKeyType = oldField.foreignKeyType;
-    const newForeignKeyType = newField.foreignKeyType;
-    if (oldForeignKeyType && newForeignKeyType && oldForeignKeyType !== newForeignKeyType) {
-      breakingChanges.push({
-        typeName,
-        fieldName,
-        reason: `Foreign key target type changed from ${oldForeignKeyType} to ${newForeignKeyType}`,
-      });
-    }
+  // Foreign key relationship changed - breaking (existing references may become
+  // invalid), unless it retargets a confirmed type rename: record ids are
+  // preserved by the rename copy, so the stored references stay valid.
+  if (oldField && newField && isBreakingForeignKeyRetarget(oldField, newField, typeRenameTargets)) {
+    breakingChanges.push({
+      typeName,
+      fieldName,
+      reason: `Foreign key target type changed from ${oldField.foreignKeyType} to ${newField.foreignKeyType}`,
+    });
   }
 
   // Unique constraint added - breaking (existing duplicate values would violate constraint)
@@ -1218,6 +1228,8 @@ interface DiffContext {
   changes: DiffChange[];
   breakingChanges: BreakingChangeInfo[];
   warnings: WarningChangeInfo[];
+  /** Confirmed type renames (old name → new name), for reference retargets. */
+  typeRenameTargets?: ReadonlyMap<string, string>;
 }
 
 function addChange(
@@ -1235,6 +1247,7 @@ function addChange(
     change.fieldName,
     oldField,
     newField,
+    ctx.typeRenameTargets,
   );
   if (breakingChanges.length > 0) {
     ctx.breakingChanges.push(...breakingChanges);
@@ -1915,6 +1928,12 @@ export interface CompareSnapshotsOptions {
    * `field_renamed` change. Specs are validated against both snapshots.
    */
   fieldRenames?: readonly FieldRenameSpec[];
+  /**
+   * Confirmed type renames. Each spec replaces the corresponding
+   * `type_removed` + `type_added` pair with a single breaking
+   * `type_renamed` change. Specs are validated against both snapshots.
+   */
+  typeRenames?: readonly TypeRenameSpec[];
 }
 
 /**
@@ -1937,14 +1956,53 @@ export function compareSnapshots(
     list.push(rename);
     renamesByType.set(rename.typeName, list);
   }
+  const typeRenames = options?.typeRenames ?? [];
+  assertValidTypeRenames(previous, current, typeRenames);
+  const typeRenameTargets = new Map(typeRenames.map((r) => [r.previousTypeName, r.typeName]));
+  const renamedToTypeNames = new Set(typeRenames.map((r) => r.typeName));
 
-  const ctx: DiffContext = { changes: [], breakingChanges: [], warnings: [] };
+  const ctx: DiffContext = {
+    changes: [],
+    breakingChanges: [],
+    warnings: [],
+    typeRenameTargets,
+  };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
   const currentTypeNames = new Set(Object.keys(current.types));
 
+  // Record confirmed type renames
+  for (const rename of typeRenames) {
+    const prevType = assertDefined(
+      previous.types[rename.previousTypeName],
+      `renamed type "${rename.previousTypeName}" missing from previous snapshot`,
+    );
+    const currType = assertDefined(
+      current.types[rename.typeName],
+      `renamed type "${rename.typeName}" missing from current snapshot`,
+    );
+    ctx.changes.push({
+      kind: "type_renamed",
+      typeName: rename.typeName,
+      previousTypeName: rename.previousTypeName,
+      before: prevType,
+      after: currType,
+    });
+    ctx.breakingChanges.push({
+      typeName: rename.typeName,
+      reason: `Type renamed from ${rename.previousTypeName} to ${rename.typeName} (existing records must be copied by the migration script)`,
+    });
+    ctx.breakingChanges.push({
+      typeName: rename.typeName,
+      reason:
+        `GraphQL API names derived from ${rename.previousTypeName}/${prevType.pluralForm} change to ` +
+        `${rename.typeName}/${currType.pluralForm} — breaking for API clients`,
+    });
+  }
+
   // Check for added types
   for (const [typeName, type] of Object.entries(current.types)) {
+    if (renamedToTypeNames.has(typeName)) continue;
     if (!previousTypeNames.has(typeName)) {
       ctx.changes.push({
         kind: "type_added",
@@ -1956,6 +2014,7 @@ export function compareSnapshots(
 
   // Check for removed types
   for (const [typeName, type] of Object.entries(previous.types)) {
+    if (typeRenameTargets.has(typeName)) continue;
     if (!currentTypeNames.has(typeName)) {
       ctx.changes.push({
         kind: "type_removed",
@@ -3147,6 +3206,14 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
         typeName: change.typeName,
         kind: "type_missing_local",
         details: `Type '${change.typeName}' exists in remote but not in snapshot`,
+      };
+    // Drift comparison never confirms renames, so this kind cannot occur here;
+    // report it as a plain type mismatch if it ever does.
+    case "type_renamed":
+      return {
+        typeName: change.typeName,
+        kind: "type_settings_mismatch",
+        details: `Type '${change.previousTypeName}' was renamed to '${change.typeName}'`,
       };
     case "type_settings_modified":
     case "type_modified":

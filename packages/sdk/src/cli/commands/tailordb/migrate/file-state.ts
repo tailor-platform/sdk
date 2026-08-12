@@ -1,10 +1,16 @@
 import { createHash, type Hash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { formatMigrationNumber, getMigrationFilePath, MIGRATION_NUMBER_PATTERN } from "./snapshot";
+import {
+  formatMigrationNumber,
+  getMigrationFilePath,
+  MIGRATION_FILE_NAMES,
+  MIGRATION_NUMBER_PATTERN,
+  type MigrationFileType,
+} from "./snapshot";
 import type { NamespaceWithMigrations } from "./config";
 
-const MIGRATION_FILE_KINDS = ["schema", "diff", "migrate", "db"] as const;
+const MIGRATION_FILE_KINDS = Object.keys(MIGRATION_FILE_NAMES) as MigrationFileType[];
 
 function getMigrationArtifactNumbers(migrationsDir: string): number[] {
   if (!fs.existsSync(migrationsDir)) return [];

@@ -15,6 +15,7 @@ import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { eventSourceLabel, publishEventsConflict } from "#/cli/shared/publish-events";
 import { generateUserTypes } from "#/cli/shared/type-generator";
+import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
@@ -2611,8 +2612,10 @@ async function deployInternal(
   return withSpan("deploy", async (rootSpan) => {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
-    // Before the first config load, so this run is judged on the keys it
-    // declares rather than on ones an earlier failed run left behind.
+    // Before the first config load, so this run re-evaluates user modules
+    // instead of reusing another run's cached ones, and is judged on the keys
+    // it declares rather than on ones an earlier failed run left behind.
+    beginUserModuleRun();
     beginWaitPointScope();
 
     const configPaths = parseDeployConfigPaths(options?.configPath);
