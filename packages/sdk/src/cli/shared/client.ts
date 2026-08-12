@@ -212,7 +212,7 @@ export function retryInterceptor(): Interceptor {
     }
 
     let lastError: unknown;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
       if (i > 0) {
         await waitRetryBackoff(i);
       }
@@ -392,6 +392,9 @@ function synthesizeEmptyUnaryResponse(req: {
  * response was lost), which is what triggers the `already_exists` race.
  */
 const RETRY_BASE_DELAY_MS = 500;
+
+/** Maximum number of attempts, including the initial one, for a retried request. */
+const MAX_RETRY_ATTEMPTS = 3;
 
 /**
  * Wait for an exponential backoff delay with jitter.
@@ -756,22 +759,9 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
     },
     body: formData,
   };
-  const resp = await (async () => {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await fetch(tokenEndpoint, request);
-      } catch (error) {
-        if (!isUndiciConnectTimeout(error) || attempt >= 3) {
-          throw error;
-        }
-        logger.debug(
-          `retry: machine user token request attempt ${attempt} failed with ` +
-            "UND_ERR_CONNECT_TIMEOUT; retrying",
-        );
-        await waitRetryBackoff(attempt);
-      }
-    }
-  })();
+  const resp = await withConnectTimeoutRetry("machine user token request", () =>
+    fetch(tokenEndpoint, request),
+  );
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
     throw new Error(
@@ -798,6 +788,31 @@ function isUndiciConnectTimeout(error: unknown): boolean {
 }
 
 /**
+ * Retry a request that failed before the connection was established.
+ *
+ * Only `UND_ERR_CONNECT_TIMEOUT` is retried: the request provably never reached
+ * the server, so replaying it cannot duplicate a server-side effect.
+ * @param label - Request description for the retry debug log
+ * @param send - Sends the request; called once per attempt
+ * @returns The first successful result
+ */
+async function withConnectTimeoutRetry<T>(label: string, send: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await send();
+    } catch (error) {
+      if (!isUndiciConnectTimeout(error) || attempt >= MAX_RETRY_ATTEMPTS) {
+        throw error;
+      }
+      logger.debug(
+        `retry: ${label} attempt ${attempt} failed with UND_ERR_CONNECT_TIMEOUT; retrying`,
+      );
+      await waitRetryBackoff(attempt);
+    }
+  }
+}
+
+/**
  * Fetch an OAuth2 token for a platform machine user via client_credentials grant.
  * @param clientId - Client ID for the platform machine user
  * @param clientSecret - Client secret for the platform machine user
@@ -809,13 +824,17 @@ export async function fetchPlatformMachineUserToken(
   clientSecret: string,
   config?: PlatformClientConfig,
 ) {
-  const client = new OAuth2Client({
-    clientId,
-    clientSecret,
-    server: getPlatformBaseUrl(config),
-    discoveryEndpoint: oauth2DiscoveryEndpoint,
-  });
-  return await client.clientCredentials();
+  const server = getPlatformBaseUrl(config);
+  // A new client per attempt: OAuth2Client caches its discovery promise even when
+  // it rejects, so a reused client would replay the failure without re-requesting.
+  return await withConnectTimeoutRetry("platform machine user token request", () =>
+    new OAuth2Client({
+      clientId,
+      clientSecret,
+      server,
+      discoveryEndpoint: oauth2DiscoveryEndpoint,
+    }).clientCredentials(),
+  );
 }
 
 /**

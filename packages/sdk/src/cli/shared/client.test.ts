@@ -13,6 +13,7 @@ import {
   fetchAllTolerant,
   fetchMachineUserToken,
   fetchPaged,
+  fetchPlatformMachineUserToken,
   formatRequestParams,
   getConsoleBaseUrl,
   getEffectivePlatformConfig,
@@ -937,6 +938,129 @@ describe("fetchMachineUserToken", () => {
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
     ).rejects.toThrow("Failed to fetch machine user token: 500 Internal Server Error");
+  });
+});
+
+describe("fetchPlatformMachineUserToken", () => {
+  const fetchMock = vi.fn();
+  const connectTimeoutError = () =>
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Connect Timeout Error"), {
+        code: "UND_ERR_CONNECT_TIMEOUT",
+      }),
+    });
+  const discoveryResponse = () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    json: () =>
+      Promise.resolve({ token_endpoint: "https://api.tailor.tech/auth/platform/oauth2/token" }),
+  });
+  const tokenResponse = () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    json: () =>
+      Promise.resolve({ token_type: "bearer", access_token: "token-1", expires_in: 3600 }),
+  });
+
+  aroundEach(async (runTest) => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await runTest();
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("retries a connection timeout on the discovery request after 500ms", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    fetchMock
+      .mockRejectedValueOnce(connectTimeoutError())
+      .mockResolvedValueOnce(discoveryResponse())
+      .mockResolvedValueOnce(tokenResponse());
+
+    const result = fetchPlatformMachineUserToken("client-id", "client-secret").then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toMatchObject({
+      ok: true,
+      value: { accessToken: "token-1" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  test("retries a connection timeout on the token request after 500ms", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    fetchMock
+      .mockResolvedValueOnce(discoveryResponse())
+      .mockRejectedValueOnce(connectTimeoutError())
+      .mockResolvedValueOnce(discoveryResponse())
+      .mockResolvedValueOnce(tokenResponse());
+
+    const result = fetchPlatformMachineUserToken("client-id", "client-secret").then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toMatchObject({
+      ok: true,
+      value: { accessToken: "token-1" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  test("stops after three connection timeouts and preserves the last error", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const errors = [connectTimeoutError(), connectTimeoutError(), connectTimeoutError()];
+    for (const error of errors) {
+      fetchMock.mockRejectedValueOnce(error);
+    }
+
+    const result = fetchPlatformMachineUserToken("client-id", "client-secret").then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await expect(result).resolves.toEqual({ ok: false, error: errors[2] });
+  });
+
+  test("does not retry other fetch failures", async () => {
+    const socketError = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Socket Error"), { code: "UND_ERR_SOCKET" }),
+    });
+    fetchMock.mockRejectedValue(socketError);
+
+    await expect(fetchPlatformMachineUserToken("client-id", "client-secret")).rejects.toBe(
+      socketError,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
 
