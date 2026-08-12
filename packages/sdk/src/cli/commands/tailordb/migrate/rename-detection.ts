@@ -296,20 +296,3 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
   }
   return { typeName, fieldName };
 }
-
-/**
- * Whether a spec matches a field whose type changed between two snapshots.
- * @param {FieldExpandContractSpec} spec - Spec to test
- * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
- * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
- * @returns {boolean} True if the spec matches a field whose type changed
- */
-export function expandContractSpecApplies(
-  spec: FieldExpandContractSpec,
-  previousSnapshot: SchemaSnapshot,
-  currentSnapshot: SchemaSnapshot,
-): boolean {
-  const before = previousSnapshot.types[spec.typeName]?.fields[spec.fieldName];
-  const after = currentSnapshot.types[spec.typeName]?.fields[spec.fieldName];
-  return Boolean(before && after && before.type !== after.type);
-}

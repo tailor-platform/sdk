@@ -427,4 +427,19 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(String(result.error)).toContain("--expand-contract does not match");
     expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
   });
+
+  test("rejects an ineligible field with its reason before writing", async () => {
+    const retyped = retypedType("User", "integer");
+    retyped.fields.name!.config.unique = true;
+    const ns = addNamespace(tmpDir, "tailordb", "User", retyped);
+
+    const result = await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain(
+      "--expand-contract cannot convert User.name (namespace: tailordb): the field is unique",
+    );
+    expect(String(result.error)).not.toContain("Unsupported schema changes detected");
+    expect(fs.existsSync(path.join(ns.migrationsDir, "0001"))).toBe(false);
+  });
 });

@@ -34,8 +34,13 @@ export function supportsInPlaceFieldTypeChange(
   return IN_PLACE_TYPE_CHANGES.has(`${before.type}:${after.type}`);
 }
 
+/** Result of checking whether a field type change can use expand-contract. */
+export type ExpandContractFieldChangeEligibility =
+  | { eligible: true }
+  | { eligible: false; reason: string };
+
 /**
- * Determine whether a field type change can be carried by a pair of migrations
+ * Explain whether a field type change can be carried by a pair of migrations
  * that move values through a temporary field.
  *
  * The copy is a whole-value overwrite, so it can only carry a field whose value
@@ -48,20 +53,32 @@ export function supportsInPlaceFieldTypeChange(
  * only produces string values.
  * @param before - Previous field configuration
  * @param after - Target field configuration
- * @returns Whether the change can be split into expand and contract migrations
+ * @returns Eligibility and, when ineligible, the reason
  */
-export function supportsExpandContractFieldChange(
+export function getExpandContractFieldChangeEligibility(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
-): boolean {
-  if (before.type === after.type) return false;
-  if (supportsInPlaceFieldTypeChange(before, after)) return false;
-  if (before.unique || after.unique) return false;
-  if (before.array || after.array) return false;
-  if (before.type === "nested" || after.type === "nested") return false;
-  if (before.serial || after.serial) return false;
-  if (before.vector || after.vector) return false;
-  if (before.foreignKey || after.foreignKey) return false;
+): ExpandContractFieldChangeEligibility {
+  if (before.type === after.type)
+    return { eligible: false, reason: "the field type did not change" };
+  if (supportsInPlaceFieldTypeChange(before, after)) {
+    return {
+      eligible: false,
+      reason: `the ${before.type} to ${after.type} change is already supported in place`,
+    };
+  }
+  if (before.unique || after.unique) return { eligible: false, reason: "the field is unique" };
+  if (before.array || after.array) return { eligible: false, reason: "the field is an array" };
+  if (before.type === "nested" || after.type === "nested") {
+    return { eligible: false, reason: "the field is nested" };
+  }
+  if (before.serial || after.serial) {
+    return { eligible: false, reason: "the field uses a serial sequence" };
+  }
+  if (before.vector || after.vector) return { eligible: false, reason: "the field is a vector" };
+  if (before.foreignKey || after.foreignKey) {
+    return { eligible: false, reason: "the field is a foreign key" };
+  }
 
-  return true;
+  return { eligible: true };
 }

@@ -32,13 +32,13 @@ import {
 import {
   canConvertField,
   fieldKey,
+  getExpandContractEligibility,
   planExpandContract,
   type ExpandContractPlan,
 } from "./expand-contract";
 import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
-  expandContractSpecApplies,
   findRenameCandidates,
   parseDropOption,
   parseExpandContractOption,
@@ -310,13 +310,29 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
   const expandContractKeysByNamespace = new Map<string, Set<string>>();
   const matchedExpandContractFlags = new Set<ExpandContractFlag>();
+  const ineligibleExpandContracts: string[] = [];
   for (const { namespace, previousSnapshot, currentSnapshot } of generations) {
     if (!previousSnapshot) continue;
-    const applicable = expandContractFlags.filter(({ spec }) =>
-      expandContractSpecApplies(spec, previousSnapshot, currentSnapshot),
-    );
-    for (const flag of applicable) {
+    const applicable: ExpandContractFlag[] = [];
+    for (const flag of expandContractFlags) {
+      const { spec } = flag;
+      const before = previousSnapshot.types[spec.typeName]?.fields[spec.fieldName];
+      const after = currentSnapshot.types[spec.typeName]?.fields[spec.fieldName];
+      if (!before || !after || before.type === after.type) continue;
       matchedExpandContractFlags.add(flag);
+      const eligibility = getExpandContractEligibility({
+        previous: previousSnapshot,
+        current: currentSnapshot,
+        typeName: spec.typeName,
+        fieldName: spec.fieldName,
+      });
+      if (!eligibility.eligible) {
+        ineligibleExpandContracts.push(
+          `--expand-contract cannot convert ${flag.raw} (namespace: ${namespace}): ${eligibility.reason}`,
+        );
+        continue;
+      }
+      applicable.push(flag);
     }
     expandContractKeysByNamespace.set(
       namespace,
@@ -332,6 +348,9 @@ export async function generate(options: GenerateOptions): Promise<void> {
         .map((flag) => flag.raw)
         .join(", ")}`,
     );
+  }
+  if (ineligibleExpandContracts.length > 0) {
+    throw new Error(ineligibleExpandContracts.join("\n"));
   }
 
   // Resolve renames for every namespace before any migration file is written,

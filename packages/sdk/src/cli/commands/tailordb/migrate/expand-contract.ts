@@ -6,7 +6,7 @@
  * that field back over the original.
  */
 
-import { supportsExpandContractFieldChange } from "./field-type-change";
+import { getExpandContractFieldChangeEligibility } from "./field-type-change";
 import type { BreakingChangeInfo, MigrationDiff } from "./diff-calculator";
 import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
 
@@ -81,15 +81,35 @@ export interface PlanExpandContractOptions {
  * @returns Whether the conversion can be generated
  */
 export function canConvertField(options: CanConvertFieldOptions): boolean {
+  return getExpandContractEligibility(options).eligible;
+}
+
+/** Result of checking whether a field can use expand-contract. */
+export type ExpandContractEligibility = { eligible: true } | { eligible: false; reason: string };
+
+/**
+ * Explain whether a field can be carried by a generated migration pair.
+ * @param options - Snapshots and the field to test
+ * @returns Eligibility and, when ineligible, the reason
+ */
+export function getExpandContractEligibility(
+  options: CanConvertFieldOptions,
+): ExpandContractEligibility {
   const { previous, current, typeName, fieldName } = options;
   const before = previous.types[typeName]?.fields[fieldName];
   const after = current.types[typeName]?.fields[fieldName];
-  if (!before || !after) return false;
-  if (!supportsExpandContractFieldChange(before, after)) return false;
-  return (
-    !isFieldReferenced(previous.types[typeName], fieldName) &&
-    !isFieldReferenced(current.types[typeName], fieldName)
-  );
+  if (!before || !after) {
+    return { eligible: false, reason: "the field does not exist in both schemas" };
+  }
+  const fieldEligibility = getExpandContractFieldChangeEligibility(before, after);
+  if (!fieldEligibility.eligible) return fieldEligibility;
+  if (
+    isFieldReferenced(previous.types[typeName], fieldName) ||
+    isFieldReferenced(current.types[typeName], fieldName)
+  ) {
+    return { eligible: false, reason: "another schema feature references the field" };
+  }
+  return { eligible: true };
 }
 
 /** Inputs for {@link canConvertField}. */
