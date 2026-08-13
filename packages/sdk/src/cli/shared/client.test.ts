@@ -657,9 +657,6 @@ describe("parseMethodName", () => {
 
 describe("errorHandlingInterceptor", () => {
   test("does not leak the request payload into the enhanced error message", async () => {
-    // Mirrors knowledge Discussion #390: `tailor query` embeds a machine user
-    // access token in TestExecScriptRequest.arg, and a client-side timeout
-    // dumped the whole request (token included) to the terminal.
     const req = {
       stream: false,
       service: OperatorService,
