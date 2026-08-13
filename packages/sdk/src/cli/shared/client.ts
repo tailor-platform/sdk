@@ -436,21 +436,24 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
 
 /**
  * Create an interceptor that enhances error messages from the Operator API.
+ * @internal
  * @returns Error handling interceptor
  */
-function errorHandlingInterceptor(): Interceptor {
+export function errorHandlingInterceptor(): Interceptor {
   return (next) => async (req) => {
     try {
       return await next(req);
     } catch (error) {
       if (error instanceof ConnectError) {
         const { operation, resourceType } = parseMethodName(req.method.name);
-        const requestParams = formatRequestParams(req.message);
 
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
+        // The request payload is intentionally not included: it can carry
+        // credentials (e.g. access tokens in TestExecScriptRequest.arg) that
+        // must never reach terminal or CI logs
         throw new ConnectError(
-          `Failed to ${operation} ${resourceType}: ${error.rawMessage}\nRequest: ${requestParams}`,
+          `Failed to ${operation} ${resourceType}: ${error.rawMessage}`,
           error.code,
           error.metadata,
         );
@@ -476,35 +479,6 @@ export function parseMethodName(methodName: string): {
 
   const [, action, resource] = match as [string, string, string];
   return { operation: action.toLowerCase(), resourceType: resource };
-}
-
-/**
- * JSON.stringify replacer that converts BigInt values to strings.
- * @param _key - Object key (unused)
- * @param value - Value to serialize
- * @returns Serializable value
- */
-function bigIntReplacer(_key: string, value: unknown): unknown {
-  if (typeof value === "bigint") {
-    return value.toString();
-  }
-  return value;
-}
-
-/**
- * @internal
- * @param message - Request message to format
- * @returns Pretty-printed JSON or error placeholder
- */
-export function formatRequestParams(message: unknown): string {
-  try {
-    if (message && typeof message === "object" && "toJson" in message) {
-      return JSON.stringify((message as { toJson: () => unknown }).toJson(), bigIntReplacer, 2);
-    }
-    return JSON.stringify(message, bigIntReplacer, 2);
-  } catch {
-    return "(unable to serialize request)";
-  }
 }
 
 export const MAX_PAGE_SIZE = 1000;
