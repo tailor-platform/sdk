@@ -1845,6 +1845,29 @@ describe("snapshot", () => {
       expect(loaded.tables.User?.name).toBe("User");
     });
 
+    test("keeps the current key when a snapshot carries both", () => {
+      const table = (name: string) => ({
+        [name]: {
+          name,
+          pluralForm: `${name}s`,
+          fields: { id: { type: "uuid", required: true } },
+        },
+      });
+      const filePath = path.join(testDir, "both_keys_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: table("Legacy"),
+          tables: table("Current"),
+        }),
+      );
+
+      expect(Object.keys(loadSnapshot(filePath).tables)).toEqual(["Current"]);
+    });
+
     test("preserves unrecognized keys when normalizing a legacy types key", () => {
       const legacySnapshot = {
         version: 2,
