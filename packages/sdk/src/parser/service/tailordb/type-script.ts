@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { PRINCIPAL_VAR, tailorPrincipalMap } from "./field";
 
 // Platform-injected record map for type-level hook/validate scripts.
 const INPUT = "_input";
@@ -249,14 +250,21 @@ function buildValidateStatements(
   return statements;
 }
 
+function principalDeclIfReferenced(...exprs: (string | undefined)[]): string {
+  return exprs.some((expr) => expr?.includes(PRINCIPAL_VAR))
+    ? ` const ${PRINCIPAL_VAR} = (${tailorPrincipalMap});`
+    : "";
+}
+
 function wrapHook(objectExpr: string): string {
-  return `((_invoker) => { const ${NOW} = new Date(); return ${objectExpr}; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
+  return `((_invoker) => { const ${NOW} = new Date();${principalDeclIfReferenced(objectExpr)} return ${objectExpr}; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
 }
 
 function wrapValidate(statements: string[], typeValidateExpr?: string): string {
   const issuesFn = typeValidateExpr ? " const __issues = (f, m) => { __errs[f] = m; };" : "";
+  const principalDecl = principalDeclIfReferenced(typeValidateExpr, ...statements);
   const typeValidateStmt = typeValidateExpr ? ` ${typeValidateExpr};` : "";
-  return `((_invoker) => { const __errs = {};${issuesFn}\n${statements.join("\n")}${typeValidateStmt}\nreturn __errs; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
+  return `((_invoker) => { const __errs = {};${issuesFn}${principalDecl}\n${statements.join("\n")}${typeValidateStmt}\nreturn __errs; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
 }
 
 /**
@@ -289,7 +297,8 @@ export function buildTypeScripts(
     const typeLevelExpr = typeHookExpr?.[operation];
     let expr: string | undefined;
     if (perFieldExpr !== null && typeLevelExpr) {
-      expr = `((_invoker) => { const ${NOW} = new Date(); const __fl = ${perFieldExpr}; return Object.assign({}, __fl, ((${INPUT}) => ${typeLevelExpr})(Object.assign({}, ${INPUT}, __fl))); })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
+      const principalDecl = principalDeclIfReferenced(perFieldExpr, typeLevelExpr);
+      expr = `((_invoker) => { const ${NOW} = new Date();${principalDecl} const __fl = ${perFieldExpr}; return Object.assign({}, __fl, ((${INPUT}) => ${typeLevelExpr})(Object.assign({}, ${INPUT}, __fl))); })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
     } else if (typeLevelExpr) {
       expr = wrapHook(typeLevelExpr);
     } else if (perFieldExpr !== null) {

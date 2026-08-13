@@ -1,4 +1,8 @@
 import { describe, expect, test } from "vitest";
+import { db } from "#/configure/services/tailordb/schema";
+import { toSchemaOutputs } from "#/utils/test/internal";
+import { parseFieldConfig } from "./field";
+import { parseTypes } from "./type-parser";
 import {
   buildTypeScripts,
   computeSourceScriptHash,
@@ -40,6 +44,68 @@ describe("buildTypeScripts", () => {
     const updateExpr = typeHook?.update?.expr ?? "";
     expect(updateExpr).toContain('"updatedAt":');
     expect(updateExpr).not.toContain('"createdAt":');
+  });
+
+  test("embeds the invoker normalization once per type instead of once per field hook", () => {
+    const type = db.table("Widget", {
+      a: db.string().hooks({ create: ({ input }) => input ?? "a" }),
+      b: db.string().hooks({ create: ({ input }) => input ?? "b" }),
+      c: db.string().hooks({ create: ({ input }) => input ?? "c" }),
+    });
+    const schema = toSchemaOutputs({ Widget: type });
+    const fields: Record<string, ScriptFieldConfig> = {
+      a: parseFieldConfig(schema.Widget!.fields.a!),
+      b: parseFieldConfig(schema.Widget!.fields.b!),
+      c: parseFieldConfig(schema.Widget!.fields.c!),
+    };
+
+    const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
+
+    expect(createExpr.match(/USER_TYPE_MACHINE_USER/g)).toHaveLength(1);
+  });
+
+  test("delivers one normalized invoker to a field hook, a type-level hook, and type-level validate", () => {
+    const type = db
+      .table("Widget", {
+        name: db
+          .string()
+          .hooks({ create: ({ input, invoker }) => invoker?.type ?? input ?? "unknown" }),
+      })
+      .hooks({ create: ({ input }) => ({ name: `${input.name}-typed` }) })
+      .validate(({ invoker }, issues) => {
+        if (!invoker) issues("name", "missing invoker");
+      });
+
+    const parsed = parseTypes({ Widget: toSchemaOutputs({ Widget: type }).Widget! }, "ns").Widget!;
+    const fields: Record<string, ScriptFieldConfig> = Object.fromEntries(
+      Object.entries(parsed.fields).map(([name, field]) => [name, field.config]),
+    );
+
+    const { typeHook, typeValidate } = buildTypeScripts(fields, {
+      typeHookExpr: parsed.typeHookExpr,
+      typeValidateExpr: parsed.typeValidateExpr,
+    });
+    const createExpr = typeHook?.create?.expr ?? "";
+    const validateExpr = typeValidate?.create?.expr ?? "";
+
+    // The mapping is generated once for the type, not once per hook/validator.
+    expect(createExpr.match(/USER_TYPE_MACHINE_USER/g)).toHaveLength(1);
+    expect(validateExpr.match(/USER_TYPE_MACHINE_USER/g)).toHaveLength(1);
+
+    const rawUser = { type: "USER_TYPE_MACHINE_USER", id: "11111111-1111-1111-1111-111111111111" };
+    const created = new Function("_input", "_oldRecord", "user", `return ${createExpr}`)(
+      { name: "orig" },
+      null,
+      rawUser,
+    );
+    expect(created.name).toBe("machine_user-typed");
+
+    const errors = new Function("_newRecord", "_oldRecord", "user", `return ${validateExpr}`)(
+      { name: "orig" },
+      null,
+      rawUser,
+    );
+    expect(errors).toEqual({});
   });
 
   test("reconstructs nested objects so unhooked siblings are preserved", () => {

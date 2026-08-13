@@ -6,7 +6,7 @@ import { createBundleLog } from "#/cli/shared/bundle-log";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
-import { stringifyFunction, tailorPrincipalMap } from "#/parser/service/tailordb/field";
+import { PRINCIPAL_VAR, stringifyFunction } from "#/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
@@ -464,14 +464,14 @@ async function bundleScriptTarget(args: {
   }
   const argsObject =
     kind === "hooks.create"
-      ? `{ input: _value, invoker: ${tailorPrincipalMap}, now: _now }`
+      ? `{ input: _value, invoker: ${PRINCIPAL_VAR}, now: _now }`
       : kind === "hooks.update"
-        ? `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`
+        ? `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`
         : kind === "validate"
           ? `{ value: _value }`
           : kind === "typeHook"
-            ? `{ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now }`
-            : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues`;
+            ? `{ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now }`
+            : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues`;
   const inlineExpr = assertParsableExpression(`(${fnSource})(${argsObject})`, context);
 
   // Check if the function has free variables that need bundling

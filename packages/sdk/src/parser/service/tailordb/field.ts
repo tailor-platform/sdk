@@ -111,6 +111,11 @@ export const tailorPrincipalMap = makePrincipalExpr({
   },
 });
 
+// Identifier the type-level wrapper (buildTypeScripts in type-script.ts) binds
+// tailorPrincipalMap's result to once per type, so per-hook exprs below can
+// reference it instead of re-embedding the full mapping on every hook.
+export const PRINCIPAL_VAR = "_principal";
+
 /**
  * Parse `wrapped` and return the first property of the top-level parenthesized
  * object expression, or `undefined` if it does not parse as one.
@@ -202,8 +207,8 @@ const convertToScriptExpr = (
     kind === "validate"
       ? `{ value: _value }`
       : kind === "hooks.create"
-        ? `{ input: _value, invoker: ${tailorPrincipalMap}, now: _now }`
-        : `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`;
+        ? `{ input: _value, invoker: ${PRINCIPAL_VAR}, now: _now }`
+        : `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`;
   return assertParsableExpression(
     `(${normalized})(${argsObject})`,
     formatScriptContext(kind, context),
@@ -218,7 +223,7 @@ export const convertTypeHookToExpr = (fn: Function): string => {
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})({ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
+    `(${normalized})({ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now })`,
     "type-hook",
   );
 };
@@ -231,7 +236,7 @@ export const convertTypeValidateToExpr = (fn: Function): string => {
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues)`,
+    `(${normalized})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues)`,
     "type-validate",
   );
 };
