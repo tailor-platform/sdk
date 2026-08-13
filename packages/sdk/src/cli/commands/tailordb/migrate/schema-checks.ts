@@ -195,9 +195,9 @@ function deployComparableSnapshot(
 ): SchemaSnapshot {
   const remoteTypesByName = new Map(remoteTypes.map((type) => [type.name, type]));
   const configuredDisabled = configuredDisabledGqlOperations(gqlOperations);
-  const types: Record<string, TailorDBSnapshotType> = {};
+  const tables: Record<string, TailorDBSnapshotType> = {};
 
-  for (const [typeName, type] of Object.entries(snapshot.types)) {
+  for (const [typeName, type] of Object.entries(snapshot.tables)) {
     const settings: SnapshotSettings = { ...type.settings };
     const remoteSettings = remoteTypesByName.get(typeName)?.schema?.settings;
 
@@ -220,10 +220,10 @@ function deployComparableSnapshot(
     } else {
       delete comparableType.settings;
     }
-    types[typeName] = comparableType;
+    tables[typeName] = comparableType;
   }
 
-  return { ...snapshot, types };
+  return { ...snapshot, tables };
 }
 
 /**

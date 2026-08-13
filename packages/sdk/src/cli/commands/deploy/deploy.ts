@@ -1845,7 +1845,7 @@ async function planDeploymentTarget(
 
   const migrationTestServices = application.tailorDBServices.map((service) => {
     const snapshot = migrationTestSnapshots?.get(service.namespace);
-    return snapshot ? { ...service, types: snapshot.types, typeSourceInfo: {} } : service;
+    return snapshot ? { ...service, tables: snapshot.tables, typeSourceInfo: {} } : service;
   });
   await withSpan("plan.validateTailorDBTypeNames", () =>
     assertUniqueTailorDBTypeNamesWithExternal({

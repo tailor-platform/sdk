@@ -80,15 +80,15 @@ const snapshotFixtures = vi.hoisted(() => {
     reconstructSnapshotFromMigrations: (migrationsDir: string, maxVersion?: number) => {
       void migrationsDir;
       const number = maxVersion ?? 0;
-      const types = typesByMigration[number];
-      if (!types) {
+      const tables = typesByMigration[number];
+      if (!tables) {
         throw new Error(`No snapshot fixture configured for migration number: ${number}`);
       }
       return {
         version: 1 as const,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        types,
+        tables,
       };
     },
   };

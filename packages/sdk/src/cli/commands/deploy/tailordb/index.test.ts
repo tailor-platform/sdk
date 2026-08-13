@@ -231,7 +231,7 @@ describe("planTailorDB (service level)", () => {
       version: 1,
       namespace: "tailordb",
       createdAt: "2026-08-05T00:00:00.000Z",
-      types: {
+      tables: {
         Legacy: {
           name: "Legacy",
           pluralForm: "Legacies",
@@ -290,7 +290,7 @@ describe("planTailorDB (service level)", () => {
       version: 1,
       namespace: "tailordb",
       createdAt: "2026-08-05T00:00:00.000Z",
-      types: {
+      tables: {
         Committed: {
           name: "Committed",
           pluralForm: "Committed",
@@ -1861,7 +1861,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: 5,
+        version: 6,
       }),
     );
     const planResult = makePlanResult(true);
@@ -1869,7 +1869,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0001" });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /supports migration file format versions 1-4/,
+      /supports migration file format versions 1-5/,
     );
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();

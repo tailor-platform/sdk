@@ -178,8 +178,8 @@ function generateDbTypesFromSnapshot(
     breakingChangeFields.clearedFields.set(plan.tableName, cleared);
   }
 
-  const types = [...Object.values(snapshot.types), ...breakingChangeFields.renamedTypes.values()];
-  if (types.length === 0) {
+  const tables = [...Object.values(snapshot.tables), ...breakingChangeFields.renamedTypes.values()];
+  if (tables.length === 0) {
     return generateEmptyDbTypes(snapshot.namespace);
   }
 
@@ -188,7 +188,7 @@ function generateDbTypesFromSnapshot(
 
   // Generate type definitions
   const typeDefinitions: string[] = [];
-  for (const type of types) {
+  for (const type of tables) {
     const result = generateTableType(type, breakingChangeFields);
     if (result.usedTimestamp) usedUtilityTypes.add("Timestamp");
     typeDefinitions.push(result.typeDef);

@@ -870,7 +870,7 @@ function buildSnapshotTypeManifest(
   typeChanges?: Map<string, FieldDiffChange>,
 ): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
   const snapshot = migrationSnapshotCache.load(migration);
-  const snapshotType = snapshot.types[tableName];
+  const snapshotType = snapshot.tables[tableName];
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   const typeScriptsChange = migration.diff.changes.find(
@@ -1269,10 +1269,10 @@ async function rollbackSingleMigrationPrePhase(
   // still references a new type (e.g. a foreign key retargeted at a renamed
   // type) at the moment that type is deleted.
   const restoredTypes = [...rollbackTypes].flatMap((tableName) => {
-    const priorType = priorSnapshot.types[tableName];
+    const priorType = priorSnapshot.tables[tableName];
     return priorType ? [{ tableName, priorType }] : [];
   });
-  const newTypes = [...rollbackTypes].filter((tableName) => !priorSnapshot.types[tableName]);
+  const newTypes = [...rollbackTypes].filter((tableName) => !priorSnapshot.tables[tableName]);
 
   for (const { tableName, priorType } of restoredTypes) {
     try {
@@ -1349,7 +1349,7 @@ export async function planTailorDB(context: PlanContext) {
       await tailordb.loadTypes();
       const input = toTailorDBDeployInput(tailordb);
       const snapshot = migrationTestSnapshots?.get(tailordb.namespace);
-      tailordbs.push(snapshot ? { ...input, types: snapshot.types } : input);
+      tailordbs.push(snapshot ? { ...input, types: snapshot.tables } : input);
     }
   }
   const executors = forRemoval
