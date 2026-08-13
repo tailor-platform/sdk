@@ -40,13 +40,19 @@ export default defineConfig({
 
 ### authNamespace
 
-The auth namespace used to resolve request tokens against your workspace's auth configuration. Must match an existing auth namespace.
+The auth namespace used to resolve request tokens against your workspace's auth configuration. Must match an existing auth namespace — in practice the name you pass to `defineAuth()`, since an application has exactly one Auth service:
 
 ```typescript
+const auth = defineAuth("my-auth", {
+  /* ... */
+});
+
 defineAIGateway("my-aigateway", {
-  authNamespace: "default",
+  authNamespace: "my-auth", // the defineAuth() name
 });
 ```
+
+This value is a plain `string` and is **not** type-checked against your auth config, so a typo or a stale name surfaces only at runtime, as `401 Unauthorized` on every request to the gateway.
 
 ### cors
 
@@ -81,8 +87,10 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const aiGateway = defineAIGateway("my-aigateway", {
-  // Name of an auth namespace in your workspace; request tokens are resolved against it.
-  authNamespace: "default",
+  // Name of an auth namespace in your workspace; request tokens are resolved
+  // against it. Must be the namespace `defineAuth()` declares below — see the
+  // `authNamespace` option for why.
+  authNamespace: "my-auth",
   cors: [website.url],
 });
 
