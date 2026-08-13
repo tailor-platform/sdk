@@ -521,7 +521,7 @@ describe("renderTagWorkflow", () => {
 describe("Tailor Platform action pins", () => {
   test("pins every generated Tailor Platform action to v2.2.0", () => {
     const contents = [
-      renderBranchWorkflow(branchBase).content,
+      renderBranchWorkflow({ ...branchBase, migrationDriftCheck: true }).content,
       renderTagWorkflow({ ...tagBase, branch: "main" }).content,
       renderPreviewWorkflow({
         workspaceName: "my-app",

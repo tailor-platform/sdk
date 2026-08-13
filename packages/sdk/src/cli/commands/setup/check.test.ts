@@ -279,7 +279,9 @@ describe("checkGitHub (integration)", () => {
   test("does not emit a drift result marker for an operational error", async () => {
     using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
 
-    await expect(checkGitHub({ outputDir: testDir })).rejects.toThrow(/No managed workflows/);
+    await expect(checkGitHub({ outputDir: testDir, ci: true })).rejects.toThrow(
+      /No managed workflows/,
+    );
 
     expect(
       logSpy.mock.calls.some(([message]) => message.startsWith("TAILOR_SETUP_CHECK_DRIFT_COUNT=")),
