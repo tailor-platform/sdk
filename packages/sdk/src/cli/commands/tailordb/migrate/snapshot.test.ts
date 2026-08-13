@@ -39,6 +39,7 @@ import {
 } from "./snapshot";
 import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
 import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
+import type { TailorDBDeployInput } from "./schema-checks";
 
 // compareSnapshots takes normalized snapshots; tests build raw fixtures.
 function compareRawSnapshots(
@@ -258,6 +259,12 @@ describe("snapshot", () => {
       expectTypeOf(normalized).toEqualTypeOf<NormalizedSchemaSnapshot>();
       expectTypeOf<NormalizedSchemaSnapshot>().toExtend<SchemaSnapshot>();
       expectTypeOf<SchemaSnapshot>().not.toExtend<NormalizedSchemaSnapshot>();
+      // A snapshot keys its tables under `tables`; a deploy input keys its
+      // parsed types under `types`. Spreading one over the other type-checks
+      // either way, so pin the distinction here.
+      expectTypeOf<SchemaSnapshot>().not.toHaveProperty("types");
+      expectTypeOf<TailorDBDeployInput>().toHaveProperty("types");
+      expectTypeOf<TailorDBDeployInput>().not.toHaveProperty("tables");
       expect(normalized.tables.Product?.pluralForm).toBe("Products");
       expect(normalized.tables.Product?.fields.price?.scale).toBe(6);
       expect(normalized.tables.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);

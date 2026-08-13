@@ -74,7 +74,7 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
       version: 1,
       namespace: "test-ns",
       createdAt: "2026-01-01T00:00:00.000Z",
-      types: {
+      tables: {
         User: {
           name: "User",
           pluralForm: "users",
