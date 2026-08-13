@@ -194,11 +194,10 @@ planned.)
 
 ### `.github/tailor.lock`
 
-A machine-owned JSON file that tracks files registered by setup. Workflow and
-action entries include their generation inputs and content hashes so the SDK can
-recognize its own files on re-runs and detect hand edits. The Renovate entry is
-only a deletion registration: it has no content hash, and user changes to
-`renovate.json` are allowed. **Commit this file. Never edit it by hand.**
+A machine-owned JSON file that tracks which files the SDK manages, the inputs
+they were generated from, and their content hashes. **Commit this file. Never
+edit it by hand.** The SDK uses it to recognize its own files on re-runs and to
+detect hand edits.
 
 ### `tailor.config.ts` (id injection)
 
@@ -369,23 +368,23 @@ Run this command once from the repository root to add Renovate configuration:
 tailor setup renovate
 ```
 
-It generates `renovate.json`, which extends Tailor's shared Renovate preset,
-and records the setup in `.github/tailor.lock`. The preset groups
-`@tailor-platform/*` package updates into one pull request and lets Renovate
-update the SHA-pinned GitHub Actions used by generated workflows. Enable
-Renovate for the repository by following the
+It generates `renovate.json`, which extends Tailor's shared Renovate preset. The
+preset groups `@tailor-platform/*` package updates into one pull request and
+lets Renovate update the SHA-pinned GitHub Actions used by generated workflows.
+Enable Renovate for the repository by following the
 [Renovate onboarding guide](https://docs.renovatebot.com/getting-started/installing-onboarding/),
-then commit both generated files.
+then commit the generated file.
 
 If the repository already has Renovate configuration, the command leaves it
 unchanged and tells you to add `github>tailor-inc/renovate-config` to its
 `extends` array. It checks Renovate's standard root, `.github`, `.gitlab`, and
 `.renovaterc` locations, including the deprecated `package.json` configuration.
+When that configuration already extends the preset, the command reports that
+Renovate is set up and changes nothing.
 
-You can add your own rules to the generated `renovate.json`. Re-running
-`tailor setup renovate` does not overwrite those changes. To remove the file,
-run `tailor setup delete renovate.json`; deletion removes any custom rules in
-the file as well.
+`renovate.json` is yours to edit — it is not tracked in `.github/tailor.lock`.
+Add your own rules freely; re-running `tailor setup renovate` does not overwrite
+them. To remove it, delete the file.
 
 Renovate updates the SDK dependency and action pins, but it does not regenerate
 the workflow template. After an SDK update, `tailor setup check --ci` reports a

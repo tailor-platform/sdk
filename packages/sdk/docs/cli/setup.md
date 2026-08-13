@@ -25,7 +25,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
 | [`setup renovate`](#setup-renovate)     | Generate a Renovate config for Tailor dependency and workflow updates.                           |
 | [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
-| [`setup delete`](#setup-delete)         | Delete files registered by setup and their .github/tailor.lock entries.                          |
+| [`setup delete`](#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
 
 ### setup action
 
@@ -114,7 +114,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### setup delete
 
-Delete files registered by setup and their .github/tailor.lock entries.
+Delete managed workflow/action file(s) and their .github/tailor.lock entries.
 
 **Usage**
 
@@ -124,9 +124,9 @@ tailor setup delete [options] <files>
 
 **Arguments**
 
-| Argument | Description                        | Required |
-| -------- | ---------------------------------- | -------- |
-| `files`  | File(s) registered by tailor setup | Yes      |
+| Argument | Description                                                                                | Required |
+| -------- | ------------------------------------------------------------------------------------------ | -------- |
+| `files`  | Workflow/action file(s) to delete, as generated under .github/workflows or .github/actions | Yes      |
 
 **Options**
 

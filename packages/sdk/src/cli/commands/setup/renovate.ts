@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { logger, styles } from "#/cli/shared/logger";
-import { LOCK_VERSION, readLock, writeLock, type SetupRegistration } from "./lock";
 
 export const RENOVATE_CONFIG_FILE = "renovate.json";
 export const RENOVATE_PRESET = "github>tailor-inc/renovate-config";
@@ -40,9 +39,34 @@ function pathEntryExists(filePath: string): boolean {
   return getPathEntry(filePath) !== null;
 }
 
-function findExistingConfig(outputDir: string): string | null {
+type ExistingConfig = {
+  /** Location shown to the user; not always a readable JSON file path. */
+  location: string;
+  /** True when the config's `extends` already references the shared preset. */
+  extendsPreset: boolean;
+};
+
+function extendsPreset(config: unknown): boolean {
+  if (typeof config !== "object" || config === null || !("extends" in config)) return false;
+  const value = config.extends;
+  return Array.isArray(value) && value.includes(RENOVATE_PRESET);
+}
+
+function readJsonConfig(filePath: string): unknown {
+  const entry = getPathEntry(filePath);
+  if (entry === null || !entry.isFile()) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function findExistingConfig(outputDir: string): ExistingConfig | null {
   for (const file of RENOVATE_CONFIG_FILES) {
-    if (pathEntryExists(path.join(outputDir, file))) return file;
+    const filePath = path.join(outputDir, file);
+    if (!pathEntryExists(filePath)) continue;
+    return { location: file, extendsPreset: extendsPreset(readJsonConfig(filePath)) };
   }
 
   const packageJsonPath = path.join(outputDir, "package.json");
@@ -55,12 +79,11 @@ function findExistingConfig(outputDir: string): string | null {
       cause,
     });
   }
-  if (
-    typeof packageJson === "object" &&
-    packageJson !== null &&
-    Object.hasOwn(packageJson, "renovate")
-  ) {
-    return "package.json#renovate";
+  if (typeof packageJson === "object" && packageJson !== null && "renovate" in packageJson) {
+    return {
+      location: "package.json#renovate",
+      extendsPreset: extendsPreset(packageJson.renovate),
+    };
   }
   return null;
 }
@@ -76,12 +99,6 @@ function renderRenovateConfig(): string {
   )}\n`;
 }
 
-function setupRollbackError(recordingCause: unknown, rollbackCause: unknown): Error {
-  return new Error(`Failed to record Renovate setup and remove ${RENOVATE_CONFIG_FILE}.`, {
-    cause: new AggregateError([recordingCause, rollbackCause]),
-  });
-}
-
 /**
  * Generate a repository-level Renovate config that extends Tailor's shared preset.
  * @param options - Renovate setup options
@@ -89,39 +106,20 @@ function setupRollbackError(recordingCause: unknown, rollbackCause: unknown): Er
 export async function setupRenovate(options: SetupRenovateOptions): Promise<void> {
   logBetaWarning("setup");
 
-  const lock = readLock(options.outputDir);
-  const registration = lock?.setups[0];
-  const outputPath = path.join(options.outputDir, RENOVATE_CONFIG_FILE);
-  if (registration && getPathEntry(outputPath)?.isFile()) {
-    logger.info(`Renovate is already set up at ${styles.path(RENOVATE_CONFIG_FILE)}.`);
-    return;
-  }
-
   const existingConfig = findExistingConfig(options.outputDir);
   if (existingConfig !== null) {
+    if (existingConfig.extendsPreset) {
+      logger.info(`Renovate is already set up at ${styles.path(existingConfig.location)}.`);
+      return;
+    }
     throw new Error(
-      `Renovate config already exists at "${existingConfig}". No files were changed. ` +
+      `Renovate config already exists at "${existingConfig.location}". No files were changed. ` +
         `Add "${RENOVATE_PRESET}" to its extends array.`,
     );
   }
 
+  const outputPath = path.join(options.outputDir, RENOVATE_CONFIG_FILE);
   fs.writeFileSync(outputPath, renderRenovateConfig(), "utf-8");
-  const setups: SetupRegistration[] = [{ kind: "renovate", file: RENOVATE_CONFIG_FILE }];
-  try {
-    writeLock(options.outputDir, {
-      version: LOCK_VERSION,
-      targets: lock?.targets ?? [],
-      setups,
-    });
-  } catch (cause) {
-    try {
-      fs.rmSync(outputPath);
-    } catch (rollbackCause) {
-      throw setupRollbackError(cause, rollbackCause);
-    }
-    throw cause;
-  }
 
   logger.success(`Generated ${styles.path(RENOVATE_CONFIG_FILE)}`);
-  logger.success("Recorded Renovate setup in .github/tailor.lock");
 }

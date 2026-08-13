@@ -695,7 +695,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   } else {
     targets[index] = newTarget;
   }
-  writeLock(options.outputDir, { version: LOCK_VERSION, targets, setups: lock?.setups ?? [] });
+  writeLock(options.outputDir, { version: LOCK_VERSION, targets });
 
   if (decision.action === "restore") {
     logger.success(`Regenerated ${styles.path(resolved.file)} (was missing on disk)`);
@@ -873,7 +873,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   } else {
     targets[idx] = newTarget;
   }
-  writeLock(outputDir, { version: LOCK_VERSION, targets, setups: lock.setups });
+  writeLock(outputDir, { version: LOCK_VERSION, targets });
 
   if (decision.action === "restore") {
     logger.success(`Regenerated ${styles.path(file)} (was missing on disk)`);

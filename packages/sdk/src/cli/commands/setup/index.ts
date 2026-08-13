@@ -226,12 +226,13 @@ const renovateCommand = defineAppCommand({
 
 const deleteCommand = defineAppCommand({
   name: "delete",
-  description: "Delete files registered by setup and their .github/tailor.lock entries.",
+  description: "Delete managed workflow/action file(s) and their .github/tailor.lock entries.",
   args: z.strictObject({
     ...confirmationArgs,
     files: arg(z.string().array().min(1), {
       positional: true,
-      description: "File(s) registered by tailor setup",
+      description:
+        "Workflow/action file(s) to delete, as generated under .github/workflows or .github/actions",
     }),
   }),
   run: async (args) => {

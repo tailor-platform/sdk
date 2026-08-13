@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 
 /** Current lock schema version. Bumped only on breaking lock-format changes. */
-export const LOCK_VERSION = 2;
+export const LOCK_VERSION = 1;
 
 /** Lock file path, relative to the repository root. */
 const LOCK_FILENAME = ".github/tailor.lock";
@@ -65,35 +65,10 @@ export type LockTarget = {
   contentHash: string;
 };
 
-export type SetupRegistration = {
-  kind: "renovate";
-  file: "renovate.json";
-};
-
 export type LockFile = {
   version: number;
   targets: LockTarget[];
-  setups: SetupRegistration[];
 };
-
-type RawLockFile = Omit<LockFile, "setups"> & { setups?: unknown };
-
-function isSetupRegistration(value: unknown): value is SetupRegistration {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "kind" in value &&
-    value.kind === "renovate" &&
-    "file" in value &&
-    value.file === "renovate.json"
-  );
-}
-
-function isSetupRegistrations(value: unknown): value is SetupRegistration[] {
-  if (!Array.isArray(value) || !value.every(isSetupRegistration)) return false;
-  const keys = value.map((setup) => `${setup.kind}:${setup.file}`);
-  return new Set(keys).size === keys.length;
-}
 
 /**
  * Compute the lock content hash for a rendered workflow file.
@@ -127,9 +102,9 @@ export function readLock(outputDir: string): LockFile | null {
   if (!fs.existsSync(file)) {
     return null;
   }
-  let parsed: RawLockFile;
+  let parsed: LockFile;
   try {
-    parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as RawLockFile;
+    parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as LockFile;
   } catch (cause) {
     throw new Error(
       `${LOCK_FILENAME} is not valid JSON. The lock file is machine-owned; ` +
@@ -155,14 +130,7 @@ export function readLock(outputDir: string): LockFile | null {
         "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
-  if (parsed.version >= 2 && !isSetupRegistrations(parsed.setups)) {
-    throw new Error(
-      `${LOCK_FILENAME} has no valid 'setups' array. The lock file is machine-owned; ` +
-        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
-    );
-  }
-  const setups = parsed.version >= 2 && isSetupRegistrations(parsed.setups) ? parsed.setups : [];
-  return { ...parsed, setups } as LockFile;
+  return parsed;
 }
 
 /**

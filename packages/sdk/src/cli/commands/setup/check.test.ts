@@ -384,17 +384,13 @@ describe("checkGitHub (integration)", () => {
   });
 
   test("reports drift instead of reading outside the repo on a traversing lock path", async () => {
-    writeLock(testDir, {
-      version: LOCK_VERSION,
-      targets: [lockTarget("../escape.yml")],
-      setups: [],
-    });
+    writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget("../escape.yml")] });
     await expect(check()).rejects.toThrow(/drift/);
   });
 
   test("does not crash when the recorded file path is a directory", async () => {
     const file = ".github/workflows/tailor-my-app.yml";
-    writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget(file)], setups: [] });
+    writeLock(testDir, { version: LOCK_VERSION, targets: [lockTarget(file)] });
     fs.mkdirSync(path.join(testDir, file), { recursive: true });
     await expect(check()).rejects.toThrow(/drift/);
   });
@@ -426,7 +422,6 @@ describe("checkGitHub (integration)", () => {
           contentHash: hashContent(wfContent),
         },
       ],
-      setups: [],
     });
     // Remove the root config to confirm coordinators skip the config probe.
     fs.rmSync(path.join(testDir, "tailor.config.ts"));
