@@ -27,7 +27,7 @@ Configure an AI Gateway using `defineAIGateway()`:
 import { defineAIGateway, defineConfig } from "@tailor-platform/sdk";
 
 const aiGateway = defineAIGateway("my-aigateway", {
-  authNamespace: "default",
+  authNamespace: "my-auth",
 });
 
 export default defineConfig({
@@ -67,7 +67,7 @@ An optional `:port` may be appended in all URL forms. Omitting `cors` (or passin
 
 ```typescript
 defineAIGateway("my-aigateway", {
-  authNamespace: "default",
+  authNamespace: "my-auth",
   cors: ["https://app.example.com", "https://*.example.com"],
 });
 ```
