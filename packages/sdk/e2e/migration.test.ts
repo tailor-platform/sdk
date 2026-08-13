@@ -440,14 +440,14 @@ export async function main(db: Kysely<any>): Promise<void> {
   /**
    * Helper to get field names for a TailorDB type
    * @param namespace - TailorDB namespace name
-   * @param typeName - Type name
+   * @param tableName - Type name
    * @returns List of field names
    */
-  async function getTailorDBTypeFields(namespace: string, typeName: string): Promise<string[]> {
+  async function getTailorDBTypeFields(namespace: string, tableName: string): Promise<string[]> {
     const resp = await client.getTailorDBType({
       workspaceId,
       namespaceName: namespace,
-      tailordbTypeName: typeName,
+      tailordbTypeName: tableName,
     });
     return Object.keys(resp.tailordbType?.schema?.fields ?? {});
   }
@@ -496,9 +496,9 @@ export async function main(db: Kysely<any>): Promise<void> {
       // Verify snapshot content
       const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
       expect(snapshot).not.toBeNull();
-      expect(snapshot!.types.User).toBeDefined();
-      expect(snapshot!.types.User!.fields.name).toBeDefined();
-      expect(snapshot!.types.User!.fields.email).toBeDefined();
+      expect(snapshot!.tables.User).toBeDefined();
+      expect(snapshot!.tables.User!.fields.name).toBeDefined();
+      expect(snapshot!.tables.User!.fields.email).toBeDefined();
     }, 60000);
 
     /**
@@ -719,7 +719,7 @@ export type user = typeof user;
       const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
       const diff = loadDiff(diffPath);
       expect(diff.hasBreakingChanges).toBe(false);
-      expect(diff.changes.some((c) => c.kind === "table_added" && c.typeName === "Post")).toBe(
+      expect(diff.changes.some((c) => c.kind === "table_added" && c.tableName === "Post")).toBe(
         true,
       );
     }, 60000);

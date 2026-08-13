@@ -281,7 +281,7 @@ export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
   version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
-  types: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
+  tables: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
   rebaseline: rebaselineMarkerSchema.optional(),
 });
 
@@ -323,30 +323,30 @@ const snapshotPermissionStateSchema: z.ZodType<SnapshotPermissionState> = z.loos
 // cast so that z.discriminatedUnion can accept them.
 const typeAddedChangeSchema = z.looseObject({
   kind: z.literal("table_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   after: tailorDBSnapshotTypeSchema,
 }) as unknown as z.ZodType<TableAddedChange>;
 
 const typeRemovedChangeSchema = z.looseObject({
   kind: z.literal("table_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: tailorDBSnapshotTypeSchema,
 }) as unknown as z.ZodType<TableRemovedChange>;
 
 const typeRenamedChangeSchema = z.looseObject({
   kind: z.literal("table_renamed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
-  previousTypeName: z.string(),
+  previousTableName: z.string(),
   before: tailorDBSnapshotTypeSchema,
   after: tailorDBSnapshotTypeSchema,
 }) as unknown as z.ZodType<TableRenamedChange>;
 
 const typeModifiedChangeSchema = z.looseObject({
   kind: z.literal("table_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: typeSettingsPatchSchema.optional(),
   after: typeSettingsPatchSchema.optional(),
@@ -354,7 +354,7 @@ const typeModifiedChangeSchema = z.looseObject({
 
 const typeSettingsModifiedChangeSchema = z.looseObject({
   kind: z.literal("table_settings_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: snapshotTypeSettingsStateSchema,
   after: snapshotTypeSettingsStateSchema,
@@ -362,7 +362,7 @@ const typeSettingsModifiedChangeSchema = z.looseObject({
 
 const fieldAddedChangeSchema = z.looseObject({
   kind: z.literal("field_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   after: snapshotFieldConfigSchema,
@@ -370,7 +370,7 @@ const fieldAddedChangeSchema = z.looseObject({
 
 const fieldRemovedChangeSchema = z.looseObject({
   kind: z.literal("field_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: snapshotFieldConfigSchema,
@@ -378,7 +378,7 @@ const fieldRemovedChangeSchema = z.looseObject({
 
 const fieldModifiedChangeSchema = z.looseObject({
   kind: z.literal("field_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: snapshotFieldConfigSchema,
@@ -387,7 +387,7 @@ const fieldModifiedChangeSchema = z.looseObject({
 
 const fieldRenamedChangeSchema = z.looseObject({
   kind: z.literal("field_renamed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   previousFieldName: z.string(),
@@ -397,7 +397,7 @@ const fieldRenamedChangeSchema = z.looseObject({
 
 const fieldTypeModifiedChangeSchema = z.looseObject({
   kind: z.literal("field_type_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: snapshotFieldConfigSchema,
@@ -406,7 +406,7 @@ const fieldTypeModifiedChangeSchema = z.looseObject({
 
 const indexAddedChangeSchema = z.looseObject({
   kind: z.literal("index_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   indexName: z.string(),
   after: snapshotIndexConfigSchema,
@@ -414,7 +414,7 @@ const indexAddedChangeSchema = z.looseObject({
 
 const indexRemovedChangeSchema = z.looseObject({
   kind: z.literal("index_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   indexName: z.string(),
   before: snapshotIndexConfigSchema,
@@ -422,7 +422,7 @@ const indexRemovedChangeSchema = z.looseObject({
 
 const indexModifiedChangeSchema = z.looseObject({
   kind: z.literal("index_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   indexName: z.string(),
   before: snapshotIndexConfigSchema,
@@ -431,7 +431,7 @@ const indexModifiedChangeSchema = z.looseObject({
 
 const fileAddedChangeSchema = z.looseObject({
   kind: z.literal("file_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   after: z.string(),
@@ -439,7 +439,7 @@ const fileAddedChangeSchema = z.looseObject({
 
 const fileRemovedChangeSchema = z.looseObject({
   kind: z.literal("file_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: z.string(),
@@ -447,7 +447,7 @@ const fileRemovedChangeSchema = z.looseObject({
 
 const fileModifiedChangeSchema = z.looseObject({
   kind: z.literal("file_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: z.string(),
@@ -456,7 +456,7 @@ const fileModifiedChangeSchema = z.looseObject({
 
 const relationshipAddedChangeSchema = z.looseObject({
   kind: z.literal("relationship_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   relationshipName: z.string(),
   relationshipType: z.enum(["forward", "backward"]).optional(),
@@ -465,7 +465,7 @@ const relationshipAddedChangeSchema = z.looseObject({
 
 const relationshipRemovedChangeSchema = z.looseObject({
   kind: z.literal("relationship_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   relationshipName: z.string(),
   relationshipType: z.enum(["forward", "backward"]).optional(),
@@ -474,7 +474,7 @@ const relationshipRemovedChangeSchema = z.looseObject({
 
 const relationshipModifiedChangeSchema = z.looseObject({
   kind: z.literal("relationship_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   relationshipName: z.string(),
   relationshipType: z.enum(["forward", "backward"]).optional(),
@@ -484,7 +484,7 @@ const relationshipModifiedChangeSchema = z.looseObject({
 
 const permissionModifiedChangeSchema = z.looseObject({
   kind: z.literal("permission_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: snapshotPermissionStateSchema.optional(),
   after: snapshotPermissionStateSchema.optional(),
@@ -502,7 +502,7 @@ const typeScriptsStateSchema: z.ZodType<TypeScriptsState> = z.looseObject({
 
 const typeScriptsModifiedChangeSchema = z.looseObject({
   kind: z.literal("table_scripts_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: typeScriptsStateSchema,
   after: typeScriptsStateSchema,
@@ -535,7 +535,7 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
 ]) as z.ZodType<DiffChange>;
 
 export const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseObject({
-  typeName: z.string(),
+  tableName: z.string(),
   fieldName: z.string().optional(),
   reason: z.string(),
   unsupported: z.boolean().optional(),
@@ -543,7 +543,7 @@ export const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseOb
 });
 
 export const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObject({
-  typeName: z.string(),
+  tableName: z.string(),
   fieldName: z.string().optional(),
   reason: z.string(),
 });

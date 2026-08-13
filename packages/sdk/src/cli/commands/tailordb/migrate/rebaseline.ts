@@ -160,7 +160,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     const currentSnapshot = createSnapshotFromLocalTypes(targetService.types, target.namespace);
     const localDiff = compareLocalTypesWithSnapshot(
       latestSnapshot,
-      currentSnapshot.types,
+      currentSnapshot.tables,
       target.namespace,
     );
     if (hasChanges(localDiff)) {

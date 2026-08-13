@@ -227,26 +227,26 @@ export async function generate(options: GenerateOptions): Promise<void> {
     throw new Error("--rename, --drop, and --expand-contract cannot be used together with --init.");
   }
   const droppedFieldKeys = new Set(
-    dropFlags.map(({ spec }) => `${spec.typeName}.${spec.fieldName}`),
+    dropFlags.map(({ spec }) => `${spec.tableName}.${spec.fieldName}`),
   );
   const conflictingFlags = renameFlags.filter(({ spec }) =>
-    droppedFieldKeys.has(`${spec.typeName}.${spec.previousFieldName}`),
+    droppedFieldKeys.has(`${spec.tableName}.${spec.previousFieldName}`),
   );
   if (conflictingFlags.length > 0) {
     throw new Error(
       `--rename and --drop conflict for: ${conflictingFlags
-        .map(({ spec }) => `${spec.typeName}.${spec.previousFieldName}`)
+        .map(({ spec }) => `${spec.tableName}.${spec.previousFieldName}`)
         .join(", ")}`,
     );
   }
-  const droppedTypeNames = new Set(typeDropFlags.map(({ spec }) => spec.typeName));
+  const droppedTypeNames = new Set(typeDropFlags.map(({ spec }) => spec.tableName));
   const conflictingTypeFlags = typeRenameFlags.filter(({ spec }) =>
-    droppedTypeNames.has(spec.previousTypeName),
+    droppedTypeNames.has(spec.previousTableName),
   );
   if (conflictingTypeFlags.length > 0) {
     throw new Error(
       `--rename and --drop conflict for: ${conflictingTypeFlags
-        .map(({ spec }) => spec.previousTypeName)
+        .map(({ spec }) => spec.previousTableName)
         .join(", ")}`,
     );
   }
@@ -335,14 +335,14 @@ export async function generate(options: GenerateOptions): Promise<void> {
     const applicable: ExpandContractFlag[] = [];
     for (const flag of expandContractFlags) {
       const { spec } = flag;
-      const before = previousSnapshot.types[spec.typeName]?.fields[spec.fieldName];
-      const after = currentSnapshot.types[spec.typeName]?.fields[spec.fieldName];
+      const before = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
+      const after = currentSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
       if (!before || !after || before.type === after.type) continue;
       matchedExpandContractFlags.add(flag);
       const eligibility = getExpandContractEligibility({
         previous: previousSnapshot,
         current: currentSnapshot,
-        typeName: spec.typeName,
+        tableName: spec.tableName,
         fieldName: spec.fieldName,
       });
       if (!eligibility.eligible) {
@@ -355,7 +355,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     }
     expandContractKeysByNamespace.set(
       namespace,
-      new Set(applicable.map(({ spec }) => fieldKey(spec.typeName, spec.fieldName))),
+      new Set(applicable.map(({ spec }) => fieldKey(spec.tableName, spec.fieldName))),
     );
   }
   const unusedExpandContracts = expandContractFlags.filter(
@@ -467,13 +467,13 @@ async function resolveExpandContractPlans(
   if (!options.yes && canPrompt()) {
     for (const change of diff.changes) {
       if (change.kind !== "field_type_modified") continue;
-      const key = fieldKey(change.typeName, change.fieldName);
+      const key = fieldKey(change.tableName, change.fieldName);
       if (confirmed.has(key)) continue;
       if (
         !canConvertField({
           previous: previousSnapshot,
           current: currentSnapshot,
-          typeName: change.typeName,
+          tableName: change.tableName,
           fieldName: change.fieldName,
         })
       ) {
@@ -482,10 +482,10 @@ async function resolveExpandContractPlans(
 
       logger.newline();
       logger.info(
-        `${change.typeName}.${change.fieldName} changes from ${change.before.type} to ${change.after.type}, which cannot be applied in one step.`,
+        `${change.tableName}.${change.fieldName} changes from ${change.before.type} to ${change.after.type}, which cannot be applied in one step.`,
       );
       const approved = await prompt.confirm({
-        message: `Generate two migrations to convert ${change.typeName}.${change.fieldName} through a temporary field?`,
+        message: `Generate two migrations to convert ${change.tableName}.${change.fieldName} through a temporary field?`,
         default: true,
       });
       if (approved) confirmed.add(key);
@@ -514,7 +514,7 @@ async function generateInitialSnapshot(
 
   logger.success(`Generated initial schema snapshot`);
   logger.info(`  File: ${result.filePath}`);
-  logger.info(`  Types: ${Object.keys(snapshot.types).length}`);
+  logger.info(`  Types: ${Object.keys(snapshot.tables).length}`);
 
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }
@@ -624,7 +624,7 @@ function availableRenameTargets(
   claimedFields: ReadonlySet<string>,
 ): string[] {
   return candidate.added
-    .filter((added) => !claimedFields.has(`${candidate.typeName}.${added.fieldName}`))
+    .filter((added) => !claimedFields.has(`${candidate.tableName}.${added.fieldName}`))
     .map((added) => added.fieldName);
 }
 
@@ -639,7 +639,7 @@ async function promptRenameCandidate(
   candidate: FieldRenameCandidate,
   addedFieldNames: string[],
 ): Promise<string | undefined> {
-  const oldLabel = `${candidate.typeName}.${candidate.removed.fieldName}`;
+  const oldLabel = `${candidate.tableName}.${candidate.removed.fieldName}`;
   const [firstFieldName] = addedFieldNames;
   if (addedFieldNames.length === 1 && firstFieldName) {
     const isRename = await prompt.confirm({
@@ -666,8 +666,8 @@ function availableTypeRenameTargets(
   claimedTypes: ReadonlySet<string>,
 ): string[] {
   return candidate.added
-    .filter((added) => !claimedTypes.has(added.typeName))
-    .map((added) => added.typeName);
+    .filter((added) => !claimedTypes.has(added.tableName))
+    .map((added) => added.tableName);
 }
 
 /**
@@ -681,7 +681,7 @@ async function promptTypeRenameCandidate(
   candidate: TypeRenameCandidate,
   addedTypeNames: string[],
 ): Promise<string | undefined> {
-  const oldTypeName = candidate.removed.typeName;
+  const oldTypeName = candidate.removed.tableName;
   const [firstTypeName] = addedTypeNames;
   if (addedTypeNames.length === 1 && firstTypeName) {
     const isRename = await prompt.confirm({
@@ -693,9 +693,9 @@ async function promptTypeRenameCandidate(
   const selected = await prompt.select({
     message: `${oldTypeName} was removed. Was it renamed to one of these added types?`,
     choices: [
-      ...addedTypeNames.map((typeName) => ({
-        name: `Yes, renamed to ${typeName}`,
-        value: typeName as string | null,
+      ...addedTypeNames.map((tableName) => ({
+        name: `Yes, renamed to ${tableName}`,
+        value: tableName as string | null,
       })),
       { name: `No, ${oldTypeName} was removed`, value: null },
     ],
@@ -726,29 +726,29 @@ async function resolveRenames(
   const confirmed: FieldRenameSpec[] = [...specs.fieldRenames];
   const claimedFields = new Set(
     confirmed.flatMap((spec) => [
-      `${spec.typeName}.${spec.previousFieldName}`,
-      `${spec.typeName}.${spec.fieldName}`,
+      `${spec.tableName}.${spec.previousFieldName}`,
+      `${spec.tableName}.${spec.fieldName}`,
     ]),
   );
   const droppedFields = new Set(
-    specs.fieldDrops.map((spec) => `${spec.typeName}.${spec.fieldName}`),
+    specs.fieldDrops.map((spec) => `${spec.tableName}.${spec.fieldName}`),
   );
   const confirmedTypes: TypeRenameSpec[] = [...specs.typeRenames];
   const claimedTypes = new Set(
-    confirmedTypes.flatMap((spec) => [spec.previousTypeName, spec.typeName]),
+    confirmedTypes.flatMap((spec) => [spec.previousTableName, spec.tableName]),
   );
-  const droppedTypes = new Set(specs.typeDrops.map((spec) => spec.typeName));
+  const droppedTypes = new Set(specs.typeDrops.map((spec) => spec.tableName));
 
   const typeCandidates = findTypeRenameCandidates(diff).filter(
     (candidate) =>
-      !droppedTypes.has(candidate.removed.typeName) &&
-      !claimedTypes.has(candidate.removed.typeName) &&
+      !droppedTypes.has(candidate.removed.tableName) &&
+      !claimedTypes.has(candidate.removed.tableName) &&
       availableTypeRenameTargets(candidate, claimedTypes).length > 0,
   );
   const candidates = findRenameCandidates(diff).filter(
     (candidate) =>
-      !droppedFields.has(`${candidate.typeName}.${candidate.removed.fieldName}`) &&
-      !claimedFields.has(`${candidate.typeName}.${candidate.removed.fieldName}`) &&
+      !droppedFields.has(`${candidate.tableName}.${candidate.removed.fieldName}`) &&
+      !claimedFields.has(`${candidate.tableName}.${candidate.removed.fieldName}`) &&
       availableRenameTargets(candidate, claimedFields).length > 0,
   );
 
@@ -757,14 +757,14 @@ async function resolveRenames(
     for (const candidate of typeCandidates) {
       unresolved.push({
         namespace: diff.namespace,
-        label: candidate.removed.typeName,
+        label: candidate.removed.tableName,
         targets: availableTypeRenameTargets(candidate, claimedTypes),
       });
     }
     for (const candidate of candidates) {
       unresolved.push({
         namespace: diff.namespace,
-        label: `${candidate.typeName}.${candidate.removed.fieldName}`,
+        label: `${candidate.tableName}.${candidate.removed.fieldName}`,
         targets: availableRenameTargets(candidate, claimedFields),
       });
     }
@@ -775,10 +775,10 @@ async function resolveRenames(
       const newTypeName = await promptTypeRenameCandidate(candidate, addedTypeNames);
       if (newTypeName) {
         confirmedTypes.push({
-          previousTypeName: candidate.removed.typeName,
-          typeName: newTypeName,
+          previousTableName: candidate.removed.tableName,
+          tableName: newTypeName,
         });
-        claimedTypes.add(candidate.removed.typeName);
+        claimedTypes.add(candidate.removed.tableName);
         claimedTypes.add(newTypeName);
       }
     }
@@ -788,12 +788,12 @@ async function resolveRenames(
       const newFieldName = await promptRenameCandidate(candidate, addedFieldNames);
       if (newFieldName) {
         confirmed.push({
-          typeName: candidate.typeName,
+          tableName: candidate.tableName,
           previousFieldName: candidate.removed.fieldName,
           fieldName: newFieldName,
         });
-        claimedFields.add(`${candidate.typeName}.${candidate.removed.fieldName}`);
-        claimedFields.add(`${candidate.typeName}.${newFieldName}`);
+        claimedFields.add(`${candidate.tableName}.${candidate.removed.fieldName}`);
+        claimedFields.add(`${candidate.tableName}.${newFieldName}`);
       }
     }
   }
@@ -837,34 +837,34 @@ async function generateDiffFromSnapshot(
   logger.newline();
   logger.info(`Summary: ${formatDiffSummary(diff)}`);
 
-  const plannedKeys = new Set(expandPlans.map((plan) => fieldKey(plan.typeName, plan.fieldName)));
+  const plannedKeys = new Set(expandPlans.map((plan) => fieldKey(plan.tableName, plan.fieldName)));
   const unsupportedChanges = diff.breakingChanges.filter(
     (change) =>
       change.unsupported &&
-      !(change.fieldName && plannedKeys.has(fieldKey(change.typeName, change.fieldName))),
+      !(change.fieldName && plannedKeys.has(fieldKey(change.tableName, change.fieldName))),
   );
   if (unsupportedChanges.length > 0) {
     for (const change of unsupportedChanges) {
       logger.newline();
-      logger.error(`Unsupported change: ${change.typeName}.${change.fieldName}`);
+      logger.error(`Unsupported change: ${change.tableName}.${change.fieldName}`);
       logger.error(`  ${change.reason}`);
     }
 
     const convertible = unsupportedChanges.filter(
-      ({ typeName, fieldName }) =>
+      ({ tableName, fieldName }) =>
         fieldName !== undefined &&
         canConvertField({
           previous: previousSnapshot,
           current: currentSnapshot,
-          typeName,
+          tableName,
           fieldName,
         }),
     );
     if (convertible.length > 0) {
       logger.newline();
       logger.info("Convert these fields through a temporary field with:");
-      for (const { typeName, fieldName } of convertible) {
-        logger.info(`  --expand-contract "${typeName}.${fieldName}"`);
+      for (const { tableName, fieldName } of convertible) {
+        logger.info(`  --expand-contract "${tableName}.${fieldName}"`);
       }
     }
 
@@ -877,7 +877,7 @@ async function generateDiffFromSnapshot(
     }
 
     const details = unsupportedChanges
-      .map((c) => `  - ${c.typeName}.${c.fieldName}: ${c.reason}`)
+      .map((c) => `  - ${c.tableName}.${c.fieldName}: ${c.reason}`)
       .join("\n");
     throw new Error(`Unsupported schema changes detected:\n${details}`);
   }
@@ -1002,19 +1002,19 @@ async function generateExpandContractMigrations(
   const expandDiff = buildExpandDiff(previousSnapshot, intermediateSnapshot, plans);
   const confirmedFieldRenames: FieldRenameSpec[] = resolvedDiff.changes
     .filter((change) => change.kind === "field_renamed")
-    .map(({ typeName, previousFieldName, fieldName }) => ({
-      typeName,
+    .map(({ tableName, previousFieldName, fieldName }) => ({
+      tableName,
       previousFieldName,
       fieldName,
     }));
   const confirmedTypeRenames: TypeRenameSpec[] = resolvedDiff.changes
     .filter((change) => change.kind === "table_renamed")
-    .map(({ previousTypeName, typeName }) => ({ previousTypeName, typeName }));
+    .map(({ previousTableName, tableName }) => ({ previousTableName, tableName }));
   const contractDiff = compareSnapshots(intermediateSnapshot, currentSnapshot, {
     fieldRenames: [
       ...confirmedFieldRenames,
       ...plans.map((plan) => ({
-        typeName: plan.typeName,
+        tableName: plan.tableName,
         previousFieldName: plan.tempFieldName,
         fieldName: plan.fieldName,
       })),
@@ -1044,7 +1044,7 @@ async function generateExpandContractMigrations(
     description,
   );
 
-  const fields = plans.map((plan) => `${plan.typeName}.${plan.fieldName}`).join(", ");
+  const fields = plans.map((plan) => `${plan.tableName}.${plan.fieldName}`).join(", ");
   logger.success(
     `Generated migrations ${styles.bold(formatMigrationNumber(expand.migrationNumber))} and ${styles.bold(
       formatMigrationNumber(contract.migrationNumber),

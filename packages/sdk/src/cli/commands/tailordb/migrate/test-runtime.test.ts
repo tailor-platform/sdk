@@ -46,7 +46,7 @@ describe("migration test runtime", () => {
       version: 1,
       namespace: "tailordb",
       createdAt: "2026-08-05T00:00:00.000Z",
-      types: {
+      tables: {
         Order: {
           name: "Order",
           pluralForm: "Orders",
@@ -84,7 +84,7 @@ describe("migration test runtime", () => {
       version: 1,
       namespace: "tailordb",
       createdAt: "2026-08-05T00:00:00.000Z",
-      types: {
+      tables: {
         Customer: {
           name: "Customer",
           pluralForm: "Customers",
@@ -134,7 +134,7 @@ describe("migration test runtime", () => {
       version: 1,
       namespace: "primary",
       createdAt: "2026-08-05T00:00:00.000Z",
-      types: {},
+      tables: {},
     });
     const client = {
       listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
@@ -165,7 +165,7 @@ describe("migration test runtime", () => {
     });
 
     expect(snapshots.get("primary")).toBe(migrationSnapshot);
-    expect(snapshots.get("audit")?.types).toEqual({});
+    expect(snapshots.get("audit")?.tables).toEqual({});
     expect(client.listTailorDBTypes).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "source", namespaceName: "audit" }),
     );
@@ -249,7 +249,7 @@ describe("migration test runtime", () => {
       version: 1,
       namespace,
       createdAt: "2026-08-05T00:00:00.000Z",
-      types: {},
+      tables: {},
     });
   }
 
@@ -329,7 +329,7 @@ describe("migration test runtime", () => {
             version: 1,
             namespace: "audit",
             createdAt: "2026-08-05T00:00:00.000Z",
-            types: {
+            tables: {
               AuditLog: { name: "AuditLog", pluralForm: "auditLogs", fields: {} },
             },
           }),

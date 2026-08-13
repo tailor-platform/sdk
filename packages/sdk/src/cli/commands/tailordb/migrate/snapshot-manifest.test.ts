@@ -26,14 +26,14 @@ describe("snapshot-manifest", () => {
   }
 
   function createTestSnapshot(
-    types: Record<string, TailorDBSnapshotType>,
+    tables: Record<string, TailorDBSnapshotType>,
     namespace = "tailordb",
   ): SchemaSnapshot {
     return {
       version: SCHEMA_SNAPSHOT_VERSION,
       namespace,
       createdAt: new Date().toISOString(),
-      types,
+      tables,
     };
   }
 

@@ -7,6 +7,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
 import { prompt } from "#/cli/shared/prompt";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { rebaselineCommand } from "./rebaseline";
 import {
   parsedType,
@@ -184,15 +185,15 @@ describe("tailordb migration rebaseline", () => {
       fs.readFileSync(path.join(state.migrationsDir, "0000", "schema.json"), "utf-8"),
     ) as {
       version: number;
-      types: Record<string, unknown>;
+      tables: Record<string, unknown>;
       rebaseline: {
         historyId: string;
         replacedHistoryId: string | null;
         replacedLatestMigration: number;
       };
     };
-    expect(baseline.version).toBe(3);
-    expect(Object.keys(baseline.types).toSorted()).toEqual(["Post", "User"]);
+    expect(baseline.version).toBe(SCHEMA_SNAPSHOT_VERSION);
+    expect(Object.keys(baseline.tables).toSorted()).toEqual(["Post", "User"]);
     expect(baseline).toMatchObject({ namespace: "tailordb" });
     expect(baseline.rebaseline).toEqual({
       historyId: expect.stringMatching(/^h[a-z0-9_-]+$/),

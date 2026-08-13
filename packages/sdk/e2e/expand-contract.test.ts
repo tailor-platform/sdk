@@ -191,7 +191,7 @@ export async function main(trx: Transaction): Promise<void> {
     );
     runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"]);
 
-    expect(reconstructSnapshotFromMigrations(migrationsDir)?.types.User?.fields.price?.type).toBe(
+    expect(reconstructSnapshotFromMigrations(migrationsDir)?.tables.User?.fields.price?.type).toBe(
       "integer",
     );
   }, 900000);
@@ -292,7 +292,7 @@ export async function main(trx: Transaction): Promise<void> {
   test("replays local history to the declared schema", () => {
     const replayed = reconstructSnapshotFromMigrations(migrationsDir);
 
-    expect(replayed?.types.User?.fields.price?.type).toBe("boolean");
-    expect(replayed?.types.User?.fields.priceMigrate).toBeUndefined();
+    expect(replayed?.tables.User?.fields.price?.type).toBe("boolean");
+    expect(replayed?.tables.User?.fields.priceMigrate).toBeUndefined();
   });
 });

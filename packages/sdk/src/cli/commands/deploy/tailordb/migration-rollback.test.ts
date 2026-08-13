@@ -5,6 +5,7 @@
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyTailorDB, captureMigrationFileState } from "./index";
+import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -95,15 +96,15 @@ const snapshotFixtures = vi.hoisted(() => {
     reconstructSnapshotFromMigrations: (migrationsDir: string, maxVersion?: number) => {
       void migrationsDir;
       const number = maxVersion ?? 0;
-      const types = typesByMigration[number];
-      if (!types) {
+      const tables = typesByMigration[number];
+      if (!tables) {
         throw new Error(`No snapshot fixture configured for migration number: ${number}`);
       }
       return {
         version: 1 as const,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        types,
+        tables,
       };
     },
   };
@@ -256,7 +257,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
   function mkAddFieldMigration(
     number: number,
-    typeName: string,
+    tableName: string,
     fieldName: string,
   ): PendingMigration {
     return {
@@ -273,7 +274,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         changes: [
           {
             kind: "field_added",
-            typeName,
+            tableName,
             fieldName,
             after: { type: "string", required: false },
           },
@@ -286,7 +287,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     } as any;
   }
 
-  function mkAddTypeMigration(number: number, typeName: string): PendingMigration {
+  function mkAddTypeMigration(number: number, tableName: string): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -301,7 +302,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         changes: [
           {
             kind: "table_added",
-            typeName,
+            tableName,
           },
         ],
         hasBreakingChanges: false,
@@ -324,16 +325,16 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         version: 1,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        changes: typeNames.map((typeName) => ({
+        changes: typeNames.map((tableName) => ({
           kind: "field_type_modified" as const,
-          typeName,
+          tableName,
           fieldName: "value",
           before: { type: "integer" as const, required: false },
           after: { type: "float" as const, required: false },
         })),
         hasBreakingChanges: true,
-        breakingChanges: typeNames.map((typeName) => ({
-          typeName,
+        breakingChanges: typeNames.map((tableName) => ({
+          tableName,
           fieldName: "value",
           reason: "Field type changed from integer to float",
         })),
@@ -344,7 +345,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     };
   }
 
-  function mkRemoveTypeMigration(number: number, typeName: string): PendingMigration {
+  function mkRemoveTypeMigration(number: number, tableName: string): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -359,9 +360,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         changes: [
           {
             kind: "table_removed",
-            typeName,
+            tableName,
             before: {
-              name: typeName,
+              name: tableName,
               pluralForm: "retiredTypes",
               fields: { value: { type: "string", required: false } },
             },
@@ -370,7 +371,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         hasBreakingChanges: false,
         breakingChanges: [],
         hasWarnings: true,
-        warnings: [{ typeName, reason: "Type removed" }],
+        warnings: [{ tableName, reason: "Type removed" }],
         requiresMigrationScript: false,
       },
     };
@@ -378,13 +379,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
   function createFieldTypePlanResult(typeNames: string[]) {
     return buildPlanResult({
-      updates: typeNames.map((typeName) => ({
-        name: typeName,
+      updates: typeNames.map((tableName) => ({
+        name: tableName,
         request: {
           workspaceId: "test-workspace",
           namespaceName: "test-ns",
           tailordbType: {
-            name: typeName,
+            name: tableName,
             schema: { fields: { value: { type: "float", required: false } } },
           },
         },
@@ -392,12 +393,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     });
   }
 
-  function fieldTypeUpdates(client: OperatorClient, typeName: string): string[] {
+  function fieldTypeUpdates(client: OperatorClient, tableName: string): string[] {
     return vi
       .mocked(client.updateTailorDBType)
       .mock.calls.filter(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (call) => (call[0] as any)?.tailordbType?.name === typeName,
+        (call) => (call[0] as any)?.tailordbType?.name === tableName,
       )
       .map(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -413,7 +414,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   }
 
   async function withOverriddenSnapshot(
-    override: (migrationsDir: string, maxVersion?: number) => unknown,
+    override: (migrationsDir: string, maxVersion?: number) => SchemaSnapshot | null,
     run: () => Promise<void>,
   ) {
     const snap = vi.mocked(reconstructSnapshotFromMigrations);
@@ -465,7 +466,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         request: {
           workspaceId: "test-workspace",
           namespaceName: "test-ns",
-          typeName: "StockReservation",
+          tableName: "StockReservation",
           permission: {},
         },
       },
@@ -516,7 +517,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         request: {
           workspaceId: "test-workspace",
           namespaceName: "test-ns",
-          typeName: "LeakedType",
+          tableName: "LeakedType",
           permission: {},
         },
       },
@@ -639,12 +640,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: Object.fromEntries(
-        typeNames.map((typeName) => [
-          typeName,
+      tables: Object.fromEntries(
+        typeNames.map((tableName) => [
+          tableName,
           {
-            name: typeName,
-            pluralForm: `${typeName}s`,
+            name: tableName,
+            pluralForm: `${tableName}s`,
             fields: {
               value: { type: number === 0 ? "integer" : "float", required: false },
             },
@@ -656,9 +657,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     const planResult = createFieldTypePlanResult(typeNames);
     let rejected = false;
     vi.mocked(client.updateTailorDBType).mockImplementation((request) => {
-      const typeName = request.tailordbType?.name;
+      const tableName = request.tailordbType?.name;
       const fieldType = request.tailordbType?.schema?.fields?.value?.type;
-      if (!rejected && typeName === "Beta" && fieldType === "float") {
+      if (!rejected && tableName === "Beta" && fieldType === "float") {
         rejected = true;
         return Promise.reject(new Error("post-phase update failed"));
       }
@@ -686,7 +687,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: {
+      tables: {
         GoodsReceipt: {
           name: "GoodsReceipt",
           pluralForm: "goodsReceipts",
@@ -721,7 +722,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: {
+      tables: {
         GoodsReceipt: {
           name: "GoodsReceipt",
           pluralForm: "goodsReceipts",
@@ -757,7 +758,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: {
+      tables: {
         GoodsReceipt: {
           name: "GoodsReceipt",
           pluralForm: "goodsReceipts",
@@ -790,16 +791,16 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   });
 
   test("advances the checkpoint before deleting a removed type", async () => {
-    const typeName = "RetiredType";
-    const snapshots = (number: number) => ({
+    const tableName = "RetiredType";
+    const snapshots = (number: number): SchemaSnapshot => ({
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types:
+      tables:
         number === 0
           ? {
-              [typeName]: {
-                name: typeName,
+              [tableName]: {
+                name: tableName,
                 pluralForm: "retiredTypes",
                 fields: { value: { type: "string" as const, required: false } },
               },
@@ -809,11 +810,11 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     const planResult = buildPlanResult({
       deletes: [
         {
-          name: typeName,
+          name: tableName,
           request: {
             workspaceId: "test-workspace",
             namespaceName: "test-ns",
-            tailordbTypeName: typeName,
+            tailordbTypeName: tableName,
           },
         },
       ],
@@ -827,7 +828,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       order.push("delete");
       return {} as never;
     });
-    setPendingMigrations([mkRemoveTypeMigration(1, typeName)]);
+    setPendingMigrations([mkRemoveTypeMigration(1, tableName)]);
 
     await withOverriddenSnapshot(
       (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
@@ -874,7 +875,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         if ((maxVersion ?? 0) === 0 && ++baselineReads > 1) {
           throw new Error("rollback snapshot reconstruction failed");
         }
-        return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);
+        return snapshotFixtures.reconstructSnapshotFromMigrations(
+          migrationsDir,
+          maxVersion,
+        ) as SchemaSnapshot;
       },
       async () => {
         // The original failure must surface, not the rollback error.
@@ -901,7 +905,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       (migrationsDir, maxVersion) =>
         (maxVersion ?? 0) === 0
           ? null
-          : snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion),
+          : (snapshotFixtures.reconstructSnapshotFromMigrations(
+              migrationsDir,
+              maxVersion,
+            ) as SchemaSnapshot),
       async () => {
         await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
           "original migration failure",

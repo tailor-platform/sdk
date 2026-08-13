@@ -27,8 +27,8 @@ function createMockSnapshot(
   >,
   namespace = "tailordb",
 ): SchemaSnapshot {
-  const snapshotTypes: SchemaSnapshot["types"] = {};
-  for (const [typeName, typeConfig] of Object.entries(types)) {
+  const snapshotTypes: SchemaSnapshot["tables"] = {};
+  for (const [tableName, typeConfig] of Object.entries(types)) {
     const fields: Record<string, SnapshotFieldConfig> = {};
     for (const [fieldName, fieldConfig] of Object.entries(typeConfig.fields)) {
       fields[fieldName] = {
@@ -37,9 +37,9 @@ function createMockSnapshot(
         ...fieldConfig,
       };
     }
-    snapshotTypes[typeName] = {
-      name: typeName,
-      pluralForm: `${typeName}s`,
+    snapshotTypes[tableName] = {
+      name: tableName,
+      pluralForm: `${tableName}s`,
       fields,
     };
   }
@@ -48,7 +48,7 @@ function createMockSnapshot(
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace,
     createdAt: new Date().toISOString(),
-    types: snapshotTypes,
+    tables: snapshotTypes,
   };
 }
 
@@ -104,7 +104,7 @@ describe("db-types-generator", () => {
 
   type BasicFieldTypesCase = {
     testName: string;
-    typeName: string;
+    tableName: string;
     fields: Record<string, Partial<SnapshotFieldConfig>>;
     expectedContains: string[];
   };
@@ -113,7 +113,7 @@ describe("db-types-generator", () => {
     test.each<BasicFieldTypesCase>([
       {
         testName: "generates types with string fields",
-        typeName: "User",
+        tableName: "User",
         fields: {
           name: { type: "string", required: true },
           email: { type: "string", required: false },
@@ -127,7 +127,7 @@ describe("db-types-generator", () => {
       },
       {
         testName: "generates types with number fields (integer, float)",
-        typeName: "Product",
+        tableName: "Product",
         fields: {
           quantity: { type: "integer", required: true },
           price: { type: "float", required: true },
@@ -137,7 +137,7 @@ describe("db-types-generator", () => {
       },
       {
         testName: "generates types with boolean fields",
-        typeName: "Settings",
+        tableName: "Settings",
         fields: {
           isActive: { type: "boolean", required: true },
           isVerified: { type: "bool", required: false },
@@ -146,7 +146,7 @@ describe("db-types-generator", () => {
       },
       {
         testName: "generates types with uuid fields",
-        typeName: "Entity",
+        tableName: "Entity",
         fields: {
           externalId: { type: "uuid", required: true },
           referenceId: { type: "uuid", required: false },
@@ -155,7 +155,7 @@ describe("db-types-generator", () => {
       },
       {
         testName: "generates types with date strings and datetime Timestamps",
-        typeName: "Event",
+        tableName: "Event",
         fields: {
           eventDate: { type: "date", required: true },
           startTime: { type: "datetime", required: true },
@@ -168,8 +168,8 @@ describe("db-types-generator", () => {
           "endTime: Timestamp | null;",
         ],
       },
-    ])("$testName", async ({ typeName, fields, expectedContains }) => {
-      const snapshot = createMockSnapshot({ [typeName]: { fields } });
+    ])("$testName", async ({ tableName, fields, expectedContains }) => {
+      const snapshot = createMockSnapshot({ [tableName]: { fields } });
 
       const { content } = await generateContent(snapshot);
 
@@ -293,7 +293,7 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             before: { type: "string", required: false },
             after: { type: "string", required: true },
@@ -325,7 +325,7 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "updatedAt",
             before: { type: "datetime", required: false },
             after: { type: "datetime", required: true },
@@ -357,7 +357,7 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "birthDate",
             before: { type: "date", required: false },
             after: { type: "date", required: true },
@@ -385,7 +385,7 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "role",
             after: { type: "string", required: true },
           },
@@ -412,8 +412,8 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: {
               name: "User",
               pluralForm: "Users",
@@ -445,8 +445,8 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "table_renamed",
-            typeName: "Person",
-            previousTypeName: "User",
+            tableName: "Person",
+            previousTableName: "User",
             before: { name: "User", pluralForm: "Users", fields: {} },
             after: { name: "Person", pluralForm: "People", fields: {} },
           },
@@ -477,7 +477,7 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "status",
             before: {
               type: "enum",
@@ -519,7 +519,7 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "status",
             before: {
               type: "enum",
@@ -560,7 +560,7 @@ describe("db-types-generator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "roles",
             before: {
               type: "enum",

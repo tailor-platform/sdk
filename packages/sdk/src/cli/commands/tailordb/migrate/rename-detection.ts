@@ -29,7 +29,7 @@ import type {
  * A confirmed field rename to record in the migration diff.
  */
 export interface FieldRenameSpec {
-  typeName: string;
+  tableName: string;
   /** Field name before the rename. */
   previousFieldName: string;
   /** Field name after the rename. */
@@ -40,7 +40,7 @@ export interface FieldRenameSpec {
  * A removed field together with the added fields it could have been renamed to.
  */
 export interface FieldRenameCandidate {
-  typeName: string;
+  tableName: string;
   removed: FieldRemovedChange;
   /** Compatible added fields in the same type, in diff order. */
   added: FieldAddedChange[];
@@ -109,24 +109,24 @@ export function findRenameCandidates(diff: MigrationDiff): FieldRenameCandidate[
   const addedByType = new Map<string, FieldAddedChange[]>();
   for (const change of diff.changes) {
     if (change.kind === "field_removed") {
-      const list = removedByType.get(change.typeName) ?? [];
+      const list = removedByType.get(change.tableName) ?? [];
       list.push(change);
-      removedByType.set(change.typeName, list);
+      removedByType.set(change.tableName, list);
     } else if (change.kind === "field_added") {
-      const list = addedByType.get(change.typeName) ?? [];
+      const list = addedByType.get(change.tableName) ?? [];
       list.push(change);
-      addedByType.set(change.typeName, list);
+      addedByType.set(change.tableName, list);
     }
   }
 
   const candidates: FieldRenameCandidate[] = [];
-  for (const [typeName, removedChanges] of removedByType) {
-    const addedChanges = addedByType.get(typeName);
+  for (const [tableName, removedChanges] of removedByType) {
+    const addedChanges = addedByType.get(tableName);
     if (!addedChanges) continue;
     for (const removed of removedChanges) {
       const added = addedChanges.filter((a) => isRenameCompatible(removed.before, a.after));
       if (added.length > 0) {
-        candidates.push({ typeName, removed, added });
+        candidates.push({ tableName, removed, added });
       }
     }
   }
@@ -148,8 +148,8 @@ export function renameSpecApplies(
   previousSnapshot: SchemaSnapshot,
   currentSnapshot: SchemaSnapshot,
 ): boolean {
-  const prevFields = previousSnapshot.types[spec.typeName]?.fields;
-  const currFields = currentSnapshot.types[spec.typeName]?.fields;
+  const prevFields = previousSnapshot.tables[spec.tableName]?.fields;
+  const currFields = currentSnapshot.tables[spec.tableName]?.fields;
   return Boolean(
     prevFields?.[spec.previousFieldName] &&
     !currFields?.[spec.previousFieldName] &&
@@ -172,20 +172,20 @@ export function assertValidFieldRenames(
 ): void {
   const seen = new Set<string>();
   for (const rename of fieldRenames) {
-    const { typeName, previousFieldName, fieldName } = rename;
-    const label = `${typeName}.${previousFieldName}:${fieldName}`;
-    for (const key of [`${typeName}.${previousFieldName}`, `${typeName}.${fieldName}`]) {
+    const { tableName, previousFieldName, fieldName } = rename;
+    const label = `${tableName}.${previousFieldName}:${fieldName}`;
+    for (const key of [`${tableName}.${previousFieldName}`, `${tableName}.${fieldName}`]) {
       if (seen.has(key)) {
         throw new Error(`Field "${key}" appears in more than one rename.`);
       }
       seen.add(key);
     }
 
-    const prevType = previous.types[typeName];
-    const currType = current.types[typeName];
+    const prevType = previous.tables[tableName];
+    const currType = current.tables[tableName];
     if (!prevType || !currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${typeName}" must exist in both the previous and the current schema.`,
+        `Cannot rename ${label}: type "${tableName}" must exist in both the previous and the current schema.`,
       );
     }
     const prevField = prevType.fields[previousFieldName];
@@ -230,8 +230,8 @@ const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;
  */
 export function parseRenameOption(value: string): FieldRenameSpec {
   const match = value.match(RENAME_OPTION_PATTERN);
-  const [, typeName, previousFieldName, fieldName] = match ?? [];
-  if (!typeName || !previousFieldName || !fieldName) {
+  const [, tableName, previousFieldName, fieldName] = match ?? [];
+  if (!tableName || !previousFieldName || !fieldName) {
     throw new Error(
       `Invalid --rename value "${value}". Expected format: "Type.oldField:newField".`,
     );
@@ -239,7 +239,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
   if (previousFieldName === fieldName) {
     throw new Error(`Invalid --rename value "${value}": old and new field names are identical.`);
   }
-  return { typeName, previousFieldName, fieldName };
+  return { tableName, previousFieldName, fieldName };
 }
 
 /**
@@ -247,7 +247,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
  * rename candidates need no interactive confirmation.
  */
 export interface FieldDropSpec {
-  typeName: string;
+  tableName: string;
   fieldName: string;
 }
 
@@ -260,11 +260,11 @@ const DROP_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+)$/;
  */
 export function parseDropOption(value: string): FieldDropSpec {
   const match = value.match(DROP_OPTION_PATTERN);
-  const [, typeName, fieldName] = match ?? [];
-  if (!typeName || !fieldName) {
+  const [, tableName, fieldName] = match ?? [];
+  if (!tableName || !fieldName) {
     throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field".`);
   }
-  return { typeName, fieldName };
+  return { tableName, fieldName };
 }
 
 /**
@@ -280,14 +280,14 @@ export function dropSpecApplies(
   previousSnapshot: SchemaSnapshot,
   currentSnapshot: SchemaSnapshot,
 ): boolean {
-  const prevFields = previousSnapshot.types[spec.typeName]?.fields;
-  const currFields = currentSnapshot.types[spec.typeName]?.fields;
+  const prevFields = previousSnapshot.tables[spec.tableName]?.fields;
+  const currFields = currentSnapshot.tables[spec.tableName]?.fields;
   return Boolean(prevFields?.[spec.fieldName] && !currFields?.[spec.fieldName]);
 }
 
 /** A field the user approved for conversion through a temporary field. */
 export interface FieldExpandContractSpec {
-  typeName: string;
+  tableName: string;
   fieldName: string;
 }
 
@@ -298,11 +298,11 @@ export interface FieldExpandContractSpec {
  */
 export function parseExpandContractOption(value: string): FieldExpandContractSpec {
   const match = value.match(DROP_OPTION_PATTERN);
-  const [, typeName, fieldName] = match ?? [];
-  if (!typeName || !fieldName) {
+  const [, tableName, fieldName] = match ?? [];
+  if (!tableName || !fieldName) {
     throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Type.field".`);
   }
-  return { typeName, fieldName };
+  return { tableName, fieldName };
 }
 
 // ============================================================================
@@ -314,9 +314,9 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
  */
 export interface TypeRenameSpec {
   /** Type name before the rename. */
-  previousTypeName: string;
+  previousTableName: string;
   /** Type name after the rename. */
-  typeName: string;
+  tableName: string;
 }
 
 /**
@@ -333,26 +333,26 @@ export interface TypeRenameCandidate {
  * name retargeted at the new name, so a self-referential type compares equal
  * to its renamed shape.
  * @param {SnapshotFieldConfig} field - Field configuration to retarget
- * @param {string} previousTypeName - Type name before the rename
- * @param {string} typeName - Type name after the rename
+ * @param {string} previousTableName - Type name before the rename
+ * @param {string} tableName - Type name after the rename
  * @returns {SnapshotFieldConfig} Retargeted copy of the field
  */
 function retargetSelfReferences(
   field: SnapshotFieldConfig,
-  previousTypeName: string,
-  typeName: string,
+  previousTableName: string,
+  tableName: string,
 ): SnapshotFieldConfig {
   const nested = field.fields
     ? Object.fromEntries(
         Object.entries(field.fields).map(([name, member]) => [
           name,
-          retargetSelfReferences(member, previousTypeName, typeName),
+          retargetSelfReferences(member, previousTableName, tableName),
         ]),
       )
     : undefined;
   return {
     ...field,
-    ...(field.foreignKeyType === previousTypeName && { foreignKeyType: typeName }),
+    ...(field.foreignKeyType === previousTableName && { foreignKeyType: tableName }),
     ...(nested && { fields: nested }),
   };
 }
@@ -474,10 +474,10 @@ export function typeRenameSpecApplies(
   currentSnapshot: SchemaSnapshot,
 ): boolean {
   return Boolean(
-    previousSnapshot.types[spec.previousTypeName] &&
-    !currentSnapshot.types[spec.previousTypeName] &&
-    currentSnapshot.types[spec.typeName] &&
-    !previousSnapshot.types[spec.typeName],
+    previousSnapshot.tables[spec.previousTableName] &&
+    !currentSnapshot.tables[spec.previousTableName] &&
+    currentSnapshot.tables[spec.tableName] &&
+    !previousSnapshot.tables[spec.tableName],
   );
 }
 
@@ -495,35 +495,35 @@ export function assertValidTypeRenames(
 ): void {
   const seen = new Set<string>();
   for (const rename of typeRenames) {
-    const { previousTypeName, typeName } = rename;
-    const label = `${previousTypeName}:${typeName}`;
-    for (const key of [previousTypeName, typeName]) {
+    const { previousTableName, tableName } = rename;
+    const label = `${previousTableName}:${tableName}`;
+    for (const key of [previousTableName, tableName]) {
       if (seen.has(key)) {
         throw new Error(`Type "${key}" appears in more than one rename.`);
       }
       seen.add(key);
     }
 
-    const prevType = previous.types[previousTypeName];
+    const prevType = previous.tables[previousTableName];
     if (!prevType) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTypeName}" does not exist in the previous schema.`,
+        `Cannot rename ${label}: type "${previousTableName}" does not exist in the previous schema.`,
       );
     }
-    if (current.types[previousTypeName]) {
+    if (current.tables[previousTableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTypeName}" still exists in the current schema.`,
+        `Cannot rename ${label}: type "${previousTableName}" still exists in the current schema.`,
       );
     }
-    const currType = current.types[typeName];
+    const currType = current.tables[tableName];
     if (!currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${typeName}" does not exist in the current schema.`,
+        `Cannot rename ${label}: type "${tableName}" does not exist in the current schema.`,
       );
     }
-    if (previous.types[typeName]) {
+    if (previous.tables[tableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${typeName}" already exists in the previous schema.`,
+        `Cannot rename ${label}: type "${tableName}" already exists in the previous schema.`,
       );
     }
     if (!isTypeRenameCompatible(prevType, currType)) {
@@ -573,16 +573,16 @@ const TYPE_RENAME_OPTION_PATTERN = /^([^.:\s]+):([^.:\s]+)$/;
  */
 export function parseTypeRenameOption(value: string): TypeRenameSpec {
   const match = value.match(TYPE_RENAME_OPTION_PATTERN);
-  const [, previousTypeName, typeName] = match ?? [];
-  if (!previousTypeName || !typeName) {
+  const [, previousTableName, tableName] = match ?? [];
+  if (!previousTableName || !tableName) {
     throw new Error(
       `Invalid --rename value "${value}". Expected format: "Type.oldField:newField" or "OldType:NewType".`,
     );
   }
-  if (previousTypeName === typeName) {
+  if (previousTableName === tableName) {
     throw new Error(`Invalid --rename value "${value}": old and new type names are identical.`);
   }
-  return { previousTypeName, typeName };
+  return { previousTableName, tableName };
 }
 
 /**
@@ -590,7 +590,7 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
  * candidates need no interactive confirmation.
  */
 export interface TypeDropSpec {
-  typeName: string;
+  tableName: string;
 }
 
 const TYPE_DROP_OPTION_PATTERN = /^([^.:\s]+)$/;
@@ -602,11 +602,11 @@ const TYPE_DROP_OPTION_PATTERN = /^([^.:\s]+)$/;
  */
 export function parseTypeDropOption(value: string): TypeDropSpec {
   const match = value.match(TYPE_DROP_OPTION_PATTERN);
-  const [, typeName] = match ?? [];
-  if (!typeName) {
+  const [, tableName] = match ?? [];
+  if (!tableName) {
     throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field" or "Type".`);
   }
-  return { typeName };
+  return { tableName };
 }
 
 /**
@@ -622,5 +622,7 @@ export function typeDropSpecApplies(
   previousSnapshot: SchemaSnapshot,
   currentSnapshot: SchemaSnapshot,
 ): boolean {
-  return Boolean(previousSnapshot.types[spec.typeName] && !currentSnapshot.types[spec.typeName]);
+  return Boolean(
+    previousSnapshot.tables[spec.tableName] && !currentSnapshot.tables[spec.tableName],
+  );
 }

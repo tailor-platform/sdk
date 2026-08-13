@@ -487,7 +487,7 @@ export function generateAllTypeManifestsFromSnapshot(
   const manifests = new Map<string, MessageInitShape<typeof TailorDBTypeSchema>>();
   const { executorUsedTypes, ...baseOptions } = options;
 
-  for (const [typeName, snapshotType] of Object.entries(snapshot.types)) {
+  for (const [typeName, snapshotType] of Object.entries(snapshot.tables)) {
     const typeOptions: GenerateManifestOptions = {
       ...baseOptions,
       subscribed: executorUsedTypes?.has(typeName) ?? false,
@@ -520,7 +520,7 @@ export function compareSnapshotWithRemote(
   snapshot: SchemaSnapshot,
   existingTypeNames: ReadonlySet<string>,
 ): SnapshotTypeComparison {
-  const snapshotTypeNames = new Set(Object.keys(snapshot.types));
+  const snapshotTypeNames = new Set(Object.keys(snapshot.tables));
 
   const creates: string[] = [];
   const updates: string[] = [];

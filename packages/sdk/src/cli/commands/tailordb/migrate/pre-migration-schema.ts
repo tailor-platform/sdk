@@ -69,7 +69,7 @@ function isPreMigrationFieldChange(change: DiffChange): change is FieldDiffChang
 }
 
 /**
- * Map of pre-migration field changes: typeName -> fieldName -> change.
+ * Map of pre-migration field changes: tableName -> fieldName -> change.
  *
  * Includes both breaking changes (required-add, unique-add, enum value
  * removal) and warning changes (field_removed). The Pre-phase needs to
@@ -126,7 +126,7 @@ export function createPreMigrationSnapshotType(
 /**
  * Build a map of field changes that require pre-migration schema adjustment.
  * @param {PendingMigration[]} pendingMigrations - Pending migrations to scan
- * @returns {PreMigrationChangesMap} Map of changes keyed by typeName/fieldName
+ * @returns {PreMigrationChangesMap} Map of changes keyed by tableName/fieldName
  */
 export function buildPreMigrationChangesMap(
   pendingMigrations: PendingMigration[],
@@ -136,9 +136,9 @@ export function buildPreMigrationChangesMap(
     for (const change of migration.diff.changes) {
       if (!isPreMigrationFieldChange(change)) continue;
       if (!change.fieldName) continue;
-      const perType = map.get(change.typeName) ?? new Map<string, FieldDiffChange>();
+      const perType = map.get(change.tableName) ?? new Map<string, FieldDiffChange>();
       perType.set(change.fieldName, change);
-      map.set(change.typeName, perType);
+      map.set(change.tableName, perType);
     }
   }
   return map;
@@ -232,7 +232,7 @@ export function applyPreMigrationFieldAdjustments(
 
 /**
  * Map of pre-migration index changes needing relaxation:
- * typeName -> indexName -> change.
+ * tableName -> indexName -> change.
  */
 export type PreMigrationIndexChangesMap = Map<string, Map<string, IndexDiffChange>>;
 
@@ -240,7 +240,7 @@ export type PreMigrationIndexChangesMap = Map<string, Map<string, IndexDiffChang
  * Build a map of type-level index changes that require pre-migration schema
  * adjustment (the breaking ones — see {@link isBreakingIndexChange}).
  * @param {PendingMigration[]} pendingMigrations - Pending migrations to scan
- * @returns {PreMigrationIndexChangesMap} Map of changes keyed by typeName/indexName
+ * @returns {PreMigrationIndexChangesMap} Map of changes keyed by tableName/indexName
  */
 export function buildPreMigrationIndexChangesMap(
   pendingMigrations: PendingMigration[],
@@ -250,12 +250,12 @@ export function buildPreMigrationIndexChangesMap(
     for (const change of migration.diff.changes) {
       if (change.kind !== "index_added" && change.kind !== "index_modified") continue;
       const before = change.kind === "index_modified" ? change.before : undefined;
-      if (!isBreakingIndexChange(change.typeName, change.indexName, before, change.after)) {
+      if (!isBreakingIndexChange(change.tableName, change.indexName, before, change.after)) {
         continue;
       }
-      const perType = map.get(change.typeName) ?? new Map<string, IndexDiffChange>();
+      const perType = map.get(change.tableName) ?? new Map<string, IndexDiffChange>();
       perType.set(change.indexName, change);
-      map.set(change.typeName, perType);
+      map.set(change.tableName, perType);
     }
   }
   return map;

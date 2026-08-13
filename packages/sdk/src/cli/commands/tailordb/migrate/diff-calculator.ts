@@ -21,7 +21,7 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 3 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 5 as const;
 
 /** Oldest migration file format this SDK can replay. */
 export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
@@ -35,7 +35,7 @@ export type DiffChangeKind = DiffChange["kind"];
  * Properties shared by all diff change variants
  */
 interface DiffChangeBase {
-  typeName: string;
+  tableName: string;
   reason?: string;
 }
 
@@ -79,11 +79,11 @@ export interface TableRemovedChange extends DiffChangeBase {
 /**
  * A table was renamed. Recorded when the user confirms that a removed + added
  * table pair is a rename (interactively or via `--rename`).
- * `typeName` is the new name; `previousTypeName` is the old name.
+ * `tableName` is the new name; `previousTableName` is the old name.
  */
 export interface TableRenamedChange extends DiffChangeBase {
   kind: "table_renamed";
-  previousTypeName: string;
+  previousTableName: string;
   before: TailorDBSnapshotType;
   after: TailorDBSnapshotType;
 }
@@ -326,7 +326,7 @@ export interface ScriptSkippedInfo {
  * Breaking change information in migration diff
  */
 export interface BreakingChangeInfo {
-  typeName: string;
+  tableName: string;
   fieldName?: string;
   reason: string;
   /** If true, this change is not supported and migration generation will fail */
@@ -344,7 +344,7 @@ export interface BreakingChangeInfo {
  * preserve or transform data before the change applies.
  */
 export interface WarningChangeInfo {
-  typeName: string;
+  tableName: string;
   fieldName?: string;
   reason: string;
 }
@@ -373,13 +373,13 @@ export function formatMigrationDiff(diff: MigrationDiff): string {
   // Group changes by type name
   const changesByType = new Map<string, DiffChange[]>();
   for (const change of diff.changes) {
-    const existing = changesByType.get(change.typeName) ?? [];
+    const existing = changesByType.get(change.tableName) ?? [];
     existing.push(change);
-    changesByType.set(change.typeName, existing);
+    changesByType.set(change.tableName, existing);
   }
 
-  for (const [typeName, changes] of changesByType) {
-    lines.push(`${diff.namespace}.${typeName}:`);
+  for (const [tableName, changes] of changesByType) {
+    lines.push(`${diff.namespace}.${tableName}:`);
 
     for (const change of changes) {
       lines.push(formatDiffChange(change));
@@ -397,15 +397,15 @@ export function formatMigrationDiff(diff: MigrationDiff): string {
 function formatDiffChange(change: DiffChange): string {
   switch (change.kind) {
     case "table_added":
-      return `  + [Table] ${change.typeName} (new table)`;
+      return `  + [Table] ${change.tableName} (new table)`;
     case "table_removed":
-      return `  - [Table] ${change.typeName} (removed)`;
+      return `  - [Table] ${change.tableName} (removed)`;
     case "table_renamed":
-      return `  ~ [Table] ${change.previousTypeName} → ${change.typeName} (renamed)`;
+      return `  ~ [Table] ${change.previousTableName} → ${change.tableName} (renamed)`;
     case "table_modified":
-      return `  ~ [Table] ${change.typeName}: ${change.reason}`;
+      return `  ~ [Table] ${change.tableName}: ${change.reason}`;
     case "table_settings_modified":
-      return `  ~ [Table Settings] ${change.typeName}: ${change.reason ?? "settings changed"}`;
+      return `  ~ [Table Settings] ${change.tableName}: ${change.reason ?? "settings changed"}`;
     case "field_added": {
       const typeStr = formatFieldType(change.after);
       return `  + ${change.fieldName}: ${typeStr}`;
@@ -438,12 +438,12 @@ function formatDiffChange(change: DiffChange): string {
     case "permission_modified":
       return `  ~ [Permission] ${change.reason ?? "modified"}`;
     case "table_scripts_modified":
-      return `  ~ [Table Scripts] ${change.typeName}: ${change.reason ?? "table-level hooks/validate changed"}`;
+      return `  ~ [Table Scripts] ${change.tableName}: ${change.reason ?? "table-level hooks/validate changed"}`;
     default: {
       // Runtime fallback: diff.json is parsed without validation, so
       // hand-edited or future-version files may carry unknown kinds.
-      const unknown = change as { typeName: string; fieldName?: string };
-      return `  ? ${unknown.typeName}.${unknown.fieldName ?? ""}`;
+      const unknown = change as { tableName: string; fieldName?: string };
+      return `  ? ${unknown.tableName}.${unknown.fieldName ?? ""}`;
     }
   }
 }
@@ -538,7 +538,7 @@ export function formatBreakingChanges(breakingChanges: BreakingChangeInfo[]): st
   const lines: string[] = ["Breaking changes detected:", ""];
 
   for (const bc of breakingChanges) {
-    const location = bc.fieldName ? `${bc.typeName}.${bc.fieldName}` : bc.typeName;
+    const location = bc.fieldName ? `${bc.tableName}.${bc.fieldName}` : bc.tableName;
     lines.push(`  - ${location}: ${bc.reason}`);
   }
 
@@ -558,7 +558,7 @@ export function formatWarnings(warnings: WarningChangeInfo[]): string {
   const lines: string[] = ["Warning: data loss possible:", ""];
 
   for (const w of warnings) {
-    const location = w.fieldName ? `${w.typeName}.${w.fieldName}` : w.typeName;
+    const location = w.fieldName ? `${w.tableName}.${w.fieldName}` : w.tableName;
     lines.push(`  - ${location}: ${w.reason}`);
   }
 

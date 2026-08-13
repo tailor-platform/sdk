@@ -188,7 +188,7 @@ export type SchemaDriftKind =
  * Single schema drift item
  */
 export interface SchemaDrift {
-  typeName: string;
+  tableName: string;
   kind: SchemaDriftKind;
   fieldName?: string;
   indexName?: string;

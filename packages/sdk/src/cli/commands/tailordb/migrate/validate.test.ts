@@ -193,7 +193,7 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.localSchema.hasDiff).toBe(true);
     expect(report.localSchema.diff.changes).toEqual([
-      expect.objectContaining({ kind: "table_added", typeName: "Post" }),
+      expect.objectContaining({ kind: "table_added", tableName: "Post" }),
     ]);
     expect(report.remoteSchema.hasDrift).toBe(false);
   });
@@ -216,7 +216,7 @@ describe("tailordb migration validate", () => {
     expect(report.remoteSchema.drifts).toEqual([
       expect.objectContaining({
         kind: "field_missing_remote",
-        typeName: "User",
+        tableName: "User",
         fieldName: "name",
       }),
     ]);
@@ -570,7 +570,7 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.localSchema.hasDiff).toBe(true);
     expect(report.localSchema.diff.changes).toEqual([
-      expect.objectContaining({ kind: "table_added", typeName: "Post" }),
+      expect.objectContaining({ kind: "table_added", tableName: "Post" }),
     ]);
     expect(report.remoteSchema).toEqual({ skipped: "check_failed" });
   });
@@ -615,7 +615,7 @@ describe("tailordb migration validate", () => {
     expect(String(result.error)).toMatch(/not found or does not have migrations configured/);
   });
 
-  const removalWarning = { typeName: "User", fieldName: "email", reason: "Field removed" };
+  const removalWarning = { tableName: "User", fieldName: "email", reason: "Field removed" };
 
   test("--strict fails when a pending migration has unacknowledged warnings", async () => {
     using stdout = captureStdout();

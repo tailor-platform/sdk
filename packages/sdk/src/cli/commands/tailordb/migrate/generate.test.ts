@@ -47,18 +47,18 @@ vi.mock("#/cli/services/application", () => ({
 function addNamespace(
   tmpDir: string,
   namespace: string,
-  typeName: string,
+  tableName: string,
   localType: ReturnType<typeof parsedType>,
 ): TestNamespace {
   const migrationsDir = path.join(tmpDir, namespace);
-  writeInitialSchema(migrationsDir, { [typeName]: snapshotType(typeName) });
-  const entry = { namespace, migrationsDir, localTypes: { [typeName]: localType } };
+  writeInitialSchema(migrationsDir, { [tableName]: snapshotType(tableName) });
+  const entry = { namespace, migrationsDir, localTypes: { [tableName]: localType } };
   state.namespaces.push(entry);
   return entry;
 }
 
-function renamedType(typeName: string, fieldName: string): ReturnType<typeof parsedType> {
-  const type = parsedType(typeName);
+function renamedType(tableName: string, fieldName: string): ReturnType<typeof parsedType> {
+  const type = parsedType(tableName);
   type.fields[fieldName] = type.fields.name!;
   delete type.fields.name;
   return type;
@@ -281,8 +281,8 @@ describe("tailordb migration generate field rename preflight", () => {
 describe("tailordb migration generate with an unsupported field type change", () => {
   let tmpDir: string;
 
-  function retypedType(typeName: string, type: string): ReturnType<typeof parsedType> {
-    const parsed = parsedType(typeName);
+  function retypedType(tableName: string, type: string): ReturnType<typeof parsedType> {
+    const parsed = parsedType(tableName);
     const field = parsed.fields.name!;
     parsed.fields.name = { ...field, config: { ...field.config, type } };
     return parsed;
@@ -380,8 +380,8 @@ describe("tailordb migration generate with an unsupported field type change", ()
     await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
 
     const replayed = reconstructSnapshotFromMigrations(ns.migrationsDir);
-    expect(replayed?.types.User?.fields.name?.type).toBe("integer");
-    expect(replayed?.types.User?.fields.nameMigrate).toBeUndefined();
+    expect(replayed?.tables.User?.fields.name?.type).toBe("integer");
+    expect(replayed?.tables.User?.fields.nameMigrate).toBeUndefined();
   });
 
   test("keeps an unrelated change out of the conversion migration", async () => {
@@ -475,18 +475,18 @@ describe("tailordb migration generate with an unsupported field type change", ()
       expect.arrayContaining([
         expect.objectContaining({
           kind: "field_renamed",
-          typeName: "Account",
+          tableName: "Account",
           previousFieldName: "name",
           fieldName: "displayName",
         }),
         expect.objectContaining({
           kind: "table_renamed",
-          previousTypeName: "User",
-          typeName: "Person",
+          previousTableName: "User",
+          tableName: "Person",
         }),
         expect.objectContaining({
           kind: "field_renamed",
-          typeName: "Product",
+          tableName: "Product",
           previousFieldName: "nameMigrate",
           fieldName: "name",
         }),
@@ -568,8 +568,8 @@ describe("tailordb migration generate type rename preflight", () => {
     expect(diff.changes).toEqual([
       expect.objectContaining({
         kind: "table_renamed",
-        typeName: "Person",
-        previousTypeName: "User",
+        tableName: "Person",
+        previousTableName: "User",
       }),
     ]);
     expect(diff.requiresMigrationScript).toBe(true);

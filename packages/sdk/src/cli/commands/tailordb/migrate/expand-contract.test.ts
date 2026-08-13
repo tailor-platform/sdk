@@ -10,7 +10,7 @@ function snapshot(fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot {
     version: 1,
     namespace: "testdb",
     createdAt: "2026-01-01T00:00:00.000Z",
-    types: { User: { ...snapshotType("User"), fields } },
+    tables: { User: { ...snapshotType("User"), fields } },
   };
 }
 
@@ -19,7 +19,7 @@ function snapshotWithType(
   options: Partial<Omit<TailorDBSnapshotType, "fields" | "name" | "pluralForm">>,
 ): SchemaSnapshot {
   const base = snapshot(fields);
-  base.types.User = { ...base.types.User!, ...options };
+  base.tables.User = { ...base.tables.User!, ...options };
   return base;
 }
 
@@ -28,7 +28,7 @@ function typeChange(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
 ): DiffChange {
-  return { kind: "field_type_modified", typeName: "User", fieldName, before, after };
+  return { kind: "field_type_modified", tableName: "User", fieldName, before, after };
 }
 
 describe("buildTempFieldName", () => {
@@ -70,7 +70,7 @@ describe("planExpandContract", () => {
   function unsupportedPrice() {
     return [
       {
-        typeName: "User",
+        tableName: "User",
         fieldName: "price",
         reason: "Field type changed from integer to boolean",
         unsupported: true,
@@ -86,7 +86,7 @@ describe("planExpandContract", () => {
 
     expect(plans).toEqual([
       {
-        typeName: "User",
+        tableName: "User",
         fieldName: "price",
         tempFieldName: "priceMigrate",
         before: snapshotField("integer"),
@@ -129,8 +129,8 @@ describe("planExpandContract", () => {
   test("blocks a field an index still points at", () => {
     const withIndex = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => {
       const base = snapshot(fields);
-      base.types.User = {
-        ...base.types.User!,
+      base.tables.User = {
+        ...base.tables.User!,
         indexes: { byPrice: { fields: ["price"] } },
       };
       return base;
@@ -179,8 +179,8 @@ describe("planExpandContract", () => {
   test("blocks a field a reference in the previous schema still names", () => {
     const withIndex = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => {
       const base = snapshot(fields);
-      base.types.User = {
-        ...base.types.User!,
+      base.tables.User = {
+        ...base.tables.User!,
         indexes: { byPrice: { fields: ["price"] } },
       };
       return base;
@@ -240,7 +240,7 @@ describe("planExpandContract", () => {
         changes: [typeChange("input", snapshotField("integer"), snapshotField("boolean"))],
         breakingChanges: [
           {
-            typeName: "User",
+            tableName: "User",
             fieldName: "input",
             reason: "Field type changed from integer to boolean",
             unsupported: true,
@@ -448,8 +448,8 @@ describe("planExpandContract", () => {
   test("avoids a temporary name a file or relationship already exposes", () => {
     const withMembers = (fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot => {
       const base = snapshot(fields);
-      base.types.User = {
-        ...base.types.User!,
+      base.tables.User = {
+        ...base.tables.User!,
         files: { priceMigrate: "text/csv" },
         forwardRelationships: {
           priceMigrate2: {
@@ -500,7 +500,7 @@ describe("planExpandContract", () => {
       [
         ...unsupportedPrice(),
         {
-          typeName: "User",
+          tableName: "User",
           fieldName: "tags",
           reason: "Field changed from single value to array",
           unsupported: true,

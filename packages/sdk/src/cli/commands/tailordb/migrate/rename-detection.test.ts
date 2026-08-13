@@ -140,7 +140,7 @@ describe("assertValidFieldRenames", () => {
       version: 1,
       namespace: "tailordb",
       createdAt: new Date().toISOString(),
-      types: { User: { name: "User", pluralForm: "Users", fields } },
+      tables: { User: { name: "User", pluralForm: "Users", fields } },
     });
 
   test("explains nested member structure incompatibility", () => {
@@ -151,7 +151,7 @@ describe("assertValidFieldRenames", () => {
       assertValidFieldRenames(
         snapshot({ fullName: nested({ legacy: stringField() }) }),
         snapshot({ displayName: nested({ replacement: stringField() }) }),
-        [{ typeName: "User", previousFieldName: "fullName", fieldName: "displayName" }],
+        [{ tableName: "User", previousFieldName: "fullName", fieldName: "displayName" }],
       ),
     ).toThrow("nested member names, requiredness, and types must match recursively");
   });
@@ -163,19 +163,19 @@ describe("findRenameCandidates", () => {
       changes: [
         {
           kind: "field_removed",
-          typeName: "User",
+          tableName: "User",
           fieldName: "fullName",
           before: stringField(),
         },
         {
           kind: "field_added",
-          typeName: "User",
+          tableName: "User",
           fieldName: "displayName",
           after: stringField(),
         },
         {
           kind: "field_added",
-          typeName: "User",
+          tableName: "User",
           fieldName: "age",
           after: stringField({ type: "integer" }),
         },
@@ -185,7 +185,7 @@ describe("findRenameCandidates", () => {
     const candidates = findRenameCandidates(diff);
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]!.typeName).toBe("User");
+    expect(candidates[0]!.tableName).toBe("User");
     expect(candidates[0]!.removed.fieldName).toBe("fullName");
     expect(candidates[0]!.added.map((a) => a.fieldName)).toEqual(["displayName"]);
   });
@@ -195,13 +195,13 @@ describe("findRenameCandidates", () => {
       changes: [
         {
           kind: "field_removed",
-          typeName: "User",
+          tableName: "User",
           fieldName: "fullName",
           before: stringField(),
         },
         {
           kind: "field_added",
-          typeName: "Company",
+          tableName: "Company",
           fieldName: "displayName",
           after: stringField(),
         },
@@ -216,13 +216,13 @@ describe("findRenameCandidates", () => {
       changes: [
         {
           kind: "field_removed",
-          typeName: "User",
+          tableName: "User",
           fieldName: "fullName",
           before: stringField(),
         },
         {
           kind: "field_added",
-          typeName: "User",
+          tableName: "User",
           fieldName: "age",
           after: stringField({ type: "integer" }),
         },
@@ -237,19 +237,19 @@ describe("findRenameCandidates", () => {
       changes: [
         {
           kind: "field_removed",
-          typeName: "User",
+          tableName: "User",
           fieldName: "fullName",
           before: stringField(),
         },
         {
           kind: "field_added",
-          typeName: "User",
+          tableName: "User",
           fieldName: "displayName",
           after: stringField(),
         },
         {
           kind: "field_added",
-          typeName: "User",
+          tableName: "User",
           fieldName: "nickname",
           after: stringField(),
         },
@@ -270,9 +270,9 @@ describe("renameSpecApplies", () => {
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types: { User: { name: "User", pluralForm: "Users", fields } },
+    tables: { User: { name: "User", pluralForm: "Users", fields } },
   });
-  const spec = { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" };
+  const spec = { tableName: "User", previousFieldName: "fullName", fieldName: "displayName" };
 
   test("matches a removed + added pair", () => {
     expect(
@@ -303,7 +303,7 @@ describe("renameSpecApplies", () => {
   test("does not match when the type does not exist", () => {
     expect(
       renameSpecApplies(
-        { ...spec, typeName: "Ghost" },
+        { ...spec, tableName: "Ghost" },
         snapshot({ fullName: stringField() }),
         snapshot({ displayName: stringField() }),
       ),
@@ -318,9 +318,9 @@ describe("dropSpecApplies", () => {
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types: { User: { name: "User", pluralForm: "Users", fields } },
+    tables: { User: { name: "User", pluralForm: "Users", fields } },
   });
-  const spec = { typeName: "User", fieldName: "fullName" };
+  const spec = { tableName: "User", fieldName: "fullName" };
 
   test("matches a removed field", () => {
     expect(dropSpecApplies(spec, snapshot({ fullName: stringField() }), snapshot({}))).toBe(true);
@@ -344,7 +344,7 @@ describe("dropSpecApplies", () => {
 describe("parseDropOption", () => {
   test("parses Type.field", () => {
     expect(parseDropOption("User.fullName")).toEqual({
-      typeName: "User",
+      tableName: "User",
       fieldName: "fullName",
     });
   });
@@ -360,7 +360,7 @@ describe("parseDropOption", () => {
 describe("parseRenameOption", () => {
   test("parses Type.old:new", () => {
     expect(parseRenameOption("User.fullName:displayName")).toEqual({
-      typeName: "User",
+      tableName: "User",
       previousFieldName: "fullName",
       fieldName: "displayName",
     });
@@ -610,11 +610,11 @@ describe("findTypeRenameCandidates", () => {
   test("pairs a removed type with compatible added types", () => {
     const diff = createMockMigrationDiff({
       changes: [
-        { kind: "table_removed", typeName: "User", before: snapshotType("User") },
-        { kind: "table_added", typeName: "Person", after: snapshotType("Person") },
+        { kind: "table_removed", tableName: "User", before: snapshotType("User") },
+        { kind: "table_added", tableName: "Person", after: snapshotType("Person") },
         {
           kind: "table_added",
-          typeName: "Order",
+          tableName: "Order",
           after: snapshotType("Order", {
             fields: { id: { type: "uuid", required: true }, total: stringField() },
           }),
@@ -625,17 +625,17 @@ describe("findTypeRenameCandidates", () => {
     const candidates = findTypeRenameCandidates(diff);
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]!.removed.typeName).toBe("User");
-    expect(candidates[0]!.added.map((a) => a.typeName)).toEqual(["Person"]);
+    expect(candidates[0]!.removed.tableName).toBe("User");
+    expect(candidates[0]!.added.map((a) => a.tableName)).toEqual(["Person"]);
   });
 
   test("returns no candidates when nothing is compatible", () => {
     const diff = createMockMigrationDiff({
       changes: [
-        { kind: "table_removed", typeName: "User", before: snapshotType("User") },
+        { kind: "table_removed", tableName: "User", before: snapshotType("User") },
         {
           kind: "table_added",
-          typeName: "Order",
+          tableName: "Order",
           after: snapshotType("Order", {
             fields: { id: { type: "uuid", required: true }, total: stringField() },
           }),
@@ -649,27 +649,27 @@ describe("findTypeRenameCandidates", () => {
   test("lists multiple compatible added types for one removed type", () => {
     const diff = createMockMigrationDiff({
       changes: [
-        { kind: "table_removed", typeName: "User", before: snapshotType("User") },
-        { kind: "table_added", typeName: "Person", after: snapshotType("Person") },
-        { kind: "table_added", typeName: "Member", after: snapshotType("Member") },
+        { kind: "table_removed", tableName: "User", before: snapshotType("User") },
+        { kind: "table_added", tableName: "Person", after: snapshotType("Person") },
+        { kind: "table_added", tableName: "Member", after: snapshotType("Member") },
       ],
     });
 
     const candidates = findTypeRenameCandidates(diff);
 
     expect(candidates).toHaveLength(1);
-    expect(candidates[0]!.added.map((a) => a.typeName)).toEqual(["Person", "Member"]);
+    expect(candidates[0]!.added.map((a) => a.tableName)).toEqual(["Person", "Member"]);
   });
 });
 
 describe("typeRenameSpecApplies", () => {
-  const snapshot = (types: Record<string, TailorDBSnapshotType>) => ({
+  const snapshot = (tables: Record<string, TailorDBSnapshotType>) => ({
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types,
+    tables,
   });
-  const spec = { previousTypeName: "User", typeName: "Person" };
+  const spec = { previousTableName: "User", tableName: "Person" };
 
   test("matches a removed + added pair", () => {
     expect(
@@ -699,12 +699,12 @@ describe("typeRenameSpecApplies", () => {
 });
 
 describe("assertValidTypeRenames", () => {
-  const normalized = (types: Record<string, TailorDBSnapshotType>) =>
+  const normalized = (tables: Record<string, TailorDBSnapshotType>) =>
     normalizeSchemaSnapshot({
       version: 1,
       namespace: "tailordb",
       createdAt: new Date().toISOString(),
-      types,
+      tables,
     });
 
   test("accepts a compatible removed + added pair", () => {
@@ -712,7 +712,7 @@ describe("assertValidTypeRenames", () => {
       assertValidTypeRenames(
         normalized({ User: snapshotType("User") }),
         normalized({ Person: snapshotType("Person") }),
-        [{ previousTypeName: "User", typeName: "Person" }],
+        [{ previousTableName: "User", tableName: "Person" }],
       ),
     ).not.toThrow();
   });
@@ -723,8 +723,8 @@ describe("assertValidTypeRenames", () => {
         normalized({ User: snapshotType("User") }),
         normalized({ Person: snapshotType("Person") }),
         [
-          { previousTypeName: "User", typeName: "Person" },
-          { previousTypeName: "User", typeName: "Person" },
+          { previousTableName: "User", tableName: "Person" },
+          { previousTableName: "User", tableName: "Person" },
         ],
       ),
     ).toThrow("appears in more than one rename");
@@ -733,7 +733,7 @@ describe("assertValidTypeRenames", () => {
   test("rejects a rename whose old type is missing from the previous schema", () => {
     expect(() =>
       assertValidTypeRenames(normalized({}), normalized({ Person: snapshotType("Person") }), [
-        { previousTypeName: "User", typeName: "Person" },
+        { previousTableName: "User", tableName: "Person" },
       ]),
     ).toThrow('type "User" does not exist in the previous schema');
   });
@@ -741,7 +741,7 @@ describe("assertValidTypeRenames", () => {
   test("rejects a rename whose new type is missing from the current schema", () => {
     expect(() =>
       assertValidTypeRenames(normalized({ User: snapshotType("User") }), normalized({}), [
-        { previousTypeName: "User", typeName: "Person" },
+        { previousTableName: "User", tableName: "Person" },
       ]),
     ).toThrow('type "Person" does not exist in the current schema');
   });
@@ -755,7 +755,7 @@ describe("assertValidTypeRenames", () => {
             fields: { id: { type: "uuid", required: true }, fullName: stringField() },
           }),
         }),
-        [{ previousTypeName: "User", typeName: "Person" }],
+        [{ previousTableName: "User", tableName: "Person" }],
       ),
     ).toThrow("not rename-compatible");
   });
@@ -764,8 +764,8 @@ describe("assertValidTypeRenames", () => {
 describe("parseTypeRenameOption", () => {
   test("parses OldType:NewType", () => {
     expect(parseTypeRenameOption("User:Person")).toEqual({
-      previousTypeName: "User",
-      typeName: "Person",
+      previousTableName: "User",
+      tableName: "Person",
     });
   });
 
@@ -783,7 +783,7 @@ describe("parseTypeRenameOption", () => {
 
 describe("parseTypeDropOption", () => {
   test("parses Type", () => {
-    expect(parseTypeDropOption("User")).toEqual({ typeName: "User" });
+    expect(parseTypeDropOption("User")).toEqual({ tableName: "User" });
   });
 
   test.each(["User.name", "User:Person", ""])("rejects malformed value %j", (value) => {
@@ -792,17 +792,17 @@ describe("parseTypeDropOption", () => {
 });
 
 describe("typeDropSpecApplies", () => {
-  const snapshot = (types: Record<string, TailorDBSnapshotType>) => ({
+  const snapshot = (tables: Record<string, TailorDBSnapshotType>) => ({
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types,
+    tables,
   });
 
   test("matches a removed type", () => {
     expect(
       typeDropSpecApplies(
-        { typeName: "User" },
+        { tableName: "User" },
         snapshot({ User: snapshotType("User") }),
         snapshot({}),
       ),
@@ -812,7 +812,7 @@ describe("typeDropSpecApplies", () => {
   test("does not match when the type still exists", () => {
     expect(
       typeDropSpecApplies(
-        { typeName: "User" },
+        { tableName: "User" },
         snapshot({ User: snapshotType("User") }),
         snapshot({ User: snapshotType("User") }),
       ),

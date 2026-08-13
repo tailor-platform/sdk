@@ -30,17 +30,17 @@ interface EnumValueChange {
  * Information about breaking change fields that need special handling
  */
 interface BreakingChangeFieldInfo {
-  /** Map of typeName -> Set of fieldNames that are changing from optional to required */
+  /** Map of tableName -> Set of fieldNames that are changing from optional to required */
   optionalToRequired: Map<string, Set<string>>;
-  /** Map of typeName -> Map of fieldName -> SnapshotFieldConfig for newly added required fields */
+  /** Map of tableName -> Map of fieldName -> SnapshotFieldConfig for newly added required fields */
   addedRequiredFields: Map<string, Map<string, SnapshotFieldConfig>>;
-  /** Map of typeName -> Map of fieldName -> EnumValueChange for enum value changes */
+  /** Map of tableName -> Map of fieldName -> EnumValueChange for enum value changes */
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
-  /** Map of typeName -> Map of new fieldName -> SnapshotFieldConfig for renamed fields */
+  /** Map of tableName -> Map of new fieldName -> SnapshotFieldConfig for renamed fields */
   renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
-  /** Map of typeName -> Set of fieldNames a conversion script clears */
+  /** Map of tableName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
-  /** Map of new typeName -> TailorDBSnapshotType for renamed types */
+  /** Map of new tableName -> TailorDBSnapshotType for renamed types */
   renamedTypes: Map<string, TailorDBSnapshotType>;
 }
 
@@ -62,11 +62,11 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
 
       // Check if this is an optional -> required change
       if (!before.required && after.required) {
-        if (!optionalToRequired.has(change.typeName)) {
-          optionalToRequired.set(change.typeName, new Set());
+        if (!optionalToRequired.has(change.tableName)) {
+          optionalToRequired.set(change.tableName, new Set());
         }
         assertDefined(
-          optionalToRequired.get(change.typeName),
+          optionalToRequired.get(change.tableName),
           "optionalToRequired entry missing",
         ).add(change.fieldName);
       }
@@ -87,11 +87,11 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           beforeValues.some((v) => !afterSet.has(v)) || afterValues.some((v) => !beforeSet.has(v));
 
         if (hasChanges) {
-          if (!enumValueChanges.has(change.typeName)) {
-            enumValueChanges.set(change.typeName, new Map());
+          if (!enumValueChanges.has(change.tableName)) {
+            enumValueChanges.set(change.tableName, new Map());
           }
           assertDefined(
-            enumValueChanges.get(change.typeName),
+            enumValueChanges.get(change.tableName),
             "enumValueChanges entry missing",
           ).set(change.fieldName, {
             beforeValues,
@@ -105,28 +105,28 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
       // Required field added is a breaking change - add it as optional in db.ts
       // so migration script can set values for existing records
       if (after.required) {
-        if (!addedRequiredFields.has(change.typeName)) {
-          addedRequiredFields.set(change.typeName, new Map());
+        if (!addedRequiredFields.has(change.tableName)) {
+          addedRequiredFields.set(change.tableName, new Map());
         }
         assertDefined(
-          addedRequiredFields.get(change.typeName),
+          addedRequiredFields.get(change.tableName),
           "addedRequiredFields entry missing",
         ).set(change.fieldName, after);
       }
     } else if (change.kind === "field_renamed") {
       // The new field is missing from the pre-migration snapshot; inject it so
       // the copy script can write it (the old field stays readable as-is).
-      if (!renamedFields.has(change.typeName)) {
-        renamedFields.set(change.typeName, new Map());
+      if (!renamedFields.has(change.tableName)) {
+        renamedFields.set(change.tableName, new Map());
       }
-      assertDefined(renamedFields.get(change.typeName), "renamedFields entry missing").set(
+      assertDefined(renamedFields.get(change.tableName), "renamedFields entry missing").set(
         change.fieldName,
         change.after,
       );
     } else if (change.kind === "table_renamed") {
       // The new type is missing from the pre-migration snapshot; inject it so
       // the copy script can insert into it (the old type stays readable as-is).
-      renamedTypes.set(change.typeName, change.after);
+      renamedTypes.set(change.tableName, change.after);
     }
   }
 
@@ -168,18 +168,18 @@ function generateDbTypesFromSnapshot(
   // the conversion script can write it, as a renamed field's new name is.
   for (const plan of expandPlans) {
     const injected =
-      breakingChangeFields.renamedFields.get(plan.typeName) ??
+      breakingChangeFields.renamedFields.get(plan.tableName) ??
       new Map<string, SnapshotFieldConfig>();
     injected.set(plan.tempFieldName, { ...plan.after, required: false, unique: false });
-    breakingChangeFields.renamedFields.set(plan.typeName, injected);
+    breakingChangeFields.renamedFields.set(plan.tableName, injected);
 
-    const cleared = breakingChangeFields.clearedFields.get(plan.typeName) ?? new Set<string>();
+    const cleared = breakingChangeFields.clearedFields.get(plan.tableName) ?? new Set<string>();
     cleared.add(plan.fieldName);
-    breakingChangeFields.clearedFields.set(plan.typeName, cleared);
+    breakingChangeFields.clearedFields.set(plan.tableName, cleared);
   }
 
-  const types = [...Object.values(snapshot.types), ...breakingChangeFields.renamedTypes.values()];
-  if (types.length === 0) {
+  const tables = [...Object.values(snapshot.tables), ...breakingChangeFields.renamedTypes.values()];
+  if (tables.length === 0) {
     return generateEmptyDbTypes(snapshot.namespace);
   }
 
@@ -188,7 +188,7 @@ function generateDbTypesFromSnapshot(
 
   // Generate type definitions
   const typeDefinitions: string[] = [];
-  for (const type of types) {
+  for (const type of tables) {
     const result = generateTableType(type, breakingChangeFields);
     if (result.usedTimestamp) usedUtilityTypes.add("Timestamp");
     typeDefinitions.push(result.typeDef);

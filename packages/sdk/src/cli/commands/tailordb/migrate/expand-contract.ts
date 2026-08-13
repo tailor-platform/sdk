@@ -25,7 +25,7 @@ const TEMP_FIELD_SUFFIX = "Migrate";
 
 /** One field type change to carry through a temporary field. */
 export interface ExpandContractPlan {
-  typeName: string;
+  tableName: string;
   fieldName: string;
   /** Field that holds converted values until the contract migration. */
   tempFieldName: string;
@@ -41,12 +41,12 @@ export interface ExpandContractPlanning {
 
 /**
  * Key identifying a field across snapshots and user-supplied options.
- * @param typeName - Name of the type holding the field
+ * @param tableName - Name of the type holding the field
  * @param fieldName - Name of the field
  * @returns Key in `Type.field` form
  */
-export function fieldKey(typeName: string, fieldName: string): string {
-  return `${typeName}.${fieldName}`;
+export function fieldKey(tableName: string, fieldName: string): string {
+  return `${tableName}.${fieldName}`;
 }
 
 /**
@@ -103,17 +103,17 @@ export type ExpandContractEligibility = { eligible: true } | { eligible: false; 
 export function getExpandContractEligibility(
   options: CanConvertFieldOptions,
 ): ExpandContractEligibility {
-  const { previous, current, typeName, fieldName } = options;
-  const before = previous.types[typeName]?.fields[fieldName];
-  const after = current.types[typeName]?.fields[fieldName];
+  const { previous, current, tableName, fieldName } = options;
+  const before = previous.tables[tableName]?.fields[fieldName];
+  const after = current.tables[tableName]?.fields[fieldName];
   if (!before || !after) {
     return { eligible: false, reason: "the field does not exist in both schemas" };
   }
   const fieldEligibility = getExpandContractFieldChangeEligibility(before, after);
   if (!fieldEligibility.eligible) return fieldEligibility;
   if (
-    isFieldReferenced(previous.types[typeName], fieldName) ||
-    isFieldReferenced(current.types[typeName], fieldName)
+    isFieldReferenced(previous.tables[tableName], fieldName) ||
+    isFieldReferenced(current.tables[tableName], fieldName)
   ) {
     return { eligible: false, reason: "another schema feature references the field" };
   }
@@ -124,7 +124,7 @@ export function getExpandContractEligibility(
 export interface CanConvertFieldOptions {
   previous: SchemaSnapshot;
   current: SchemaSnapshot;
-  typeName: string;
+  tableName: string;
   fieldName: string;
 }
 
@@ -390,13 +390,13 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
 
   for (const change of diff.changes) {
     if (change.kind !== "field_type_modified") continue;
-    const key = fieldKey(change.typeName, change.fieldName);
+    const key = fieldKey(change.tableName, change.fieldName);
     if (!confirmed.has(key)) continue;
     if (
       !canConvertField({
         previous,
         current,
-        typeName: change.typeName,
+        tableName: change.tableName,
         fieldName: change.fieldName,
       })
     ) {
@@ -406,14 +406,14 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
     // A temporary field shares the type's GraphQL namespace with its files and
     // relationships, so a name taken by either is not available.
     const taken = new Set([
-      ...typeMemberNames(previous.types[change.typeName]),
-      ...typeMemberNames(current.types[change.typeName]),
+      ...typeMemberNames(previous.tables[change.tableName]),
+      ...typeMemberNames(current.tables[change.tableName]),
       ...plans
-        .filter((plan) => plan.typeName === change.typeName)
+        .filter((plan) => plan.tableName === change.tableName)
         .map((plan) => plan.tempFieldName),
     ]);
     plans.push({
-      typeName: change.typeName,
+      tableName: change.tableName,
       fieldName: change.fieldName,
       tempFieldName: buildTempFieldName(change.fieldName, taken),
       before: change.before,
@@ -425,7 +425,7 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
   const blocked = diff.breakingChanges.filter(
     (change) =>
       change.unsupported &&
-      !(change.fieldName && planned.has(fieldKey(change.typeName, change.fieldName))),
+      !(change.fieldName && planned.has(fieldKey(change.tableName, change.fieldName))),
   );
 
   return { plans, blocked };
