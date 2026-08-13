@@ -44,7 +44,7 @@ The auth namespace used to resolve request tokens against your workspace's auth 
 
 ```typescript
 const auth = defineAuth("my-auth", {
-  /* ... */
+  // ...auth configuration...
 });
 
 defineAIGateway("my-aigateway", {
