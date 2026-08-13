@@ -210,6 +210,20 @@ function renameLegacyEntryFields(entry: unknown): unknown {
 const LEGACY_FIELD_CARRIERS = ["changes", "breakingChanges", "warnings"] as const;
 
 /**
+ * Move a pre-rename `types` record to `tables` so schema.json files written
+ * before the rename keep validating against the current schema.
+ * @param {unknown} raw - Parsed schema.json contents
+ * @returns {unknown} Snapshot contents with the legacy key moved
+ */
+function normalizeLegacyTablesKey(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null) return raw;
+  const source = raw as Record<string, unknown>;
+  if (!("types" in source) || "tables" in source) return raw;
+  const { types, ...rest } = source;
+  return { ...rest, tables: types };
+}
+
+/**
  * Rewrite the pre-rename `typeName` / `previousTypeName` keys to their current
  * names across every persisted position that carries a table name.
  * @param {unknown} raw - Parsed diff.json contents
@@ -295,11 +309,11 @@ function normalizeSnapshotType(type: TailorDBSnapshotType): TailorDBSnapshotType
  * @returns {NormalizedSchemaSnapshot} A new schema snapshot object branded as normalized
  */
 export function normalizeSchemaSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
-  const types = createSnapshotRecord<TailorDBSnapshotType>();
-  for (const [tableName, type] of Object.entries(snapshot.types)) {
-    types[tableName] = normalizeSnapshotType(type);
+  const tables = createSnapshotRecord<TailorDBSnapshotType>();
+  for (const [tableName, type] of Object.entries(snapshot.tables)) {
+    tables[tableName] = normalizeSnapshotType(type);
   }
-  return { ...snapshot, types } as NormalizedSchemaSnapshot;
+  return { ...snapshot, tables } as NormalizedSchemaSnapshot;
 }
 
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
@@ -624,7 +638,7 @@ export function createSnapshotFromLocalTypes(
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace,
     createdAt: new Date().toISOString(),
-    types: snapshotTypes,
+    tables: snapshotTypes,
   });
 }
 
@@ -646,7 +660,7 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${String(error)}`, { cause: error });
   }
   assertSupportedMigrationFileVersion(filePath, raw);
-  const result = schemaSnapshotSchema.safeParse(raw);
+  const result = schemaSnapshotSchema.safeParse(normalizeLegacyTablesKey(raw));
   if (!result.success) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`, {
       cause: result.error,
@@ -796,21 +810,21 @@ function applyDiffToSnapshot(
   snapshot: SchemaSnapshot,
   diff: MigrationDiff,
 ): NormalizedSchemaSnapshot {
-  const types = copySnapshotRecord(snapshot.types);
+  const tables = copySnapshotRecord(snapshot.tables);
 
   for (const change of diff.changes) {
     switch (change.kind) {
       case "table_added":
-        types[change.tableName] = change.after;
+        tables[change.tableName] = change.after;
         break;
       case "table_removed":
-        delete types[change.tableName];
+        delete tables[change.tableName];
         break;
       case "table_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing && change.after) {
           const after = change.after;
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             ...(after.indexes !== undefined && { indexes: after.indexes }),
             ...(after.files !== undefined && { files: after.files }),
@@ -819,9 +833,9 @@ function applyDiffToSnapshot(
         break;
       }
       case "table_settings_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             description: change.after.description,
             pluralForm: change.after.pluralForm,
@@ -831,10 +845,10 @@ function applyDiffToSnapshot(
         break;
       }
       case "table_scripts_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
           const { typeHookExpr: _, typeValidateExpr: __, ...rest } = existing;
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...rest,
             ...(change.after.typeHookExpr && { typeHookExpr: change.after.typeHookExpr }),
             ...(change.after.typeValidateExpr !== undefined && {
@@ -847,11 +861,11 @@ function applyDiffToSnapshot(
       case "field_added":
       case "field_modified":
       case "field_type_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
           const fields = copySnapshotRecord(existing.fields);
           fields[change.fieldName] = change.after;
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             fields,
           };
@@ -859,11 +873,11 @@ function applyDiffToSnapshot(
         break;
       }
       case "field_removed": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
           const remainingFields = copySnapshotRecord(existing.fields);
           delete remainingFields[change.fieldName];
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             fields: remainingFields,
           };
@@ -871,12 +885,12 @@ function applyDiffToSnapshot(
         break;
       }
       case "field_renamed": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
           const fields = copySnapshotRecord(existing.fields);
           delete fields[change.previousFieldName];
           fields[change.fieldName] = change.after;
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             fields,
           };
@@ -884,16 +898,16 @@ function applyDiffToSnapshot(
         break;
       }
       case "table_renamed":
-        delete types[change.previousTableName];
-        types[change.tableName] = change.after;
+        delete tables[change.previousTableName];
+        tables[change.tableName] = change.after;
         break;
       case "index_added":
       case "index_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
           const indexes = copySnapshotRecord(existing.indexes);
           indexes[change.indexName] = change.after;
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             indexes,
           };
@@ -901,11 +915,11 @@ function applyDiffToSnapshot(
         break;
       }
       case "index_removed": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing && existing.indexes) {
           const remainingIndexes = copySnapshotRecord(existing.indexes);
           delete remainingIndexes[change.indexName];
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             indexes: Object.keys(remainingIndexes).length > 0 ? remainingIndexes : undefined,
           };
@@ -914,11 +928,11 @@ function applyDiffToSnapshot(
       }
       case "file_added":
       case "file_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
           const files = copySnapshotRecord(existing.files);
           files[change.fieldName] = change.after;
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             files,
           };
@@ -926,11 +940,11 @@ function applyDiffToSnapshot(
         break;
       }
       case "file_removed": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing && existing.files) {
           const remainingFiles = copySnapshotRecord(existing.files);
           delete remainingFiles[change.fieldName];
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             files: Object.keys(remainingFiles).length > 0 ? remainingFiles : undefined,
           };
@@ -939,7 +953,7 @@ function applyDiffToSnapshot(
       }
       case "relationship_added":
       case "relationship_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing) {
           const rel = change.after;
           // Use relationshipType if specified, fallback to existing logic for backwards compatibility
@@ -954,14 +968,14 @@ function applyDiffToSnapshot(
           if (targetType === "forward") {
             const forwardRelationships = copySnapshotRecord(existing.forwardRelationships);
             forwardRelationships[change.relationshipName] = rel;
-            types[change.tableName] = {
+            tables[change.tableName] = {
               ...existing,
               forwardRelationships,
             };
           } else {
             const backwardRelationships = copySnapshotRecord(existing.backwardRelationships);
             backwardRelationships[change.relationshipName] = rel;
-            types[change.tableName] = {
+            tables[change.tableName] = {
               ...existing,
               backwardRelationships,
             };
@@ -970,7 +984,7 @@ function applyDiffToSnapshot(
         break;
       }
       case "relationship_removed": {
-        const type = types[change.tableName];
+        const type = tables[change.tableName];
         if (type) {
           // Use relationshipType if specified
           const targetType =
@@ -984,7 +998,7 @@ function applyDiffToSnapshot(
           if (targetType === "forward" && type.forwardRelationships?.[change.relationshipName]) {
             const remaining = copySnapshotRecord(type.forwardRelationships);
             delete remaining[change.relationshipName];
-            types[change.tableName] = {
+            tables[change.tableName] = {
               ...type,
               forwardRelationships: Object.keys(remaining).length > 0 ? remaining : undefined,
             };
@@ -994,7 +1008,7 @@ function applyDiffToSnapshot(
           ) {
             const remaining = copySnapshotRecord(type.backwardRelationships);
             delete remaining[change.relationshipName];
-            types[change.tableName] = {
+            tables[change.tableName] = {
               ...type,
               backwardRelationships: Object.keys(remaining).length > 0 ? remaining : undefined,
             };
@@ -1003,10 +1017,10 @@ function applyDiffToSnapshot(
         break;
       }
       case "permission_modified": {
-        const existing = types[change.tableName];
+        const existing = tables[change.tableName];
         if (existing && change.after) {
           const after = change.after;
-          types[change.tableName] = {
+          tables[change.tableName] = {
             ...existing,
             permissions: {
               record: after.recordPermission,
@@ -1021,7 +1035,7 @@ function applyDiffToSnapshot(
 
   return normalizeSchemaSnapshot({
     ...snapshot,
-    types,
+    tables,
     createdAt: diff.createdAt,
   });
 }
@@ -1938,16 +1952,16 @@ function buildExpandBaseSnapshot(
   previous: NormalizedSchemaSnapshot,
   plans: readonly ExpandContractPlan[],
 ): NormalizedSchemaSnapshot {
-  const types = copySnapshotRecord(previous.types);
+  const tables = copySnapshotRecord(previous.tables);
   for (const plan of plans) {
-    const type = types[plan.tableName];
+    const type = tables[plan.tableName];
     const original = type?.fields[plan.fieldName];
     if (!type || !original) continue;
     const fields = copySnapshotRecord(type.fields);
     fields[plan.fieldName] = { ...original, required: false };
-    types[plan.tableName] = { ...type, fields };
+    tables[plan.tableName] = { ...type, fields };
   }
-  return normalizeSchemaSnapshot({ ...previous, types });
+  return normalizeSchemaSnapshot({ ...previous, tables });
 }
 
 /**
@@ -1989,9 +2003,9 @@ export function buildIntermediateSnapshot(
   previous: NormalizedSchemaSnapshot,
   plans: readonly ExpandContractPlan[],
 ): NormalizedSchemaSnapshot {
-  const types = copySnapshotRecord(previous.types);
+  const tables = copySnapshotRecord(previous.tables);
   for (const plan of plans) {
-    const type = types[plan.tableName];
+    const type = tables[plan.tableName];
     if (!type) continue;
     const fields = copySnapshotRecord(type.fields);
     // Hooks and validation stay off the temporary field: the rename re-applies
@@ -2000,9 +2014,9 @@ export function buildIntermediateSnapshot(
     const { hooks: _hooks, validate: _validate, ...carried } = plan.after;
     fields[plan.tempFieldName] = { ...carried, required: false, unique: false };
     delete fields[plan.fieldName];
-    types[plan.tableName] = { ...type, fields };
+    tables[plan.tableName] = { ...type, fields };
   }
-  return normalizeSchemaSnapshot({ ...previous, types });
+  return normalizeSchemaSnapshot({ ...previous, tables });
 }
 
 /**
@@ -2055,17 +2069,17 @@ export function compareSnapshots(
     typeRenameTargets,
   };
 
-  const previousTypeNames = new Set(Object.keys(previous.types));
-  const currentTypeNames = new Set(Object.keys(current.types));
+  const previousTypeNames = new Set(Object.keys(previous.tables));
+  const currentTypeNames = new Set(Object.keys(current.tables));
 
   // Record confirmed type renames
   for (const rename of typeRenames) {
     const prevType = assertDefined(
-      previous.types[rename.previousTableName],
+      previous.tables[rename.previousTableName],
       `renamed type "${rename.previousTableName}" missing from previous snapshot`,
     );
     const currType = assertDefined(
-      current.types[rename.tableName],
+      current.tables[rename.tableName],
       `renamed type "${rename.tableName}" missing from current snapshot`,
     );
     ctx.changes.push({
@@ -2088,7 +2102,7 @@ export function compareSnapshots(
   }
 
   // Check for added types
-  for (const [tableName, type] of Object.entries(current.types)) {
+  for (const [tableName, type] of Object.entries(current.tables)) {
     if (renamedToTypeNames.has(tableName)) continue;
     if (!previousTypeNames.has(tableName)) {
       ctx.changes.push({
@@ -2100,7 +2114,7 @@ export function compareSnapshots(
   }
 
   // Check for removed types
-  for (const [tableName, type] of Object.entries(previous.types)) {
+  for (const [tableName, type] of Object.entries(previous.tables)) {
     if (typeRenameTargets.has(tableName)) continue;
     if (!currentTypeNames.has(tableName)) {
       ctx.changes.push({
@@ -2120,11 +2134,11 @@ export function compareSnapshots(
     if (!previousTypeNames.has(tableName)) continue;
 
     const prevType = assertDefined(
-      previous.types[tableName],
+      previous.tables[tableName],
       `type "${tableName}" missing from previous snapshot`,
     );
     const currType = assertDefined(
-      current.types[tableName],
+      current.tables[tableName],
       `type "${tableName}" missing from current snapshot`,
     );
 
@@ -2203,7 +2217,7 @@ export function compareLocalTypesWithSnapshot(
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace,
     createdAt: new Date().toISOString(),
-    types: localTypes,
+    tables: localTypes,
   };
   return compareSnapshots(
     normalizeSchemaSnapshot(snapshot),
@@ -2813,17 +2827,17 @@ export function createSnapshotFromRemoteTypes(
   remoteGqlPermissions: readonly RemoteGqlPermission[] = [],
   expectedSnapshot?: SchemaSnapshot,
 ): NormalizedSchemaSnapshot {
-  const types = createSnapshotRecord<TailorDBSnapshotType>();
+  const tables = createSnapshotRecord<TailorDBSnapshotType>();
   for (const remoteType of remoteTypes) {
-    types[remoteType.name] = convertRemoteTypeToSnapshot(
+    tables[remoteType.name] = convertRemoteTypeToSnapshot(
       remoteType,
-      expectedSnapshot?.types[remoteType.name],
+      expectedSnapshot?.tables[remoteType.name],
     );
   }
 
   for (const permission of remoteGqlPermissions) {
     const { typeName: tableName } = permission;
-    const snapshotType = types[tableName];
+    const snapshotType = tables[tableName];
     if (!snapshotType) continue;
 
     const gqlPermission = convertRemoteGqlPermissionToSnapshot(permission.permission);
@@ -2839,7 +2853,7 @@ export function createSnapshotFromRemoteTypes(
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace,
     createdAt: new Date().toISOString(),
-    types,
+    tables,
   });
 }
 
@@ -3204,7 +3218,7 @@ function compareScriptHashes(
   const drifts: SchemaDrift[] = [];
   const remoteByName = new Map(remoteTypes.map((t) => [t.name, t]));
 
-  for (const [tableName, snapshotType] of Object.entries(snapshot.types)) {
+  for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
     const localHash = computeSourceScriptHash(snapshotType.fields, {
       typeHookExpr: snapshotType.typeHookExpr,
       typeValidateExpr: snapshotType.typeValidateExpr,
@@ -3249,21 +3263,21 @@ function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig 
 }
 
 function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
-  const types = createSnapshotRecord<TailorDBSnapshotType>();
+  const tables = createSnapshotRecord<TailorDBSnapshotType>();
 
-  for (const [tableName, type] of Object.entries(snapshot.types)) {
+  for (const [tableName, type] of Object.entries(snapshot.tables)) {
     const fields = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [fieldName, field] of Object.entries(type.fields)) {
       if (SYSTEM_FIELDS.has(fieldName)) continue;
       fields[fieldName] = stripFieldScriptProps(field);
     }
     const { typeHookExpr: _, typeValidateExpr: __, ...typeRest } = type;
-    types[tableName] = { ...typeRest, fields };
+    tables[tableName] = { ...typeRest, fields };
   }
 
   return normalizeSchemaSnapshot({
     ...snapshot,
-    types,
+    tables,
   });
 }
 

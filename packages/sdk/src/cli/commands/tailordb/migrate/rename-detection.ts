@@ -148,8 +148,8 @@ export function renameSpecApplies(
   previousSnapshot: SchemaSnapshot,
   currentSnapshot: SchemaSnapshot,
 ): boolean {
-  const prevFields = previousSnapshot.types[spec.tableName]?.fields;
-  const currFields = currentSnapshot.types[spec.tableName]?.fields;
+  const prevFields = previousSnapshot.tables[spec.tableName]?.fields;
+  const currFields = currentSnapshot.tables[spec.tableName]?.fields;
   return Boolean(
     prevFields?.[spec.previousFieldName] &&
     !currFields?.[spec.previousFieldName] &&
@@ -181,8 +181,8 @@ export function assertValidFieldRenames(
       seen.add(key);
     }
 
-    const prevType = previous.types[tableName];
-    const currType = current.types[tableName];
+    const prevType = previous.tables[tableName];
+    const currType = current.tables[tableName];
     if (!prevType || !currType) {
       throw new Error(
         `Cannot rename ${label}: type "${tableName}" must exist in both the previous and the current schema.`,
@@ -280,8 +280,8 @@ export function dropSpecApplies(
   previousSnapshot: SchemaSnapshot,
   currentSnapshot: SchemaSnapshot,
 ): boolean {
-  const prevFields = previousSnapshot.types[spec.tableName]?.fields;
-  const currFields = currentSnapshot.types[spec.tableName]?.fields;
+  const prevFields = previousSnapshot.tables[spec.tableName]?.fields;
+  const currFields = currentSnapshot.tables[spec.tableName]?.fields;
   return Boolean(prevFields?.[spec.fieldName] && !currFields?.[spec.fieldName]);
 }
 
@@ -474,10 +474,10 @@ export function typeRenameSpecApplies(
   currentSnapshot: SchemaSnapshot,
 ): boolean {
   return Boolean(
-    previousSnapshot.types[spec.previousTableName] &&
-    !currentSnapshot.types[spec.previousTableName] &&
-    currentSnapshot.types[spec.tableName] &&
-    !previousSnapshot.types[spec.tableName],
+    previousSnapshot.tables[spec.previousTableName] &&
+    !currentSnapshot.tables[spec.previousTableName] &&
+    currentSnapshot.tables[spec.tableName] &&
+    !previousSnapshot.tables[spec.tableName],
   );
 }
 
@@ -504,24 +504,24 @@ export function assertValidTypeRenames(
       seen.add(key);
     }
 
-    const prevType = previous.types[previousTableName];
+    const prevType = previous.tables[previousTableName];
     if (!prevType) {
       throw new Error(
         `Cannot rename ${label}: type "${previousTableName}" does not exist in the previous schema.`,
       );
     }
-    if (current.types[previousTableName]) {
+    if (current.tables[previousTableName]) {
       throw new Error(
         `Cannot rename ${label}: type "${previousTableName}" still exists in the current schema.`,
       );
     }
-    const currType = current.types[tableName];
+    const currType = current.tables[tableName];
     if (!currType) {
       throw new Error(
         `Cannot rename ${label}: type "${tableName}" does not exist in the current schema.`,
       );
     }
-    if (previous.types[tableName]) {
+    if (previous.tables[tableName]) {
       throw new Error(
         `Cannot rename ${label}: type "${tableName}" already exists in the previous schema.`,
       );
@@ -622,5 +622,7 @@ export function typeDropSpecApplies(
   previousSnapshot: SchemaSnapshot,
   currentSnapshot: SchemaSnapshot,
 ): boolean {
-  return Boolean(previousSnapshot.types[spec.tableName] && !currentSnapshot.types[spec.tableName]);
+  return Boolean(
+    previousSnapshot.tables[spec.tableName] && !currentSnapshot.tables[spec.tableName],
+  );
 }

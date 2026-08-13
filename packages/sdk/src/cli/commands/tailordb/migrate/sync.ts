@@ -184,7 +184,7 @@ async function assertMigrationsReproduceLocalTypes(
   const currentSnapshot = createSnapshotFromLocalTypes(tailordbService.types, target.namespace);
   const diff = compareLocalTypesWithSnapshot(
     latestSnapshot,
-    currentSnapshot.types,
+    currentSnapshot.tables,
     target.namespace,
   );
   if (!hasChanges(diff)) {
@@ -275,7 +275,7 @@ async function sync(options: SyncOptions): Promise<void> {
     target.namespace,
   );
   const remoteGqlPermissionTypes = new Set(remoteGqlPermissions.map((p) => p.typeName));
-  const desiredGqlPermissions = Object.entries(snapshot.types).flatMap(
+  const desiredGqlPermissions = Object.entries(snapshot.tables).flatMap(
     ([typeName, snapshotType]) =>
       snapshotType.permissions?.gql
         ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]

@@ -5,6 +5,7 @@
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyTailorDB, captureMigrationFileState } from "./index";
+import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -95,15 +96,15 @@ const snapshotFixtures = vi.hoisted(() => {
     reconstructSnapshotFromMigrations: (migrationsDir: string, maxVersion?: number) => {
       void migrationsDir;
       const number = maxVersion ?? 0;
-      const types = typesByMigration[number];
-      if (!types) {
+      const tables = typesByMigration[number];
+      if (!tables) {
         throw new Error(`No snapshot fixture configured for migration number: ${number}`);
       }
       return {
         version: 1 as const,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        types,
+        tables,
       };
     },
   };
@@ -413,7 +414,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   }
 
   async function withOverriddenSnapshot(
-    override: (migrationsDir: string, maxVersion?: number) => unknown,
+    override: (migrationsDir: string, maxVersion?: number) => SchemaSnapshot | null,
     run: () => Promise<void>,
   ) {
     const snap = vi.mocked(reconstructSnapshotFromMigrations);
@@ -639,7 +640,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: Object.fromEntries(
+      tables: Object.fromEntries(
         typeNames.map((tableName) => [
           tableName,
           {
@@ -686,7 +687,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: {
+      tables: {
         GoodsReceipt: {
           name: "GoodsReceipt",
           pluralForm: "goodsReceipts",
@@ -721,7 +722,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: {
+      tables: {
         GoodsReceipt: {
           name: "GoodsReceipt",
           pluralForm: "goodsReceipts",
@@ -757,7 +758,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types: {
+      tables: {
         GoodsReceipt: {
           name: "GoodsReceipt",
           pluralForm: "goodsReceipts",
@@ -791,11 +792,11 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
   test("advances the checkpoint before deleting a removed type", async () => {
     const tableName = "RetiredType";
-    const snapshots = (number: number) => ({
+    const snapshots = (number: number): SchemaSnapshot => ({
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
-      types:
+      tables:
         number === 0
           ? {
               [tableName]: {
@@ -874,7 +875,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         if ((maxVersion ?? 0) === 0 && ++baselineReads > 1) {
           throw new Error("rollback snapshot reconstruction failed");
         }
-        return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);
+        return snapshotFixtures.reconstructSnapshotFromMigrations(
+          migrationsDir,
+          maxVersion,
+        ) as SchemaSnapshot;
       },
       async () => {
         // The original failure must surface, not the rollback error.
@@ -901,7 +905,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       (migrationsDir, maxVersion) =>
         (maxVersion ?? 0) === 0
           ? null
-          : snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion),
+          : (snapshotFixtures.reconstructSnapshotFromMigrations(
+              migrationsDir,
+              maxVersion,
+            ) as SchemaSnapshot),
       async () => {
         await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
           "original migration failure",

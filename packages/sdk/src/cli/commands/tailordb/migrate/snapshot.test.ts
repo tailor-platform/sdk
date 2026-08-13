@@ -39,6 +39,7 @@ import {
 } from "./snapshot";
 import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
 import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
+import type { TailorDBDeployInput } from "./schema-checks";
 
 // compareSnapshots takes normalized snapshots; tests build raw fixtures.
 function compareRawSnapshots(
@@ -143,10 +144,10 @@ describe("snapshot", () => {
       expect(snapshot.version).toBe(SCHEMA_SNAPSHOT_VERSION);
       expect(snapshot.namespace).toBe(namespace);
       expect(snapshot.createdAt).toBeDefined();
-      expect(snapshot.types.User).toBeDefined();
-      expect(snapshot.types.User!.name).toBe("User");
-      expect(snapshot.types.User!.fields.id).toBeDefined();
-      expect(snapshot.types.User!.fields.name).toBeDefined();
+      expect(snapshot.tables.User).toBeDefined();
+      expect(snapshot.tables.User!.name).toBe("User");
+      expect(snapshot.tables.User!.fields.id).toBeDefined();
+      expect(snapshot.tables.User!.fields.name).toBeDefined();
     });
 
     test("captures field attributes", () => {
@@ -166,9 +167,9 @@ describe("snapshot", () => {
 
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
-      expect(snapshot.types.Product!.fields.sku!.required).toBe(true);
-      expect(snapshot.types.Product!.fields.sku!.unique).toBe(true);
-      expect(snapshot.types.Product!.fields.tags!.array).toBe(true);
+      expect(snapshot.tables.Product!.fields.sku!.required).toBe(true);
+      expect(snapshot.tables.Product!.fields.sku!.unique).toBe(true);
+      expect(snapshot.tables.Product!.fields.tags!.array).toBe(true);
     });
 
     test("captures foreign key relationships", () => {
@@ -190,9 +191,9 @@ describe("snapshot", () => {
 
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
-      expect(snapshot.types.Order!.fields.customerId!.foreignKey).toBe(true);
-      expect(snapshot.types.Order!.fields.customerId!.foreignKeyType).toBe("Customer");
-      expect(snapshot.types.Order!.fields.customerId!.foreignKeyField).toBe("id");
+      expect(snapshot.tables.Order!.fields.customerId!.foreignKey).toBe(true);
+      expect(snapshot.tables.Order!.fields.customerId!.foreignKeyType).toBe("Customer");
+      expect(snapshot.tables.Order!.fields.customerId!.foreignKeyField).toBe("id");
     });
 
     test("captures enum fields with allowedValues", () => {
@@ -212,8 +213,8 @@ describe("snapshot", () => {
 
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
-      expect(snapshot.types.Task!.fields.status!.type).toBe("enum");
-      expect(snapshot.types.Task!.fields.status!.allowedValues).toEqual([
+      expect(snapshot.tables.Task!.fields.status!.type).toBe("enum");
+      expect(snapshot.tables.Task!.fields.status!.allowedValues).toEqual([
         { value: "PENDING" },
         { value: "IN_PROGRESS" },
         { value: "DONE" },
@@ -225,7 +226,7 @@ describe("snapshot", () => {
       const snapshot = createSnapshotFromLocalTypes(mockTypes, namespace);
 
       expect(snapshot.version).toBe(SCHEMA_SNAPSHOT_VERSION);
-      expect(snapshot.types).toEqual({});
+      expect(snapshot.tables).toEqual({});
     });
   });
 
@@ -235,7 +236,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           Product: {
             name: "Product",
             fields: {
@@ -258,14 +259,20 @@ describe("snapshot", () => {
       expectTypeOf(normalized).toEqualTypeOf<NormalizedSchemaSnapshot>();
       expectTypeOf<NormalizedSchemaSnapshot>().toExtend<SchemaSnapshot>();
       expectTypeOf<SchemaSnapshot>().not.toExtend<NormalizedSchemaSnapshot>();
-      expect(normalized.types.Product?.pluralForm).toBe("Products");
-      expect(normalized.types.Product?.fields.price?.scale).toBe(6);
-      expect(normalized.types.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);
+      // A snapshot keys its tables under `tables`; a deploy input keys its
+      // parsed types under `types`. Spreading one over the other type-checks
+      // either way, so pin the distinction here.
+      expectTypeOf<SchemaSnapshot>().not.toHaveProperty("types");
+      expectTypeOf<TailorDBDeployInput>().toHaveProperty("types");
+      expectTypeOf<TailorDBDeployInput>().not.toHaveProperty("tables");
+      expect(normalized.tables.Product?.pluralForm).toBe("Products");
+      expect(normalized.tables.Product?.fields.price?.scale).toBe(6);
+      expect(normalized.tables.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);
 
       // Original snapshot must remain unmutated (the footgun this behavior fixes)
-      expect(snapshot.types.Product?.pluralForm).toBeUndefined();
-      expect(snapshot.types.Product?.fields.price?.scale).toBeUndefined();
-      expect(snapshot.types.Product?.fields.metadata?.fields?.discount?.scale).toBeUndefined();
+      expect(snapshot.tables.Product?.pluralForm).toBeUndefined();
+      expect(snapshot.tables.Product?.fields.price?.scale).toBeUndefined();
+      expect(snapshot.tables.Product?.fields.metadata?.fields?.discount?.scale).toBeUndefined();
     });
   });
 
@@ -277,14 +284,14 @@ describe("snapshot", () => {
       version: SCHEMA_SNAPSHOT_VERSION,
       namespace,
       createdAt: new Date().toISOString(),
-      types: {},
+      tables: {},
     });
 
     test("detects type addition", () => {
       const previous = createEmptySnapshot();
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           NewType: {
             name: "NewType",
             pluralForm: "NewTypes",
@@ -304,7 +311,7 @@ describe("snapshot", () => {
     test("detects type removal (non-breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           OldType: {
             name: "OldType",
             pluralForm: "OldTypes",
@@ -332,7 +339,7 @@ describe("snapshot", () => {
     test("detects field addition (optional - non-breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -342,7 +349,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -363,7 +370,7 @@ describe("snapshot", () => {
     test("detects field addition (required - breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -373,7 +380,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -394,7 +401,7 @@ describe("snapshot", () => {
     test("detects field removal (non-breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -407,7 +414,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -434,7 +441,7 @@ describe("snapshot", () => {
     test("supports cast-compatible field type changes with a migration script", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -447,7 +454,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -471,7 +478,7 @@ describe("snapshot", () => {
     test("rejects cast-incompatible field type changes", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -484,7 +491,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -511,7 +518,7 @@ describe("snapshot", () => {
       // must come out empty even though the literal shapes differ.
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Order: {
             name: "Order",
             pluralForm: "Orders",
@@ -541,7 +548,7 @@ describe("snapshot", () => {
     test("detects required flag change (optional to required - breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -554,7 +561,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -575,7 +582,7 @@ describe("snapshot", () => {
     test("detects array to single value change (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Post: {
             name: "Post",
             pluralForm: "Posts",
@@ -588,7 +595,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Post: {
             name: "Post",
             pluralForm: "Posts",
@@ -609,7 +616,7 @@ describe("snapshot", () => {
     test("detects unique constraint addition (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -622,7 +629,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -646,7 +653,7 @@ describe("snapshot", () => {
       ): SchemaSnapshot {
         return {
           ...createEmptySnapshot(),
-          types: {
+          tables: {
             User: {
               name: "User",
               pluralForm: "Users",
@@ -773,7 +780,7 @@ describe("snapshot", () => {
       function snapshotWithType(name: string, pluralForm: string): SchemaSnapshot {
         return {
           ...createEmptySnapshot(),
-          types: {
+          tables: {
             [name]: {
               name,
               pluralForm,
@@ -828,8 +835,8 @@ describe("snapshot", () => {
       test("does not flag a foreign key retarget that follows the rename", () => {
         const withOrder = (base: SchemaSnapshot, target: string): SchemaSnapshot => ({
           ...base,
-          types: {
-            ...base.types,
+          tables: {
+            ...base.tables,
             Order: {
               name: "Order",
               pluralForm: "Orders",
@@ -861,8 +868,8 @@ describe("snapshot", () => {
       test("still flags a foreign key retarget unrelated to the rename", () => {
         const withOrder = (base: SchemaSnapshot, target: string): SchemaSnapshot => ({
           ...base,
-          types: {
-            ...base.types,
+          tables: {
+            ...base.tables,
             Team: {
               name: "Team",
               pluralForm: "Teams",
@@ -901,7 +908,7 @@ describe("snapshot", () => {
       test("rejects a rename between incompatible type shapes", () => {
         const incompatible: SchemaSnapshot = {
           ...createEmptySnapshot(),
-          types: {
+          tables: {
             Person: {
               name: "Person",
               pluralForm: "People",
@@ -927,7 +934,7 @@ describe("snapshot", () => {
       function snapshotWithPrice(scale: number | undefined): SchemaSnapshot {
         return {
           ...createEmptySnapshot(),
-          types: {
+          tables: {
             Item: {
               name: "Item",
               pluralForm: "Items",
@@ -954,14 +961,14 @@ describe("snapshot", () => {
 
       test("collects every reason for combined decimal field changes", () => {
         const previous = snapshotWithPrice(4);
-        previous.types.Item!.fields.price = {
+        previous.tables.Item!.fields.price = {
           type: "decimal",
           required: false,
           unique: false,
           scale: 4,
         };
         const current = snapshotWithPrice(2);
-        current.types.Item!.fields.price = {
+        current.tables.Item!.fields.price = {
           type: "decimal",
           required: true,
           unique: true,
@@ -998,7 +1005,7 @@ describe("snapshot", () => {
       ): SchemaSnapshot {
         return {
           ...createEmptySnapshot(),
-          types: {
+          tables: {
             User: {
               name: "User",
               pluralForm: "Users",
@@ -1089,7 +1096,7 @@ describe("snapshot", () => {
     test("detects enum values removal (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -1111,7 +1118,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -1137,7 +1144,7 @@ describe("snapshot", () => {
     test("does not detect change when enum values are reordered", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -1154,7 +1161,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -1180,7 +1187,7 @@ describe("snapshot", () => {
     test("detects change when enum values are added (regardless of order)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -1197,7 +1204,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -1224,7 +1231,7 @@ describe("snapshot", () => {
     test("returns empty diff when no changes", () => {
       const snapshot: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1241,7 +1248,7 @@ describe("snapshot", () => {
     test("detects type settings changes", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1252,7 +1259,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1276,7 +1283,7 @@ describe("snapshot", () => {
     test("detects explicit GQL operation enable overrides", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1286,7 +1293,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1310,7 +1317,7 @@ describe("snapshot", () => {
     test("detects explicit empty GQL operation overrides", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1320,7 +1327,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1344,7 +1351,7 @@ describe("snapshot", () => {
     test("includes relationshipType in relationship_added changes", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1363,7 +1370,7 @@ describe("snapshot", () => {
 
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1416,7 +1423,7 @@ describe("snapshot", () => {
     test("detects relationship description changes", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1435,7 +1442,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1469,7 +1476,7 @@ describe("snapshot", () => {
     test("detects typeHookExpr addition", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1479,7 +1486,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1508,7 +1515,7 @@ describe("snapshot", () => {
     test("detects typeHookExpr removal", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1519,7 +1526,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1543,7 +1550,7 @@ describe("snapshot", () => {
     test("detects typeValidateExpr change", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1554,7 +1561,7 @@ describe("snapshot", () => {
       };
       const current: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1579,7 +1586,7 @@ describe("snapshot", () => {
     test("no diff when typeHookExpr unchanged", () => {
       const snapshot: SchemaSnapshot = {
         ...createEmptySnapshot(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1605,7 +1612,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1621,7 +1628,7 @@ describe("snapshot", () => {
         }),
       };
 
-      const snapshotTypes = createSnapshotFromLocalTypes(localTypes, namespace).types;
+      const snapshotTypes = createSnapshotFromLocalTypes(localTypes, namespace).tables;
       const diff = compareLocalTypesWithSnapshot(previousSnapshot, snapshotTypes, namespace);
 
       expect(diff.changes.length).toBe(1);
@@ -1797,7 +1804,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -1812,12 +1819,108 @@ describe("snapshot", () => {
       const loaded = loadSnapshot(filePath);
 
       expect(loaded.version).toBe(SCHEMA_SNAPSHOT_VERSION);
-      expect(loaded.types.User).toBeDefined();
+      expect(loaded.tables.User).toBeDefined();
+    });
+
+    test("reads a legacy types key as tables", () => {
+      const legacySnapshot = {
+        version: 4,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const filePath = path.join(testDir, "legacy_types_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacySnapshot, null, 2));
+
+      const loaded = loadSnapshot(filePath);
+
+      expect(Object.keys(loaded.tables)).toEqual(["User"]);
+      expect(loaded.tables.User?.name).toBe("User");
+    });
+
+    test("keeps the current key when a snapshot carries both", () => {
+      const table = (name: string) => ({
+        [name]: {
+          name,
+          pluralForm: `${name}s`,
+          fields: { id: { type: "uuid", required: true } },
+        },
+      });
+      const filePath = path.join(testDir, "both_keys_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: table("Legacy"),
+          tables: table("Current"),
+        }),
+      );
+
+      expect(Object.keys(loadSnapshot(filePath).tables)).toEqual(["Current"]);
+    });
+
+    test("preserves unrecognized keys when normalizing a legacy types key", () => {
+      const legacySnapshot = {
+        version: 2,
+        namespace,
+        createdAt: new Date().toISOString(),
+        futureKey: { nested: true },
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const filePath = path.join(testDir, "legacy_types_extra_schema.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacySnapshot, null, 2));
+
+      const loaded = loadSnapshot(filePath) as NormalizedSchemaSnapshot & {
+        futureKey?: { nested: boolean };
+      };
+
+      expect(loaded.version).toBe(2);
+      expect(loaded.futureKey).toEqual({ nested: true });
+      expect(Object.keys(loaded.tables)).toEqual(["User"]);
+    });
+
+    test("keeps a legacy __proto__ table name through types normalization", () => {
+      const types = Object.create(null) as Record<string, unknown>;
+      types["__proto__"] = {
+        name: "__proto__",
+        pluralForm: "__proto__",
+        fields: { id: { type: "uuid", required: true } },
+      };
+      const filePath = path.join(testDir, "legacy_proto_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 4,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types,
+        }),
+      );
+
+      const loaded = loadSnapshot(filePath);
+
+      expect(Object.keys(loaded.tables)).toEqual(["__proto__"]);
     });
 
     test("preserves type names that match Object prototype keys", () => {
-      const types = Object.create(null) as SchemaSnapshot["types"];
-      types["__proto__"] = {
+      const tables = Object.create(null) as SchemaSnapshot["tables"];
+      tables["__proto__"] = {
         name: "__proto__",
         pluralForm: "__proto__",
         fields: { id: { type: "uuid", required: true } },
@@ -1826,7 +1929,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types,
+        tables,
       };
 
       const filePath = path.join(testDir, "proto_schema.json");
@@ -1834,8 +1937,8 @@ describe("snapshot", () => {
 
       const loaded = loadSnapshot(filePath);
 
-      expect(Object.hasOwn(loaded.types, "__proto__")).toBe(true);
-      expect(loaded.types["__proto__"]?.fields.id).toBeDefined();
+      expect(Object.hasOwn(loaded.tables, "__proto__")).toBe(true);
+      expect(loaded.tables["__proto__"]?.fields.id).toBeDefined();
     });
   });
 
@@ -2385,20 +2488,20 @@ describe("snapshot", () => {
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-4/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-5/);
       expect(() => loadSnapshot(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects snapshot formats newer than the supported window", () => {
-      const version = 5;
+      const version = 6;
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-4/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-5/);
       expect(() => loadSnapshot(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 5/i,
+        /upgrade to an SDK that supports migration file format version 6/i,
       );
     });
 
@@ -2551,7 +2654,7 @@ describe("snapshot", () => {
       );
 
       const loaded = loadSnapshot(filePath);
-      expect(loaded.types.User?.fields.name?.required).toBe(true);
+      expect(loaded.tables.User?.fields.name?.required).toBe(true);
     });
 
     test("loads a partial record permission object (only create and read)", () => {
@@ -2579,9 +2682,9 @@ describe("snapshot", () => {
       );
 
       const loaded = loadSnapshot(filePath);
-      expect(loaded.types.User?.permissions?.record?.create).toHaveLength(1);
-      expect(loaded.types.User?.permissions?.record?.update).toEqual([]);
-      expect(loaded.types.User?.permissions?.record?.delete).toEqual([]);
+      expect(loaded.tables.User?.permissions?.record?.create).toHaveLength(1);
+      expect(loaded.tables.User?.permissions?.record?.update).toEqual([]);
+      expect(loaded.tables.User?.permissions?.record?.delete).toEqual([]);
     });
 
     test("throws with file path when the file is not valid JSON", () => {
@@ -2635,9 +2738,9 @@ describe("snapshot", () => {
       fs.writeFileSync(filePath, JSON.stringify(legacySnapshot, null, 2));
 
       const loaded = loadSnapshot(filePath);
-      expect(loaded.types.Product?.name).toBe("Product");
+      expect(loaded.tables.Product?.name).toBe("Product");
       // pluralForm is backfilled from inflection
-      expect(loaded.types.Product?.pluralForm).toBe("Products");
+      expect(loaded.tables.Product?.pluralForm).toBe("Products");
     });
 
     test("unknown extra keys survive loadSnapshot → writeSnapshot round-trip", () => {
@@ -2667,7 +2770,7 @@ describe("snapshot", () => {
       const saved = JSON.parse(fs.readFileSync(savedPath, "utf-8")) as Record<string, unknown>;
 
       expect(saved.futureTopLevelField).toBe("keep-me");
-      const widget = (saved.types as Record<string, unknown>).Widget as Record<string, unknown>;
+      const widget = (saved.tables as Record<string, unknown>).Widget as Record<string, unknown>;
       expect(widget.futurTypeField).toBe("also-keep");
       const idField = (widget.fields as Record<string, unknown>).id as Record<string, unknown>;
       expect(idField.futureFieldProp).toBe(true);
@@ -2709,20 +2812,20 @@ describe("snapshot", () => {
         }),
       );
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-4/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-5/);
       expect(() => loadDiff(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects diff formats newer than the supported window", () => {
-      const version = 5;
+      const version = 6;
       const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-4/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-5/);
       expect(() => loadDiff(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 5/i,
+        /upgrade to an SDK that supports migration file format version 6/i,
       );
     });
 
@@ -2777,7 +2880,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
 
       const filePath = writeSnapshot(snapshot, testDir, INITIAL_SCHEMA_NUMBER);
@@ -2788,8 +2891,8 @@ describe("snapshot", () => {
       expect(fs.existsSync(filePath)).toBe(true);
 
       const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(SCHEMA_SNAPSHOT_VERSION).toBe(4);
-      expect(loaded.version).toBe(4);
+      expect(SCHEMA_SNAPSHOT_VERSION).toBe(5);
+      expect(loaded.version).toBe(5);
     });
   });
 
@@ -2831,7 +2934,7 @@ describe("snapshot", () => {
       const replayed = reconstructSnapshotFromMigrations(exampleMigrations);
 
       expect(replayed).not.toBeNull();
-      expect(Object.keys(replayed!.types)).toContain("Customer");
+      expect(Object.keys(replayed!.tables)).toContain("Customer");
     });
 
     test("reconstructs from initial schema only (directory structure)", () => {
@@ -2839,7 +2942,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -2856,9 +2959,9 @@ describe("snapshot", () => {
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
       expect(reconstructed).not.toBeNull();
-      expect(reconstructed?.types.User).toBeDefined();
-      expect(reconstructed?.types.User!.fields.id).toBeDefined();
-      expect(reconstructed?.types.User!.fields.name).toBeDefined();
+      expect(reconstructed?.tables.User).toBeDefined();
+      expect(reconstructed?.tables.User!.fields.id).toBeDefined();
+      expect(reconstructed?.tables.User!.fields.name).toBeDefined();
     });
 
     test("applies single diff to schema (directory structure)", () => {
@@ -2866,7 +2969,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -2899,8 +3002,8 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User!.fields.id).toBeDefined();
-      expect(reconstructed?.types.User!.fields.email).toBeDefined();
+      expect(reconstructed?.tables.User!.fields.id).toBeDefined();
+      expect(reconstructed?.tables.User!.fields.email).toBeDefined();
     });
 
     test("applies field_renamed diff (old field dropped, new field added)", () => {
@@ -2908,7 +3011,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -2952,8 +3055,8 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User!.fields.fullName).toBeUndefined();
-      expect(reconstructed?.types.User!.fields.displayName).toEqual({
+      expect(reconstructed?.tables.User!.fields.fullName).toBeUndefined();
+      expect(reconstructed?.tables.User!.fields.displayName).toEqual({
         type: "string",
         required: false,
       });
@@ -2964,7 +3067,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3006,8 +3109,8 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User).toBeUndefined();
-      expect(reconstructed?.types.Person).toMatchObject({ name: "Person", pluralForm: "People" });
+      expect(reconstructed?.tables.User).toBeUndefined();
+      expect(reconstructed?.tables.Person).toMatchObject({ name: "Person", pluralForm: "People" });
     });
 
     test("reconstructs the target field type from a phased type change", () => {
@@ -3015,7 +3118,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3057,7 +3160,7 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User!.fields.age!.type).toBe("float");
+      expect(reconstructed?.tables.User!.fields.age!.type).toBe("float");
     });
 
     test("applies added type names that match Object prototype keys", () => {
@@ -3065,7 +3168,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
 
       const diff: MigrationDiff = {
@@ -3095,8 +3198,8 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(Object.hasOwn(reconstructed?.types ?? {}, "__proto__")).toBe(true);
-      expect(reconstructed?.types["__proto__"]?.fields.id).toBeDefined();
+      expect(Object.hasOwn(reconstructed?.tables ?? {}, "__proto__")).toBe(true);
+      expect(reconstructed?.tables["__proto__"]?.fields.id).toBeDefined();
     });
 
     test("applies multiple diffs sequentially (directory structure)", () => {
@@ -3104,7 +3207,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3157,9 +3260,9 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User!.fields.id).toBeDefined();
-      expect(reconstructed?.types.User!.fields.name).toBeDefined();
-      expect(reconstructed?.types.User!.fields.email).toBeDefined();
+      expect(reconstructed?.tables.User!.fields.id).toBeDefined();
+      expect(reconstructed?.tables.User!.fields.name).toBeDefined();
+      expect(reconstructed?.tables.User!.fields.email).toBeDefined();
     });
 
     test("handles type addition in diff (directory structure)", () => {
@@ -3167,7 +3270,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3206,9 +3309,9 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User).toBeDefined();
-      expect(reconstructed?.types.Post).toBeDefined();
-      expect(reconstructed?.types.Post!.fields.title).toBeDefined();
+      expect(reconstructed?.tables.User).toBeDefined();
+      expect(reconstructed?.tables.Post).toBeDefined();
+      expect(reconstructed?.tables.Post!.fields.title).toBeDefined();
     });
 
     test("handles type removal in diff (directory structure)", () => {
@@ -3216,7 +3319,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3257,8 +3360,8 @@ describe("snapshot", () => {
 
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
-      expect(reconstructed?.types.User).toBeDefined();
-      expect(reconstructed?.types.OldType).toBeUndefined();
+      expect(reconstructed?.tables.User).toBeDefined();
+      expect(reconstructed?.tables.OldType).toBeUndefined();
     });
 
     test("returns null for empty directory", () => {
@@ -3271,7 +3374,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3334,13 +3437,13 @@ describe("snapshot", () => {
       const reconstructed = reconstructSnapshotFromMigrations(testDir);
 
       // Forward relationship should be in forwardRelationships
-      expect(reconstructed?.types.Post!.forwardRelationships?.author).toBeDefined();
-      expect(reconstructed?.types.Post!.forwardRelationships?.author!.targetType).toBe("User");
+      expect(reconstructed?.tables.Post!.forwardRelationships?.author).toBeDefined();
+      expect(reconstructed?.tables.Post!.forwardRelationships?.author!.targetType).toBe("User");
 
       // Backward relationship should be in backwardRelationships (NOT forwardRelationships)
-      expect(reconstructed?.types.User!.backwardRelationships?.posts).toBeDefined();
-      expect(reconstructed?.types.User!.backwardRelationships?.posts!.targetType).toBe("Post");
-      expect(reconstructed?.types.User!.forwardRelationships?.posts).toBeUndefined();
+      expect(reconstructed?.tables.User!.backwardRelationships?.posts).toBeDefined();
+      expect(reconstructed?.tables.User!.backwardRelationships?.posts!.targetType).toBe("Post");
+      expect(reconstructed?.tables.User!.forwardRelationships?.posts).toBeUndefined();
     });
   });
 
@@ -3363,7 +3466,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
       writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, snapshot);
 
@@ -3376,7 +3479,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
@@ -3427,7 +3530,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
       const diff: MigrationDiff = {
         version: SCHEMA_SNAPSHOT_VERSION,
@@ -3458,7 +3561,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
 
       writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, snapshot);
@@ -3480,7 +3583,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
 
       writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, snapshot);
@@ -3502,7 +3605,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
       writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, snapshot);
 
@@ -3640,8 +3743,8 @@ describe("snapshot", () => {
       );
 
       expect(snapshot.namespace).toBe(namespace);
-      expect(snapshot.types.Order?.pluralForm).toBe("Orders");
-      expect(snapshot.types.Order?.fields.amount?.scale).toBe(6);
+      expect(snapshot.tables.Order?.pluralForm).toBe("Orders");
+      expect(snapshot.tables.Order?.fields.amount?.scale).toBe(6);
     });
 
     test("reconstructs remote type-level schema elements", () => {
@@ -3695,7 +3798,7 @@ describe("snapshot", () => {
         namespace,
       );
 
-      expect(snapshot.types.User).toMatchObject({
+      expect(snapshot.tables.User).toMatchObject({
         description: "Application user",
         settings: {
           aggregation: true,
@@ -3738,7 +3841,7 @@ describe("snapshot", () => {
         [createMockRemoteGqlPermission("Task", TailorDBGQLPermission_Permit.ALLOW)],
       );
 
-      expect(snapshot.types.Task?.permissions?.gql).toEqual([
+      expect(snapshot.tables.Task?.permissions?.gql).toEqual([
         {
           conditions: [],
           actions: ["read"],
@@ -3768,7 +3871,7 @@ describe("snapshot", () => {
         namespace,
       );
 
-      expect(snapshot.types.User?.fields.email?.validate).toEqual([
+      expect(snapshot.tables.User?.fields.email?.validate).toEqual([
         {
           script: { expr: "value.includes('@')" },
           errorMessage: "Email is invalid",
@@ -3812,13 +3915,13 @@ describe("snapshot", () => {
       ];
 
       const remoteSnapshot = createSnapshotFromRemoteTypes(remoteTypes, namespace);
-      expect(Object.hasOwn(remoteSnapshot.types, "__proto__")).toBe(true);
+      expect(Object.hasOwn(remoteSnapshot.tables, "__proto__")).toBe(true);
 
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
@@ -3836,7 +3939,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3864,7 +3967,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3925,7 +4028,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -3992,7 +4095,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4031,7 +4134,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4085,7 +4188,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4129,7 +4232,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -4178,7 +4281,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -4274,7 +4377,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4321,7 +4424,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4352,7 +4455,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4381,7 +4484,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4410,7 +4513,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4439,7 +4542,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4470,7 +4573,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4500,7 +4603,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4530,7 +4633,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           Task: {
             name: "Task",
             pluralForm: "Tasks",
@@ -4568,7 +4671,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4651,7 +4754,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           Order: {
             name: "Order",
             pluralForm: "Orders",
@@ -4681,7 +4784,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4700,7 +4803,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {},
+        tables: {},
       };
 
       const remoteTypes = [
@@ -4719,7 +4822,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4766,7 +4869,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4808,7 +4911,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4836,7 +4939,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",
@@ -4872,7 +4975,7 @@ describe("snapshot", () => {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
         createdAt: new Date().toISOString(),
-        types: {
+        tables: {
           User: {
             name: "User",
             pluralForm: "Users",

@@ -104,16 +104,16 @@ export function getExpandContractEligibility(
   options: CanConvertFieldOptions,
 ): ExpandContractEligibility {
   const { previous, current, tableName, fieldName } = options;
-  const before = previous.types[tableName]?.fields[fieldName];
-  const after = current.types[tableName]?.fields[fieldName];
+  const before = previous.tables[tableName]?.fields[fieldName];
+  const after = current.tables[tableName]?.fields[fieldName];
   if (!before || !after) {
     return { eligible: false, reason: "the field does not exist in both schemas" };
   }
   const fieldEligibility = getExpandContractFieldChangeEligibility(before, after);
   if (!fieldEligibility.eligible) return fieldEligibility;
   if (
-    isFieldReferenced(previous.types[tableName], fieldName) ||
-    isFieldReferenced(current.types[tableName], fieldName)
+    isFieldReferenced(previous.tables[tableName], fieldName) ||
+    isFieldReferenced(current.tables[tableName], fieldName)
   ) {
     return { eligible: false, reason: "another schema feature references the field" };
   }
@@ -406,8 +406,8 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
     // A temporary field shares the type's GraphQL namespace with its files and
     // relationships, so a name taken by either is not available.
     const taken = new Set([
-      ...typeMemberNames(previous.types[change.tableName]),
-      ...typeMemberNames(current.types[change.tableName]),
+      ...typeMemberNames(previous.tables[change.tableName]),
+      ...typeMemberNames(current.tables[change.tableName]),
       ...plans
         .filter((plan) => plan.tableName === change.tableName)
         .map((plan) => plan.tempFieldName),

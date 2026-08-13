@@ -335,8 +335,8 @@ export async function generate(options: GenerateOptions): Promise<void> {
     const applicable: ExpandContractFlag[] = [];
     for (const flag of expandContractFlags) {
       const { spec } = flag;
-      const before = previousSnapshot.types[spec.tableName]?.fields[spec.fieldName];
-      const after = currentSnapshot.types[spec.tableName]?.fields[spec.fieldName];
+      const before = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
+      const after = currentSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
       if (!before || !after || before.type === after.type) continue;
       matchedExpandContractFlags.add(flag);
       const eligibility = getExpandContractEligibility({
@@ -514,7 +514,7 @@ async function generateInitialSnapshot(
 
   logger.success(`Generated initial schema snapshot`);
   logger.info(`  File: ${result.filePath}`);
-  logger.info(`  Types: ${Object.keys(snapshot.types).length}`);
+  logger.info(`  Types: ${Object.keys(snapshot.tables).length}`);
 
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }

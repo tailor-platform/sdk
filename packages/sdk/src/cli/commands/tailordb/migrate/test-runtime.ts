@@ -246,7 +246,7 @@ export function loadSnapshotSeedData(
 ): SeedData {
   const data: SeedData = {};
   for (const typeName of typeNames) {
-    const snapshotType = snapshot?.types[typeName];
+    const snapshotType = snapshot?.tables[typeName];
     const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
     let content: string;
     try {
@@ -319,11 +319,11 @@ export function sortSeedTypesForSnapshot(snapshot: NormalizedSchemaSnapshot): {
   order: string[];
   selfRefTypes: string[];
 } {
-  const typeNames = Object.keys(snapshot.types);
+  const typeNames = Object.keys(snapshot.tables);
   const available = new Set(typeNames);
   const dependencies = new Map<string, string[]>();
   const selfRefTypes: string[] = [];
-  for (const [typeName, type] of Object.entries(snapshot.types)) {
+  for (const [typeName, type] of Object.entries(snapshot.tables)) {
     const referenced = new Set<string>();
     for (const field of Object.values(type.fields)) {
       const target = field.foreignKeyType;
@@ -701,7 +701,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
                 version: 1,
                 namespace: service.namespace,
                 createdAt: new Date().toISOString(),
-                types: input.types,
+                tables: input.types,
               }),
           ] as const;
         }),

@@ -27,7 +27,7 @@ function createMockSnapshot(
   >,
   namespace = "tailordb",
 ): SchemaSnapshot {
-  const snapshotTypes: SchemaSnapshot["types"] = {};
+  const snapshotTypes: SchemaSnapshot["tables"] = {};
   for (const [tableName, typeConfig] of Object.entries(types)) {
     const fields: Record<string, SnapshotFieldConfig> = {};
     for (const [fieldName, fieldConfig] of Object.entries(typeConfig.fields)) {
@@ -48,7 +48,7 @@ function createMockSnapshot(
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace,
     createdAt: new Date().toISOString(),
-    types: snapshotTypes,
+    tables: snapshotTypes,
   };
 }
 

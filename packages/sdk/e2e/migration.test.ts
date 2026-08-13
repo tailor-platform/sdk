@@ -496,9 +496,9 @@ export async function main(db: Kysely<any>): Promise<void> {
       // Verify snapshot content
       const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
       expect(snapshot).not.toBeNull();
-      expect(snapshot!.types.User).toBeDefined();
-      expect(snapshot!.types.User!.fields.name).toBeDefined();
-      expect(snapshot!.types.User!.fields.email).toBeDefined();
+      expect(snapshot!.tables.User).toBeDefined();
+      expect(snapshot!.tables.User!.fields.name).toBeDefined();
+      expect(snapshot!.tables.User!.fields.email).toBeDefined();
     }, 60000);
 
     /**

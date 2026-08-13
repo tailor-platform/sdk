@@ -61,14 +61,14 @@ describe("template-generator", () => {
   });
 
   function createTestSnapshot(
-    types: SchemaSnapshot["types"] = {},
+    tables: SchemaSnapshot["tables"] = {},
     namespace = "tailordb",
   ): SchemaSnapshot {
     return {
       version: SCHEMA_SNAPSHOT_VERSION,
       namespace,
       createdAt: new Date().toISOString(),
-      types,
+      tables,
     };
   }
 
@@ -103,7 +103,7 @@ describe("template-generator", () => {
       const parsed = JSON.parse(content);
       expect(parsed.version).toBe(SCHEMA_SNAPSHOT_VERSION);
       expect(parsed.namespace).toBe("tailordb");
-      expect(parsed.types.User.name).toBe("User");
+      expect(parsed.tables.User.name).toBe("User");
     });
 
     test("should create nested directories if they do not exist", async () => {

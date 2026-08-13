@@ -140,7 +140,7 @@ describe("assertValidFieldRenames", () => {
       version: 1,
       namespace: "tailordb",
       createdAt: new Date().toISOString(),
-      types: { User: { name: "User", pluralForm: "Users", fields } },
+      tables: { User: { name: "User", pluralForm: "Users", fields } },
     });
 
   test("explains nested member structure incompatibility", () => {
@@ -270,7 +270,7 @@ describe("renameSpecApplies", () => {
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types: { User: { name: "User", pluralForm: "Users", fields } },
+    tables: { User: { name: "User", pluralForm: "Users", fields } },
   });
   const spec = { tableName: "User", previousFieldName: "fullName", fieldName: "displayName" };
 
@@ -318,7 +318,7 @@ describe("dropSpecApplies", () => {
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types: { User: { name: "User", pluralForm: "Users", fields } },
+    tables: { User: { name: "User", pluralForm: "Users", fields } },
   });
   const spec = { tableName: "User", fieldName: "fullName" };
 
@@ -663,11 +663,11 @@ describe("findTypeRenameCandidates", () => {
 });
 
 describe("typeRenameSpecApplies", () => {
-  const snapshot = (types: Record<string, TailorDBSnapshotType>) => ({
+  const snapshot = (tables: Record<string, TailorDBSnapshotType>) => ({
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types,
+    tables,
   });
   const spec = { previousTableName: "User", tableName: "Person" };
 
@@ -699,12 +699,12 @@ describe("typeRenameSpecApplies", () => {
 });
 
 describe("assertValidTypeRenames", () => {
-  const normalized = (types: Record<string, TailorDBSnapshotType>) =>
+  const normalized = (tables: Record<string, TailorDBSnapshotType>) =>
     normalizeSchemaSnapshot({
       version: 1,
       namespace: "tailordb",
       createdAt: new Date().toISOString(),
-      types,
+      tables,
     });
 
   test("accepts a compatible removed + added pair", () => {
@@ -792,11 +792,11 @@ describe("parseTypeDropOption", () => {
 });
 
 describe("typeDropSpecApplies", () => {
-  const snapshot = (types: Record<string, TailorDBSnapshotType>) => ({
+  const snapshot = (tables: Record<string, TailorDBSnapshotType>) => ({
     version: 1,
     namespace: "tailordb",
     createdAt: new Date().toISOString(),
-    types,
+    tables,
   });
 
   test("matches a removed type", () => {

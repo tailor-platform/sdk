@@ -281,7 +281,7 @@ export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
   version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
-  types: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
+  tables: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
   rebaseline: rebaselineMarkerSchema.optional(),
 });
 

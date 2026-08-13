@@ -380,8 +380,8 @@ describe("tailordb migration generate with an unsupported field type change", ()
     await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
 
     const replayed = reconstructSnapshotFromMigrations(ns.migrationsDir);
-    expect(replayed?.types.User?.fields.name?.type).toBe("integer");
-    expect(replayed?.types.User?.fields.nameMigrate).toBeUndefined();
+    expect(replayed?.tables.User?.fields.name?.type).toBe("integer");
+    expect(replayed?.tables.User?.fields.nameMigrate).toBeUndefined();
   });
 
   test("keeps an unrelated change out of the conversion migration", async () => {

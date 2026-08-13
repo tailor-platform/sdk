@@ -57,17 +57,17 @@ export function snapshotType(name: string): TailorDBSnapshotType {
 /**
  * Write a 0000 baseline schema snapshot into a migrations directory
  * @param {string} migrationsDir - Migrations directory path
- * @param {Record<string, TailorDBSnapshotType>} types - Snapshot types
+ * @param {Record<string, TailorDBSnapshotType>} tables - Snapshot tables
  */
 export function writeInitialSchema(
   migrationsDir: string,
-  types: Record<string, TailorDBSnapshotType>,
+  tables: Record<string, TailorDBSnapshotType>,
 ): void {
   const snapshot: SchemaSnapshot = {
     version: SCHEMA_SNAPSHOT_VERSION,
     namespace: "tailordb",
     createdAt: "2026-01-01T00:00:00.000Z",
-    types,
+    tables,
   };
   const dir = path.join(migrationsDir, "0000");
   fs.mkdirSync(dir, { recursive: true });

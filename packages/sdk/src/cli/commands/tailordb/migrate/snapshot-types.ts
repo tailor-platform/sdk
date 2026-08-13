@@ -263,7 +263,7 @@ export interface SchemaSnapshot {
   version: number;
   namespace: string;
   createdAt: string;
-  types: Record<string, TailorDBSnapshotType>;
+  tables: Record<string, TailorDBSnapshotType>;
   rebaseline?: RebaselineMarker;
 }
 

@@ -102,7 +102,7 @@ describe("db.ts for an expand migration", () => {
       version: 1,
       namespace: "testdb",
       createdAt: "2026-01-01T00:00:00.000Z",
-      types: {
+      tables: {
         User: { ...snapshotType("User"), fields: { price: plan.before } },
       },
     };

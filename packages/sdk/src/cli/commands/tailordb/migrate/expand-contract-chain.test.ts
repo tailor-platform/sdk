@@ -39,7 +39,7 @@ function snapshot(fields: Record<string, SnapshotFieldConfig>): SchemaSnapshot {
     version: 1,
     namespace: "testdb",
     createdAt: "2026-01-01T00:00:00.000Z",
-    types: { User: { ...snapshotType("User"), fields } },
+    tables: { User: { ...snapshotType("User"), fields } },
   };
 }
 
@@ -79,7 +79,7 @@ function writePair(
   expand: MigrationDiff,
   contract: MigrationDiff,
 ) {
-  writeInitialSchema(dir, previous.types);
+  writeInitialSchema(dir, previous.tables);
   writeDiff(dir, 1, expand.changes, expand);
   writeDiff(dir, 2, contract.changes, contract);
 }
@@ -93,7 +93,7 @@ describe("expand-contract migration chain", () => {
     const dir = migrationsDir();
     writePair(dir, previous, expand, contract);
 
-    expect(reconstructSnapshotFromMigrations(dir)?.types).toEqual(current.types);
+    expect(reconstructSnapshotFromMigrations(dir)?.tables).toEqual(current.tables);
   });
 
   test("replays the expand migration alone to the intermediate schema", () => {
@@ -104,7 +104,7 @@ describe("expand-contract migration chain", () => {
     const dir = migrationsDir();
     writePair(dir, previous, expand, contract);
 
-    expect(reconstructSnapshotFromMigrations(dir, 1)?.types).toEqual(intermediate.types);
+    expect(reconstructSnapshotFromMigrations(dir, 1)?.tables).toEqual(intermediate.tables);
   });
 
   test("frees the original name so the contract can reuse it", () => {
@@ -113,8 +113,8 @@ describe("expand-contract migration chain", () => {
       { price: snapshotField("boolean", { required: true }) },
     );
 
-    expect(intermediate.types.User?.fields.price).toBeUndefined();
-    expect(intermediate.types.User?.fields.priceMigrate?.type).toBe("boolean");
+    expect(intermediate.tables.User?.fields.price).toBeUndefined();
+    expect(intermediate.tables.User?.fields.priceMigrate?.type).toBe("boolean");
   });
 
   test("removes the original field in the expand migration, which keeps it readable there", () => {
@@ -167,7 +167,7 @@ describe("expand-contract migration chain", () => {
     );
 
     const temp = assertDefined(
-      intermediate.types.User?.fields.priceMigrate,
+      intermediate.tables.User?.fields.priceMigrate,
       "temporary field missing",
     );
     // The rename re-applies the real contract; running an update hook here
@@ -183,8 +183,8 @@ describe("expand-contract migration chain", () => {
       { price: snapshotField("boolean", { required: true }) },
     );
 
-    expect(intermediate.types.User?.fields.priceMigrate?.required).toBe(false);
-    expect(intermediate.types.User?.fields.priceMigrate?.unique).toBe(false);
+    expect(intermediate.tables.User?.fields.priceMigrate?.required).toBe(false);
+    expect(intermediate.tables.User?.fields.priceMigrate?.unique).toBe(false);
   });
 
   test("contracts through a single rename that restores the final contract", () => {
