@@ -303,9 +303,13 @@ jobs:
             posts (or updates) the comment for you. Your only deliverable is the
             file.
 
-            **Recommended Actions heading**: This is the only section shown
-            without collapsing, so reviewers must be able to tell at a glance
-            whether the comment requires action. Choose the heading based on
+            **Recommended Actions heading**: This and the Update Summary
+            section below are the only parts shown without collapsing, so
+            reviewers must be able to tell at a glance whether the comment
+            requires action **and** which library/version it is about (some
+            renovate PRs group multiple libraries under a title that shows
+            no version, e.g. "chore(deps): update eslint" bumping both
+            `eslint` and `eslint-plugin-zod`). Choose the heading based on
             your conclusion:
             - `### ✅ Recommended Actions` — no action is required (safe to
               merge as-is). Write a one-line reason, e.g. "None — safe to
@@ -315,6 +319,11 @@ jobs:
               block merge, or the update should be held). List the concrete
               steps the reviewer must take.
 
+            The heading line must appear exactly as `### ✅ Recommended
+            Actions` or `### ❌ Recommended Actions` — a later workflow step
+            checks for this exact text and asks you to fix it if it's
+            missing, so don't paraphrase or add extra words to the line.
+
             ```markdown
             ## 🤖 Claude Dependency Review
 
@@ -322,14 +331,10 @@ jobs:
             {If no action is needed, state so explicitly. If action is
             needed, list the concrete steps.}
 
-            <details>
-            <summary>📦 Update Summary</summary>
-
+            ### 📦 Update Summary
             - **Library**: {library name}
             - **Version**: {old version} → {new version}
             - **Change Type**: {Major/Minor/Patch}
-
-            </details>
 
             <details>
             <summary>📝 Release Notes</summary>
@@ -385,6 +390,37 @@ jobs:
           claude_args: |
             --model claude-sonnet-4-5-20250929
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(pnpm view:*),WebSearch,WebFetch,Read,Glob,Grep,Write"
+
+      - name: Validate Recommended Actions heading
+        id: validate-heading
+        if: always()
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          elif grep -qE '^### (✅|❌) Recommended Actions$' "$REVIEW_BODY_FILE"; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_fix=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fix Recommended Actions heading with Claude
+        if: always() && steps.validate-heading.outputs.needs_fix == 'true'
+        uses: anthropics/claude-code-action@e63208cb983318a44e3f945e959ef894b707dcfa # v1.0.192
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            The file `${{ env.REVIEW_BODY_FILE }}` is missing a
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`
+            heading (the exact literal text must appear on its own line).
+
+            Read the file, decide from its existing content whether action
+            is required, then rewrite **only** that heading line so it reads
+            exactly `### ✅ Recommended Actions` (no action needed) or
+            `### ❌ Recommended Actions` (action needed). Do not change any
+            other content in the file. Save your change with the Write tool.
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Read,Write"
 
       - name: Post dependency review comment
         if: always()
