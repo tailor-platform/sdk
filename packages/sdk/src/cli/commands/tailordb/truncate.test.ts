@@ -69,13 +69,13 @@ describe("truncate command", () => {
 
   describe("argument validation", () => {
     const mutuallyExclusiveError =
-      "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.";
+      "Options --all, --namespace, and table names are mutually exclusive. Please specify only one.";
 
     test.each<[string, TruncateOptions, string]>([
       [
         "no options are specified",
         {},
-        "Please specify one of: --all, --namespace <name>, or type names",
+        "Please specify one of: --all, --namespace <name>, or table names",
       ],
       [
         "--all is specified with --namespace",
@@ -83,18 +83,18 @@ describe("truncate command", () => {
         mutuallyExclusiveError,
       ],
       [
-        "--all is specified with type names",
-        { all: true, types: ["User"] },
+        "--all is specified with table names",
+        { all: true, tables: ["User"] },
         mutuallyExclusiveError,
       ],
       [
-        "--namespace is specified with type names",
-        { namespace: "tailordb", types: ["User"] },
+        "--namespace is specified with table names",
+        { namespace: "tailordb", tables: ["User"] },
         mutuallyExclusiveError,
       ],
       [
         "all three options are specified",
-        { all: true, namespace: "tailordb", types: ["User"] },
+        { all: true, namespace: "tailordb", tables: ["User"] },
         mutuallyExclusiveError,
       ],
     ])("throws error when %s", async (_, options, message) => {
@@ -195,17 +195,17 @@ describe("truncate command", () => {
     });
   });
 
-  describe("truncate with type names", () => {
+  describe("truncate with table names", () => {
     test.each<[string, string[]]>([
-      ["truncates single type", ["User"]],
-      ["truncates multiple types", ["User", "Order"]],
-    ])("%s", async (_, types) => {
+      ["truncates a single table", ["User"]],
+      ["truncates multiple tables", ["User", "Order"]],
+    ])("%s", async (_, names) => {
       const client = await getMockClient();
 
-      await truncate({ types });
+      await truncate({ tables: names });
 
-      expect(client.truncateTailorDBType).toHaveBeenCalledTimes(types.length);
-      for (const tailordbTypeName of types) {
+      expect(client.truncateTailorDBType).toHaveBeenCalledTimes(names.length);
+      for (const tailordbTypeName of names) {
         expect(client.truncateTailorDBType).toHaveBeenCalledWith({
           workspaceId: "mock-workspace-id",
           namespaceName: "tailordb",
@@ -214,7 +214,7 @@ describe("truncate command", () => {
       }
     });
 
-    test("throws error when type not found in any namespace", async () => {
+    test("throws error when table not found in any namespace", async () => {
       const { initOperatorClient } = await import("#/cli/shared/client");
 
       vi.mocked(initOperatorClient).mockResolvedValue({
@@ -225,8 +225,8 @@ describe("truncate command", () => {
         }),
       } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
-      await expect(truncate({ types: ["NonExistentType"] })).rejects.toThrow(
-        "The following types were not found in any namespace: NonExistentType",
+      await expect(truncate({ tables: ["NonExistentType"] })).rejects.toThrow(
+        "The following tables were not found in any namespace: NonExistentType",
       );
     });
   });
