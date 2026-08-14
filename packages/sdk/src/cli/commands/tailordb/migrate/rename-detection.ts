@@ -233,7 +233,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
   const [, tableName, previousFieldName, fieldName] = match ?? [];
   if (!tableName || !previousFieldName || !fieldName) {
     throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Type.oldField:newField".`,
+      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField".`,
     );
   }
   if (previousFieldName === fieldName) {
@@ -576,7 +576,7 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
   const [, previousTableName, tableName] = match ?? [];
   if (!previousTableName || !tableName) {
     throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Type.oldField:newField" or "OldType:NewType".`,
+      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField" or "OldTable:NewTable".`,
     );
   }
   if (previousTableName === tableName) {

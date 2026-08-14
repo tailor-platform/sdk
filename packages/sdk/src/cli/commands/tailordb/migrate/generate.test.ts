@@ -554,7 +554,7 @@ describe("tailordb migration generate type rename preflight", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("Possible rename(s) detected");
     expect(String(result.error)).toContain("- User → Person? (namespace: tailordb)");
-    expect(String(result.error)).toContain('--rename "OldType:NewType"');
+    expect(String(result.error)).toContain('--rename "OldTable:NewTable"');
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
