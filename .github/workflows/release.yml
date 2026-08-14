@@ -60,20 +60,21 @@ jobs:
         id: changesets
         uses: changesets/action@198f833dd7d863100ea6e28967bc9a9fdefadb0a # v2.1.0
         with:
-          commitMode: "github-api"
-          publish: "pnpm changeset publish --no-git-tag"
-          createGithubReleases: false
-          title: "Release - ${{ github.ref_name }}"
-        env:
-          GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
+          publish-script: "pnpm changeset publish --no-git-tag"
+          create-github-releases: false
+          # v2 defaults this to true even when create-github-releases is
+          # false; ensure-github-releases.sh owns tag creation, so keep it off.
+          push-git-tags: false
+          pr-title: "Release - ${{ github.ref_name }}"
+          github-token: ${{ steps.get_access_token.outputs.token }}
 
       # Only fires when changesets/action created/updated a release PR (as
       # opposed to publishing). See resolve-pending-release-versions.sh.
       - name: Resolve pending release versions
-        if: steps.changesets.outputs.pullRequestNumber
+        if: steps.changesets.outputs.pr-number
         env:
           GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
-          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
         shell: bash
         run: bash ./.github/scripts/resolve-pending-release-versions.sh
 
