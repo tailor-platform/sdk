@@ -2076,11 +2076,11 @@ export function compareSnapshots(
   for (const rename of typeRenames) {
     const prevType = assertDefined(
       previous.tables[rename.previousTableName],
-      `renamed type "${rename.previousTableName}" missing from previous snapshot`,
+      `renamed table "${rename.previousTableName}" missing from previous snapshot`,
     );
     const currType = assertDefined(
       current.tables[rename.tableName],
-      `renamed type "${rename.tableName}" missing from current snapshot`,
+      `renamed table "${rename.tableName}" missing from current snapshot`,
     );
     ctx.changes.push({
       kind: "table_renamed",
@@ -2135,11 +2135,11 @@ export function compareSnapshots(
 
     const prevType = assertDefined(
       previous.tables[tableName],
-      `type "${tableName}" missing from previous snapshot`,
+      `table "${tableName}" missing from previous snapshot`,
     );
     const currType = assertDefined(
       current.tables[tableName],
-      `type "${tableName}" missing from current snapshot`,
+      `table "${tableName}" missing from current snapshot`,
     );
 
     // Compare type-level settings and metadata

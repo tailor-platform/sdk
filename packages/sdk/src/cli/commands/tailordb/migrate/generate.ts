@@ -600,7 +600,7 @@ interface NamespaceGeneration {
 /** A rename candidate that a non-interactive run could not resolve. */
 interface UnresolvedRenameCandidate {
   namespace: string;
-  /** Removed field (`Type.field`) or type (`Type`) with rename candidates. */
+  /** Removed field (`Table.field`) or table (`Table`) with rename candidates. */
   label: string;
   targets: string[];
 }

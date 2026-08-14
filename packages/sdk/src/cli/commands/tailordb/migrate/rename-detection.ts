@@ -1,11 +1,11 @@
 /**
- * Field and type rename detection for TailorDB migrations
+ * Field and table rename detection for TailorDB migrations
  *
  * A rename has no dedicated platform API, so the diff decomposes it into
- * `field_removed` + `field_added` (`table_removed` + `table_added` for types).
+ * `field_removed` + `field_added` (`table_removed` + `table_added` for tables).
  * This module detects removed/added pairs that are compatible enough to be a
  * rename so that `migration generate` can ask the user (or accept
- * `--rename Type.old:new` / `--rename OldType:NewType`) and record a single
+ * `--rename Table.oldField:newField` / `--rename OldTable:NewTable`) and record a single
  * `field_renamed` / `table_renamed` change instead.
  */
 
@@ -224,7 +224,7 @@ export function assertValidFieldRenames(
 const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;
 
 /**
- * Parse a `--rename` option value of the form `Type.old:new`.
+ * Parse a `--rename` option value of the form `Table.oldField:newField`.
  * @param {string} value - Raw option value
  * @returns {FieldRenameSpec} Parsed rename spec
  */
@@ -243,7 +243,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
 }
 
 /**
- * A field removal confirmed as intentional (`--drop Type.field`), so its
+ * A field removal confirmed as intentional (`--drop Table.field`), so its
  * rename candidates need no interactive confirmation.
  */
 export interface FieldDropSpec {
@@ -254,7 +254,7 @@ export interface FieldDropSpec {
 const DROP_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+)$/;
 
 /**
- * Parse a `--drop` option value of the form `Type.field`.
+ * Parse a `--drop` option value of the form `Table.field`.
  * @param {string} value - Raw option value
  * @returns {FieldDropSpec} Parsed drop spec
  */
@@ -292,7 +292,7 @@ export interface FieldExpandContractSpec {
 }
 
 /**
- * Parse an `--expand-contract` option value of the form `Type.field`.
+ * Parse an `--expand-contract` option value of the form `Table.field`.
  * @param {string} value - Raw option value
  * @returns {FieldExpandContractSpec} Parsed spec
  */
@@ -586,7 +586,7 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
 }
 
 /**
- * A type removal confirmed as intentional (`--drop Type`), so its rename
+ * A table removal confirmed as intentional (`--drop Table`), so its rename
  * candidates need no interactive confirmation.
  */
 export interface TypeDropSpec {
@@ -596,7 +596,7 @@ export interface TypeDropSpec {
 const TYPE_DROP_OPTION_PATTERN = /^([^.:\s]+)$/;
 
 /**
- * Parse a `--drop` option value of the form `Type`.
+ * Parse a `--drop` option value of the form `Table`.
  * @param {string} value - Raw option value
  * @returns {TypeDropSpec} Parsed drop spec
  */
