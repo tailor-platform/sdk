@@ -741,6 +741,28 @@ describe("confirmDeploymentPlans", () => {
       "old-app",
     ]);
   });
+
+  test("names a deleted TailorDB table a table", async () => {
+    using _logger = silenceLogger("warn", "success", "newline");
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const results = emptyResults();
+    results.tailorDB.changeSet.type.deletes.push({
+      name: "Order",
+      request: {},
+    } as (typeof results.tailorDB.changeSet.type.deletes)[number]);
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-app", results)],
+      yes: true,
+    });
+
+    const plain = logSpy.mock.calls
+      .flat()
+      .join("\n")
+      .replace(/\[[0-9;]*m/g, "");
+    expect(plain).toContain('TailorDB table "Order"');
+    logSpy.mockRestore();
+  });
 });
 
 describe("printPlanResults", () => {
