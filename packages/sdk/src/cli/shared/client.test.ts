@@ -666,7 +666,7 @@ describe("errorHandlingInterceptor", () => {
         workspaceId: "workspace-id",
         name: "query-gql.js",
         code: "export async function main() {}",
-        arg: '{"endpoint":"https://app.example.com/query","accessToken":"tpmu_supersecrettoken","query":"mutation { m }"}',
+        arg: '{"endpoint":"https://app.example.com/query","accessToken":"not-a-real-token","query":"mutation { m }"}',
       },
     } as unknown as UnaryRequest;
     const next = vi
@@ -678,7 +678,7 @@ describe("errorHandlingInterceptor", () => {
     await expect(promise).rejects.toThrow(ConnectError);
     const error = await promise.catch((e: unknown) => e as ConnectError);
     expect(error.message).toContain("context deadline exceeded");
-    expect(error.message).not.toContain("tpmu_supersecrettoken");
+    expect(error.message).not.toContain("not-a-real-token");
     expect(error.message).not.toContain('"arg"');
   });
 
@@ -691,7 +691,11 @@ describe("errorHandlingInterceptor", () => {
       message: {
         workspaceId: "22222222-2222-2222-2222-222222222222",
         namespaceName: "shared-db",
-        tailordbType: { name: "Order", description: "do-not-print-payload" },
+        tailordbType: {
+          $typeName: "tailor.v1.TailorDBType",
+          name: "Order",
+          description: "do-not-print-payload",
+        },
       },
     } as unknown as UnaryRequest;
     const next = vi.fn().mockRejectedValue(new ConnectError("already exists", Code.AlreadyExists));
@@ -758,6 +762,30 @@ describe("errorHandlingInterceptor", () => {
       "trn: trn:v1:workspace/staffing:tailordb/shared-db",
     );
     expect((onOtherMethod as ConnectError).message).not.toContain("trn:");
+  });
+
+  test("does not read names out of map or struct fields", async () => {
+    // Map fields (e.g. metadata labels merged from the remote resource) and
+    // google.protobuf.Struct payloads materialize without a nested message
+    // $typeName, and their entries are not under the SDK's control.
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.setMetadata,
+      header: new Headers(),
+      message: {
+        trn: "trn:v1:workspace/staffing:tailordb/shared-db",
+        labels: { name: "arbitrary-remote-value" },
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("trn: trn:v1:workspace/staffing:tailordb/shared-db");
+    expect(error.message).not.toContain("arbitrary-remote-value");
   });
 });
 

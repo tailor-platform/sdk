@@ -489,6 +489,9 @@ export function parseMethodName(methodName: string): {
 const IDENTITY_KEYS = new Set(["name", "id"]);
 const IDENTITY_KEY_SUFFIXES = ["Name", "Id", "Namespace"];
 // Key read from nested resource messages (e.g. the type in a create request).
+// Only materialized protobuf messages (marked by $typeName) qualify: map and
+// Struct fields materialize without one, and their entries can carry values
+// the SDK does not control (e.g. metadata labels merged from the remote).
 const NESTED_IDENTITY_KEY = "name";
 // API-specific identifier fields, scoped to the RPC methods that define them
 // so a same-named field on an unrelated API is never surfaced by accident.
@@ -535,7 +538,8 @@ function formatRequestIdentity(message: unknown, methodName: string): string {
       !key.startsWith("$") &&
       value !== null &&
       typeof value === "object" &&
-      !Array.isArray(value)
+      !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).$typeName === "string"
     ) {
       const nestedName = (value as Record<string, unknown>)[NESTED_IDENTITY_KEY];
       if (typeof nestedName === "string" && nestedName !== "") {
