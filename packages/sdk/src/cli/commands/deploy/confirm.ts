@@ -282,7 +282,7 @@ export async function confirmImportantResourceDeletion(
 export interface MissingDependentApp {
   /**
    * The resource whose value is applied differently without the dependent, named
-   * as messages name it, e.g. `TailorDB type "Order"`. Records live on the
+   * as messages name it, e.g. `TailorDB table "Order"`. Records live on the
    * resource, so this identifies one of those rather than an application.
    */
   resource: string;

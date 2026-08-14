@@ -364,7 +364,7 @@ function validatePluralFormUniqueness(
       const sourceInfo = getTypeSourceInfo(typeSourceInfo, parsedType.name);
       const location = formatTypeSourceLocation(sourceInfo);
       errors.push(
-        `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
+        `Table "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
           `Use db.table(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
       );
     }
