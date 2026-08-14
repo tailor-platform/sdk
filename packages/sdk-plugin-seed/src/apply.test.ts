@@ -208,7 +208,7 @@ describe("seedApplyCommand", () => {
     expect(sdk.truncate).toHaveBeenCalledWith({
       configPath: "tailor.config.ts",
       profile: undefined,
-      types: ["User"],
+      tables: ["User"],
       workspaceId: undefined,
     });
     expect(sdk.executeScript).not.toHaveBeenCalled();

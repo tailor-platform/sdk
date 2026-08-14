@@ -18,7 +18,7 @@ export interface TruncateOptions {
   configPath?: string;
   all?: boolean;
   namespace?: string;
-  types?: string[];
+  tables?: string[];
 }
 
 interface InternalTruncateOptions extends TruncateOptions {
@@ -41,7 +41,7 @@ async function truncateSingleType(
     tailordbTypeName: options.typeName,
   });
 
-  logger.success(`Truncated type "${options.typeName}" in namespace "${options.namespaceName}"`);
+  logger.success(`Truncated table "${options.typeName}" in namespace "${options.namespaceName}"`);
 }
 
 async function truncateNamespace(
@@ -54,7 +54,7 @@ async function truncateNamespace(
     namespaceName,
   });
 
-  logger.success(`Truncated all types in namespace "${namespaceName}"`);
+  logger.success(`Truncated all tables in namespace "${namespaceName}"`);
 }
 
 /**
@@ -78,18 +78,18 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
   });
 
   // Validate arguments
-  const hasTypes = options.types && options.types.length > 0;
+  const hasTables = options.tables && options.tables.length > 0;
   const hasNamespace = !!options.namespace;
   const hasAll = !!options.all;
 
   // All options are mutually exclusive
-  const optionCount = [hasAll, hasNamespace, hasTypes].filter(Boolean).length;
+  const optionCount = [hasAll, hasNamespace, hasTables].filter(Boolean).length;
   if (optionCount === 0) {
-    throw new Error("Please specify one of: --all, --namespace <name>, or type names");
+    throw new Error("Please specify one of: --all, --namespace <name>, or table names");
   }
   if (optionCount > 1) {
     throw new Error(
-      "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
+      "Options --all, --namespace, and table names are mutually exclusive. Please specify only one.",
     );
   }
 
@@ -155,29 +155,29 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
     return;
   }
 
-  // Handle specific types
-  if (hasTypes) {
-    const typeNames = assertDefined(options.types, "types option missing");
+  // Handle specific tables
+  if (hasTables) {
+    const typeNames = assertDefined(options.tables, "tables option missing");
 
-    // Validate all types exist and get their namespaces before confirmation
+    // Validate all tables exist and get their namespaces before confirmation
     const typeNamespaceMap = await resolveTypeNamespaces({
       workspaceId,
       namespaces,
       typeNames,
       client,
     });
-    const notFoundTypes = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
+    const notFoundTables = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
 
-    if (notFoundTypes.length > 0) {
+    if (notFoundTables.length > 0) {
       throw new Error(
-        `The following types were not found in any namespace: ${notFoundTypes.join(", ")}`,
+        `The following tables were not found in any namespace: ${notFoundTables.join(", ")}`,
       );
     }
 
     if (!options.yes) {
-      const typeList = typeNames.join(", ");
+      const tableList = typeNames.join(", ");
       const confirmation = await prompt.confirm({
-        message: `This will truncate the following types: ${typeList}. Continue?`,
+        message: `This will truncate the following tables: ${tableList}. Continue?`,
         default: false,
       });
       if (!confirmation) {
@@ -210,9 +210,9 @@ export const truncateCommand = defineAppCommand({
   args: z.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
-    types: arg(z.string().array().optional(), {
+    tables: arg(z.string().array().optional(), {
       positional: true,
-      description: "Type names to truncate",
+      description: "Table names to truncate",
     }),
     all: arg(z.boolean().default(false), {
       alias: "a",
@@ -225,14 +225,14 @@ export const truncateCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const types = args.types && args.types.length > 0 ? args.types : undefined;
+    const tables = args.tables && args.tables.length > 0 ? args.tables : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
       all: args.all,
       namespace: args.namespace,
-      types,
+      tables,
       yes: args.yes,
     });
   },

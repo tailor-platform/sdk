@@ -412,10 +412,10 @@ export const seedApplyCommand = defineAppCommand({
             configPath: args.config,
             profile: args.profile,
             workspaceId: args["workspace-id"],
-            types: typesToTruncate,
+            tables: typesToTruncate,
           });
         } else {
-          logger.log(styles.dim("No TailorDB types to truncate (only _User was specified)."));
+          logger.log(styles.dim("No TailorDB tables to truncate (only _User was specified)."));
         }
       } else {
         await truncate({
