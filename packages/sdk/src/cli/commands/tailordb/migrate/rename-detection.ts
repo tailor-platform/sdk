@@ -5,7 +5,7 @@
  * `field_removed` + `field_added` (`table_removed` + `table_added` for types).
  * This module detects removed/added pairs that are compatible enough to be a
  * rename so that `migration generate` can ask the user (or accept
- * `--rename Type.old:new` / `--rename OldType:NewType`) and record a single
+ * `--rename Table.old:new` / `--rename OldTable:NewTable`) and record a single
  * `field_renamed` / `table_renamed` change instead.
  */
 
@@ -224,7 +224,7 @@ export function assertValidFieldRenames(
 const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;
 
 /**
- * Parse a `--rename` option value of the form `Type.old:new`.
+ * Parse a `--rename` option value of the form `Table.old:new`.
  * @param {string} value - Raw option value
  * @returns {FieldRenameSpec} Parsed rename spec
  */
@@ -233,7 +233,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
   const [, tableName, previousFieldName, fieldName] = match ?? [];
   if (!tableName || !previousFieldName || !fieldName) {
     throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Type.oldField:newField".`,
+      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField".`,
     );
   }
   if (previousFieldName === fieldName) {
@@ -243,7 +243,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
 }
 
 /**
- * A field removal confirmed as intentional (`--drop Type.field`), so its
+ * A field removal confirmed as intentional (`--drop Table.field`), so its
  * rename candidates need no interactive confirmation.
  */
 export interface FieldDropSpec {
@@ -254,7 +254,7 @@ export interface FieldDropSpec {
 const DROP_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+)$/;
 
 /**
- * Parse a `--drop` option value of the form `Type.field`.
+ * Parse a `--drop` option value of the form `Table.field`.
  * @param {string} value - Raw option value
  * @returns {FieldDropSpec} Parsed drop spec
  */
@@ -262,7 +262,7 @@ export function parseDropOption(value: string): FieldDropSpec {
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field".`);
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field".`);
   }
   return { tableName, fieldName };
 }
@@ -292,7 +292,7 @@ export interface FieldExpandContractSpec {
 }
 
 /**
- * Parse an `--expand-contract` option value of the form `Type.field`.
+ * Parse an `--expand-contract` option value of the form `Table.field`.
  * @param {string} value - Raw option value
  * @returns {FieldExpandContractSpec} Parsed spec
  */
@@ -300,7 +300,7 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Type.field".`);
+    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Table.field".`);
   }
   return { tableName, fieldName };
 }
@@ -567,7 +567,7 @@ export function isBreakingForeignKeyRetarget(
 const TYPE_RENAME_OPTION_PATTERN = /^([^.:\s]+):([^.:\s]+)$/;
 
 /**
- * Parse a `--rename` option value of the form `OldType:NewType`.
+ * Parse a `--rename` option value of the form `OldTable:NewTable`.
  * @param {string} value - Raw option value
  * @returns {TypeRenameSpec} Parsed rename spec
  */
@@ -576,11 +576,11 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
   const [, previousTableName, tableName] = match ?? [];
   if (!previousTableName || !tableName) {
     throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Type.oldField:newField" or "OldType:NewType".`,
+      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField" or "OldTable:NewTable".`,
     );
   }
   if (previousTableName === tableName) {
-    throw new Error(`Invalid --rename value "${value}": old and new type names are identical.`);
+    throw new Error(`Invalid --rename value "${value}": old and new table names are identical.`);
   }
   return { previousTableName, tableName };
 }
@@ -596,7 +596,7 @@ export interface TypeDropSpec {
 const TYPE_DROP_OPTION_PATTERN = /^([^.:\s]+)$/;
 
 /**
- * Parse a `--drop` option value of the form `Type`.
+ * Parse a `--drop` option value of the form `Table`.
  * @param {string} value - Raw option value
  * @returns {TypeDropSpec} Parsed drop spec
  */
@@ -604,7 +604,7 @@ export function parseTypeDropOption(value: string): TypeDropSpec {
   const match = value.match(TYPE_DROP_OPTION_PATTERN);
   const [, tableName] = match ?? [];
   if (!tableName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field" or "Type".`);
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field" or "Table".`);
   }
   return { tableName };
 }
