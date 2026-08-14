@@ -26,9 +26,7 @@ Configure an AI Gateway using `defineAIGateway()`:
 ```typescript
 import { defineAIGateway, defineConfig } from "@tailor-platform/sdk";
 
-const aiGateway = defineAIGateway("my-aigateway", {
-  authNamespace: "my-auth",
-});
+const aiGateway = defineAIGateway("my-aigateway", {});
 
 export default defineConfig({
   name: "my-app",
@@ -40,19 +38,25 @@ export default defineConfig({
 
 ### authNamespace
 
-The auth namespace used to resolve request tokens against your workspace's auth configuration. Must match an existing auth namespace — in practice the name you pass to `defineAuth()`, since an application has exactly one Auth service:
+The auth namespace used to resolve request tokens against your workspace's auth configuration. Optional — when omitted, it defaults to your application's own Auth service (the name passed to `defineAuth()`), which is what most AI Gateways need:
 
 ```typescript
 const auth = defineAuth("my-auth", {
   // ...auth configuration...
 });
 
+defineAIGateway("my-aigateway", {}); // defaults to "my-auth"
+```
+
+Set it explicitly only when this gateway must authenticate against an auth namespace owned by a **different** application in your workspace:
+
+```typescript
 defineAIGateway("my-aigateway", {
-  authNamespace: "my-auth", // the defineAuth() name
+  authNamespace: "shared-auth", // a different application's Auth service
 });
 ```
 
-This value is a plain `string` and is **not** type-checked against your auth config, so a typo or a stale name surfaces only at runtime, as `401 Unauthorized` on every request to the gateway.
+An explicit value that doesn't match an existing auth namespace surfaces only at runtime, as `401 Unauthorized` on every request to the gateway.
 
 ### cors
 
@@ -67,7 +71,6 @@ An optional `:port` may be appended in all URL forms. Omitting `cors` (or passin
 
 ```typescript
 defineAIGateway("my-aigateway", {
-  authNamespace: "my-auth",
   cors: ["https://app.example.com", "https://*.example.com"],
 });
 ```
@@ -87,10 +90,7 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const aiGateway = defineAIGateway("my-aigateway", {
-  // Name of an auth namespace in your workspace; request tokens are resolved
-  // against it. Must be the namespace `defineAuth()` declares below — see the
-  // `authNamespace` option for why.
-  authNamespace: "my-auth",
+  // authNamespace omitted: defaults to this app's own Auth service, declared below.
   cors: [website.url],
 });
 

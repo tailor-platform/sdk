@@ -415,4 +415,37 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     const { aiGatewayNames } = extractAttributesFromConfig(config);
     expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
   });
+
+  test("extracts the local auth service's name into AuthNamespaceNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: { name: "my-auth", machineUsers: {} } as never,
+    };
+
+    const { authNamespaceNames } = extractAttributesFromConfig(config);
+    expect(authNamespaceNames).toEqual(["my-auth"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      authNamespaceNames,
+    );
+    expect(content).toContain("interface AuthNamespaceNameRegistry");
+    expect(content).toContain('"my-auth": true;');
+  });
+
+  test("omits AuthNamespaceNameRegistry entries when no auth is configured", () => {
+    const config = { name: "test-app" };
+
+    const { authNamespaceNames } = extractAttributesFromConfig(config);
+    expect(authNamespaceNames).toBeUndefined();
+
+    const content = generateTypeDefinition(undefined, undefined);
+    expect(content).toContain("interface AuthNamespaceNameRegistry {}");
+  });
 });

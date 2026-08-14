@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { defineConfig } from "#/configure/config/index";
+import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
@@ -81,6 +82,49 @@ describe("defineAuth parse wiring", () => {
 
     expect(application.staticWebsiteServices).toHaveLength(1);
     expect(application.staticWebsiteServices[0]?.name).toBe("my-site");
+  });
+});
+
+describe("AI Gateway authNamespace default", () => {
+  test("defaults an omitted authNamespace to the local auth service's name", () => {
+    const auth = defineAuth("my-auth", { machineUserAttributes: {}, machineUsers: {} });
+    const aiGateway = defineAIGateway("my-aigateway", {});
+
+    const config = {
+      ...defineConfig({ name: "testApp", auth, aiGateways: [aiGateway] }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.aiGatewayServices[0]?.authNamespace).toBe("my-auth");
+  });
+
+  test("keeps an explicit authNamespace even when it differs from the local auth service", () => {
+    const auth = defineAuth("my-auth", { machineUserAttributes: {}, machineUsers: {} });
+    const aiGateway = defineAIGateway("my-aigateway", { authNamespace: "other-apps-auth" });
+
+    const config = {
+      ...defineConfig({ name: "testApp", auth, aiGateways: [aiGateway] }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.aiGatewayServices[0]?.authNamespace).toBe("other-apps-auth");
+  });
+
+  test("throws when authNamespace is omitted and no Auth service is configured", () => {
+    const aiGateway = defineAIGateway("my-aigateway", {});
+
+    const config = {
+      ...defineConfig({ name: "testApp", aiGateways: [aiGateway] }),
+      path: "tailor.config.ts",
+    };
+
+    expect(() => defineApplication({ config })).toThrow(
+      /AI Gateway "my-aigateway" has no "authNamespace"/,
+    );
   });
 });
 
