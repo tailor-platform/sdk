@@ -292,6 +292,6 @@ export const TailorDBServiceConfigSchema = z.strictObject({
   ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from table discovery"),
   migration: TailorDBMigrationConfigSchema.optional().describe("Migration configuration"),
   gqlOperations: GqlOperationsSchema.optional().describe(
-    "Default GraphQL operations for all types in this service",
+    "Default GraphQL operations for all tables in this service",
   ),
 });

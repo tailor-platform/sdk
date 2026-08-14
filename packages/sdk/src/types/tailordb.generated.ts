@@ -1133,7 +1133,7 @@ export type TailorDBServiceConfigInput = {
         machineUser?: string | undefined;
       }
     | undefined;
-  /** Default GraphQL operations for all types in this service */
+  /** Default GraphQL operations for all tables in this service */
   gqlOperations?:
     | "query"
     | {
@@ -1163,6 +1163,6 @@ export type TailorDBServiceConfig = {
         machineUser?: string | undefined;
       }
     | undefined;
-  /** Default GraphQL operations for all types in this service */
+  /** Default GraphQL operations for all tables in this service */
   gqlOperations?: GqlOperations;
 };
