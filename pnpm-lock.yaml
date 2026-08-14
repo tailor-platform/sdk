@@ -662,8 +662,8 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.10)(yaml@2.9.0))
       zinfer:
-        specifier: 0.2.7
-        version: 0.2.7(typescript@6.0.3)(zod@4.4.3)
+        specifier: 0.2.8
+        version: 0.2.8(typescript@6.0.3)(zod@4.4.3)
 
   packages/sdk-codemod:
     dependencies:
@@ -4393,8 +4393,8 @@ packages:
   yuku-parser@0.8.3:
     resolution: {integrity: sha512-KPQcpF9aj77ywlJBIkQWCQ9DObdxnCA8AJdUOmA5CZZx042Xt4+dvbQmPJfWxF3E+KG5dVAZ2fBKuDJ8VsKWgA==}
 
-  zinfer@0.2.7:
-    resolution: {integrity: sha512-D/GL7q03XFPNHeDnsRmfBladuatreu6C31XVKhMCoNsw0FTCZ7+jBnDxdi7//WO8bGP/UonuiISEoX8p/UdrPw==}
+  zinfer@0.2.8:
+    resolution: {integrity: sha512-QPekcok07BZNGfJiFl/ysIaUzxhibeFsbaBI3E746L/IZE34o0LXdWM63ul+0NR+L1SkTAgxqbVoXHPAJ20GOw==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
@@ -7485,7 +7485,7 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.8.3
       '@yuku-parser/binding-win32-x64': 0.8.3
 
-  zinfer@0.2.7(typescript@6.0.3)(zod@4.4.3):
+  zinfer@0.2.8(typescript@6.0.3)(zod@4.4.3):
     dependencies:
       commander: 15.0.0
       glob: 13.0.6
