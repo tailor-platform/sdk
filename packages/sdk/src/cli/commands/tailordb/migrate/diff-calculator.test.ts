@@ -233,11 +233,11 @@ describe("diff-calculator", () => {
         {
           tableName: "OldType",
           reason:
-            "Type removed (all records of this type will be deleted during post-migration cleanup)",
+            "Table removed (all records in this table will be deleted during post-migration cleanup)",
         },
       ];
       expect(formatWarnings(warnings)).toContain(
-        "OldType: Type removed (all records of this type will be deleted during post-migration cleanup)",
+        "OldType: Table removed (all records in this table will be deleted during post-migration cleanup)",
       );
     });
 

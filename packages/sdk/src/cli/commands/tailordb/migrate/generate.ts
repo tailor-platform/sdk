@@ -79,11 +79,11 @@ export interface GenerateOptions {
   name?: string;
   yes?: boolean;
   init?: boolean;
-  /** `--rename Type.old:new` / `--rename OldType:NewType` values confirming renames non-interactively. */
+  /** `--rename Table.old:new` / `--rename OldTable:NewTable` values confirming renames non-interactively. */
   renames?: string[];
-  /** `--drop Type.field` / `--drop Type` values confirming removals non-interactively. */
+  /** `--drop Table.field` / `--drop Table` values confirming removals non-interactively. */
   drops?: string[];
-  /** `--expand-contract Type.field` values approving a field type conversion. */
+  /** `--expand-contract Table.field` values approving a field type conversion. */
   expandContracts?: string[];
 }
 
@@ -312,7 +312,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     typeRenameFlags,
     generations,
     typeRenameSpecApplies,
-    "--rename does not match a removed + added type pair",
+    "--rename does not match a removed + added table pair",
   );
   const dropSpecsByNamespace = matchFlagsToNamespaces(
     dropFlags,
@@ -324,7 +324,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     typeDropFlags,
     generations,
     typeDropSpecApplies,
-    "--drop does not match a removed type",
+    "--drop does not match a removed table",
   );
 
   const expandContractKeysByNamespace = new Map<string, Set<string>>();
@@ -414,9 +414,9 @@ export async function generate(options: GenerateOptions): Promise<void> {
       .join("\n");
     throw new Error(
       `Possible rename(s) detected:\n${details}\n` +
-        'Re-run with --rename "Type.oldField:newField" (field) or --rename "OldType:NewType" (type) ' +
+        'Re-run with --rename "Table.oldField:newField" (field) or --rename "OldTable:NewTable" (table) ' +
         "to record a rename and scaffold a data copy script, " +
-        'or --drop "Type.field" / --drop "Type" to confirm the removal.',
+        'or --drop "Table.field" / --drop "Table" to confirm the removal.',
     );
   }
 
@@ -514,7 +514,7 @@ async function generateInitialSnapshot(
 
   logger.success(`Generated initial schema snapshot`);
   logger.info(`  File: ${result.filePath}`);
-  logger.info(`  Types: ${Object.keys(snapshot.tables).length}`);
+  logger.info(`  Tables: ${Object.keys(snapshot.tables).length}`);
 
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }
@@ -600,7 +600,7 @@ interface NamespaceGeneration {
 /** A rename candidate that a non-interactive run could not resolve. */
 interface UnresolvedRenameCandidate {
   namespace: string;
-  /** Removed field (`Type.field`) or type (`Type`) with rename candidates. */
+  /** Removed field (`Table.field`) or table (`Table`) with rename candidates. */
   label: string;
   targets: string[];
 }
@@ -691,7 +691,7 @@ async function promptTypeRenameCandidate(
     return isRename ? firstTypeName : undefined;
   }
   const selected = await prompt.select({
-    message: `${oldTypeName} was removed. Was it renamed to one of these added types?`,
+    message: `${oldTypeName} was removed. Was it renamed to one of these added tables?`,
     choices: [
       ...addedTypeNames.map((tableName) => ({
         name: `Yes, renamed to ${tableName}`,
@@ -1121,7 +1121,7 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
 export const generateCommand = defineAppCommand({
   name: "generate",
   description:
-    "Generate migration files by detecting schema differences between current local types and the previous migration snapshot.",
+    "Generate migration files by detecting schema differences between current local tables and the previous migration snapshot.",
   args: z.strictObject({
     ...confirmationArgs,
     ...configArg,
@@ -1134,15 +1134,15 @@ export const generateCommand = defineAppCommand({
     }),
     rename: arg(z.array(z.string()).optional(), {
       description:
-        'Record a field or type rename instead of remove + add (format: "Type.oldField:newField" or "OldType:NewType"; repeatable). Renames require a migration script that copies the data.',
+        'Record a field or table rename instead of remove + add (format: "Table.oldField:newField" or "OldTable:NewTable"; repeatable). Renames require a migration script that copies the data.',
     }),
     drop: arg(z.array(z.string()).optional(), {
       description:
-        'Confirm that a removed field or type is a genuine removal, not a rename (format: "Type.field" or "Type"; repeatable). Required in non-interactive runs for a removal with rename candidates.',
+        'Confirm that a removed field or table is a genuine removal, not a rename (format: "Table.field" or "Table"; repeatable). Required in non-interactive runs for a removal with rename candidates.',
     }),
     "expand-contract": arg(z.array(z.string()).optional(), {
       description:
-        'Convert a field type through a temporary field (format: "Type.field"; repeatable). Generates two migrations.',
+        'Convert a field type through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
     }),
   }),
   run: async (args) => {

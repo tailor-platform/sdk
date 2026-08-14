@@ -41,9 +41,9 @@ export interface ExpandContractPlanning {
 
 /**
  * Key identifying a field across snapshots and user-supplied options.
- * @param tableName - Name of the type holding the field
+ * @param tableName - Name of the table holding the field
  * @param fieldName - Name of the field
- * @returns Key in `Type.field` form
+ * @returns Key in `Table.field` form
  */
 export function fieldKey(tableName: string, fieldName: string): string {
   return `${tableName}.${fieldName}`;
@@ -76,7 +76,7 @@ export interface PlanExpandContractOptions {
   previous: SchemaSnapshot;
   current: SchemaSnapshot;
   diff: MigrationDiff;
-  /** `Type.field` keys the user approved for automation. */
+  /** `Table.field` keys the user approved for automation. */
   confirmed: ReadonlySet<string>;
 }
 

@@ -59,7 +59,7 @@ If your local tables and remote schema have **diverged**, reconcile them before 
 
 ### Resetting
 
-`tailor tailordb migration generate --init` deletes the existing `migrations/` directory and creates `0000` from the current local types. Use it only before the project is deployed. For a deployed migration history, use [`migration rebaseline`](#re-baselining-a-deployed-migration-history), which verifies the history and connected workspace before replacing any files.
+`tailor tailordb migration generate --init` deletes the existing `migrations/` directory and creates `0000` from the current local tables. Use it only before the project is deployed. For a deployed migration history, use [`migration rebaseline`](#re-baselining-a-deployed-migration-history), which verifies the history and connected workspace before replacing any files.
 
 ## Migration Workflow
 
@@ -141,9 +141,9 @@ In an interactive session, `migration generate` offers to record the reason on t
 
 ### Renaming a field
 
-Renaming a field in a type definition looks like a removal plus an addition to the diff engine. Left as-is, that combination silently drops the old field's data: the removal is only a warning, so nothing forces a data copy.
+Renaming a field in a table definition looks like a removal plus an addition to the diff engine. Left as-is, that combination silently drops the old field's data: the removal is only a warning, so nothing forces a data copy.
 
-To prevent that, when `migration generate` finds a removed field and an added field in the same type whose stored values can be copied without changing their meaning, it asks whether the change is a rename. Serial fields are never rename candidates, and an enum field only qualifies when it keeps every value of the removed field:
+To prevent that, when `migration generate` finds a removed field and an added field in the same table whose stored values can be copied without changing their meaning, it asks whether the change is a rename. Serial fields are never rename candidates, and an enum field only qualifies when it keeps every value of the removed field:
 
 ```
 ? User.fullName was removed and displayName was added with a compatible type. Was it renamed to displayName? (Y/n)
@@ -166,30 +166,30 @@ If you decline the prompt (or confirm the removal with `--drop`), the change sta
 
 Renaming a member inside a **nested field** is not detected, and it is quieter: `User.address.zip` → `zipCode` becomes a single `field_modified` on `address` with no breaking change, no warning, and no generated script, so the member's values are not carried over. Copy them with a custom `tailordb migration script` if they must survive.
 
-### Renaming a type
+### Renaming a table
 
-Renaming a whole type is detected the same way: when `migration generate` finds a removed type and an added type with a matching shape, it asks whether the change is a rename:
+Renaming a whole table is detected the same way: when `migration generate` finds a removed table and an added table with a matching shape, it asks whether the change is a rename:
 
 ```
 ? User was removed and Person was added with a compatible schema. Was it renamed to Person? (Y/n)
 ```
 
-In non-interactive environments the command fails while a candidate is left unresolved, exactly like field renames. Resolve it with the type forms of the same flags (a value without a `.` targets a type):
+In non-interactive environments the command fails while a candidate is left unresolved, exactly like field renames. Resolve it with the table forms of the same flags (a value without a `.` targets a table):
 
 ```bash
 tailor tailordb migration generate --rename "User:Person"
 tailor tailordb migration generate --drop "User"
 ```
 
-Two types qualify as a rename pair only when copying every row preserves the data: every field must keep its name, type, array-ness, required/unique constraints, foreign key target, and decimal scale; enum fields may gain values but not lose them; indexes must match. A self-referential foreign key is compared against the new type name and must be optional. Types with serial fields (their values cannot be written by a script) or file fields (file contents are not copied) are never candidates. Name-derived and data-independent settings — `pluralForm`, description, type settings, permissions, hooks, and validations — may differ.
+Two tables qualify as a rename pair only when copying every row preserves the data: every field must keep its name, type, array-ness, required/unique constraints, foreign key target, and decimal scale; enum fields may gain values but not lose them; indexes must match. A self-referential foreign key is compared against the new table name and must be optional. Tables with serial fields (their values cannot be written by a script) or file fields (file contents are not copied) are never candidates. Name-derived and data-independent settings — `pluralForm`, description, table settings, permissions, hooks, and validations — may differ.
 
-A confirmed rename is recorded as a single `table_renamed` change and treated as **breaking** for two reasons: existing records must be copied by the migration script, and the type's GraphQL API names (derived from the type name and `pluralForm`) change, which breaks API clients. The generated `migrate.ts` copies every row from the old type into the new one in id-ordered batches, preserving ids so stored foreign key references stay valid, and the generated `db.ts` exposes both the old table (readable) and the new table (writable). Self-referential foreign keys are inserted as null and backfilled after every row exists, so a reference to a row in a later batch cannot fail the copy.
+A confirmed rename is recorded as a single `table_renamed` change and treated as **breaking** for two reasons: existing records must be copied by the migration script, and the table's GraphQL API names (derived from the table name and `pluralForm`) change, which breaks API clients. The generated `migrate.ts` copies every row from the old table into the new one in id-ordered batches, preserving ids so stored foreign key references stay valid, and the generated `db.ts` exposes both the old table (readable) and the new table (writable). Self-referential foreign keys are inserted as null and backfilled after every row exists, so a reference to a row in a later batch cannot fail the copy.
 
-Two caveats apply to the copy. The old type is not write-protected: rows written to it after the script's transaction commits — and before post-migration cleanup drops it — are not carried over, so pause writers to the renamed type for the duration of the deploy. And platform-managed record metadata (creation/update timestamps and actors) cannot be written by the script, so the new type's records carry the migration run's metadata instead of the original values.
+Two caveats apply to the copy. The old table is not write-protected: rows written to it after the script's transaction commits — and before post-migration cleanup drops it — are not carried over, so pause writers to the renamed table for the duration of the deploy. And platform-managed record metadata (creation/update timestamps and actors) cannot be written by the script, so the new table's records carry the migration run's metadata instead of the original values.
 
-Fields on other types that reference the renamed type via `foreignKeyType` must be retargeted at the new name in the same change. That retarget is recognized as part of the rename: it is not flagged as a breaking foreign-key change and needs no reference fixup, because record ids are preserved by the copy.
+Fields on other tables that reference the renamed table via `foreignKeyType` must be retargeted at the new name in the same change. That retarget is recognized as part of the rename: it is not flagged as a breaking foreign-key change and needs no reference fixup, because record ids are preserved by the copy.
 
-During deploy, the pre-migration phase creates the new type with its full constraints while the old type stays on the namespace, the script copies the rows, and the old type is dropped in post-migration cleanup after the checkpoint advances — all within a single `tailor deploy`.
+During deploy, the pre-migration phase creates the new table with its full constraints while the old table stays on the namespace, the script copies the rows, and the old table is dropped in post-migration cleanup after the checkpoint advances — all within a single `tailor deploy`.
 
 ### Breaking changes without a script
 
@@ -320,31 +320,31 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 
 ## Supported Schema Changes
 
-| Change Type                       | Breaking? | Migration Script? | Notes                                                                                                                                                                                                                                   |
-| --------------------------------- | --------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add optional field                | No        | No                | Schema change only                                                                                                                                                                                                                      |
-| Add required field                | Yes       | Yes               | Script populates default values                                                                                                                                                                                                         |
-| Remove field                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve or clear data before the field leaves the active schema. The field stays readable from `migrate.ts` during Pre-migration.  |
-| Rename field                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "Type.old:new"` — see [Renaming a field](#renaming-a-field). Auto-generated script copies values from the old field to the new one; both fields coexist during Pre-migration. |
-| Change optional → required        | Yes       | Yes               | Script sets defaults for null values                                                                                                                                                                                                    |
-| Change required → optional        | No        | No                | Schema change only                                                                                                                                                                                                                      |
-| Add index (non-unique)            | No        | No                | Schema change only                                                                                                                                                                                                                      |
-| Add unique index                  | Yes       | Yes               | Script must resolve duplicate value combinations across the index fields                                                                                                                                                                |
-| Change unique index fields        | Yes       | Yes               | Treated like adding a new unique constraint over the new field set                                                                                                                                                                      |
-| Remove index                      | No        | No                | Schema change only (removing the unique constraint from an index is also non-breaking)                                                                                                                                                  |
-| Add unique constraint             | Yes       | Yes               | Script must resolve duplicate values                                                                                                                                                                                                    |
-| Remove unique constraint          | No        | No                | Schema change only                                                                                                                                                                                                                      |
-| Change decimal scale              | Yes       | Yes               | Auto-generated script re-saves existing rows under the new scale. Decreasing scale rounds values half-up and can lose precision. If the same change adds a unique constraint, duplicate handling runs after re-saving.                  |
-| Add enum value                    | No        | No                | Schema change only                                                                                                                                                                                                                      |
-| Remove enum value                 | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                             |
-| Add table                         | No        | No                | Schema change only                                                                                                                                                                                                                      |
-| Remove table                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the table leaves the active schema. The table stays readable from `migrate.ts` during Pre-migration.           |
-| Rename table                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "OldType:NewType"` — see [Renaming a type](#renaming-a-type). Auto-generated script copies all rows preserving ids; both tables coexist until post-migration cleanup.         |
-| Change foreign key target table   | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                             |
-| Change field type (verified pair) | Yes       | Yes               | In-place for the pairs listed under [Field type changes](#field-type-changes); review the generated normalization scaffold and customize it only when existing values need transformation                                               |
-| Change field type (other pair)    | Yes       | Yes               | Two migrations, generated together after you confirm — see [Converting a field type](#converting-a-field-type). Edit the conversion in the first; the second needs no changes.                                                          |
-| Change array → single value       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                             |
-| Change single value → array       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                             |
+| Change Type                       | Breaking? | Migration Script? | Notes                                                                                                                                                                                                                                              |
+| --------------------------------- | --------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add optional field                | No        | No                | Schema change only                                                                                                                                                                                                                                 |
+| Add required field                | Yes       | Yes               | Script populates default values                                                                                                                                                                                                                    |
+| Remove field                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve or clear data before the field leaves the active schema. The field stays readable from `migrate.ts` during Pre-migration.             |
+| Rename field                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "Table.oldField:newField"` — see [Renaming a field](#renaming-a-field). Auto-generated script copies values from the old field to the new one; both fields coexist during Pre-migration. |
+| Change optional → required        | Yes       | Yes               | Script sets defaults for null values                                                                                                                                                                                                               |
+| Change required → optional        | No        | No                | Schema change only                                                                                                                                                                                                                                 |
+| Add index (non-unique)            | No        | No                | Schema change only                                                                                                                                                                                                                                 |
+| Add unique index                  | Yes       | Yes               | Script must resolve duplicate value combinations across the index fields                                                                                                                                                                           |
+| Change unique index fields        | Yes       | Yes               | Treated like adding a new unique constraint over the new field set                                                                                                                                                                                 |
+| Remove index                      | No        | No                | Schema change only (removing the unique constraint from an index is also non-breaking)                                                                                                                                                             |
+| Add unique constraint             | Yes       | Yes               | Script must resolve duplicate values                                                                                                                                                                                                               |
+| Remove unique constraint          | No        | No                | Schema change only                                                                                                                                                                                                                                 |
+| Change decimal scale              | Yes       | Yes               | Auto-generated script re-saves existing rows under the new scale. Decreasing scale rounds values half-up and can lose precision. If the same change adds a unique constraint, duplicate handling runs after re-saving.                             |
+| Add enum value                    | No        | No                | Schema change only                                                                                                                                                                                                                                 |
+| Remove enum value                 | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                                        |
+| Add table                         | No        | No                | Schema change only                                                                                                                                                                                                                                 |
+| Remove table                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the table leaves the active schema. The table stays readable from `migrate.ts` during Pre-migration.                      |
+| Rename table                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "OldTable:NewTable"` — see [Renaming a table](#renaming-a-table). Auto-generated script copies all rows preserving ids; both tables coexist until post-migration cleanup.                |
+| Change foreign key target table   | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                                        |
+| Change field type (verified pair) | Yes       | Yes               | In-place for the pairs listed under [Field type changes](#field-type-changes); review the generated normalization scaffold and customize it only when existing values need transformation                                                          |
+| Change field type (other pair)    | Yes       | Yes               | Two migrations, generated together after you confirm — see [Converting a field type](#converting-a-field-type). Edit the conversion in the first; the second needs no changes.                                                                     |
+| Change array → single value       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                                        |
+| Change single value → array       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                                        |
 
 ### Field type changes
 
@@ -449,7 +449,7 @@ Without the flag the command fails rather than converting anything, so a scripte
 Some changes are still rejected and need a temporary field you add yourself — add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration:
 
 - Array-to-scalar and scalar-to-array, since collapsing an array has no answer the generated script could choose for you.
-- A field that is unique, or that an index, relationship, permission, or type-level script names. Those keep pointing at the original name, which the conversion removes.
+- A field that is unique, or that an index, relationship, permission, or table-level script names. Those keep pointing at the original name, which the conversion removes.
 
 ## Testing Pending Migrations
 
@@ -465,7 +465,7 @@ The command performs the following sequence:
 6. Optionally runs an assertion script against the migrated data.
 7. Deletes an automatically-created workspace after success or failure.
 
-Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current type source are not included in the rehearsal.
+Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current table definitions are not included in the rehearsal.
 
 Executors are omitted from the baseline deployment so loading fixture or cloned records cannot trigger current event handlers against the older schema. Auth user profiles are also deferred until the pending migrations finish, while configured machine users remain available to run seed and migration scripts. The final deployment restores the configured executors and user profiles. Static websites are deployed so configuration references to their URLs resolve, but their workspace-bound custom domains are omitted from migration-test deployments.
 
@@ -530,10 +530,10 @@ When you run `tailor deploy`, the SDK detects pending migrations (anything past 
 
 For each pending migration:
 
-1. **Pre-migration**: Schema changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and type-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the table so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. For a renamed type, the new type is created with its full constraints while the old type stays on the namespace until post-migration cleanup, so the script can copy rows between them. Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
+1. **Pre-migration**: Schema changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and table-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the table so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. For a renamed table, the new table is created with its full constraints while the old table stays on the namespace until post-migration cleanup, so the script can copy rows between them. Breaking table-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
 2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
 3. **Post-migration schema**: Required constraints and the target field definitions are applied. Do not assume that removing a field clears its underlying stored JSON value.
-4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and tables — including a renamed type's old table — are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.
+4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and tables — including the old table left behind by a rename — are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.
 
 This split is what allows existing rows to be backfilled before the database starts rejecting nulls, and what lets `migrate.ts` traverse foreign-key fields that the same migration removes.
 
@@ -551,7 +551,7 @@ On drift you'll see something like:
 Namespace: tailordb
   Remote migration: 0007
   Differences:
-  Type 'User':
+  Table 'User':
     - Field 'email': required: remote=false, expected=true
 ```
 
@@ -565,7 +565,7 @@ tailor tailordb migration validate
 
 It reports issues per namespace, exits with a non-zero code when any check fails, and supports `--json` for machine-readable output.
 
-With `--strict`, validation additionally fails when a migration not yet applied to the remote has data-loss warnings (see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts)) but neither a `migrate.ts` nor a recorded `--no-script` acknowledgment. The failure names the affected type and field and prints the exact command to record the acknowledgment.
+With `--strict`, validation additionally fails when a migration not yet applied to the remote has data-loss warnings (see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts)) but neither a `migrate.ts` nor a recorded `--no-script` acknowledgment. The failure names the affected table and field and prints the exact command to record the acknowledgment.
 
 To bypass both checks during deploy (not recommended outside of recovery scenarios):
 

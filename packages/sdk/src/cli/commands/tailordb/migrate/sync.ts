@@ -198,11 +198,11 @@ async function assertMigrationsReproduceLocalTypes(
   logger.newline();
   logger.info("This usually means one of the following:");
   logger.info(
-    "  - Migration files were edited and replaying them no longer matches the type definitions — fix the migration files.",
+    "  - Migration files were edited and replaying them no longer matches the table definitions — fix the migration files.",
     { mode: "plain" },
   );
   logger.info(
-    "  - Type definitions changed without a new migration — run 'tailor tailordb migration generate' first.",
+    "  - Table definitions changed without a new migration — run 'tailor tailordb migration generate' first.",
     { mode: "plain" },
   );
   logger.newline();
@@ -292,9 +292,9 @@ async function sync(options: SyncOptions): Promise<void> {
     `  Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
   );
   logger.log(`  Target migration: ${styles.bold(formatMigrationNumber(targetVersion))}`);
-  logger.log(`  Types to create: ${styles.bold(String(creates.length))}`);
-  logger.log(`  Types to update: ${styles.bold(String(updates.length))}`);
-  logger.log(`  Types to delete: ${styles.bold(String(deletes.length))}`);
+  logger.log(`  Tables to create: ${styles.bold(String(creates.length))}`);
+  logger.log(`  Tables to update: ${styles.bold(String(updates.length))}`);
+  logger.log(`  Tables to delete: ${styles.bold(String(deletes.length))}`);
   logger.log(`  GQL permissions to set: ${styles.bold(String(desiredGqlPermissions.length))}`);
   logger.log(`  GQL permissions to delete: ${styles.bold(String(gqlPermissionDeletes.length))}`);
   logger.newline();
@@ -306,15 +306,15 @@ async function sync(options: SyncOptions): Promise<void> {
     desiredGqlPermissions.length +
     gqlPermissionDeletes.length;
   if (totalOps === 0) {
-    // Reachable only when both snapshot and remote hold no types; the label
+    // Reachable only when both snapshot and remote hold no tables; the label
     // may still be stale, so the sync proceeds to update it.
-    logger.info("No types to apply; only the migration label will be updated.");
+    logger.info("No tables to apply; only the migration label will be updated.");
   } else {
     logger.warn(
-      "This operation will overwrite remote TailorDB types to match the selected snapshot.",
+      "This operation will overwrite remote TailorDB tables to match the selected snapshot.",
     );
     if (deletes.length > 0) {
-      logger.warn("Existing data in deleted types will be lost.");
+      logger.warn("Existing data in deleted tables will be lost.");
     }
     logger.newline();
   }
@@ -363,7 +363,7 @@ async function sync(options: SyncOptions): Promise<void> {
     const manifest = manifests.get(typeName);
     if (!manifest) {
       throw new Error(
-        `Internal error: no manifest generated for type "${typeName}". No changes were applied.`,
+        `Internal error: no manifest generated for table "${typeName}". No changes were applied.`,
       );
     }
     return manifest;

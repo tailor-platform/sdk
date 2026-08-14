@@ -1,11 +1,11 @@
 /**
- * Field and type rename detection for TailorDB migrations
+ * Field and table rename detection for TailorDB migrations
  *
  * A rename has no dedicated platform API, so the diff decomposes it into
- * `field_removed` + `field_added` (`table_removed` + `table_added` for types).
+ * `field_removed` + `field_added` (`table_removed` + `table_added` for tables).
  * This module detects removed/added pairs that are compatible enough to be a
  * rename so that `migration generate` can ask the user (or accept
- * `--rename Type.old:new` / `--rename OldType:NewType`) and record a single
+ * `--rename Table.oldField:newField` / `--rename OldTable:NewTable`) and record a single
  * `field_renamed` / `table_renamed` change instead.
  */
 
@@ -185,7 +185,7 @@ export function assertValidFieldRenames(
     const currType = current.tables[tableName];
     if (!prevType || !currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" must exist in both the previous and the current schema.`,
+        `Cannot rename ${label}: table "${tableName}" must exist in both the previous and the current schema.`,
       );
     }
     const prevField = prevType.fields[previousFieldName];
@@ -224,7 +224,7 @@ export function assertValidFieldRenames(
 const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;
 
 /**
- * Parse a `--rename` option value of the form `Type.old:new`.
+ * Parse a `--rename` option value of the form `Table.oldField:newField`.
  * @param {string} value - Raw option value
  * @returns {FieldRenameSpec} Parsed rename spec
  */
@@ -233,7 +233,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
   const [, tableName, previousFieldName, fieldName] = match ?? [];
   if (!tableName || !previousFieldName || !fieldName) {
     throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Type.oldField:newField".`,
+      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField".`,
     );
   }
   if (previousFieldName === fieldName) {
@@ -243,7 +243,7 @@ export function parseRenameOption(value: string): FieldRenameSpec {
 }
 
 /**
- * A field removal confirmed as intentional (`--drop Type.field`), so its
+ * A field removal confirmed as intentional (`--drop Table.field`), so its
  * rename candidates need no interactive confirmation.
  */
 export interface FieldDropSpec {
@@ -254,7 +254,7 @@ export interface FieldDropSpec {
 const DROP_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+)$/;
 
 /**
- * Parse a `--drop` option value of the form `Type.field`.
+ * Parse a `--drop` option value of the form `Table.field`.
  * @param {string} value - Raw option value
  * @returns {FieldDropSpec} Parsed drop spec
  */
@@ -262,7 +262,7 @@ export function parseDropOption(value: string): FieldDropSpec {
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field".`);
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field".`);
   }
   return { tableName, fieldName };
 }
@@ -292,7 +292,7 @@ export interface FieldExpandContractSpec {
 }
 
 /**
- * Parse an `--expand-contract` option value of the form `Type.field`.
+ * Parse an `--expand-contract` option value of the form `Table.field`.
  * @param {string} value - Raw option value
  * @returns {FieldExpandContractSpec} Parsed spec
  */
@@ -300,7 +300,7 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Type.field".`);
+    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Table.field".`);
   }
   return { tableName, fieldName };
 }
@@ -499,7 +499,7 @@ export function assertValidTypeRenames(
     const label = `${previousTableName}:${tableName}`;
     for (const key of [previousTableName, tableName]) {
       if (seen.has(key)) {
-        throw new Error(`Type "${key}" appears in more than one rename.`);
+        throw new Error(`Table "${key}" appears in more than one rename.`);
       }
       seen.add(key);
     }
@@ -507,32 +507,32 @@ export function assertValidTypeRenames(
     const prevType = previous.tables[previousTableName];
     if (!prevType) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTableName}" does not exist in the previous schema.`,
+        `Cannot rename ${label}: table "${previousTableName}" does not exist in the previous schema.`,
       );
     }
     if (current.tables[previousTableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTableName}" still exists in the current schema.`,
+        `Cannot rename ${label}: table "${previousTableName}" still exists in the current schema.`,
       );
     }
     const currType = current.tables[tableName];
     if (!currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" does not exist in the current schema.`,
+        `Cannot rename ${label}: table "${tableName}" does not exist in the current schema.`,
       );
     }
     if (previous.tables[tableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" already exists in the previous schema.`,
+        `Cannot rename ${label}: table "${tableName}" already exists in the previous schema.`,
       );
     }
     if (!isTypeRenameCompatible(prevType, currType)) {
       throw new Error(
-        `Cannot rename ${label}: the types are not rename-compatible ` +
+        `Cannot rename ${label}: the tables are not rename-compatible ` +
           `(every field must keep its name, type, array-ness, required/unique constraints, ` +
           `foreign key target, and scale, enum values must not be removed, indexes must match, ` +
           `self-referential foreign keys must be optional, ` +
-          `and types with serial or file fields cannot be renamed).`,
+          `and tables with serial or file fields cannot be renamed).`,
       );
     }
   }
@@ -576,17 +576,17 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
   const [, previousTableName, tableName] = match ?? [];
   if (!previousTableName || !tableName) {
     throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Type.oldField:newField" or "OldType:NewType".`,
+      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField" or "OldTable:NewTable".`,
     );
   }
   if (previousTableName === tableName) {
-    throw new Error(`Invalid --rename value "${value}": old and new type names are identical.`);
+    throw new Error(`Invalid --rename value "${value}": old and new table names are identical.`);
   }
   return { previousTableName, tableName };
 }
 
 /**
- * A type removal confirmed as intentional (`--drop Type`), so its rename
+ * A table removal confirmed as intentional (`--drop Table`), so its rename
  * candidates need no interactive confirmation.
  */
 export interface TypeDropSpec {
@@ -596,7 +596,7 @@ export interface TypeDropSpec {
 const TYPE_DROP_OPTION_PATTERN = /^([^.:\s]+)$/;
 
 /**
- * Parse a `--drop` option value of the form `Type`.
+ * Parse a `--drop` option value of the form `Table`.
  * @param {string} value - Raw option value
  * @returns {TypeDropSpec} Parsed drop spec
  */
@@ -604,7 +604,7 @@ export function parseTypeDropOption(value: string): TypeDropSpec {
   const match = value.match(TYPE_DROP_OPTION_PATTERN);
   const [, tableName] = match ?? [];
   if (!tableName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field" or "Type".`);
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field" or "Table".`);
   }
   return { tableName };
 }

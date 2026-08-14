@@ -59,7 +59,7 @@ interface MigrationFilesReport {
 
 interface LocalSchemaReport {
   hasDiff: boolean;
-  /** Present when local types drifted from the latest migration snapshot; absent when the drift is a missing snapshot */
+  /** Present when local tables drifted from the latest migration snapshot; absent when the drift is a missing snapshot */
   diff?: MigrationDiff;
 }
 
@@ -544,7 +544,7 @@ async function validate(options: ValidateOptions): Promise<void> {
 export const validateCommand = defineAppCommand({
   name: "validate",
   description:
-    "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
+    "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
