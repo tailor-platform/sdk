@@ -181,7 +181,7 @@ export const SCIMAttributeMappingSchema = z.strictObject({
 export const SCIMResourceSchema = z.strictObject({
   name: z.string().describe("SCIM resource name"),
   tailorDBNamespace: z.string().describe("TailorDB namespace for the resource"),
-  tailorDBType: z.string().describe("TailorDB type name for the resource"),
+  tailorDBType: z.string().describe("TailorDB table name for the resource"),
   coreSchema: SCIMSchemaSchema.describe("Core SCIM schema definition"),
   attributeMapping: z.array(SCIMAttributeMappingSchema).describe("Attribute mapping configuration"),
 });
@@ -193,13 +193,13 @@ export const SCIMSchema = z.strictObject({
 });
 
 export const TenantProviderSchema = z.strictObject({
-  namespace: z.string().describe("TailorDB namespace for the tenant type"),
-  type: z.string().describe("TailorDB type name for tenants"),
+  namespace: z.string().describe("TailorDB namespace for the tenant table"),
+  type: z.string().describe("TailorDB table name for tenants"),
   signatureField: z.string().describe("Field used as the tenant signature"),
 });
 
 const UserProfileSchema = z.strictObject({
-  namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
+  namespace: z.string().optional().describe("TailorDB namespace where the user table is defined"),
   type: z
     .custom<TailorDBInstance>()
     .transform(stripTailorDBTypeBuilderHelpers)

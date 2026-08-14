@@ -124,7 +124,7 @@ async function getNamespaceFromSqlQuery(
 
   const notFoundTypes = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
   if (notFoundTypes.length > 0) {
-    throw new Error(`Could not find namespace for types in query: ${notFoundTypes.join(", ")}.`);
+    throw new Error(`Could not find namespace for tables in query: ${notFoundTypes.join(", ")}.`);
   }
 
   const namespacesFromTypes = new Set(typeNamespaceMap.values());
@@ -133,7 +133,7 @@ async function getNamespaceFromSqlQuery(
   }
 
   throw new Error(
-    `Query references types from multiple namespaces: ${[...namespacesFromTypes].join(", ")}.`,
+    `Query references tables from multiple namespaces: ${[...namespacesFromTypes].join(", ")}.`,
   );
 }
 

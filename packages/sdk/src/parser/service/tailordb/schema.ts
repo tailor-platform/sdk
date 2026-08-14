@@ -36,7 +36,7 @@ export const GqlOperationsSchema = z
     }),
   ])
   .describe(
-    "Configuration for GraphQL operations on a TailorDB type.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
+    "Configuration for GraphQL operations on a TailorDB table.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
   )
   .transform((val) => normalizeGqlOperations(val));
 
@@ -72,7 +72,7 @@ export const DBFieldMetadataSchema = z.strictObject({
     .optional()
     .describe("Whether the field is a vector field for similarity search"),
   foreignKey: z.boolean().optional().describe("Whether the field is a foreign key"),
-  foreignKeyType: z.string().optional().describe("Target type name for foreign key relations"),
+  foreignKeyType: z.string().optional().describe("Target table name for foreign key relations"),
   foreignKeyField: z.string().optional().describe("Target field name for foreign key relations"),
   hooks: z
     .strictObject({
@@ -105,11 +105,11 @@ const RelationTypeSchema = z.enum(relationTypesKeys);
 export const RawRelationConfigSchema = z.strictObject({
   type: RelationTypeSchema.describe("Relation cardinality type"),
   toward: z.strictObject({
-    type: z.string().describe("Target type name, or 'self' for self-relations"),
+    type: z.string().describe("Target table name, or 'self' for self-relations"),
     as: z.string().optional().describe("Custom forward relation name"),
     key: z.string().optional().describe("Target field to join on (default: 'id')"),
   }),
-  backward: z.string().optional().describe("Backward relation name on the target type"),
+  backward: z.string().optional().describe("Backward relation name on the target table"),
 });
 
 const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
@@ -127,17 +127,17 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
  * Normalizes gqlOperations from alias ("query") to object format.
  */
 export const TailorDBTypeSettingsSchema = z.strictObject({
-  pluralForm: z.string().optional().describe("Custom plural form of the type name for GraphQL"),
-  aggregation: z.boolean().optional().describe("Enable aggregation queries for this type"),
-  bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this type"),
+  pluralForm: z.string().optional().describe("Custom plural form of the table name for GraphQL"),
+  aggregation: z.boolean().optional().describe("Enable aggregation queries for this table"),
+  bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this table"),
   gqlOperations: GqlOperationsSchema.optional().describe(
-    'Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control.',
+    'Configure GraphQL operations for this table. Use "query" for read-only mode, or an object for granular control.',
   ),
   publishEvents: z
     .boolean()
     .optional()
     .describe(
-      "Enable publishing events for this type.\nWhen enabled, record creation/update/deletion events are published.\nIf not specified, this is automatically set to true when an executor uses this type\nwith recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false\nwhile an executor uses this type, an error will be thrown during apply.",
+      "Enable publishing events for this table.\nWhen enabled, record creation/update/deletion events are published.\nIf not specified, this is automatically set to true when an executor uses this table\nwith recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false\nwhile an executor uses this table, an error will be thrown during apply.",
     ),
 });
 
@@ -288,8 +288,8 @@ const TailorDBMigrationConfigSchema = z.strictObject({
  * Normalizes gqlOperations from alias ("query") to object format.
  */
 export const TailorDBServiceConfigSchema = z.strictObject({
-  files: z.array(z.string()).describe("Glob patterns for TailorDB type definition files"),
-  ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from type discovery"),
+  files: z.array(z.string()).describe("Glob patterns for TailorDB table definition files"),
+  ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from table discovery"),
   migration: TailorDBMigrationConfigSchema.optional().describe("Migration configuration"),
   gqlOperations: GqlOperationsSchema.optional().describe(
     "Default GraphQL operations for all types in this service",

@@ -8,7 +8,7 @@ import type { LoadedConfig } from "#/cli/shared/config-loader";
 type TypeFieldOrderMap = Map<string, string[]>;
 
 /**
- * Load field definition order for all TailorDB types in a namespace.
+ * Load field definition order for all TailorDB tables in a namespace.
  * @param config - Loaded application configuration
  * @param namespace - TailorDB namespace name
  * @returns Map of type name to field names in definition order
