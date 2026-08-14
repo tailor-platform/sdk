@@ -712,7 +712,7 @@ export function loadDiff(filePath: string): MigrationDiff {
 const FIELD_REMOVED_WARNING_REASON =
   "Field removed (existing data will no longer be accessible through the schema)";
 const TABLE_REMOVED_WARNING_REASON =
-  "Type removed (all records of this type will be deleted during post-migration cleanup)";
+  "Table removed (all records in this table will be deleted during post-migration cleanup)";
 
 /**
  * Reconstruct data-loss warnings from removal changes for diff.json files
@@ -3234,15 +3234,15 @@ function compareScriptHashes(
           tableName,
           kind: "script_mismatch",
           details: remoteHash
-            ? `Type '${tableName}' scripts differ between remote and snapshot`
-            : `Type '${tableName}' has no script hash on remote`,
+            ? `Table '${tableName}' scripts differ between remote and snapshot`
+            : `Table '${tableName}' has no script hash on remote`,
         });
       }
     } else if (remoteHasScripts(remoteType)) {
       drifts.push({
         tableName,
         kind: "script_mismatch",
-        details: `Type '${tableName}' has scripts on remote but not in snapshot`,
+        details: `Table '${tableName}' has scripts on remote but not in snapshot`,
       });
     }
   }
@@ -3300,13 +3300,13 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
       return {
         tableName: change.tableName,
         kind: "type_missing_remote",
-        details: `Type '${change.tableName}' exists in snapshot but not in remote`,
+        details: `Table '${change.tableName}' exists in snapshot but not in remote`,
       };
     case "table_removed":
       return {
         tableName: change.tableName,
         kind: "type_missing_local",
-        details: `Type '${change.tableName}' exists in remote but not in snapshot`,
+        details: `Table '${change.tableName}' exists in remote but not in snapshot`,
       };
     // Drift comparison never confirms renames, so this kind cannot occur here;
     // report it as a plain type mismatch if it ever does.
@@ -3314,7 +3314,7 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
       return {
         tableName: change.tableName,
         kind: "type_settings_mismatch",
-        details: `Type '${change.previousTableName}' was renamed to '${change.tableName}'`,
+        details: `Table '${change.previousTableName}' was renamed to '${change.tableName}'`,
       };
     case "table_settings_modified":
     case "table_modified":
@@ -3464,7 +3464,7 @@ export function formatSchemaDrifts(drifts: SchemaDrift[]): string {
   }
 
   for (const [tableName, typeDrifts] of driftsByType) {
-    lines.push(`  Type '${tableName}':`);
+    lines.push(`  Table '${tableName}':`);
     for (const drift of typeDrifts) {
       if (drift.fieldName) {
         lines.push(`    - Field '${drift.fieldName}': ${drift.details}`);
