@@ -9,7 +9,7 @@ import type { InferredAttributes } from "#/runtime/types";
 // --- Permission types (UX-focused, for configure layer) ---
 
 /**
- * Record-level permission configuration for a TailorDB type.
+ * Record-level permission configuration for a TailorDB table.
  * Defines create, read, update, and delete permissions.
  *
  * Prefer object format with explicit `conditions` and `permit` for readability.

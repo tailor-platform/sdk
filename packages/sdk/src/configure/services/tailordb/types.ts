@@ -292,17 +292,20 @@ export type ExcludeDefaultedDBFields<T extends Record<string, TailorAnyDBField>>
 // --- Type features ---
 
 export interface TypeFeatures {
+  /** Custom plural form of the table name for GraphQL */
   pluralForm?: string;
+  /** Enable aggregation queries for this table */
   aggregation?: true;
+  /** Enable bulk upsert mutation for this table */
   bulkUpsert?: true;
-  /** Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control. */
+  /** Configure GraphQL operations for this table. Use "query" for read-only mode, or an object for granular control. */
   gqlOperations?: GqlOperationsConfig;
   /**
-   * Enable publishing events for this type.
+   * Enable publishing events for this table.
    * When enabled, record creation/update/deletion events are published.
-   * If not specified, this is automatically set to true when an executor uses this type
+   * If not specified, this is automatically set to true when an executor uses this table
    * with recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false
-   * while an executor uses this type, an error will be thrown during apply.
+   * while an executor uses this table, an error will be thrown during apply.
    */
   publishEvents?: boolean;
 }
