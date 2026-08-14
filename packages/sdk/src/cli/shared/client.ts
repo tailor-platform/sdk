@@ -446,7 +446,7 @@ export function errorHandlingInterceptor(): Interceptor {
     } catch (error) {
       if (error instanceof ConnectError) {
         const { operation, resourceType } = parseMethodName(req.method.name);
-        const identity = formatRequestIdentity(req.message);
+        const identity = formatRequestIdentity(req.message, req.method.name);
 
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
@@ -479,28 +479,39 @@ export function parseMethodName(methodName: string): {
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 
-// Identifier fields surfaced in enhanced error messages. Add an entry here to
-// surface another field. Never add fields that can carry secrets or PII
-// (tokens, scripts, query args, secret values, emails), and never add a
-// suffix that could match them (e.g. "Key" would match future key material).
-const IDENTITY_KEYS = new Set([
-  "name",
-  "id",
-  "trn",
-  "domain",
-  "filePath",
-  "authNamespace",
-  "executionPolicyKey",
-]);
-const IDENTITY_KEY_SUFFIXES = ["Name", "Id"];
+// Identifier fields surfaced in enhanced error messages. Never add fields
+// that can carry secrets or PII (tokens, scripts, query args, secret values,
+// emails), and never add a suffix that could match them (e.g. "Key" would
+// match future key material).
+//
+// Platform-wide naming conventions: on every API, a top-level string field
+// with one of these names or suffixes is a resource identifier.
+const IDENTITY_KEYS = new Set(["name", "id"]);
+const IDENTITY_KEY_SUFFIXES = ["Name", "Id", "Namespace"];
 // Key read from nested resource messages (e.g. the type in a create request).
 const NESTED_IDENTITY_KEY = "name";
+// API-specific identifier fields, scoped to the RPC methods that define them
+// so a same-named field on an unrelated API is never surfaced by accident.
+const METHOD_IDENTITY_KEYS: Readonly<Record<string, readonly string[]>> = {
+  GetMetadata: ["trn"],
+  SetMetadata: ["trn"],
+  AddCustomDomain: ["domain"],
+  GetCustomDomain: ["domain"],
+  RemoveCustomDomain: ["domain"],
+  CreateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  UpdateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  GetWorkflowJobFunctionExecutionPolicyByKey: ["executionPolicyKey"],
+};
 
-function isIdentityKey(key: string): boolean {
+function isIdentityKey(key: string, methodName: string): boolean {
   if (key.startsWith("$")) {
     return false;
   }
-  return IDENTITY_KEYS.has(key) || IDENTITY_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix));
+  return (
+    IDENTITY_KEYS.has(key) ||
+    IDENTITY_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix)) ||
+    (METHOD_IDENTITY_KEYS[methodName]?.includes(key) ?? false)
+  );
 }
 
 /**
@@ -509,15 +520,16 @@ function isIdentityKey(key: string): boolean {
  * Only resource identifiers are included — the rest of the request payload
  * can carry credentials and must never reach terminal or CI logs.
  * @param message - Request message to extract identifiers from
+ * @param methodName - RPC method name used to resolve method-scoped identifiers
  * @returns Identity suffix like " (namespaceName: x, type.name: y)", or an empty string
  */
-function formatRequestIdentity(message: unknown): string {
+function formatRequestIdentity(message: unknown, methodName: string): string {
   if (typeof message !== "object" || message === null) {
     return "";
   }
   const parts: string[] = [];
   for (const [key, value] of Object.entries(message)) {
-    if (typeof value === "string" && value !== "" && isIdentityKey(key)) {
+    if (typeof value === "string" && value !== "" && isIdentityKey(key, methodName)) {
       parts.push(`${key}: ${value}`);
     } else if (
       !key.startsWith("$") &&
