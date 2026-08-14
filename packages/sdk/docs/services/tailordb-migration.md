@@ -339,7 +339,7 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Remove enum value                 | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                             |
 | Add table                         | No        | No                | Schema change only                                                                                                                                                                                                                      |
 | Remove table                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the table leaves the active schema. The table stays readable from `migrate.ts` during Pre-migration.           |
-| Rename table                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "OldType:NewType"` — see [Renaming a table](#renaming-a-table). Auto-generated script copies all rows preserving ids; both tables coexist until post-migration cleanup.       |
+| Rename table                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "OldTable:NewTable"` — see [Renaming a table](#renaming-a-table). Auto-generated script copies all rows preserving ids; both tables coexist until post-migration cleanup.     |
 | Change foreign key target table   | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                             |
 | Change field type (verified pair) | Yes       | Yes               | In-place for the pairs listed under [Field type changes](#field-type-changes); review the generated normalization scaffold and customize it only when existing values need transformation                                               |
 | Change field type (other pair)    | Yes       | Yes               | Two migrations, generated together after you confirm — see [Converting a field type](#converting-a-field-type). Edit the conversion in the first; the second needs no changes.                                                          |
@@ -551,7 +551,7 @@ On drift you'll see something like:
 Namespace: tailordb
   Remote migration: 0007
   Differences:
-  Type 'User':
+  Table 'User':
     - Field 'email': required: remote=false, expected=true
 ```
 

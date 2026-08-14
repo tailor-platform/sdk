@@ -772,7 +772,7 @@ describe("snapshot", () => {
               { tableName: "Ghost", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
-        ).toThrow('type "Ghost" must exist');
+        ).toThrow('table "Ghost" must exist');
       });
     });
 
@@ -812,7 +812,7 @@ describe("snapshot", () => {
         expect(diff.requiresMigrationScript).toBe(true);
         expect(diff.breakingChanges).toHaveLength(2);
         expect(diff.breakingChanges[0]!.reason).toContain(
-          "Type renamed from User to Person (existing records must be copied by the migration script)",
+          "Table renamed from User to Person (existing records must be copied by the migration script)",
         );
         expect(diff.breakingChanges[1]!.reason).toContain("GraphQL API names");
         expect(diff.breakingChanges[1]!.reason).toContain("User/Users");
@@ -926,7 +926,7 @@ describe("snapshot", () => {
           compareRawSnapshots(previous(), current(), {
             typeRenames: [{ previousTableName: "Ghost", tableName: "Person" }],
           }),
-        ).toThrow('type "Ghost" does not exist in the previous schema');
+        ).toThrow('table "Ghost" does not exist in the previous schema');
       });
     });
 
@@ -2303,7 +2303,7 @@ describe("snapshot", () => {
         breakingChanges: [
           {
             tableName: "Person",
-            reason: "Type renamed from User to Person",
+            reason: "Table renamed from User to Person",
           },
         ],
         hasWarnings: false,
@@ -3098,7 +3098,7 @@ describe("snapshot", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Table renamed from User to Person" }],
         hasWarnings: false,
         warnings: [],
         requiresMigrationScript: true,

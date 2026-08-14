@@ -2091,7 +2091,7 @@ export function compareSnapshots(
     });
     ctx.breakingChanges.push({
       tableName: rename.tableName,
-      reason: `Type renamed from ${rename.previousTableName} to ${rename.tableName} (existing records must be copied by the migration script)`,
+      reason: `Table renamed from ${rename.previousTableName} to ${rename.tableName} (existing records must be copied by the migration script)`,
     });
     ctx.breakingChanges.push({
       tableName: rename.tableName,
@@ -3321,7 +3321,7 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
       return {
         tableName: change.tableName,
         kind: "type_settings_mismatch",
-        details: change.reason ?? "Type settings differ between remote and snapshot",
+        details: change.reason ?? "Table settings differ between remote and snapshot",
       };
     case "field_added":
       return {
@@ -3427,7 +3427,7 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
       return {
         tableName: change.tableName,
         kind: "script_mismatch",
-        details: change.reason ?? "Type-level scripts differ between remote and snapshot",
+        details: change.reason ?? "Table-level scripts differ between remote and snapshot",
       };
     default: {
       change satisfies never;

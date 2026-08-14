@@ -185,7 +185,7 @@ export function assertValidFieldRenames(
     const currType = current.tables[tableName];
     if (!prevType || !currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" must exist in both the previous and the current schema.`,
+        `Cannot rename ${label}: table "${tableName}" must exist in both the previous and the current schema.`,
       );
     }
     const prevField = prevType.fields[previousFieldName];
@@ -262,7 +262,7 @@ export function parseDropOption(value: string): FieldDropSpec {
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field".`);
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field".`);
   }
   return { tableName, fieldName };
 }
@@ -300,7 +300,7 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Type.field".`);
+    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Table.field".`);
   }
   return { tableName, fieldName };
 }
@@ -499,7 +499,7 @@ export function assertValidTypeRenames(
     const label = `${previousTableName}:${tableName}`;
     for (const key of [previousTableName, tableName]) {
       if (seen.has(key)) {
-        throw new Error(`Type "${key}" appears in more than one rename.`);
+        throw new Error(`Table "${key}" appears in more than one rename.`);
       }
       seen.add(key);
     }
@@ -507,23 +507,23 @@ export function assertValidTypeRenames(
     const prevType = previous.tables[previousTableName];
     if (!prevType) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTableName}" does not exist in the previous schema.`,
+        `Cannot rename ${label}: table "${previousTableName}" does not exist in the previous schema.`,
       );
     }
     if (current.tables[previousTableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTableName}" still exists in the current schema.`,
+        `Cannot rename ${label}: table "${previousTableName}" still exists in the current schema.`,
       );
     }
     const currType = current.tables[tableName];
     if (!currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" does not exist in the current schema.`,
+        `Cannot rename ${label}: table "${tableName}" does not exist in the current schema.`,
       );
     }
     if (previous.tables[tableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" already exists in the previous schema.`,
+        `Cannot rename ${label}: table "${tableName}" already exists in the previous schema.`,
       );
     }
     if (!isTypeRenameCompatible(prevType, currType)) {
@@ -604,7 +604,7 @@ export function parseTypeDropOption(value: string): TypeDropSpec {
   const match = value.match(TYPE_DROP_OPTION_PATTERN);
   const [, tableName] = match ?? [];
   if (!tableName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field" or "Type".`);
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field" or "Table".`);
   }
   return { tableName };
 }

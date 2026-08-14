@@ -514,7 +514,7 @@ async function generateInitialSnapshot(
 
   logger.success(`Generated initial schema snapshot`);
   logger.info(`  File: ${result.filePath}`);
-  logger.info(`  Types: ${Object.keys(snapshot.tables).length}`);
+  logger.info(`  Tables: ${Object.keys(snapshot.tables).length}`);
 
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }
