@@ -48,7 +48,7 @@
     "@tailor-platform/shared": "workspace:^",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.3",
-    "eslint-plugin-zod": "4.9.0",
+    "eslint-plugin-zod": "4.9.1",
     "oxlint": "1.76.0",
     "tsdown": "0.22.5",
     "typescript": "6.0.3",
