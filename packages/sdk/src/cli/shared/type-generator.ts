@@ -59,7 +59,7 @@ const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.t
  * @param idpNames - Registered IdP names (used to narrow `idpUser*Trigger({ idp })` strings)
  * @param connectionNames - Registered auth connection names (used to narrow `getConnectionToken()` strings)
  * @param aiGatewayNames - Registered AI Gateway names (used to narrow `aigateway.get()` strings)
- * @param authNamespaceNames - Registered auth namespace names (used to narrow `authNamespace` strings)
+ * @param authNamespaceNames - Registered auth namespace names (used to suggest, but not narrow, `authNamespace` strings)
  * @returns Generated type definition source
  */
 export function generateTypeDefinition(
