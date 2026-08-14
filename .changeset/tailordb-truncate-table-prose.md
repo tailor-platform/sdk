@@ -10,4 +10,4 @@ await truncate({ types: ["User"] }); // before
 await truncate({ tables: ["User"] }); // after
 ```
 
-The command line is unchanged — table names are still passed positionally, as in `tailor tailordb truncate User Post`, so `tailor seed apply --truncate` and any scripted invocation keep working.
+Passing table names positionally is unchanged, as in `tailor tailordb truncate User Post`. The argument also binds by name, so an invocation spelled `--types User` now has to read `--tables User`.

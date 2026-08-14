@@ -197,8 +197,8 @@ describe("truncate command", () => {
 
   describe("truncate with table names", () => {
     test.each<[string, string[]]>([
-      ["truncates single type", ["User"]],
-      ["truncates multiple types", ["User", "Order"]],
+      ["truncates a single table", ["User"]],
+      ["truncates multiple tables", ["User", "Order"]],
     ])("%s", async (_, names) => {
       const client = await getMockClient();
 
@@ -214,7 +214,7 @@ describe("truncate command", () => {
       }
     });
 
-    test("throws error when type not found in any namespace", async () => {
+    test("throws error when table not found in any namespace", async () => {
       const { initOperatorClient } = await import("#/cli/shared/client");
 
       vi.mocked(initOperatorClient).mockResolvedValue({

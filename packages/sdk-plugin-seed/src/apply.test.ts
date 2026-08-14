@@ -202,7 +202,7 @@ describe("seedApplyCommand", () => {
     expect(sdk.executeScript).not.toHaveBeenCalled();
   });
 
-  test("limits truncation to selected TailorDB types and excludes the IdP user", async () => {
+  test("limits truncation to selected TailorDB tables and excludes the IdP user", async () => {
     await runApply(["--truncate", "--yes", "User"]);
 
     expect(sdk.truncate).toHaveBeenCalledWith({
