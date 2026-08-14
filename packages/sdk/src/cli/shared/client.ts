@@ -493,13 +493,11 @@ const IDENTITY_KEYS = new Set([
   "executionPolicyKey",
 ]);
 const IDENTITY_KEY_SUFFIXES = ["Name", "Id"];
-// Ambient context the user already provides on every command; pure noise.
-const IDENTITY_EXCLUDED_KEYS = new Set(["workspaceId"]);
 // Key read from nested resource messages (e.g. the type in a create request).
 const NESTED_IDENTITY_KEY = "name";
 
 function isIdentityKey(key: string): boolean {
-  if (key.startsWith("$") || IDENTITY_EXCLUDED_KEYS.has(key)) {
+  if (key.startsWith("$")) {
     return false;
   }
   return IDENTITY_KEYS.has(key) || IDENTITY_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix));

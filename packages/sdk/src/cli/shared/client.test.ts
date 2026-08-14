@@ -701,10 +701,9 @@ describe("errorHandlingInterceptor", () => {
     await expect(promise).rejects.toThrow(ConnectError);
     const error = await promise.catch((e: unknown) => e as ConnectError);
     expect(error.message).toContain(
-      "Failed to create TailorDBType (namespaceName: shared-db, tailordbType.name: Order): already exists",
+      "Failed to create TailorDBType (workspaceId: 22222222-2222-2222-2222-222222222222, namespaceName: shared-db, tailordbType.name: Order): already exists",
     );
     expect(error.message).not.toContain("do-not-print-payload");
-    expect(error.message).not.toContain("22222222");
   });
 
   test("surfaces id-like identifiers while keeping sensitive fields out", async () => {
@@ -727,9 +726,9 @@ describe("errorHandlingInterceptor", () => {
 
     await expect(promise).rejects.toThrow(ConnectError);
     const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("workspaceId: 22222222-2222-2222-2222-222222222222");
     expect(error.message).toContain("executionId: 0189aaaa-bbbb-cccc-dddd-eeeeffff0000");
     expect(error.message).toContain("trn: trn:v1:workspace/staffing:tailordb/shared-db");
-    expect(error.message).not.toContain("22222222");
     expect(error.message).not.toContain("admin@example.com");
     expect(error.message).not.toContain("do-not-print-secret");
   });
