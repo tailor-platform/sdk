@@ -8,6 +8,19 @@ export const LOCK_VERSION = 1;
 /** Lock file path, relative to the repository root. */
 const LOCK_FILENAME = ".github/tailor.lock";
 
+function assertSafeLockPath(outputDir: string): void {
+  for (const relativePath of [".github", LOCK_FILENAME]) {
+    try {
+      if (fs.lstatSync(path.join(outputDir, relativePath)).isSymbolicLink()) {
+        throw new Error(`Refusing to use ${LOCK_FILENAME}: "${relativePath}" is a symbolic link.`);
+      }
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") continue;
+      throw error;
+    }
+  }
+}
+
 export type TargetKind = "branch" | "tag" | "preview" | "action" | "coordinate";
 
 export type LockInputs = {
@@ -84,6 +97,7 @@ export function lockPath(outputDir: string): string {
  * @returns Parsed lock file, or null when absent
  */
 export function readLock(outputDir: string): LockFile | null {
+  assertSafeLockPath(outputDir);
   const file = lockPath(outputDir);
   if (!fs.existsSync(file)) {
     return null;
@@ -125,6 +139,7 @@ export function readLock(outputDir: string): LockFile | null {
  * @param lock - Lock file contents to serialize
  */
 export function writeLock(outputDir: string, lock: LockFile): void {
+  assertSafeLockPath(outputDir);
   const file = lockPath(outputDir);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(lock, null, 2)}\n`, "utf-8");
