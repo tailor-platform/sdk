@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Isolate unit and integration tests from TAILOR_\* environment variables exported by the developer's shell, so the test suite passes regardless of local CLI configuration.
+Isolate the SDK test suite (every vitest project except e2e) from TAILOR_\* environment variables exported by the developer's shell, so tests pass regardless of local CLI configuration.

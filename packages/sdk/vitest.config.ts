@@ -162,6 +162,7 @@ export default defineConfig({
         test: {
           name: "scripts",
           include: ["../../scripts/**/*.test.js"],
+          setupFiles: ["./vitest.setup.ts"],
           typecheck: { enabled: false },
         },
       },
