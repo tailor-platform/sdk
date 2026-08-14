@@ -112,6 +112,7 @@ export default defineConfig({
           // (in "unit-core").
           name: "unit",
           include: isolatedUnitTests,
+          setupFiles: ["./vitest.setup.ts"],
           typecheck: { enabled: false },
         },
       },
@@ -124,6 +125,7 @@ export default defineConfig({
           name: "unit-core",
           isolate: false,
           include: sharedUnitTests,
+          setupFiles: ["./vitest.setup.ts"],
         },
       },
       {
@@ -133,6 +135,7 @@ export default defineConfig({
           // `--project unit-plugin`; the `unit*` glob still runs it on Linux.
           name: "unit-plugin",
           include: [pluginTestInclude],
+          setupFiles: ["./vitest.setup.ts"],
           typecheck: { enabled: false },
         },
       },
@@ -141,6 +144,7 @@ export default defineConfig({
         test: {
           name: "integration",
           include: integrationTestIncludes,
+          setupFiles: ["./vitest.setup.ts"],
           testTimeout: 60000,
         },
       },
@@ -158,6 +162,7 @@ export default defineConfig({
         test: {
           name: "scripts",
           include: ["../../scripts/**/*.test.js"],
+          setupFiles: ["./vitest.setup.ts"],
           typecheck: { enabled: false },
         },
       },
