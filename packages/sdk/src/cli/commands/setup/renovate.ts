@@ -112,14 +112,12 @@ function appendPreset(existing: Extract<ExistingConfig, { kind: "appendable" }>)
         `Add "${RENOVATE_PRESET}" to it manually.`,
     );
   }
-  const extendsArray = [...(current ?? []), RENOVATE_PRESET];
+  const config = { ...existing.config, extends: [...(current ?? []), RENOVATE_PRESET] };
 
-  const root = JSON.parse(source) as Record<string, unknown>;
-  if (existing.location === "package.json#renovate") {
-    root.renovate = { ...existing.config, extends: extendsArray };
-  } else {
-    Object.assign(root, { ...existing.config, extends: extendsArray });
-  }
+  const root =
+    existing.location === "package.json#renovate"
+      ? { ...(JSON.parse(source) as Record<string, unknown>), renovate: config }
+      : config;
 
   const trailingNewline = source.endsWith("\n") ? "\n" : "";
   fs.writeFileSync(
