@@ -88,7 +88,7 @@ describe("selectEntities", () => {
         types: ["_User"],
         skipIdp: false,
       }),
-    ).toThrow(/types were not found: _User/);
+    ).toThrow(/tables were not found: _User/);
   });
 
   test("--skip-idp removes _User from the selection", () => {

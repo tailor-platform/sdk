@@ -10,10 +10,10 @@ export const seedFillCommand = defineAppCommand({
   name: "fill",
   description: "Fill in the values a record gets on create for JSONL seed data rows missing them.",
   notes:
-    "The values come from the type itself, and nothing is validated, so rows can be filled while the " +
+    "The values come from the table itself, and nothing is validated, so rows can be filled while the " +
     "data around them is still incomplete — run `tailor seed validate` when it is ready. A value " +
     "already in the file is never replaced, and a line that gains nothing is left byte for byte as " +
-    "it was. A field the type gives no value to is skipped, so one field list covers a whole data " +
+    "it was. A field the table gives no value to is skipped, so one field list covers a whole data " +
     "directory.",
   args: z.strictObject({
     ...configArg,

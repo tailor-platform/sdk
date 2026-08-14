@@ -26,7 +26,7 @@ const templateHints: Record<string, string | undefined> = {
   "hello-world": "Initial project to get started with Tailor Platform SDK",
   "inventory-management": "Simple inventory management system",
   "multi-application": "Multi-application setup with shared databases",
-  tailordb: "Comprehensive TailorDB type definitions with all features",
+  tailordb: "Comprehensive TailorDB table definitions with all features",
   resolver: "Resolver patterns with testing (simple, DB, env, user)",
   workflow: "Workflow patterns with job chaining and testing",
   executor: "Executor trigger types (record, resolver, schedule, webhook)",

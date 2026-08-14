@@ -135,7 +135,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   }
 
   logger.info(
-    `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch ${upsert ? "upsert" : "insert"}...`,
+    `  [${namespace}] Seeding ${typesWithData.length} tables via Kysely batch ${upsert ? "upsert" : "insert"}...`,
     { mode: "plain" },
   );
 
@@ -306,7 +306,7 @@ export const seedApplyCommand = defineAppCommand({
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",
-      description: "Seed all types in the specified TailorDB namespace (excludes _User)",
+      description: "Seed all tables in the specified TailorDB namespace (excludes _User)",
     }),
     "skip-idp": arg(z.boolean().default(false), {
       description: "Skip the IdP user (_User) entity",
@@ -323,7 +323,7 @@ export const seedApplyCommand = defineAppCommand({
     }),
     types: arg(z.array(z.string()).default([]), {
       positional: true,
-      description: "Type names to seed (default: all types)",
+      description: "Table names to seed (default: all tables)",
     }),
   }),
   run: async (args) => {
@@ -347,7 +347,7 @@ export const seedApplyCommand = defineAppCommand({
       logger.info(`Filtering by namespace: ${args.namespace}`);
       logger.log(styles.dim(`Entities: ${(selection.entitiesToProcess ?? []).join(", ")}`));
     } else if (args.types.length > 0) {
-      logger.info(`Filtering by types: ${(selection.entitiesToProcess ?? []).join(", ")}`);
+      logger.info(`Filtering by tables: ${(selection.entitiesToProcess ?? []).join(", ")}`);
     }
 
     if (!selection.hasEntitiesToProcess) {
