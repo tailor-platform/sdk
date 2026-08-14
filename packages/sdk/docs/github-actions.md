@@ -375,12 +375,16 @@ Enable Renovate for the repository by following the
 [Renovate onboarding guide](https://docs.renovatebot.com/getting-started/installing-onboarding/),
 then commit the generated file.
 
-If the repository already has Renovate configuration, the command leaves it
-unchanged and tells you to add `github>tailor-inc/renovate-config` to its
-`extends` array. It checks Renovate's standard root, `.github`, `.gitlab`, and
-`.renovaterc` locations, including the deprecated `package.json` configuration.
-When that configuration already extends the preset, the command reports that
-Renovate is set up and changes nothing.
+If the repository already has Renovate configuration, the command adds
+`github>tailor-inc/renovate-config` to its `extends` array in place instead of
+writing a new file, leaving your other settings untouched. It checks Renovate's
+standard root, `.github`, `.gitlab`, and `.renovaterc` locations, including the
+deprecated `package.json` configuration. When that configuration already extends
+the preset, the command reports that Renovate is set up and changes nothing.
+
+Configuration written in JSON5 or JSONC — with comments or trailing commas —
+cannot be edited without losing those comments, so the command leaves it
+unchanged and asks you to add the preset to its `extends` array yourself.
 
 `renovate.json` is yours to edit — it is not tracked in `.github/tailor.lock`.
 Add your own rules freely; re-running `tailor setup renovate` does not overwrite

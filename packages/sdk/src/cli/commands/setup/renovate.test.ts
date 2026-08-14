@@ -56,18 +56,72 @@ describe("setupRenovate", () => {
     expect(fs.readFileSync(configPath, "utf-8")).toBe(edited);
   });
 
-  test("does not regenerate over a config the user emptied of the preset", async () => {
+  test("appends the preset to a plain-JSON config that lacks it, keeping its other keys", async () => {
     const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
-    const customized = `${JSON.stringify(
-      { extends: ["config:recommended"], packageRules: [{ matchPackageNames: ["example"] }] },
-      null,
-      2,
-    )}\n`;
+    fs.writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        { extends: ["config:recommended"], packageRules: [{ matchPackageNames: ["example"] }] },
+        null,
+        2,
+      )}\n`,
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(JSON.parse(fs.readFileSync(configPath, "utf-8"))).toEqual({
+      extends: ["config:recommended", RENOVATE_PRESET],
+      packageRules: [{ matchPackageNames: ["example"] }],
+    });
+  });
+
+  test("appends the preset to a plain-JSON config that has no extends key", async () => {
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    fs.writeFileSync(configPath, `${JSON.stringify({ labels: ["deps"] }, null, 2)}\n`);
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(JSON.parse(fs.readFileSync(configPath, "utf-8"))).toEqual({
+      labels: ["deps"],
+      extends: [RENOVATE_PRESET],
+    });
+  });
+
+  test("preserves the existing indentation and trailing newline when appending", async () => {
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    fs.writeFileSync(configPath, `${JSON.stringify({ labels: ["deps"] }, null, 4)}\n`);
+
+    await setupRenovate({ outputDir: testDir });
+
+    const written = fs.readFileSync(configPath, "utf-8");
+    expect(written).toBe(
+      `${JSON.stringify({ labels: ["deps"], extends: [RENOVATE_PRESET] }, null, 4)}\n`,
+    );
+  });
+
+  test("refuses to append when extends is not an array", async () => {
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    const customized = `${JSON.stringify({ extends: "config:recommended" }, null, 2)}\n`;
     fs.writeFileSync(configPath, customized);
 
-    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/already exists/);
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/non-array "extends"/);
 
     expect(fs.readFileSync(configPath, "utf-8")).toBe(customized);
+  });
+
+  test.each([
+    ["renovate.jsonc", '{\n  // comment\n  "extends": []\n}\n'],
+    ["renovate.json5", "{\n  extends: [],\n}\n"],
+    [".renovaterc", '{\n  "extends": [],\n}\n'],
+  ])("reports an unparseable config at %s instead of a generic message", async (file, content) => {
+    const configPath = path.join(testDir, file);
+    fs.writeFileSync(configPath, content);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+      /could not parse it as JSON/,
+    );
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(content);
   });
 
   test("treats a config already extending the preset as set up", async () => {
@@ -97,7 +151,7 @@ describe("setupRenovate", () => {
     const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
     fs.mkdirSync(configPath);
 
-    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/already exists/);
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/could not parse it/);
 
     expect(fs.lstatSync(configPath).isDirectory()).toBe(true);
   });
@@ -106,12 +160,14 @@ describe("setupRenovate", () => {
     const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
     const outsideConfig = path.join(outsideDir, RENOVATE_CONFIG_FILE);
     fs.mkdirSync(outsideDir, { recursive: true });
-    fs.writeFileSync(outsideConfig, `${JSON.stringify({ extends: [RENOVATE_PRESET] })}\n`);
+    const outsideContent = `${JSON.stringify({ extends: [RENOVATE_PRESET] })}\n`;
+    fs.writeFileSync(outsideConfig, outsideContent);
     fs.symlinkSync(outsideConfig, configPath);
 
-    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/already exists/);
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/could not parse it/);
 
     expect(fs.lstatSync(configPath).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(outsideConfig, "utf-8")).toBe(outsideContent);
   });
 
   test.each([
@@ -128,22 +184,36 @@ describe("setupRenovate", () => {
     ".renovaterc.json",
     ".renovaterc.jsonc",
     ".renovaterc.json5",
-  ])("refuses to overwrite an existing config at %s", async (relativePath) => {
+  ])("appends the preset in place at %s instead of writing a new config", async (relativePath) => {
     const configPath = path.join(testDir, relativePath);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     fs.writeFileSync(configPath, "{}\n");
 
-    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(relativePath);
-    expect(fs.readFileSync(configPath, "utf-8")).toBe("{}\n");
+    await setupRenovate({ outputDir: testDir });
+
+    expect(JSON.parse(fs.readFileSync(configPath, "utf-8"))).toEqual({
+      extends: [RENOVATE_PRESET],
+    });
+    expect(fs.readdirSync(testDir)).toEqual([relativePath.split("/")[0]]);
   });
 
-  test("refuses to shadow a package.json Renovate config", async () => {
+  test("appends the preset to a package.json Renovate config without disturbing other fields", async () => {
+    const packageJsonPath = path.join(testDir, "package.json");
     fs.writeFileSync(
-      path.join(testDir, "package.json"),
-      `${JSON.stringify({ renovate: { extends: ["config:recommended"] } }, null, 2)}\n`,
+      packageJsonPath,
+      `${JSON.stringify(
+        { name: "example", renovate: { extends: ["config:recommended"] } },
+        null,
+        2,
+      )}\n`,
     );
 
-    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/package\.json.*renovate/);
+    await setupRenovate({ outputDir: testDir });
+
+    expect(JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"))).toEqual({
+      name: "example",
+      renovate: { extends: ["config:recommended", RENOVATE_PRESET] },
+    });
     expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
   });
 
@@ -169,7 +239,7 @@ describe("setupRenovate", () => {
     const outsideConfig = path.join(outsideDir, RENOVATE_CONFIG_FILE);
     fs.symlinkSync(outsideConfig, path.join(testDir, RENOVATE_CONFIG_FILE));
 
-    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(RENOVATE_CONFIG_FILE);
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/could not parse it/);
 
     expect(fs.lstatSync(path.join(testDir, RENOVATE_CONFIG_FILE)).isSymbolicLink()).toBe(true);
     expect(fs.existsSync(outsideConfig)).toBe(false);

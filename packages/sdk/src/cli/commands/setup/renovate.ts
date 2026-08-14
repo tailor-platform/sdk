@@ -39,34 +39,43 @@ function pathEntryExists(filePath: string): boolean {
   return getPathEntry(filePath) !== null;
 }
 
-type ExistingConfig = {
-  /** Location shown to the user; not always a readable JSON file path. */
-  location: string;
-  /** True when the config's `extends` already references the shared preset. */
-  extendsPreset: boolean;
-};
+type ExistingConfig =
+  /** The config's `extends` already references the shared preset. */
+  | { kind: "extends-preset"; location: string }
+  /** Strict JSON, so the preset can be appended without losing comments. */
+  | { kind: "appendable"; location: string; filePath: string; config: object }
+  /** Not strict JSON, or not a regular file; the `extends` array is unknown. */
+  | { kind: "unreadable"; location: string };
 
-function extendsPreset(config: unknown): boolean {
-  if (typeof config !== "object" || config === null || !("extends" in config)) return false;
+function extendsPreset(config: object): boolean {
+  if (!("extends" in config)) return false;
   const value = config.extends;
   return Array.isArray(value) && value.includes(RENOVATE_PRESET);
 }
 
-function readJsonConfig(filePath: string): unknown {
+function readJsonConfig(filePath: string): object | null {
   const entry = getPathEntry(filePath);
   if (entry === null || !entry.isFile()) return null;
+  let parsed: unknown;
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    parsed = JSON.parse(fs.readFileSync(filePath, "utf-8"));
   } catch {
     return null;
   }
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : null;
+}
+
+function classifyConfig(location: string, filePath: string, config: object | null): ExistingConfig {
+  if (config === null) return { kind: "unreadable", location };
+  if (extendsPreset(config)) return { kind: "extends-preset", location };
+  return { kind: "appendable", location, filePath, config };
 }
 
 function findExistingConfig(outputDir: string): ExistingConfig | null {
   for (const file of RENOVATE_CONFIG_FILES) {
     const filePath = path.join(outputDir, file);
     if (!pathEntryExists(filePath)) continue;
-    return { location: file, extendsPreset: extendsPreset(readJsonConfig(filePath)) };
+    return classifyConfig(file, filePath, readJsonConfig(filePath));
   }
 
   const packageJsonPath = path.join(outputDir, "package.json");
@@ -80,12 +89,44 @@ function findExistingConfig(outputDir: string): ExistingConfig | null {
     });
   }
   if (typeof packageJson === "object" && packageJson !== null && "renovate" in packageJson) {
-    return {
-      location: "package.json#renovate",
-      extendsPreset: extendsPreset(packageJson.renovate),
-    };
+    const renovate = packageJson.renovate;
+    const config =
+      typeof renovate === "object" && renovate !== null && !Array.isArray(renovate)
+        ? renovate
+        : null;
+    return classifyConfig("package.json#renovate", packageJsonPath, config);
   }
   return null;
+}
+
+function detectIndent(source: string): number {
+  return /^(?<indent>[ ]+)"/m.exec(source)?.groups?.indent?.length ?? 2;
+}
+
+function appendPreset(existing: Extract<ExistingConfig, { kind: "appendable" }>): void {
+  const source = fs.readFileSync(existing.filePath, "utf-8");
+  const current = "extends" in existing.config ? existing.config.extends : undefined;
+  if (current !== undefined && !Array.isArray(current)) {
+    throw new Error(
+      `Renovate config at "${existing.location}" has a non-array "extends". No files were changed. ` +
+        `Add "${RENOVATE_PRESET}" to it manually.`,
+    );
+  }
+  const extendsArray = [...(current ?? []), RENOVATE_PRESET];
+
+  const root = JSON.parse(source) as Record<string, unknown>;
+  if (existing.location === "package.json#renovate") {
+    root.renovate = { ...existing.config, extends: extendsArray };
+  } else {
+    Object.assign(root, { ...existing.config, extends: extendsArray });
+  }
+
+  const trailingNewline = source.endsWith("\n") ? "\n" : "";
+  fs.writeFileSync(
+    existing.filePath,
+    `${JSON.stringify(root, null, detectIndent(source))}${trailingNewline}`,
+    "utf-8",
+  );
 }
 
 function renderRenovateConfig(): string {
@@ -108,14 +149,20 @@ export async function setupRenovate(options: SetupRenovateOptions): Promise<void
 
   const existingConfig = findExistingConfig(options.outputDir);
   if (existingConfig !== null) {
-    if (existingConfig.extendsPreset) {
+    if (existingConfig.kind === "extends-preset") {
       logger.info(`Renovate is already set up at ${styles.path(existingConfig.location)}.`);
       return;
     }
-    throw new Error(
-      `Renovate config already exists at "${existingConfig.location}". No files were changed. ` +
-        `Add "${RENOVATE_PRESET}" to its extends array.`,
-    );
+    if (existingConfig.kind === "unreadable") {
+      throw new Error(
+        `Found a Renovate config at "${existingConfig.location}" but could not parse it as JSON. ` +
+          `Comment-containing JSON5/JSONC configs are not supported yet. No files were changed. ` +
+          `Check its extends array for "${RENOVATE_PRESET}" manually.`,
+      );
+    }
+    appendPreset(existingConfig);
+    logger.success(`Added the Tailor preset to ${styles.path(existingConfig.location)}`);
+    return;
   }
 
   const outputPath = path.join(options.outputDir, RENOVATE_CONFIG_FILE);
