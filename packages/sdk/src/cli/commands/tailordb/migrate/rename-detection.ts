@@ -580,7 +580,7 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
     );
   }
   if (previousTableName === tableName) {
-    throw new Error(`Invalid --rename value "${value}": old and new type names are identical.`);
+    throw new Error(`Invalid --rename value "${value}": old and new table names are identical.`);
   }
   return { previousTableName, tableName };
 }
