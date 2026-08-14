@@ -528,11 +528,11 @@ export function assertValidTypeRenames(
     }
     if (!isTypeRenameCompatible(prevType, currType)) {
       throw new Error(
-        `Cannot rename ${label}: the types are not rename-compatible ` +
+        `Cannot rename ${label}: the tables are not rename-compatible ` +
           `(every field must keep its name, type, array-ness, required/unique constraints, ` +
           `foreign key target, and scale, enum values must not be removed, indexes must match, ` +
           `self-referential foreign keys must be optional, ` +
-          `and types with serial or file fields cannot be renamed).`,
+          `and tables with serial or file fields cannot be renamed).`,
       );
     }
   }
