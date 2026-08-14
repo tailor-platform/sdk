@@ -235,12 +235,12 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   creates(
     CreateTailorDBTypeRequestSchema,
-    "TailorDB type",
+    "TailorDB table",
     tailorDB.changeSet.type.creates as HasRequest[],
   );
   updates(
     UpdateTailorDBTypeRequestSchema,
-    "TailorDB type",
+    "TailorDB table",
     tailorDB.changeSet.type.updates as HasRequest[],
   );
 

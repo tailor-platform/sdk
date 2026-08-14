@@ -41,7 +41,7 @@ describe("parseTypes", () => {
       });
 
       expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
-        `Field "tags" on type "Test": ${message}`,
+        `Field "tags" on table "Test": ${message}`,
       );
     });
 
@@ -514,7 +514,7 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post, Comment: comment }), "test-namespace"),
-      ).toThrow(/Relation name "author" on type "Post".*forward.*backward/s);
+      ).toThrow(/Relation name "author" on table "Post".*forward.*backward/s);
     });
 
     test("should include source file information in forward conflict error message", () => {
@@ -556,7 +556,7 @@ describe("parseTypes", () => {
       });
 
       expect(() => parseTypes(toSchemaOutputs({ Node: node }), "test-namespace")).toThrow(
-        /Forward relation name for field "ID" on type "Node" cannot be empty/s,
+        /Forward relation name for field "ID" on table "Node" cannot be empty/s,
       );
     });
 
@@ -573,7 +573,7 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/Forward relation name for field "ID" on type "Post" cannot be empty/s);
+      ).toThrow(/Forward relation name for field "ID" on table "Post" cannot be empty/s);
     });
   });
 
@@ -629,7 +629,7 @@ describe("parseTypes", () => {
 
       // Only include Post, not User - should throw error about unknown type
       expect(() => parseTypes(toSchemaOutputs({ Post: post }), "test-namespace")).toThrow(
-        /references unknown type "User"/,
+        /references unknown table "User"/,
       );
     });
 
@@ -776,7 +776,7 @@ describe("parseTypes", () => {
         expect(() =>
           parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
         ).toThrow(
-          'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
+          'Field "userID" on table "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
             "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
         );
       },

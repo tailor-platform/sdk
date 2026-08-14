@@ -36,7 +36,7 @@ function emptyInput(): ValidatePlanInput {
     tailorDB: {
       changeSet: {
         service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB types"),
+        type: createChangeSet("TailorDB tables"),
         gqlPermission: createChangeSet("TailorDB gqlPermissions"),
       },
       conflicts: [],

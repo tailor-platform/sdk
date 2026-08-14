@@ -172,7 +172,7 @@ describe("collectEventSubscriptions", () => {
 
   test.each([
     {
-      kind: "TailorDB type",
+      kind: "TailorDB table",
       trigger: { kind: "tailordb", typeName: "Order" },
       external: { externalTailorDBNamespaces: ["shared-db"] },
       expected:

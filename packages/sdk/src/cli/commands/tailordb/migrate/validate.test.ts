@@ -606,7 +606,7 @@ describe("tailordb migration validate", () => {
     const result = await runCommand(validateCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/Duplicate TailorDB type names/);
+    expect(String(result.error)).toMatch(/Duplicate TailorDB table names/);
   });
 
   test("rejects an unknown --namespace", async () => {

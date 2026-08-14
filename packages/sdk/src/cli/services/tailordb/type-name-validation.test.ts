@@ -50,7 +50,7 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
       assertUniqueLocalTailorDBTypeNames({
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
       }),
-    ).toThrow(/Duplicate TailorDB type names detected/);
+    ).toThrow(/Duplicate TailorDB table names detected/);
     expect(() =>
       assertUniqueLocalTailorDBTypeNames({
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
@@ -149,7 +149,7 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         tailorDBServices: [localService("main", ["User"])],
         externalTailorDBNamespaces: ["shared"],
       }),
-    ).rejects.toThrow(/Type "User" is defined more than once/);
+    ).rejects.toThrow(/Table "User" is defined more than once/);
   });
 
   test("rejects duplicate type names between external namespaces", async () => {

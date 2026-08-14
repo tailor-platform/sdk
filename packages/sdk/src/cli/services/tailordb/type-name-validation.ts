@@ -177,14 +177,14 @@ export function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeName
     }
 
     const sourceList = sources.map(formatTailorDBTypeNameSource).join(", ");
-    errors.push(`Type "${typeName}" is defined more than once: ${sourceList}`);
+    errors.push(`Table "${typeName}" is defined more than once: ${sourceList}`);
   }
 
   if (errors.length > 0) {
     throw new Error(
-      "Duplicate TailorDB type names detected.\n" +
+      "Duplicate TailorDB table names detected.\n" +
         `${errors.map((error) => `  - ${error}`).join("\n")}\n` +
-        "TailorDB type names must be unique across all TailorDB namespaces in an application.",
+        "TailorDB table names must be unique across all TailorDB namespaces in an application.",
     );
   }
 }

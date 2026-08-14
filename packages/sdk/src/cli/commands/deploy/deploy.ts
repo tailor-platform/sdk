@@ -2020,7 +2020,7 @@ function collectImportantResourceDeletions(results: PlanResults): ImportantResou
   const importantDeletions: ImportantResourceDeletion[] = [];
   for (const del of results.tailorDB.changeSet.type.deletes) {
     importantDeletions.push({
-      resourceType: "TailorDB type",
+      resourceType: "TailorDB table",
       resourceName: del.name,
     });
   }

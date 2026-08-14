@@ -49,7 +49,7 @@ function emptyResults(): PlanResults {
     tailorDB: {
       changeSet: {
         service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB types"),
+        type: createChangeSet("TailorDB tables"),
         gqlPermission: createChangeSet("TailorDB gqlPermissions"),
       },
       ...emptyOwnership(),

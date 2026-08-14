@@ -190,7 +190,7 @@ describe("GenerationManager", () => {
       );
     });
 
-    test("rejects duplicate TailorDB type names between namespaces", async () => {
+    test("rejects duplicate TailorDB table names between namespaces", async () => {
       const duplicateApp = applicationWithTailorDBServices(mockConfig, [
         loadedTailorDBService("main", ["User"]),
         loadedTailorDBService("analytics", ["User"]),
@@ -201,7 +201,7 @@ describe("GenerationManager", () => {
       });
 
       await expect(duplicateManager.generate()).rejects.toThrow(
-        /Duplicate TailorDB type names detected/,
+        /Duplicate TailorDB table names detected/,
       );
     });
   });

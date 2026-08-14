@@ -412,7 +412,7 @@ function resolveTailorDBNamespace(
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
   return resolveNamespace({
-    resourceLabel: "TailorDB type",
+    resourceLabel: "TailorDB table",
     resourceName: typeName,
     localNamespaces: application.tailorDBServices.map((service) => service.namespace),
     findLocalNamespace: () => findTailorDBNamespace(application, typeName),
