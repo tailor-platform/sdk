@@ -94,7 +94,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   };
 }
 
-// Collect the issues the type's own `validate` reports for a record, so they
+// Collect the issues the table's own `validate` reports for a record, so they
 // surface the same way a field's do instead of ending the run.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unknown) {
@@ -117,7 +117,7 @@ function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unkno
 
 /**
  * Creates the standard schema definition used to validate seed rows.
- * Runs the hook, then the type's own `validate`, and the field schema only when
+ * Runs the hook, then the table's own `validate`, and the field schema only when
  * that reported nothing, so both levels of validation report as issues rather
  * than by throwing.
  * @template T - The output type after validation

@@ -123,7 +123,7 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
 );
 
 /**
- * Schema for TailorDB type settings.
+ * Schema for TailorDB table settings.
  * Normalizes gqlOperations from alias ("query") to object format.
  */
 export const TailorDBTypeSettingsSchema = z.strictObject({
