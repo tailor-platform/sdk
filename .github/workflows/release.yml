@@ -71,10 +71,10 @@ jobs:
       # Only fires when changesets/action created/updated a release PR (as
       # opposed to publishing). See resolve-pending-release-versions.sh.
       - name: Resolve pending release versions
-        if: steps.changesets.outputs.pr-number
+        if: steps.changesets.outputs['pr-number']
         env:
           GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
-          PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
+          PR_NUMBER: ${{ steps.changesets.outputs['pr-number'] }}
         shell: bash
         run: bash ./.github/scripts/resolve-pending-release-versions.sh
 
