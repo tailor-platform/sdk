@@ -449,7 +449,7 @@ Without the flag the command fails rather than converting anything, so a scripte
 Some changes are still rejected and need a temporary field you add yourself — add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration:
 
 - Array-to-scalar and scalar-to-array, since collapsing an array has no answer the generated script could choose for you.
-- A field that is unique, or that an index, relationship, permission, or type-level script names. Those keep pointing at the original name, which the conversion removes.
+- A field that is unique, or that an index, relationship, permission, or table-level script names. Those keep pointing at the original name, which the conversion removes.
 
 ## Testing Pending Migrations
 
@@ -465,7 +465,7 @@ The command performs the following sequence:
 6. Optionally runs an assertion script against the migrated data.
 7. Deletes an automatically-created workspace after success or failure.
 
-Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current type source are not included in the rehearsal.
+Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current table definitions are not included in the rehearsal.
 
 Executors are omitted from the baseline deployment so loading fixture or cloned records cannot trigger current event handlers against the older schema. Auth user profiles are also deferred until the pending migrations finish, while configured machine users remain available to run seed and migration scripts. The final deployment restores the configured executors and user profiles. Static websites are deployed so configuration references to their URLs resolve, but their workspace-bound custom domains are omitted from migration-test deployments.
 
@@ -565,7 +565,7 @@ tailor tailordb migration validate
 
 It reports issues per namespace, exits with a non-zero code when any check fails, and supports `--json` for machine-readable output.
 
-With `--strict`, validation additionally fails when a migration not yet applied to the remote has data-loss warnings (see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts)) but neither a `migrate.ts` nor a recorded `--no-script` acknowledgment. The failure names the affected type and field and prints the exact command to record the acknowledgment.
+With `--strict`, validation additionally fails when a migration not yet applied to the remote has data-loss warnings (see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts)) but neither a `migrate.ts` nor a recorded `--no-script` acknowledgment. The failure names the affected table and field and prints the exact command to record the acknowledgment.
 
 To bypass both checks during deploy (not recommended outside of recovery scenarios):
 

@@ -1121,7 +1121,7 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
 export const generateCommand = defineAppCommand({
   name: "generate",
   description:
-    "Generate migration files by detecting schema differences between current local types and the previous migration snapshot.",
+    "Generate migration files by detecting schema differences between current local tables and the previous migration snapshot.",
   args: z.strictObject({
     ...confirmationArgs,
     ...configArg,
