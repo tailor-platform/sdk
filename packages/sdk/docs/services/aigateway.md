@@ -45,26 +45,30 @@ const auth = defineAuth("my-auth", {
   // ...auth configuration...
 });
 
-defineAIGateway("my-aigateway", {}); // defaults to "my-auth"
+const aiGateway = defineAIGateway("my-aigateway", {}); // defaults to "my-auth"
+
+export default defineConfig({
+  name: "my-app",
+  auth,
+  aiGateways: [aiGateway],
+});
 ```
 
 Type-checked and autocompleted against your own Auth service name via the generated `tailor.d.ts` (the `AuthNamespaceNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining an Auth service to refresh it. Before the first generate run, `authNamespace` accepts any string.
 
-To authenticate against an auth namespace owned by a **different** application in your workspace, register it via module augmentation, then reference it:
+To authenticate against a **different** application's Auth service, reference it as an [external resource](../configuration.md#external-resources) in your own config — `authNamespace` then defaults to it like any other Auth service:
 
 ```typescript
-declare module "@tailor-platform/sdk" {
-  interface AuthNamespaceNameRegistry {
-    "shared-auth": true; // a different application's Auth service
-  }
-}
+const aiGateway = defineAIGateway("my-aigateway", {}); // defaults to "shared-auth"
 
-defineAIGateway("my-aigateway", {
-  authNamespace: "shared-auth",
+export default defineConfig({
+  name: "my-app",
+  auth: { name: "shared-auth", external: true },
+  aiGateways: [aiGateway],
 });
 ```
 
-An unregistered value surfaces only at runtime, as `401 Unauthorized` on every request to the gateway.
+An `authNamespace` that doesn't match any auth namespace in your workspace surfaces only at runtime, as `401 Unauthorized` on every request to the gateway.
 
 ### cors
 
