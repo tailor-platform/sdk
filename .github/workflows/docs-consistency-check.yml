@@ -144,10 +144,12 @@ jobs:
             - `### ❌ Recommended Actions` — action is required. List the
               concrete fixes the author must make.
 
-            The heading line must appear exactly as `### ✅ Recommended
-            Actions` or `### ❌ Recommended Actions` — a later workflow step
-            checks for this exact text and asks you to fix it if it's
-            missing, so don't paraphrase or add extra words to the line.
+            The heading line must appear exactly as
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`,
+            before any `<details>` block — a later workflow step checks for
+            this exact text at the top of the file and asks you to fix it
+            if it's missing, so don't paraphrase or add extra words to the
+            line.
 
             ```markdown
             ## 📖 Docs Quality & Consistency Check
@@ -220,7 +222,8 @@ jobs:
         run: |
           if [ ! -s "$REVIEW_BODY_FILE" ]; then
             echo "needs_fix=false" >> "$GITHUB_OUTPUT"
-          elif grep -qE '^### (✅|❌) Recommended Actions$' "$REVIEW_BODY_FILE"; then
+          elif awk '/<details>/{exit} {print}' "$REVIEW_BODY_FILE" \
+              | grep -qE '^### (✅|❌) Recommended Actions$'; then
             echo "needs_fix=false" >> "$GITHUB_OUTPUT"
           else
             echo "needs_fix=true" >> "$GITHUB_OUTPUT"
@@ -234,13 +237,17 @@ jobs:
           prompt: |
             The file `${{ env.REVIEW_BODY_FILE }}` is missing a
             `### ✅ Recommended Actions` or `### ❌ Recommended Actions`
-            heading (the exact literal text must appear on its own line).
+            heading (the exact literal text on its own line, appearing
+            before any `<details>` block).
 
             Read the file, decide from its existing content whether action
-            is required, then rewrite **only** that heading line so it reads
+            is required, then fix **only** the heading — either correct its
+            text, or move it (or add it, if entirely absent) so it reads
             exactly `### ✅ Recommended Actions` (no action needed) or
-            `### ❌ Recommended Actions` (action needed). Do not change any
-            other content in the file. Save your change with the Write tool.
+            `### ❌ Recommended Actions` (action needed) as the first
+            heading in the file, before any `<details>` block. Do not change
+            any other content in the file. Save your change with the Write
+            tool.
           claude_args: |
             --model claude-sonnet-4-5-20250929
             --allowedTools "Read,Write"
