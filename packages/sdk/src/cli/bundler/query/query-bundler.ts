@@ -8,7 +8,6 @@ import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
-import type { QueryEngine } from "#/cli/query/types";
 
 function createSqlEntry(): string {
   return ml /* ts */ `
@@ -42,57 +41,17 @@ function createSqlEntry(): string {
   `;
 }
 
-function createGqlEntry(): string {
-  return ml /* ts */ `
-    type QueryInput = {
-      endpoint: string;
-      accessToken: string;
-      query: string;
-    };
-
-    export async function main(input: QueryInput) {
-      const response = await fetch(input.endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: \`Bearer \${input.accessToken}\`,
-        },
-        body: JSON.stringify({
-          query: input.query,
-        }),
-      });
-      if (!response.ok) {
-        let message = \`HTTP \${response.status}\`;
-        try {
-          const errorJson = await response.json();
-          if (errorJson && typeof errorJson === "object" && "message" in errorJson) {
-            message = String(errorJson.message);
-          }
-        } catch {
-          // Keep default HTTP status message when response body is not JSON.
-        }
-        throw new Error(\`GraphQL request failed: \${message}\`);
-      }
-
-      const json = await response.json();
-      return json;
-    }
-  `;
-}
-
 /**
- * Bundle a query executor script for TestExecScript.
- * @param engine - Query engine type
+ * Bundle the SQL query executor script for TestExecScript.
  * @param baseDir - Directory to resolve the bundler's tsconfig against
  * @returns Bundled code
  */
-export async function bundleQueryScript(engine: QueryEngine, baseDir: string): Promise<string> {
+export async function bundleQueryScript(baseDir: string): Promise<string> {
   const outputDir = path.resolve(getDistDir(), "query");
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const entryPath = path.join(outputDir, `query_${engine}.entry.ts`);
-  const entryContent = engine === "sql" ? createSqlEntry() : createGqlEntry();
-  fs.writeFileSync(entryPath, entryContent);
+  const entryPath = path.join(outputDir, "query_sql.entry.ts");
+  fs.writeFileSync(entryPath, createSqlEntry());
 
   const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
@@ -114,7 +73,7 @@ export async function bundleQueryScript(engine: QueryEngine, baseDir: string): P
         tailordb: "tailordb",
       },
     },
-    external: engine === "sql" ? ["tailordb"] : [],
+    external: ["tailordb"],
     resolve: {
       conditionNames: ["node", "import"],
     },

@@ -38,13 +38,13 @@ describe("query-bundler", () => {
   describe("bundleQueryScript", () => {
     test("resolves tsconfig from the provided baseDir", async () => {
       vi.mocked(resolveTSConfig).mockClear();
-      await bundleQueryScript("sql", __dirname);
+      await bundleQueryScript(__dirname);
 
       expect(resolveTSConfig).toHaveBeenCalledWith(__dirname);
     });
 
     test("bundles SQL query script with expected runtime pieces", async () => {
-      const bundledCode = await bundleQueryScript("sql", __dirname);
+      const bundledCode = await bundleQueryScript(__dirname);
 
       expect(bundledCode).toContain("export");
       expect(bundledCode).toContain("main");
@@ -55,52 +55,21 @@ describe("query-bundler", () => {
       expect(bundledCode).toContain("rowCount");
     });
 
-    test("bundles GraphQL query script with fetch and error handling", async () => {
-      const bundledCode = await bundleQueryScript("gql", __dirname);
-
-      expect(bundledCode).toContain("export");
-      expect(bundledCode).toContain("main");
-      expect(bundledCode).toContain("fetch");
-      expect(bundledCode).toContain("Authorization");
-      expect(bundledCode).toContain("GraphQL request failed");
-      expect(bundledCode).toContain("response.ok");
-    });
-
-    test("keeps SQL and GraphQL runtime concerns separated", async () => {
-      const sqlBundle = await bundleQueryScript("sql", __dirname);
-      const gqlBundle = await bundleQueryScript("gql", __dirname);
-
-      expect(sqlBundle).toContain("tailordb.Client");
-      expect(sqlBundle).toContain("TailordbDialect");
-      expect(sqlBundle).toContain("sql.raw(query).execute");
-      expect(sqlBundle).not.toContain("fetch(input.endpoint");
-
-      expect(gqlBundle).toContain("fetch(input.endpoint");
-      expect(gqlBundle).not.toContain("TailordbDialect");
-      expect(gqlBundle).not.toContain("tailordb.Client");
-    });
-
-    test("writes entry files to query output directory (bundle output is in-memory only)", async () => {
+    test("writes the entry file to query output directory (bundle output is in-memory only)", async () => {
       const outputDir = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR!, "query");
 
-      await bundleQueryScript("sql", __dirname);
-      await bundleQueryScript("gql", __dirname);
+      await bundleQueryScript(__dirname);
 
       // Entry files are still written to disk (rolldown input)
       expect(fs.existsSync(path.join(outputDir, "query_sql.entry.ts"))).toBe(true);
-      expect(fs.existsSync(path.join(outputDir, "query_gql.entry.ts"))).toBe(true);
 
       // Bundle output files are NOT written (write: false)
       expect(fs.existsSync(path.join(outputDir, "query_sql.js"))).toBe(false);
-      expect(fs.existsSync(path.join(outputDir, "query_gql.js"))).toBe(false);
 
       const sqlEntry = fs.readFileSync(path.join(outputDir, "query_sql.entry.ts"), "utf-8");
-      const gqlEntry = fs.readFileSync(path.join(outputDir, "query_gql.entry.ts"), "utf-8");
 
       expect(sqlEntry).toContain("sql.raw(query).execute");
       expect(sqlEntry).toContain("new tailordb.Client");
-      expect(gqlEntry).toContain("fetch(input.endpoint");
-      expect(gqlEntry).toContain("GraphQL request failed");
     });
   });
 });

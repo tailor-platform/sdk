@@ -31,6 +31,15 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
     });
   }
 
+  if (args.engine === "gql" && message.includes("GraphQL request failed: HTTP 403")) {
+    return CLIError({
+      code: "forbidden",
+      message,
+      suggestion:
+        "The application rejected the request. If it restricts client IPs with allowedIpAddresses, run the query from an allowed IP address or add yours to the allowlist.",
+    });
+  }
+
   if (
     args.engine === "sql" &&
     message.includes(

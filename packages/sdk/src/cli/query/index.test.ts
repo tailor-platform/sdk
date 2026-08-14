@@ -160,7 +160,7 @@ describe("query", () => {
       query: 'select * from "User";',
     });
 
-    expect(bundleQueryScript).toHaveBeenCalledWith("sql", "/project");
+    expect(bundleQueryScript).toHaveBeenCalledWith("/project");
     expect(resolveTypeNamespaces).not.toHaveBeenCalled();
     expect(executeScript).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -304,45 +304,123 @@ describe("query", () => {
     expect(arg.queries).toHaveLength(1);
   });
 
-  test("executes GraphQL query via machine user token flow", async () => {
+  test("executes GraphQL query locally against the application endpoint", async () => {
     const { executeScript } = await import("../shared/script-executor");
+    const { bundleQueryScript } = await import("../bundler/query/query-bundler");
     const { fetchMachineUserToken } = await import("../shared/client");
 
-    vi.mocked(executeScript).mockResolvedValue({
-      success: true,
-      logs: "",
-      result: "raw graphql result",
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { viewer: { id: "1" } } }),
     });
+    vi.stubGlobal("fetch", fetchMock);
 
-    const result = await query({
-      workspaceId: "workspace-1",
-      configPath: "tailor.config.ts",
-      engine: "gql",
-      machineUser: "bot",
-      query: "{ viewer { id } }",
+    try {
+      const result = await query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "gql",
+        machineUser: "bot",
+        query: "{ viewer { id } }",
+      });
+
+      expect(fetchMachineUserToken).toHaveBeenCalledWith(
+        "https://app.example.com",
+        "client-id",
+        "client-secret",
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://app.example.com/query",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+            Authorization: "Bearer mu-token",
+          }),
+          body: JSON.stringify({ query: "{ viewer { id } }" }),
+        }),
+      );
+      expect(executeScript).not.toHaveBeenCalled();
+      expect(bundleQueryScript).not.toHaveBeenCalled();
+
+      expect(result).toEqual({
+        engine: "gql",
+        query: "{ viewer { id } }",
+        result: { data: { viewer: { id: "1" } } },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("throws with the endpoint error message when the GraphQL request fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: () => Promise.resolve({ message: "upstream unavailable" }),
     });
+    vi.stubGlobal("fetch", fetchMock);
 
-    expect(fetchMachineUserToken).toHaveBeenCalledWith(
-      "https://app.example.com",
-      "client-id",
-      "client-secret",
-    );
-    expect(executeScript).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: "query-gql.js",
-        arg: {
-          endpoint: "https://app.example.com/query",
-          accessToken: "mu-token",
+    try {
+      await expect(
+        query({
+          workspaceId: "workspace-1",
+          configPath: "tailor.config.ts",
+          engine: "gql",
+          machineUser: "bot",
           query: "{ viewer { id } }",
-        },
-      }),
-    );
+        }),
+      ).rejects.toThrow("GraphQL request failed: upstream unavailable");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 
-    expect(result).toEqual({
-      engine: "gql",
-      query: "{ viewer { id } }",
-      result: "raw graphql result",
+  test("explains the IP allowlist when the application rejects the request with 403", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.reject(new Error("not json")),
     });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const promise = query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "gql",
+        machineUser: "bot",
+        query: "{ viewer { id } }",
+      });
+      await expect(promise).rejects.toThrow("GraphQL request failed: HTTP 403");
+      const error = (await promise.catch((e: unknown) => e)) as { suggestion?: string };
+      expect(error.suggestion).toContain("allowedIpAddresses");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("falls back to the HTTP status when the GraphQL error body is not JSON", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: () => Promise.reject(new Error("not json")),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      await expect(
+        query({
+          workspaceId: "workspace-1",
+          configPath: "tailor.config.ts",
+          engine: "gql",
+          machineUser: "bot",
+          query: "{ viewer { id } }",
+        }),
+      ).rejects.toThrow("GraphQL request failed: HTTP 502");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test("throws when application has no auth namespace", async () => {

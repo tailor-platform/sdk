@@ -233,13 +233,9 @@ async function sqlQuery(
 }
 
 async function gqlQuery(
-  client: Client,
-  invoker: AuthInvoker,
   application: Application,
   machineUser: MachineUser,
   args: {
-    workspaceId: string;
-    bundledCode: string;
     query: string;
   },
 ): Promise<GQLQueryDispatchResult> {
@@ -249,27 +245,31 @@ async function gqlQuery(
     machineUser.clientSecret,
   );
 
-  const executed = await executeScript({
-    client,
-    workspaceId: args.workspaceId,
-    name: `query-gql.js`,
-    code: args.bundledCode,
-    arg: {
-      endpoint: `${application.url}/query`,
-      accessToken,
-      query: args.query,
+  const response = await fetch(`${application.url}/query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
     },
-    invoker,
+    body: JSON.stringify({ query: args.query }),
   });
-
-  if (!executed.success) {
-    throw new Error(executed.error);
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const errorJson: unknown = await response.json();
+      if (errorJson && typeof errorJson === "object" && "message" in errorJson) {
+        message = String(errorJson.message);
+      }
+    } catch {
+      // Keep default HTTP status message when response body is not JSON.
+    }
+    throw new Error(`GraphQL request failed: ${message}`);
   }
 
   return {
     engine: "gql" as const,
     query: args.query,
-    result: parseExecutionResult(executed.result),
+    result: await response.json(),
   };
 }
 
@@ -386,7 +386,8 @@ async function prepareQueryExecutor(
 ): Promise<(query: string) => Promise<QueryDispatchResult>> {
   const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
     await loadOptions(options);
-  const bundledCode = await bundleQueryScript(engine, path.dirname(config.path));
+  const bundledCode =
+    engine === "sql" ? await bundleQueryScript(path.dirname(config.path)) : undefined;
   const invoker = create(AuthInvokerSchema, {
     namespace: application.authNamespace,
     machineUserName: machineUserResource.name,
@@ -402,17 +403,13 @@ async function prepareQueryExecutor(
           const result = await sqlQuery(client, invoker, {
             workspaceId,
             namespace,
-            bundledCode,
+            bundledCode: assertDefined(bundledCode, "bundled code missing for sql engine"),
             query: queryString,
           });
           return reorderSqlColumns(result, config, namespace, queryString);
         }
         case "gql":
-          return await gqlQuery(client, invoker, application, machineUserResource, {
-            workspaceId,
-            bundledCode,
-            query: queryString,
-          });
+          return await gqlQuery(application, machineUserResource, { query: queryString });
         default:
           throw new Error(`Unsupported query engine: ${engine satisfies never}`);
       }
