@@ -10,6 +10,8 @@ import { detectDefaultBranch, type GitRunner } from "./git";
 import { hashContent, type LockTarget, readLock } from "./lock";
 import { TEMPLATE_VERSION } from "./templates";
 
+const DRIFT_COUNT_MARKER = "TAILOR_SETUP_CHECK_DRIFT_COUNT";
+
 /**
  * Stable drift rule keys. These are part of the public contract: a future
  * `ignore` input on the workflow drift-check step suppresses findings by key.
@@ -386,6 +388,9 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
 
   for (const finding of findings) {
     logger.warn(`[${finding.target}] ${finding.message} (ignore key: ${finding.rule})`);
+  }
+  if (options.ci) {
+    logger.log(`${DRIFT_COUNT_MARKER}=${String(findings.length)}`);
   }
   throw new Error(
     `Detected ${String(findings.length)} drift finding(s) across ${String(count)} target(s). ` +
