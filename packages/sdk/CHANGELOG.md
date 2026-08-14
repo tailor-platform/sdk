@@ -1,5 +1,120 @@
 # @tailor-platform/sdk
 
+## 2.3.0
+
+### Minor Changes
+
+- [#2041](https://github.com/tailor-platform/sdk/pull/2041) [`0d2d542`](https://github.com/tailor-platform/sdk/commit/0d2d5420935a5f1f43f367f58837943fb49ad2dc) Thanks [@dqn](https://github.com/dqn)! - Add `tailor setup renovate` to generate a Renovate config that extends Tailor's shared preset without overwriting existing or customized configuration.
+
+- [#2043](https://github.com/tailor-platform/sdk/pull/2043) [`2524e2f`](https://github.com/tailor-platform/sdk/commit/2524e2f0fff830c3ae8978d3136d6a7f0d22e0fe) Thanks [@dqn](https://github.com/dqn)! - Allow generated GitHub workflows to fail on unsuppressed setup drift when the `TAILOR_PLATFORM_FAIL_ON_DRIFT` repository variable is set to `true`. Execution and configuration errors in the drift check now fail regardless of this variable. Re-run the relevant `tailor setup` command after upgrading to regenerate the workflow.
+
+- [#2035](https://github.com/tailor-platform/sdk/pull/2035) [`a928959`](https://github.com/tailor-platform/sdk/commit/a9289591359449da4157eb98a28c4beef14bc121) Thanks [@dqn](https://github.com/dqn)! - Convert a TailorDB field to a type that cannot be applied in place without writing the migrations by hand. `tailor tailordb migration generate` now offers to carry the values through a temporary field and writes both migrations for you; you supply the conversion expression. Non-interactive runs opt in per field with `--expand-contract "Type.field"`, and still fail without it.
+  
+  Writes that land on the field while the conversion runs are dropped rather than converted, so stop writing to it first on a live workspace. Array-cardinality changes, unique fields, and fields named by an index, relationship, permission, or type-level script remain manual.
+
+- [#2033](https://github.com/tailor-platform/sdk/pull/2033) [`d5801fc`](https://github.com/tailor-platform/sdk/commit/d5801fc94419359cfea2c3973b0d43333324510d) Thanks [@dqn](https://github.com/dqn)! - Support more TailorDB field type changes as single in-place migrations: `integer` now converts to `string` and `decimal`, `float` to `string` and `decimal`, `decimal` to `float`, and `boolean` to `string`. A `float` field that is already unique keeps to the 3-step migration when converting to `decimal`, because rounding to the target scale can merge distinct values.
+
+- [#1991](https://github.com/tailor-platform/sdk/pull/1991) [`dcc66a6`](https://github.com/tailor-platform/sdk/commit/dcc66a61861cf4d94c6081e46d8fd9053d9f81e5) Thanks [@dqn](https://github.com/dqn)! - Renaming a TailorDB field no longer silently drops the field's data: `tailordb migration generate` now detects rename candidates and records a confirmed rename as a single breaking `field_renamed` change with a scaffolded data-copy script, instead of decomposing it into a removal plus an addition. Note: older SDK versions cannot read a `diff.json` that contains a `field_renamed` change and stop with a validation error.
+
+- [#2026](https://github.com/tailor-platform/sdk/pull/2026) [`1346b75`](https://github.com/tailor-platform/sdk/commit/1346b75c1f3e2dd41297db18c6e7b8e676e01f77) Thanks [@dqn](https://github.com/dqn)! - Renaming a TailorDB type no longer silently drops its records: `tailordb migration generate` now detects type rename candidates and records a confirmed rename as a single breaking `type_renamed` change with a scaffolded id-preserving data-copy script, instead of decomposing it into a removal plus an addition (confirm interactively, or via `--rename "OldType:NewType"` / `--drop "Type"` in non-interactive runs). Note: older SDK versions cannot read a `diff.json` that contains a `type_renamed` change and stop with a validation error.
+
+- [#1933](https://github.com/tailor-platform/sdk/pull/1933) [`89b5647`](https://github.com/tailor-platform/sdk/commit/89b5647c21624b3782af4e8bf3a0de39b10b1ed0) Thanks [@toiroakr](https://github.com/toiroakr)! - Support wait point keys with runtime values. Write `$paramName` in a key passed to `createWaitPoints`' `define` and the param names become the argument of `.with()`, which builds the concrete key:
+  
+  ```typescript
+  export const { lineApproval } = createWaitPoints((define) => ({
+    lineApproval: define.for("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+  }));
+  
+  await lineApproval.with({ lineId: line.id }).wait({ message: "Please approve" });
+  ```
+  
+  This makes it possible for one execution to suspend on the same logical wait point more than once at a time — one approval per order line, one per approver — which previously failed because a suspension with that key was already pending. A parameterized wait point exposes only `.with()`, so the unsubstituted key can never be waited on. `mockWorkflow().waitPointWith(definition, params)` gives typed mocks for one binding.
+  
+  The key has to come before the `Payload` / `Result` type arguments, because TypeScript stops inferring it as a literal type once those are given explicitly, and the param names can only be read off a literal. `createWaitPoint` takes its type arguments first, so it cannot type `$params`; `deploy` rejects such a key and points at `createWaitPoints`. Its own signature is unchanged.
+  
+  Wait point keys are now checked by `deploy` instead of failing when the job creates the suspension. Keys must match `[a-z0-9-]`, be 3 to 63 characters long, and start and end with `[a-z0-9]`. A key that never worked — a camelCase `createWaitPoints` property name, say — was rejected by the platform once the job ran; `deploy` now reports it before anything is deployed. Inside `createWaitPoints`, pass a valid key to `define` to keep the property name you read at the call site:
+  
+  ```typescript
+  managerApproval: define.for("manager-approval")<{ amount: number }, { approved: boolean }>(),
+  ```
+  
+  This works for a key without `$params` too, which is the way to keep a property name that reads well at the call site while the key stays within the platform grammar.
+
+### Patch Changes
+
+- [#2025](https://github.com/tailor-platform/sdk/pull/2025) [`2574bdd`](https://github.com/tailor-platform/sdk/commit/2574bdd69947b0f6e050c3c0af224fc3f18c6435) Thanks [@dqn](https://github.com/dqn)! - Treat `migrate.test.ts` as a migration artifact: `tailordb migration rebaseline` now removes a test-only migration directory together with the history it belongs to, and aborts when one is added while its confirmation prompt is open.
+
+- [#2012](https://github.com/tailor-platform/sdk/pull/2012) [`8826675`](https://github.com/tailor-platform/sdk/commit/88266754543c0975609274f0905c3a5b19cb9538) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#2014](https://github.com/tailor-platform/sdk/pull/2014) [`3852f3a`](https://github.com/tailor-platform/sdk/commit/3852f3a71dc5235c979b596cf23f1b252e3a3532) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsx to v4.23.10
+
+- [#2018](https://github.com/tailor-platform/sdk/pull/2018) [`6d13888`](https://github.com/tailor-platform/sdk/commit/6d13888b0fa07d078076ad3df9f3992f61419d6b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.0
+
+- [#2042](https://github.com/tailor-platform/sdk/pull/2042) [`6ee6584`](https://github.com/tailor-platform/sdk/commit/6ee65841670880986b392dabc69c06b1a2f3988f) Thanks [@dqn](https://github.com/dqn)! - Retry machine-user access token requests after transient connection timeouts.
+
+- [#2032](https://github.com/tailor-platform/sdk/pull/2032) [`b173a0d`](https://github.com/tailor-platform/sdk/commit/b173a0de53c5235b8c201bc8c671ebf812953d1c) Thanks [@dqn](https://github.com/dqn)! - Workflows generated by `tailor setup preview` now include a `tailor-drift-check` step, so preview-only repositories audit their generated workflows in CI like branch, tag, and coordinator workflows already do. The check is warning-only and never fails the job. `tailor setup check` reports targets generated with an older template as outdated; re-run the matching `tailor setup` subcommand to regenerate them.
+
+- [#2034](https://github.com/tailor-platform/sdk/pull/2034) [`413f6cb`](https://github.com/tailor-platform/sdk/commit/413f6cbf8faefefb155869f14e0ea76e939c1b41) Thanks [@dqn](https://github.com/dqn)! - Name the serial-column constraint in `db.insertInto(...).values({ ... })` and `.set({ ... })` errors, where TypeScript previously truncated the explanation away
+
+- [#2051](https://github.com/tailor-platform/sdk/pull/2051) [`a3b980d`](https://github.com/tailor-platform/sdk/commit/a3b980da849c28b5faf985469fdde4a193ec269f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailordb deploy`/`migrate` failing with `type_hook.create.expr: must be at most 10000 characters` on TailorDB types with many field hooks. The generated hook scripts are now optimized to avoid duplication.
+  
+  Since generated hook/validate script text changes for any type with hooks, the first `tailordb migration generate` after upgrading will report a script update for those types even without any code changes on your side — this is expected and required for the fix to take effect.
+
+- [#2049](https://github.com/tailor-platform/sdk/pull/2049) [`b3b2aae`](https://github.com/tailor-platform/sdk/commit/b3b2aae05a63e2514cdd796d9a8b16bf458f1fcd) Thanks [@dqn](https://github.com/dqn)! - TailorDB schema snapshots now keep their tables under a `tables` key instead of `types`, completing the `db.type()` → `db.table()` rename. Committed migration histories keep replaying: a legacy `types` key in `schema.json` is still read and moved on load, so no migration files need editing. Migration file format version is now 5 and this SDK reads versions 1 through 5.
+  
+  Code that imports `SchemaSnapshot` or `NormalizedSchemaSnapshot` from `@tailor-platform/sdk/cli` and reads `snapshot.types` no longer compiles:
+  
+  ```ts
+  Object.keys(snapshot.types); // before
+  Object.keys(snapshot.tables); // after
+  ```
+  
+  This also applies to the snapshots returned by `compareSnapshots`, `createSnapshotFromLocalTypes`, `reconstructSnapshotFromMigrations`, and `compareLocalTypesWithSnapshot`.
+  
+  The `types` key on parsed TailorDB service config is a different thing and is unchanged.
+
+- [#2044](https://github.com/tailor-platform/sdk/pull/2044) [`8a5cc3f`](https://github.com/tailor-platform/sdk/commit/8a5cc3fe9a5f53f0128857f095c9b995f86c7408) Thanks [@dqn](https://github.com/dqn)! - TailorDB migration diffs now describe table-level changes as `table_*` instead of `type_*`, completing the `db.type()` → `db.table()` rename. Migration histories written by earlier versions keep working: `type_*` change kinds in committed `diff.json` files are still read and normalized on load, so no migration files need editing. Migration file format version is now 3 and this SDK reads versions 1 through 3. CLI diff output reads `[Table]` and `table(s) added` where it previously read `[Type]` and `type(s) added`.
+  
+  Code that imports `MigrationDiff` / `DiffChange` from `@tailor-platform/sdk/cli` and compares `change.kind` against a renamed spelling no longer compiles, because the discriminant literal is gone from the union:
+  
+  | Old spelling             | New spelling              |
+  | ------------------------ | ------------------------- |
+  | `type_added`             | `table_added`             |
+  | `type_removed`           | `table_removed`           |
+  | `type_renamed`           | `table_renamed`           |
+  | `type_modified`          | `table_modified`          |
+  | `type_settings_modified` | `table_settings_modified` |
+  | `type_scripts_modified`  | `table_scripts_modified`  |
+  
+  Update those comparisons to the new spelling. Reading `diff.json` files is unaffected.
+
+- [#2045](https://github.com/tailor-platform/sdk/pull/2045) [`c468a23`](https://github.com/tailor-platform/sdk/commit/c468a2327025dea9c3b5f8d0554010f5efba9211) Thanks [@dqn](https://github.com/dqn)! - TailorDB migration diffs now name the table they describe with `tableName` instead of `typeName`, and a rename records `previousTableName` instead of `previousTypeName`, continuing the `db.type()` → `db.table()` rename. Migration histories written by earlier versions keep replaying: the legacy field names in committed `diff.json` files are still read and normalized on load, across change entries, breaking changes, and warnings, so no migration files need editing. Migration file format version is now 4 and this SDK reads versions 1 through 4.
+  
+  Code that imports `MigrationDiff` / `DiffChange` / `BreakingChangeInfo` from `@tailor-platform/sdk/cli` and reads the renamed properties no longer compiles:
+  
+  | Old spelling                 | New spelling                  |
+  | ---------------------------- | ----------------------------- |
+  | `change.typeName`            | `change.tableName`            |
+  | `change.previousTypeName`    | `change.previousTableName`    |
+  | `breakingChanges[].typeName` | `breakingChanges[].tableName` |
+  | `warnings[].typeName`        | `warnings[].tableName`        |
+  
+  Update those reads to the new spelling. `tailor tailordb migration validate --json` renames the same key wherever it appears in its output, so anything parsing that JSON needs the same update.
+  
+  The `typeName` field on executor record triggers, the `.typeName()` field builder, and the file-runtime `typeName` argument are unrelated and unchanged.
+
+- [#2052](https://github.com/tailor-platform/sdk/pull/2052) [`a31d362`](https://github.com/tailor-platform/sdk/commit/a31d362d4d7386a2f3dcce06f3c53c78537ffcec) Thanks [@toiroakr](https://github.com/toiroakr)! - Isolate the SDK test suite (every vitest project except e2e) from TAILOR_\* environment variables exported by the developer's shell, so tests pass regardless of local CLI configuration.
+
+- [#2022](https://github.com/tailor-platform/sdk/pull/2022) [`4eb5302`](https://github.com/tailor-platform/sdk/commit/4eb530251e2480cd8179325fe43950c5cab5b954) Thanks [@dqn](https://github.com/dqn)! - Fail `deploy` and `tailordb migration validate` when a migration has both a recorded `--no-script` acknowledgment and a `migrate.ts`, instead of warning and running the script against the committed record. The error names the two ways out: rerun `tailordb migration script <n>` to clear the stale acknowledgment (the script then runs on the next deploy), or delete `migrate.ts` to keep the skip.
+
+- [#2027](https://github.com/tailor-platform/sdk/pull/2027) [`794bab7`](https://github.com/tailor-platform/sdk/commit/794bab7ffec4c63f30a8b7a305bb34443573fbec) Thanks [@dqn](https://github.com/dqn)! - Reload user modules (config, tailordb types, workflows, resolvers, executors, HTTP adapters) on every `deploy()` run, so calling the programmatic `deploy()` repeatedly in one Node process picks up file changes and re-registers wait point keys instead of silently reusing modules cached by an earlier run.
+
+- [#2023](https://github.com/tailor-platform/sdk/pull/2023) [`9dc826f`](https://github.com/tailor-platform/sdk/commit/9dc826fc0a83aa926de5b07245513f67c1ace877) Thanks [@dqn](https://github.com/dqn)! - Guide users through the v2 type-only import requirement. The CLI loads TypeScript by stripping types from each file in isolation, so a plain import of a type-only export fails at load time with `SyntaxError: ... does not provide an export named '<name>'` and no indication that the import form is the cause.
+  
+  - The CLI now appends a suggestion to that error: import the name with `import type` and set `"verbatimModuleSyntax": true` in tsconfig.json to catch violations at typecheck.
+  - Projects scaffolded by `tailor init` now enable `verbatimModuleSyntax` in their tsconfig.json, so new projects catch violations at typecheck instead of at load time.
+  - The v2 migration guide gains a `v2/type-only-imports` entry documenting the requirement, the failure mode, and the migration steps, offered by `tailor upgrade` when crossing the v2 boundary.
+
 ## 2.2.0
 
 ### Minor Changes

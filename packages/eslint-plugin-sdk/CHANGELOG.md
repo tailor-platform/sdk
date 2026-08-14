@@ -1,5 +1,11 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.2.2
+
+### Patch Changes
+
+- [#2001](https://github.com/tailor-platform/sdk/pull/2001) [`ed82efa`](https://github.com/tailor-platform/sdk/commit/ed82efa17cf37e2e15caa4a81dce400f8216dad2) Thanks [@toiroakr](https://github.com/toiroakr)! - Build the package during install so the plugin entry point exists without running a separate build step first.
+
 ## 0.2.1
 
 ### Patch Changes
