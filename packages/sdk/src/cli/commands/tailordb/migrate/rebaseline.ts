@@ -291,7 +291,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     );
   }
   if (captureFileState(localSourceFiles()) !== initialLocalFileState) {
-    throw new Error("Local TailorDB type or config files changed. Run the command again.");
+    throw new Error("Local TailorDB table or config files changed. Run the command again.");
   }
   assertLocalTypesReady();
   await assertConnectedWorkspaceReady(currentHistoryId, "confirmation");

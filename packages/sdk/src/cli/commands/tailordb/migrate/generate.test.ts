@@ -611,7 +611,7 @@ describe("tailordb migration generate type rename preflight", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain(
-      "--rename does not match a removed + added type pair: Ghost:Person",
+      "--rename does not match a removed + added table pair: Ghost:Person",
     );
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
@@ -622,7 +622,7 @@ describe("tailordb migration generate type rename preflight", () => {
     const result = await runCommand(generateCommand, ["--yes", "--drop", "Ghost"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toContain("--drop does not match a removed type: Ghost");
+    expect(String(result.error)).toContain("--drop does not match a removed table: Ghost");
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 });

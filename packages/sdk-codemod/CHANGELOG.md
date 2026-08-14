@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-codemod
 
+## 0.5.0
+
+### Minor Changes
+
+- [#2023](https://github.com/tailor-platform/sdk/pull/2023) [`9dc826f`](https://github.com/tailor-platform/sdk/commit/9dc826fc0a83aa926de5b07245513f67c1ace877) Thanks [@dqn](https://github.com/dqn)! - Guide users through the v2 type-only import requirement. The CLI loads TypeScript by stripping types from each file in isolation, so a plain import of a type-only export fails at load time with `SyntaxError: ... does not provide an export named '<name>'` and no indication that the import form is the cause.
+  
+  - The CLI now appends a suggestion to that error: import the name with `import type` and set `"verbatimModuleSyntax": true` in tsconfig.json to catch violations at typecheck.
+  - Projects scaffolded by `tailor init` now enable `verbatimModuleSyntax` in their tsconfig.json, so new projects catch violations at typecheck instead of at load time.
+  - The v2 migration guide gains a `v2/type-only-imports` entry documenting the requirement, the failure mode, and the migration steps, offered by `tailor upgrade` when crossing the v2 boundary.
+
 ## 0.4.2
 
 ### Patch Changes

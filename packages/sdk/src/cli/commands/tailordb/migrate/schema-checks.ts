@@ -374,7 +374,7 @@ export function logRemoteDriftGuidance(): void {
   logger.info("  - Run 'tailor tailordb migration status' to compare local vs remote.", {
     mode: "plain",
   });
-  logger.info("  - If remote is correct, update local types and run 'migration generate'.", {
+  logger.info("  - If remote is correct, update local tables and run 'migration generate'.", {
     mode: "plain",
   });
   logger.info(

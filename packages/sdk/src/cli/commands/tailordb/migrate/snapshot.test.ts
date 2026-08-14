@@ -331,7 +331,7 @@ describe("snapshot", () => {
         {
           tableName: "OldType",
           reason:
-            "Type removed (all records of this type will be deleted during post-migration cleanup)",
+            "Table removed (all records in this table will be deleted during post-migration cleanup)",
         },
       ]);
     });
@@ -772,7 +772,7 @@ describe("snapshot", () => {
               { tableName: "Ghost", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
-        ).toThrow('type "Ghost" must exist');
+        ).toThrow('table "Ghost" must exist');
       });
     });
 
@@ -812,7 +812,7 @@ describe("snapshot", () => {
         expect(diff.requiresMigrationScript).toBe(true);
         expect(diff.breakingChanges).toHaveLength(2);
         expect(diff.breakingChanges[0]!.reason).toContain(
-          "Type renamed from User to Person (existing records must be copied by the migration script)",
+          "Table renamed from User to Person (existing records must be copied by the migration script)",
         );
         expect(diff.breakingChanges[1]!.reason).toContain("GraphQL API names");
         expect(diff.breakingChanges[1]!.reason).toContain("User/Users");
@@ -926,7 +926,7 @@ describe("snapshot", () => {
           compareRawSnapshots(previous(), current(), {
             typeRenames: [{ previousTableName: "Ghost", tableName: "Person" }],
           }),
-        ).toThrow('type "Ghost" does not exist in the previous schema');
+        ).toThrow('table "Ghost" does not exist in the previous schema');
       });
     });
 
@@ -2221,7 +2221,7 @@ describe("snapshot", () => {
         {
           tableName: "OldType",
           reason:
-            "Type removed (all records of this type will be deleted during post-migration cleanup)",
+            "Table removed (all records in this table will be deleted during post-migration cleanup)",
         },
       ]);
     });
@@ -2303,7 +2303,7 @@ describe("snapshot", () => {
         breakingChanges: [
           {
             tableName: "Person",
-            reason: "Type renamed from User to Person",
+            reason: "Table renamed from User to Person",
           },
         ],
         hasWarnings: false,
@@ -3098,7 +3098,7 @@ describe("snapshot", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Table renamed from User to Person" }],
         hasWarnings: false,
         warnings: [],
         requiresMigrationScript: true,
@@ -3929,7 +3929,7 @@ describe("snapshot", () => {
         {
           tableName: "__proto__",
           kind: "type_missing_local",
-          details: "Type '__proto__' exists in remote but not in snapshot",
+          details: "Table '__proto__' exists in remote but not in snapshot",
         },
       ]);
     });
@@ -5025,15 +5025,15 @@ describe("snapshot", () => {
         {
           tableName: "Post",
           kind: "type_missing_remote" as const,
-          details: "Type 'Post' exists in snapshot but not in remote",
+          details: "Table 'Post' exists in snapshot but not in remote",
         },
       ];
 
       const result = formatSchemaDrifts(drifts);
-      expect(result).toContain("Type 'User':");
+      expect(result).toContain("Table 'User':");
       expect(result).toContain("Field 'email'");
       expect(result).toContain("Field 'name'");
-      expect(result).toContain("Type 'Post':");
+      expect(result).toContain("Table 'Post':");
     });
   });
 });

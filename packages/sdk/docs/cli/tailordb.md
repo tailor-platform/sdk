@@ -28,14 +28,14 @@ Truncate (delete all records from) TailorDB tables.
 **Usage**
 
 ```
-tailor tailordb truncate [options] [types]
+tailor tailordb truncate [options] [tables]
 ```
 
 **Arguments**
 
-| Argument | Description            | Required |
-| -------- | ---------------------- | -------- |
-| `types`  | Type names to truncate | No       |
+| Argument | Description             | Required |
+| -------- | ----------------------- | -------- |
+| `tables` | Table names to truncate | No       |
 
 **Options**
 
@@ -62,21 +62,21 @@ tailor tailordb truncate --all --yes
 # Truncate all tables in a specific namespace
 tailor tailordb truncate --namespace myNamespace
 
-# Truncate specific types (namespace is auto-detected)
+# Truncate specific tables (namespace is auto-detected)
 tailor tailordb truncate User Post Comment
 
-# Truncate specific types with confirmation skipped
+# Truncate specific tables with confirmation skipped
 tailor tailordb truncate User Post --yes
 ```
 
 **Notes:**
 
-- You must specify exactly one of: `--all`, `--namespace`, or type names
-- When truncating specific types, the namespace is automatically detected from your config
+- You must specify exactly one of: `--all`, `--namespace`, or table names
+- When truncating specific tables, the namespace is automatically detected from your config
 - Confirmation prompts vary based on the operation:
   - `--all`: requires typing `truncate all`
   - `--namespace`: requires typing `truncate <namespace-name>`
-  - Specific types: requires typing `yes`
+  - Specific tables: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
 - Namespaces declared with `{ external: true }` are skipped by `--all` and rejected with a dedicated error when targeted by `--namespace`. Run truncate from the app that owns the namespace.
 

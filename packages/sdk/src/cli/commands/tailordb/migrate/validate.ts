@@ -59,7 +59,7 @@ interface MigrationFilesReport {
 
 interface LocalSchemaReport {
   hasDiff: boolean;
-  /** Present when local types drifted from the latest migration snapshot; absent when the drift is a missing snapshot */
+  /** Present when local tables drifted from the latest migration snapshot; absent when the drift is a missing snapshot */
   diff?: MigrationDiff;
 }
 

@@ -1,11 +1,11 @@
 /**
- * Field and type rename detection for TailorDB migrations
+ * Field and table rename detection for TailorDB migrations
  *
  * A rename has no dedicated platform API, so the diff decomposes it into
- * `field_removed` + `field_added` (`table_removed` + `table_added` for types).
+ * `field_removed` + `field_added` (`table_removed` + `table_added` for tables).
  * This module detects removed/added pairs that are compatible enough to be a
  * rename so that `migration generate` can ask the user (or accept
- * `--rename Table.old:new` / `--rename OldTable:NewTable`) and record a single
+ * `--rename Table.oldField:newField` / `--rename OldTable:NewTable`) and record a single
  * `field_renamed` / `table_renamed` change instead.
  */
 
@@ -185,7 +185,7 @@ export function assertValidFieldRenames(
     const currType = current.tables[tableName];
     if (!prevType || !currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" must exist in both the previous and the current schema.`,
+        `Cannot rename ${label}: table "${tableName}" must exist in both the previous and the current schema.`,
       );
     }
     const prevField = prevType.fields[previousFieldName];
@@ -224,7 +224,7 @@ export function assertValidFieldRenames(
 const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;
 
 /**
- * Parse a `--rename` option value of the form `Table.old:new`.
+ * Parse a `--rename` option value of the form `Table.oldField:newField`.
  * @param {string} value - Raw option value
  * @returns {FieldRenameSpec} Parsed rename spec
  */
@@ -499,7 +499,7 @@ export function assertValidTypeRenames(
     const label = `${previousTableName}:${tableName}`;
     for (const key of [previousTableName, tableName]) {
       if (seen.has(key)) {
-        throw new Error(`Type "${key}" appears in more than one rename.`);
+        throw new Error(`Table "${key}" appears in more than one rename.`);
       }
       seen.add(key);
     }
@@ -507,32 +507,32 @@ export function assertValidTypeRenames(
     const prevType = previous.tables[previousTableName];
     if (!prevType) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTableName}" does not exist in the previous schema.`,
+        `Cannot rename ${label}: table "${previousTableName}" does not exist in the previous schema.`,
       );
     }
     if (current.tables[previousTableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${previousTableName}" still exists in the current schema.`,
+        `Cannot rename ${label}: table "${previousTableName}" still exists in the current schema.`,
       );
     }
     const currType = current.tables[tableName];
     if (!currType) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" does not exist in the current schema.`,
+        `Cannot rename ${label}: table "${tableName}" does not exist in the current schema.`,
       );
     }
     if (previous.tables[tableName]) {
       throw new Error(
-        `Cannot rename ${label}: type "${tableName}" already exists in the previous schema.`,
+        `Cannot rename ${label}: table "${tableName}" already exists in the previous schema.`,
       );
     }
     if (!isTypeRenameCompatible(prevType, currType)) {
       throw new Error(
-        `Cannot rename ${label}: the types are not rename-compatible ` +
+        `Cannot rename ${label}: the tables are not rename-compatible ` +
           `(every field must keep its name, type, array-ness, required/unique constraints, ` +
           `foreign key target, and scale, enum values must not be removed, indexes must match, ` +
           `self-referential foreign keys must be optional, ` +
-          `and types with serial or file fields cannot be renamed).`,
+          `and tables with serial or file fields cannot be renamed).`,
       );
     }
   }
@@ -586,7 +586,7 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
 }
 
 /**
- * A type removal confirmed as intentional (`--drop Type`), so its rename
+ * A table removal confirmed as intentional (`--drop Table`), so its rename
  * candidates need no interactive confirmation.
  */
 export interface TypeDropSpec {

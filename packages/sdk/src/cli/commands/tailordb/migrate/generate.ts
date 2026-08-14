@@ -79,11 +79,11 @@ export interface GenerateOptions {
   name?: string;
   yes?: boolean;
   init?: boolean;
-  /** `--rename Table.old:new` / `--rename OldTable:NewTable` values confirming renames non-interactively. */
+  /** `--rename Table.oldField:newField` / `--rename OldTable:NewTable` values confirming renames non-interactively. */
   renames?: string[];
-  /** `--drop Type.field` / `--drop Type` values confirming removals non-interactively. */
+  /** `--drop Table.field` / `--drop Table` values confirming removals non-interactively. */
   drops?: string[];
-  /** `--expand-contract Type.field` values approving a field type conversion. */
+  /** `--expand-contract Table.field` values approving a field type conversion. */
   expandContracts?: string[];
 }
 
@@ -312,7 +312,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     typeRenameFlags,
     generations,
     typeRenameSpecApplies,
-    "--rename does not match a removed + added type pair",
+    "--rename does not match a removed + added table pair",
   );
   const dropSpecsByNamespace = matchFlagsToNamespaces(
     dropFlags,
@@ -324,7 +324,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     typeDropFlags,
     generations,
     typeDropSpecApplies,
-    "--drop does not match a removed type",
+    "--drop does not match a removed table",
   );
 
   const expandContractKeysByNamespace = new Map<string, Set<string>>();
@@ -514,7 +514,7 @@ async function generateInitialSnapshot(
 
   logger.success(`Generated initial schema snapshot`);
   logger.info(`  File: ${result.filePath}`);
-  logger.info(`  Types: ${Object.keys(snapshot.tables).length}`);
+  logger.info(`  Tables: ${Object.keys(snapshot.tables).length}`);
 
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }
@@ -600,7 +600,7 @@ interface NamespaceGeneration {
 /** A rename candidate that a non-interactive run could not resolve. */
 interface UnresolvedRenameCandidate {
   namespace: string;
-  /** Removed field (`Type.field`) or type (`Type`) with rename candidates. */
+  /** Removed field (`Table.field`) or table (`Table`) with rename candidates. */
   label: string;
   targets: string[];
 }
@@ -691,7 +691,7 @@ async function promptTypeRenameCandidate(
     return isRename ? firstTypeName : undefined;
   }
   const selected = await prompt.select({
-    message: `${oldTypeName} was removed. Was it renamed to one of these added types?`,
+    message: `${oldTypeName} was removed. Was it renamed to one of these added tables?`,
     choices: [
       ...addedTypeNames.map((tableName) => ({
         name: `Yes, renamed to ${tableName}`,

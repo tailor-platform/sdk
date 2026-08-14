@@ -735,7 +735,7 @@ describe("assertValidTypeRenames", () => {
       assertValidTypeRenames(normalized({}), normalized({ Person: snapshotType("Person") }), [
         { previousTableName: "User", tableName: "Person" },
       ]),
-    ).toThrow('type "User" does not exist in the previous schema');
+    ).toThrow('table "User" does not exist in the previous schema');
   });
 
   test("rejects a rename whose new type is missing from the current schema", () => {
@@ -743,7 +743,7 @@ describe("assertValidTypeRenames", () => {
       assertValidTypeRenames(normalized({ User: snapshotType("User") }), normalized({}), [
         { previousTableName: "User", tableName: "Person" },
       ]),
-    ).toThrow('type "Person" does not exist in the current schema');
+    ).toThrow('table "Person" does not exist in the current schema');
   });
 
   test("explains shape incompatibility", () => {
