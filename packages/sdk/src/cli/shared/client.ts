@@ -479,12 +479,37 @@ export function parseMethodName(methodName: string): {
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 
+// Identifier fields surfaced in enhanced error messages. Add an entry here to
+// surface another field. Never add fields that can carry secrets or PII
+// (tokens, scripts, query args, secret values, emails), and never add a
+// suffix that could match them (e.g. "Key" would match future key material).
+const IDENTITY_KEYS = new Set([
+  "name",
+  "id",
+  "trn",
+  "domain",
+  "filePath",
+  "authNamespace",
+  "executionPolicyKey",
+]);
+const IDENTITY_KEY_SUFFIXES = ["Name", "Id"];
+// Ambient context the user already provides on every command; pure noise.
+const IDENTITY_EXCLUDED_KEYS = new Set(["workspaceId"]);
+// Key read from nested resource messages (e.g. the type in a create request).
+const NESTED_IDENTITY_KEY = "name";
+
+function isIdentityKey(key: string): boolean {
+  if (key.startsWith("$") || IDENTITY_EXCLUDED_KEYS.has(key)) {
+    return false;
+  }
+  return IDENTITY_KEYS.has(key) || IDENTITY_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix));
+}
+
 /**
  * Format an allowlisted identity suffix for enhanced error messages.
  *
- * Only resource identifiers (name-like fields) are included — the rest of the
- * request payload can carry credentials and must never reach terminal or CI
- * logs.
+ * Only resource identifiers are included — the rest of the request payload
+ * can carry credentials and must never reach terminal or CI logs.
  * @param message - Request message to extract identifiers from
  * @returns Identity suffix like " (namespaceName: x, type.name: y)", or an empty string
  */
@@ -494,13 +519,17 @@ function formatRequestIdentity(message: unknown): string {
   }
   const parts: string[] = [];
   for (const [key, value] of Object.entries(message)) {
-    if (key.startsWith("$")) continue;
-    if (typeof value === "string" && value !== "" && (key === "name" || key.endsWith("Name"))) {
+    if (typeof value === "string" && value !== "" && isIdentityKey(key)) {
       parts.push(`${key}: ${value}`);
-    } else if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      const nestedName = (value as { name?: unknown }).name;
+    } else if (
+      !key.startsWith("$") &&
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
+      const nestedName = (value as Record<string, unknown>)[NESTED_IDENTITY_KEY];
       if (typeof nestedName === "string" && nestedName !== "") {
-        parts.push(`${key}.name: ${nestedName}`);
+        parts.push(`${key}.${NESTED_IDENTITY_KEY}: ${nestedName}`);
       }
     }
   }

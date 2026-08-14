@@ -706,6 +706,33 @@ describe("errorHandlingInterceptor", () => {
     expect(error.message).not.toContain("do-not-print-payload");
     expect(error.message).not.toContain("22222222");
   });
+
+  test("surfaces id-like identifiers while keeping sensitive fields out", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.resumeWorkflowExecution,
+      header: new Headers(),
+      message: {
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+        executionId: "0189aaaa-bbbb-cccc-dddd-eeeeffff0000",
+        trn: "trn:v1:workspace/staffing:tailordb/shared-db",
+        email: "admin@example.com",
+        secretmanagerSecretValue: "do-not-print-secret",
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("executionId: 0189aaaa-bbbb-cccc-dddd-eeeeffff0000");
+    expect(error.message).toContain("trn: trn:v1:workspace/staffing:tailordb/shared-db");
+    expect(error.message).not.toContain("22222222");
+    expect(error.message).not.toContain("admin@example.com");
+    expect(error.message).not.toContain("do-not-print-secret");
+  });
 });
 
 describe("resolveStaticWebsiteUrls", () => {
