@@ -681,6 +681,31 @@ describe("errorHandlingInterceptor", () => {
     expect(error.message).not.toContain("tpmu_supersecrettoken");
     expect(error.message).not.toContain('"arg"');
   });
+
+  test("includes allowlisted resource identifiers in the enhanced error message", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.createTailorDBType,
+      header: new Headers(),
+      message: {
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+        namespaceName: "shared-db",
+        tailordbType: { name: "Order", description: "do-not-print-payload" },
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("already exists", Code.AlreadyExists));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain(
+      "Failed to create TailorDBType (namespaceName: shared-db, tailordbType.name: Order): already exists",
+    );
+    expect(error.message).not.toContain("do-not-print-payload");
+    expect(error.message).not.toContain("22222222");
+  });
 });
 
 describe("resolveStaticWebsiteUrls", () => {

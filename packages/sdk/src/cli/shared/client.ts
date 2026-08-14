@@ -446,14 +446,12 @@ export function errorHandlingInterceptor(): Interceptor {
     } catch (error) {
       if (error instanceof ConnectError) {
         const { operation, resourceType } = parseMethodName(req.method.name);
+        const identity = formatRequestIdentity(req.message);
 
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
-        // The request payload is intentionally not included: it can carry
-        // credentials (e.g. access tokens in TestExecScriptRequest.arg) that
-        // must never reach terminal or CI logs
         throw new ConnectError(
-          `Failed to ${operation} ${resourceType}: ${error.rawMessage}`,
+          `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
           error.code,
           error.metadata,
         );
@@ -479,6 +477,34 @@ export function parseMethodName(methodName: string): {
 
   const [, action, resource] = match as [string, string, string];
   return { operation: action.toLowerCase(), resourceType: resource };
+}
+
+/**
+ * Format an allowlisted identity suffix for enhanced error messages.
+ *
+ * Only resource identifiers (name-like fields) are included — the rest of the
+ * request payload can carry credentials and must never reach terminal or CI
+ * logs.
+ * @param message - Request message to extract identifiers from
+ * @returns Identity suffix like " (namespaceName: x, type.name: y)", or an empty string
+ */
+function formatRequestIdentity(message: unknown): string {
+  if (typeof message !== "object" || message === null) {
+    return "";
+  }
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(message)) {
+    if (key.startsWith("$")) continue;
+    if (typeof value === "string" && value !== "" && (key === "name" || key.endsWith("Name"))) {
+      parts.push(`${key}: ${value}`);
+    } else if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      const nestedName = (value as { name?: unknown }).name;
+      if (typeof nestedName === "string" && nestedName !== "") {
+        parts.push(`${key}.name: ${nestedName}`);
+      }
+    }
+  }
+  return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
 }
 
 export const MAX_PAGE_SIZE = 1000;
