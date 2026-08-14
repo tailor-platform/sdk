@@ -15,7 +15,7 @@ export const AIGatewaySchema = z
       .regex(AUTH_NAMESPACE_PATTERN, "Must be 3-63 lowercase alphanumeric characters or hyphens")
       .optional()
       .describe(
-        "Auth namespace used to resolve request tokens against the workspace's auth. Defaults to the application's own auth service when omitted.",
+        "Auth namespace used to resolve request tokens against the workspace's auth. Defaults to the application's own auth service when omitted; omitting it without an Auth service configured is rejected.",
       ),
     cors: z
       .array(z.string())

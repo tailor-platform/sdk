@@ -38,7 +38,7 @@ export default defineConfig({
 
 ### authNamespace
 
-The auth namespace used to resolve request tokens against your workspace's auth configuration. Optional — when omitted, it defaults to your application's own Auth service (local or external, the name passed to `defineAuth()`), which is what most AI Gateways need:
+The auth namespace used to resolve request tokens against your workspace's auth configuration. Optional — when omitted, it defaults to your application's own Auth service (local or external, the name passed to `defineAuth()`), which is what most AI Gateways need. Omitting it without an Auth service configured is rejected by `deploy`/`generate`, asking you to either define one or set `authNamespace` explicitly:
 
 ```typescript
 const auth = defineAuth("my-auth", {
