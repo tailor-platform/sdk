@@ -346,7 +346,9 @@ describe("seedApplyCommand", () => {
     const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
     expect(
       warnedLines.some(
-        (line) => line.includes("25/30") && line.includes("tailor seed apply _User --upsert"),
+        (line) =>
+          line.includes("25/30") &&
+          line.includes("re-run the same command narrowed to `_User` with `--upsert`"),
       ),
     ).toBe(true);
   });
@@ -399,7 +401,9 @@ describe("seedApplyCommand", () => {
     const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
     expect(
       warnedLines.some(
-        (line) => line.includes("25/51") && line.includes("tailor seed apply _User --upsert"),
+        (line) =>
+          line.includes("25/51") &&
+          line.includes("re-run the same command narrowed to `_User` with `--upsert`"),
       ),
     ).toBe(true);
   });

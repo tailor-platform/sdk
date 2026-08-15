@@ -291,7 +291,7 @@ async function seedIdpUser(
       `    _User: ${totals.processed}/${rows.length} rows confirmed processed before the failure ` +
         `(${totals.created} created, ${totals.updated} updated). ` +
         "The interrupted chunk may still have been applied server-side; " +
-        "re-run `tailor seed apply _User --upsert` to retry safely.",
+        "re-run the same command narrowed to `_User` with `--upsert` to retry safely.",
       { mode: "plain" },
     );
   };
