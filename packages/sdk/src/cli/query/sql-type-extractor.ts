@@ -3,7 +3,7 @@ import { astVisitor, parse, type From, type Statement } from "pgsql-ast-parser";
 /**
  * Extract TailorDB table names from SQL query.
  * @param query - SQL query
- * @returns Type names referenced by query
+ * @returns Table names referenced by query
  */
 export function extractTypeNamesFromSql(query: string): string[] {
   let statements: Statement[];
