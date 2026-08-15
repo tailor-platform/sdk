@@ -390,7 +390,7 @@ export default createExecutor({
 });
 ```
 
-The machine user is resolved in your application's auth namespace — the name passed to `defineAuth()`. `webhook` is the only operation kind that does not accept `invoker`, since it calls an external URL rather than acting inside your workspace.
+The machine user is resolved in your application's auth namespace — the name of your Auth service, local or external. `webhook` is the only operation kind that does not accept `invoker`, since it calls an external URL rather than acting inside your workspace.
 
 Without an `invoker`, the operation runs as whoever raised the trigger event, or anonymously when there is no such principal — as with a `schedule` trigger. Declare an `invoker` whenever the operation needs an identity of its own.
 

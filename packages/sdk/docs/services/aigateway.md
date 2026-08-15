@@ -41,6 +41,8 @@ export default defineConfig({
 The auth namespace used to resolve request tokens against your workspace's auth configuration. Optional — when omitted, it defaults to your application's own Auth service (local or external, the name passed to `defineAuth()`), which is what most AI Gateways need. Omitting it without an Auth service configured is rejected by `deploy`/`generate`, asking you to either define one or set `authNamespace` explicitly:
 
 ```typescript
+import { defineAIGateway, defineAuth, defineConfig } from "@tailor-platform/sdk";
+
 const auth = defineAuth("my-auth", {
   // ...auth configuration...
 });
@@ -59,6 +61,8 @@ Type-checked and autocompleted against your own Auth service name via the genera
 To authenticate against a **different** application's Auth service, reference it as an [external resource](../configuration.md#external-resources) in your own config — `authNamespace` then defaults to it like any other Auth service:
 
 ```typescript
+import { defineAIGateway, defineConfig } from "@tailor-platform/sdk";
+
 const aiGateway = defineAIGateway("my-aigateway", {}); // defaults to "shared-auth"
 
 export default defineConfig({
