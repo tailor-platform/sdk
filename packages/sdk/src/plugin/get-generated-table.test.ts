@@ -3,7 +3,7 @@ import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
-import { _clearCacheForTesting } from "./get-generated-type";
+import { _clearCacheForTesting } from "./get-generated-table";
 import { getGeneratedTable } from "./index";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 
