@@ -104,8 +104,8 @@ export interface TailorDBFileAPI {
   /**
    * Upload a file to TailorDB.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
+   * @param typeName - TailorDB table name
+   * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @param data - File contents
    * @param options - Upload options (e.g. `contentType`)
@@ -126,8 +126,8 @@ export interface TailorDBFileAPI {
    * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
    * exceeds 10MB — use {@link downloadStream} for large files.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
+   * @param typeName - TailorDB table name
+   * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Bytes and metadata for the file
    */
@@ -144,8 +144,8 @@ export interface TailorDBFileAPI {
    * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
    * exceeds 10MB — use {@link downloadStream} for large files.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
+   * @param typeName - TailorDB table name
+   * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Base64-encoded contents and metadata for the file
    */
@@ -159,8 +159,8 @@ export interface TailorDBFileAPI {
   /**
    * Delete a file from TailorDB.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
+   * @param typeName - TailorDB table name
+   * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Resolves once the file has been deleted
    */
@@ -169,8 +169,8 @@ export interface TailorDBFileAPI {
   /**
    * Get file metadata from TailorDB.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
+   * @param typeName - TailorDB table name
+   * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Metadata for the stored file
    */
@@ -184,8 +184,8 @@ export interface TailorDBFileAPI {
   /**
    * Download a file as a ReadableStream.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
+   * @param typeName - TailorDB table name
+   * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns ReadableStream body and metadata for the file
    */
@@ -199,8 +199,8 @@ export interface TailorDBFileAPI {
   /**
    * Upload a file using a ReadableStream.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB type name
-   * @param fieldName - File field name on the type
+   * @param typeName - TailorDB table name
+   * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @param readableStream - ReadableStream providing the file data
    * @param options - Upload stream options (e.g. `contentType`, `fileSize`)

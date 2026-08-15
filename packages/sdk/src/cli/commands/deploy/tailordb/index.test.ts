@@ -1123,7 +1123,7 @@ describe("planTailorDB (service level)", () => {
 describe("formatTailorDBResourceChangeEntries", () => {
   test.each([
     {
-      name: "groups type and gqlPermission changes for the same type name",
+      name: "groups table and gqlPermission changes for the same table name",
       typeChanges: { creates: [{ name: "Project" }], updates: [], deletes: [], replaces: [] },
       gqlPermissionChanges: {
         creates: [{ name: "Project" }],
@@ -1136,12 +1136,12 @@ describe("formatTailorDBResourceChangeEntries", () => {
           action: "create",
           symbol: symbols.create,
           name: "Project",
-          labels: ["type", "gqlPermission"],
+          labels: ["table", "gqlPermission"],
         },
       ],
     },
     {
-      name: "shows separate entries when type and gqlPermission have different actions for the same name",
+      name: "shows separate entries when table and gqlPermission have different actions for the same name",
       typeChanges: { creates: [{ name: "Project" }], updates: [], deletes: [], replaces: [] },
       gqlPermissionChanges: {
         creates: [],
@@ -1150,7 +1150,7 @@ describe("formatTailorDBResourceChangeEntries", () => {
         replaces: [],
       },
       expected: [
-        { action: "create", symbol: symbols.create, name: "Project", labels: ["type"] },
+        { action: "create", symbol: symbols.create, name: "Project", labels: ["table"] },
         { action: "update", symbol: symbols.update, name: "Project", labels: ["gqlPermission"] },
       ],
     },

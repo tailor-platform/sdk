@@ -1,7 +1,7 @@
 /**
  * Plugin executor context support for defining plugin executors in separate files.
  * This module provides utilities for creating type-safe plugin executors that receive
- * context (like type references and namespace) at runtime.
+ * context (like table references and namespace) at runtime.
  */
 
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
@@ -30,7 +30,7 @@ export interface PluginFunctionArgs {
   env: TailorEnv;
   /** Principal that triggered the event, null for system events */
   actor: TailorPrincipal | null;
-  /** Name of the TailorDB type */
+  /** Name of the TailorDB table */
   typeName: string;
   /** TailorDB connections by namespace */
   tailordb: Record<string, unknown>;

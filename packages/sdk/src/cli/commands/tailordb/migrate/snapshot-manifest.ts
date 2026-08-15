@@ -48,7 +48,7 @@ import type {
 } from "./snapshot";
 
 /**
- * Options for generating TailorDB type manifest from snapshot
+ * Options for generating TailorDB table manifest from snapshot
  */
 export interface GenerateManifestOptions {
   /** Whether an executor taking part in the same run subscribes to its record events */
@@ -63,10 +63,10 @@ export interface GenerateManifestOptions {
 }
 
 /**
- * Generate a TailorDB type manifest from a snapshot type
- * @param {TailorDBSnapshotType} snapshotType - Snapshot type to generate manifest from
+ * Generate a TailorDB table manifest from a snapshot table
+ * @param {TailorDBSnapshotType} snapshotType - Snapshot table to generate manifest from
  * @param {GenerateManifestOptions} options - Generation options
- * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
+ * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Table manifest
  */
 export function generateTailorDBTypeManifestFromSnapshot(
   snapshotType: TailorDBSnapshotType,
@@ -169,7 +169,7 @@ export function generateTailorDBTypeManifestFromSnapshot(
     ? convertRecordPermissionToProto(snapshotType.permissions.record)
     : defaultPermission;
 
-  // Field hooks/validators are aggregated into type-level scripts so that a
+  // Field hooks/validators are aggregated into table-level scripts so that a
   // single shared timestamp is observed across every field in one operation.
   const { typeHook, typeValidate } = buildTypeScripts(snapshotType.fields, {
     typeHookExpr: snapshotType.typeHookExpr,
@@ -467,18 +467,18 @@ function convertOperandToProto(
 }
 
 /**
- * Options for generating all type manifests from a snapshot
+ * Options for generating all table manifests from a snapshot
  */
 export interface GenerateAllManifestsOptions extends GenerateManifestOptions {
-  /** Set of type names that should have publishRecordEvents enabled */
+  /** Set of table names that should have publishRecordEvents enabled */
   executorUsedTypes?: ReadonlySet<string>;
 }
 
 /**
- * Generate all TailorDB type manifests from a schema snapshot
+ * Generate all TailorDB table manifests from a schema snapshot
  * @param {SchemaSnapshot} snapshot - Schema snapshot
  * @param {GenerateAllManifestsOptions} options - Generation options
- * @returns {Map<string, MessageInitShape<typeof TailorDBTypeSchema>>} Map of type name to manifest
+ * @returns {Map<string, MessageInitShape<typeof TailorDBTypeSchema>>} Map of table name to manifest
  */
 export function generateAllTypeManifestsFromSnapshot(
   snapshot: SchemaSnapshot,
@@ -499,21 +499,21 @@ export function generateAllTypeManifestsFromSnapshot(
 }
 
 /**
- * Result of comparing snapshot types with existing remote types
+ * Result of comparing snapshot tables with existing remote tables
  */
 export interface SnapshotTypeComparison {
-  /** Types to create (exist in snapshot but not in remote) */
+  /** Tables to create (exist in snapshot but not in remote) */
   creates: string[];
-  /** Types to update (exist in both) */
+  /** Tables to update (exist in both) */
   updates: string[];
-  /** Types to delete (exist in remote but not in snapshot) */
+  /** Tables to delete (exist in remote but not in snapshot) */
   deletes: string[];
 }
 
 /**
- * Compare snapshot types with existing remote type names
+ * Compare snapshot tables with existing remote table names
  * @param {SchemaSnapshot} snapshot - Schema snapshot
- * @param {ReadonlySet<string>} existingTypeNames - Set of existing type names in remote
+ * @param {ReadonlySet<string>} existingTypeNames - Set of existing table names in remote
  * @returns {SnapshotTypeComparison} Comparison result
  */
 export function compareSnapshotWithRemote(
@@ -526,7 +526,7 @@ export function compareSnapshotWithRemote(
   const updates: string[] = [];
   const deletes: string[] = [];
 
-  // Types in snapshot
+  // Tables in snapshot
   for (const typeName of snapshotTypeNames) {
     if (existingTypeNames.has(typeName)) {
       updates.push(typeName);
@@ -535,7 +535,7 @@ export function compareSnapshotWithRemote(
     }
   }
 
-  // Types only in remote (to be deleted)
+  // Tables only in remote (to be deleted)
   for (const typeName of existingTypeNames) {
     if (!snapshotTypeNames.has(typeName)) {
       deletes.push(typeName);

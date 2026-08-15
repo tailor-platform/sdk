@@ -352,9 +352,9 @@ export function resolveSameRunNamespace(
 }
 
 /**
- * Find the local TailorDB namespace that declares the given type.
+ * Find the local TailorDB namespace that declares the given table.
  * @param application - Loaded application
- * @param typeName - TailorDB type name to look up
+ * @param typeName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
 export function findTailorDBNamespace(
