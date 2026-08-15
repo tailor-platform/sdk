@@ -532,16 +532,32 @@ async function generateDataOnlyMigration(
     "Edit the script to implement the data transformation before running 'tailor deploy'.",
   );
 
+  await openMigrationScriptInEditor(result.migrateFilePath);
+}
+
+/**
+ * Open a generated migrate.ts in the configured editor, silently skipping
+ * when no editor is configured, the file is missing, or the editor fails.
+ * @param {string} migrateFilePath - Path of the generated migration script
+ * @returns {Promise<void>} Promise that resolves when the editor is closed or skipped
+ */
+async function openMigrationScriptInEditor(migrateFilePath: string): Promise<void> {
   const editor = getConfiguredEditorCommand();
   if (!editor) {
     return;
   }
 
+  try {
+    await fsPromises.access(migrateFilePath);
+  } catch {
+    return;
+  }
+
   logger.newline();
-  logger.info(`Opening ${path.basename(result.migrateFilePath)} in ${editor}...`);
+  logger.info(`Opening ${path.basename(migrateFilePath)} in ${editor}...`);
 
   try {
-    await openInConfiguredEditor(result.migrateFilePath);
+    await openInConfiguredEditor(migrateFilePath);
   } catch {
     return;
   }
@@ -1049,25 +1065,7 @@ async function generateDiffFromSnapshot(
     logger.log("A migration script was generated for breaking changes.");
     logger.log("Please review and edit the script before running 'tailor deploy'.");
 
-    const editor = getConfiguredEditorCommand();
-    if (!editor) {
-      return;
-    }
-
-    try {
-      await fsPromises.access(result.migrateFilePath);
-    } catch {
-      return;
-    }
-
-    logger.newline();
-    logger.info(`Opening ${path.basename(result.migrateFilePath)} in ${editor}...`);
-
-    try {
-      await openInConfiguredEditor(result.migrateFilePath);
-    } catch {
-      return;
-    }
+    await openMigrationScriptInEditor(result.migrateFilePath);
   } else if (diff.hasWarnings) {
     await acknowledgeWarnings({
       namespace: diff.namespace,
