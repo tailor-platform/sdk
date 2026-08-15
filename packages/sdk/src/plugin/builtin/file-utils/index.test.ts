@@ -39,7 +39,7 @@ describe("FileUtilsPlugin", () => {
       const plugin = fileUtilsPlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(FileUtilsGeneratorID);
       expect(plugin.description).toBe(
-        "Generates TypeWithFiles interface from TailorDB type definitions",
+        "Generates TypeWithFiles interface from TailorDB table definitions",
       );
     });
   });

@@ -11,7 +11,7 @@ type EnumConstantsPluginOptions = {
 };
 
 /**
- * Plugin that generates enum constants from TailorDB type definitions.
+ * Plugin that generates enum constants from TailorDB table definitions.
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated constants
  * @returns Plugin instance with onTailorDBReady hook
@@ -21,7 +21,7 @@ export function enumConstantsPlugin(
 ): Plugin<unknown, EnumConstantsPluginOptions> {
   return {
     id: EnumConstantsGeneratorID,
-    description: "Generates enum constants from TailorDB type definitions",
+    description: "Generates enum constants from TailorDB table definitions",
     pluginConfig: options,
 
     async onTailorDBReady(

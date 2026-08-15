@@ -276,7 +276,7 @@ export function createGenerationManager(params: {
                 pluginAttachments: db.pluginAttachments,
               };
             } catch (error) {
-              logger.error(`Error loading types for TailorDB service ${styles.bold(namespace)}`);
+              logger.error(`Error loading tables for TailorDB service ${styles.bold(namespace)}`);
               logger.error(String(error));
               throw error;
             }
@@ -287,7 +287,7 @@ export function createGenerationManager(params: {
             tailorDBServices: app.tailorDBServices,
           });
         } catch (error) {
-          logger.error("Error validating TailorDB type names");
+          logger.error("Error validating TailorDB table names");
           logger.error(String(error));
           throw error;
         }

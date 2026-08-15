@@ -1,6 +1,6 @@
 /** Resource and trigger named in a `publishEvents` opt-out conflict error. */
 export type PublishEventsConflict = {
-  /** Resource named in the error, e.g. `TailorDB type "Order"`. */
+  /** Resource named in the error, e.g. `TailorDB table "Order"`. */
   resource: string;
   /** Executor trigger family named in the error, e.g. `record`. */
   trigger: string;
@@ -15,7 +15,7 @@ export type PublishEventsConflict = {
  * confirmation that lists the same resource cannot drift apart.
  */
 export const eventSourceLabel = {
-  tailorDBType: (name: string) => `TailorDB type "${name}"`,
+  tailorDBType: (name: string) => `TailorDB table "${name}"`,
   resolver: (name: string) => `Resolver "${name}"`,
   idpService: (name: string) => `IdP service "${name}"`,
   workflow: (name: string) => `Workflow "${name}"`,

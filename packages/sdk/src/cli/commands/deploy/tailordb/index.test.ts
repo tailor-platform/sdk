@@ -558,7 +558,7 @@ describe("planTailorDB (service level)", () => {
 
       test("throws when an opt-out is combined with a subscribing executor", async () => {
         await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
-          'TailorDB type "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
+          'TailorDB table "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
         );
       });
 
@@ -579,7 +579,7 @@ describe("planTailorDB (service level)", () => {
             config: mockConfig,
             executorUsedTailorDBTypes: new Set(["User"]),
           }),
-        ).rejects.toThrow('TailorDB type "User" has "publishEvents: false"');
+        ).rejects.toThrow('TailorDB table "User" has "publishEvents: false"');
 
         expect(client.listTailorDBTypes).not.toHaveBeenCalled();
       });

@@ -1287,7 +1287,7 @@ async function rollbackSingleMigrationPrePhase(
       });
     } catch (rollbackError) {
       logger.warn(
-        `Failed to roll back type '${tableName}' in namespace '${migration.namespace}': ` +
+        `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +
           `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
       );
     }
@@ -1311,7 +1311,7 @@ async function rollbackSingleMigrationPrePhase(
       });
     } catch (rollbackError) {
       logger.warn(
-        `Failed to roll back type '${tableName}' in namespace '${migration.namespace}': ` +
+        `Failed to roll back table '${tableName}' in namespace '${migration.namespace}': ` +
           `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
       );
     }
@@ -1383,7 +1383,7 @@ export async function planTailorDB(context: PlanContext) {
         const existingNamespace = namespaceByType.get(tableName);
         if (existingNamespace) {
           throw new Error(
-            `Migration test snapshot has duplicate TailorDB type name "${tableName}" in namespaces "${existingNamespace}" and "${tailordb.namespace}".`,
+            `Migration test snapshot has duplicate TailorDB table name "${tableName}" in namespaces "${existingNamespace}" and "${tailordb.namespace}".`,
           );
         }
         namespaceByType.set(tableName, tailordb.namespace);
@@ -1725,7 +1725,7 @@ async function planTypes(
   records: TypeRecordInputs = {},
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType, never, UnchangedType>(
-    "TailorDB types",
+    "TailorDB tables",
   );
   const { appName, appId, dependentApps, runAppIds } = records;
 

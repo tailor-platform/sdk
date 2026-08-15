@@ -106,7 +106,7 @@ const strictSchemaCases: StrictSchemaCase[] = [
     value: { files: ["tailordb/*.ts"] },
   },
   {
-    name: "TailorDB type",
+    name: "TailorDB table",
     schema: TailorDBTypeSchema,
     value: {
       name: "User",

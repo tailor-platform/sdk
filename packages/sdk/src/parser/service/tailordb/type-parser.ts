@@ -84,7 +84,7 @@ function parseTailorDBType(
       const isNToOne = ["n-1", "manyToOne", "N-1"].includes(rawRelation.type);
       if (isNToOne && fieldConfig.unique) {
         throw new Error(
-          `Field "${fieldName}" on type "${type.name}": cannot set unique on n-1 (manyToOne) relation. ` +
+          `Field "${fieldName}" on table "${type.name}": cannot set unique on n-1 (manyToOne) relation. ` +
             `Use 1-1 (oneToOne) relation instead, or remove the unique constraint.`,
         );
       }
@@ -96,12 +96,12 @@ function parseTailorDBType(
     // Validate that index/unique are not set on array fields
     if (fieldConfig.array && fieldConfig.index) {
       throw new Error(
-        `Field "${fieldName}" on type "${type.name}": index cannot be set on array fields`,
+        `Field "${fieldName}" on table "${type.name}": index cannot be set on array fields`,
       );
     }
     if (fieldConfig.array && fieldConfig.unique) {
       throw new Error(
-        `Field "${fieldName}" on type "${type.name}": unique cannot be set on array fields`,
+        `Field "${fieldName}" on table "${type.name}": unique cannot be set on array fields`,
       );
     }
 
@@ -115,7 +115,7 @@ function parseTailorDBType(
 
       if (forwardName.length === 0) {
         throw new Error(
-          `Forward relation name for field "${fieldName}" on type "${type.name}"${typeLocation} cannot be empty. ` +
+          `Forward relation name for field "${fieldName}" on table "${type.name}"${typeLocation} cannot be empty. ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a non-empty name.`,
         );
       }
@@ -123,7 +123,7 @@ function parseTailorDBType(
       const existingForward = forwardRelationships[forwardName];
       if (existingForward) {
         throw new Error(
-          `Forward relation name "${forwardName}" on type "${type.name}"${typeLocation} is duplicated ` +
+          `Forward relation name "${forwardName}" on table "${type.name}"${typeLocation} is duplicated ` +
             `between fields "${existingForward.targetField}" and "${fieldName}". ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a unique name.`,
         );
@@ -131,16 +131,16 @@ function parseTailorDBType(
       if (Object.hasOwn(type.fields, forwardName)) {
         const message =
           forwardName === fieldName
-            ? `Forward relation name "${forwardName}" on type "${type.name}"${typeLocation} is the same as its own relation field "${fieldName}". ` +
+            ? `Forward relation name "${forwardName}" on table "${type.name}"${typeLocation} is the same as its own relation field "${fieldName}". ` +
               `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`
-            : `Forward relation name "${forwardName}" from field "${fieldName}" on type "${type.name}"${typeLocation} ` +
+            : `Forward relation name "${forwardName}" from field "${fieldName}" on table "${type.name}"${typeLocation} ` +
               `conflicts with existing field "${forwardName}". ` +
               `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`;
         throw new Error(message);
       }
       if (Object.hasOwn(metadata.files, forwardName)) {
         throw new Error(
-          `Forward relation name "${forwardName}" from field "${fieldName}" on type "${type.name}"${typeLocation} ` +
+          `Forward relation name "${forwardName}" from field "${fieldName}" on table "${type.name}"${typeLocation} ` +
             `conflicts with files field "${forwardName}". ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`,
         );
@@ -280,7 +280,7 @@ function buildBackwardRelationships(
           })
           .join(", ");
         errors.push(
-          `Backward relation name "${backwardName}" on type "${targetTypeName}" is duplicated from: ${sourceList}. ` +
+          `Backward relation name "${backwardName}" on table "${targetTypeName}" is duplicated from: ${sourceList}. ` +
             `Use the "backward" option in .relation() to specify unique names.`,
         );
       }
@@ -295,7 +295,7 @@ function buildBackwardRelationships(
         const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
-            `conflicts with existing field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
+            `conflicts with existing field "${backwardName}" on table "${targetTypeName}"${targetLocation}. ` +
             `Use the "backward" option in .relation() to specify a different name.`,
         );
       }
@@ -310,7 +310,7 @@ function buildBackwardRelationships(
         const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
-            `conflicts with files field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
+            `conflicts with files field "${backwardName}" on table "${targetTypeName}"${targetLocation}. ` +
             `Use the "backward" option in .relation() to specify a different name.`,
         );
       }
@@ -323,7 +323,7 @@ function buildBackwardRelationships(
         const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
-          `Relation name "${backwardName}" on type "${targetTypeName}"${targetLocation} is used by both ` +
+          `Relation name "${backwardName}" on table "${targetTypeName}"${targetLocation} is used by both ` +
             `a forward relationship and a backward relationship from ${source.sourceType}.${source.fieldName}${sourceLocation}. ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) or the "backward" option in .relation() to specify unique names.`,
         );
@@ -364,7 +364,7 @@ function validatePluralFormUniqueness(
       const sourceInfo = getTypeSourceInfo(typeSourceInfo, parsedType.name);
       const location = formatTypeSourceLocation(sourceInfo);
       errors.push(
-        `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
+        `Table "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
           `Use db.table(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
       );
     }

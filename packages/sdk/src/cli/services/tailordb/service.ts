@@ -78,9 +78,9 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       const firstSource = formatTailorDBTypeSourceInfo(existingSourceInfo) ?? "unknown source";
       const secondSource = formatTailorDBTypeSourceInfo(sourceInfo) ?? "unknown source";
       throw new Error(
-        `Duplicate TailorDB type name "${typeName}" detected in TailorDB service "${namespace}". ` +
+        `Duplicate TailorDB table name "${typeName}" detected in TailorDB service "${namespace}". ` +
           `First: ${firstSource}. Second: ${secondSource}. ` +
-          "TailorDB type names must be unique across all TailorDB files in a service.",
+          "TailorDB table names must be unique across all TailorDB files in a service.",
       );
     }
 
@@ -110,7 +110,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         const locations = findOmittedPermitRules(type.metadata.permissions);
         if (locations.length > 0) {
           logger.warn(
-            `TailorDB type "${typeName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+            `TailorDB table "${typeName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
           );
         }
       }
@@ -139,12 +139,12 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         const location = source ? ` (${source})` : "";
         if (missingPermission) {
           errors.push(
-            `TailorDB type "${typeName}"${location} has no .permission() configured. TailorDB denies all record operations for types without permission; call .permission(...) to grant access explicitly.`,
+            `TailorDB table "${typeName}"${location} has no .permission() configured. TailorDB denies all record operations for tables without permission; call .permission(...) to grant access explicitly.`,
           );
         }
         if (missingGqlPermission) {
           errors.push(
-            `TailorDB type "${typeName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
+            `TailorDB table "${typeName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
           );
         }
       }
@@ -255,7 +255,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);
-      logger.error(`Failed to load type from ${styles.bold(relativePath)}`);
+      logger.error(`Failed to load table from ${styles.bold(relativePath)}`);
       logger.error(String(error));
       throw error;
     }
@@ -287,7 +287,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
           logger.newline();
           logger.log(
-            `Found ${styles.highlight(typeFiles.length.toString())} type files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
+            `Found ${styles.highlight(typeFiles.length.toString())} table files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
           );
 
           if (pluginManager) {

@@ -1067,7 +1067,7 @@ describe("planExecutor", () => {
 
       await expect(
         planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow('TailorDB type "Unknown" not found in any namespace');
+      ).rejects.toThrow('TailorDB table "Unknown" not found in any namespace');
     });
 
     test("resolverExecuted throws when resolver not found in any namespace", async () => {
@@ -1329,7 +1329,7 @@ describe("planExecutor", () => {
           operation: { kind: "function", body: () => {} },
         } satisfies Executor,
         appOptions: { tailorDBTypes: { User: "my-tailordb" } },
-        errorPattern: 'TailorDB type "Unknown" not found in any namespace',
+        errorPattern: 'TailorDB table "Unknown" not found in any namespace',
       },
       {
         name: "resolverExecuted throws when resolver not found in any namespace",

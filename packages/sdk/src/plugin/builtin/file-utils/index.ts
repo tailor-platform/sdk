@@ -11,7 +11,7 @@ type FileUtilsPluginOptions = {
 };
 
 /**
- * Plugin that generates TypeWithFiles interface from TailorDB type definitions.
+ * Plugin that generates TypeWithFiles interface from TailorDB table definitions.
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated file utilities
  * @returns Plugin instance with onTailorDBReady hook
@@ -21,7 +21,7 @@ export function fileUtilsPlugin(
 ): Plugin<unknown, FileUtilsPluginOptions> {
   return {
     id: FileUtilsGeneratorID,
-    description: "Generates TypeWithFiles interface from TailorDB type definitions",
+    description: "Generates TypeWithFiles interface from TailorDB table definitions",
     pluginConfig: options,
 
     async onTailorDBReady(

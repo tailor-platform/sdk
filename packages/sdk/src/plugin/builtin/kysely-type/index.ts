@@ -10,7 +10,7 @@ type KyselyTypePluginOptions = {
 };
 
 /**
- * Plugin that generates Kysely type definitions for TailorDB types.
+ * Plugin that generates Kysely type definitions for TailorDB tables.
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated types
  * @returns Plugin instance with onTailorDBReady hook
@@ -20,7 +20,7 @@ export function kyselyTypePlugin(
 ): Plugin<unknown, KyselyTypePluginOptions> {
   return {
     id: KyselyGeneratorID,
-    description: "Generates Kysely type definitions for TailorDB types",
+    description: "Generates Kysely type definitions for TailorDB tables",
     pluginConfig: options,
 
     async onTailorDBReady(

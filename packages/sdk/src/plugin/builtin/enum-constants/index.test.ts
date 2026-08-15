@@ -21,7 +21,7 @@ describe("EnumConstantsPlugin", () => {
     test("should have correct id and description", () => {
       const plugin = enumConstantsPlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(EnumConstantsGeneratorID);
-      expect(plugin.description).toBe("Generates enum constants from TailorDB type definitions");
+      expect(plugin.description).toBe("Generates enum constants from TailorDB table definitions");
     });
   });
 

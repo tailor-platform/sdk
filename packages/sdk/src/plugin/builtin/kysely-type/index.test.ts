@@ -94,7 +94,7 @@ describe("KyselyTypePlugin integration tests", () => {
     test("should have correct id and description", () => {
       const plugin = kyselyTypePlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(KyselyGeneratorID);
-      expect(plugin.description).toBe("Generates Kysely type definitions for TailorDB types");
+      expect(plugin.description).toBe("Generates Kysely type definitions for TailorDB tables");
     });
   });
 

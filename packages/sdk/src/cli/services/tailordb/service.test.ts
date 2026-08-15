@@ -61,7 +61,7 @@ export const account = db.table("User", {
 
     using _logger = silenceLogger("error", "log");
     await expect(service.loadTypes()).rejects.toThrow(
-      /Duplicate TailorDB type name "User" detected in TailorDB service "main"/,
+      /Duplicate TailorDB table name "User" detected in TailorDB service "main"/,
     );
   });
 
@@ -187,7 +187,7 @@ export const user = db.table("User", {
     using _logger = silenceLogger("error", "log");
     await service.loadTypes();
     await expect(service.processNamespacePlugins()).rejects.toThrow(
-      /TailorDB type "AuditLogNoPermission".* has no \.permission\(\) configured/,
+      /TailorDB table "AuditLogNoPermission".* has no \.permission\(\) configured/,
     );
   });
 
@@ -211,7 +211,7 @@ export const noPermission = db.table("NoPermission", {
     using _logger = silenceLogger("error", "log", "warn");
     await expect(service.loadTypes()).rejects.toThrow(
       new RegExp(
-        `TailorDB type "NoPermission" \\(${typeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} export noPermission\\) has no \\.permission\\(\\) configured`,
+        `TailorDB table "NoPermission" \\(${typeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} export noPermission\\) has no \\.permission\\(\\) configured`,
       ),
     );
   });
@@ -235,7 +235,7 @@ export const noGqlPermission = db.table("NoGqlPermission", {
 
     using _logger = silenceLogger("error", "log", "warn");
     await expect(service.loadTypes()).rejects.toThrow(
-      /TailorDB type "NoGqlPermission".* has no \.gqlPermission\(\) configured/,
+      /TailorDB table "NoGqlPermission".* has no \.gqlPermission\(\) configured/,
     );
   });
 

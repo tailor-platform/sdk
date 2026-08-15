@@ -228,7 +228,7 @@ describe("confirmMissingDependentApps", () => {
 
   const missing: MissingDependentApp[] = [
     {
-      resource: 'TailorDB type "Order"',
+      resource: 'TailorDB table "Order"',
       appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
       reason: "publish-events",
     },
@@ -263,7 +263,7 @@ describe("confirmMissingDependentApps", () => {
     // reader to keep the wrong config in `--config`. Records live on the resource,
     // so the resource is what the message can point at.
     expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
-      'application id 0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81 depends on TailorDB type "Order"',
+      'application id 0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81 depends on TailorDB table "Order"',
     );
   });
 

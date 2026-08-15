@@ -567,7 +567,7 @@ export function isBreakingForeignKeyRetarget(
 const TYPE_RENAME_OPTION_PATTERN = /^([^.:\s]+):([^.:\s]+)$/;
 
 /**
- * Parse a `--rename` option value of the form `OldType:NewType`.
+ * Parse a `--rename` option value of the form `OldTable:NewTable`.
  * @param {string} value - Raw option value
  * @returns {TypeRenameSpec} Parsed rename spec
  */

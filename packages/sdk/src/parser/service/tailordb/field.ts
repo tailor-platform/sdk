@@ -259,14 +259,14 @@ export function parseFieldConfig(
 
   if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+      `Field "${context.fieldPath.join(".")}" on table "${context.typeName}": ` +
         `.default() cannot be used on nested inner fields`,
     );
   }
 
   if (context && context.fieldPath.length > 1 && metadata.hooks) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+      `Field "${context.fieldPath.join(".")}" on table "${context.typeName}": ` +
         `.hooks() cannot be used on nested inner fields`,
     );
   }

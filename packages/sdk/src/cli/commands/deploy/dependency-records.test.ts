@@ -94,7 +94,7 @@ describe("fetchMissingDependentApps", () => {
     });
 
     expect(missing).toEqual([
-      { resource: 'TailorDB type "Order"', appId: buyer, reason: "publish-events" },
+      { resource: 'TailorDB table "Order"', appId: buyer, reason: "publish-events" },
     ]);
     expect(client.getMetadata.mock.calls.map((call) => call[0].trn)).not.toContain(
       "trn:v1:workspace:ws:application:supplier",

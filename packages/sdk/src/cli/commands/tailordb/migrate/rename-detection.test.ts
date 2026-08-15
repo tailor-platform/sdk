@@ -762,7 +762,7 @@ describe("assertValidTypeRenames", () => {
 });
 
 describe("parseTypeRenameOption", () => {
-  test("parses OldType:NewType", () => {
+  test("parses OldTable:NewTable", () => {
     expect(parseTypeRenameOption("User:Person")).toEqual({
       previousTableName: "User",
       tableName: "Person",

@@ -38,7 +38,7 @@ export interface RelationInfo {
 }
 
 function fieldRef(context: RelationProcessingContext): string {
-  return `Field "${context.fieldName}" on type "${context.typeName}"`;
+  return `Field "${context.fieldName}" on table "${context.typeName}"`;
 }
 
 /**
@@ -67,7 +67,7 @@ export function validateRelationConfig(
 
   // Validate target type exists (for non-self relations)
   if (rawRelation.toward.type !== "self" && !context.allTypeNames.has(rawRelation.toward.type)) {
-    throw new Error(`${fieldRef(context)} references unknown type "${rawRelation.toward.type}".`);
+    throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.type}".`);
   }
 }
 

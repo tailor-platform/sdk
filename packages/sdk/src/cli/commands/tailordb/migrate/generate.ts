@@ -79,7 +79,7 @@ export interface GenerateOptions {
   name?: string;
   yes?: boolean;
   init?: boolean;
-  /** `--rename Table.old:new` / `--rename OldTable:NewTable` values confirming renames non-interactively. */
+  /** `--rename Table.oldField:newField` / `--rename OldTable:NewTable` values confirming renames non-interactively. */
   renames?: string[];
   /** `--drop Table.field` / `--drop Table` values confirming removals non-interactively. */
   drops?: string[];

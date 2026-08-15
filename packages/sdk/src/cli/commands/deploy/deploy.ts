@@ -1402,7 +1402,7 @@ type OwnerCandidates = BuiltDeploymentTarget[] | "ambiguous";
 
 /** How to find one event-publishing resource in a deployment target. */
 type EventSourceLookup = {
-  /** Resource named in error messages, e.g. `TailorDB type "Order"`. */
+  /** Resource named in error messages, e.g. `TailorDB table "Order"`. */
   resource: string;
   /** The trigger, narrowed to a kind that names a publishing resource. */
   trigger: PublishingTrigger;
@@ -2020,7 +2020,7 @@ function collectImportantResourceDeletions(results: PlanResults): ImportantResou
   const importantDeletions: ImportantResourceDeletion[] = [];
   for (const del of results.tailorDB.changeSet.type.deletes) {
     importantDeletions.push({
-      resourceType: "TailorDB type",
+      resourceType: "TailorDB table",
       resourceName: del.name,
     });
   }
