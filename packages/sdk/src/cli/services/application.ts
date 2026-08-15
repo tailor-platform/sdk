@@ -1,6 +1,6 @@
 import * as path from "pathe";
 import { generatePluginExecutorFiles } from "#/cli/commands/generate/plugin-executor-generator";
-import { generatePluginTableFiles } from "#/cli/commands/generate/plugin-type-generator";
+import { generatePluginTableFiles } from "#/cli/commands/generate/plugin-table-generator";
 import { bundleAuthHooks } from "#/cli/services/auth/bundler";
 import { createAuthService, type AuthService } from "#/cli/services/auth/service";
 import { bundleExecutors } from "#/cli/services/executor/bundler";
