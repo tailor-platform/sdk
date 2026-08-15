@@ -1873,7 +1873,18 @@ export type AuthConfig =
               name: string;
               fields: {
                 [x: string]: {
-                  type: string;
+                  type:
+                    | "uuid"
+                    | "string"
+                    | "boolean"
+                    | "integer"
+                    | "float"
+                    | "decimal"
+                    | "enum"
+                    | "date"
+                    | "datetime"
+                    | "time"
+                    | "nested";
                   fields?: any | undefined;
                   metadata: {
                     required?: boolean | undefined | undefined;
@@ -1913,7 +1924,7 @@ export type AuthConfig =
                     | {
                         type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
                         toward: {
-                          table: string;
+                          type: string;
                           as?: string | undefined | undefined;
                           key?: string | undefined | undefined;
                         };

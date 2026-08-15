@@ -14,7 +14,18 @@ import type {
 } from "#/types/tailordb.generated";
 
 export type TailorDBFieldOutput = {
-  type: string;
+  type:
+    | "uuid"
+    | "string"
+    | "boolean"
+    | "integer"
+    | "float"
+    | "decimal"
+    | "enum"
+    | "date"
+    | "datetime"
+    | "time"
+    | "nested";
   fields?: Record<string, TailorDBFieldOutput>;
   metadata: DBFieldMetadataGenerated;
   rawRelation?: RawRelationConfigGenerated;
