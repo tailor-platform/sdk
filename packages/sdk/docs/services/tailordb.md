@@ -311,7 +311,7 @@ db.string().hooks({
 
 Field-level hooks operate on a single field and cannot access other fields. Use table-level hooks for cross-field logic.
 
-#### Type-level Hooks
+#### Table-level Hooks
 
 Set hooks across multiple fields using `db.table().hooks()`. The hook returns an object with the fields to override. When both field-level and table-level hooks exist for the same field, table-level hooks take priority.
 
@@ -380,7 +380,7 @@ db.string().validate(
 );
 ```
 
-#### Type-level Validation
+#### Table-level Validation
 
 Set a validator across all fields using `db.table().validate()`. The validator receives `{ newRecord, oldRecord, invoker }` and an `issues()` callback to report errors per field:
 

@@ -489,7 +489,7 @@
         }
       },
       "pluralForm": "NestedProfiles",
-      "description": "Nested Profile",
+      "description": "Nested Profile Type",
       "settings": {},
       "permissions": {
         "record": {
