@@ -471,13 +471,13 @@ Executors are omitted from the baseline deployment so loading fixture or cloned 
 
 ### Seed mode
 
-Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing the seeded tables, then populate its `data/*.jsonl` files:
+Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing seed tables, then populate its `data/*.jsonl` files:
 
 ```bash
 tailor tailordb migration test --data seed
 ```
 
-Rows are loaded only for tables present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. A table with no data file is treated as empty. IdP `_User` fixtures are not loaded by this command.
+Rows are loaded only for tables present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing table files are treated as empty. IdP `_User` fixtures are not loaded by this command.
 
 Use `--machine-user` to override the seed plugin's `machineUserName`, the namespace migration setting, and the first configured Auth machine user for seed and assertion execution.
 
