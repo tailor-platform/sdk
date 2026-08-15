@@ -4,7 +4,7 @@ import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { functionSchema } from "../common";
 
 export const QueryTypeSchema = v.pipe(
-  v.union([v.literal("query"), v.literal("mutation")]),
+  v.picklist(["query", "mutation"]),
   v.description("GraphQL operation type"),
 );
 
@@ -14,7 +14,7 @@ const ResolverPermissionOperandSchema = v.union([
   v.boolean(),
 ]);
 
-const ResolverPermissionOperatorSchema = v.union([v.literal("="), v.literal("!=")]);
+const ResolverPermissionOperatorSchema = v.picklist(["=", "!="]);
 
 const isUserOperand = (operand: v.InferOutput<typeof ResolverPermissionOperandSchema>) =>
   typeof operand === "object";

@@ -301,7 +301,7 @@ export const RawPermissionsSchema = v.strictObject({
 export const TailorDBTypeSchema = v.strictObject({
   name: v.string(),
   fields: v.record(v.string(), TailorDBFieldSchema),
-  // oxlint-disable-next-line tailor-valibot/require-object-policy-comment -- Keep v.strictObject() so vinfer preserves the RawPermissions alias in generated types.
+  // Keep v.strictObject() so vinfer preserves the RawPermissions alias in generated types.
   metadata: v.strictObject({
     name: v.string(),
     description: v.optional(v.string()),

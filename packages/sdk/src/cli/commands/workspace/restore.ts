@@ -7,7 +7,6 @@ import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
 const restoreWorkspaceOptionsSchema = v.object({
@@ -19,7 +18,7 @@ export type RestoreWorkspaceOptions = v.InferInput<typeof restoreWorkspaceOption
 async function loadOptions(options: RestoreWorkspaceOptions) {
   const result = v.safeParse(restoreWorkspaceOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken();

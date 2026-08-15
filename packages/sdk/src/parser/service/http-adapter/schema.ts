@@ -13,7 +13,7 @@ const inputHandlersSchema = v.pipe(
   }),
   v.check(
     (value) =>
-      // optional fields become undefined after valibot parses them
+      // valibot drops absent optional keys, but an explicitly passed `undefined` survives
       // oxlint-disable-next-line typescript/no-unnecessary-condition
       Object.values(value).some((handler) => handler !== undefined),
     "input must declare at least one HTTP method handler",

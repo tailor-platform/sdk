@@ -9,7 +9,8 @@
     "./args": "./src/args.ts",
     "./color": "./src/color.ts",
     "./command": "./src/command.ts",
-    "./logger": "./src/logger.ts"
+    "./logger": "./src/logger.ts",
+    "./vali": "./src/vali.ts"
   },
   "scripts": {
     "lint": "oxlint --type-aware .",

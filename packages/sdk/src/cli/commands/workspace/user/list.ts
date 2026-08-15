@@ -4,7 +4,6 @@ import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
 import { userInfo, type UserInfo } from "./transform";
 
 // strip unknown keys
@@ -20,7 +19,7 @@ export type ListUsersOptions = v.InferInput<typeof listUsersOptionsSchema>;
 async function loadOptions(options: ListUsersOptions) {
   const result = v.safeParse(listUsersOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken({ profile: result.output.profile });

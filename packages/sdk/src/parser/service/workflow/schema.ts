@@ -31,6 +31,7 @@ type Duration = `${number}${(typeof durationUnits)[number]}`;
 
 const baseDurationSchema = v.custom<Duration>(
   (val) => typeof val === "string" && /^\d+(ms|s|m)$/.test(val),
+  "Invalid duration format. Expected a digit sequence followed by 'ms', 's' or 'm' (e.g. '500ms', '30s', '1m')",
 );
 
 const durationSchema = (maxSeconds: number) =>

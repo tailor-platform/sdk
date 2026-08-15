@@ -1,6 +1,6 @@
 "use strict";
 
-const OBJECT_POLICY_COMMENT_PATTERN = /\b(catchall|strip)\b/i;
+const OBJECT_POLICY_COMMENT_PATTERN = /\b(rest|strip)\b/i;
 
 function getPropertyName(property) {
   if (property == null) {
@@ -50,7 +50,7 @@ module.exports = {
         schema: [],
         messages: {
           missingObjectPolicyComment:
-            'Add a previous-line comment containing "strip" or "catchall" for v.object(), or use v.strictObject() / v.looseObject().',
+            'Add a previous-line comment containing "strip" or "rest" for v.object(), or use v.strictObject() / v.looseObject() / v.objectWithRest().',
         },
       },
       create(context) {

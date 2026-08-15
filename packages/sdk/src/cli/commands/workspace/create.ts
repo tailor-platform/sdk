@@ -119,7 +119,7 @@ export function validateCreateWorkspaceOptions(
 ): ValidatedCreateWorkspaceOptions {
   const result = v.safeParse(createWorkspaceOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
   return result.output;
 }

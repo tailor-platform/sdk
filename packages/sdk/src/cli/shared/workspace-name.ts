@@ -1,5 +1,4 @@
 import * as v from "valibot";
-import { assertDefined } from "#/utils/assert";
 
 export const workspaceNameSchema = v.pipe(
   v.string(),
@@ -19,7 +18,5 @@ export const workspaceNameSchema = v.pipe(
  */
 export function validateWorkspaceName(name: string): true | string {
   const result = v.safeParse(workspaceNameSchema, name);
-  return result.success
-    ? true
-    : assertDefined(result.issues[0], "Valibot returned no issues").message;
+  return result.success ? true : result.issues[0].message;
 }

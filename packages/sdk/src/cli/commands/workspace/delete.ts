@@ -7,7 +7,6 @@ import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "#/cli/
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
 
 // strip unknown keys
@@ -21,7 +20,7 @@ async function loadOptions(options: DeleteWorkspaceOptions) {
   // Validate options with zod schema
   const result = v.safeParse(deleteWorkspaceOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken();

@@ -88,10 +88,18 @@ recursion:
 - **Best — a getter, annotated only at the property's return type**, not on
   the schema constant itself: `get fields(): v.GenericSchema<Record<string,
 Shape>> { return v.record(v.string(), ThisSchema); }`. When the recursive
-  property is a required key, vinfer keeps the recursion fully named
-  (`type FooInput = { fields: { [x: string]: FooInput } }`), matching what
-  zinfer produced for the equivalent Zod schema. See `TailorFieldSchema`
-  (`parser/service/field/schema.ts`).
+  property is a required key, vinfer terminates the recursion in a named
+  self-reference rather than `any`. See `TailorFieldSchema`
+  (`parser/service/field/schema.ts`). Two known vinfer limitations still show
+  up in the output and are not worth working around in the schema:
+  - It inlines one redundant copy of the shape before the self-reference
+    (`fields: { [x: string]: { ... fields: { [x: string]: TailorField } } }`
+    where zinfer emitted `fields: { [x: string]: TailorField }`), and that
+    inlined copy carries no `v.description` TSDoc.
+  - A recursive schema referenced from a schema in **another** output file is
+    inlined there and bottoms out at bare `any` (see `input` / `output` in
+    `types/resolver.generated.ts`), because vinfer does not import the type it
+    already generated into `types/field.generated.ts`.
 - **Degraded but usable — same getter pattern, on an optional property**:
   vinfer resolves only one level deep, then falls back to `any` for the rest.
   When annotating the return type for an optional recursive property, use

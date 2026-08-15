@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import { toJson } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
+import { formatValiIssuePaths } from "@tailor-platform/shared/vali";
 import {
   TailorDBGQLPermission_Action,
   TailorDBType_PermitAction,
@@ -651,27 +652,6 @@ export function createSnapshotFromLocalTypes(
 // ============================================================================
 
 /**
- * Formats a Valibot validation error into a multi-line, field-path-annotated message.
- * @param error - The Valibot error to format
- * @returns Formatted error message with one line per issue
- */
-function formatValiError(
-  error: v.ValiError<
-    | v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>
-    | v.BaseSchemaAsync<unknown, unknown, v.BaseIssue<unknown>>
-  >,
-): string {
-  const flat = v.flatten(error.issues);
-  const lines: string[] = [...(flat.root ?? [])];
-  for (const [fieldPath, messages] of Object.entries(flat.nested ?? {})) {
-    for (const message of messages ?? []) {
-      lines.push(`${fieldPath}: ${message}`);
-    }
-  }
-  return lines.join("\n");
-}
-
-/**
  * Load a schema snapshot from a file
  * @param {string} filePath - Path to the snapshot file
  * @returns {NormalizedSchemaSnapshot} Loaded normalized schema snapshot
@@ -688,9 +668,12 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
   const result = v.safeParse(schemaSnapshotSchema, normalizeLegacyTablesKey(raw));
   if (!result.success) {
     const error = new v.ValiError(result.issues);
-    throw new Error(`Invalid schema snapshot at ${filePath}: ${formatValiError(error)}`, {
-      cause: error,
-    });
+    throw new Error(
+      `Invalid schema snapshot at ${filePath}: ${formatValiIssuePaths(result.issues)}`,
+      {
+        cause: error,
+      },
+    );
   }
   const snapshot = result.output;
   return normalizeSchemaSnapshot(snapshot);
@@ -716,9 +699,12 @@ export function loadDiff(filePath: string): MigrationDiff {
   );
   if (!result.success) {
     const error = new v.ValiError(result.issues);
-    throw new Error(`Invalid migration diff at ${filePath}: ${formatValiError(error)}`, {
-      cause: error,
-    });
+    throw new Error(
+      `Invalid migration diff at ${filePath}: ${formatValiIssuePaths(result.issues)}`,
+      {
+        cause: error,
+      },
+    );
   }
   const parsed = result.output;
   // Backfill fields introduced after the initial diff.json schema so that older
