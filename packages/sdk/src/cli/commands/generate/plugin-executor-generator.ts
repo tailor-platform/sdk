@@ -38,8 +38,6 @@ interface TableImportInfo {
   variableName: string;
   /** Import path for the table */
   importPath: string;
-  /** Whether this is a generated table (vs user-defined) */
-  isGeneratedTable: boolean;
 }
 
 /**
@@ -220,7 +218,6 @@ function collectTableImports(
 
       // Check if it's a generated table
       let importPath: string;
-      let isGeneratedTable = false;
 
       if (tableGenerationResult?.tableFilePaths.has(tableName)) {
         // It's a generated table - import from plugin types directory
@@ -233,7 +230,6 @@ function collectTableImports(
         if (!importPath.startsWith(".")) {
           importPath = `./${importPath}`;
         }
-        isGeneratedTable = true;
       } else if (sourceInfo) {
         // It's a user-defined table
         const sourceFilePath = sourceInfo.filePath;
@@ -250,7 +246,6 @@ function collectTableImports(
       tableImports.set(key, {
         variableName,
         importPath,
-        isGeneratedTable,
       });
     }
   }
