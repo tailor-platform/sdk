@@ -57,7 +57,7 @@ export interface GeneratorAuthInput {
 export interface TailorDBNamespaceData {
   /** Namespace name */
   namespace: string;
-  /** All TailorDB types in this namespace, keyed by type name */
+  /** All TailorDB tables in this namespace, keyed by table name */
   types: Record<string, TailorDBType>;
   /** Source info for each type (file path, export name, plugin info) */
   sourceInfo: ReadonlyMap<string, TypeSourceInfoEntry>;
@@ -164,7 +164,7 @@ export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
 }
 
 /**
- * Interface representing a TailorDB type for plugin output.
+ * Interface representing a TailorDB table for plugin output.
  */
 export interface TailorDBTypeForPlugin {
   readonly name: string;

@@ -9,7 +9,7 @@ export type TailorDBTrigger = {
     | "tailordb.type_record.updated"
     | "tailordb.type_record.deleted"
   )[];
-  /** TailorDB type name to watch for events */
+  /** TailorDB table name to watch for events */
   typeName: string;
   /** Condition function to filter events */
   condition?: Function | undefined;
