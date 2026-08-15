@@ -69,7 +69,7 @@ function parseExecutionResult(
   success: boolean;
   parsed: Record<string, unknown>;
   errors: string[];
-  executionFailed: boolean;
+  outcomeUnknown: boolean;
 } {
   logExecutionLogs(result.logs, indent);
 
@@ -78,7 +78,7 @@ function parseExecutionResult(
       success: false,
       parsed: {},
       errors: [result.error ?? "Script execution failed"],
-      executionFailed: true,
+      outcomeUnknown: true,
     };
   }
 
@@ -92,7 +92,7 @@ function parseExecutionResult(
       success: false,
       parsed: {},
       errors: [`Failed to parse result: ${message}`],
-      executionFailed: false,
+      outcomeUnknown: true,
     };
   }
 
@@ -102,11 +102,11 @@ function parseExecutionResult(
       success: false,
       parsed,
       errors: errors.length > 0 ? errors : ["Script reported failure"],
-      executionFailed: false,
+      outcomeUnknown: false,
     };
   }
 
-  return { success: true, parsed, errors: [], executionFailed: false };
+  return { success: true, parsed, errors: [], outcomeUnknown: false };
 }
 
 interface SeedResult {
@@ -212,7 +212,7 @@ interface IdpScriptRun {
 
 async function runIdpScript(
   params: IdpScriptRun,
-): Promise<{ success: boolean; parsed: Record<string, unknown>; executionFailed: boolean }> {
+): Promise<{ success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean }> {
   const { execution, scriptCode, scriptName, arg, indent, reportSuccess } = params;
 
   const result = await executeScript({
@@ -227,14 +227,14 @@ async function runIdpScript(
     },
   });
 
-  const { success, parsed, errors, executionFailed } = parseExecutionResult(result, indent);
+  const { success, parsed, errors, outcomeUnknown } = parseExecutionResult(result, indent);
   reportSuccess(parsed);
   if (!success) {
     for (const error of errors) {
       logger.error(`${indent}${error}`, { mode: "plain" });
     }
   }
-  return { success, parsed, executionFailed };
+  return { success, parsed, outcomeUnknown };
 }
 
 // The generated seed script upserts IdP users one call at a time (seconds per
@@ -291,7 +291,7 @@ async function seedIdpUser(
       `    _User: ${totals.processed}/${rows.length} rows confirmed processed before the failure ` +
         `(${totals.created} created, ${totals.updated} updated). ` +
         "The interrupted chunk may still have been applied server-side; " +
-        "re-run with --upsert to retry safely.",
+        "re-run `tailor seed apply _User --upsert` to retry safely.",
       { mode: "plain" },
     );
   };
@@ -299,7 +299,7 @@ async function seedIdpUser(
     if (chunks.length > 1) {
       logger.log(styles.dim(`    Chunk ${index + 1}/${chunks.length}: ${chunk.length} rows`));
     }
-    let run: { success: boolean; parsed: Record<string, unknown>; executionFailed: boolean };
+    let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
     try {
       run = await runIdpScript({
         execution,
@@ -318,7 +318,7 @@ async function seedIdpUser(
       warnInterruptedChunk();
       throw error;
     }
-    if (run.executionFailed) {
+    if (run.outcomeUnknown) {
       warnInterruptedChunk();
       return { success: false, processed: totals.processed };
     }

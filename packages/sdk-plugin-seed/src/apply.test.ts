@@ -344,9 +344,11 @@ describe("seedApplyCommand", () => {
 
     expect(result.exitCode).toBe(1);
     const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
-    expect(warnedLines.some((line) => line.includes("25/30") && line.includes("--upsert"))).toBe(
-      true,
-    );
+    expect(
+      warnedLines.some(
+        (line) => line.includes("25/30") && line.includes("tailor seed apply _User --upsert"),
+      ),
+    ).toBe(true);
   });
 
   test("stops and reports progress when a _User chunk execution fails without a result", async () => {
@@ -395,9 +397,60 @@ describe("seedApplyCommand", () => {
     expect(result.exitCode).toBe(1);
     expect(idpCallCount).toBe(2);
     const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
-    expect(warnedLines.some((line) => line.includes("25/51") && line.includes("--upsert"))).toBe(
-      true,
+    expect(
+      warnedLines.some(
+        (line) => line.includes("25/51") && line.includes("tailor seed apply _User --upsert"),
+      ),
+    ).toBe(true);
+  });
+
+  test("stops and reports progress when a _User chunk returns an unparseable result", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
     );
+    let idpCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name !== "seed-idp-user.ts") {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: '{"success":true,"deleted":1}',
+            success: true,
+          });
+        }
+        idpCallCount += 1;
+        if (idpCallCount > 1) {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: "not-json",
+            success: true,
+          });
+        }
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: true,
+            processed: arg?.users?.length ?? 0,
+            created: arg?.users?.length ?? 0,
+            updated: 0,
+            skipped: 0,
+            errors: [],
+          }),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(idpCallCount).toBe(2);
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(warnedLines.some((line) => line.includes("25/51"))).toBe(true);
   });
 
   test("passes --upsert through to the TailorDB and IdP seed scripts", async () => {
