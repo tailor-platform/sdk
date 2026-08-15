@@ -471,19 +471,19 @@ Executors are omitted from the baseline deployment so loading fixture or cloned 
 
 ### Seed mode
 
-Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing seed types, then populate its `data/*.jsonl` files:
+Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing seed tables, then populate its `data/*.jsonl` files:
 
 ```bash
 tailor tailordb migration test --data seed
 ```
 
-Rows are loaded only for types present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing type files are treated as empty. IdP `_User` fixtures are not loaded by this command.
+Rows are loaded only for tables present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing table files are treated as empty. IdP `_User` fixtures are not loaded by this command.
 
 Use `--machine-user` to override the seed plugin's `machineUserName`, the namespace migration setting, and the first configured Auth machine user for seed and assertion execution.
 
 ### Clone mode
 
-Clone mode copies TailorDB records from the source workspace after the identical application, namespace names, and pre-migration schemas exist in the target. For namespaces without migration history, the command reproduces the deployed source schema rather than uncommitted local type changes:
+Clone mode copies TailorDB records from the source workspace after the identical application, namespace names, and pre-migration schemas exist in the target. For namespaces without migration history, the command reproduces the deployed source schema rather than uncommitted local table changes:
 
 ```bash
 tailor tailordb migration test --data clone
@@ -595,7 +595,7 @@ Before running it:
 
 1. Apply the latest migration to every environment. The CLI verifies the connected workspace, but it cannot inspect other workspaces.
 2. Commit or otherwise preserve the existing migration history. Files after `0000`, including `migrate.ts` and `db.ts`, disappear from the working tree; Git history retains committed files.
-3. Make sure local type changes have been captured with `tailor tailordb migration generate`.
+3. Make sure local table changes have been captured with `tailor tailordb migration generate`.
 
 Then re-baseline one namespace:
 
