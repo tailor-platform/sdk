@@ -57,7 +57,7 @@ import {
   type TypeRenameCandidate,
   type TypeRenameSpec,
 } from "./rename-detection";
-import { markMigrationScriptSkipped } from "./script";
+import { markMigrationScriptSkipped, resolveTargetNamespace } from "./script";
 import {
   buildExpandDiff,
   buildIntermediateSnapshot,
@@ -72,13 +72,21 @@ import {
   type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
-import { generateSchemaFile, generateDiffFiles } from "./template-generator";
+import {
+  generateSchemaFile,
+  generateDiffFiles,
+  generateDataOnlyMigrationFiles,
+} from "./template-generator";
 
 export interface GenerateOptions {
   configPath?: string;
   name?: string;
   yes?: boolean;
   init?: boolean;
+  /** Create a migration with no schema changes that exists to run a migration script. */
+  dataOnly?: boolean;
+  /** Namespace the `--data-only` migration targets. */
+  namespace?: string;
   /** `--rename Table.oldField:newField` / `--rename OldTable:NewTable` values confirming renames non-interactively. */
   renames?: string[];
   /** `--drop Table.field` / `--drop Table` values confirming removals non-interactively. */
@@ -250,6 +258,24 @@ export async function generate(options: GenerateOptions): Promise<void> {
         .join(", ")}`,
     );
   }
+  if (options.namespace !== undefined && !options.dataOnly) {
+    throw new Error("--namespace can only be used together with --data-only.");
+  }
+  // A data-only migration must not carry schema changes, so every flag that
+  // shapes a schema diff is meaningless with it
+  if (
+    options.dataOnly &&
+    (options.init ||
+      renameFlags.length > 0 ||
+      typeRenameFlags.length > 0 ||
+      dropFlags.length > 0 ||
+      typeDropFlags.length > 0 ||
+      expandContractFlags.length > 0)
+  ) {
+    throw new Error(
+      "--init, --rename, --drop, and --expand-contract cannot be used together with --data-only.",
+    );
+  }
 
   // Handle --init option: delete existing migrations directory
   if (options.init) {
@@ -297,6 +323,11 @@ export async function generate(options: GenerateOptions): Promise<void> {
       // throws when existing migration files are invalid.
       previousSnapshot: reconstructSnapshotFromMigrations(migrationsDir),
     });
+  }
+
+  if (options.dataOnly) {
+    await generateDataOnlyMigration(generations, namespacesWithMigrations, options);
+    return;
   }
 
   // A flag applies to a namespace only when that namespace actually removed
@@ -440,6 +471,79 @@ export async function generate(options: GenerateOptions): Promise<void> {
         expandPlans ?? [],
       );
     }
+  }
+}
+
+/**
+ * Generate a data-only migration: a numbered entry with an empty diff that
+ * exists to run a migration script against the unchanged schema.
+ * @param {readonly NamespaceGeneration[]} generations - Snapshots per namespace
+ * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
+ * @param {GenerateOptions} options - Generate options
+ * @returns {Promise<void>} Promise that resolves when the migration is written
+ */
+async function generateDataOnlyMigration(
+  generations: readonly NamespaceGeneration[],
+  namespacesWithMigrations: NamespaceWithMigrations[],
+  options: GenerateOptions,
+): Promise<void> {
+  const namespace = resolveTargetNamespace(namespacesWithMigrations, options.namespace);
+  const generation = generations.find((g) => g.namespace === namespace);
+  if (!generation) {
+    throw new Error(`No TailorDB service found for namespace "${namespace}"`);
+  }
+  const { migrationsDir, previousSnapshot, currentSnapshot } = generation;
+  if (!previousSnapshot) {
+    throw new Error(
+      `Namespace "${namespace}" has no migration baseline. ` +
+        "Run 'tailor tailordb migration generate' first to create the initial snapshot.",
+    );
+  }
+
+  const diff = compareSnapshots(previousSnapshot, currentSnapshot);
+  if (hasChanges(diff)) {
+    logger.newline();
+    logger.log(formatMigrationDiff(diff));
+    logger.newline();
+    throw new Error(
+      `Namespace "${namespace}" has schema changes that are not in migration files. ` +
+        "Generate the schema migration first by running without --data-only.",
+    );
+  }
+
+  const migrationNumber = getNextMigrationNumber(migrationsDir);
+  const result = await generateDataOnlyMigrationFiles({
+    diff: { ...diff, requiresMigrationScript: true },
+    migrationsDir,
+    migrationNumber,
+    snapshot: previousSnapshot,
+    description: options.name,
+  });
+
+  logger.success(
+    `Generated data-only migration ${styles.bold(formatMigrationNumber(result.migrationNumber))}`,
+  );
+  logger.info(`  Diff file: ${result.diffFilePath}`);
+  logger.info(`  Migration script: ${result.migrateFilePath}`);
+  logger.info(`  DB types: ${result.dbTypesFilePath}`);
+  logger.newline();
+  logger.log("This migration carries no schema changes.");
+  logger.log(
+    "Edit the script to implement the data transformation before running 'tailor deploy'.",
+  );
+
+  const editor = getConfiguredEditorCommand();
+  if (!editor) {
+    return;
+  }
+
+  logger.newline();
+  logger.info(`Opening ${path.basename(result.migrateFilePath)} in ${editor}...`);
+
+  try {
+    await openInConfiguredEditor(result.migrateFilePath);
+  } catch {
+    return;
   }
 }
 
@@ -1132,6 +1236,14 @@ export const generateCommand = defineAppCommand({
     init: arg(z.boolean().default(false), {
       description: "Delete existing migrations and start fresh",
     }),
+    "data-only": arg(z.boolean().default(false), {
+      description:
+        "Create a migration with no schema changes whose migration script runs a standalone data transformation",
+    }),
+    namespace: arg(z.string().optional(), {
+      description:
+        "Target TailorDB namespace for --data-only (required if multiple namespaces exist)",
+    }),
     rename: arg(z.array(z.string()).optional(), {
       description:
         'Record a field or table rename instead of remove + add (format: "Table.oldField:newField" or "OldTable:NewTable"; repeatable). Renames require a migration script that copies the data.',
@@ -1151,6 +1263,8 @@ export const generateCommand = defineAppCommand({
       name: args.name,
       yes: args.yes,
       init: args.init,
+      dataOnly: args["data-only"],
+      namespace: args.namespace,
       renames: args.rename,
       drops: args.drop,
       expandContracts: args["expand-contract"],

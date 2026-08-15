@@ -201,6 +201,20 @@ tailor tailordb migration script 0002 --no-script --reason "no data yet, safe to
 
 This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, `tailor deploy` fails rather than choosing between the script and the acknowledgment; run `tailor tailordb migration script 0002` again to clear the now-stale acknowledgment from `diff.json` (the script then runs on the next deploy), or delete `migrate.ts` to keep the skip.
 
+### Data-only migrations
+
+Sometimes existing data must be transformed without any schema change — fixing values written by an application bug, or a one-off normalization. Create a migration that carries no schema diff and exists only to run its script:
+
+```bash
+tailor tailordb migration generate --data-only --name "normalize legacy phone numbers"
+```
+
+This writes a numbered migration with an empty `diff.json`, a `migrate.ts` skeleton, and `db.ts` typed against the current schema. Edit `migrate.ts` to implement the transformation; the next `tailor deploy` runs it like any other migration script — in a single transaction, advancing the migration checkpoint (see [Performance and Large Tables](#performance-and-large-tables) for batching patterns). Because the entry is part of the migration history, the fix is versioned, ordered relative to schema changes, and applied once per workspace.
+
+The command requires a clean state: if the namespace has schema changes that are not yet in migration files, generate the schema migration first. With multiple namespaces, pass `--namespace` to name the target. `--data-only` cannot be combined with `--init`, `--rename`, `--drop`, or `--expand-contract`.
+
+A data-only migration runs in **every** workspace the history is applied to, including freshly created ones. Write the script so it is safe against tables with no matching rows (a set-based `UPDATE` with a `WHERE` clause is naturally a no-op on an empty table). For a fix that should run in a single environment only, or that is too large for one transaction, run it outside the migration history instead.
+
 ## Configuration
 
 ```typescript
@@ -227,13 +241,13 @@ export default defineConfig({
 
 ## Generated Files
 
-| File                   | When generated                                                                                               | Description                                                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `0000/schema.json`     | First `migration generate`                                                                                   | Full snapshot of all tables in the namespace.                                                                            |
-| `XXXX/diff.json`       | Every subsequent migration                                                                                   | Field-level diff against the previous snapshot.                                                                          |
-| `XXXX/migrate.ts`      | Auto-generated for breaking changes; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`.                                           |
-| `XXXX/db.ts`           | Generated once when `migrate.ts` is created                                                                  | Kysely types reflecting the schema **before** this migration. Exports `Database`, `Transaction`, and `MigrationContext`. |
-| `XXXX/migrate.test.ts` | Added via `tailordb migration script --with-test`                                                            | Unit-test scaffold for `migrate.ts` (see [Testing Migrations Locally](#testing-migrations-locally)). Never deployed.     |
+| File                   | When generated                                                                                                                            | Description                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `0000/schema.json`     | First `migration generate`                                                                                                                | Full snapshot of all tables in the namespace.                                                                            |
+| `XXXX/diff.json`       | Every subsequent migration                                                                                                                | Field-level diff against the previous snapshot.                                                                          |
+| `XXXX/migrate.ts`      | Auto-generated for breaking changes and `--data-only` migrations; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`.                                           |
+| `XXXX/db.ts`           | Generated once when `migrate.ts` is created                                                                                               | Kysely types reflecting the schema **before** this migration. Exports `Database`, `Transaction`, and `MigrationContext`. |
+| `XXXX/migrate.test.ts` | Added via `tailordb migration script --with-test`                                                                                         | Unit-test scaffold for `migrate.ts` (see [Testing Migrations Locally](#testing-migrations-locally)). Never deployed.     |
 
 `db.ts` reflects the pre-migration schema because the script runs after the pre-migration phase has temporarily relaxed breaking constraints (e.g., a new `required` field is added as `optional` first), so the data being read still matches the previous shape.
 
