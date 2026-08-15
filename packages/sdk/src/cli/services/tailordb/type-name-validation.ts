@@ -48,7 +48,7 @@ export interface FetchExternalTailorDBTypeNameSourcesArgs {
 }
 
 export interface AssertUniqueTailorDBTypeNamesArgs {
-  /** Type-name sources to validate. */
+  /** Table-name sources to validate. */
   sources: ReadonlyArray<TailorDBTypeNameSource>;
 }
 
@@ -59,8 +59,8 @@ export interface AssertUniqueTailorDBTypeNamesWithExternalArgs
 }
 
 /**
- * Format a TailorDB type source for validation errors.
- * @param sourceInfo - Source information captured when loading the type
+ * Format a TailorDB table source for validation errors.
+ * @param sourceInfo - Source information captured when loading the table
  * @returns Human-readable source detail
  */
 export function formatTailorDBTypeSourceInfo(
@@ -88,9 +88,9 @@ export function formatTailorDBTypeSourceInfo(
 }
 
 /**
- * Collect TailorDB type-name sources from loaded local services.
+ * Collect TailorDB table-name sources from loaded local services.
  * @param args - Collection inputs
- * @returns Type-name sources for local services
+ * @returns Table-name sources for local services
  */
 export function collectLocalTailorDBTypeNameSources(
   args: CollectLocalTailorDBTypeNameSourcesArgs,
@@ -112,9 +112,9 @@ export function collectLocalTailorDBTypeNameSources(
 }
 
 /**
- * Fetch TailorDB type-name sources for external namespaces.
+ * Fetch TailorDB table-name sources for external namespaces.
  * @param args - Fetch inputs
- * @returns Type-name sources for external services
+ * @returns Table-name sources for external services
  */
 export async function fetchExternalTailorDBTypeNameSources(
   args: FetchExternalTailorDBTypeNameSourcesArgs,
@@ -155,7 +155,7 @@ export async function fetchExternalTailorDBTypeNameSources(
 }
 
 /**
- * Assert that TailorDB type names are unique across all supplied sources.
+ * Assert that TailorDB table names are unique across all supplied sources.
  * @param args - Validation inputs
  */
 export function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs): void {
@@ -190,7 +190,7 @@ export function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeName
 }
 
 /**
- * Assert local TailorDB type names are unique.
+ * Assert local TailorDB table names are unique.
  * @param args - Validation inputs
  */
 export function assertUniqueLocalTailorDBTypeNames(
@@ -202,7 +202,7 @@ export function assertUniqueLocalTailorDBTypeNames(
 }
 
 /**
- * Assert TailorDB type names are unique across local and external namespaces.
+ * Assert TailorDB table names are unique across local and external namespaces.
  * @param args - Validation inputs
  */
 export async function assertUniqueTailorDBTypeNamesWithExternal(

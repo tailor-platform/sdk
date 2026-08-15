@@ -40,9 +40,9 @@ function collectEnums(type: TailorDBType): EnumConstantMetadata["enums"] {
 }
 
 /**
- * Process a TailorDB type and extract enum metadata.
- * @param type - The parsed TailorDB type to process
- * @returns Enum constant metadata for the type
+ * Process a TailorDB table and extract enum metadata.
+ * @param type - The parsed TailorDB table to process
+ * @returns Enum constant metadata for the table
  */
 export async function processEnumType(type: TailorDBType): Promise<EnumConstantMetadata> {
   const enums = collectEnums(type);

@@ -15,7 +15,7 @@
  * - `field_type_modified`: keep the complete previous field config until
  *   Post-phase so migrate.ts runs against the previous type contract.
  *
- * and the type-level index adjustments:
+ * and the table-level index adjustments:
  *
  * - `index_added` with `unique: true`: withhold the index until Post-phase.
  * - `index_modified` that gains a unique constraint or re-points a unique
@@ -82,7 +82,7 @@ export type PreMigrationChangesMap = Map<string, Map<string, FieldDiffChange>>;
  * Create the type snapshot used to build a Pre-phase manifest.
  *
  * This adjustment happens before manifest generation because field hooks and
- * validators are aggregated into type-level scripts by the manifest builder.
+ * validators are aggregated into table-level scripts by the manifest builder.
  * Replacing only the generated field proto would leave those scripts on the
  * target field contract while migrate.ts still runs against the previous one.
  * @param snapshotType - Final snapshot state for this migration
@@ -237,7 +237,7 @@ export function applyPreMigrationFieldAdjustments(
 export type PreMigrationIndexChangesMap = Map<string, Map<string, IndexDiffChange>>;
 
 /**
- * Build a map of type-level index changes that require pre-migration schema
+ * Build a map of table-level index changes that require pre-migration schema
  * adjustment (the breaking ones — see {@link isBreakingIndexChange}).
  * @param {PendingMigration[]} pendingMigrations - Pending migrations to scan
  * @returns {PreMigrationIndexChangesMap} Map of changes keyed by tableName/indexName

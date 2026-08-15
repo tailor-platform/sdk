@@ -537,8 +537,8 @@ async function bundleScriptTarget(args: {
  * Precompile TailorDB hooks/validators into self-contained script expressions using rolldown.
  * Uses oxc-parser AST walking to extract free variables from functions, then builds
  * minimal entry points containing only the needed imports and declarations.
- * @param type - TailorDB type schema output.
- * @param sourceFilePath - Source file where the type is defined.
+ * @param type - TailorDB table schema output.
+ * @param sourceFilePath - Source file where the table is defined.
  * @param tsconfig - Resolved tsconfig path, or undefined if not found.
  */
 export async function precompileTailorDBTypeScripts(

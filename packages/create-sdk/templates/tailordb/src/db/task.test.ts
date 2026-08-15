@@ -4,7 +4,7 @@ import { user } from "./user";
 import { category } from "./category";
 import { comment } from "./comment";
 
-describe("TailorDB type definitions", () => {
+describe("TailorDB table definitions", () => {
   test("task type has expected fields", () => {
     const { fields } = task;
     expect(fields).toHaveProperty("title");

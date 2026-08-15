@@ -10,7 +10,7 @@ import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailor
  * Converts a single db.table() result to schema-parsed output for testing.
  * In production, this conversion happens in application loader.
  * @param type - The db.table() result to convert
- * @returns Parsed TailorDB type schema output
+ * @returns Parsed TailorDB table schema output
  */
 export function toSchemaOutput(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Accept any db.table() result for testing
@@ -27,7 +27,7 @@ export function toSchemaOutput(
  * Converts multiple db.table() results to schema-parsed outputs for testing.
  * In production, this conversion happens in application loader.
  * @param types - Record of db.table() results to convert
- * @returns Record of parsed TailorDB type schema outputs
+ * @returns Record of parsed TailorDB table schema outputs
  */
 export function toSchemaOutputs(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Accept any db.table() result for testing

@@ -18,12 +18,12 @@ import type {
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 /**
- * Parse multiple TailorDB types, build relationships, and validate uniqueness.
- * This is the main entry point for parsing TailorDB types.
- * @param rawTypes - Raw TailorDB types keyed by name
+ * Parse multiple TailorDB tables, build relationships, and validate uniqueness.
+ * This is the main entry point for parsing TailorDB tables.
+ * @param rawTypes - Raw TailorDB tables keyed by name
  * @param namespace - TailorDB namespace name
- * @param typeSourceInfo - Optional type source information
- * @returns Parsed types
+ * @param typeSourceInfo - Optional table source information
+ * @returns Parsed tables
  */
 export function parseTypes(
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
@@ -45,11 +45,11 @@ export function parseTypes(
 
 /**
  * Parse a TailorDBTypeSchemaOutput into a TailorDBType.
- * @param type - TailorDB type to parse
- * @param allTypeNames - Set of all TailorDB type names
- * @param rawTypes - All raw TailorDB types keyed by name
- * @param typeSourceInfo - Optional type source information
- * @returns Parsed TailorDB type
+ * @param type - TailorDB table to parse
+ * @param allTypeNames - Set of all TailorDB table names
+ * @param rawTypes - All raw TailorDB tables keyed by name
+ * @param typeSourceInfo - Optional table source information
+ * @returns Parsed TailorDB table
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
@@ -188,11 +188,11 @@ function parseTailorDBType(
 }
 
 /**
- * Build backward relationships between parsed types.
- * Also validates that backward relation names are unique within each type.
- * @param types - Parsed types
+ * Build backward relationships between parsed tables.
+ * Also validates that backward relation names are unique within each table.
+ * @param types - Parsed tables
  * @param namespace - TailorDB namespace name
- * @param typeSourceInfo - Optional type source information
+ * @param typeSourceInfo - Optional table source information
  */
 function buildBackwardRelationships(
   types: Record<string, TailorDBType>,
@@ -206,7 +206,7 @@ function buildBackwardRelationships(
     Record<string, { sourceType: string; fieldName: string }[]>
   > = Object.create(null);
 
-  // Initialize tracking for all types
+  // Initialize tracking for all tables
   for (const typeName of Object.keys(types)) {
     backwardNameSources[typeName] = Object.create(null) as Record<
       string,
@@ -342,11 +342,11 @@ function buildBackwardRelationships(
 /**
  * Validate GraphQL query field name uniqueness.
  * Checks for:
- * 1. Each type's singular query name != plural query name
- * 2. No duplicate query names across all types
- * @param types - Parsed types
+ * 1. Each table's singular query name != plural query name
+ * 2. No duplicate query names across all tables
+ * @param types - Parsed tables
  * @param namespace - TailorDB namespace name
- * @param typeSourceInfo - Optional type source information
+ * @param typeSourceInfo - Optional table source information
  */
 function validatePluralFormUniqueness(
   types: Record<string, TailorDBType>,
@@ -355,7 +355,7 @@ function validatePluralFormUniqueness(
 ): void {
   const errors: string[] = [];
 
-  // Check 1: Each type's singular and plural query names must be different
+  // Check 1: Each table's singular and plural query names must be different
   for (const [, parsedType] of Object.entries(types)) {
     const singularQuery = inflection.camelize(parsedType.name, true);
     const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
@@ -370,7 +370,7 @@ function validatePluralFormUniqueness(
     }
   }
 
-  // Check 2: All query names must be unique across types
+  // Check 2: All query names must be unique across tables
   const queryNameToSource = new Map<string, { typeName: string; kind: string }[]>();
 
   for (const parsedType of Object.values(types)) {

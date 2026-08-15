@@ -43,8 +43,8 @@ function fieldRef(context: RelationProcessingContext): string {
 
 /**
  * Validate relation configuration.
- * @param rawRelation - Raw relation configuration from TailorDB type definition
- * @param context - Context information for the relation (type name, field name, all type names)
+ * @param rawRelation - Raw relation configuration from TailorDB table definition
+ * @param context - Context information for the relation (table name, field name, all type names)
  */
 export function validateRelationConfig(
   rawRelation: RawRelationConfig,
@@ -65,7 +65,7 @@ export function validateRelationConfig(
     );
   }
 
-  // Validate target type exists (for non-self relations)
+  // Validate target table exists (for non-self relations)
   if (rawRelation.toward.type !== "self" && !context.allTypeNames.has(rawRelation.toward.type)) {
     throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.type}".`);
   }
@@ -86,7 +86,7 @@ export function processRelationMetadata(
   const isUnique = relationTypes[rawRelation.type] === "1-1";
   const key = rawRelation.toward.key ?? "id";
 
-  // Resolve target type name (handle "self" reference)
+  // Resolve target table name (handle "self" reference)
   const targetTypeName =
     rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
 
@@ -123,7 +123,7 @@ export function buildRelationInfo(
   const isUnique = relationTypes[rawRelation.type] === "1-1";
   const key = rawRelation.toward.key ?? "id";
 
-  // Resolve target type name (handle "self" reference)
+  // Resolve target table name (handle "self" reference)
   const targetTypeName =
     rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
 

@@ -5,9 +5,9 @@ import type { TailorDBNamespaceData } from "#/plugin/types";
 import type { SeedTypeInfo } from "./types";
 
 /**
- * Processes TailorDB types to extract seed type information
- * @param type - Parsed TailorDB type
- * @param namespace - Namespace of the type
+ * Processes TailorDB tables to extract seed type information
+ * @param type - Parsed TailorDB table
+ * @param namespace - Namespace of the table
  * @returns Seed type information
  */
 export function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInfo {
@@ -41,13 +41,13 @@ export function processSeedTypeInfo(type: TailorDBType, namespace: string): Seed
 export interface SeedNamespaceConfig {
   /** TailorDB namespace name. */
   namespace: string;
-  /** Type names in the namespace, in definition order. */
+  /** Table names in the namespace, in definition order. */
   types: string[];
-  /** Seed dependencies (referenced type names) per type. */
+  /** Seed dependencies (referenced table names) per table. */
   dependencies: Record<string, string[]>;
-  /** Types with self-referencing fields, seeded in two passes. */
+  /** Tables with self-referencing fields, seeded in two passes. */
   selfRefTypes: string[];
-  /** Field names a seed row must supply per type, enforced with `--upsert`. */
+  /** Field names a seed row must supply per table, enforced with `--upsert`. */
   requiredFields: Record<string, string[]>;
 }
 

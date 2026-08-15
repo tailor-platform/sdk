@@ -8,7 +8,7 @@ const inputFields = {
 export default createResolver({
   operation: "query",
   name: "passThrough",
-  description: "Pass Through - Nested Profile Type(Create)",
+  description: "Pass Through - Nested Profile (Create)",
   input: {
     id: t.uuid({ optional: true }),
     input: t.object(inputFields),
