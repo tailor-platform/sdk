@@ -176,7 +176,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     return {
       changeSet: {
         service: changeSetGroup("TailorDB Services"),
-        type: changeSetGroup("TailorDB Types", typeChanges),
+        type: changeSetGroup("TailorDB tables", typeChanges),
         gqlPermission: changeSetGroup("TailorDB GQL Permissions"),
       },
       conflicts: [],

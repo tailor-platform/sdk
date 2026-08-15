@@ -84,7 +84,7 @@ describe("db-types-generator", () => {
     return { filePath, content };
   }
 
-  test("generates empty db types when no types in snapshot", async () => {
+  test("generates empty db types when no tables in snapshot", async () => {
     const snapshot = createMockSnapshot({}, "tailordb");
 
     const { filePath, content } = await generateContent(snapshot);

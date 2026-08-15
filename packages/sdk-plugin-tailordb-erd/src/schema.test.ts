@@ -68,7 +68,7 @@ function createNamespace(types: Record<string, TailorDBType>): TailorDBNamespace
 }
 
 describe("buildTailorDbErdSchema", () => {
-  test("maps TailorDB types into TailorDB ERD schema v1", () => {
+  test("maps TailorDB tables into TailorDB ERD schema v1", () => {
     const customer = createType(
       "Customer",
       {

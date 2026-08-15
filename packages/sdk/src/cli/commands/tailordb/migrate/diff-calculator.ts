@@ -49,7 +49,7 @@ export interface TypeSettingsPatch {
   files?: Record<string, string>;
 }
 
-/** Type-level settings and metadata state used by current diffs. */
+/** Table-level settings and metadata state used by current diffs. */
 export interface SnapshotTypeSettingsState {
   description?: string;
   pluralForm: string;
@@ -106,14 +106,14 @@ export interface TableSettingsModifiedChange extends DiffChangeBase {
   after: SnapshotTypeSettingsState;
 }
 
-/** A field was added to a type. */
+/** A field was added to a table. */
 export interface FieldAddedChange extends DiffChangeBase {
   kind: "field_added";
   fieldName: string;
   after: SnapshotFieldConfig;
 }
 
-/** A field was removed from a type. */
+/** A field was removed from a table. */
 export interface FieldRemovedChange extends DiffChangeBase {
   kind: "field_removed";
   fieldName: string;
@@ -129,7 +129,7 @@ export interface FieldModifiedChange extends DiffChangeBase {
 }
 
 /**
- * A field was renamed within a type. Recorded when the user confirms that a
+ * A field was renamed within a table. Recorded when the user confirms that a
  * removed + added field pair is a rename (interactively or via `--rename`).
  * `fieldName` is the new name; `previousFieldName` is the old name.
  */
@@ -149,14 +149,14 @@ export interface FieldTypeModifiedChange extends DiffChangeBase {
   after: SnapshotFieldConfig;
 }
 
-/** An index was added to a type. */
+/** An index was added to a table. */
 export interface IndexAddedChange extends DiffChangeBase {
   kind: "index_added";
   indexName: string;
   after: SnapshotIndexConfig;
 }
 
-/** An index was removed from a type. */
+/** An index was removed from a table. */
 export interface IndexRemovedChange extends DiffChangeBase {
   kind: "index_removed";
   indexName: string;
@@ -171,14 +171,14 @@ export interface IndexModifiedChange extends DiffChangeBase {
   after: SnapshotIndexConfig;
 }
 
-/** A file field was added to a type. `before`/`after` hold the description. */
+/** A file field was added to a table. `before`/`after` hold the description. */
 export interface FileAddedChange extends DiffChangeBase {
   kind: "file_added";
   fieldName: string;
   after: string;
 }
 
-/** A file field was removed from a type. */
+/** A file field was removed from a table. */
 export interface FileRemovedChange extends DiffChangeBase {
   kind: "file_removed";
   fieldName: string;
@@ -194,7 +194,7 @@ export interface FileModifiedChange extends DiffChangeBase {
 }
 
 /**
- * A relationship was added to a type. `relationshipType` is optional for
+ * A relationship was added to a table. `relationshipType` is optional for
  * backward compatibility: diff.json files written by older SDK versions
  * predate the field.
  */
@@ -205,7 +205,7 @@ export interface RelationshipAddedChange extends DiffChangeBase {
   after: SnapshotRelationship;
 }
 
-/** A relationship was removed from a type. */
+/** A relationship was removed from a table. */
 export interface RelationshipRemovedChange extends DiffChangeBase {
   kind: "relationship_removed";
   relationshipName: string;
@@ -223,7 +223,7 @@ export interface RelationshipModifiedChange extends DiffChangeBase {
 }
 
 /**
- * Type-level permissions were modified. `before`/`after` are optional for
+ * Table-level permissions were modified. `before`/`after` are optional for
  * robustness against hand-edited or legacy diff.json files; consumers guard
  * on their presence.
  */
@@ -233,7 +233,7 @@ export interface PermissionModifiedChange extends DiffChangeBase {
   after?: SnapshotPermissionState;
 }
 
-/** Type-level hook/validate script state for diff tracking. */
+/** Table-level hook/validate script state for diff tracking. */
 export interface TypeScriptsState {
   typeHookExpr?: { create?: string; update?: string };
   typeValidateExpr?: string;
@@ -303,7 +303,7 @@ export interface MigrationDiff {
   hasBreakingChanges: boolean;
   /** List of breaking changes */
   breakingChanges: BreakingChangeInfo[];
-  /** Whether there are non-breaking changes that may cause data loss (e.g. field/type removal) */
+  /** Whether there are non-breaking changes that may cause data loss (e.g. field/table removal) */
   hasWarnings: boolean;
   /** List of non-breaking warnings */
   warnings: WarningChangeInfo[];
@@ -339,7 +339,7 @@ export interface BreakingChangeInfo {
  * Warning change information in migration diff.
  *
  * Warnings are non-breaking changes that may still cause data loss
- * (e.g. removing a field or type). Unlike breaking changes, a migration
+ * (e.g. removing a field or table). Unlike breaking changes, a migration
  * script is not required, but writing one is recommended if you need to
  * preserve or transform data before the change applies.
  */
@@ -370,7 +370,7 @@ export function formatMigrationDiff(diff: MigrationDiff): string {
 
   const lines: string[] = [];
 
-  // Group changes by type name
+  // Group changes by table name
   const changesByType = new Map<string, DiffChange[]>();
   for (const change of diff.changes) {
     const existing = changesByType.get(change.tableName) ?? [];

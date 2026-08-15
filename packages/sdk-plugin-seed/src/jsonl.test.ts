@@ -55,7 +55,7 @@ describe("loadSeedData", () => {
     expect(loadSeedData(dir, ["User"])).toEqual({ User: [] });
   });
 
-  test("loads no requested types without requiring a data directory", () => {
+  test("loads no requested entities without requiring a data directory", () => {
     expect(loadSeedData("/missing", [])).toEqual({});
   });
 

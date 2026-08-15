@@ -6,7 +6,7 @@ import type { Plugin } from "#/plugin/types";
 const orderType = () => db.table("Order", { name: db.string() });
 
 describe("PluginManager", () => {
-  test("collects namespace plugin-generated types", async () => {
+  test("collects namespace plugin-generated tables", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
@@ -64,7 +64,7 @@ describe("PluginManager", () => {
     expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);
   });
 
-  test("preserves pluralForm and plugin attachments when extending types", () => {
+  test("preserves pluralForm and plugin attachments when extending tables", () => {
     const manager = new PluginManager();
     const original = db
       .table(["Person", "People"], {
@@ -85,7 +85,7 @@ describe("PluginManager", () => {
     expect(extended.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
   });
 
-  test("requires per-type config when typeConfigRequired is true", async () => {
+  test("requires per-table config when typeConfigRequired is true", async () => {
     const plugin: Plugin = {
       id: "requires-config",
       description: "requires per-type config",
@@ -109,7 +109,7 @@ describe("PluginManager", () => {
     expect(result.error).toContain("requires typeConfig");
   });
 
-  test("processes type attachment without configSchema (arbitrary config)", async () => {
+  test("processes table attachment without configSchema (arbitrary config)", async () => {
     const plugin: Plugin = {
       id: "schema-less-plugin",
       description: "plugin without configSchema",

@@ -59,9 +59,9 @@ export interface TailorDBNamespaceData {
   namespace: string;
   /** All TailorDB tables in this namespace, keyed by table name */
   types: Record<string, TailorDBType>;
-  /** Source info for each type (file path, export name, plugin info) */
+  /** Source info for each table (file path, export name, plugin info) */
   sourceInfo: ReadonlyMap<string, TypeSourceInfoEntry>;
-  /** Plugin attachments configured on each type via .plugin() method */
+  /** Plugin attachments configured on each table via .plugin() method */
   pluginAttachments: ReadonlyMap<string, readonly PluginAttachment[]>;
 }
 
@@ -80,7 +80,7 @@ export interface ResolverNamespaceData {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface TailorDBReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their types and metadata */
+  /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
   /** Auth configuration */
   auth?: GeneratorAuthInput;
@@ -97,7 +97,7 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ResolverReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their types and metadata */
+  /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
@@ -116,7 +116,7 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ExecutorReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their types and metadata */
+  /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
@@ -296,7 +296,7 @@ export type NamespacePluginOutput = PluginOutput;
 
 /**
  * Plugin interface that all plugins must implement.
- * @template TypeConfig - Type for per-type configuration passed via .plugin() method
+ * @template TypeConfig - Type for per-table configuration passed via .plugin() method
  * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
  */
 export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {

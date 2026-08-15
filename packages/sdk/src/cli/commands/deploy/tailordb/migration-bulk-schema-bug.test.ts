@@ -193,7 +193,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           ],
           deletes: [],
           unchanged: [],
-          title: "TailorDB Types",
+          title: "TailorDB tables",
           isEmpty: () => false,
           lines: () => [],
         },

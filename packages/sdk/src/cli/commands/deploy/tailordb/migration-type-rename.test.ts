@@ -171,7 +171,7 @@ describe("applyTailorDB: type rename migration flow", () => {
     return {
       changeSet: {
         service: changeSetGroup("TailorDB Services"),
-        type: changeSetGroup("TailorDB Types", {
+        type: changeSetGroup("TailorDB tables", {
           creates: [
             {
               name: "Person",

@@ -1015,9 +1015,9 @@ function object<
 
 /**
  * Creates a new TailorDBType instance.
- * @param name - Type name
+ * @param name - Table name
  * @param fields - Field definitions
- * @param options - Type options
+ * @param options - Table options
  * @param options.pluralForm - Optional plural form
  * @param options.description - Optional description
  * @returns A new TailorDBType

@@ -42,7 +42,7 @@ export interface FieldRenameSpec {
 export interface FieldRenameCandidate {
   tableName: string;
   removed: FieldRemovedChange;
-  /** Compatible added fields in the same type, in diff order. */
+  /** Compatible added fields in the same table, in diff order. */
   added: FieldAddedChange[];
 }
 
@@ -310,7 +310,7 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
 // ============================================================================
 
 /**
- * A confirmed type rename to record in the migration diff.
+ * A confirmed table rename to record in the migration diff.
  */
 export interface TypeRenameSpec {
   /** Type name before the rename. */
@@ -320,17 +320,17 @@ export interface TypeRenameSpec {
 }
 
 /**
- * A removed type together with the added types it could have been renamed to.
+ * A removed table together with the added tables it could have been renamed to.
  */
 export interface TypeRenameCandidate {
   removed: TableRemovedChange;
-  /** Compatible added types, in diff order. */
+  /** Compatible added tables, in diff order. */
   added: TableAddedChange[];
 }
 
 /**
- * Return a copy of a field config with foreign key references to the old type
- * name retargeted at the new name, so a self-referential type compares equal
+ * Return a copy of a field config with foreign key references to the old table
+ * name retargeted at the new name, so a self-referential table compares equal
  * to its renamed shape.
  * @param {SnapshotFieldConfig} field - Field configuration to retarget
  * @param {string} previousTableName - Type name before the rename
@@ -394,19 +394,19 @@ function isTypeRenameFieldCompatible(
 
 /**
  * Whether copying every row of `before` into `after` preserves the data, i.e.
- * the removed + added type pair can be treated as a rename.
+ * the removed + added table pair can be treated as a rename.
  *
- * A renamed type is created with its full constraints in the Pre-phase (there
- * is no relaxation machinery for a fresh type), so the shape must match
+ * A renamed table is created with its full constraints in the Pre-phase (there
+ * is no relaxation machinery for a fresh table), so the shape must match
  * strictly: same field names with the same type, array-ness, required/unique
  * constraints, foreign key target (self references compare against the new
  * name), and scale; enum values must not be removed; indexes must match.
  * Serial values cannot be written by a script and file contents are not
- * copied by SQL, so types with serial or file fields are never candidates.
+ * copied by SQL, so tables with serial or file fields are never candidates.
  * Name-derived and data-independent surfaces (pluralForm, description,
  * settings, permissions, hooks, validations, relationships) may differ.
- * @param {TailorDBSnapshotType} before - Removed type's snapshot
- * @param {TailorDBSnapshotType} after - Added type's snapshot
+ * @param {TailorDBSnapshotType} before - Removed table's snapshot
+ * @param {TailorDBSnapshotType} after - Added table's snapshot
  * @returns {boolean} True if the pair is rename-compatible
  */
 export function isTypeRenameCompatible(
@@ -436,7 +436,7 @@ export function isTypeRenameCompatible(
 }
 
 /**
- * Find removed + added type pairs in a diff that could be renames.
+ * Find removed + added table pairs in a diff that could be renames.
  * @param {MigrationDiff} diff - Migration diff to scan
  * @returns {TypeRenameCandidate[]} Candidates in diff order (may be empty)
  */
@@ -459,8 +459,8 @@ export function findTypeRenameCandidates(diff: MigrationDiff): TypeRenameCandida
 }
 
 /**
- * Whether a type rename spec matches a removed + added type pair between two
- * snapshots: the old type existed before and is gone now, and the new type
+ * Whether a table rename spec matches a removed + added table pair between two
+ * snapshots: the old table existed before and is gone now, and the new table
  * exists now but did not before. Type compatibility is checked separately
  * when the diff is recomputed with the spec.
  * @param {TypeRenameSpec} spec - Rename spec to test
@@ -482,8 +482,8 @@ export function typeRenameSpecApplies(
 }
 
 /**
- * Assert that every type rename spec matches a compatible removed + added
- * type pair between the two normalized snapshots.
+ * Assert that every table rename spec matches a compatible removed + added
+ * table pair between the two normalized snapshots.
  * @param {NormalizedSchemaSnapshot} previous - Previous normalized snapshot
  * @param {NormalizedSchemaSnapshot} current - Current normalized snapshot
  * @param {readonly TypeRenameSpec[]} typeRenames - Rename specs to validate
@@ -540,14 +540,14 @@ export function assertValidTypeRenames(
 
 /**
  * Whether a field's foreign key target changed in a way that is not explained
- * by a confirmed type rename. Such a retarget is breaking (stored references
+ * by a confirmed table rename. Such a retarget is breaking (stored references
  * may become invalid) and needs a reference fixup script; a retarget that
  * follows a rename does not, because record ids are preserved by the copy —
  * provided the referenced field is unchanged, since the copy only guarantees
- * that the same ids exist under the new type name.
+ * that the same ids exist under the new table name.
  * @param {SnapshotFieldConfig} before - Field configuration before the change
  * @param {SnapshotFieldConfig} after - Field configuration after the change
- * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
+ * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed table renames (old name → new name)
  * @returns {boolean} True if the retarget is breaking
  */
 export function isBreakingForeignKeyRetarget(
@@ -610,12 +610,12 @@ export function parseTypeDropOption(value: string): TypeDropSpec {
 }
 
 /**
- * Whether a type drop spec matches a type that was removed between two
- * snapshots: the type existed before and is gone now.
+ * Whether a table drop spec matches a table that was removed between two
+ * snapshots: the table existed before and is gone now.
  * @param {TypeDropSpec} spec - Drop spec to test
  * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
  * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
- * @returns {boolean} True if the spec matches a removed type
+ * @returns {boolean} True if the spec matches a removed table
  */
 export function typeDropSpecApplies(
   spec: TypeDropSpec,

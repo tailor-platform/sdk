@@ -172,7 +172,7 @@ describe("migration flow: namespaces without pending migrations", () => {
             },
           ],
           unchanged: [],
-          title: "TailorDB Types",
+          title: "TailorDB tables",
           isEmpty: () => false,
           lines: () => [],
         },

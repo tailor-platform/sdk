@@ -614,7 +614,7 @@ describe("dataplane", () => {
   });
 
   describe("productBundle", async () => {
-    test("type-level hook computes label from input fields", async () => {
+    test("table-level hook computes label from input fields", async () => {
       const query = gql`
         mutation {
           createProductBundle(
@@ -652,7 +652,7 @@ describe("dataplane", () => {
       });
     });
 
-    test("type-level hook recomputes label on update", async () => {
+    test("table-level hook recomputes label on update", async () => {
       const create = gql`
         mutation {
           createProductBundle(
@@ -689,7 +689,7 @@ describe("dataplane", () => {
       });
     });
 
-    test("type-level hook falls back to oldRecord when name is not in input", async () => {
+    test("table-level hook falls back to oldRecord when name is not in input", async () => {
       const create = gql`
         mutation {
           createProductBundle(
@@ -746,7 +746,7 @@ describe("dataplane", () => {
       expect(result.errors![0].message).toMatch("qty must be positive");
     });
 
-    test("type-level validate rejects empty items", async () => {
+    test("table-level validate rejects empty items", async () => {
       const query = gql`
         mutation {
           createProductBundle(input: { name: "Empty", items: [] }) {
