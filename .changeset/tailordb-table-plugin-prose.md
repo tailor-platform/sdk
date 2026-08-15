@@ -8,4 +8,4 @@
 
 Messages that list the seed targets say entities rather than tables, because `_User` is an IdP entity rather than a TailorDB table and can appear in the same list.
 
-The `types` positional keeps its name; only the wording around it changed, so existing invocations are unaffected.
+The positional is now named `entities`, so `--help` shows `[entities]` instead of `[types]`. Positionals are matched by argv order, so existing invocations are unaffected.
