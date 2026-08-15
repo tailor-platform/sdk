@@ -1,7 +1,7 @@
 // IdP permission standard types (normalized form shared by parser and CLI).
 //
 // This is a pure type module: it must contain type declarations only and may
-// not reference zod or schema modules, so other layers (including configure)
+// not reference valibot or schema modules, so other layers (including configure)
 // can import it type-only without pulling any runtime dependency.
 import type { ValueOperand } from "#/configure/services/auth/types";
 

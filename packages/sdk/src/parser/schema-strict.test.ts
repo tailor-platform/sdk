@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expect, test } from "vitest";
 import { AppConfigSchema } from "./app-config/schema";
 import { PluginConfigSchema } from "./plugin-config/schema";
@@ -12,22 +13,19 @@ import { SecretsSchema } from "./service/secrets/schema";
 import { StaticWebsiteSchema } from "./service/staticwebsite/schema";
 import { TailorDBServiceConfigSchema, TailorDBTypeSchema } from "./service/tailordb/schema";
 import { WorkflowSchema } from "./service/workflow/schema";
-import type { ZodType } from "zod";
 
 type StrictSchemaCase = {
   readonly name: string;
-  readonly schema: ZodType;
+  readonly schema: v.GenericSchema;
   readonly value: Record<string, unknown>;
 };
 
 function hasUnrecognizedKeyIssue(issues: readonly unknown[]): boolean {
   return issues.some((issue) => {
     if (typeof issue !== "object" || issue === null) return false;
-    if ("code" in issue && issue.code === "unrecognized_keys") return true;
-    if (!("errors" in issue) || !Array.isArray(issue.errors)) return false;
-    return issue.errors.some(
-      (variantIssues) => Array.isArray(variantIssues) && hasUnrecognizedKeyIssue(variantIssues),
-    );
+    if ("type" in issue && issue.type === "strict_object") return true;
+    if (!("issues" in issue) || !Array.isArray(issue.issues)) return false;
+    return hasUnrecognizedKeyIssue(issue.issues);
   });
 }
 
@@ -134,17 +132,17 @@ const strictSchemaCases: StrictSchemaCase[] = [
 
 describe("parser schemas", () => {
   test.each(strictSchemaCases)("rejects unknown keys for $name", ({ schema, value }) => {
-    const result = schema.safeParse({ ...value, unknownOption: true });
+    const result = v.safeParse(schema, { ...value, unknownOption: true });
 
     expect(result.success).toBe(false);
     if (result.success) {
       throw new Error("Expected schema parsing to fail");
     }
-    expect(hasUnrecognizedKeyIssue(result.error.issues)).toBe(true);
+    expect(hasUnrecognizedKeyIssue(result.issues)).toBe(true);
   });
 
   test("preserves plugin instance properties", () => {
-    const result = PluginConfigSchema.safeParse({
+    const result = v.safeParse(PluginConfigSchema, {
       id: "plugin",
       description: "Plugin",
       customProperty: true,
@@ -154,11 +152,11 @@ describe("parser schemas", () => {
     if (!result.success) {
       throw new Error("Expected plugin config parsing to succeed");
     }
-    expect(result.data).toHaveProperty("customProperty", true);
+    expect(result.output).toHaveProperty("customProperty", true);
   });
 
   test("accepts field builder properties", () => {
-    const result = TailorFieldSchema.safeParse({
+    const result = v.safeParse(TailorFieldSchema, {
       type: "string",
       metadata: {
         validate: [() => true, () => "Invalid value"],

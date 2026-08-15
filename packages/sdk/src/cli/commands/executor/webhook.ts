@@ -1,5 +1,5 @@
-import { defineCommand, runCommand } from "politty";
-import { z } from "zod";
+import { defineCommand, runCommand } from "@politty/valibot";
+import * as v from "valibot";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -60,7 +60,7 @@ export async function listWebhookExecutors(
 const listWebhookCommand = defineAppCommand({
   name: "list",
   description: "List executors with incoming webhook triggers",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...paginationArgs(),
   }),

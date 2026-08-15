@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
@@ -17,12 +17,12 @@ const detectPackageManager = () => {
 export const initCommand = defineAppCommand({
   name: "init",
   description: "Initialize a new project using create-sdk.",
-  args: z.strictObject({
-    name: arg(z.string().optional(), {
+  args: v.strictObject({
+    name: arg(v.optional(v.string()), {
       positional: true,
       description: "Project name",
     }),
-    template: arg(z.string().optional(), {
+    template: arg(v.optional(v.string()), {
       alias: "t",
       description: "Template name",
     }),

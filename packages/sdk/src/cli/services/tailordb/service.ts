@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import * as v from "valibot";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -221,21 +222,24 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
 
-        const result = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(exportedValue));
+        const result = v.safeParse(
+          TailorDBTypeSchema,
+          stripTailorDBTypeBuilderHelpers(exportedValue),
+        );
         if (!result.success) {
           if (isSdkBranded(exportedValue, "tailordb-type")) {
-            throw result.error;
+            throw new v.ValiError(result.issues);
           }
           continue;
         }
 
         const relativePath = path.relative(process.cwd(), typeFile);
         logger.log(
-          `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
+          `Type: ${styles.successBright(`"${result.output.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig);
-        loadedTypes[result.data.name] = result.data;
-        registerRawType(typeFile, result.data.name, result.data, {
+        await precompileTailorDBTypeScripts(result.output, typeFile, tsconfig);
+        loadedTypes[result.output.name] = result.output;
+        registerRawType(typeFile, result.output.name, result.output, {
           filePath: typeFile,
           exportName,
         });

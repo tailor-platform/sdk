@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import * as v from "valibot";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
@@ -35,17 +36,17 @@ export function createResolverService(
   const loadResolverForFile = async (resolverFile: string): Promise<Resolver | undefined> => {
     try {
       const resolverModule = await importUserModule(resolverFile);
-      const result = ResolverSchema.safeParse(resolverModule.default);
+      const result = v.safeParse(ResolverSchema, resolverModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), resolverFile);
         logger.log(
-          `Resolver: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
+          `Resolver: ${styles.successBright(`"${result.output.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        resolvers[resolverFile] = result.data;
-        return result.data;
+        resolvers[resolverFile] = result.output;
+        return result.output;
       }
       if (isSdkBranded(resolverModule.default, "resolver")) {
-        throw result.error;
+        throw new v.ValiError(result.issues);
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), resolverFile);

@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expect, test } from "vitest";
 import {
   ExecutionPolicyKeySchema,
@@ -25,7 +26,7 @@ describe("ExecutionPolicyNameSchema", () => {
     // '*' not allowed in name.
     ["foo*", false],
   ])("%s → %s", (input, expected) => {
-    expect(ExecutionPolicyNameSchema.safeParse(input).success).toBe(expected);
+    expect(v.safeParse(ExecutionPolicyNameSchema, input).success).toBe(expected);
   });
 });
 
@@ -53,13 +54,13 @@ describe("ExecutionPolicyKeySchema (Phase 3 grammar)", () => {
     // Too short (min 2 chars).
     ["a", false],
   ])("%s → %s", (input, expected) => {
-    expect(ExecutionPolicyKeySchema.safeParse(input).success).toBe(expected);
+    expect(v.safeParse(ExecutionPolicyKeySchema, input).success).toBe(expected);
   });
 });
 
 describe("WorkflowJobFunctionExecutionPolicySchema", () => {
   test("accepts a valid policy with concurrency", () => {
-    const result = WorkflowJobFunctionExecutionPolicySchema.safeParse({
+    const result = v.safeParse(WorkflowJobFunctionExecutionPolicySchema, {
       name: "per-tenant",
       key: "tenant-api*",
       concurrencyPolicy: { maxConcurrentExecutions: 3 },
@@ -68,7 +69,7 @@ describe("WorkflowJobFunctionExecutionPolicySchema", () => {
   });
 
   test("accepts a valid policy without concurrency", () => {
-    const result = WorkflowJobFunctionExecutionPolicySchema.safeParse({
+    const result = v.safeParse(WorkflowJobFunctionExecutionPolicySchema, {
       name: "premium",
       key: "premium",
     });
@@ -76,7 +77,7 @@ describe("WorkflowJobFunctionExecutionPolicySchema", () => {
   });
 
   test("rejects invalid name grammar", () => {
-    const result = WorkflowJobFunctionExecutionPolicySchema.safeParse({
+    const result = v.safeParse(WorkflowJobFunctionExecutionPolicySchema, {
       name: "Bad-Name",
       key: "ok",
     });
@@ -84,7 +85,7 @@ describe("WorkflowJobFunctionExecutionPolicySchema", () => {
   });
 
   test("rejects invalid key grammar", () => {
-    const result = WorkflowJobFunctionExecutionPolicySchema.safeParse({
+    const result = v.safeParse(WorkflowJobFunctionExecutionPolicySchema, {
       name: "premium",
       key: "!bad",
     });

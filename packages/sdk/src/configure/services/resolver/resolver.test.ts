@@ -7,6 +7,14 @@ import type { output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
 import type { ResolverPermission } from "./permission";
 
+// createResolver() widens `permission` to the richer, readonly ResolverPermission
+// DSL type (see ResolverReturn in ./resolver.ts) — ResolverPermissionSchema's
+// generated Input type is a plain mutable array, so it no longer matches
+// ResolverPermission's readonly shape directly.
+type ResolverInputForCompatCheck = Omit<ResolverInput, "permission"> & {
+  permission?: ResolverPermission;
+};
+
 describe("createResolver", () => {
   describe("type inference", () => {
     test("query resolver without input has correct context type", () => {
@@ -630,7 +638,7 @@ describe("createResolver", () => {
         body: (context) => ({ result: context.input.id }),
       });
 
-      expectTypeOf(resolver).toExtend<ResolverInput>();
+      expectTypeOf(resolver).toExtend<ResolverInputForCompatCheck>();
     });
 
     test("all ResolverInput fields (except input/output) are supported in createResolver config", () => {
@@ -645,7 +653,7 @@ describe("createResolver", () => {
       expect(resolver.name).toBe("fullConfigTest");
       expect(resolver.operation).toBe("mutation");
       expect(resolver.description).toBe("Full configuration test");
-      expectTypeOf(resolver).toExtend<ResolverInput>();
+      expectTypeOf(resolver).toExtend<ResolverInputForCompatCheck>();
     });
 
     test("createResolver with input/output types is compatible with ResolverInput", () => {
@@ -680,7 +688,7 @@ describe("createResolver", () => {
         }),
       });
 
-      expectTypeOf(resolver).toExtend<ResolverInput>();
+      expectTypeOf(resolver).toExtend<ResolverInputForCompatCheck>();
 
       expect(resolver.name).toBe("typeCompatTest");
       expect(resolver.description).toBe("Type compatibility test");
@@ -697,7 +705,7 @@ describe("createResolver", () => {
         body: () => ({ value: "test" }),
       });
 
-      expectTypeOf(resolver).toExtend<ResolverInput>();
+      expectTypeOf(resolver).toExtend<ResolverInputForCompatCheck>();
 
       expect(resolver.name).toBe("minimalCompat");
       expect(resolver.operation).toBe("query");

@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -12,7 +12,7 @@ import { connectionNameArgs } from "./args";
 export const deleteAuthConnectionCommand = defineAppCommand({
   name: "delete",
   description: "Delete an auth connection entirely.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...connectionNameArgs,
     ...confirmationArgs,

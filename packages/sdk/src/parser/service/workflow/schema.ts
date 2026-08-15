@@ -1,14 +1,13 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { functionSchema } from "../common";
 
-export const WorkflowJobSchema = z.strictObject({
-  name: z.string().describe("Job name (must be unique across the project)"),
-  start: functionSchema.describe("Start function that initiates the job"),
-  body: functionSchema.describe("Job implementation function"),
-  publishEvents: z
-    .boolean()
-    .optional()
-    .describe("Enable publishing job execution events for this job"),
+export const WorkflowJobSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("Job name (must be unique across the project)")),
+  start: v.pipe(functionSchema, v.description("Start function that initiates the job")),
+  body: v.pipe(functionSchema, v.description("Job implementation function")),
+  publishEvents: v.optional(
+    v.pipe(v.boolean(), v.description("Enable publishing job execution events for this job")),
+  ),
 });
 
 const durationUnits = ["ms", "s", "m"] as const;
@@ -28,76 +27,114 @@ function durationToSeconds(duration: string): number {
   return parseInt(value, 10) * unitToSeconds[unit as (typeof durationUnits)[number]];
 }
 
-const baseDurationSchema = z.templateLiteral([z.number().int().positive(), z.enum(durationUnits)]);
+type Duration = `${number}${(typeof durationUnits)[number]}`;
+
+const baseDurationSchema = v.custom<Duration>(
+  (val) => typeof val === "string" && /^\d+(ms|s|m)$/.test(val),
+);
 
 const durationSchema = (maxSeconds: number) =>
-  baseDurationSchema.refine((val) => durationToSeconds(val) <= maxSeconds, {
-    message: `Duration must be at most ${maxSeconds} seconds`,
-  });
-
-export const RetryPolicySchema = z
-  .strictObject({
-    maxRetries: z.number().int().min(1).max(10).describe("Maximum number of retries (1-10)"),
-    initialBackoff: durationSchema(3600).describe(
-      "Initial backoff duration (e.g., '1s', '500ms', '1m', max 1h)",
+  v.pipe(
+    baseDurationSchema,
+    v.check(
+      (val) => durationToSeconds(val) <= maxSeconds,
+      `Duration must be at most ${maxSeconds} seconds`,
     ),
-    maxBackoff: durationSchema(86400).describe(
-      "Maximum backoff duration (e.g., '30s', '5m', max 24h)",
+  );
+
+export const RetryPolicySchema = v.pipe(
+  v.strictObject({
+    maxRetries: v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(10),
+      v.description("Maximum number of retries (1-10)"),
     ),
-    backoffMultiplier: z.number().min(1).describe("Backoff multiplier (>= 1)"),
-  })
+    initialBackoff: v.pipe(
+      durationSchema(3600),
+      v.description("Initial backoff duration (e.g., '1s', '500ms', '1m', max 1h)"),
+    ),
+    maxBackoff: v.pipe(
+      durationSchema(86400),
+      v.description("Maximum backoff duration (e.g., '30s', '5m', max 24h)"),
+    ),
+    backoffMultiplier: v.pipe(
+      v.number(),
+      v.minValue(1),
+      v.description("Backoff multiplier (>= 1)"),
+    ),
+  }),
+  v.forward(
+    v.check(
+      (data) => durationToSeconds(data.initialBackoff) <= durationToSeconds(data.maxBackoff),
+      "initialBackoff must be less than or equal to maxBackoff",
+    ),
+    ["initialBackoff"],
+  ),
+  v.forward(
+    v.check(
+      (data) => durationToSeconds(data.initialBackoff) > 0,
+      "initialBackoff must be greater than 0",
+    ),
+    ["initialBackoff"],
+  ),
+);
 
-  .refine((data) => durationToSeconds(data.initialBackoff) <= durationToSeconds(data.maxBackoff), {
-    message: "initialBackoff must be less than or equal to maxBackoff",
-    path: ["initialBackoff"],
-  })
-  .refine((data) => durationToSeconds(data.initialBackoff) > 0, {
-    message: "initialBackoff must be greater than 0",
-    path: ["initialBackoff"],
-  });
-
-export const ConcurrencyPolicySchema = z.strictObject({
-  maxConcurrentExecutions: z
-    .number()
-    .int()
-    .min(1)
-    .max(1000)
-    .describe("Maximum number of concurrent executions (1-1000)"),
+export const ConcurrencyPolicySchema = v.strictObject({
+  maxConcurrentExecutions: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(1000),
+    v.description("Maximum number of concurrent executions (1-1000)"),
+  ),
 });
 
-export const ExecutionPolicyNameSchema = z
-  .string()
-  .regex(
+export const ExecutionPolicyNameSchema = v.pipe(
+  v.string(),
+  v.regex(
     /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
     "Invalid execution policy name: must match [a-z0-9-] (3-63 chars; must start and end with [a-z0-9])",
-  )
-  .describe("Workspace-unique execution policy name embedded in the resource TRN");
+  ),
+  v.description("Workspace-unique execution policy name embedded in the resource TRN"),
+);
 
-export const ExecutionPolicyKeySchema = z
-  .string()
-  .regex(
+export const ExecutionPolicyKeySchema = v.pipe(
+  v.string(),
+  v.regex(
     /^[a-z0-9][a-z0-9_:.-]{0,62}[a-z0-9*]$/,
     "Invalid execution policy key: must match [a-z0-9_:.-] (2-64 chars; must start with [a-z0-9] and end with [a-z0-9] or a trailing '*')",
-  )
-  .describe("Execution policy key passed to execJobFunction's executionPolicyKey option");
+  ),
+  v.description("Execution policy key passed to execJobFunction's executionPolicyKey option"),
+);
 
-export const WorkflowJobFunctionExecutionPolicySchema = z.strictObject({
+export const WorkflowJobFunctionExecutionPolicySchema = v.strictObject({
   name: ExecutionPolicyNameSchema,
   key: ExecutionPolicyKeySchema,
-  concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
-    "Optional per-key concurrency cap for job function dispatches matching this policy",
+  concurrencyPolicy: v.optional(
+    v.pipe(
+      ConcurrencyPolicySchema,
+      v.description(
+        "Optional per-key concurrency cap for job function dispatches matching this policy",
+      ),
+    ),
   ),
 });
 
-export const WorkflowSchema = z.strictObject({
-  name: z.string().describe("Workflow name"),
-  mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
-  retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),
-  concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
-    "Concurrency policy for the workflow",
+export const WorkflowSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("Workflow name")),
+  mainJob: v.pipe(WorkflowJobSchema, v.description("Main job that starts the workflow")),
+  retryPolicy: v.optional(
+    v.pipe(RetryPolicySchema, v.description("Retry policy for the workflow")),
   ),
-  publishEvents: z
-    .boolean()
-    .optional()
-    .describe("Enable publishing workflow execution events for this workflow"),
+  concurrencyPolicy: v.optional(
+    v.pipe(ConcurrencyPolicySchema, v.description("Concurrency policy for the workflow")),
+  ),
+  publishEvents: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description("Enable publishing workflow execution events for this workflow"),
+    ),
+  ),
 });

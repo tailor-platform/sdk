@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expect, test } from "vitest";
 import {
   IdPUserAuthPolicySchema,
@@ -30,7 +31,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     ["minimum password length", { passwordMinLength: 6 }],
     ["maximum password length", { passwordMaxLength: 4096 }],
   ])("accepts %s", (_name, policy) => {
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).not.toThrow();
   });
 
   test.each([
@@ -60,7 +61,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       "passwordMinLength must be less than or equal to passwordMaxLength",
     ],
   ])("rejects %s", (_name, policy, message) => {
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(message);
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(message);
   });
 
   test("accepts when passwordMinLength equals passwordMaxLength", () => {
@@ -69,11 +70,11 @@ describe("IdPUserAuthPolicySchema validation", () => {
       passwordMaxLength: 10,
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).not.toThrow();
   });
 
   test("returns undefined for unspecified fields (allows platform defaults)", () => {
-    const result = IdPUserAuthPolicySchema.parse({});
+    const result = v.parse(IdPUserAuthPolicySchema, {});
     expect(result).toEqual({});
     expect(result.useNonEmailIdentifier).toBeUndefined();
     expect(result.allowSelfPasswordReset).toBeUndefined();
@@ -97,7 +98,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       ["example.com", "corp.example.com", "test.org"],
     ],
   ])("accepts allowedEmailDomains %j", (allowedEmailDomains, expected) => {
-    const result = IdPUserAuthPolicySchema.parse({ allowedEmailDomains });
+    const result = v.parse(IdPUserAuthPolicySchema, { allowedEmailDomains });
     expect(result.allowedEmailDomains).toEqual(expected);
   });
 
@@ -107,7 +108,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedEmailDomains: ["example.com"],
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
       "allowedEmailDomains cannot be set when useNonEmailIdentifier is true",
     );
   });
@@ -118,7 +119,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedEmailDomains: [],
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).not.toThrow();
   });
 
   test("accepts allowedEmailDomains when useNonEmailIdentifier is false", () => {
@@ -127,7 +128,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedEmailDomains: ["example.com"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowedEmailDomains).toEqual(["example.com"]);
   });
 
@@ -137,7 +138,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedEmailDomains: ["example.com"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowGoogleOauth).toBe(true);
   });
 
@@ -146,7 +147,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowGoogleOauth: false,
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowGoogleOauth).toBe(false);
   });
 
@@ -156,7 +157,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowGoogleOauth: true,
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
       "allowGoogleOauth cannot be set when useNonEmailIdentifier is true",
     );
   });
@@ -167,7 +168,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowGoogleOauth: false,
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).not.toThrow();
   });
 
   test("accepts allowGoogleOauth when useNonEmailIdentifier is false", () => {
@@ -177,7 +178,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedEmailDomains: ["example.com"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowGoogleOauth).toBe(true);
   });
 
@@ -189,7 +190,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
         ...(allowedEmailDomains !== undefined && { allowedEmailDomains }),
       };
 
-      expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
         "allowGoogleOauth requires allowedEmailDomains to be set",
       );
     },
@@ -202,7 +203,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       disablePasswordAuth: true,
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowMicrosoftOauth).toBe(true);
   });
 
@@ -211,7 +212,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowMicrosoftOauth: false,
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowMicrosoftOauth).toBe(false);
   });
 
@@ -221,7 +222,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowMicrosoftOauth: true,
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
       "allowMicrosoftOauth cannot be set when useNonEmailIdentifier is true",
     );
   });
@@ -232,7 +233,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowMicrosoftOauth: false,
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).not.toThrow();
   });
 
   test("accepts allowMicrosoftOauth when useNonEmailIdentifier is false", () => {
@@ -243,7 +244,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       disablePasswordAuth: true,
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowMicrosoftOauth).toBe(true);
   });
 
@@ -273,7 +274,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       "allowMicrosoftOauth requires allowedEmailDomains to be set",
     ],
   ])("rejects allowMicrosoftOauth when %s", (_name, policy, message) => {
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(message);
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(message);
   });
 
   test("accepts disablePasswordAuth as true when allowGoogleOauth is true", () => {
@@ -283,7 +284,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedEmailDomains: ["example.com"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.disablePasswordAuth).toBe(true);
   });
 
@@ -294,7 +295,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedEmailDomains: ["example.com"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.disablePasswordAuth).toBe(true);
   });
 
@@ -303,7 +304,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       disablePasswordAuth: false,
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.disablePasswordAuth).toBe(false);
   });
 
@@ -311,7 +312,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     ["allowGoogleOauth is not set", { disablePasswordAuth: true }],
     ["allowGoogleOauth is false", { disablePasswordAuth: true, allowGoogleOauth: false }],
   ])("rejects disablePasswordAuth when %s", (_name, policy) => {
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
       "disablePasswordAuth requires allowGoogleOauth or allowMicrosoftOauth to be enabled",
     );
   });
@@ -322,7 +323,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowGoogleOauth: false,
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).not.toThrow();
   });
 
   test("rejects disablePasswordAuth when allowSelfPasswordReset is true", () => {
@@ -333,7 +334,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowSelfPasswordReset: true,
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
       "disablePasswordAuth cannot be used with allowSelfPasswordReset",
     );
   });
@@ -346,7 +347,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowSelfPasswordReset: false,
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.disablePasswordAuth).toBe(true);
   });
 
@@ -356,7 +357,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       passwordMinLength: 8,
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.passwordRequireUppercase).toBe(true);
     expect(result.passwordMinLength).toBe(8);
     expect(result.passwordRequireLowercase).toBeUndefined();
@@ -369,7 +370,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedReturnOrigins: ["https://app.example.com"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.enableMfa).toBe(true);
     expect(result.allowedReturnOrigins).toEqual(["https://app.example.com"]);
   });
@@ -382,7 +383,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
         ...(allowedReturnOrigins !== undefined && { allowedReturnOrigins }),
       };
 
-      expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
         "enableMfa requires allowedReturnOrigins to list at least one origin",
       );
     },
@@ -395,7 +396,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedReturnOrigins: ["https://app.example.com"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.requireMfa).toBe(true);
   });
 
@@ -403,7 +404,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     ["without enableMfa", { requireMfa: true }],
     ["when enableMfa is false", { enableMfa: false, requireMfa: true }],
   ])("rejects requireMfa %s", (_name, policy) => {
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
       "requireMfa requires enableMfa to be enabled",
     );
   });
@@ -414,7 +415,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedReturnOrigins: ["http://localhost:3000", "https://app.example.com:8443"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowedReturnOrigins).toEqual([
       "http://localhost:3000",
       "https://app.example.com:8443",
@@ -434,7 +435,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedReturnOrigins: [origin],
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow("must be an http(s) origin");
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow("must be an http(s) origin");
   });
 
   test("accepts allowedReturnOrigins with static-website :url placeholder", () => {
@@ -443,7 +444,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       allowedReturnOrigins: ["my-frontend:url"],
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.allowedReturnOrigins).toEqual(["my-frontend:url"]);
   });
 
@@ -454,7 +455,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       mfaIssuer: "My App",
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.mfaIssuer).toBe("My App");
   });
 
@@ -465,7 +466,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       mfaIssuer: "a".repeat(65),
     };
 
-    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+    expect(() => v.parse(IdPUserAuthPolicySchema, policy)).toThrow(
       "mfaIssuer must be 64 characters or less",
     );
   });
@@ -477,12 +478,12 @@ describe("IdPUserAuthPolicySchema validation", () => {
       mfaIssuer: "a".repeat(64),
     };
 
-    const result = IdPUserAuthPolicySchema.parse(policy);
+    const result = v.parse(IdPUserAuthPolicySchema, policy);
     expect(result.mfaIssuer).toHaveLength(64);
   });
 
   test("MFA fields default to undefined when omitted", () => {
-    const result = IdPUserAuthPolicySchema.parse({});
+    const result = v.parse(IdPUserAuthPolicySchema, {});
     expect(result.enableMfa).toBeUndefined();
     expect(result.requireMfa).toBeUndefined();
     expect(result.allowedReturnOrigins).toBeUndefined();
@@ -503,7 +504,7 @@ describe("IdPSchema validation", () => {
       ...(publishEvents !== undefined && { publishEvents }),
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.publishEvents).toBe(expected);
   });
 
@@ -515,7 +516,7 @@ describe("IdPSchema validation", () => {
       publishUserEvents: true,
     };
 
-    expect(() => IdPSchema.parse(config)).toThrow("publishUserEvents");
+    expect(() => v.parse(IdPSchema, config)).toThrow("publishUserEvents");
   });
 
   test("accepts gqlOperations with all fields", () => {
@@ -534,7 +535,7 @@ describe("IdPSchema validation", () => {
       },
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.gqlOperations?.create).toBe(true);
     expect(result.gqlOperations?.update).toBe(true);
     expect(result.gqlOperations?.delete).toBe(true);
@@ -555,7 +556,7 @@ describe("IdPSchema validation", () => {
       },
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.gqlOperations?.create).toBe(true);
     expect(result.gqlOperations?.read).toBe(false);
     expect(result.gqlOperations?.update).toBeUndefined();
@@ -572,14 +573,14 @@ describe("IdPSchema validation", () => {
       clients: ["client-1"],
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.gqlOperations).toBeUndefined();
   });
 });
 
 describe("IdPGqlOperationsSchema validation", () => {
   test("accepts empty object", () => {
-    const result = IdPGqlOperationsSchema.parse({});
+    const result = v.parse(IdPGqlOperationsSchema, {});
     expect(result.create).toBeUndefined();
     expect(result.update).toBeUndefined();
     expect(result.delete).toBeUndefined();
@@ -600,7 +601,7 @@ describe("IdPGqlOperationsSchema validation", () => {
       unenrollMfa: value,
     };
 
-    const result = IdPGqlOperationsSchema.parse(config);
+    const result = v.parse(IdPGqlOperationsSchema, config);
     expect(result.create).toBe(value);
     expect(result.update).toBe(value);
     expect(result.delete).toBe(value);
@@ -616,7 +617,7 @@ describe("IdPGqlOperationsSchema validation", () => {
       read: false,
     };
 
-    const result = IdPGqlOperationsSchema.parse(config);
+    const result = v.parse(IdPGqlOperationsSchema, config);
     expect(result.create).toBe(true);
     expect(result.read).toBe(false);
     expect(result.update).toBeUndefined();
@@ -627,7 +628,7 @@ describe("IdPGqlOperationsSchema validation", () => {
   });
 
   test("accepts 'query' alias and normalizes to read-only mode", () => {
-    const result = IdPGqlOperationsSchema.parse("query");
+    const result = v.parse(IdPGqlOperationsSchema, "query");
     expect(result.create).toBe(false);
     expect(result.update).toBe(false);
     expect(result.delete).toBe(false);
@@ -640,7 +641,7 @@ describe("IdPGqlOperationsSchema validation", () => {
 
 describe("IdPEmailConfigSchema validation", () => {
   test("accepts valid email config", () => {
-    const result = IdPEmailConfigSchema.parse({
+    const result = v.parse(IdPEmailConfigSchema, {
       fromName: "My App",
       passwordResetSubject: "Reset your password",
     });
@@ -649,13 +650,13 @@ describe("IdPEmailConfigSchema validation", () => {
   });
 
   test("accepts partial config", () => {
-    const result = IdPEmailConfigSchema.parse({ fromName: "My App" });
+    const result = v.parse(IdPEmailConfigSchema, { fromName: "My App" });
     expect(result.fromName).toBe("My App");
     expect(result.passwordResetSubject).toBeUndefined();
   });
 
   test("accepts empty object", () => {
-    const result = IdPEmailConfigSchema.parse({});
+    const result = v.parse(IdPEmailConfigSchema, {});
     expect(result.fromName).toBeUndefined();
     expect(result.passwordResetSubject).toBeUndefined();
   });
@@ -664,28 +665,28 @@ describe("IdPEmailConfigSchema validation", () => {
     ["fromName", "fromName" as const],
     ["passwordResetSubject", "passwordResetSubject" as const],
   ])("rejects %s exceeding 200 characters", (_name, field) => {
-    expect(() => IdPEmailConfigSchema.parse({ [field]: "a".repeat(201) })).toThrow(
+    expect(() => v.parse(IdPEmailConfigSchema, { [field]: "a".repeat(201) })).toThrow(
       "200 characters or less",
     );
   });
 
   test("rejects fromName containing newline characters", () => {
-    expect(() => IdPEmailConfigSchema.parse({ fromName: "My\nApp" })).toThrow(
+    expect(() => v.parse(IdPEmailConfigSchema, { fromName: "My\nApp" })).toThrow(
       "must not contain newline characters",
     );
-    expect(() => IdPEmailConfigSchema.parse({ fromName: "My\rApp" })).toThrow(
+    expect(() => v.parse(IdPEmailConfigSchema, { fromName: "My\rApp" })).toThrow(
       "must not contain newline characters",
     );
   });
 
   test("rejects passwordResetSubject containing newline characters", () => {
     expect(() =>
-      IdPEmailConfigSchema.parse({ passwordResetSubject: "Reset\nyour password" }),
+      v.parse(IdPEmailConfigSchema, { passwordResetSubject: "Reset\nyour password" }),
     ).toThrow("must not contain newline characters");
   });
 
   test("accepts fromName at exactly 200 characters", () => {
-    const result = IdPEmailConfigSchema.parse({ fromName: "a".repeat(200) });
+    const result = v.parse(IdPEmailConfigSchema, { fromName: "a".repeat(200) });
     expect(result.fromName).toHaveLength(200);
   });
 });
@@ -702,7 +703,7 @@ describe("IdPSchema emailConfig tests", () => {
       },
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.emailConfig?.fromName).toBe("My App");
     expect(result.emailConfig?.passwordResetSubject).toBe("Reset your password");
   });
@@ -714,7 +715,7 @@ describe("IdPSchema emailConfig tests", () => {
       clients: ["client-1"],
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.emailConfig).toBeUndefined();
   });
 
@@ -728,7 +729,7 @@ describe("IdPSchema emailConfig tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).toThrow("200 characters or less");
+    expect(() => v.parse(IdPSchema, config)).toThrow("200 characters or less");
   });
 });
 
@@ -749,7 +750,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.permission).toBeDefined();
     expect(result.permission!.create).toHaveLength(1);
     expect(result.permission!.sendPasswordResetEmail).toHaveLength(1);
@@ -761,7 +762,7 @@ describe("IdPSchema permission tests", () => {
       clients: ["client-1"],
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.permission).toBeUndefined();
   });
 
@@ -779,7 +780,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.permission!.create).toHaveLength(0);
   });
 
@@ -797,7 +798,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.permission).toBeDefined();
   });
 
@@ -814,7 +815,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).not.toThrow();
+    expect(() => v.parse(IdPSchema, config)).not.toThrow();
   });
 
   test("rejects permission omitting unenrollMfa when enableMfa is true", () => {
@@ -834,7 +835,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).toThrow(
+    expect(() => v.parse(IdPSchema, config)).toThrow(
       "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true",
     );
   });
@@ -849,7 +850,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).toThrow(
+    expect(() => v.parse(IdPSchema, config)).toThrow(
       "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true",
     );
   });
@@ -877,7 +878,7 @@ describe("IdPSchema permission tests", () => {
         },
       };
 
-      expect(() => IdPSchema.parse(config)).not.toThrow();
+      expect(() => v.parse(IdPSchema, config)).not.toThrow();
     },
   );
 
@@ -899,7 +900,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).not.toThrow();
+    expect(() => v.parse(IdPSchema, config)).not.toThrow();
   });
 
   test("accepts permission with in/not in operators", () => {
@@ -916,7 +917,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.permission).toBeDefined();
   });
 
@@ -932,7 +933,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).toThrow(
+    expect(() => v.parse(IdPSchema, config)).toThrow(
       "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled",
     );
   });
@@ -954,7 +955,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).not.toThrow();
+    expect(() => v.parse(IdPSchema, config)).not.toThrow();
   });
 
   test("accepts permission with explicit empty sendPasswordResetEmail", () => {
@@ -970,7 +971,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).not.toThrow();
+    expect(() => v.parse(IdPSchema, config)).not.toThrow();
   });
 
   test.each([
@@ -989,7 +990,7 @@ describe("IdPSchema permission tests", () => {
       },
     };
 
-    expect(() => IdPSchema.parse(config)).not.toThrow();
+    expect(() => v.parse(IdPSchema, config)).not.toThrow();
   });
 });
 
@@ -1002,7 +1003,7 @@ describe("IdPSchema gqlOperations alias tests", () => {
       gqlOperations: "query" as const,
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.gqlOperations?.create).toBe(false);
     expect(result.gqlOperations?.update).toBe(false);
     expect(result.gqlOperations?.delete).toBe(false);
@@ -1020,7 +1021,7 @@ describe("IdPSchema gqlOperations alias tests", () => {
       gqlOperations: "query" as const,
     };
 
-    const result = IdPSchema.parse(config);
+    const result = v.parse(IdPSchema, config);
     expect(result.lang).toBe("en");
     expect(result.publishEvents).toBe(true);
     expect(result.gqlOperations?.read).toBe(true);

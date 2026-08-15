@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -24,7 +24,7 @@ export interface ListWorkspacesOptions {
  * @returns List of workspaces
  */
 export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<WorkspaceInfo[]> {
-  const profile = profileNameSchema.optional().parse(options?.profile);
+  const profile = v.parse(v.optional(profileNameSchema), options?.profile);
   const accessToken = await loadAccessToken({ profile });
   const platformConfig = await loadPlatformClientConfig({ profile });
   const client = await initOperatorClient(accessToken, platformConfig);
@@ -60,9 +60,9 @@ export async function listWorkspacesWithClient(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all Tailor Platform workspaces.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...paginationArgs(),
-    profile: arg(profileNameSchema.optional(), {
+    profile: arg(v.optional(profileNameSchema), {
       description: "Workspace profile used for authentication and Platform selection",
       env: "TAILOR_PLATFORM_PROFILE",
     }),

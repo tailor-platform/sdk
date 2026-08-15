@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
+import * as v from "valibot";
 import { describe, expect, aroundEach, test, vi } from "vitest";
 import {
   loadEnvFiles,
@@ -136,19 +137,19 @@ describe("loadEnvFiles", () => {
 
 describe("durationArg", () => {
   test("validates and returns duration string as-is", () => {
-    expect(durationArg.parse("3s")).toBe("3s");
-    expect(durationArg.parse("500ms")).toBe("500ms");
-    expect(durationArg.parse("1m")).toBe("1m");
+    expect(v.parse(durationArg, "3s")).toBe("3s");
+    expect(v.parse(durationArg, "500ms")).toBe("500ms");
+    expect(v.parse(durationArg, "1m")).toBe("1m");
   });
 
   test.each(["3", "3x", "abc", ""])("rejects invalid format: %s", (value) => {
-    expect(() => durationArg.parse(value)).toThrow(
+    expect(() => v.parse(durationArg, value)).toThrow(
       /Invalid duration format|Cannot read properties of null/,
     );
   });
 
   test.each(["0ms", "0s", "0m"])("rejects zero duration: %s", (value) => {
-    expect(() => durationArg.parse(value)).toThrow(/Duration must be greater than 0/);
+    expect(() => v.parse(durationArg, value)).toThrow(/Duration must be greater than 0/);
   });
 });
 
@@ -167,24 +168,24 @@ describe("parseDuration", () => {
 
 describe("positiveIntArg", () => {
   test("parses positive integers", () => {
-    expect(positiveIntArg.parse("1")).toBe(1);
-    expect(positiveIntArg.parse("100")).toBe(100);
+    expect(v.parse(positiveIntArg, "1")).toBe(1);
+    expect(v.parse(positiveIntArg, "100")).toBe(100);
   });
 
   test("coerces numbers", () => {
-    expect(positiveIntArg.parse(5)).toBe(5);
+    expect(v.parse(positiveIntArg, 5)).toBe(5);
   });
 
   test("rejects zero", () => {
-    expect(() => positiveIntArg.parse("0")).toThrow(/Too small/);
+    expect(() => v.parse(positiveIntArg, "0")).toThrow(/Invalid value/);
   });
 
   test("rejects negative numbers", () => {
-    expect(() => positiveIntArg.parse("-1")).toThrow(/Too small/);
+    expect(() => v.parse(positiveIntArg, "-1")).toThrow(/Invalid value/);
   });
 
   test("rejects non-integers", () => {
-    expect(() => positiveIntArg.parse("1.5")).toThrow(/Invalid input/);
+    expect(() => v.parse(positiveIntArg, "1.5")).toThrow(/Invalid integer/);
   });
 });
 

@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   getReplHistoryPath,
@@ -767,7 +768,7 @@ describe("queryCommand args", () => {
       "Pass only one of --edit, -q/--query, or -f/--file.",
     ],
   ])("rejects when %s are both passed", (_label, extraArgs, expectedMessage) => {
-    const result = queryCommand.args.safeParse({
+    const result = v.safeParse(queryCommand.args, {
       engine: "sql",
       "machine-user": "bot",
       ...extraArgs,
@@ -777,26 +778,26 @@ describe("queryCommand args", () => {
     if (result.success) {
       throw new Error("expected args parsing to fail");
     }
-    expect(result.error.issues[0]?.message).toBe(expectedMessage);
+    expect(result.issues[0].message).toBe(expectedMessage);
   });
 
   test("newline-on-enter is optional and passes boolean through", () => {
-    const omitted = queryCommand.args.safeParse({
+    const omitted = v.safeParse(queryCommand.args, {
       engine: "sql",
       "machine-user": "bot",
     });
     expect(omitted.success).toBe(true);
     if (!omitted.success) throw new Error("expected args parsing to succeed");
-    expect(omitted.data["newline-on-enter"]).toBeUndefined();
+    expect(omitted.output["newline-on-enter"]).toBeUndefined();
 
-    const disabled = queryCommand.args.safeParse({
+    const disabled = v.safeParse(queryCommand.args, {
       engine: "sql",
       "machine-user": "bot",
       "newline-on-enter": false,
     });
     expect(disabled.success).toBe(true);
     if (!disabled.success) throw new Error("expected args parsing to succeed");
-    expect(disabled.data["newline-on-enter"]).toBe(false);
+    expect(disabled.output["newline-on-enter"]).toBe(false);
   });
 });
 

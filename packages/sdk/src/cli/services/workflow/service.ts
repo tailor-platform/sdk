@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import * as v from "valibot";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
@@ -194,27 +195,27 @@ async function loadFileContent(filePath: string): Promise<{
     for (const [exportName, exportValue] of Object.entries(module)) {
       // Check if it's a workflow (default export)
       if (exportName === "default") {
-        const workflowResult = WorkflowSchema.safeParse(stripRuntimeStart(exportValue));
+        const workflowResult = v.safeParse(WorkflowSchema, stripRuntimeStart(exportValue));
         if (workflowResult.success) {
-          workflow = workflowResult.data;
+          workflow = workflowResult.output;
         } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
-          throw workflowResult.error;
+          throw new v.ValiError(workflowResult.issues);
         }
         continue;
       }
 
-      const jobResult = WorkflowJobSchema.safeParse(exportValue);
+      const jobResult = v.safeParse(WorkflowJobSchema, exportValue);
       if (jobResult.success) {
         jobs.push({
-          name: jobResult.data.name,
+          name: jobResult.output.name,
           exportName,
           sourceFile: filePath,
-          ...(jobResult.data.publishEvents !== undefined
-            ? { publishEvents: jobResult.data.publishEvents }
+          ...(jobResult.output.publishEvents !== undefined
+            ? { publishEvents: jobResult.output.publishEvents }
             : {}),
         });
       } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
-        throw jobResult.error;
+        throw new v.ValiError(jobResult.issues);
       }
     }
   } catch (error) {

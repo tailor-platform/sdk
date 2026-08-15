@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,33 +10,35 @@ import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 // strip unknown keys
-const listFunctionRegistriesOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
-  profile: z.string().optional(),
-  order: z.enum(["asc", "desc"]).optional(),
-  limit: z.coerce.number().int().nonnegative().optional(),
+const listFunctionRegistriesOptionsSchema = v.object({
+  workspaceId: v.optional(v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID"))),
+  profile: v.optional(v.string()),
+  order: v.optional(v.picklist(["asc", "desc"])),
+  limit: v.optional(v.pipe(v.unknown(), v.transform(Number), v.integer(), v.minValue(0))),
 });
 
-export type ListFunctionRegistriesOptions = z.input<typeof listFunctionRegistriesOptionsSchema>;
+export type ListFunctionRegistriesOptions = v.InferInput<
+  typeof listFunctionRegistriesOptionsSchema
+>;
 
 async function loadOptions(options: ListFunctionRegistriesOptions) {
-  const result = listFunctionRegistriesOptionsSchema.safeParse(options);
+  const result = v.safeParse(listFunctionRegistriesOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.output.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
 
   return {
     client,
     workspaceId,
-    order: result.data.order as Order | undefined,
-    limit: result.data.limit,
+    order: result.output.order as Order | undefined,
+    limit: result.output.limit,
   };
 }
 
@@ -78,7 +80,7 @@ export async function listFunctionRegistries(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List function registries in a workspace",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...paginationArgs(),
   }),

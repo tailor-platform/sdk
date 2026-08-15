@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { deploymentArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -64,9 +64,9 @@ export async function getOAuth2Client(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get OAuth2 client credentials (including client secret).",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       positional: true,
       description: "OAuth2 client name",
     }),

@@ -12,7 +12,7 @@
  * - validate: Validate migration files and detect schema drift without deploying
  */
 
-import { defineCommand } from "politty";
+import { defineCommand } from "@politty/valibot";
 import { generateCommand } from "./generate";
 import { rebaselineCommand } from "./rebaseline";
 import { scriptCommand } from "./script";

@@ -1,4 +1,6 @@
+import * as v from "valibot";
 import { type OperatorClient } from "#/cli/shared/client";
+import { formatValiIssues } from "#/cli/shared/vali-issues";
 import { WorkflowJobFunctionExecutionPolicySchema } from "#/parser/service/workflow/schema";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -102,14 +104,14 @@ function validatePolicy(policy: ExecutionPolicyInstance): void {
       `Invalid workflow execution policy "${policy.name}": key must not end with '*'; omit the '*' and set matchType: "prefix" for wildcard policies (the SDK appends '*' automatically).`,
     );
   }
-  const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse({
+  const parsed = v.safeParse(WorkflowJobFunctionExecutionPolicySchema, {
     name: policy.name,
     key: toPlatformExecutionPolicyKey(policy),
     concurrencyPolicy: policy.concurrencyPolicy,
   });
   if (!parsed.success) {
     throw new Error(
-      `Invalid workflow execution policy "${policy.name}": ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
+      `Invalid workflow execution policy "${policy.name}": ${formatValiIssues(parsed.issues)}`,
     );
   }
 }

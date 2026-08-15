@@ -1,10 +1,10 @@
+import { arg } from "@politty/valibot";
 import { loadSeedContext } from "@tailor-platform/sdk/cli";
 import { configArg } from "@tailor-platform/shared/args";
 import { defineAppCommand } from "@tailor-platform/shared/command";
 import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 
 export const seedFillCommand = defineAppCommand({
   name: "fill",
@@ -15,14 +15,14 @@ export const seedFillCommand = defineAppCommand({
     "already in the file is never replaced, and a line that gains nothing is left byte for byte as " +
     "it was. A field the type gives no value to is skipped, so one field list covers a whole data " +
     "directory.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...configArg,
-    fields: arg(z.string().default("id"), {
+    fields: arg(v.optional(v.string(), "id"), {
       alias: "f",
       description: "Comma-separated fields to fill",
       completion: { type: "none" },
     }),
-    path: arg(z.string().optional(), {
+    path: arg(v.optional(v.string()), {
       positional: true,
       description:
         "File or directory to fill (default: the data directory under the seedPlugin distPath)",

@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import open from "open";
-import { z } from "zod";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -38,20 +38,26 @@ function randomState() {
 export const authorizeAuthConnectionCommand = defineAppCommand({
   name: "authorize",
   description: "Authorize an auth connection via OAuth2 flow.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...connectionNameArgs,
-    scopes: z
-      .string()
-      .optional()
-      .default(defaultScopes)
-      .describe("OAuth2 scopes to request (comma-separated)"),
-    port: z.coerce.number().optional().default(defaultPort).describe("Local callback server port"),
-    "no-browser": z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe("Don't open browser automatically"),
+    scopes: v.optional(
+      v.pipe(v.string(), v.description("OAuth2 scopes to request (comma-separated)")),
+      defaultScopes,
+    ),
+    port: v.optional(
+      v.pipe(
+        v.unknown(),
+        v.transform(Number),
+        v.integer(),
+        v.description("Local callback server port"),
+      ),
+      defaultPort,
+    ),
+    "no-browser": v.optional(
+      v.pipe(v.boolean(), v.description("Don't open browser automatically")),
+      false,
+    ),
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });

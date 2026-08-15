@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expect, test } from "vitest";
 import { GQL_PERMISSION_INVALID_OPERAND_MESSAGE, TailorDBTypeSchema } from "./schema";
 
@@ -14,14 +15,12 @@ const makeType = (gql: unknown) => ({
 });
 
 function getInvalidOperandIssue(gql: unknown) {
-  const result = TailorDBTypeSchema.safeParse(makeType(gql));
+  const result = v.safeParse(TailorDBTypeSchema, makeType(gql));
   expect(result.success).toBe(false);
   if (result.success) {
     throw new Error("Expected TailorDBTypeSchema parsing to fail");
   }
-  return result.error.issues.find((i) =>
-    i.message.includes(GQL_PERMISSION_INVALID_OPERAND_MESSAGE),
-  );
+  return result.issues.find((i) => i.message.includes(GQL_PERMISSION_INVALID_OPERAND_MESSAGE));
 }
 
 describe("TailorDBTypeSchema gqlPermission validation", () => {
@@ -49,7 +48,7 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
         permit: true,
       },
     ]);
-    const result = TailorDBTypeSchema.safeParse(input);
+    const result = v.safeParse(TailorDBTypeSchema, input);
     expect(result.success).toBe(true);
   });
 });

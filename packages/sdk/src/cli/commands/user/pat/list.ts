@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,7 +10,7 @@ import { createPatOperatorClient } from "./user";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z.strictObject({ ...paginationArgs() }),
+  args: v.strictObject({ ...paginationArgs() }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const client = await createPatOperatorClient();

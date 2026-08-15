@@ -1,16 +1,27 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { defineCommand, runMain } from "@politty/valibot";
 import { serializeError } from "@tailor-platform/sdk/cli";
 import { commonArgs } from "@tailor-platform/shared/args";
 import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
-import { defineCommand, runMain } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { seedApplyCommand } from "./apply";
 import { seedFillCommand } from "./fill";
 import { seedValidateCommand } from "./validate";
+
+function formatValiError(error: v.ValiError<v.GenericSchema>): string {
+  const flat = v.flatten(error.issues);
+  const lines: string[] = [...(flat.root ?? [])];
+  for (const [fieldPath, messages] of Object.entries(flat.nested ?? {})) {
+    for (const message of messages ?? []) {
+      lines.push(`${fieldPath}: ${message}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 function hasFormat(error: unknown): error is { format(): string } {
   return (
@@ -38,12 +49,14 @@ const mainCommand = defineCommand({
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   // -v matches the generated seed runner this plugin replaces; strip unknown keys
-  globalArgs: z.object(commonArgs({ verboseAlias: "v" })),
+  globalArgs: v.object(commonArgs({ verboseAlias: "v" })),
   displayErrors: false,
   cleanup: ({ error }) => {
     if (!error) return;
     if (logger.jsonMode) {
       logger.log(serializeError(error, { includeStack: logger.verbose }));
+    } else if (error instanceof v.ValiError) {
+      logger.log(formatValiError(error));
     } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {

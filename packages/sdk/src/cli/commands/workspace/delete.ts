@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { confirmationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -11,17 +11,17 @@ import { assertDefined } from "#/utils/assert";
 import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
 
 // strip unknown keys
-const deleteWorkspaceOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
+const deleteWorkspaceOptionsSchema = v.object({
+  workspaceId: v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID")),
 });
 
-export type DeleteWorkspaceOptions = z.input<typeof deleteWorkspaceOptionsSchema>;
+export type DeleteWorkspaceOptions = v.InferInput<typeof deleteWorkspaceOptionsSchema>;
 
 async function loadOptions(options: DeleteWorkspaceOptions) {
   // Validate options with zod schema
-  const result = deleteWorkspaceOptionsSchema.safeParse(options);
+  const result = v.safeParse(deleteWorkspaceOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
@@ -29,7 +29,7 @@ async function loadOptions(options: DeleteWorkspaceOptions) {
 
   return {
     client,
-    workspaceId: result.data.workspaceId,
+    workspaceId: result.output.workspaceId,
   };
 }
 
@@ -51,8 +51,8 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Tailor Platform workspace.",
-  args: z.strictObject({
-    "workspace-id": arg(z.string(), {
+  args: v.strictObject({
+    "workspace-id": arg(v.string(), {
       alias: "w",
       description: "Workspace ID",
     }),
@@ -101,7 +101,7 @@ export const deleteCommand = defineAppCommand({
     // Remove profiles associated with the deleted workspace
     const pfConfig = await readPlatformConfig();
     const profilesToDelete = Object.entries(pfConfig.profiles).filter(
-      ([, profile]) => profile?.workspace_id === workspaceId,
+      ([, profile]) => profile.workspace_id === workspaceId,
     );
     if (profilesToDelete.length > 0) {
       for (const [profileName] of profilesToDelete) {

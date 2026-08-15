@@ -1,303 +1,384 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/index";
+import { functionSchema } from "#/parser/service/common";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { ValueOperand } from "#/configure/services/auth/types";
 import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 
-export const AuthInvokerObjectSchema = z.strictObject({
-  namespace: z.string().describe("Auth namespace"),
-  machineUserName: z.string().describe("Machine user name for authentication"),
+export const AuthInvokerObjectSchema = v.strictObject({
+  namespace: v.pipe(v.string(), v.description("Auth namespace")),
+  machineUserName: v.pipe(v.string(), v.description("Machine user name for authentication")),
 });
 
-export const AuthInvokerSchema = z.union([
-  z.string().describe("Machine user name (namespace auto-resolved from auth service)"),
+export const AuthInvokerSchema = v.union([
+  v.pipe(
+    v.string(),
+    v.description("Machine user name (namespace auto-resolved from auth service)"),
+  ),
   AuthInvokerObjectSchema,
 ]);
 
-const secretValueSchema = z.strictObject({
-  vaultName: z.string().describe("Vault name containing the secret"),
-  secretKey: z.string().describe("Key of the secret in the vault"),
+const secretValueSchema = v.strictObject({
+  vaultName: v.pipe(v.string(), v.description("Vault name containing the secret")),
+  secretKey: v.pipe(v.string(), v.description("Key of the secret in the vault")),
 });
 
-export const OIDCSchema = z.strictObject({
-  name: z.string().describe("Identity provider name"),
-  kind: z.literal("OIDC"),
-  clientID: z.string().describe("OAuth2 client ID"),
-  clientSecret: secretValueSchema.describe("OAuth2 client secret"),
-  providerURL: z.string().describe("OIDC provider URL"),
-  issuerURL: z.string().optional().describe("OIDC issuer URL (defaults to providerURL)"),
-  usernameClaim: z.string().optional().describe("JWT claim to use as username"),
+export const OIDCSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("Identity provider name")),
+  kind: v.literal("OIDC"),
+  clientID: v.pipe(v.string(), v.description("OAuth2 client ID")),
+  clientSecret: v.pipe(secretValueSchema, v.description("OAuth2 client secret")),
+  providerURL: v.pipe(v.string(), v.description("OIDC provider URL")),
+  issuerURL: v.optional(
+    v.pipe(v.string(), v.description("OIDC issuer URL (defaults to providerURL)")),
+  ),
+  usernameClaim: v.optional(v.pipe(v.string(), v.description("JWT claim to use as username"))),
 });
 
-export const SAMLSchema = z
-  .strictObject({
-    name: z.string().describe("Identity provider name"),
-    kind: z.literal("SAML"),
-    enableSignRequest: z.boolean().default(false).describe("Enable signing of SAML requests"),
-    metadataURL: z
-      .string()
-      .optional()
-      .describe("URL to fetch SAML metadata (mutually exclusive with rawMetadata)"),
-    rawMetadata: z
-      .string()
-      .optional()
-      .describe("Raw SAML metadata XML (mutually exclusive with metadataURL)"),
-    defaultRedirectURL: z
-      .string()
-      .optional()
-      .describe("URL to redirect to when SAML ACS receives a response with an empty RelayState."),
-  })
-
-  .refine((value) => {
+export const SAMLSchema = v.pipe(
+  v.strictObject({
+    name: v.pipe(v.string(), v.description("Identity provider name")),
+    kind: v.literal("SAML"),
+    enableSignRequest: v.optional(
+      v.pipe(v.boolean(), v.description("Enable signing of SAML requests")),
+      false,
+    ),
+    metadataURL: v.optional(
+      v.pipe(
+        v.string(),
+        v.description("URL to fetch SAML metadata (mutually exclusive with rawMetadata)"),
+      ),
+    ),
+    rawMetadata: v.optional(
+      v.pipe(
+        v.string(),
+        v.description("Raw SAML metadata XML (mutually exclusive with metadataURL)"),
+      ),
+    ),
+    defaultRedirectURL: v.optional(
+      v.pipe(
+        v.string(),
+        v.description(
+          "URL to redirect to when SAML ACS receives a response with an empty RelayState.",
+        ),
+      ),
+    ),
+  }),
+  v.check((value) => {
     const hasMetadata = value.metadataURL !== undefined;
     const hasRaw = value.rawMetadata !== undefined;
     return hasMetadata !== hasRaw;
-  }, "Provide either metadataURL or rawMetadata");
+  }, "Provide either metadataURL or rawMetadata"),
+);
 
-export const IDTokenSchema = z.strictObject({
-  name: z.string().describe("Identity provider name"),
-  kind: z.literal("IDToken"),
-  providerURL: z.string().describe("ID token provider URL"),
-  issuerURL: z.string().optional().describe("ID token issuer URL"),
-  clientID: z.string().describe("Client ID for ID token validation"),
-  usernameClaim: z.string().optional().describe("JWT claim to use as username"),
+export const IDTokenSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("Identity provider name")),
+  kind: v.literal("IDToken"),
+  providerURL: v.pipe(v.string(), v.description("ID token provider URL")),
+  issuerURL: v.optional(v.pipe(v.string(), v.description("ID token issuer URL"))),
+  clientID: v.pipe(v.string(), v.description("Client ID for ID token validation")),
+  usernameClaim: v.optional(v.pipe(v.string(), v.description("JWT claim to use as username"))),
 });
 
-export const BuiltinIdPSchema = z.strictObject({
-  name: z.string().describe("Identity provider name"),
-  kind: z.literal("BuiltInIdP"),
-  namespace: z.string().describe("IdP namespace"),
-  clientName: z.string().describe("OAuth2 client name in the IdP"),
+export const BuiltinIdPSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("Identity provider name")),
+  kind: v.literal("BuiltInIdP"),
+  namespace: v.pipe(v.string(), v.description("IdP namespace")),
+  clientName: v.pipe(v.string(), v.description("OAuth2 client name in the IdP")),
 });
 
-export const IdProviderSchema = z.discriminatedUnion("kind", [
+export const IdProviderSchema = v.variant("kind", [
   OIDCSchema,
   SAMLSchema,
   IDTokenSchema,
   BuiltinIdPSchema,
 ]);
 
-export const OAuth2ClientGrantTypeSchema = z
-  .union([z.literal("authorization_code"), z.literal("refresh_token")])
-  .describe("OAuth2 grant type");
+export const OAuth2ClientGrantTypeSchema = v.pipe(
+  v.union([v.literal("authorization_code"), v.literal("refresh_token")]),
+  v.description("OAuth2 grant type"),
+);
 
-export const OAuth2ClientSchema = z
-  .strictObject({
-    description: z.string().optional().describe("Client description"),
-    grantTypes: z
-      .array(OAuth2ClientGrantTypeSchema)
-      .default(["authorization_code", "refresh_token"])
-      .describe("Allowed OAuth2 grant types"),
-    redirectURIs: z
-      .array(
-        z.union([
-          z.templateLiteral(["https://", z.string()]),
-          z.templateLiteral(["http://", z.string()]),
-          z.templateLiteral([z.string(), ":url"]),
-          z.templateLiteral([z.string(), ":url/", z.string()]),
-        ]),
-      )
-      .describe("Allowed redirect URIs"),
-    clientType: z
-      .union([z.literal("confidential"), z.literal("public"), z.literal("browser")])
-      .optional()
-      .describe("OAuth2 client type"),
-    accessTokenLifetimeSeconds: z
-      .number()
-      .int()
-      .min(60, "Minimum access token lifetime is 60 seconds")
-      .max(86400, "Maximum access token lifetime is 1 day (86400 seconds)")
-      .optional()
-      .describe("Access token lifetime in seconds (60-86400)")
-      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
-    refreshTokenLifetimeSeconds: z
-      .number()
-      .int()
-      .min(60, "Minimum refresh token lifetime is 60 seconds")
-      .max(604800, "Maximum refresh token lifetime is 7 days (604800 seconds)")
-      .optional()
-      .describe("Refresh token lifetime in seconds (60-604800)")
-      .transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
-    requireDpop: z
-      .boolean()
-      .optional()
-      .describe("Require DPoP (Demonstrating Proof-of-Possession) for token requests"),
-  })
+// Redirect URIs accepted for OAuth2 clients: absolute http(s) URLs, or the
+// app-scheme placeholders `<scheme>:url` / `<scheme>:url/<path>` resolved at
+// deployment time. There is no valibot template-literal schema, so the shape
+// is validated with an explicit predicate instead.
+const oauth2RedirectURISchema = v.custom<
+  `https://${string}` | `http://${string}` | `${string}:url` | `${string}:url/${string}`
+>(
+  (val) =>
+    typeof val === "string" &&
+    (val.startsWith("https://") ||
+      val.startsWith("http://") ||
+      val.endsWith(":url") ||
+      val.includes(":url/")),
+);
 
-  .refine((data) => !(data.clientType === "browser" && data.requireDpop === true), {
-    message: "requireDpop cannot be set to true for browser clients as they don't support DPoP",
-    path: ["requireDpop"],
-  });
+export const OAuth2ClientSchema = v.pipe(
+  v.strictObject({
+    description: v.optional(v.pipe(v.string(), v.description("Client description"))),
+    grantTypes: v.optional(
+      v.pipe(v.array(OAuth2ClientGrantTypeSchema), v.description("Allowed OAuth2 grant types")),
+      ["authorization_code", "refresh_token"],
+    ),
+    redirectURIs: v.pipe(v.array(oauth2RedirectURISchema), v.description("Allowed redirect URIs")),
+    clientType: v.optional(
+      v.pipe(
+        v.union([v.literal("confidential"), v.literal("public"), v.literal("browser")]),
+        v.description("OAuth2 client type"),
+      ),
+    ),
+    accessTokenLifetimeSeconds: v.pipe(
+      v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(60, "Minimum access token lifetime is 60 seconds"),
+          v.maxValue(86400, "Maximum access token lifetime is 1 day (86400 seconds)"),
+          v.description("Access token lifetime in seconds (60-86400)"),
+        ),
+      ),
+      v.transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+    ),
+    refreshTokenLifetimeSeconds: v.pipe(
+      v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(60, "Minimum refresh token lifetime is 60 seconds"),
+          v.maxValue(604800, "Maximum refresh token lifetime is 7 days (604800 seconds)"),
+          v.description("Refresh token lifetime in seconds (60-604800)"),
+        ),
+      ),
+      v.transform((val) => (val ? { seconds: BigInt(val), nanos: 0 } : undefined)),
+    ),
+    requireDpop: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description("Require DPoP (Demonstrating Proof-of-Possession) for token requests"),
+      ),
+    ),
+  }),
+  v.forward(
+    v.check(
+      (data) => !(data.clientType === "browser" && data.requireDpop === true),
+      "requireDpop cannot be set to true for browser clients as they don't support DPoP",
+    ),
+    ["requireDpop"],
+  ),
+);
 
-export const SCIMAuthorizationSchema = z.strictObject({
-  type: z.union([z.literal("oauth2"), z.literal("bearer")]).describe("SCIM authorization type"),
-  bearerSecret: secretValueSchema
-    .optional()
-    .describe("Bearer token secret (required for bearer type)"),
+export const SCIMAuthorizationSchema = v.strictObject({
+  type: v.pipe(
+    v.union([v.literal("oauth2"), v.literal("bearer")]),
+    v.description("SCIM authorization type"),
+  ),
+  bearerSecret: v.optional(
+    v.pipe(secretValueSchema, v.description("Bearer token secret (required for bearer type)")),
+  ),
 });
 
-export const SCIMAttributeTypeSchema = z
-  .union([
-    z.literal("string"),
-    z.literal("number"),
-    z.literal("boolean"),
-    z.literal("datetime"),
-    z.literal("complex"),
-  ])
-  .describe("SCIM attribute data type");
+export const SCIMAttributeTypeSchema = v.pipe(
+  v.union([
+    v.literal("string"),
+    v.literal("number"),
+    v.literal("boolean"),
+    v.literal("datetime"),
+    v.literal("complex"),
+  ]),
+  v.description("SCIM attribute data type"),
+);
 
-export const SCIMAttributeSchema = z.strictObject({
-  type: SCIMAttributeTypeSchema.describe("Attribute data type"),
-  name: z.string().describe("Attribute name"),
-  description: z.string().optional().describe("Attribute description"),
-  mutability: z
-    .union([z.literal("readOnly"), z.literal("readWrite"), z.literal("writeOnly")])
-    .optional()
-    .describe("Attribute mutability"),
-  required: z.boolean().optional().describe("Whether the attribute is required"),
-  multiValued: z.boolean().optional().describe("Whether the attribute can have multiple values"),
-  uniqueness: z
-    .union([z.literal("none"), z.literal("server"), z.literal("global")])
-    .optional()
-    .describe("Uniqueness constraint"),
-  canonicalValues: z.array(z.string()).nullable().optional().describe("List of canonical values"),
-  get subAttributes() {
-    return z.array(SCIMAttributeSchema).nullable().optional();
+interface SCIMAttribute {
+  type: "string" | "number" | "boolean" | "datetime" | "complex";
+  name: string;
+  description?: string;
+  mutability?: "readOnly" | "readWrite" | "writeOnly";
+  required?: boolean;
+  multiValued?: boolean;
+  uniqueness?: "none" | "server" | "global";
+  canonicalValues?: string[] | null;
+  subAttributes?: SCIMAttribute[] | null;
+}
+
+export const SCIMAttributeSchema = v.strictObject({
+  type: v.pipe(SCIMAttributeTypeSchema, v.description("Attribute data type")),
+  name: v.pipe(v.string(), v.description("Attribute name")),
+  description: v.optional(v.pipe(v.string(), v.description("Attribute description"))),
+  mutability: v.optional(
+    v.pipe(
+      v.union([v.literal("readOnly"), v.literal("readWrite"), v.literal("writeOnly")]),
+      v.description("Attribute mutability"),
+    ),
+  ),
+  required: v.optional(v.pipe(v.boolean(), v.description("Whether the attribute is required"))),
+  multiValued: v.optional(
+    v.pipe(v.boolean(), v.description("Whether the attribute can have multiple values")),
+  ),
+  uniqueness: v.optional(
+    v.pipe(
+      v.union([v.literal("none"), v.literal("server"), v.literal("global")]),
+      v.description("Uniqueness constraint"),
+    ),
+  ),
+  canonicalValues: v.optional(
+    v.nullable(v.pipe(v.array(v.string()), v.description("List of canonical values"))),
+  ),
+  get subAttributes(): v.OptionalSchema<
+    v.NullableSchema<v.ArraySchema<v.GenericSchema<SCIMAttribute>, undefined>, undefined>,
+    undefined
+  > {
+    return v.optional(v.nullable(v.array(SCIMAttributeSchema)));
   },
 });
 
-const SCIMSchemaSchema = z.strictObject({
-  name: z.string().describe("SCIM schema name"),
-  attributes: z.array(SCIMAttributeSchema).describe("Schema attributes"),
+const SCIMSchemaSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("SCIM schema name")),
+  attributes: v.pipe(v.array(SCIMAttributeSchema), v.description("Schema attributes")),
 });
 
-export const SCIMAttributeMappingSchema = z.strictObject({
-  tailorDBField: z.string().describe("TailorDB field name to map to"),
-  scimPath: z.string().describe("SCIM attribute path"),
+export const SCIMAttributeMappingSchema = v.strictObject({
+  tailorDBField: v.pipe(v.string(), v.description("TailorDB field name to map to")),
+  scimPath: v.pipe(v.string(), v.description("SCIM attribute path")),
 });
 
-export const SCIMResourceSchema = z.strictObject({
-  name: z.string().describe("SCIM resource name"),
-  tailorDBNamespace: z.string().describe("TailorDB namespace for the resource"),
-  tailorDBType: z.string().describe("TailorDB type name for the resource"),
-  coreSchema: SCIMSchemaSchema.describe("Core SCIM schema definition"),
-  attributeMapping: z.array(SCIMAttributeMappingSchema).describe("Attribute mapping configuration"),
+export const SCIMResourceSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("SCIM resource name")),
+  tailorDBNamespace: v.pipe(v.string(), v.description("TailorDB namespace for the resource")),
+  tailorDBType: v.pipe(v.string(), v.description("TailorDB type name for the resource")),
+  coreSchema: v.pipe(SCIMSchemaSchema, v.description("Core SCIM schema definition")),
+  attributeMapping: v.pipe(
+    v.array(SCIMAttributeMappingSchema),
+    v.description("Attribute mapping configuration"),
+  ),
 });
 
-export const SCIMSchema = z.strictObject({
-  machineUserName: z.string().describe("Machine user name for SCIM operations"),
-  authorization: SCIMAuthorizationSchema.describe("SCIM authorization configuration"),
-  resources: z.array(SCIMResourceSchema).describe("SCIM resource definitions"),
+export const SCIMSchema = v.strictObject({
+  machineUserName: v.pipe(v.string(), v.description("Machine user name for SCIM operations")),
+  authorization: v.pipe(SCIMAuthorizationSchema, v.description("SCIM authorization configuration")),
+  resources: v.pipe(v.array(SCIMResourceSchema), v.description("SCIM resource definitions")),
 });
 
-export const TenantProviderSchema = z.strictObject({
-  namespace: z.string().describe("TailorDB namespace for the tenant type"),
-  type: z.string().describe("TailorDB type name for tenants"),
-  signatureField: z.string().describe("Field used as the tenant signature"),
+export const TenantProviderSchema = v.strictObject({
+  namespace: v.pipe(v.string(), v.description("TailorDB namespace for the tenant type")),
+  type: v.pipe(v.string(), v.description("TailorDB type name for tenants")),
+  signatureField: v.pipe(v.string(), v.description("Field used as the tenant signature")),
 });
 
-const UserProfileSchema = z.strictObject({
-  namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
-  type: z
-    .custom<TailorDBInstance>()
-    .transform(stripTailorDBTypeBuilderHelpers)
-    .pipe(TailorDBTypeSchema),
-  usernameField: z.string(),
-  attributes: z.record(z.string(), z.literal(true)).optional(),
-  attributeList: z.array(z.string()).optional(),
+const UserProfileSchema = v.strictObject({
+  namespace: v.optional(
+    v.pipe(v.string(), v.description("TailorDB namespace where the user type is defined")),
+  ),
+  type: v.pipe(
+    v.custom<TailorDBInstance>(() => true),
+    v.transform((val: TailorDBInstance) => stripTailorDBTypeBuilderHelpers(val)),
+    TailorDBTypeSchema,
+  ),
+  usernameField: v.string(),
+  attributes: v.optional(v.record(v.string(), v.literal(true))),
+  attributeList: v.optional(v.array(v.string())),
 });
 
-const ValueOperandSchema: z.ZodType<ValueOperand> = z.union([
-  z.string(),
-  z.boolean(),
-  z.array(z.string()),
-  z.array(z.boolean()),
+const ValueOperandSchema: v.GenericSchema<ValueOperand> = v.union([
+  v.string(),
+  v.boolean(),
+  v.array(v.string()),
+  v.array(v.boolean()),
 ]);
 
-const MachineUserSchema = z.strictObject({
+const MachineUserSchema = v.strictObject({
   // null/undefined values mean "attribute not set" and are dropped so
   // downstream (deploy, drift diff) only ever sees concrete values.
-  attributes: z
-    .record(z.string(), ValueOperandSchema.nullish())
-    .transform(
-      (attributes): Record<string, ValueOperand> =>
-        Object.fromEntries(
-          Object.entries(attributes).filter(
-            (entry): entry is [string, ValueOperand] => entry[1] != null,
+  attributes: v.optional(
+    v.pipe(
+      v.record(v.string(), v.nullish(ValueOperandSchema)),
+      v.transform(
+        (attributes): Record<string, ValueOperand> =>
+          Object.fromEntries(
+            Object.entries(attributes).filter(
+              (entry): entry is [string, ValueOperand] => entry[1] != null,
+            ),
           ),
+      ),
+    ),
+  ),
+  attributeList: v.optional(v.array(v.pipe(v.string(), v.uuid()))),
+});
+
+const BeforeLoginHookSchema = v.strictObject({
+  handler: functionSchema,
+  invoker: v.string(),
+});
+
+const AuthConfigBaseSchema = v.strictObject({
+  name: v.pipe(v.string(), v.description("Auth service name")),
+  hooks: v.optional(
+    v.pipe(
+      v.strictObject({
+        beforeLogin: v.optional(
+          v.pipe(BeforeLoginHookSchema, v.description("Before login auth hook")),
         ),
-    )
-    .optional(),
-  attributeList: z.array(z.uuid()).optional(),
-});
-
-const BeforeLoginHookSchema = z.strictObject({
-  handler: z.function(),
-  invoker: z.string(),
-});
-
-const AuthConfigBaseSchema = z.strictObject({
-  name: z.string().describe("Auth service name"),
-  hooks: z
-    .strictObject({
-      beforeLogin: BeforeLoginHookSchema.optional().describe("Before login auth hook"),
-    })
-    .optional()
-    .describe("Auth hooks"),
-  machineUsers: z
-    .record(z.string(), MachineUserSchema)
-    .optional()
-    .describe("Machine user definitions"),
-  oauth2Clients: z
-    .record(z.string(), OAuth2ClientSchema)
-    .optional()
-    .describe("OAuth2 client definitions"),
-  idProvider: IdProviderSchema.optional().describe("Identity provider configuration"),
-  scim: SCIMSchema.optional().describe("SCIM provisioning configuration"),
-  tenantProvider: TenantProviderSchema.optional().describe("Multi-tenant provider configuration"),
-  connections: z
-    .record(z.string(), AuthConnectionConfigSchema)
-    .optional()
-    .describe("Auth connection definitions for external OAuth2 providers"),
-  publishSessionEvents: z.boolean().optional().describe("Enable publishing session events"),
-});
-
-export const AuthConfigSchema = z
-  .xor(
-    [
-      AuthConfigBaseSchema.extend({
-        userProfile: UserProfileSchema.optional().describe("User profile configuration"),
-        machineUserAttributes: z.undefined().optional(),
       }),
-      AuthConfigBaseSchema.extend({
-        userProfile: z.undefined().optional(),
-        machineUserAttributes: z
-          .record(z.string(), TailorFieldSchema)
-          .describe("Machine user attribute fields"),
-      }),
-    ],
-    {
-      error: (iss) => {
-        // zod may report error codes not covered by its type definitions
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (iss.code !== "invalid_union") return undefined;
-        // zod may report error codes not covered by its type definitions
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (iss.errors.length < 2) return undefined;
-        const isOnlyMutexViolation = iss.errors.every((variantErrors) =>
-          variantErrors.every(
-            (e) =>
-              e.path.length === 1 &&
-              (e.path[0] === "userProfile" || e.path[0] === "machineUserAttributes"),
-          ),
-        );
-        if (isOnlyMutexViolation) {
-          return "Specify either `userProfile` or `machineUserAttributes`, not both.";
-        }
-        return undefined;
-      },
-    },
-  )
-  .brand("AuthConfig");
+      v.description("Auth hooks"),
+    ),
+  ),
+  machineUsers: v.optional(
+    v.pipe(v.record(v.string(), MachineUserSchema), v.description("Machine user definitions")),
+  ),
+  oauth2Clients: v.optional(
+    v.pipe(v.record(v.string(), OAuth2ClientSchema), v.description("OAuth2 client definitions")),
+  ),
+  idProvider: v.optional(
+    v.pipe(IdProviderSchema, v.description("Identity provider configuration")),
+  ),
+  scim: v.optional(v.pipe(SCIMSchema, v.description("SCIM provisioning configuration"))),
+  tenantProvider: v.optional(
+    v.pipe(TenantProviderSchema, v.description("Multi-tenant provider configuration")),
+  ),
+  connections: v.optional(
+    v.pipe(
+      v.record(v.string(), AuthConnectionConfigSchema),
+      v.description("Auth connection definitions for external OAuth2 providers"),
+    ),
+  ),
+  publishSessionEvents: v.optional(
+    v.pipe(v.boolean(), v.description("Enable publishing session events")),
+  ),
+});
+
+const AUTH_CONFIG_MUTEX_MESSAGE =
+  "Specify either `userProfile` or `machineUserAttributes`, not both.";
+
+function hasBothAuthConfigVariantFields(input: unknown): boolean {
+  if (typeof input !== "object" || input === null) {
+    return false;
+  }
+  const record = input as Record<string, unknown>;
+  return record.userProfile !== undefined && record.machineUserAttributes !== undefined;
+}
+
+const AuthConfigWithUserProfileSchema = v.strictObject({
+  ...AuthConfigBaseSchema.entries,
+  userProfile: v.optional(v.pipe(UserProfileSchema, v.description("User profile configuration"))),
+  machineUserAttributes: v.optional(v.undefined()),
+});
+
+const AuthConfigWithMachineUserAttributesSchema = v.strictObject({
+  ...AuthConfigBaseSchema.entries,
+  userProfile: v.optional(v.undefined()),
+  machineUserAttributes: v.pipe(
+    v.record(v.string(), TailorFieldSchema),
+    v.description("Machine user attribute fields"),
+  ),
+});
+
+export const AuthConfigSchema = v.pipe(
+  v.union([AuthConfigWithUserProfileSchema, AuthConfigWithMachineUserAttributesSchema], (issue) =>
+    hasBothAuthConfigVariantFields(issue.input)
+      ? AUTH_CONFIG_MUTEX_MESSAGE
+      : "Invalid auth configuration",
+  ),
+  v.brand("AuthConfig"),
+);

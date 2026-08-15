@@ -2,15 +2,15 @@ import { type TailorDBService } from "#/cli/services/tailordb/service";
 import { type AuthConfigSchema } from "#/parser/service/auth/index";
 import { assertDefined } from "#/utils/assert";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
-import type { z } from "zod";
+import type * as v from "valibot";
 
 /**
- * Auth config after `AuthConfigSchema.parse`. The Zod `.brand("AuthConfig")` makes
+ * Auth config after `AuthConfigSchema.parse`. The Valibot `v.brand("AuthConfig")` makes
  * this type inhabitable only by parse output, so `createAuthService` can only be
  * called with a validated/transformed config (e.g. token lifetimes as Duration).
  * Passing a raw, unparsed config is a compile error.
  */
-type ParsedAuthConfig = z.output<typeof AuthConfigSchema>;
+type ParsedAuthConfig = v.InferOutput<typeof AuthConfigSchema>;
 
 type UserProfile = NonNullable<ParsedAuthConfig["userProfile"]> & {
   namespace: string;

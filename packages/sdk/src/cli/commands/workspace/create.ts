@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import {
   getConsoleBaseUrl,
   getOAuth2ClientId,
@@ -37,17 +37,17 @@ import type { ProfileInfo } from "../profile";
  * - organizationId, folderId: optional UUIDs
  */
 // strip unknown keys
-const createWorkspaceOptionsSchema = z.object({
+const createWorkspaceOptionsSchema = v.object({
   name: workspaceNameSchema,
-  region: z.string(),
-  deleteProtection: z.boolean().optional(),
-  organizationId: z.uuid().optional(),
-  folderId: z.uuid().optional(),
-  profile: profileNameSchema.optional(),
+  region: v.string(),
+  deleteProtection: v.optional(v.boolean()),
+  organizationId: v.optional(v.pipe(v.string(), v.uuid())),
+  folderId: v.optional(v.pipe(v.string(), v.uuid())),
+  profile: v.optional(profileNameSchema),
 });
 
-export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
-export type ValidatedCreateWorkspaceOptions = z.output<typeof createWorkspaceOptionsSchema>;
+export type CreateWorkspaceOptions = v.InferInput<typeof createWorkspaceOptionsSchema>;
+export type ValidatedCreateWorkspaceOptions = v.InferOutput<typeof createWorkspaceOptionsSchema>;
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
@@ -117,11 +117,11 @@ export async function createValidatedWorkspaceWithClient(
 export function validateCreateWorkspaceOptions(
   options: CreateWorkspaceOptions,
 ): ValidatedCreateWorkspaceOptions {
-  const result = createWorkspaceOptionsSchema.safeParse(options);
+  const result = v.safeParse(createWorkspaceOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
-  return result.data;
+  return result.output;
 }
 
 export { validateWorkspaceName } from "#/cli/shared/workspace-name";
@@ -129,42 +129,42 @@ export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
-  args: z.strictObject({
-    name: arg(z.string(), {
+  args: v.strictObject({
+    name: arg(v.string(), {
       alias: "n",
       description: "Workspace name",
     }),
-    region: arg(z.string(), {
+    region: arg(v.string(), {
       alias: "r",
       description: "Workspace region (us-west, asia-northeast)",
     }),
-    "delete-protection": arg(z.boolean().default(false), {
+    "delete-protection": arg(v.optional(v.boolean(), false), {
       alias: "d",
       description: "Enable delete protection",
     }),
-    "organization-id": arg(z.string().optional(), {
+    "organization-id": arg(v.optional(v.string()), {
       alias: "o",
       description: "Organization ID to workspace associate with",
       env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     }),
-    "folder-id": arg(z.string().optional(), {
+    "folder-id": arg(v.optional(v.string()), {
       alias: "f",
       description: "Folder ID to workspace associate with",
       env: "TAILOR_PLATFORM_FOLDER_ID",
     }),
-    "profile-name": arg(z.string().optional(), {
+    "profile-name": arg(v.optional(v.string()), {
       alias: "p",
       description: "Profile name to create",
     }),
-    profile: arg(profileNameSchema.optional(), {
+    profile: arg(v.optional(profileNameSchema), {
       description: "Workspace profile used for authentication and Platform selection",
       env: "TAILOR_PLATFORM_PROFILE",
     }),
-    "profile-user": arg(z.string().optional(), {
+    "profile-user": arg(v.optional(v.string()), {
       description:
         "User email address or machine user client ID for the profile (defaults to current user)",
     }),
-    permission: arg(z.enum(["write", "read"]).default("write"), {
+    permission: arg(v.optional(v.picklist(["write", "read"]), "write"), {
       description:
         "Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.",
     }),

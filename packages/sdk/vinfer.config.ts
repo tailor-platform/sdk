@@ -1,4 +1,4 @@
-import { defineConfig } from "zinfer";
+import { defineConfig } from "vinfer";
 
 export default defineConfig({
   project: "./tsconfig.json",

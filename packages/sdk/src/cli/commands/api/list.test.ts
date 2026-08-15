@@ -1,4 +1,4 @@
-import { runCommand } from "politty";
+import { runCommand } from "@politty/valibot";
 import { describe, expect, test, vi } from "vitest";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { apiCommand } from "./index";

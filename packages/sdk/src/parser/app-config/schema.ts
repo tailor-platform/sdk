@@ -1,28 +1,31 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { LOG_LEVELS } from "./log-level";
 
-const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
+const envValueSchema = v.union([v.string(), v.number(), v.boolean()]);
 
 // A boolean is never detected as a credential, so it cannot need an allowance.
-const allowedSecretValueSchema = z.union([z.string(), z.number()]);
+const allowedSecretValueSchema = v.union([v.string(), v.number()]);
 
-const envEntrySchema = z.union([
+const envEntrySchema = v.union([
   envValueSchema,
-  z.strictObject({
+  v.strictObject({
     value: allowedSecretValueSchema,
-    allowSecretReason: z.string().min(1, {
-      message: "'allowSecretReason' must state why the value is safe to keep in 'env'.",
-    }),
+    allowSecretReason: v.pipe(
+      v.string(),
+      v.minLength(1, "'allowSecretReason' must state why the value is safe to keep in 'env'."),
+    ),
   }),
 ]);
 
-export const LogLevelSchema = z.enum(LOG_LEVELS);
+export const LogLevelSchema = v.picklist(LOG_LEVELS);
 
-const logLevelSchema = z
-  .string()
-  .refine((value) => LogLevelSchema.safeParse(value.trim().toUpperCase()).success, {
-    message: `'logLevel' must be one of: ${LOG_LEVELS.join(", ")}.`,
-  });
+const logLevelSchema = v.pipe(
+  v.string(),
+  v.check(
+    (value) => v.safeParse(LogLevelSchema, value.trim().toUpperCase()).success,
+    `'logLevel' must be one of: ${LOG_LEVELS.join(", ")}.`,
+  ),
+);
 
 /**
  * Structural validation schema for `defineConfig({...})`. Validates only
@@ -35,23 +38,23 @@ const logLevelSchema = z
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */
-export const AppConfigSchema = z.strictObject({
-  id: z.uuid({ message: "'id' must be a UUID." }).optional(),
-  name: z.string().min(1, { message: "'name' must be a non-empty string." }),
-  env: z.record(z.string(), envEntrySchema).optional(),
-  cors: z.array(z.string()).optional(),
-  allowedIpAddresses: z.array(z.string()).optional(),
-  disableIntrospection: z.boolean().optional(),
-  inlineSourcemap: z.boolean().optional(),
-  logLevel: logLevelSchema.optional(),
-  db: z.unknown().optional(),
-  resolver: z.unknown().optional(),
-  idp: z.unknown().optional(),
-  auth: z.unknown().optional(),
-  executor: z.unknown().optional(),
-  workflow: z.unknown().optional(),
-  httpAdapter: z.unknown().optional(),
-  staticWebsites: z.unknown().optional(),
-  aiGateways: z.unknown().optional(),
-  secrets: z.unknown().optional(),
+export const AppConfigSchema = v.strictObject({
+  id: v.optional(v.pipe(v.string(), v.uuid("'id' must be a UUID."))),
+  name: v.pipe(v.string(), v.minLength(1, "'name' must be a non-empty string.")),
+  env: v.optional(v.record(v.string(), envEntrySchema)),
+  cors: v.optional(v.array(v.string())),
+  allowedIpAddresses: v.optional(v.array(v.string())),
+  disableIntrospection: v.optional(v.boolean()),
+  inlineSourcemap: v.optional(v.boolean()),
+  logLevel: v.optional(logLevelSchema),
+  db: v.optional(v.unknown()),
+  resolver: v.optional(v.unknown()),
+  idp: v.optional(v.unknown()),
+  auth: v.optional(v.unknown()),
+  executor: v.optional(v.unknown()),
+  workflow: v.optional(v.unknown()),
+  httpAdapter: v.optional(v.unknown()),
+  staticWebsites: v.optional(v.unknown()),
+  aiGateways: v.optional(v.unknown()),
+  secrets: v.optional(v.unknown()),
 });

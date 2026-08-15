@@ -4,7 +4,7 @@
 // "which keys of `User` hold a string/boolean (array)?" derivation is
 // identical, so it lives here once instead of being copied per service.
 //
-// This is a pure type module: type declarations only, no zod/schema
+// This is a pure type module: type declarations only, no valibot/schema
 // references, importable type-only from any layer.
 import type { InferredAttributes } from "#/runtime/types";
 

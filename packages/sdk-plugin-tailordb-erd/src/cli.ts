@@ -1,16 +1,27 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { defineCommand, runMain } from "@politty/valibot";
 import { commonArgs } from "@tailor-platform/shared/args";
 import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
-import { defineCommand, runMain } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { erdDeployCommand } from "./deploy";
 import { erdDiffCommand } from "./diff-command";
 import { erdExportCommand } from "./export";
 import { erdServeCommand } from "./serve";
+
+function formatValiError(error: v.ValiError<v.GenericSchema>): string {
+  const flat = v.flatten(error.issues);
+  const lines: string[] = [...(flat.root ?? [])];
+  for (const [fieldPath, messages] of Object.entries(flat.nested ?? {})) {
+    for (const message of messages ?? []) {
+      lines.push(`${fieldPath}: ${message}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 function hasFormat(error: unknown): error is { format(): string } {
   return (
@@ -39,12 +50,14 @@ const mainCommand = defineCommand({
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   // strip unknown keys
-  globalArgs: z.object(commonArgs()),
+  globalArgs: v.object(commonArgs()),
   displayErrors: false,
   // Render the SDK's CLIError format (details/suggestion) like the host CLI does.
   cleanup: ({ error }) => {
     if (!error) return;
-    if (hasFormat(error)) {
+    if (error instanceof v.ValiError) {
+      logger.log(formatValiError(error));
+    } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {
       logger.error(error.message);

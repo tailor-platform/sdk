@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { folderArgs, organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,13 +10,13 @@ import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
 // strip unknown keys
-const updateFolderOptionsSchema = z.object({
-  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
-  folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
-  name: z.string().min(1, "Name must not be empty"),
+const updateFolderOptionsSchema = v.object({
+  organizationId: v.pipe(v.string(), v.uuid("organization-id must be a valid UUID")),
+  folderId: v.pipe(v.string(), v.uuid("folder-id must be a valid UUID")),
+  name: v.pipe(v.string(), v.minLength(1, "Name must not be empty")),
 });
 
-export type UpdateFolderOptions = z.input<typeof updateFolderOptionsSchema>;
+export type UpdateFolderOptions = v.InferInput<typeof updateFolderOptionsSchema>;
 
 /**
  * Update a folder's name.
@@ -24,22 +24,22 @@ export type UpdateFolderOptions = z.input<typeof updateFolderOptionsSchema>;
  * @returns Updated folder details
  */
 export async function updateFolder(options: UpdateFolderOptions): Promise<FolderInfo> {
-  const result = updateFolderOptionsSchema.safeParse(options);
+  const result = v.safeParse(updateFolderOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.updateOrganizationFolder({
-    organizationId: result.data.organizationId,
-    folderId: result.data.folderId,
-    folderName: result.data.name,
+    organizationId: result.output.organizationId,
+    folderId: result.output.folderId,
+    folderName: result.output.name,
   });
 
   if (!response.folder) {
-    throw new Error(`Failed to update folder "${result.data.folderId}".`);
+    throw new Error(`Failed to update folder "${result.output.folderId}".`);
   }
 
   return folderInfo(response.folder);
@@ -48,10 +48,10 @@ export async function updateFolder(options: UpdateFolderOptions): Promise<Folder
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a folder's name.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...organizationArgs,
     ...folderArgs,
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       alias: "n",
       description: "New folder name",
     }),

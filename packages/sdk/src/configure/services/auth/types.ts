@@ -8,7 +8,7 @@ import type {
 import type { TailorEnv } from "#/runtime/types";
 // Auth configuration input types and user-field type machinery.
 //
-// This is a pure type module: type declarations only, no zod/schema
+// This is a pure type module: type declarations only, no valibot/schema
 // references, importable type-only from any layer.
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type {
@@ -22,7 +22,7 @@ import type {
 import type { NullableToOptional, output } from "#/types/helpers";
 import type { IsAny, JsonObject, JsonValue } from "type-fest";
 
-// Derived from generated types (zinfer inlines these literal unions)
+// Derived from generated types (vinfer inlines these literal unions)
 export type OAuth2ClientGrantType = OAuth2Client["grantTypes"][number];
 export type SCIMAttributeType = SCIMAttribute["type"];
 

@@ -22,4 +22,4 @@ Common mistake: new CLI commands, new config options, and new field types are **
 Write from the SDK user's perspective. Describe what changed for them, not implementation details.
 
 - Good: `Add decimal field type with optional scale parameter for fixed-point precision`
-- Bad: `Refactor schema parser to add decimal Zod schema with regex validation`
+- Bad: `Refactor schema parser to add decimal Valibot schema with regex validation`

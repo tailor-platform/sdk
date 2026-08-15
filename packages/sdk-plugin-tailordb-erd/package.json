@@ -35,20 +35,19 @@
     "publint": "publint --strict"
   },
   "dependencies": {
+    "@politty/valibot": "0.1.1",
     "chokidar": "5.0.0",
     "mime-types": "3.0.2",
     "open": "11.0.0",
     "pathe": "2.0.3",
     "pkg-types": "2.3.1",
-    "politty": "0.11.6",
-    "zod": "4.4.3"
+    "valibot": "1.4.2"
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/shared": "workspace:^",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.3",
-    "eslint-plugin-zod": "4.9.0",
     "oxlint": "1.76.0",
     "tsdown": "0.22.5",
     "typescript": "6.0.3",

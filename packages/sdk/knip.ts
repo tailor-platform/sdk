@@ -12,7 +12,7 @@ export default {
     "src/cli/ts-hook.d.mts",
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
-    "zinfer.config.ts",
+    "vinfer.config.ts",
   ],
   ignoreIssues: {
     "src/runtime/{aigateway,authconnection,context,file,iconv,idp,secretmanager,workflow}.ts": [

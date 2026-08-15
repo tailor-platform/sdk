@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
@@ -450,14 +450,14 @@ export const syncCommand = defineAppCommand({
   name: "sync",
   description:
     "Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
-    number: arg(z.string(), {
+    number: arg(v.string(), {
       positional: true,
       description: "Migration number to sync to (e.g., 0001 or 1; 0 targets the baseline snapshot)",
     }),
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
     }),

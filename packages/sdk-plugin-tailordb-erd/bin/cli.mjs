@@ -5,10 +5,11 @@
 // CLI module graph is compiled, so warm starts skip recompilation
 // (Node >= 22.8.0; silent no-op otherwise).
 try {
-  const { enableCompileCache } = await import("politty/compile-cache");
+  const { enableCompileCache } = await import("@politty/valibot/compile-cache");
   enableCompileCache("tailor-tailordb-erd");
 } catch {
-  // politty is not resolvable from here (e.g. a fully bundled CLI) —
-  // start without the compile cache rather than failing the CLI.
+  // @politty/valibot/compile-cache is not resolvable from here (e.g. a fully
+  // bundled CLI) — start without the compile cache rather than failing
+  // the CLI.
 }
 await import("../dist/cli.js");

@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import * as v from "valibot";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
@@ -129,12 +130,12 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
       return null;
     }
 
-    const parsed = HttpAdapterConfigSchema.safeParse(module.default);
+    const parsed = v.safeParse(HttpAdapterConfigSchema, module.default);
     if (!parsed.success) {
-      throw parsed.error;
+      throw new v.ValiError(parsed.issues);
     }
 
-    const adapter = parsed.data as unknown as HttpAdapterConfig;
+    const adapter = parsed.output as unknown as HttpAdapterConfig;
     const methods = collectMethodKeys(adapter);
     rejectAsyncHandlers(adapter, methods, filePath);
 

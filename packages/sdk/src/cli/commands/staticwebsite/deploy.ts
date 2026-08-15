@@ -1,10 +1,10 @@
 import * as fs from "fs";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/valibot";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -229,13 +229,13 @@ export function logSkippedFiles(skippedFiles: string[]) {
 export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy a static website from a local build directory.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       alias: "n",
       description: "Static website name",
     }),
-    dir: arg(z.string(), {
+    dir: arg(v.string(), {
       alias: "d",
       description: "Path to the static website files",
       completion: { type: "directory" },

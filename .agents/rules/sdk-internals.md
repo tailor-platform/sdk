@@ -41,7 +41,7 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 1. **Configure Module** (`src/configure/**/*.ts`):
    - ❌ Cannot import from `cli` module
    - ❌ Cannot import from `parser` / `plugin` modules — **except their pure type modules, type-only**
-   - ⚠️ Can only import types from `zod` (runtime imports are forbidden)
+   - ⚠️ Can only import types from `valibot` (runtime imports are forbidden)
 
 2. **Parser Module** (`src/parser/**/*.ts`):
    - ❌ Cannot import from `cli` module
@@ -56,7 +56,7 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
    - ❌ Cannot import from `configure` module — **except configure pure type modules, type-only**
 
 5. **Types Module** (`src/types/**/*.ts`):
-   - Contains only zinfer-generated types and `helpers.ts` (generic utilities)
+   - Contains only vinfer-generated types and `helpers.ts` (generic utilities)
    - ❌ Cannot import from `configure`, `cli`, `parser`, `plugin` modules
 
 ## Pure Type Modules
@@ -70,14 +70,14 @@ boundaries — always type-only.
 Pure type module rules (enforced by oxlint):
 
 - All imports must be type-only (`import type`)
-- ❌ No `zod` imports, even type-only
+- ❌ No `valibot` imports, even type-only
 - ❌ No `**/schema` imports, even type-only — schema-derived types must come
-  from zinfer output (`src/types/*.generated.ts`)
+  from vinfer output (`src/types/*.generated.ts`)
 
 This guarantees, by construction, that importing the SDK's user-facing entry
-points never loads zod — neither its runtime code nor its type machinery. The
-`check:zod-isolation` script (part of `pnpm check`) verifies this on the built
-artifacts: every `package.json#exports` entry except `./cli` must be zod-free
+points never loads valibot — neither its runtime code nor its type machinery. The
+`check:valibot-isolation` script (part of `pnpm check`) verifies this on the built
+artifacts: every `package.json#exports` entry except `./cli` must be valibot-free
 in both its `.d.mts` and `.mjs` import closures.
 
 ## No Import Cycles (Type-Level Included)
@@ -89,7 +89,7 @@ edges. Two complementary checks enforce this:
   import declarations in linted files.
 - `check:import-cycles` (part of `pnpm check`) builds the full graph —
   including lint-ignored generated files and inline `import("...")` type
-  references emitted by zinfer — and fails on any strongly connected
+  references emitted by vinfer — and fails on any strongly connected
   component.
 
 When two pure type modules would need each other, move the shared type into
@@ -103,20 +103,20 @@ re-exported by `plugin/types.ts`).
 - Prefer inline type imports: `import { type Foo } from "..."`
 - **Special case for `export type`**: Even when `allowTypeImports: true` is configured, `export type` statements will still trigger ESLint errors. In such cases, you may use `eslint-disable` comments for the export line
 
-## Preventing Bundling Issues with Zod and Type-Only Dependencies
+## Preventing Bundling Issues with Valibot and Type-Only Dependencies
 
-**Problem:** Even with `export type *` syntax, bundlers resolve the entire module graph including runtime dependencies. This can cause unnecessary libraries like zod to be bundled into output files.
+**Problem:** Even with `export type *` syntax, bundlers resolve the entire module graph including runtime dependencies. This can cause unnecessary libraries like valibot to be bundled into output files.
 
 **Root Cause:**
 
 - `export type * from "./module"` is TypeScript syntax for the type system, not a bundler instruction
 - Bundlers follow the module chain and include all runtime imports, even when only types are needed
-- Example: `configure/auth` → `parser/auth` → `parser/auth/schema` → `zod` (runtime import)
+- Example: `configure/auth` → `parser/auth` → `parser/auth/schema` → `valibot` (runtime import)
 
 **Solution:**
 
-- Zod schemas live in `parser/**/schema.ts` and export only schemas, never types
-- Types derived from schemas are generated into `src/types/*.generated.ts` by zinfer — no runtime dependency on zod
+- Valibot schemas live in `parser/**/schema.ts` and export only schemas, never types
+- Types derived from schemas are generated into `src/types/*.generated.ts` by vinfer — no runtime dependency on valibot
 - Hand-written shared types live in pure type modules, whose import closure contains no runtime modules at all, so even a bundler that resolves the full module graph finds nothing to include
 - See the `schema-types` rule for details
 

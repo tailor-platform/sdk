@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { z } from "zod";
+import * as v from "valibot";
 import { parseCrashReportConfig } from "#/cli/crashreport/config";
 import { CRASH_LOG_EXTENSION } from "#/cli/crashreport/writer";
 import { type Order, paginationArgs } from "#/cli/shared/args";
@@ -26,7 +26,7 @@ function formatCrashReportFiles(files: string[], localDir: string) {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List local crash report files.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...paginationArgs(),
   }),
   run: async (args) => {

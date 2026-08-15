@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,33 +10,33 @@ import { assertDefined } from "#/utils/assert";
 import { stringToRole, validRoles } from "./transform";
 
 // strip unknown keys
-const updateUserOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
-  profile: z.string().optional(),
-  email: z.string().email({ message: "email must be a valid email address" }),
-  role: z.enum(validRoles, { message: `role must be one of: ${validRoles.join(", ")}` }),
+const updateUserOptionsSchema = v.object({
+  workspaceId: v.optional(v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID"))),
+  profile: v.optional(v.string()),
+  email: v.pipe(v.string(), v.email("email must be a valid email address")),
+  role: v.picklist(validRoles, `role must be one of: ${validRoles.join(", ")}`),
 });
 
-export type UpdateUserOptions = z.input<typeof updateUserOptionsSchema>;
+export type UpdateUserOptions = v.InferInput<typeof updateUserOptionsSchema>;
 
 async function loadOptions(options: UpdateUserOptions) {
-  const result = updateUserOptionsSchema.safeParse(options);
+  const result = v.safeParse(updateUserOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.output.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
 
   return {
     client,
     workspaceId,
-    email: result.data.email,
-    role: stringToRole(result.data.role),
+    email: result.output.email,
+    role: stringToRole(result.output.role),
   };
 }
 
@@ -58,12 +58,12 @@ export async function updateUser(options: UpdateUserOptions): Promise<void> {
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a user's role in a workspace",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    email: arg(z.email(), {
+    email: arg(v.pipe(v.string(), v.email()), {
       description: "Email address of the user to update",
     }),
-    role: arg(z.enum(validRoles), {
+    role: arg(v.picklist(validRoles), {
       description: `New role to assign (${validRoles.join(", ")})`,
       alias: "r",
     }),

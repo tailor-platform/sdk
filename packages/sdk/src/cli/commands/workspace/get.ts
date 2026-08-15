@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -13,24 +13,24 @@ import {
 } from "./transform";
 
 // strip unknown keys
-const getWorkspaceOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
-  profile: z.string().optional(),
+const getWorkspaceOptionsSchema = v.object({
+  workspaceId: v.optional(v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID"))),
+  profile: v.optional(v.string()),
 });
 
-export type GetWorkspaceOptions = z.input<typeof getWorkspaceOptionsSchema>;
+export type GetWorkspaceOptions = v.InferInput<typeof getWorkspaceOptionsSchema>;
 
 async function loadOptions(options: GetWorkspaceOptions) {
-  const result = getWorkspaceOptionsSchema.safeParse(options);
+  const result = v.safeParse(getWorkspaceOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.output.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
 
   return {
@@ -61,7 +61,7 @@ export async function getWorkspace(options: GetWorkspaceOptions): Promise<Worksp
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about a workspace",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
   }),
   run: async (args) => {

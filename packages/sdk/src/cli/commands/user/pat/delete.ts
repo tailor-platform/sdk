@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -8,8 +8,8 @@ import { createPatOperatorClient } from "./user";
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a personal access token.",
-  args: z.strictObject({
-    name: arg(z.string(), {
+  args: v.strictObject({
+    name: arg(v.string(), {
       positional: true,
       description: "Token name",
     }),

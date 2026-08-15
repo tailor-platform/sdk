@@ -10,9 +10,9 @@
 
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { configArg } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -340,24 +340,24 @@ export const scriptCommand = defineAppCommand({
   description:
     "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
   notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment.`,
-  args: z.strictObject({
+  args: v.strictObject({
     ...configArg,
-    number: arg(z.string(), {
+    number: arg(v.string(), {
       positional: true,
       description: "Migration number to add a script to (e.g., 0001 or 1)",
     }),
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
     }),
-    "no-script": arg(z.boolean().optional(), {
+    "no-script": arg(v.optional(v.boolean()), {
       description:
         "Record that this migration intentionally runs without a migration script (requires --reason)",
     }),
-    reason: arg(z.string().optional(), {
+    reason: arg(v.optional(v.string()), {
       description: "Reason why no migration script is needed (used with --no-script)",
     }),
-    "with-test": arg(z.boolean().optional(), {
+    "with-test": arg(v.optional(v.boolean()), {
       description:
         "Also add a migrate.test.ts unit-test scaffold; when migrate.ts already exists, only the test is added",
     }),

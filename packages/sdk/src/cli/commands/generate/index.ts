@@ -1,13 +1,13 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { generate } from "#/cli/commands/generate/service";
 import { defineAppCommand } from "#/cli/shared/command";
 
 export const generateCommand = defineAppCommand({
   name: "generate",
   description: "Generate files using Tailor configuration.",
-  args: z.strictObject({
-    config: arg(z.string().default("tailor.config.ts"), {
+  args: v.strictObject({
+    config: arg(v.optional(v.string(), "tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",
     }),

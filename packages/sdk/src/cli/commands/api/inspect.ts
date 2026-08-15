@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -18,8 +18,8 @@ export const inspectCommand = defineAppCommand({
       desc: "Inspect a deeply nested input with `(oneof config)` annotations.",
     },
   ],
-  args: z.strictObject({
-    endpoint: arg(z.string(), {
+  args: v.strictObject({
+    endpoint: arg(v.string(), {
       positional: true,
       description:
         "API endpoint to inspect (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",

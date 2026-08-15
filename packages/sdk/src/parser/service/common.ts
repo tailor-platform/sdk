@@ -1,7 +1,6 @@
-import { z } from "zod";
+import * as v from "valibot";
 
-// Use `z.custom` instead of `z.function`, since `z.function` changes `toString` representation.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export const functionSchema: z.ZodType<Function, Function> = z.custom<Function>(
+export const functionSchema: v.GenericSchema<Function, Function> = v.custom<Function>(
   (val) => typeof val === "function",
 );

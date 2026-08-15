@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { parseDuration, workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -77,9 +77,9 @@ export async function resumeWorkflow(
 export const resumeCommand = defineAppCommand({
   name: "resume",
   description: "Resume a failed or pending workflow execution.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    "execution-id": arg(z.string(), {
+    "execution-id": arg(v.string(), {
       positional: true,
       description: "Failed execution ID",
     }),

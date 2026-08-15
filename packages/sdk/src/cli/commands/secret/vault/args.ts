@@ -1,10 +1,10 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 
-type ArgsShape = Record<string, z.ZodType>;
+type ArgsShape = Record<string, v.GenericSchema>;
 
 export const nameArgs = {
-  name: arg(z.string(), {
+  name: arg(v.string(), {
     positional: true,
     description: "Vault name",
   }),

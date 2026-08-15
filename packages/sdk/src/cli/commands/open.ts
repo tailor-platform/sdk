@@ -1,5 +1,5 @@
 import open from "open";
-import { z } from "zod";
+import * as v from "valibot";
 import { deploymentArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -9,7 +9,7 @@ import { logger } from "#/cli/shared/logger";
 export const openCommand = defineAppCommand({
   name: "open",
   description: "Open Tailor Platform Console.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
   }),
   run: async (args) => {

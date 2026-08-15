@@ -29,9 +29,7 @@
     "typescript/no-require-imports": "error",
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-unsafe-function-type": "error",
-    "tailor-zod/require-object-policy-comment": "error",
-    "zod/prefer-loose-object": "error",
-    "zod/prefer-strict-object": "error"
+    "tailor-valibot/require-object-policy-comment": "error"
   },
   "overrides": [
     {
@@ -60,5 +58,5 @@
       }
     }
   ],
-  "jsPlugins": ["eslint-plugin-zod", "../../scripts/oxlint/tailor-zod-plugin.cjs"]
+  "jsPlugins": ["../../scripts/oxlint/tailor-valibot-plugin.cjs"]
 }

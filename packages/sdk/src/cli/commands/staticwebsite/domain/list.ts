@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -11,9 +11,9 @@ import { statusLabels } from "./status";
 export const domainListCommand = defineAppCommand({
   name: "list",
   description: "List custom domains for a static website.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       positional: true,
       description: "Static website name",
     }),

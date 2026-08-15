@@ -1,6 +1,6 @@
 import { ScalarType } from "@bufbuild/protobuf";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { configArg, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -146,38 +146,39 @@ export function normalizeBodyFieldKeys(
 // untrusted dotted key mutate the runtime prototype instead of the body.
 const FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
 
-const fieldArg = z.string().transform((val, ctx): ParsedField => {
-  const eq = val.indexOf("=");
-  if (eq < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Invalid field format: '${val}'. Expected format: 'key=value' or 'a.b.c=value'`,
-    });
-    return z.NEVER;
-  }
-  const key = val.slice(0, eq);
-  if (key.length === 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Field key cannot be empty" });
-    return z.NEVER;
-  }
-  const segments = key.split(".");
-  if (segments.some((seg) => seg.length === 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Invalid field key: '${key}'. Dotted segments cannot be empty`,
-    });
-    return z.NEVER;
-  }
-  const forbidden = segments.find((seg) => FORBIDDEN_SEGMENTS.has(seg));
-  if (forbidden) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Invalid field key: '${key}'. Segment '${forbidden}' is not allowed.`,
-    });
-    return z.NEVER;
-  }
-  return { path: segments, value: val.slice(eq + 1) };
-});
+const fieldArg = v.pipe(
+  v.string(),
+  v.rawTransform(({ dataset, addIssue, NEVER }): ParsedField => {
+    const val = dataset.value;
+    const eq = val.indexOf("=");
+    if (eq < 0) {
+      addIssue({
+        message: `Invalid field format: '${val}'. Expected format: 'key=value' or 'a.b.c=value'`,
+      });
+      return NEVER;
+    }
+    const key = val.slice(0, eq);
+    if (key.length === 0) {
+      addIssue({ message: "Field key cannot be empty" });
+      return NEVER;
+    }
+    const segments = key.split(".");
+    if (segments.some((seg) => seg.length === 0)) {
+      addIssue({
+        message: `Invalid field key: '${key}'. Dotted segments cannot be empty`,
+      });
+      return NEVER;
+    }
+    const forbidden = segments.find((seg) => FORBIDDEN_SEGMENTS.has(seg));
+    if (forbidden) {
+      addIssue({
+        message: `Invalid field key: '${key}'. Segment '${forbidden}' is not allowed.`,
+      });
+      return NEVER;
+    }
+    return { path: segments, value: val.slice(eq + 1) };
+  }),
+);
 
 export const apiCommand = defineAppCommand({
   name: "api",
@@ -216,14 +217,14 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
     list: listCommand,
     inspect: inspectCommand,
   },
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...configArg,
-    body: arg(z.string().default("{}"), {
+    body: arg(v.optional(v.string(), "{}"), {
       alias: "b",
       description: "Request body as JSON.",
     }),
-    field: arg(fieldArg.array().optional(), {
+    field: arg(v.optional(v.array(fieldArg)), {
       alias: "f",
       description:
         "Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body.",
@@ -237,7 +238,7 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
         },
       },
     }),
-    endpoint: arg(z.string(), {
+    endpoint: arg(v.string(), {
       positional: true,
       description:
         "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",

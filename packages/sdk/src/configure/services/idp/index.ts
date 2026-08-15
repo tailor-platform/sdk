@@ -35,8 +35,9 @@ export function defineIdp<const TClients extends string[]>(
         clientName,
       } as const satisfies BuiltinIdP;
     },
-  } as const satisfies IdPInput & {
+  } as const satisfies Omit<IdPInput, "permission"> & {
     provider: (providerName: string, clientName: TClients[number]) => BuiltinIdP;
+    permission?: IdPPermission;
   };
 
   return result as typeof result & IdpDefinitionBrand;

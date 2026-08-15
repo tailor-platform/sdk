@@ -24,9 +24,6 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       knip:
         specifier: 6.32.0
         version: 6.32.0
@@ -91,9 +88,6 @@ importers:
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260707.2
         version: 7.0.0-dev.20260707.2
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       graphql:
         specifier: 17.0.2
         version: 17.0.2
@@ -130,9 +124,6 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       oxlint:
         specifier: 1.76.0
         version: 1.76.0(oxlint-tsgolint@7.0.2001)
@@ -154,6 +145,9 @@ importers:
       '@clack/prompts':
         specifier: 1.7.0
         version: 1.7.0
+      '@politty/valibot':
+        specifier: 0.1.1
+        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       execa:
         specifier: 10.0.1
         version: 10.0.1
@@ -163,19 +157,13 @@ importers:
       pkg-types:
         specifier: 2.3.1
         version: 2.3.1
-      politty:
-        specifier: 0.11.6
-        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
+      valibot:
+        specifier: 1.4.2
+        version: 1.4.2(typescript@6.0.3)
     devDependencies:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       oxlint:
         specifier: 1.76.0
         version: 1.76.0(oxlint-tsgolint@7.0.2001)
@@ -507,6 +495,9 @@ importers:
       '@oxc-project/types':
         specifier: 0.142.0
         version: 0.142.0
+      '@politty/valibot':
+        specifier: 0.1.1
+        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       '@secretlint/core':
         specifier: 13.0.4
         version: 13.0.4(supports-color@7.2.0)
@@ -582,9 +573,6 @@ importers:
       pkg-types:
         specifier: 2.3.1
         version: 2.3.1
-      politty:
-        specifier: 0.11.6
-        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
       rolldown:
         specifier: 1.2.0
         version: 1.2.0
@@ -603,15 +591,15 @@ importers:
       type-fest:
         specifier: 5.8.0
         version: 5.8.0
+      valibot:
+        specifier: 1.4.2
+        version: 1.4.2(typescript@6.0.3)
       vite:
         specifier: ^6.0.0 || ^7.0.0 || ^8.0.0
         version: 8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.10)(yaml@2.9.0)
       xdg-basedir:
         specifier: 5.1.0
         version: 5.1.0
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
     devDependencies:
       '@opentelemetry/sdk-trace-base':
         specifier: 2.10.0
@@ -637,9 +625,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       oxfmt:
         specifier: 0.61.0
         version: 0.61.0
@@ -658,18 +643,21 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      vinfer:
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(valibot@1.4.2(typescript@6.0.3))
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.10)(yaml@2.9.0))
-      zinfer:
-        specifier: 0.2.8
-        version: 0.2.8(typescript@6.0.3)(zod@4.4.3)
 
   packages/sdk-codemod:
     dependencies:
       '@ast-grep/napi':
         specifier: 0.45.1
         version: 0.45.1
+      '@politty/valibot':
+        specifier: 0.1.1
+        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -682,15 +670,12 @@ importers:
       pkg-types:
         specifier: 2.3.1
         version: 2.3.1
-      politty:
-        specifier: 0.11.6
-        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
       semver:
         specifier: 7.8.5
         version: 7.8.5
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
+      valibot:
+        specifier: 1.4.2
+        version: 1.4.2(typescript@6.0.3)
     devDependencies:
       '@tailor-platform/shared':
         specifier: workspace:^
@@ -704,9 +689,6 @@ importers:
       '@types/semver':
         specifier: 7.8.0
         version: 7.8.0
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       oxlint:
         specifier: 1.76.0
         version: 1.76.0(oxlint-tsgolint@7.0.2001)
@@ -722,18 +704,18 @@ importers:
 
   packages/sdk-plugin-seed:
     dependencies:
+      '@politty/valibot':
+        specifier: 0.1.1
+        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       pathe:
         specifier: 2.0.3
         version: 2.0.3
       pkg-types:
         specifier: 2.3.1
         version: 2.3.1
-      politty:
-        specifier: 0.11.6
-        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
+      valibot:
+        specifier: 1.4.2
+        version: 1.4.2(typescript@6.0.3)
     devDependencies:
       '@tailor-platform/sdk':
         specifier: workspace:^
@@ -744,9 +726,6 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       oxlint:
         specifier: 1.76.0
         version: 1.76.0(oxlint-tsgolint@7.0.2001)
@@ -762,6 +741,9 @@ importers:
 
   packages/sdk-plugin-tailordb-erd:
     dependencies:
+      '@politty/valibot':
+        specifier: 0.1.1
+        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -777,12 +759,9 @@ importers:
       pkg-types:
         specifier: 2.3.1
         version: 2.3.1
-      politty:
-        specifier: 0.11.6
-        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
+      valibot:
+        specifier: 1.4.2
+        version: 1.4.2(typescript@6.0.3)
     devDependencies:
       '@tailor-platform/sdk':
         specifier: workspace:^
@@ -796,9 +775,6 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      eslint-plugin-zod:
-        specifier: 4.9.0
-        version: 4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       oxlint:
         specifier: 1.76.0
         version: 1.76.0(oxlint-tsgolint@7.0.2001)
@@ -814,18 +790,18 @@ importers:
 
   packages/shared:
     devDependencies:
+      '@politty/valibot':
+        specifier: 0.1.1
+        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       pathe:
         specifier: 2.0.3
         version: 2.0.3
-      politty:
-        specifier: 0.11.6
-        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
+      valibot:
+        specifier: 1.4.2
+        version: 1.4.2(typescript@6.0.3)
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.10)(yaml@2.9.0))
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
 
   packages/tailor-proto:
     dependencies:
@@ -1231,10 +1207,6 @@ packages:
   '@eslint-community/regexpp@4.12.2':
     resolution: {integrity: sha512-EriSTlt5OC9/7SXkRSCAhfSxxoSUgBm33OH+IkwbdpgoqsSsUg7y3uh+IICI/Qg4BBWr3U2i39RpmycbxMq4ew==}
     engines: {node: ^12.0.0 || ^14.0.0 || >=16.0.0}
-
-  '@eslint-zod/utils@2.5.0':
-    resolution: {integrity: sha512-8cWwRFB0hS06mW3avcsAEqxbGJ371S00OVDTaTMyCaGefRZWNo1ONQMstexhjrSPsJYJnBft6zwsmDVzfCO5Dg==}
-    engines: {node: ^20 || ^22 || >=24}
 
   '@eslint/config-array@0.23.5':
     resolution: {integrity: sha512-Y3kKLvC1dvTOT+oGlqNQ1XLqK6D1HU2YXPc52NmAlJZbMMWDzGYXMiPRJ8TYD39muD/OTjlZmNJ4ib7dvSrMBA==}
@@ -2129,6 +2101,20 @@ packages:
     resolution: {integrity: sha512-pOr5+q1fLYKwFN3LAJuGZEnfXDcQ73zqgDHMtGy+K+uIoUqyY+6MeDCWFwfu+4EFuq76I5EPFofoNAI+Bmmq4A==}
     engines: {node: '>=22.13'}
 
+  '@politty/valibot@0.1.1':
+    resolution: {integrity: sha512-vTRno29w/JHDOCSsqITTOsLmsUFnPqgFSJqITtVYBJmr4C/JLtgRiLf09B25+1vUC5XVn+NUeTOG86wya1fbHw==}
+    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
+    hasBin: true
+    peerDependencies:
+      '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
+      '@inquirer/prompts': ^8.3.2
+      valibot: ^1.1.0
+    peerDependenciesMeta:
+      '@clack/prompts':
+        optional: true
+      '@inquirer/prompts':
+        optional: true
+
   '@publint/pack@0.1.6':
     resolution: {integrity: sha512-3uVNyGcVplhPZSLVyeIpL7+cIRn1YCSNHLG/rUIlBQMVH8YuN9++YF+5+UDIIO9RW98dujiUoTltO7RDB5bFJA==}
     engines: {node: '>=18'}
@@ -2515,10 +2501,6 @@ packages:
     peerDependencies:
       typescript: '>=4.8.4 <6.1.0'
 
-  '@typescript-eslint/scope-manager@8.66.0':
-    resolution: {integrity: sha512-8TGcH25j9zqJ/IULB/ppyhRvxA8QYfFEZ7nfbg6/BN9spDgb8fPWQXlE5l8TWBL50EtUx007uZ1o9VOwrq2/9g==}
-    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-
   '@typescript-eslint/tsconfig-utils@8.66.0':
     resolution: {integrity: sha512-9D5gLYZG4rOjcoag8MQ/fWI8WqA9wcPDyOGyWtWFhvM1lHRbliqUSPIY5J3zqCU1tvSwzXxnnjhQhz5Ne7mJ4g==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -2533,13 +2515,6 @@ packages:
     resolution: {integrity: sha512-8/x4INiiQb10jGgXYD7116/zQ+OL84ZIFn0za68wwFHCanT/VLbBEroWht8RV8fn0/ZCAoazHLQgwUC0UQcDfg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
-      typescript: '>=4.8.4 <6.1.0'
-
-  '@typescript-eslint/utils@8.66.0':
-    resolution: {integrity: sha512-jasearZPolBw5NJNYGMwxzHMF83niVWmMU1VdHzG1CyfI2VS7f7nZltnKtHcg20hW+7Uo5GfK4MeDPoU3qI8EA==}
-    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-    peerDependencies:
-      eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
       typescript: '>=4.8.4 <6.1.0'
 
   '@typescript-eslint/visitor-keys@8.66.0':
@@ -3070,21 +3045,6 @@ packages:
     resolution: {integrity: sha512-2NlIDTwUWJN0mRPQOdtQBzbUHvdGY2P1VXSyU83Q3xKxM7WHX2Ql8dKq782Q9TgQUNOLEzEYu9bzLNj1q88I5w==}
     engines: {node: '>=6.0'}
     hasBin: true
-
-  eslint-plugin-zod@4.9.0:
-    resolution: {integrity: sha512-jWUbyQITQEsJxXfMtSw7HcD08Au9kJ6fatm3QrYPePfxJDbf6mbJ/lxdm5dIsyMbuO9A79jLnJjwDmjW2G8Asw==}
-    engines: {node: ^20 || ^22 || >=24}
-    peerDependencies:
-      eslint: ^9 || ^10
-      oxlint: ^1.59.0
-      zod: ^4
-    peerDependenciesMeta:
-      eslint:
-        optional: true
-      oxlint:
-        optional: true
-      zod:
-        optional: true
 
   eslint-scope@9.1.2:
     resolution: {integrity: sha512-xS90H51cKw0jltxmvmHy2Iai1LIqrfbw57b79w/J7MfvDfkIkFZ+kj6zC3BjtUwh150HsSSdxXZcsuv72miDFQ==}
@@ -3806,20 +3766,6 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.11.6:
-    resolution: {integrity: sha512-yX2vsYOeeY1+Dygir/7EOnVYJ4emByfWaegN/aYj5+t2yB1Q3ctSwEhHUzu6VK+1csXSGTJRjpJtI3ec0Zd9oA==}
-    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
-    hasBin: true
-    peerDependencies:
-      '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
-      '@inquirer/prompts': ^8.3.2
-      zod: ^4.2.1
-    peerDependenciesMeta:
-      '@clack/prompts':
-        optional: true
-      '@inquirer/prompts':
-        optional: true
-
   postcss-values-parser@6.0.2:
     resolution: {integrity: sha512-YLJpK0N1brcNJrs9WatuJFtHaV9q5aAOj+S4DI5S7jgHlRfm0PIbDCAFRYMQD5SHq7Fy6xsDhyutgS0QOAs0qw==}
     engines: {node: '>=10'}
@@ -4238,9 +4184,24 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
+  valibot@1.4.2:
+    resolution: {integrity: sha512-gjdCvJ6d3RyHAneqxMYMW9QMCwYMb3jpOO0IyHZV1bnRHFBHrX3VkIILt5XYR0WhwHiH7Mty8ovuPZ/O3gamrg==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   verkit@0.3.2:
     resolution: {integrity: sha512-zj/ob3UsvJGN0whEAKFp53REA5X66hvffVqoCtVQAakJKnKlH+/PcOfMoFwIG/o4rElqLv/ycAFlx8ZlXUorCg==}
     engines: {node: '>=18.12.0'}
+
+  vinfer@0.1.2:
+    resolution: {integrity: sha512-qdvLn+U78dSzn7QRcks9CpiwNLCmPvHf0YM0RHkS0taXqI2mO7PPt+jiOjhRFXo+jEqlJMpcuaH/VhhSKjliuA==}
+    hasBin: true
+    peerDependencies:
+      typescript: '>=5.0.0'
+      valibot: '>=1.1.0'
 
   vite@8.2.1:
     resolution: {integrity: sha512-EU/eS7BH3XROHh2YnBefjM6DBKA6ZeMZEYQbj7NLWg5wHYlhB8B/Mayd5XsgWq+NFYccDOTemRpdETWR6Ka/lw==}
@@ -4392,13 +4353,6 @@ packages:
 
   yuku-parser@0.8.3:
     resolution: {integrity: sha512-KPQcpF9aj77ywlJBIkQWCQ9DObdxnCA8AJdUOmA5CZZx042Xt4+dvbQmPJfWxF3E+KG5dVAZ2fBKuDJ8VsKWgA==}
-
-  zinfer@0.2.8:
-    resolution: {integrity: sha512-QPekcok07BZNGfJiFl/ysIaUzxhibeFsbaBI3E746L/IZE34o0LXdWM63ul+0NR+L1SkTAgxqbVoXHPAJ20GOw==}
-    hasBin: true
-    peerDependencies:
-      typescript: '>=5.0.0'
-      zod: '>=3.0.0'
 
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
@@ -4735,15 +4689,6 @@ snapshots:
       eslint-visitor-keys: 3.4.3
 
   '@eslint-community/regexpp@4.12.2': {}
-
-  '@eslint-zod/utils@2.5.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
-    dependencies:
-      '@typescript-eslint/utils': 8.66.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
-      esquery: 1.7.0
-    transitivePeerDependencies:
-      - eslint
-      - supports-color
-      - typescript
 
   '@eslint/config-array@0.23.5(supports-color@7.2.0)':
     dependencies:
@@ -5355,6 +5300,14 @@ snapshots:
 
   '@pnpm/deps.graph-sequencer@1100.0.1': {}
 
+  '@politty/valibot@0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))':
+    dependencies:
+      valibot: 1.4.2(typescript@6.0.3)
+      yaml: 2.9.0
+    optionalDependencies:
+      '@clack/prompts': 1.7.0
+      '@inquirer/prompts': 8.5.2(@types/node@24.13.3)
+
   '@publint/pack@0.1.6':
     dependencies:
       tinyexec: 1.3.0
@@ -5600,27 +5553,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/project-service@8.66.0(supports-color@7.2.0)(typescript@6.0.3)':
-    dependencies:
-      '@typescript-eslint/tsconfig-utils': 8.66.0(typescript@6.0.3)
-      '@typescript-eslint/types': 8.66.0
-      debug: 4.4.3(supports-color@7.2.0)
-      typescript: 6.0.3
-    transitivePeerDependencies:
-      - supports-color
-
-  '@typescript-eslint/scope-manager@8.66.0':
-    dependencies:
-      '@typescript-eslint/types': 8.66.0
-      '@typescript-eslint/visitor-keys': 8.66.0
-
   '@typescript-eslint/tsconfig-utils@8.66.0(typescript@5.9.3)':
     dependencies:
       typescript: 5.9.3
-
-  '@typescript-eslint/tsconfig-utils@8.66.0(typescript@6.0.3)':
-    dependencies:
-      typescript: 6.0.3
 
   '@typescript-eslint/types@8.66.0': {}
 
@@ -5636,32 +5571,6 @@ snapshots:
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
-    transitivePeerDependencies:
-      - supports-color
-
-  '@typescript-eslint/typescript-estree@8.66.0(supports-color@7.2.0)(typescript@6.0.3)':
-    dependencies:
-      '@typescript-eslint/project-service': 8.66.0(supports-color@7.2.0)(typescript@6.0.3)
-      '@typescript-eslint/tsconfig-utils': 8.66.0(typescript@6.0.3)
-      '@typescript-eslint/types': 8.66.0
-      '@typescript-eslint/visitor-keys': 8.66.0
-      debug: 4.4.3(supports-color@7.2.0)
-      minimatch: 10.2.6
-      semver: 7.8.5
-      tinyglobby: 0.2.17
-      ts-api-utils: 2.5.0(typescript@6.0.3)
-      typescript: 6.0.3
-    transitivePeerDependencies:
-      - supports-color
-
-  '@typescript-eslint/utils@8.66.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
-    dependencies:
-      '@eslint-community/eslint-utils': 4.10.1(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))
-      '@typescript-eslint/scope-manager': 8.66.0
-      '@typescript-eslint/types': 8.66.0
-      '@typescript-eslint/typescript-estree': 8.66.0(supports-color@7.2.0)(typescript@6.0.3)
-      eslint: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
-      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
@@ -6142,18 +6051,6 @@ snapshots:
       esutils: 2.0.3
     optionalDependencies:
       source-map: 0.6.1
-
-  eslint-plugin-zod@4.9.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.76.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3):
-    dependencies:
-      '@eslint-zod/utils': 2.5.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
-      '@typescript-eslint/utils': 8.66.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
-    optionalDependencies:
-      eslint: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
-      oxlint: 1.76.0(oxlint-tsgolint@7.0.2001)
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
 
   eslint-scope@9.1.2:
     dependencies:
@@ -6885,14 +6782,6 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3):
-    dependencies:
-      yaml: 2.9.0
-      zod: 4.4.3
-    optionalDependencies:
-      '@clack/prompts': 1.7.0
-      '@inquirer/prompts': 8.5.2(@types/node@24.13.3)
-
   postcss-values-parser@6.0.2(postcss@8.5.26):
     dependencies:
       color-name: 1.1.4
@@ -7219,10 +7108,6 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
-  ts-api-utils@2.5.0(typescript@6.0.3):
-    dependencies:
-      typescript: 6.0.3
-
   ts-cron-validator@1.1.5: {}
 
   ts-graphviz@2.1.6:
@@ -7362,7 +7247,21 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
+  valibot@1.4.2(typescript@6.0.3):
+    optionalDependencies:
+      typescript: 6.0.3
+
   verkit@0.3.2: {}
+
+  vinfer@0.1.2(typescript@6.0.3)(valibot@1.4.2(typescript@6.0.3)):
+    dependencies:
+      commander: 15.0.0
+      glob: 13.0.6
+      jiti: 2.7.0
+      pathe: 2.0.3
+      ts-morph: 28.0.0
+      typescript: 6.0.3
+      valibot: 1.4.2(typescript@6.0.3)
 
   vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.10)(yaml@2.9.0):
     dependencies:
@@ -7484,15 +7383,5 @@ snapshots:
       '@yuku-parser/binding-linux-x64-musl': 0.8.3
       '@yuku-parser/binding-win32-arm64': 0.8.3
       '@yuku-parser/binding-win32-x64': 0.8.3
-
-  zinfer@0.2.8(typescript@6.0.3)(zod@4.4.3):
-    dependencies:
-      commander: 15.0.0
-      glob: 13.0.6
-      jiti: 2.7.0
-      pathe: 2.0.3
-      ts-morph: 28.0.0
-      typescript: 6.0.3
-      zod: 4.4.3
 
   zod@4.4.3: {}

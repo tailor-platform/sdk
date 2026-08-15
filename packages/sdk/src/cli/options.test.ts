@@ -1,8 +1,8 @@
-import { extractFields, isLazyCommand } from "politty";
+import { extractFields, isLazyCommand } from "@politty/valibot";
 import { describe, expect, test, vi } from "vitest";
 import { mainCommand } from "./main";
 import { BUILTIN_COMMAND_NAMES } from "./shared/builtin-commands";
-import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
+import type { AnyCommand, ExtractedFields, SubCommandValue } from "@politty/valibot";
 
 const allowedHybridCommandPaths = new Set(["api"]);
 
@@ -14,8 +14,8 @@ vi.mock("node:module", async () => {
   };
 });
 
-vi.mock("politty", async () => {
-  const actual = await vi.importActual("politty");
+vi.mock("@politty/valibot", async () => {
+  const actual = await vi.importActual("@politty/valibot");
   return {
     ...actual,
     runMain: vi.fn(),

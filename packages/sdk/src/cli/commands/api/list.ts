@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { listMethodNames } from "./proto-reflect";
@@ -8,7 +8,7 @@ export const listCommand = defineAppCommand({
   description: "List all invocable OperatorService methods.",
   notes:
     "Only single-request (non-streaming) methods are listed, because the CLI issues a single JSON request and reads one JSON response.",
-  args: z.strictObject({}),
+  args: v.strictObject({}),
   run: () => {
     const names = listMethodNames();
     if (logger.jsonMode) {

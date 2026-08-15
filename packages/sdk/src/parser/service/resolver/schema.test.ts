@@ -1,15 +1,34 @@
+import * as v from "valibot";
 import { describe, expect, test } from "vitest";
 import { ResolverPermissionSchema, ResolverSchema } from "./schema";
-import type { ZodError } from "zod";
 
 function expectParseFailure<T>(
-  result: { success: true; data: T } | { success: false; error: ZodError },
-): ZodError {
+  result: v.SafeParseResult<v.GenericSchema<unknown, T>>,
+): [v.BaseIssue<unknown>, ...v.BaseIssue<unknown>[]] {
   expect(result.success).toBe(false);
   if (result.success) {
     throw new Error("Expected schema parsing to fail");
   }
-  return result.error;
+  return result.issues;
+}
+
+// Union branches wrap their own array-level checks (minLength, at-least-one-permit,
+// user-operand cross-checks); a failing union collects those as nested `.issues`
+// rather than surfacing them as the top-level thrown message, so rejection
+// assertions search the full issue tree instead of `.toThrow()`.
+function findIssueMessage(issues: readonly v.BaseIssue<unknown>[], substring: string): boolean {
+  return issues.some(
+    (issue) =>
+      issue.message.includes(substring) ||
+      ("issues" in issue &&
+        Array.isArray(issue.issues) &&
+        findIssueMessage(issue.issues as v.BaseIssue<unknown>[], substring)),
+  );
+}
+
+function expectRejectionMessage(input: unknown, substring: string) {
+  const issues = expectParseFailure(v.safeParse(ResolverPermissionSchema, input));
+  expect(findIssueMessage(issues, substring)).toBe(true);
 }
 
 describe("ResolverSchema", () => {
@@ -25,17 +44,17 @@ describe("ResolverSchema", () => {
   };
 
   test("rejects unknown options", () => {
-    const error = expectParseFailure(
-      ResolverSchema.safeParse({
+    const issues = expectParseFailure(
+      v.safeParse(ResolverSchema, {
         ...validResolver,
         unknownOption: true,
       }),
     );
 
-    expect(error.issues).toEqual(
+    expect(issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "unrecognized_keys",
+          type: "strict_object",
         }),
       ]),
     );
@@ -45,7 +64,7 @@ describe("ResolverSchema", () => {
 describe("ResolverPermissionSchema", () => {
   test("accepts a single policy with one condition", () => {
     expect(() =>
-      ResolverPermissionSchema.parse([
+      v.parse(ResolverPermissionSchema, [
         { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
       ]),
     ).not.toThrow();
@@ -53,7 +72,7 @@ describe("ResolverPermissionSchema", () => {
 
   test("accepts a single policy with multiple conditions", () => {
     expect(() =>
-      ResolverPermissionSchema.parse([
+      v.parse(ResolverPermissionSchema, [
         {
           conditions: [
             [{ user: "_loggedIn" }, "=", true],
@@ -67,7 +86,7 @@ describe("ResolverPermissionSchema", () => {
 
   test("accepts multiple policies", () => {
     expect(() =>
-      ResolverPermissionSchema.parse([
+      v.parse(ResolverPermissionSchema, [
         { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
         { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
       ]),
@@ -75,12 +94,12 @@ describe("ResolverPermissionSchema", () => {
   });
 
   test('accepts "allowAnonymous"', () => {
-    expect(() => ResolverPermissionSchema.parse("allowAnonymous")).not.toThrow();
+    expect(() => v.parse(ResolverPermissionSchema, "allowAnonymous")).not.toThrow();
   });
 
   test("accepts a mix of `permit: true` and `permit: false` policies", () => {
     expect(() =>
-      ResolverPermissionSchema.parse([
+      v.parse(ResolverPermissionSchema, [
         { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
         { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
       ]),
@@ -88,67 +107,60 @@ describe("ResolverPermissionSchema", () => {
   });
 
   test("rejects a policy array with only `permit: false` policies", () => {
-    expect(() =>
-      ResolverPermissionSchema.parse([
-        { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
-      ]),
-    ).toThrow("must include at least one `permit: true` policy");
+    expectRejectionMessage(
+      [{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }],
+      "must include at least one `permit: true` policy",
+    );
   });
 
   test("rejects an empty policy array", () => {
-    expect(() => ResolverPermissionSchema.parse([])).toThrow(
-      "permission must have at least one policy",
-    );
+    expectRejectionMessage([], "permission must have at least one policy");
   });
 
   test("rejects a policy with an empty conditions array", () => {
-    expect(() => ResolverPermissionSchema.parse([{ conditions: [], permit: true }])).toThrow(
-      "must have at least one condition",
-    );
+    expectRejectionMessage([{ conditions: [], permit: true }], "must have at least one condition");
   });
 
   test("rejects a policy missing permit", () => {
-    expect(() =>
-      ResolverPermissionSchema.parse([{ conditions: [[{ user: "_loggedIn" }, "=", true]] }]),
-    ).toThrow("permit");
+    expectRejectionMessage([{ conditions: [[{ user: "_loggedIn" }, "=", true]] }], "permit");
   });
 
   test("rejects a condition with no `user` operand on either side", () => {
-    expect(() =>
-      ResolverPermissionSchema.parse([{ conditions: [["a", "=", "b"]], permit: true }]),
-    ).toThrow("must reference a `user` operand");
+    expectRejectionMessage(
+      [{ conditions: [["a", "=", "b"]], permit: true }],
+      "must reference a `user` operand",
+    );
   });
 
   test("rejects a condition comparing two `user` operands to each other", () => {
-    expect(() =>
-      ResolverPermissionSchema.parse([
-        { conditions: [[{ user: "role" }, "=", { user: "rol" }]], permit: true },
-      ]),
-    ).toThrow("must reference a `user` operand");
+    expectRejectionMessage(
+      [{ conditions: [[{ user: "role" }, "=", { user: "rol" }]], permit: true }],
+      "must reference a `user` operand",
+    );
   });
 
   test("rejects `_loggedIn` compared to a string", () => {
-    expect(() =>
-      ResolverPermissionSchema.parse([
-        { conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true },
-      ]),
-    ).toThrow("`_loggedIn` must compare to a boolean");
+    expectRejectionMessage(
+      [{ conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true }],
+      "`_loggedIn` must compare to a boolean",
+    );
   });
 
   test("rejects `id` compared to a boolean", () => {
-    expect(() =>
-      ResolverPermissionSchema.parse([{ conditions: [[{ user: "id" }, "=", true]], permit: true }]),
-    ).toThrow("`id` must compare to a string");
+    expectRejectionMessage(
+      [{ conditions: [[{ user: "id" }, "=", true]], permit: true }],
+      "`id` must compare to a string",
+    );
   });
 
   test("accepts an arbitrary attribute compared to either a string or a boolean", () => {
     expect(() =>
-      ResolverPermissionSchema.parse([
+      v.parse(ResolverPermissionSchema, [
         { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
       ]),
     ).not.toThrow();
     expect(() =>
-      ResolverPermissionSchema.parse([
+      v.parse(ResolverPermissionSchema, [
         { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
       ]),
     ).not.toThrow();

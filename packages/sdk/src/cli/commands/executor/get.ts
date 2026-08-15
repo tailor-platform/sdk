@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -13,7 +13,7 @@ type ExecutorLike = {
 };
 
 const nameArgs = {
-  name: arg(z.string(), {
+  name: arg(v.string(), {
     positional: true,
     description: "Executor name",
   }),
@@ -79,7 +79,7 @@ export async function getExecutor<E extends ExecutorLike>(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get executor details",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...nameArgs,
   }),

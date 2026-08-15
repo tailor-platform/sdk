@@ -1,6 +1,7 @@
 import { setTimeout } from "timers/promises";
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/valibot";
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
@@ -12,8 +13,7 @@ import {
   FilterSchema,
   PageDirection,
 } from "@tailor-platform/tailor-proto/resource_pb";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import {
   durationArg,
   nonNegativeIntArg,
@@ -681,42 +681,42 @@ export const jobsCommand = defineAppCommand({
       desc: "Wait for job with logs",
     },
   ],
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    "executor-name": arg(z.string(), {
+    "executor-name": arg(v.string(), {
       positional: true,
       description: "Executor name",
     }),
-    "job-id": arg(z.string().optional(), {
+    "job-id": arg(v.optional(v.string()), {
       positional: true,
       description: "Job ID (if provided, shows job details)",
     }),
-    status: arg(z.string().optional(), {
+    status: arg(v.optional(v.string()), {
       alias: "s",
       description:
         "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)",
     }),
-    attempts: arg(z.boolean().default(false), {
+    attempts: arg(v.optional(v.boolean(), false), {
       description: "Show job attempts (only with job ID) (detail mode only)",
     }),
-    wait: arg(z.boolean().default(false), {
+    wait: arg(v.optional(v.boolean(), false), {
       alias: "W",
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
     }),
-    interval: arg(durationArg.default("3s"), {
+    interval: arg(v.optional(durationArg, "3s"), {
       alias: "i",
       description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
     }),
-    timeout: arg(durationArg.default("5m"), {
+    timeout: arg(v.optional(durationArg, "5m"), {
       alias: "t",
       description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
     }),
     ...pagedLogArgs,
-    limit: arg(nonNegativeIntArg.default(50), {
+    limit: arg(v.optional(nonNegativeIntArg, 50), {
       description: "Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)",
     }),
-    logs: arg(z.boolean().default(false), {
+    logs: arg(v.optional(v.boolean(), false), {
       alias: "l",
       description: "Display function execution logs after completion (requires --wait)",
     }),

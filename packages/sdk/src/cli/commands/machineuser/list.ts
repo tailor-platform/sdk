@@ -1,6 +1,6 @@
 import { toJson } from "@bufbuild/protobuf";
 import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
-import { z } from "zod";
+import * as v from "valibot";
 import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -93,7 +93,7 @@ export async function listMachineUsers(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all machine users in the application.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
     ...paginationArgs(),
   }),

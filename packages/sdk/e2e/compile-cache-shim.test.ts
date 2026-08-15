@@ -68,7 +68,7 @@ describe("compile-cache bin shim", () => {
     expect(fs.existsSync(mainPath)).toBe(true);
 
     const content = fs.readFileSync(shimPath, "utf-8");
-    expect(content).toContain('await import("politty/compile-cache")');
+    expect(content).toContain('await import("@politty/valibot/compile-cache")');
     expect(content).toContain('enableCompileCache("tailor")');
     expect(content).toContain('await import("../dist/cli/main.mjs")');
   });

@@ -1,6 +1,6 @@
-import { runCommand } from "politty";
+import { runCommand } from "@politty/valibot";
+import * as v from "valibot";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { z } from "zod";
 import { deployCommand } from "#/cli/commands/deploy/index";
 import { commonArgs } from "#/cli/shared/args";
 
@@ -57,7 +57,7 @@ describe("deployCommand", () => {
   test("forwards global options needed to reproduce deploy", async () => {
     await runCommand(deployCommand, ["--env-file-if-exists", ".env.local", "--verbose", "--json"], {
       // strip unknown keys
-      globalArgs: z.object(commonArgs),
+      globalArgs: v.object(commonArgs),
     });
 
     expect(mocks.deployFromCLI).toHaveBeenCalledWith(

@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,31 +10,31 @@ import { assertDefined } from "#/utils/assert";
 import { appHealthInfo, type AppHealthInfo } from "./transform";
 
 // strip unknown keys
-const healthOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
-  profile: z.string().optional(),
-  name: z.string().min(1, { message: "name is required" }),
+const healthOptionsSchema = v.object({
+  workspaceId: v.optional(v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID"))),
+  profile: v.optional(v.string()),
+  name: v.pipe(v.string(), v.minLength(1, "name is required")),
 });
 
-export type HealthOptions = z.input<typeof healthOptionsSchema>;
+export type HealthOptions = v.InferInput<typeof healthOptionsSchema>;
 
 async function loadOptions(options: HealthOptions) {
-  const result = healthOptionsSchema.safeParse(options);
+  const result = v.safeParse(healthOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.output.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
 
   return {
     client,
     workspaceId,
-    name: result.data.name,
+    name: result.output.name,
   };
 }
 
@@ -57,9 +57,9 @@ export async function getAppHealth(options: HealthOptions): Promise<AppHealthInf
 export const healthCommand = defineAppCommand({
   name: "health",
   description: "Check application schema health",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       description: "Application name",
       alias: "n",
     }),

@@ -10,7 +10,7 @@ import {
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
 import { userAgent } from "./user-agent";
@@ -647,11 +647,11 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
 
   const rawJson = await resp.json();
   // strip unknown keys
-  const schema = z.object({
-    sub: z.string(),
-    email: z.string(),
+  const schema = v.object({
+    sub: v.string(),
+    email: v.string(),
   });
-  return schema.parse(rawJson);
+  return v.parse(schema, rawJson);
 }
 
 // Converting "name:url" patterns to actual Static Website URLs
@@ -771,12 +771,12 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   const rawJson = await resp.json();
 
   // strip unknown keys
-  const schema = z.object({
-    token_type: z.string(),
-    access_token: z.string(),
-    expires_in: z.number(),
+  const schema = v.object({
+    token_type: v.string(),
+    access_token: v.string(),
+    expires_in: v.number(),
   });
-  return schema.parse(rawJson);
+  return v.parse(schema, rawJson);
 }
 
 function isUndiciConnectTimeout(error: unknown): boolean {

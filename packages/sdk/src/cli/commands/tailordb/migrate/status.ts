@@ -1,6 +1,6 @@
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
@@ -264,9 +264,9 @@ export const statusCommand = defineAppCommand({
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   notes:
     "Every local migration file is checked for a compatible format version, and deployed migration history IDs must match the local baseline. Compatibility errors, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "Target TailorDB namespace (shows all namespaces if not specified)",
     }),

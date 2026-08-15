@@ -1,5 +1,5 @@
 import open from "open";
-import { z } from "zod";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
@@ -8,7 +8,7 @@ import { logger } from "#/cli/shared/logger";
 export const openAuthConnectionCommand = defineAppCommand({
   name: "open",
   description: "Open the auth connections page in the Tailor Platform Console.",
-  args: z.strictObject({ ...workspaceArgs }),
+  args: v.strictObject({ ...workspaceArgs }),
   run: async (args) => {
     const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],

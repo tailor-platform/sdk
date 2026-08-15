@@ -1,5 +1,5 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { z } from "zod";
+import * as v from "valibot";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -63,7 +63,7 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all Secret Manager vaults in the workspace.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...paginationArgs(),
   }),

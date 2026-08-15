@@ -1,9 +1,9 @@
+import { arg } from "@politty/valibot";
 import { assertWritable, deployStaticWebsite } from "@tailor-platform/sdk/cli";
 import { deploymentArgs } from "@tailor-platform/shared/args";
 import { defineAppCommand } from "@tailor-platform/shared/command";
 import { logger } from "@tailor-platform/shared/logger";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { prepareErdBuilds } from "./export";
 import { initErdDeployContext } from "./utils";
 
@@ -22,9 +22,9 @@ function logSkippedFiles(skippedFiles: string[]): void {
 export const erdDeployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy ERD static website for TailorDB namespace(s).",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description:
         "TailorDB namespace name (optional - deploys all namespaces with an ERD site configured if omitted)",

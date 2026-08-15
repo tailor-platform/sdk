@@ -1,4 +1,4 @@
-import { runCommand } from "politty";
+import { runCommand } from "@politty/valibot";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";

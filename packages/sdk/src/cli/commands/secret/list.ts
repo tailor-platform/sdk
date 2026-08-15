@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -67,7 +67,7 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
 export const listSecretCommand = defineAppCommand({
   name: "list",
   description: "List all secrets in a vault.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...vaultArgs,
     ...paginationArgs(),

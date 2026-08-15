@@ -592,8 +592,8 @@ describe("parseTypes", () => {
         }),
       });
 
-      // Now validated at schema level by Zod - error is thrown in toSchemaOutput
-      expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid option/);
+      // Now validated at schema level by Valibot - error is thrown in toSchemaOutput
+      expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid type/);
       expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/rawRelation/);
     });
 
@@ -611,8 +611,8 @@ describe("parseTypes", () => {
         }),
       });
 
-      // Now validated at schema level by Zod - error is thrown in toSchemaOutput
-      expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid option/);
+      // Now validated at schema level by Valibot - error is thrown in toSchemaOutput
+      expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid type/);
     });
 
     test("should throw error when target type does not exist", () => {

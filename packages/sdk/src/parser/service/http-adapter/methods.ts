@@ -3,7 +3,7 @@ import type { HttpAdapterConfigInput } from "#/types/http-adapter.generated";
 /**
  * Maps the lowercase `input` handler keys to the HTTP methods they serve.
  * The key set is tied to `inputHandlersSchema` in `./schema` via the
- * zinfer-generated config type, so the two cannot drift apart.
+ * vinfer-generated config type, so the two cannot drift apart.
  */
 export const HTTP_METHODS = {
   get: "GET",

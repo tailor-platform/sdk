@@ -1,11 +1,11 @@
-// Verify zod stays isolated to the CLI entry point.
+// Verify valibot stays isolated to the CLI entry point.
 //
-// zinfer exists so that user-facing entry points never depend on zod:
-// neither at the type level (a user's tsc must not load zod's type
-// definitions when importing the SDK) nor at the runtime level (zod code
+// vinfer exists so that user-facing entry points never depend on valibot:
+// neither at the type level (a user's tsc must not load valibot's type
+// definitions when importing the SDK) nor at the runtime level (valibot code
 // must not end up in bundled user functions). This check walks the
 // relative-import closure of every package.json#exports entry in dist/ and
-// fails if any non-allowlisted entry can reach a zod import — in its
+// fails if any non-allowlisted entry can reach a valibot import — in its
 // rolled-up .d.mts graph (type level) or its .mjs graph (runtime level).
 //
 // Run after `pnpm build` (operates on dist/).
@@ -17,9 +17,9 @@ import { extractImportSpecifiers } from "./lib/scan-imports.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const sdkRoot = resolve(here, "..");
 
-// Entries allowed to reference zod. The CLI bundles the parser layer, whose
-// Zod schemas are the source of truth zinfer generates types from.
-const ZOD_ALLOWED_ENTRIES = new Set(["./cli"]);
+// Entries allowed to reference valibot. The CLI bundles the parser layer, whose
+// Valibot schemas are the source of truth vinfer generates types from.
+const VALIBOT_ALLOWED_ENTRIES = new Set(["./cli"]);
 
 interface ExportTarget {
   types?: string;
@@ -31,7 +31,7 @@ const pkg = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf8")) a
   exports: Record<string, string | ExportTarget | null>;
 };
 
-interface ZodReference {
+interface ValibotReference {
   file: string;
   specifier: string;
 }
@@ -44,10 +44,10 @@ function looksLikeDistChunk(specifier: string): boolean {
   return /\.(mjs|cjs|js)$/.test(specifier) || /\.d\.(m|c)?ts$/.test(specifier);
 }
 
-function findZodReferences(entryFile: string): ZodReference[] {
+function findValibotReferences(entryFile: string): ValibotReference[] {
   const seen = new Set<string>();
   const stack = [entryFile];
-  const references: ZodReference[] = [];
+  const references: ValibotReference[] = [];
   while (stack.length > 0) {
     const file = stack.pop() as string;
     if (seen.has(file)) {
@@ -56,7 +56,7 @@ function findZodReferences(entryFile: string): ZodReference[] {
     seen.add(file);
     const source = readFileSync(file, "utf8");
     for (const specifier of extractImportSpecifiers(source)) {
-      if (specifier === "zod" || specifier.startsWith("zod/")) {
+      if (specifier === "valibot" || specifier.startsWith("valibot/")) {
         references.push({ file, specifier });
         continue;
       }
@@ -74,8 +74,8 @@ function findZodReferences(entryFile: string): ZodReference[] {
         if (looksLikeDistChunk(specifier)) {
           throw new Error(
             `Unresolved dist chunk reference ${JSON.stringify(specifier)} from ${file}. ` +
-              "The bundler chunk-reference style may have changed; update check-zod-isolation " +
-              "so the import closure is walked completely (a vacuous pass would hide zod leaks).",
+              "The bundler chunk-reference style may have changed; update check-valibot-isolation " +
+              "so the import closure is walked completely (a vacuous pass would hide valibot leaks).",
           );
         }
         continue; // non-chunk relative path (e.g. an asset) that legitimately has no further imports
@@ -89,13 +89,13 @@ function findZodReferences(entryFile: string): ZodReference[] {
 interface Violation {
   entry: string;
   level: "types" | "runtime";
-  references: ZodReference[];
+  references: ValibotReference[];
 }
 
 const violations: Violation[] = [];
 
 for (const [entry, target] of Object.entries(pkg.exports)) {
-  if (ZOD_ALLOWED_ENTRIES.has(entry)) {
+  if (VALIBOT_ALLOWED_ENTRIES.has(entry)) {
     continue;
   }
   if (typeof target !== "object" || target === null) {
@@ -104,7 +104,7 @@ for (const [entry, target] of Object.entries(pkg.exports)) {
     // both verified.
     throw new Error(
       `exports[${JSON.stringify(entry)}] is not in object form ({ types, import/default }); ` +
-        "check-zod-isolation cannot verify it. Convert it to the object form.",
+        "check-valibot-isolation cannot verify it. Convert it to the object form.",
     );
   }
   const checks: { level: "types" | "runtime"; file: string | undefined }[] = [
@@ -121,7 +121,7 @@ for (const [entry, target] of Object.entries(pkg.exports)) {
         `exports[${JSON.stringify(entry)}] target missing: ${file} (run pnpm build first)`,
       );
     }
-    const references = findZodReferences(entryFile);
+    const references = findValibotReferences(entryFile);
     if (references.length > 0) {
       violations.push({ entry, level, references });
     }
@@ -129,14 +129,16 @@ for (const [entry, target] of Object.entries(pkg.exports)) {
 }
 
 if (violations.length === 0) {
-  console.log("check-zod-isolation: all non-CLI entry points are zod-free (types + runtime).");
+  console.log(
+    "check-valibot-isolation: all non-CLI entry points are valibot-free (types + runtime).",
+  );
   process.exit(0);
 }
 
 console.error(
-  "check-zod-isolation: zod is reachable from user-facing entry points.\n" +
-    "User projects must never load zod through the SDK — schema-derived types belong in\n" +
-    "zinfer-generated files (src/types/*.generated.ts), and runtime zod usage belongs to the CLI.\n",
+  "check-valibot-isolation: valibot is reachable from user-facing entry points.\n" +
+    "User projects must never load valibot through the SDK — schema-derived types belong in\n" +
+    "vinfer-generated files (src/types/*.generated.ts), and runtime valibot usage belongs to the CLI.\n",
 );
 for (const violation of violations) {
   console.error(`  exports[${JSON.stringify(violation.entry)}] (${violation.level}):`);

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { runCommand } from "@politty/valibot";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";

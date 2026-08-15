@@ -63,7 +63,7 @@ describe("bundled execution tests", () => {
 
       expect(
         actualSize,
-        `File ${file} is too large: ${actualSize} bytes (max: ${maxSize} bytes). This may indicate unwanted dependencies (e.g., zod) are being bundled.`,
+        `File ${file} is too large: ${actualSize} bytes (max: ${maxSize} bytes). This may indicate unwanted dependencies (e.g., valibot) are being bundled.`,
       ).toBeLessThanOrEqual(maxSize);
     }
   });

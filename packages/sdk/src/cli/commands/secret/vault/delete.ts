@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -13,7 +13,7 @@ import { nameArgs } from "./args";
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Secret Manager vault.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...nameArgs,
     ...confirmationArgs,

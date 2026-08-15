@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { confirmationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,16 +10,16 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
-const restoreWorkspaceOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
+const restoreWorkspaceOptionsSchema = v.object({
+  workspaceId: v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID")),
 });
 
-export type RestoreWorkspaceOptions = z.input<typeof restoreWorkspaceOptionsSchema>;
+export type RestoreWorkspaceOptions = v.InferInput<typeof restoreWorkspaceOptionsSchema>;
 
 async function loadOptions(options: RestoreWorkspaceOptions) {
-  const result = restoreWorkspaceOptionsSchema.safeParse(options);
+  const result = v.safeParse(restoreWorkspaceOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
@@ -27,7 +27,7 @@ async function loadOptions(options: RestoreWorkspaceOptions) {
 
   return {
     client,
-    workspaceId: result.data.workspaceId,
+    workspaceId: result.output.workspaceId,
   };
 }
 
@@ -47,8 +47,8 @@ export async function restoreWorkspace(options: RestoreWorkspaceOptions): Promis
 export const restoreCommand = defineAppCommand({
   name: "restore",
   description: "Restore a deleted workspace",
-  args: z.strictObject({
-    "workspace-id": arg(z.string(), {
+  args: v.strictObject({
+    "workspace-id": arg(v.string(), {
       alias: "w",
       description: "Workspace ID",
     }),

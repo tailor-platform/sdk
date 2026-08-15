@@ -1,14 +1,10 @@
+import * as v from "valibot";
 import { describe, expect, test } from "vitest";
-import { ZodError } from "zod";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import { WorkflowSchema, WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { type SdkBrandKind, brandValue, isSdkBranded } from "#/utils/brand";
-
-type SafeParseSchema<T> = {
-  safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: ZodError };
-};
 
 /**
  * Simulates the brand-based error categorization pattern used by all service loaders.
@@ -16,33 +12,31 @@ type SafeParseSchema<T> = {
  * - Branded value with different kind + invalid schema -> skipped (different SDK object)
  * - Non-branded value + invalid schema -> skipped (unrelated export)
  * - Branded value + valid schema -> returns parsed data
- * @param schema - Zod schema with safeParse method
- * @param schema.safeParse - Safely parses a value and returns a discriminated union result
+ * @param schema - Valibot schema
  * @param value - The value to parse and categorize
  * @param kind - The expected brand kind for this service loader
  * @returns Parsed data or "skipped" if non-branded and invalid
  */
 function simulateServiceLoad<T>(
-  schema: SafeParseSchema<T>,
+  schema: v.GenericSchema<unknown, T>,
   value: unknown,
   kind: SdkBrandKind,
 ): T | "skipped" {
-  const result = schema.safeParse(value);
+  const result = v.safeParse(schema, value);
   if (!result.success) {
     if (isSdkBranded(value, kind)) {
-      throw result.error;
+      throw new v.ValiError(result.issues);
     }
     return "skipped";
   }
-  return result.data;
+  return result.output;
 }
 
 /**
  * Registers the three tests shared by every service loader: a branded value
  * with a valid schema loads, a branded value with an invalid schema throws,
  * and a non-branded value with an invalid schema is skipped.
- * @param schema - Zod schema with safeParse method
- * @param schema.safeParse - Safely parses a value and returns a discriminated union result
+ * @param schema - Valibot schema
  * @param kind - The expected brand kind for this service loader
  * @param validValue - A value that satisfies the schema once branded
  * @param invalidValue - A value that fails the schema once branded
@@ -50,7 +44,7 @@ function simulateServiceLoad<T>(
  * @param randomExport - An unrelated, non-branded value that also fails the schema
  */
 function itLoadsBrandedValues<T>(
-  schema: SafeParseSchema<T>,
+  schema: v.GenericSchema<unknown, T>,
   kind: SdkBrandKind,
   validValue: Record<string, unknown>,
   invalidValue: Record<string, unknown>,
@@ -64,9 +58,9 @@ function itLoadsBrandedValues<T>(
     expect(result).toHaveProperty("name", validName);
   });
 
-  test("branded value with invalid schema throws ZodError", () => {
+  test("branded value with invalid schema throws ValiError", () => {
     const invalid = brandValue(invalidValue, kind);
-    expect(() => simulateServiceLoad(schema, invalid, kind)).toThrow(ZodError);
+    expect(() => simulateServiceLoad(schema, invalid, kind)).toThrow(v.ValiError);
   });
 
   test("non-branded value with invalid schema is skipped", () => {

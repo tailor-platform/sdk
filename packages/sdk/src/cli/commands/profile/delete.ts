@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -7,8 +7,8 @@ import { logger } from "#/cli/shared/logger";
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a profile.",
-  args: z.strictObject({
-    name: arg(z.string(), {
+  args: v.strictObject({
+    name: arg(v.string(), {
       positional: true,
       description: "Profile name",
     }),

@@ -10,32 +10,32 @@ import {
 } from "node:fs";
 import pLimit, { type LimitFunction } from "p-limit";
 import * as path from "pathe";
-import { z } from "zod";
+import * as v from "valibot";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 // strip unknown keys
-const SecretsStateEntrySchema = z.object({
-  hash: z.string(),
-  updateTime: z.string().optional(),
+const SecretsStateEntrySchema = v.object({
+  hash: v.string(),
+  updateTime: v.optional(v.string()),
 });
 
 // strip unknown keys
-const SecretsStateSchema = z.object({
-  vaults: z.record(z.string(), z.record(z.string(), SecretsStateEntrySchema)),
-  connections: z.record(z.string(), z.string()).optional(),
+const SecretsStateSchema = v.object({
+  vaults: v.record(v.string(), v.record(v.string(), SecretsStateEntrySchema)),
+  connections: v.optional(v.record(v.string(), v.string())),
 });
 
 // strip unknown keys
-const PersistedSecretsStateSchema = z.object({
-  version: z.literal(2),
-  workspaceId: z.string(),
-  applicationKey: z.string(),
+const PersistedSecretsStateSchema = v.object({
+  version: v.literal(2),
+  workspaceId: v.string(),
+  applicationKey: v.string(),
   state: SecretsStateSchema,
 });
 
-export type SecretsState = z.infer<typeof SecretsStateSchema>;
-type PersistedSecretsState = z.infer<typeof PersistedSecretsStateSchema>;
+export type SecretsState = v.InferOutput<typeof SecretsStateSchema>;
+type PersistedSecretsState = v.InferOutput<typeof PersistedSecretsStateSchema>;
 
 export interface SecretsStateScope {
   readonly workspaceId: string;
@@ -56,7 +56,7 @@ export function getSecretsStatePath(scope: SecretsStateScope): string {
 function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsState | undefined {
   try {
     const raw = readFileSync(getSecretsStatePath(scope), "utf-8");
-    const persistedState = PersistedSecretsStateSchema.parse(JSON.parse(raw));
+    const persistedState = v.parse(PersistedSecretsStateSchema, JSON.parse(raw));
     if (
       persistedState.workspaceId !== scope.workspaceId ||
       persistedState.applicationKey !== applicationStateKey(scope)

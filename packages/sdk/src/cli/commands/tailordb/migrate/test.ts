@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -149,29 +149,29 @@ export const testCommand = defineAppCommand({
     "Test pending migrations with seed fixtures or cloned data in a temporary workspace.",
   notes:
     "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
-    yes: arg(z.boolean().default(false), {
+    yes: arg(v.optional(v.boolean(), false), {
       alias: "y",
       description: "Acknowledge that a designated target workspace may be overwritten",
     }),
-    data: arg(z.enum(["seed", "clone"]).default("seed"), {
+    data: arg(v.optional(v.picklist(["seed", "clone"]), "seed"), {
       description: "Data source for the migration test (seed or clone)",
     }),
-    "target-workspace-id": arg(z.uuid().optional(), {
+    "target-workspace-id": arg(v.optional(v.pipe(v.string(), v.uuid())), {
       description: "Existing throwaway workspace to retain after the test (requires --yes)",
     }),
-    keep: arg(z.boolean().default(false), {
+    keep: arg(v.optional(v.boolean(), false), {
       description: "Keep the automatically created workspace after the test",
     }),
-    assert: arg(z.string().optional(), {
+    assert: arg(v.optional(v.string()), {
       description: "Path to a TypeScript assertion script to run after migrations",
       completion: { type: "file", extensions: ["ts"] },
     }),
-    "assert-namespace": arg(z.string().optional(), {
+    "assert-namespace": arg(v.optional(v.string()), {
       description: "TailorDB namespace exposed to the assertion script",
     }),
-    "machine-user": arg(z.string().optional(), {
+    "machine-user": arg(v.optional(v.string()), {
       description: "Machine user for seed and assertion script execution",
     }),
   }),

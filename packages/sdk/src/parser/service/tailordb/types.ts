@@ -1,9 +1,9 @@
 import type { ValueOperand } from "#/configure/services/auth/types";
 // TailorDB parsed data structures (normalized form shared by parser, CLI,
 // and plugin layers). Produced by CLI-side parsing (TailorDBService.loadTypes),
-// not by Zod schemas, so these cannot be zinfer-generated.
+// not by valibot schemas, so these cannot be vinfer-generated.
 //
-// This is a pure type module: type declarations only, no zod/schema
+// This is a pure type module: type declarations only, no valibot/schema
 // references, importable type-only from any layer.
 import type { RawRelationConfig, TailorDBTypeMetadata } from "#/configure/services/tailordb/types";
 import type { EnumValue } from "#/configure/types/field.types";

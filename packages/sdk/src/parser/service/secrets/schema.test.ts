@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expect, test } from "vitest";
 import { SecretsSchema } from "./schema";
 
@@ -22,14 +23,14 @@ describe("SecretsSchema validation", () => {
       },
     ],
   ] as const)("accepts %s", (_description, vaults) => {
-    expect(() => SecretsSchema.parse(wrap(vaults))).not.toThrow();
+    expect(() => v.parse(SecretsSchema, wrap(vaults))).not.toThrow();
   });
 
   test("accepts names at maximum length (63 characters)", () => {
     const name = `a${"b".repeat(61)}c`;
     expect(name).toHaveLength(63);
     const valid = wrap({ [name]: { [name]: "value" } });
-    expect(() => SecretsSchema.parse(valid)).not.toThrow();
+    expect(() => v.parse(SecretsSchema, valid)).not.toThrow();
   });
 
   test.each([
@@ -40,14 +41,14 @@ describe("SecretsSchema validation", () => {
     ["name shorter than 3 characters", { ab: { "my-secret": "value" } }],
     ["name with underscores", { my_vault: { "my-secret": "value" } }],
   ] as const)("rejects %s", (_description, vaults) => {
-    expect(() => SecretsSchema.parse(wrap(vaults))).toThrow(/Invalid string/);
+    expect(() => v.parse(SecretsSchema, wrap(vaults))).toThrow(/Invalid format/);
   });
 
   test("rejects name longer than 63 characters", () => {
     const name = `a${"b".repeat(62)}c`;
     expect(name).toHaveLength(64);
     const invalid = wrap({ [name]: { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
+    expect(() => v.parse(SecretsSchema, invalid)).toThrow(/Invalid format/);
   });
 
   test("accepts nullish secret values", () => {
@@ -60,12 +61,12 @@ describe("SecretsSchema validation", () => {
       },
       true,
     );
-    expect(() => SecretsSchema.parse(valid)).not.toThrow();
+    expect(() => v.parse(SecretsSchema, valid)).not.toThrow();
   });
 
   test("accepts ignoreNullishValues option", () => {
     const valid = wrap({ "my-vault": { "my-secret": "value" } }, true);
-    const parsed = SecretsSchema.parse(valid);
+    const parsed = v.parse(SecretsSchema, valid);
     expect(parsed.options.ignoreNullishValues).toBe(true);
   });
 });

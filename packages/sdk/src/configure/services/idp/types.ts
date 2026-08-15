@@ -1,6 +1,6 @@
 // IdP configuration input types.
 //
-// This is a pure type module: type declarations only, no zod/schema
+// This is a pure type module: type declarations only, no valibot/schema
 // references, importable type-only from any layer.
 import type { IdPPermission } from "#/configure/services/idp/permission";
 import type { BuiltinIdP } from "#/types/auth.generated";

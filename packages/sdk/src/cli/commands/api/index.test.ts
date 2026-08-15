@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { runCommand } from "politty";
+import { runCommand } from "@politty/valibot";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { getMethodDescriptor } from "./proto-reflect";
 import { apiCommand, normalizeBodyFieldKeys } from "./index";

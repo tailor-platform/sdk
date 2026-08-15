@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
@@ -8,12 +8,12 @@ import { createPatOperatorClient } from "./user";
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a personal access token (delete and recreate).",
-  args: z.strictObject({
-    name: arg(z.string(), {
+  args: v.strictObject({
+    name: arg(v.string(), {
       positional: true,
       description: "Token name",
     }),
-    write: arg(z.boolean().default(false), {
+    write: arg(v.optional(v.boolean(), false), {
       alias: "W",
       description: "Grant write permission (if not specified, keeps read-only)",
     }),

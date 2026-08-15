@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import * as v from "valibot";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
@@ -61,10 +62,12 @@ export async function loadConfig(
     throw new Error("Invalid Tailor config module: default export not found");
   }
 
-  const validated = AppConfigSchema.safeParse(configModule.default);
+  const validated = v.safeParse(AppConfigSchema, configModule.default);
   if (!validated.success) {
-    const issues = validated.error.issues
-      .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+    const issues = validated.issues
+      .map(
+        (i) => `  - ${i.path?.map((segment) => segment.key).join(".") || "(root)"}: ${i.message}`,
+      )
       .join("\n");
     throw new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`);
   }
@@ -86,9 +89,9 @@ export async function loadConfig(
         (acc, item) => {
           if (!acc.success) return acc;
 
-          const result = PluginConfigSchema.safeParse(item);
+          const result = v.safeParse(PluginConfigSchema, item);
           if (result.success) {
-            acc.items.push(result.data);
+            acc.items.push(result.output);
           } else {
             acc.success = false;
           }

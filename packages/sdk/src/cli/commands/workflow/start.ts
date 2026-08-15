@@ -1,8 +1,8 @@
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/valibot";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import {
   deploymentArgs,
   parseDuration,
@@ -250,15 +250,15 @@ export async function startWorkflow<W extends WorkflowLike>(
 export const startCommand = defineAppCommand({
   name: "start",
   description: "Start a workflow execution.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
     ...nameArgs,
-    "machine-user": arg(z.string().optional(), {
+    "machine-user": arg(v.optional(v.string()), {
       alias: "m",
       description: "Machine user name. Falls back to the active profile's default machine user.",
       env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
-    arg: arg(z.string().optional(), {
+    arg: arg(v.optional(v.string()), {
       alias: "a",
       description: "Workflow argument (JSON string)",
     }),

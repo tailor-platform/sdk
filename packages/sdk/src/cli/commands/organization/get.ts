@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -9,11 +9,11 @@ import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 // strip unknown keys
-const getOrganizationOptionsSchema = z.object({
-  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
+const getOrganizationOptionsSchema = v.object({
+  organizationId: v.pipe(v.string(), v.uuid("organization-id must be a valid UUID")),
 });
 
-export type GetOrganizationOptions = z.input<typeof getOrganizationOptionsSchema>;
+export type GetOrganizationOptions = v.InferInput<typeof getOrganizationOptionsSchema>;
 
 /**
  * Get detailed information about an organization.
@@ -21,20 +21,20 @@ export type GetOrganizationOptions = z.input<typeof getOrganizationOptionsSchema
  * @returns Organization details
  */
 export async function getOrganization(options: GetOrganizationOptions): Promise<OrganizationInfo> {
-  const result = getOrganizationOptionsSchema.safeParse(options);
+  const result = v.safeParse(getOrganizationOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.getOrganization({
-    organizationId: result.data.organizationId,
+    organizationId: result.output.organizationId,
   });
 
   if (!response.organization) {
-    throw new Error(`Organization "${result.data.organizationId}" not found.`);
+    throw new Error(`Organization "${result.output.organizationId}" not found.`);
   }
 
   return organizationInfo(response.organization);
@@ -43,7 +43,7 @@ export async function getOrganization(options: GetOrganizationOptions): Promise<
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about an organization.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...organizationArgs,
   }),
   run: async (args) => {

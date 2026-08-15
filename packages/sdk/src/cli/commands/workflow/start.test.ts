@@ -1,5 +1,5 @@
+import { runCommand } from "@politty/valibot";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";

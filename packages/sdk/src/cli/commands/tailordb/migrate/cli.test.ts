@@ -29,7 +29,7 @@ describe("migration CLI commands", () => {
   describe("rebaselineCommand", () => {
     test("should expose the deployment target and confirmation args", () => {
       expect(rebaselineCommand.name).toBe("rebaseline");
-      const shape = rebaselineCommand.args.shape;
+      const shape = rebaselineCommand.args.entries;
       expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("workspace-id");
       expect(shape).toHaveProperty("profile");
@@ -45,7 +45,7 @@ describe("migration CLI commands", () => {
     });
 
     test("should have required args schema", () => {
-      const shape = generateCommand.args.shape;
+      const shape = generateCommand.args.entries;
       expect(shape).toHaveProperty("name");
       expect(shape).toHaveProperty("yes");
     });
@@ -58,7 +58,7 @@ describe("migration CLI commands", () => {
     });
 
     test("should have required args schema", () => {
-      const shape = setCommand.args.shape;
+      const shape = setCommand.args.entries;
       expect(shape).toHaveProperty("number");
       expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("yes");
@@ -72,7 +72,7 @@ describe("migration CLI commands", () => {
     });
 
     test("should have required args schema", () => {
-      const shape = scriptCommand.args.shape;
+      const shape = scriptCommand.args.entries;
       expect(shape).toHaveProperty("number");
       expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("no-script");
@@ -88,7 +88,7 @@ describe("migration CLI commands", () => {
     });
 
     test("should have required args schema", () => {
-      const shape = statusCommand.args.shape;
+      const shape = statusCommand.args.entries;
       expect(shape).toHaveProperty("namespace");
     });
   });
@@ -100,7 +100,7 @@ describe("migration CLI commands", () => {
     });
 
     test("should have required args schema", () => {
-      const shape = syncCommand.args.shape;
+      const shape = syncCommand.args.entries;
       expect(shape).toHaveProperty("number");
       expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("yes");
@@ -125,7 +125,7 @@ describe("migration CLI commands", () => {
       expect(testCommand.description).toContain("temporary workspace");
       expect(testCommand.description).toContain("pending migrations");
 
-      const shape = testCommand.args.shape;
+      const shape = testCommand.args.entries;
       expect(shape).toHaveProperty("data");
       expect(shape).toHaveProperty("target-workspace-id");
       expect(shape).toHaveProperty("assert");

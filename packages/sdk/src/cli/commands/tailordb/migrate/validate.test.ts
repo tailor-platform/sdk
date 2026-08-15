@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { runCommand } from "@politty/valibot";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";

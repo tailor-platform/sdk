@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
+import { runCommand } from "@politty/valibot";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";

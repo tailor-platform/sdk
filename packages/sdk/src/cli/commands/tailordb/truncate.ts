@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -207,18 +207,18 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
 export const truncateCommand = defineAppCommand({
   name: "truncate",
   description: "Truncate (delete all records from) TailorDB tables.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
-    tables: arg(z.string().array().optional(), {
+    tables: arg(v.optional(v.array(v.string())), {
       positional: true,
       description: "Table names to truncate",
     }),
-    all: arg(z.boolean().default(false), {
+    all: arg(v.optional(v.boolean(), false), {
       alias: "a",
       description: "Truncate all tables in all owned namespaces (excludes external namespaces)",
     }),
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "Truncate all tables in specified namespace",
     }),

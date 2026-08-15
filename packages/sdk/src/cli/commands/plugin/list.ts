@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { BUILTIN_COMMAND_NAMES } from "#/cli/shared/builtin-commands";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
@@ -18,7 +18,7 @@ export const listCommand = defineAppCommand({
   name: "list",
   description:
     "List discovered plugins (executables named `<cli>-<name>` on PATH or node_modules/.bin).",
-  args: z.strictObject({}),
+  args: v.strictObject({}),
   run: async () => {
     const pkg = await readPackageJson();
     const cliName = Object.keys(pkg.bin ?? {})[0] || "tailor";

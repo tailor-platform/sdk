@@ -1,7 +1,7 @@
 // Shared runtime principal/environment types.
 //
 // This is a pure type module: it must contain type declarations only and may
-// not reference zod or schema modules, so every layer can import it type-only
+// not reference valibot or schema modules, so every layer can import it type-only
 // without pulling any runtime dependency.
 
 // Interfaces for module augmentation

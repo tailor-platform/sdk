@@ -3,7 +3,7 @@
 // oxlint's import/no-cycle (ignoreTypes: false) already rejects cycles formed
 // by import declarations, but it cannot see two kinds of edges:
 //   1. files excluded from linting (src/types/*.generated.ts), and
-//   2. inline `import("...")` type references, which zinfer emits into
+//   2. inline `import("...")` type references, which vinfer emits into
 //      generated files.
 // This check builds the full graph over src/**/*.ts from raw source text
 // (static imports, re-exports, dynamic imports, and inline import() type

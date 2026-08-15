@@ -1,49 +1,58 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { functionSchema } from "../common";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
-const inputHandlersSchema = z
-  .strictObject({
-    get: functionSchema.optional().describe("Handler for GET requests"),
-    post: functionSchema.optional().describe("Handler for POST requests"),
-    put: functionSchema.optional().describe("Handler for PUT requests"),
-    patch: functionSchema.optional().describe("Handler for PATCH requests"),
-    delete: functionSchema.optional().describe("Handler for DELETE requests"),
-  })
-
-  .refine(
-    // optional fields become undefined after zod parses them
-    // oxlint-disable-next-line typescript/no-unnecessary-condition
-    (val) => Object.values(val).some((v) => v !== undefined),
+const inputHandlersSchema = v.pipe(
+  v.strictObject({
+    get: v.optional(v.pipe(functionSchema, v.description("Handler for GET requests"))),
+    post: v.optional(v.pipe(functionSchema, v.description("Handler for POST requests"))),
+    put: v.optional(v.pipe(functionSchema, v.description("Handler for PUT requests"))),
+    patch: v.optional(v.pipe(functionSchema, v.description("Handler for PATCH requests"))),
+    delete: v.optional(v.pipe(functionSchema, v.description("Handler for DELETE requests"))),
+  }),
+  v.check(
+    (value) =>
+      // optional fields become undefined after valibot parses them
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
+      Object.values(value).some((handler) => handler !== undefined),
     "input must declare at least one HTTP method handler",
-  )
-  .describe("Per-method functions that transform HTTP requests to GraphQL requests");
+  ),
+  v.description("Per-method functions that transform HTTP requests to GraphQL requests"),
+);
 
-export const HttpAdapterConfigSchema = z
-  .strictObject({
-    name: z
-      .string()
-      .regex(
+export const HttpAdapterConfigSchema = v.pipe(
+  v.strictObject({
+    name: v.pipe(
+      v.string(),
+      v.regex(
         NAME_PATTERN,
         "name must be 3-63 chars, lowercase alphanumeric with hyphens, not starting or ending with a hyphen",
-      )
-      .describe("Unique adapter name within the domain"),
-    pathPattern: z
-      .string()
-      .min(1)
-      .describe("Path pattern with segment wildcards (trailing or single-segment)"),
-    enabled: z.boolean().default(true).describe("Whether the adapter is active"),
-    priority: z
-      .number()
-      .int()
-      .min(0)
-      .default(0)
-      .describe("Matching priority; the lowest value wins when multiple adapters match"),
+      ),
+      v.description("Unique adapter name within the domain"),
+    ),
+    pathPattern: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("Path pattern with segment wildcards (trailing or single-segment)"),
+    ),
+    enabled: v.optional(v.pipe(v.boolean(), v.description("Whether the adapter is active")), true),
+    priority: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(0),
+        v.description("Matching priority; the lowest value wins when multiple adapters match"),
+      ),
+      0,
+    ),
     input: inputHandlersSchema,
-    output: functionSchema
-      .optional()
-      .describe("Function that transforms GraphQL response to HTTP response"),
-  })
-
-  .brand("HttpAdapterConfig");
+    output: v.optional(
+      v.pipe(
+        functionSchema,
+        v.description("Function that transforms GraphQL response to HTTP response"),
+      ),
+    ),
+  }),
+  v.brand("HttpAdapterConfig"),
+);

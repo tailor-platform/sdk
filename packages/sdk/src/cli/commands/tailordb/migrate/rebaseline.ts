@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
@@ -326,10 +326,10 @@ export const rebaselineCommand = defineAppCommand({
   name: "rebaseline",
   description: "Collapse the full migration history into a new 0000 baseline.",
   notes: `Re-baselining removes migrations after 0000 from the working tree, records a new migration history ID, and resets the connected workspace checkpoint without changing its schema or data. Every environment must already have applied the latest migration before you run this command.`,
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
     }),

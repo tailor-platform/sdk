@@ -22,7 +22,7 @@ import {
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
 import * as path from "pathe";
-import { z } from "zod";
+import * as v from "valibot";
 import {
   computeSourceScriptHash,
   extractSourceScriptHash,
@@ -647,6 +647,27 @@ export function createSnapshotFromLocalTypes(
 // ============================================================================
 
 /**
+ * Formats a Valibot validation error into a multi-line, field-path-annotated message.
+ * @param error - The Valibot error to format
+ * @returns Formatted error message with one line per issue
+ */
+function formatValiError(
+  error: v.ValiError<
+    | v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>
+    | v.BaseSchemaAsync<unknown, unknown, v.BaseIssue<unknown>>
+  >,
+): string {
+  const flat = v.flatten(error.issues);
+  const lines: string[] = [...(flat.root ?? [])];
+  for (const [fieldPath, messages] of Object.entries(flat.nested ?? {})) {
+    for (const message of messages ?? []) {
+      lines.push(`${fieldPath}: ${message}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
  * Load a schema snapshot from a file
  * @param {string} filePath - Path to the snapshot file
  * @returns {NormalizedSchemaSnapshot} Loaded normalized schema snapshot
@@ -660,13 +681,14 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${String(error)}`, { cause: error });
   }
   assertSupportedMigrationFileVersion(filePath, raw);
-  const result = schemaSnapshotSchema.safeParse(normalizeLegacyTablesKey(raw));
+  const result = v.safeParse(schemaSnapshotSchema, normalizeLegacyTablesKey(raw));
   if (!result.success) {
-    throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`, {
-      cause: result.error,
+    const error = new v.ValiError(result.issues);
+    throw new Error(`Invalid schema snapshot at ${filePath}: ${formatValiError(error)}`, {
+      cause: error,
     });
   }
-  const snapshot = result.data;
+  const snapshot = result.output;
   return normalizeSchemaSnapshot(snapshot);
 }
 
@@ -684,15 +706,17 @@ export function loadDiff(filePath: string): MigrationDiff {
     throw new Error(`Invalid migration diff at ${filePath}: ${String(error)}`, { cause: error });
   }
   assertSupportedMigrationFileVersion(filePath, raw);
-  const result = migrationDiffSchema.safeParse(
+  const result = v.safeParse(
+    migrationDiffSchema,
     normalizeLegacyFieldNames(normalizeLegacyChangeKinds(raw)),
   );
   if (!result.success) {
-    throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`, {
-      cause: result.error,
+    const error = new v.ValiError(result.issues);
+    throw new Error(`Invalid migration diff at ${filePath}: ${formatValiError(error)}`, {
+      cause: error,
     });
   }
-  const parsed = result.data;
+  const parsed = result.output;
   // Backfill fields introduced after the initial diff.json schema so that older
   // migrations on disk remain readable without manual edits. A missing warnings
   // field (pre-warning-tier diff.json) is reconstructed from the recorded

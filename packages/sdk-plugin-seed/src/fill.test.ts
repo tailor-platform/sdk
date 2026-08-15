@@ -2,10 +2,10 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import * as os from "node:os";
 import { fillSeedData } from "@tailor-platform/sdk/seed";
 import * as path from "pathe";
+import * as v from "valibot";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { z } from "zod";
 
-const uuid = z.uuid();
+const uuidSchema = v.pipe(v.string(), v.uuid());
 
 // The generated data dir lives outside the workspace, so the schema files it
 // holds import the SDK by resolved URL instead of by package name.
@@ -92,7 +92,7 @@ describe("fillSeedData", () => {
     expect(Object.keys(rows[0] ?? {})).toEqual(["id", "name"]);
     expect(Object.keys(rows[1] ?? {})).toEqual(["id", "name", "note"]);
     for (const row of rows) {
-      expect(uuid.safeParse(row.id).success, `id: ${String(row.id)}`).toBe(true);
+      expect(v.safeParse(uuidSchema, row.id).success, `id: ${String(row.id)}`).toBe(true);
       // The hook computes these before validation; only the named fields are written back.
       expect(row).not.toHaveProperty("createdAt");
       expect(row).not.toHaveProperty("updatedAt");
@@ -116,7 +116,7 @@ describe("fillSeedData", () => {
     expect(rows[1]?.createdAt).toEqual(expect.any(String));
     for (const row of rows) {
       expect(Object.keys(row)).toEqual(["id", "name", "createdAt"]);
-      expect(uuid.safeParse(row.id).success, `id: ${String(row.id)}`).toBe(true);
+      expect(v.safeParse(uuidSchema, row.id).success, `id: ${String(row.id)}`).toBe(true);
       expect(row).not.toHaveProperty("updatedAt");
     }
   });
@@ -157,7 +157,7 @@ describe("fillSeedData", () => {
     expect(rows[0]?.name).toBe(42);
     expect(rows[1]?.unrelated).toBe("row");
     for (const row of rows) {
-      expect(uuid.safeParse(row.id).success, `id: ${String(row.id)}`).toBe(true);
+      expect(v.safeParse(uuidSchema, row.id).success, `id: ${String(row.id)}`).toBe(true);
     }
   });
 
@@ -247,7 +247,7 @@ describe("fillSeedData", () => {
     const result = await fillSeedData({ path: dataDir });
 
     expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 1 }]);
-    expect(uuid.safeParse((await readRows(jsonlPath))[0]?.id).success).toBe(true);
+    expect(v.safeParse(uuidSchema, (await readRows(jsonlPath))[0]?.id).success).toBe(true);
   });
 
   test("does not write an empty object for a nested field the row never had", async () => {
@@ -268,7 +268,7 @@ describe("fillSeedData", () => {
 
     expect(result.filled.map(({ table }) => table)).toEqual(["Widget"]);
     const widgetId = (await readRows(widgetPath))[0]?.id;
-    expect(uuid.safeParse(widgetId).success, `id: ${String(widgetId)}`).toBe(true);
+    expect(v.safeParse(uuidSchema, widgetId).success, `id: ${String(widgetId)}`).toBe(true);
     expect((await readRows(gadgetPath))[0]).not.toHaveProperty("id");
   });
 });

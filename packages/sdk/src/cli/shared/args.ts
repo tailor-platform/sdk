@@ -1,13 +1,13 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
+import { arg } from "@politty/valibot";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { assertDefined } from "#/utils/assert";
 import { logger } from "./logger";
 
-type ArgsShape = Record<string, z.ZodType>;
+type ArgsShape = Record<string, v.GenericSchema>;
 export type MachineUserInputSource = "option" | "env";
 type ResolveMachineUserInputSourceOptions = {
   valueIsExplicit?: boolean;
@@ -32,20 +32,19 @@ const durationPattern = /^(\d+)(ms|s|m)$/;
  * Schema for duration string validation (e.g., "3s", "500ms", "1m")
  * Only validates format; use parseDuration() to convert to milliseconds
  */
-export const durationArg = z
-  .string()
-  .refine((val) => durationPattern.test(val), {
-    message: "Invalid duration format. Expected format: '3s', '500ms', '1m'",
-  })
-  .refine(
-    (val) => {
-      const match = val.match(durationPattern);
-      if (!match) return false;
-      const digits = match[1];
-      return digits !== undefined && parseInt(digits, 10) > 0;
-    },
-    { message: "Duration must be greater than 0" },
-  );
+export const durationArg = v.pipe(
+  v.string(),
+  v.check(
+    (val) => durationPattern.test(val),
+    "Invalid duration format. Expected format: '3s', '500ms', '1m'",
+  ),
+  v.check((val) => {
+    const match = val.match(durationPattern);
+    if (!match) return false;
+    const digits = match[1];
+    return digits !== undefined && parseInt(digits, 10) > 0;
+  }, "Duration must be greater than 0"),
+);
 
 /**
  * Parse a validated duration string into milliseconds
@@ -66,20 +65,25 @@ export function parseDuration(duration: string): number {
  * Schema for positive integer validation (from string input)
  * Transforms the string to a number
  */
-export const positiveIntArg = z.coerce.number().int().positive();
+export const positiveIntArg = v.pipe(v.unknown(), v.transform(Number), v.integer(), v.minValue(1));
 
 /**
  * Schema for non-negative integer validation (from string input).
  * Accepts 0 (used for `--limit 0` to disable the limit).
  */
-export const nonNegativeIntArg = z.coerce.number().int().nonnegative();
+export const nonNegativeIntArg = v.pipe(
+  v.unknown(),
+  v.transform(Number),
+  v.integer(),
+  v.minValue(0),
+);
 
 /**
  * Schema for sort order (`asc` or `desc`).
  */
-export const orderArg = z.enum(["asc", "desc"]);
+export const orderArg = v.picklist(["asc", "desc"]);
 
-export type Order = z.infer<typeof orderArg>;
+export type Order = v.InferOutput<typeof orderArg>;
 
 /**
  * Translate a CLI `--order` value into the proto `PageDirection` enum.
@@ -184,12 +188,12 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
  * script path, causing warnings (twice due to tsx loader).
  */
 export const commonArgs = {
-  "env-file": arg(z.string().optional(), {
+  "env-file": arg(v.optional(v.string()), {
     alias: "e",
     description: "Path to the environment file (error if not found)",
     completion: { type: "file", matcher: [".env.*", ".env"] },
   }),
-  "env-file-if-exists": arg(z.string().optional(), {
+  "env-file-if-exists": arg(v.optional(v.string()), {
     description: "Path to the environment file (ignored if not found)",
     completion: { type: "file", matcher: [".env.*", ".env"] },
     effect: (_value, { args }) => {
@@ -199,13 +203,13 @@ export const commonArgs = {
       );
     },
   }),
-  verbose: arg(z.boolean().default(false), {
+  verbose: arg(v.optional(v.boolean(), false), {
     description: "Enable verbose logging",
     effect: (value) => {
       verboseMode = value;
     },
   }),
-  json: arg(z.boolean().default(false), {
+  json: arg(v.optional(v.boolean(), false), {
     alias: "j",
     description: "Output as JSON",
     effect: (value) => {
@@ -218,13 +222,13 @@ export const commonArgs = {
  * Arguments for commands that require workspace context
  */
 export const workspaceArgs = {
-  "workspace-id": arg(z.string().optional(), {
+  "workspace-id": arg(v.optional(v.string()), {
     alias: "w",
     description: "Workspace ID",
     env: "TAILOR_PLATFORM_WORKSPACE_ID",
     completion: { type: "none" },
   }),
-  profile: arg(z.string().optional(), {
+  profile: arg(v.optional(v.string()), {
     alias: "p",
     description: "Workspace profile",
     env: "TAILOR_PLATFORM_PROFILE",
@@ -255,7 +259,7 @@ export function formatConfigArg(configPath?: string): string | undefined {
  * Shared config arg for commands that accept a config file path
  */
 export const configArg = {
-  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
+  config: arg(v.optional(v.string(), DEFAULT_CONFIG_PATH), {
     alias: "c",
     description: "Path to Tailor config file",
     env: "TAILOR_CONFIG_PATH",
@@ -267,7 +271,7 @@ export const configArg = {
  * Shared config arg for commands that accept one or more comma-separated config file paths
  */
 export const multiConfigArg = {
-  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
+  config: arg(v.optional(v.string(), DEFAULT_CONFIG_PATH), {
     alias: "c",
     description:
       "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",
@@ -288,7 +292,7 @@ export const deploymentArgs = {
  * Arguments for commands that require confirmation
  */
 export const confirmationArgs = {
-  yes: arg(z.boolean().default(false), {
+  yes: arg(v.optional(v.boolean(), false), {
     alias: "y",
     description: "Skip confirmation prompts",
   }),
@@ -298,7 +302,7 @@ export const confirmationArgs = {
  * Arguments for commands that require organization context
  */
 export const organizationArgs = {
-  "organization-id": arg(z.string(), {
+  "organization-id": arg(v.string(), {
     alias: "o",
     description: "Organization ID",
     env: "TAILOR_PLATFORM_ORGANIZATION_ID",
@@ -317,10 +321,10 @@ export const organizationArgs = {
  */
 export const paginationArgs = (defaultOrder: Order = "desc") =>
   ({
-    order: arg(orderArg.default(defaultOrder), {
+    order: arg(v.optional(orderArg, defaultOrder), {
       description: "Sort order (asc or desc)",
     }),
-    limit: arg(nonNegativeIntArg.optional(), {
+    limit: arg(v.optional(nonNegativeIntArg), {
       alias: "l",
       description: "Maximum number of items to return (0 or omit: unlimited)",
     }),
@@ -332,10 +336,10 @@ export const paginationArgs = (defaultOrder: Order = "desc") =>
  * workspaces. Pass `--limit 0` to disable the cap and fetch all entries.
  */
 export const pagedLogArgs = {
-  order: arg(orderArg.default("desc"), {
+  order: arg(v.optional(orderArg, "desc"), {
     description: "Sort order (asc or desc)",
   }),
-  limit: arg(nonNegativeIntArg.default(50), {
+  limit: arg(v.optional(nonNegativeIntArg, 50), {
     alias: "l",
     description: "Maximum number of items to return (0: unlimited)",
   }),
@@ -345,7 +349,7 @@ export const pagedLogArgs = {
  * Arguments for commands that require folder context
  */
 export const folderArgs = {
-  "folder-id": arg(z.string(), {
+  "folder-id": arg(v.string(), {
     alias: "f",
     description: "Folder ID",
     env: "TAILOR_PLATFORM_FOLDER_ID",
@@ -353,7 +357,7 @@ export const folderArgs = {
   }),
 } satisfies ArgsShape;
 
-export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
+export type CommonArgsType = v.InferOutput<v.ObjectSchema<typeof commonArgs, undefined>>;
 
 // Tracks verbose mode for use in global error handler (cleanup)
 let verboseMode = false;

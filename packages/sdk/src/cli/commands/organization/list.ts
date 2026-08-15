@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { positiveIntArg } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -35,8 +35,8 @@ export async function listOrganizations(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List organizations you belong to.",
-  args: z.strictObject({
-    limit: arg(positiveIntArg.optional(), {
+  args: v.strictObject({
+    limit: arg(v.optional(positiveIntArg), {
       alias: "l",
       description: "Maximum number of organizations to list",
     }),
