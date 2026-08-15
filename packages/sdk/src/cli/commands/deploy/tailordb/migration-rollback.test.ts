@@ -867,12 +867,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
 
-    // Let preflight capture the baseline, then make rollback's second baseline
-    // reconstruction throw (e.g. files disappeared after preflight).
+    // Let preflight and the pre-loop baseline materialization capture the
+    // baseline, then make rollback's third baseline reconstruction throw
+    // (e.g. files disappeared after the migration loop started).
     let baselineReads = 0;
     await withOverriddenSnapshot(
       (migrationsDir, maxVersion) => {
-        if ((maxVersion ?? 0) === 0 && ++baselineReads > 1) {
+        if ((maxVersion ?? 0) === 0 && ++baselineReads > 2) {
           throw new Error("rollback snapshot reconstruction failed");
         }
         return snapshotFixtures.reconstructSnapshotFromMigrations(
@@ -899,11 +900,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
 
-    // Prior snapshot is unavailable: new and pre-existing types are then
-    // indistinguishable, so nothing must be deleted.
+    // Prior snapshot becomes unavailable at rollback time: new and
+    // pre-existing types are then indistinguishable, so nothing must be
+    // deleted.
+    let baselineReads = 0;
     await withOverriddenSnapshot(
       (migrationsDir, maxVersion) =>
-        (maxVersion ?? 0) === 0
+        (maxVersion ?? 0) === 0 && ++baselineReads > 2
           ? null
           : (snapshotFixtures.reconstructSnapshotFromMigrations(
               migrationsDir,

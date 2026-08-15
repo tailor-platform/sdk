@@ -472,19 +472,72 @@ export async function applyTailorDB(
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
-      // Step 1.5: The migration loop below only touches the namespaces of the
-      // pending migrations; changes planned for every other namespace must go
-      // through the normal flow or they would be silently dropped.
-      // Creates/updates run before the loop so migration scripts see the
+      // Step 1.5: The migration loop below only touches the types named by
+      // some pending migration's diff; changes planned for every other
+      // namespace must go through the normal flow or they would be silently
+      // dropped. A migrating namespace's planned creates that already exist
+      // in the schema state before its first pending migration — the whole
+      // baseline on a fresh-workspace replay, and every table when the
+      // pending migration is data-only — are equally dropped by the loop and
+      // run here too, built from that snapshot so scripts see the checkpoint
+      // state rather than the final schema. Updates of types no pending diff
+      // names stay skipped: applying the final schema outside the
+      // per-migration phases could enforce a change whose migration has not
+      // run. Creates/updates run before the loop so migration scripts see the
       // complete world; deletes are irreversible and stay last (Step 5).
       const migratingNamespaces = new Set(pendingMigrations.map((m) => m.namespace));
       const isOutsideMigrations = (namespaceName: string | undefined) =>
         namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
+      const firstPendingByNamespace = new Map<string, PendingMigration>();
+      const pendingDeletedTypes = new Map<string, Set<string>>();
+      for (const migration of pendingMigrations) {
+        const first = firstPendingByNamespace.get(migration.namespace);
+        if (!first || migration.number < first.number) {
+          firstPendingByNamespace.set(migration.namespace, migration);
+        }
+        const deleted = pendingDeletedTypes.get(migration.namespace) ?? new Set<string>();
+        for (const typeName of getDeletedTypeNames(migration)) deleted.add(typeName);
+        pendingDeletedTypes.set(migration.namespace, deleted);
+      }
+      const preMigrationTables = new Map<string, SchemaSnapshot["tables"]>();
+      for (const [namespace, first] of firstPendingByNamespace) {
+        const snapshot = reconstructSnapshotFromMigrations(first.migrationsDir, first.number - 1);
+        if (!snapshot) {
+          throw new Error(
+            `Cannot reconstruct the schema state before migration ${formatMigrationNumber(first.number)} for namespace "${namespace}"`,
+          );
+        }
+        preMigrationTables.set(namespace, snapshot.tables);
+      }
 
       try {
         for (const create of changeSet.type.creates) {
-          if (!isOutsideMigrations(create.request.namespaceName)) continue;
-          await client.createTailorDBType(create.request);
+          const namespaceName = create.request.namespaceName;
+          if (isOutsideMigrations(namespaceName)) {
+            await client.createTailorDBType(create.request);
+            continue;
+          }
+          const typeName = create.request.tailordbType?.name;
+          if (!namespaceName || !typeName) continue;
+          const priorType = preMigrationTables.get(namespaceName)?.[typeName];
+          if (!priorType) continue;
+          // A type some pending migration removes or renames away is created
+          // only when its re-adding migration runs; materializing it early
+          // would erase the removal boundary (the plan holds no delete entry
+          // for a name its final state keeps).
+          if (pendingDeletedTypes.get(namespaceName)?.has(typeName)) continue;
+          const input = migrationContext.tailorDBInputs.find((i) => i.namespace === namespaceName);
+          // Recorded so the pre-phase GQL-permission fallback does not create
+          // the type a second time.
+          processedTypes.created.add(typeName);
+          await client.createTailorDBType({
+            workspaceId: create.request.workspaceId,
+            namespaceName,
+            tailordbType: generateTailorDBTypeManifestFromSnapshot(priorType, {
+              subscribed: migrationContext.executorUsedTypes.has(typeName),
+              namespaceGqlOperations: input?.config.gqlOperations,
+            }),
+          });
         }
         for (const update of changeSet.type.updates) {
           if (!isOutsideMigrations(update.request.namespaceName)) continue;
