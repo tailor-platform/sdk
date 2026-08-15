@@ -64,9 +64,7 @@
     "typescript/prefer-nullish-coalescing": "error",
     "typescript/prefer-regexp-exec": "error",
     "typescript/prefer-string-starts-ends-with": "error",
-    "tailor-zod/require-object-policy-comment": "error",
-    "zod/prefer-loose-object": "error",
-    "zod/prefer-strict-object": "error",
+    "tailor-valibot/require-object-policy-comment": "error",
     "typescript/await-thenable": "error",
     "typescript/no-floating-promises": "error",
     "typescript/switch-exhaustiveness-check": [
@@ -169,5 +167,5 @@
       }
     }
   ],
-  "jsPlugins": ["eslint-plugin-zod", "../../scripts/oxlint/tailor-zod-plugin.cjs"]
+  "jsPlugins": ["../../scripts/oxlint/tailor-valibot-plugin.cjs"]
 }

@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { parseDuration, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
@@ -71,9 +71,9 @@ export const waitCommand = defineAppCommand({
       desc: "Wait for success, failure, or suspension",
     },
   ],
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    "execution-id": arg(z.string(), {
+    "execution-id": arg(v.string(), {
       positional: true,
       description: "Execution ID",
     }),

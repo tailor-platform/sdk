@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import { readPlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -9,7 +9,7 @@ import type { ProfileInfo } from "./types";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all profiles.",
-  args: z.strictObject({}),
+  args: v.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;

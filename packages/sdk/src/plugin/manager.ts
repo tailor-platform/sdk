@@ -631,7 +631,7 @@ function copyMetadataToExtendedTable(
   }
 
   // Copy permissions from metadata
-  // Zod schema operand types are wider unions than the configure layer's discriminated PermissionCondition,
+  // Valibot schema operand types are wider unions than the configure layer's discriminated PermissionCondition,
   // so type assertions are needed here.
   if (metadata.permissions.record) {
     result = result.permission(metadata.permissions.record as TailorTypePermission);

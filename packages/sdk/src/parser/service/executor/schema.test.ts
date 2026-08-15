@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   ExecutorSchema,
@@ -9,34 +10,30 @@ import {
 } from "./schema";
 import type { Executor, ExecutorInput, WorkflowOperationArgs } from "#/types/executor.generated";
 
-function expectParseSuccess<T>(
-  result: { success: true; data: T } | { success: false; error: unknown },
-): T {
+function expectParseSuccess<T>(result: v.SafeParseResult<v.GenericSchema<unknown, T>>): T {
   expect(result.success).toBe(true);
   if (!result.success) {
     throw new Error("Expected schema parsing to succeed");
   }
-  return result.data;
+  return result.output;
 }
 
 function expectParseFailure<T>(
-  result: { success: true; data: T } | { success: false; error: { issues: unknown[] } },
-): { issues: unknown[] } {
+  result: v.SafeParseResult<v.GenericSchema<unknown, T>>,
+): [v.BaseIssue<unknown>, ...v.BaseIssue<unknown>[]] {
   expect(result.success).toBe(false);
   if (result.success) {
     throw new Error("Expected schema parsing to fail");
   }
-  return result.error;
+  return result.issues;
 }
 
-function expectUnknownKeyRejected<T>(
-  result: { success: true; data: T } | { success: false; error: { issues: unknown[] } },
-) {
-  const error = expectParseFailure(result);
-  expect(error.issues).toEqual(
+function expectUnknownKeyRejected<T>(result: v.SafeParseResult<v.GenericSchema<unknown, T>>) {
+  const issues = expectParseFailure(result);
+  expect(issues).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        code: "unrecognized_keys",
+        type: "strict_object",
       }),
     ]),
   );
@@ -47,7 +44,7 @@ describe("FunctionOperationSchema", () => {
     expect.hasAssertions();
 
     expectUnknownKeyRejected(
-      FunctionOperationSchema.safeParse({
+      v.safeParse(FunctionOperationSchema, {
         kind: "function",
         body: () => {},
         unknownOption: true,
@@ -67,7 +64,7 @@ describe("GqlOperationSchema", () => {
     ["converts query to string", documentNode],
     ["accepts string query directly", "query { users { id } }"],
   ] as const)("%s", (_description, query) => {
-    const result = GqlOperationSchema.safeParse({ kind: "graphql", query });
+    const result = v.safeParse(GqlOperationSchema, { kind: "graphql", query });
     const data = expectParseSuccess(result);
     expect(data.query).toBe("query { users { id } }");
   });
@@ -76,7 +73,7 @@ describe("GqlOperationSchema", () => {
     expect.hasAssertions();
 
     expectUnknownKeyRejected(
-      GqlOperationSchema.safeParse({
+      v.safeParse(GqlOperationSchema, {
         kind: "graphql",
         query: "query { users { id } }",
         unknownOption: true,
@@ -87,7 +84,7 @@ describe("GqlOperationSchema", () => {
 
 describe("WorkflowOperationSchema", () => {
   test("extracts workflowName from workflow object", () => {
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflow: { name: "my-workflow" },
       args: { id: "123" },
@@ -99,7 +96,7 @@ describe("WorkflowOperationSchema", () => {
   });
 
   test("prefers workflow object name when workflowName is also present", () => {
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflowName: "stale-workflow",
       workflow: { name: "current-workflow" },
@@ -111,7 +108,7 @@ describe("WorkflowOperationSchema", () => {
   });
 
   test("rejects a malformed workflow object even when workflowName is present", () => {
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflowName: "stale-workflow",
       workflow: {},
@@ -122,7 +119,7 @@ describe("WorkflowOperationSchema", () => {
   });
 
   test("accepts workflowName directly", () => {
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflowName: "my-workflow",
       args: { id: "123" },
@@ -135,24 +132,22 @@ describe("WorkflowOperationSchema", () => {
   test("rejects unknown options", () => {
     expect.hasAssertions();
 
-    const error = expectParseFailure(
-      WorkflowOperationSchema.safeParse({
+    const issues = expectParseFailure(
+      v.safeParse(WorkflowOperationSchema, {
         kind: "workflow",
         workflowName: "my-workflow",
         unknownOption: true,
       }),
     );
 
-    expect(error.issues).toEqual(
+    expect(issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "invalid_union",
-          errors: expect.arrayContaining([
-            expect.arrayContaining([
-              expect.objectContaining({
-                code: "unrecognized_keys",
-              }),
-            ]),
+          type: "union",
+          issues: expect.arrayContaining([
+            expect.objectContaining({
+              type: "strict_object",
+            }),
           ]),
         }),
       ]),
@@ -168,7 +163,7 @@ describe("WorkflowOperationSchema", () => {
     ["false", false],
     ["array", ["hello", 42, false, null]],
   ])("accepts %s static args", (_description, args) => {
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflowName: "my-workflow",
       args,
@@ -186,7 +181,7 @@ describe("WorkflowOperationSchema", () => {
     ["nested Date", { nested: new Date("2026-01-01T00:00:00.000Z") }],
     ["nested Map", [new Map([["key", "value"]])]],
   ])("rejects unsupported %s static args", (_description, args) => {
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflowName: "my-workflow",
       args,
@@ -197,7 +192,7 @@ describe("WorkflowOperationSchema", () => {
 
   test("accepts a dynamic args function", () => {
     const args = () => ({ orderId: "123" });
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflowName: "my-workflow",
       args,
@@ -215,7 +210,7 @@ describe("WorkflowOperationSchema", () => {
         return "stable";
       },
     };
-    const result = WorkflowOperationSchema.safeParse({
+    const result = v.safeParse(WorkflowOperationSchema, {
       kind: "workflow",
       workflowName: "my-workflow",
       args,
@@ -275,27 +270,32 @@ describe("WorkflowOperationSchema", () => {
 
 describe("workflow execution trigger schemas", () => {
   test.each([
-    ["workflow execution", WorkflowExecutionTriggerSchema, "workflow.workflow_execution.started"],
+    [
+      "workflow execution",
+      WorkflowExecutionTriggerSchema,
+      "workflowExecution",
+      "workflow.workflow_execution.started",
+    ],
     [
       "workflow job execution",
       WorkflowJobExecutionTriggerSchema,
+      "workflowJobExecution",
       "workflow.workflow_execution.job_execution.started",
     ],
-  ] as const)("rejects blank workflow names for %s triggers", (_description, schema, event) => {
-    expect(
-      schema.safeParse({ kind: schema.shape.kind.value, events: [event], workflowName: "" })
-        .success,
-    ).toBe(false);
-    expect(
-      schema.safeParse({ kind: schema.shape.kind.value, events: [event], workflowName: "  " })
-        .success,
-    ).toBe(false);
-  });
+  ] as const)(
+    "rejects blank workflow names for %s triggers",
+    (_description, schema, kind, event) => {
+      expect(v.safeParse(schema, { kind, events: [event], workflowName: "" }).success).toBe(false);
+      expect(v.safeParse(schema, { kind, events: [event], workflowName: "  " }).success).toBe(
+        false,
+      );
+    },
+  );
 });
 
 describe("ExecutorSchema", () => {
   test("transforms workflow executor correctly", () => {
-    const result = ExecutorSchema.safeParse({
+    const result = v.safeParse(ExecutorSchema, {
       name: "test-executor",
       trigger: {
         kind: "schedule",
@@ -322,7 +322,7 @@ describe("ExecutorSchema", () => {
       toString: () => "mutation { createUser { id } }",
     };
 
-    const result = ExecutorSchema.safeParse({
+    const result = v.safeParse(ExecutorSchema, {
       name: "test-executor",
       trigger: {
         kind: "schedule",
@@ -346,7 +346,7 @@ describe("ExecutorSchema", () => {
     expect.hasAssertions();
 
     expectParseFailure(
-      ExecutorSchema.safeParse({
+      v.safeParse(ExecutorSchema, {
         name: "test-executor",
         trigger: {
           kind: "schedule",

@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
+import { assertDocMatch } from "@politty/valibot/docs";
 import { format } from "oxfmt";
-import { assertDocMatch } from "politty/docs";
+import * as v from "valibot";
 import { describe, expect, test, vi } from "vitest";
-import { z } from "zod";
 import { mainCommand } from "./main";
 import { commonArgs } from "./shared/args";
 
@@ -16,8 +16,8 @@ vi.mock("node:module", async () => {
   return { ...actual, register: vi.fn() };
 });
 
-vi.mock("politty", async () => {
-  const actual = await vi.importActual("politty");
+vi.mock("@politty/valibot", async () => {
+  const actual = await vi.importActual("@politty/valibot");
   return { ...actual, runMain: vi.fn() };
 });
 
@@ -67,7 +67,7 @@ describe("CLI Documentation", () => {
       templates,
       targetCommands,
       // strip unknown keys
-      globalArgs: z.object(commonArgs),
+      globalArgs: v.object(commonArgs),
       formatter: mdFormatter,
     });
   });

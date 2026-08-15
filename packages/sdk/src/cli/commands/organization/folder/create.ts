@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,13 +10,13 @@ import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
 // strip unknown keys
-const createFolderOptionsSchema = z.object({
-  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
-  parentFolderId: z.string().optional(),
-  name: z.string().min(1, "Name must not be empty"),
+const createFolderOptionsSchema = v.object({
+  organizationId: v.pipe(v.string(), v.uuid("organization-id must be a valid UUID")),
+  parentFolderId: v.optional(v.string()),
+  name: v.pipe(v.string(), v.minLength(1, "Name must not be empty")),
 });
 
-export type CreateFolderOptions = z.input<typeof createFolderOptionsSchema>;
+export type CreateFolderOptions = v.InferInput<typeof createFolderOptionsSchema>;
 
 /**
  * Create a new folder in an organization.
@@ -24,18 +24,18 @@ export type CreateFolderOptions = z.input<typeof createFolderOptionsSchema>;
  * @returns Created folder details
  */
 export async function createFolder(options: CreateFolderOptions): Promise<FolderInfo> {
-  const result = createFolderOptionsSchema.safeParse(options);
+  const result = v.safeParse(createFolderOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.createOrganizationFolder({
-    organizationId: result.data.organizationId,
-    parentFolderId: result.data.parentFolderId ?? "",
-    folderName: result.data.name,
+    organizationId: result.output.organizationId,
+    parentFolderId: result.output.parentFolderId ?? "",
+    folderName: result.output.name,
   });
 
   if (!response.folder) {
@@ -48,12 +48,12 @@ export async function createFolder(options: CreateFolderOptions): Promise<Folder
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new folder in an organization.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...organizationArgs,
-    "parent-folder-id": arg(z.string().optional(), {
+    "parent-folder-id": arg(v.optional(v.string()), {
       description: "Parent folder ID",
     }),
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       alias: "n",
       description: "Folder name",
     }),

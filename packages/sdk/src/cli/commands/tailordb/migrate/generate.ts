@@ -8,9 +8,9 @@
 
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { configArg, confirmationArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -1231,33 +1231,33 @@ export const generateCommand = defineAppCommand({
   name: "generate",
   description:
     "Generate migration files by detecting schema differences between current local tables and the previous migration snapshot.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...confirmationArgs,
     ...configArg,
-    name: arg(z.string().optional(), {
+    name: arg(v.optional(v.string()), {
       alias: "n",
       description: "Optional description for the migration",
     }),
-    init: arg(z.boolean().default(false), {
+    init: arg(v.optional(v.boolean(), false), {
       description: "Delete existing migrations and start fresh",
     }),
-    "data-only": arg(z.boolean().default(false), {
+    "data-only": arg(v.optional(v.boolean(), false), {
       description:
         "Create a migration with no schema changes whose migration script runs a standalone data transformation",
     }),
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       description:
         "Target TailorDB namespace for --data-only (required if multiple namespaces exist)",
     }),
-    rename: arg(z.array(z.string()).optional(), {
+    rename: arg(v.optional(v.array(v.string())), {
       description:
         'Record a field or table rename instead of remove + add (format: "Table.oldField:newField" or "OldTable:NewTable"; repeatable). Renames require a migration script that copies the data.',
     }),
-    drop: arg(z.array(z.string()).optional(), {
+    drop: arg(v.optional(v.array(v.string())), {
       description:
         'Confirm that a removed field or table is a genuine removal, not a rename (format: "Table.field" or "Table"; repeatable). Required in non-interactive runs for a removal with rename candidates.',
     }),
-    "expand-contract": arg(z.array(z.string()).optional(), {
+    "expand-contract": arg(v.optional(v.array(v.string())), {
       description:
         'Convert a field type through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
     }),

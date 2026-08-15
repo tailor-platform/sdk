@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import {
   deploymentArgs,
   resolveMachineUserInputSource,
@@ -102,9 +102,9 @@ export async function getMachineUserToken(
 export const tokenCommand = defineAppCommand({
   name: "token",
   description: "Get an access token for a machine user.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
-    name: arg(z.string().optional(), {
+    name: arg(v.optional(v.string()), {
       positional: true,
       description:
         "Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",

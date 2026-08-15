@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -36,7 +36,7 @@ function connectionInfo(connection: AuthConnection): ConnectionInfo {
 export const listAuthConnectionCommand = defineAppCommand({
   name: "list",
   description: "List all auth connections.",
-  args: z.strictObject({ ...workspaceArgs, ...paginationArgs() }),
+  args: v.strictObject({ ...workspaceArgs, ...paginationArgs() }),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       profile: args.profile,

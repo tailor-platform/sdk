@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline";
+import { arg } from "@politty/valibot";
 import {
   bundleSeedScript,
   chunkSeedData,
@@ -15,8 +16,7 @@ import { renderFor } from "@tailor-platform/shared/color";
 import { defineAppCommand } from "@tailor-platform/shared/command";
 import { logger, styles } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { selectEntities } from "./entities";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { topologicalSort } from "./topo-sort";
@@ -356,31 +356,31 @@ async function truncateIdpUser(
 export const seedApplyCommand = defineAppCommand({
   name: "apply",
   description: "Seed TailorDB (and IdP `_User`) data from generated JSONL files.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
-    "machine-user": arg(z.string().optional(), {
+    "machine-user": arg(v.optional(v.string()), {
       alias: "m",
       description:
         "Machine user name for authentication (required unless machineUserName is configured in seedPlugin options)",
     }),
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "Seed all tables in the specified TailorDB namespace (excludes _User)",
     }),
-    "skip-idp": arg(z.boolean().default(false), {
+    "skip-idp": arg(v.optional(v.boolean(), false), {
       description: "Skip the IdP user (_User) entity",
     }),
-    truncate: arg(z.boolean().default(false), {
+    truncate: arg(v.optional(v.boolean(), false), {
       description: "Truncate target tables before seeding",
     }),
-    upsert: arg(z.boolean().default(false), {
+    upsert: arg(v.optional(v.boolean(), false), {
       description: "Update existing rows instead of failing on duplicate ids",
     }),
-    yes: arg(z.boolean().default(false), {
+    yes: arg(v.optional(v.boolean(), false), {
       alias: "y",
       description: "Skip confirmation prompts (for --truncate)",
     }),
-    entities: arg(z.array(z.string()).default([]), {
+    entities: arg(v.optional(v.array(v.string()), []), {
       positional: true,
       description: "Entity names to seed, including _User (default: all)",
     }),

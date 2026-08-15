@@ -17,7 +17,7 @@ The main `packages/sdk` has four core modules:
 ```
 src/
 ├── configure/   User-facing API (defineConfig, db.table, createResolver, ...)
-├── parser/      Validation & transformation layer (Zod schemas → internal types)
+├── parser/      Validation & transformation layer (Valibot schemas → internal types)
 ├── cli/         CLI commands, bundling, deployment
 └── plugin/      Plugin system (manager + built-in plugins)
 ```
@@ -31,15 +31,15 @@ The essential constraint: **configure cannot depend on parser/cli at runtime**, 
 The configure module's import boundaries enforced by oxlint:
 
 1. **Cannot import from `cli/`** — CLI is deployment tooling, not user runtime
-2. **Cannot import from `parser/`** (except `parser/**/types.ts`, type-only) — prevents Zod from leaking into user bundles
+2. **Cannot import from `parser/`** (except `parser/**/types.ts`, type-only) — prevents Valibot from leaking into user bundles
 3. **Cannot import from `plugin/`** (except `plugin/types.ts`, type-only) — prevents plugin system code from bundling into user output
 4. **Can only import `utils/brand` or `utils/test/*`** — other utils helpers may have dependencies that would inflate user bundle sizes
 
 ## Design Decisions
 
-### Schema/Types Separation (Zod Bundling Prevention)
+### Schema/Types Separation (Valibot Bundling Prevention)
 
-**Problem:** `export type * from "./module"` looks like a type-only re-export, but bundlers still resolve the entire module graph including runtime dependencies. If a configure module re-exports types from a parser module that imports Zod, Zod gets bundled into user output.
+**Problem:** `export type * from "./module"` looks like a type-only re-export, but bundlers still resolve the entire module graph including runtime dependencies. If a configure module re-exports types from a parser module that imports Valibot, Valibot gets bundled into user output.
 
 **Example of the problem chain:**
 
@@ -48,18 +48,18 @@ configure/auth/index.ts
   → export type * from "../../parser/auth"
     → parser/auth/index.ts
       → import { schema } from "./schema"
-        → import { z } from "zod"  ← bundled into user output!
+        → import * as v from "valibot"  ← bundled into user output!
 ```
 
-**Solution:** Three kinds of type homes, none of which can reach Zod:
+**Solution:** Three kinds of type homes, none of which can reach Valibot:
 
-1. **Generated types** — Zod schemas live in `parser/**/schema.ts`; their types are generated into `src/types/*.generated.ts` by zinfer (`pnpm generate`). `src/types/` contains only these and `helpers.ts` (generic utilities).
-2. **Pure type modules** — hand-written shared types live next to the code that owns them, in files named `types.ts` (or `*.types.ts` under `configure/`): e.g. `parser/service/tailordb/types.ts` (parsed structures), `configure/services/auth/types.ts` (config input types), `plugin/types.ts` (plugin authoring types), `runtime/types.ts` (runtime principal types). oxlint enforces that these files contain type-only imports and reference neither `zod` nor `**/schema` — even type-only, so the user's tsc never loads Zod's type machinery either.
+1. **Generated types** — Valibot schemas live in `parser/**/schema.ts`; their types are generated into `src/types/*.generated.ts` by vinfer (`pnpm generate`). `src/types/` contains only these and `helpers.ts` (generic utilities).
+2. **Pure type modules** — hand-written shared types live next to the code that owns them, in files named `types.ts` (or `*.types.ts` under `configure/`): e.g. `parser/service/tailordb/types.ts` (parsed structures), `configure/services/auth/types.ts` (config input types), `plugin/types.ts` (plugin authoring types), `runtime/types.ts` (runtime principal types). oxlint enforces that these files contain type-only imports and reference neither `valibot` nor `**/schema` — even type-only, so the user's tsc never loads Valibot's type machinery either.
 3. **Cross-layer access** — otherwise-closed boundaries (configure → parser, cli → configure, plugin → configure) are open _only_ for pure type modules, _only_ type-only.
 
 Because a pure type module's import closure contains no runtime modules at all, even a bundler that resolves the full module graph finds nothing to include.
 
-**Verification:** `check:zod-isolation` (part of `pnpm check`) walks the import closure of every `package.json#exports` entry in `dist/` and fails if any entry other than `./cli` can reach a zod import — in its rolled-up `.d.mts` graph (type level) or its `.mjs` graph (runtime level).
+**Verification:** `check:valibot-isolation` (part of `pnpm check`) walks the import closure of every `package.json#exports` entry in `dist/` and fails if any entry other than `./cli` can reach a valibot import — in its rolled-up `.d.mts` graph (type level) or its `.mjs` graph (runtime level).
 
 ### Plugin Entry Point Separation
 

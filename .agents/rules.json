@@ -40,7 +40,7 @@
         "packages/sdk/src/plugin/types.ts",
         "packages/sdk/src/runtime/types.ts",
         "packages/sdk/src/parser/**/schema.ts",
-        "packages/sdk/zinfer.config.ts"
+        "packages/sdk/vinfer.config.ts"
       ],
       "file": ".agents/rules/schema-types.md"
     },

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import * as v from "valibot";
 import { hashContent } from "./hasher";
 import { cacheManifestSchema } from "./types";
 import type { CacheConfig, CacheEntry, CacheManifest } from "./types";
@@ -55,14 +56,14 @@ function createCacheStore(config: CacheConfig): CacheStore {
   function loadManifest(): CacheManifest | undefined {
     try {
       const raw = fs.readFileSync(manifestPath(), "utf-8");
-      const result = cacheManifestSchema.safeParse(JSON.parse(raw));
+      const result = v.safeParse(cacheManifestSchema, JSON.parse(raw));
 
       if (!result.success) {
         cachedManifest = undefined;
         return undefined;
       }
 
-      cachedManifest = result.data;
+      cachedManifest = result.output;
       return cachedManifest;
     } catch {
       // Missing file, parse error, etc.

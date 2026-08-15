@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -62,7 +62,7 @@ export async function listOAuth2Clients(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all OAuth2 clients in the application.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
     ...paginationArgs(),
   }),

@@ -1,9 +1,9 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { generateCodeVerifier } from "@badgateway/oauth2-client";
+import { arg } from "@politty/valibot";
 import open from "open";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
@@ -256,38 +256,40 @@ async function loginAsMachineUser(
 export const loginCommand = defineAppCommand({
   name: "login",
   description: "Login to Tailor Platform.",
-  args: z.xor([
-    z
-      .strictObject({
-        profile: arg(z.string().optional(), {
+  args: v.union([
+    v.pipe(
+      v.strictObject({
+        profile: arg(v.optional(v.string()), {
           alias: "p",
           description: "Workspace profile whose platform settings should be used for login.",
           env: "TAILOR_PLATFORM_PROFILE",
         }),
-      })
-      .describe("User Login"),
-    z
-      .strictObject({
-        "machine-user": arg(z.literal(true), {
+      }),
+      v.description("User Login"),
+    ),
+    v.pipe(
+      v.strictObject({
+        "machine-user": arg(v.literal(true), {
           description: "Login as a platform machine user.",
           required: true,
         }),
-        "client-id": arg(z.string(), {
+        "client-id": arg(v.string(), {
           description: "Client ID",
           env: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID",
           required: true,
         }),
-        "client-secret": arg(z.string().optional(), {
+        "client-secret": arg(v.optional(v.string()), {
           description: "Client secret",
           env: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
         }),
-        profile: arg(z.string().optional(), {
+        profile: arg(v.optional(v.string()), {
           alias: "p",
           description: "Workspace profile whose platform settings should be used for login.",
           env: "TAILOR_PLATFORM_PROFILE",
         }),
-      })
-      .describe("Machine User Login"),
+      }),
+      v.description("Machine User Login"),
+    ),
   ]),
   run: async (args) => {
     try {

@@ -54,7 +54,7 @@ export function defineSecretManager<const T extends SecretsInputNullish>(
     options: { ignoreNullishValues: options?.ignoreNullishValues ?? false },
   };
 
-  // Non-enumerable so Zod's z.object validation ignores them
+  // Non-enumerable so Valibot's v.object validation ignores them
   Object.defineProperty(result, "get", {
     value: async (vault: string, secret: string) => {
       return tailor.secretmanager.getSecret(vault, secret);

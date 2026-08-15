@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
@@ -47,7 +47,7 @@ function formatUserListInfo(info: UserListInfo): string {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
-  args: z.strictObject({}),
+  args: v.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;

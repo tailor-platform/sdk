@@ -1,9 +1,9 @@
+import { arg } from "@politty/valibot";
 import { configArg } from "@tailor-platform/shared/args";
 import { defineAppCommand } from "@tailor-platform/shared/command";
 import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
 import { buildTailorDbErdSchema } from "./schema";
 import { initErdCommand } from "./utils";
@@ -174,13 +174,13 @@ export function prepareErdBuildsFromContext(
 export const erdExportCommand = defineAppCommand({
   name: "export",
   description: "Export TailorDB ERD static viewer from local TailorDB schema.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...configArg,
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "TailorDB namespace name (optional if only one namespace is defined in config)",
     }),
-    output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
+    output: arg(v.optional(v.string(), DEFAULT_ERD_BASE_DIR), {
       alias: "o",
       description:
         "Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`)",

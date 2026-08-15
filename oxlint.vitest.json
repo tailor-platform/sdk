@@ -28,7 +28,8 @@
           "assert",
           "assertType",
           "expectBundleExists",
-          "assertDocMatch"
+          "assertDocMatch",
+          "expectRejectionMessage"
         ]
       }
     ],

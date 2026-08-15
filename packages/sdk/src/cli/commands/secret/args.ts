@@ -1,11 +1,11 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 
 /**
  * Arguments for specify secret key
  */
 export const vaultArgs = {
-  "vault-name": arg(z.string(), {
+  "vault-name": arg(v.string(), {
     alias: "V",
     description: "Vault name",
   }),
@@ -16,7 +16,7 @@ export const vaultArgs = {
  */
 export const secretIdentifyArgs = {
   ...vaultArgs,
-  name: arg(z.string(), {
+  name: arg(v.string(), {
     alias: "n",
     description: "Secret name",
   }),
@@ -27,7 +27,7 @@ export const secretIdentifyArgs = {
  */
 export const secretValueArgs = {
   ...secretIdentifyArgs,
-  value: arg(z.string(), {
+  value: arg(v.string(), {
     alias: "v",
     description: "Secret value",
   }),

@@ -7,10 +7,10 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
+import { arg } from "@politty/valibot";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver/default-permission";
 import {
   resolveMachineUserInputSource,
@@ -39,27 +39,27 @@ export const runFunctionCommand = defineAppCommand({
   aliases: ["test-run"],
   description: "Run a function on the Tailor Platform server without deploying.",
   // strip unknown keys
-  args: z.object({
+  args: v.object({
     ...workspaceArgs,
-    file: arg(z.string(), {
+    file: arg(v.string(), {
       positional: true,
       description: "Path to the function file",
     }),
-    name: arg(z.string().optional(), {
+    name: arg(v.optional(v.string()), {
       alias: "n",
       description: "Workflow job name to run (matches the `name` field of createWorkflowJob)",
     }),
-    arg: arg(z.string().optional(), {
+    arg: arg(v.optional(v.string()), {
       alias: "a",
       description: "JSON argument to pass to the function",
     }),
-    "machine-user": arg(z.string().optional(), {
+    "machine-user": arg(v.optional(v.string()), {
       alias: "m",
       description:
         "Machine user name for authentication. Falls back to the active profile's default machine user.",
       env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
-    config: arg(z.string().default("tailor.config.ts"), {
+    config: arg(v.optional(v.string(), "tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",
     }),

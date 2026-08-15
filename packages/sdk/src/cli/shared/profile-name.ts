@@ -1,3 +1,3 @@
-import { z } from "zod";
+import * as v from "valibot";
 
-export const profileNameSchema = z.string().min(1, "Profile must not be empty");
+export const profileNameSchema = v.pipe(v.string(), v.minLength(1, "Profile must not be empty"));

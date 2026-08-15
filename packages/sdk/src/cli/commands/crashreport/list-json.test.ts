@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { runCommand } from "@politty/valibot";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { parseCrashReportConfig } from "#/cli/crashreport/config";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";

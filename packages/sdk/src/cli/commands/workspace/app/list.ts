@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { orderArg, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -9,33 +9,33 @@ import { assertDefined } from "#/utils/assert";
 import { appInfo, type AppInfo } from "./transform";
 
 // strip unknown keys
-const listAppsOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
-  profile: z.string().optional(),
-  order: orderArg.optional(),
-  limit: z.coerce.number().int().nonnegative().optional(),
+const listAppsOptionsSchema = v.object({
+  workspaceId: v.optional(v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID"))),
+  profile: v.optional(v.string()),
+  order: v.optional(orderArg),
+  limit: v.optional(v.pipe(v.unknown(), v.transform(Number), v.integer(), v.minValue(0))),
 });
 
-export type ListAppsOptions = z.input<typeof listAppsOptionsSchema>;
+export type ListAppsOptions = v.InferInput<typeof listAppsOptionsSchema>;
 
 async function loadOptions(options: ListAppsOptions) {
-  const result = listAppsOptionsSchema.safeParse(options);
+  const result = v.safeParse(listAppsOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.output.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
 
   return {
     client,
     workspaceId,
-    order: result.data.order,
-    limit: result.data.limit,
+    order: result.output.order,
+    limit: result.output.limit,
   };
 }
 
@@ -67,7 +67,7 @@ export async function listApps(options: ListAppsOptions): Promise<AppInfo[]> {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List applications in a workspace",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...paginationArgs(),
   }),

@@ -1,6 +1,6 @@
 // AI Gateway configuration input types.
 //
-// This is a pure type module: type declarations only, no zod/schema
+// This is a pure type module: type declarations only, no valibot/schema
 // references, importable type-only from any layer.
 import type { AuthNamespaceName } from "#/configure/types/auth-namespace-name";
 import type { AIGatewayInput } from "#/types/aigateway.generated";

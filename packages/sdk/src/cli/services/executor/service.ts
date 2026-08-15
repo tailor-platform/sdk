@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import * as v from "valibot";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { importUserModule } from "#/cli/shared/user-modules";
@@ -52,17 +53,17 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
   const loadExecutorForFile = async (executorFile: string): Promise<Executor | undefined> => {
     try {
       const executorModule = await importUserModule(executorFile);
-      const result = ExecutorSchema.safeParse(stripExecutorTriggerArgs(executorModule.default));
+      const result = v.safeParse(ExecutorSchema, stripExecutorTriggerArgs(executorModule.default));
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
         logger.log(
-          `Executor: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
+          `Executor: ${styles.successBright(`"${result.output.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        executors[executorFile] = result.data;
-        return result.data;
+        executors[executorFile] = result.output;
+        return result.output;
       }
       if (isSdkBranded(executorModule.default, "executor")) {
-        throw result.error;
+        throw new v.ValiError(result.issues);
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);

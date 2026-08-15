@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { functionSchema } from "../common";
 import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "#/parser/service/tailordb/types";
@@ -19,28 +19,37 @@ function normalizeGqlOperations(
 }
 
 /**
- * Zod schema for GqlOperations configuration with normalization transform.
+ * Valibot schema for GqlOperations configuration with normalization transform.
  * Accepts "query" alias or detailed object, normalizes to GqlOperations object.
  */
-export const GqlOperationsSchema = z
-  .union([
-    z.literal("query"),
-    z.strictObject({
-      create: z.boolean().optional().describe("Enable create mutation (default: true)"),
-      update: z.boolean().optional().describe("Enable update mutation (default: true)"),
-      delete: z.boolean().optional().describe("Enable delete mutation (default: true)"),
-      read: z
-        .boolean()
-        .optional()
-        .describe("Enable read queries - get, list, aggregation (default: true)"),
+export const GqlOperationsSchema = v.pipe(
+  v.union([
+    v.literal("query"),
+    v.strictObject({
+      create: v.optional(
+        v.pipe(v.boolean(), v.description("Enable create mutation (default: true)")),
+      ),
+      update: v.optional(
+        v.pipe(v.boolean(), v.description("Enable update mutation (default: true)")),
+      ),
+      delete: v.optional(
+        v.pipe(v.boolean(), v.description("Enable delete mutation (default: true)")),
+      ),
+      read: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description("Enable read queries - get, list, aggregation (default: true)"),
+        ),
+      ),
     }),
-  ])
-  .describe(
+  ]),
+  v.description(
     "Configuration for GraphQL operations on a TailorDB table.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
-  )
-  .transform((val) => normalizeGqlOperations(val));
+  ),
+  v.transform((val) => normalizeGqlOperations(val)),
+);
 
-const TailorFieldTypeSchema = z.enum([
+const TailorFieldTypeSchema = v.picklist([
   "uuid",
   "string",
   "boolean",
@@ -54,71 +63,96 @@ const TailorFieldTypeSchema = z.enum([
   "nested",
 ]);
 
-const AllowedValueSchema = z.strictObject({
-  value: z.string(),
-  description: z.string().optional(),
+const AllowedValueSchema = v.strictObject({
+  value: v.string(),
+  description: v.optional(v.string()),
 });
 
-export const DBFieldMetadataSchema = z.strictObject({
-  required: z.boolean().optional().describe("Whether the field is required"),
-  array: z.boolean().optional().describe("Whether the field is an array"),
-  description: z.string().optional().describe("Field description"),
-  typeName: z.string().optional().describe("Type name for nested or enum fields"),
-  allowedValues: z.array(AllowedValueSchema).optional().describe("Allowed values for enum fields"),
-  index: z.boolean().optional().describe("Whether the field is indexed for faster queries"),
-  unique: z.boolean().optional().describe("Whether the field value must be unique"),
-  vector: z
-    .boolean()
-    .optional()
-    .describe("Whether the field is a vector field for similarity search"),
-  foreignKey: z.boolean().optional().describe("Whether the field is a foreign key"),
-  foreignKeyType: z.string().optional().describe("Target table name for foreign key relations"),
-  foreignKeyField: z.string().optional().describe("Target field name for foreign key relations"),
-  hooks: z
-    .strictObject({
-      create: functionSchema.optional().describe("Hook function called on record creation"),
-      update: functionSchema.optional().describe("Hook function called on record update"),
-    })
-    .optional()
-    .describe("Lifecycle hooks for the field"),
-  validate: z.array(functionSchema).optional().describe("Validation functions for the field"),
-  serial: z
-    .strictObject({
-      start: z.number().describe("Starting value for the serial sequence"),
-      maxValue: z.number().optional().describe("Maximum value for the serial sequence"),
-      format: z.string().optional().describe("Format string for serial value (string type only)"),
-    })
-    .optional()
-    .describe("Serial (auto-increment) configuration"),
-  scale: z
-    .number()
-    .int()
-    .min(0)
-    .max(12)
-    .optional()
-    .describe("Decimal scale (number of digits after decimal point, 0-12)"),
-  default: z.unknown().optional().describe("Default value for the field on create"),
+export const DBFieldMetadataSchema = v.strictObject({
+  required: v.optional(v.pipe(v.boolean(), v.description("Whether the field is required"))),
+  array: v.optional(v.pipe(v.boolean(), v.description("Whether the field is an array"))),
+  description: v.optional(v.pipe(v.string(), v.description("Field description"))),
+  typeName: v.optional(v.pipe(v.string(), v.description("Type name for nested or enum fields"))),
+  allowedValues: v.optional(
+    v.pipe(v.array(AllowedValueSchema), v.description("Allowed values for enum fields")),
+  ),
+  index: v.optional(
+    v.pipe(v.boolean(), v.description("Whether the field is indexed for faster queries")),
+  ),
+  unique: v.optional(v.pipe(v.boolean(), v.description("Whether the field value must be unique"))),
+  vector: v.optional(
+    v.pipe(v.boolean(), v.description("Whether the field is a vector field for similarity search")),
+  ),
+  foreignKey: v.optional(v.pipe(v.boolean(), v.description("Whether the field is a foreign key"))),
+  foreignKeyType: v.optional(
+    v.pipe(v.string(), v.description("Target table name for foreign key relations")),
+  ),
+  foreignKeyField: v.optional(
+    v.pipe(v.string(), v.description("Target field name for foreign key relations")),
+  ),
+  hooks: v.optional(
+    v.pipe(
+      v.strictObject({
+        create: v.optional(
+          v.pipe(functionSchema, v.description("Hook function called on record creation")),
+        ),
+        update: v.optional(
+          v.pipe(functionSchema, v.description("Hook function called on record update")),
+        ),
+      }),
+      v.description("Lifecycle hooks for the field"),
+    ),
+  ),
+  validate: v.optional(
+    v.pipe(v.array(functionSchema), v.description("Validation functions for the field")),
+  ),
+  serial: v.optional(
+    v.pipe(
+      v.strictObject({
+        start: v.pipe(v.number(), v.description("Starting value for the serial sequence")),
+        maxValue: v.optional(
+          v.pipe(v.number(), v.description("Maximum value for the serial sequence")),
+        ),
+        format: v.optional(
+          v.pipe(v.string(), v.description("Format string for serial value (string type only)")),
+        ),
+      }),
+      v.description("Serial (auto-increment) configuration"),
+    ),
+  ),
+  scale: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(12),
+      v.description("Decimal scale (number of digits after decimal point, 0-12)"),
+    ),
+  ),
+  default: v.optional(v.pipe(v.unknown(), v.description("Default value for the field on create"))),
 });
 
-const RelationTypeSchema = z.enum(relationTypesKeys);
+const RelationTypeSchema = v.picklist(relationTypesKeys);
 
-export const RawRelationConfigSchema = z.strictObject({
-  type: RelationTypeSchema.describe("Relation cardinality type"),
-  toward: z.strictObject({
-    type: z.string().describe("Target table name, or 'self' for self-relations"),
-    as: z.string().optional().describe("Custom forward relation name"),
-    key: z.string().optional().describe("Target field to join on (default: 'id')"),
+export const RawRelationConfigSchema = v.strictObject({
+  type: v.pipe(RelationTypeSchema, v.description("Relation cardinality type")),
+  toward: v.strictObject({
+    type: v.pipe(v.string(), v.description("Target table name, or 'self' for self-relations")),
+    as: v.optional(v.pipe(v.string(), v.description("Custom forward relation name"))),
+    key: v.optional(v.pipe(v.string(), v.description("Target field to join on (default: 'id')"))),
   }),
-  backward: z.string().optional().describe("Backward relation name on the target table"),
+  backward: v.optional(
+    v.pipe(v.string(), v.description("Backward relation name on the target table")),
+  ),
 });
 
-const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
+const TailorDBFieldSchema: v.GenericSchema<TailorDBFieldOutput> = v.lazy(() =>
   // strip unknown keys
-  z.object({
+  v.object({
     type: TailorFieldTypeSchema,
-    fields: z.record(z.string(), TailorDBFieldSchema).optional(),
+    fields: v.optional(v.record(v.string(), TailorDBFieldSchema)),
     metadata: DBFieldMetadataSchema,
-    rawRelation: RawRelationConfigSchema.optional(),
+    rawRelation: v.optional(RawRelationConfigSchema),
   }),
 );
 
@@ -126,100 +160,117 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
  * Schema for TailorDB table settings.
  * Normalizes gqlOperations from alias ("query") to object format.
  */
-export const TailorDBTypeSettingsSchema = z.strictObject({
-  pluralForm: z.string().optional().describe("Custom plural form of the table name for GraphQL"),
-  aggregation: z.boolean().optional().describe("Enable aggregation queries for this table"),
-  bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this table"),
-  gqlOperations: GqlOperationsSchema.optional().describe(
-    'Configure GraphQL operations for this table. Use "query" for read-only mode, or an object for granular control.',
+export const TailorDBTypeSettingsSchema = v.strictObject({
+  pluralForm: v.optional(
+    v.pipe(v.string(), v.description("Custom plural form of the table name for GraphQL")),
   ),
-  publishEvents: z
-    .boolean()
-    .optional()
-    .describe(
-      "Enable publishing events for this table.\nWhen enabled, record creation/update/deletion events are published.\nIf not specified, this is automatically set to true when an executor uses this table\nwith recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false\nwhile an executor uses this table, an error will be thrown during apply.",
+  aggregation: v.optional(
+    v.pipe(v.boolean(), v.description("Enable aggregation queries for this table")),
+  ),
+  bulkUpsert: v.optional(
+    v.pipe(v.boolean(), v.description("Enable bulk upsert mutation for this table")),
+  ),
+  gqlOperations: v.optional(
+    v.pipe(
+      GqlOperationsSchema,
+      v.description(
+        'Configure GraphQL operations for this table. Use "query" for read-only mode, or an object for granular control.',
+      ),
     ),
+  ),
+  publishEvents: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Enable publishing events for this table.\nWhen enabled, record creation/update/deletion events are published.\nIf not specified, this is automatically set to true when an executor uses this table\nwith recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false\nwhile an executor uses this table, an error will be thrown during apply.",
+      ),
+    ),
+  ),
 });
 
 export const GQL_PERMISSION_INVALID_OPERAND_MESSAGE =
   "operand is not supported in gqlPermission. Use permission() for record-level conditions.";
 
-const GqlPermissionOperandSchema = z.union(
+const GqlPermissionOperandSchema = v.union(
   [
-    z.strictObject({ user: z.string() }),
-    z.string(),
-    z.boolean(),
-    z.array(z.string()),
-    z.array(z.boolean()),
+    v.strictObject({ user: v.string() }),
+    v.string(),
+    v.boolean(),
+    v.array(v.string()),
+    v.array(v.boolean()),
   ],
-  {
-    error: (issue) => {
-      if (typeof issue.input === "object" && issue.input !== null) {
-        const keys = Object.keys(issue.input);
-        if (keys.length === 1) {
-          return `"${keys[0]}" ${GQL_PERMISSION_INVALID_OPERAND_MESSAGE}`;
-        }
-        return "Operand object must have exactly 1 key";
+  (issue) => {
+    if (typeof issue.input === "object" && issue.input !== null) {
+      const keys = Object.keys(issue.input);
+      if (keys.length === 1) {
+        return `"${keys[0]}" ${GQL_PERMISSION_INVALID_OPERAND_MESSAGE}`;
       }
-      return "Invalid operand in gqlPermission";
-    },
+      return "Operand object must have exactly 1 key";
+    }
+    return "Invalid operand in gqlPermission";
   },
 );
 
-const RecordPermissionOperandSchema = z.union([
+const RecordPermissionOperandSchema = v.union([
   GqlPermissionOperandSchema,
-  z.strictObject({ record: z.string() }),
-  z.strictObject({ oldRecord: z.string() }),
-  z.strictObject({ newRecord: z.string() }),
+  v.strictObject({ record: v.string() }),
+  v.strictObject({ oldRecord: v.string() }),
+  v.strictObject({ newRecord: v.string() }),
 ]);
 
-const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in", "hasAny", "not hasAny"]);
+const PermissionOperatorSchema = v.picklist(["=", "!=", "in", "not in", "hasAny", "not hasAny"]);
 
-const RecordPermissionConditionSchema = z
-  .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])
-  .readonly();
+const RecordPermissionConditionSchema = v.pipe(
+  v.tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema]),
+  v.readonly(),
+);
 
-const GqlPermissionConditionSchema = z
-  .tuple([GqlPermissionOperandSchema, PermissionOperatorSchema, GqlPermissionOperandSchema])
-  .readonly();
+const GqlPermissionConditionSchema = v.pipe(
+  v.tuple([GqlPermissionOperandSchema, PermissionOperatorSchema, GqlPermissionOperandSchema]),
+  v.readonly(),
+);
 
-const ActionPermissionSchema = z.union([
+const ActionPermissionSchema = v.union([
   // Object format: { conditions, description?, permit? }
-  z.strictObject({
-    conditions: z.union([
+  v.strictObject({
+    conditions: v.union([
       RecordPermissionConditionSchema,
-      z.array(RecordPermissionConditionSchema).readonly(),
+      v.pipe(v.array(RecordPermissionConditionSchema), v.readonly()),
     ]),
-    description: z.string().optional(),
-    permit: z.boolean().optional(),
+    description: v.optional(v.string()),
+    permit: v.optional(v.boolean()),
   }),
   // Single condition tuple: [operand, operator, operand]
-  z
-    .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])
-    .readonly(),
-  // Single condition tuple with permit: [operand, operator, operand, permit]
-  z
-    .tuple([
+  v.pipe(
+    v.tuple([
       RecordPermissionOperandSchema,
       PermissionOperatorSchema,
       RecordPermissionOperandSchema,
-      z.boolean(),
-    ])
-    .readonly(),
+    ]),
+    v.readonly(),
+  ),
+  // Single condition tuple with permit: [operand, operator, operand, permit]
+  v.pipe(
+    v.tuple([
+      RecordPermissionOperandSchema,
+      PermissionOperatorSchema,
+      RecordPermissionOperandSchema,
+      v.boolean(),
+    ]),
+    v.readonly(),
+  ),
   // Multiple conditions with optional trailing permit
-  z
-    .array(z.union([RecordPermissionConditionSchema, z.boolean()]))
-    .refine(
-      (arr) => {
-        const boolIndex = arr.findIndex((item) => typeof item === "boolean");
-        return boolIndex === -1 || boolIndex === arr.length - 1;
-      },
-      { message: "Boolean permit flag must only appear at the end" },
-    )
-    .readonly(),
+  v.pipe(
+    v.array(v.union([RecordPermissionConditionSchema, v.boolean()])),
+    v.check((arr) => {
+      const boolIndex = arr.findIndex((item) => typeof item === "boolean");
+      return boolIndex === -1 || boolIndex === arr.length - 1;
+    }, "Boolean permit flag must only appear at the end"),
+    v.readonly(),
+  ),
 ]);
 
-const GqlPermissionActionSchema = z.enum([
+const GqlPermissionActionSchema = v.picklist([
   "read",
   "create",
   "update",
@@ -228,70 +279,80 @@ const GqlPermissionActionSchema = z.enum([
   "bulkUpsert",
 ]);
 
-const GqlPermissionPolicySchema = z.strictObject({
-  conditions: z.array(GqlPermissionConditionSchema).readonly(),
-  actions: z.union([z.literal("all"), z.array(GqlPermissionActionSchema).readonly()]),
-  permit: z.boolean().optional(),
-  description: z.string().optional(),
+const GqlPermissionPolicySchema = v.strictObject({
+  conditions: v.pipe(v.array(GqlPermissionConditionSchema), v.readonly()),
+  actions: v.union([v.literal("all"), v.pipe(v.array(GqlPermissionActionSchema), v.readonly())]),
+  permit: v.optional(v.boolean()),
+  description: v.optional(v.string()),
 });
 
-export const RawPermissionsSchema = z.strictObject({
-  record: z
-    .strictObject({
-      create: z.array(ActionPermissionSchema).readonly(),
-      read: z.array(ActionPermissionSchema).readonly(),
-      update: z.array(ActionPermissionSchema).readonly(),
-      delete: z.array(ActionPermissionSchema).readonly(),
-    })
-    .optional(),
-  gql: z.array(GqlPermissionPolicySchema).readonly().optional(),
+export const RawPermissionsSchema = v.strictObject({
+  record: v.optional(
+    v.strictObject({
+      create: v.pipe(v.array(ActionPermissionSchema), v.readonly()),
+      read: v.pipe(v.array(ActionPermissionSchema), v.readonly()),
+      update: v.pipe(v.array(ActionPermissionSchema), v.readonly()),
+      delete: v.pipe(v.array(ActionPermissionSchema), v.readonly()),
+    }),
+  ),
+  gql: v.optional(v.pipe(v.array(GqlPermissionPolicySchema), v.readonly())),
 });
 
-export const TailorDBTypeSchema = z.strictObject({
-  name: z.string(),
-  fields: z.record(z.string(), TailorDBFieldSchema),
-  // oxlint-disable-next-line zod/prefer-strict-object, tailor-zod/require-object-policy-comment -- Keep z.object().strict() so zinfer preserves the RawPermissions alias in generated types.
-  metadata: z
-    .object({
-      name: z.string(),
-      description: z.string().optional(),
-      settings: TailorDBTypeSettingsSchema.optional(),
-      permissions: RawPermissionsSchema,
-      files: z.record(z.string(), z.string()),
-      indexes: z
-        .record(
-          z.string(),
-          z.strictObject({
-            fields: z.array(z.string()),
-            unique: z.boolean().optional(),
-          }),
-        )
-        .optional(),
-      typeHook: z
-        .strictObject({
-          create: functionSchema.optional(),
-          update: functionSchema.optional(),
-        })
-        .optional(),
-      typeValidate: functionSchema.optional(),
-    })
-    .strict(),
+export const TailorDBTypeSchema = v.strictObject({
+  name: v.string(),
+  fields: v.record(v.string(), TailorDBFieldSchema),
+  // oxlint-disable-next-line tailor-valibot/require-object-policy-comment -- Keep v.strictObject() so vinfer preserves the RawPermissions alias in generated types.
+  metadata: v.strictObject({
+    name: v.string(),
+    description: v.optional(v.string()),
+    settings: v.optional(TailorDBTypeSettingsSchema),
+    permissions: RawPermissionsSchema,
+    files: v.record(v.string(), v.string()),
+    indexes: v.optional(
+      v.record(
+        v.string(),
+        v.strictObject({
+          fields: v.array(v.string()),
+          unique: v.optional(v.boolean()),
+        }),
+      ),
+    ),
+    typeHook: v.optional(
+      v.strictObject({
+        create: v.optional(functionSchema),
+        update: v.optional(functionSchema),
+      }),
+    ),
+    typeValidate: v.optional(functionSchema),
+  }),
 });
 
-const TailorDBMigrationConfigSchema = z.strictObject({
-  directory: z.string().describe("Directory containing migration files"),
-  machineUser: z.string().optional().describe("Machine user name for migration execution"),
+const TailorDBMigrationConfigSchema = v.strictObject({
+  directory: v.pipe(v.string(), v.description("Directory containing migration files")),
+  machineUser: v.optional(
+    v.pipe(v.string(), v.description("Machine user name for migration execution")),
+  ),
 });
 
 /**
  * Schema for TailorDB service configuration.
  * Normalizes gqlOperations from alias ("query") to object format.
  */
-export const TailorDBServiceConfigSchema = z.strictObject({
-  files: z.array(z.string()).describe("Glob patterns for TailorDB table definition files"),
-  ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from table discovery"),
-  migration: TailorDBMigrationConfigSchema.optional().describe("Migration configuration"),
-  gqlOperations: GqlOperationsSchema.optional().describe(
-    "Default GraphQL operations for all tables in this service",
+export const TailorDBServiceConfigSchema = v.strictObject({
+  files: v.pipe(
+    v.array(v.string()),
+    v.description("Glob patterns for TailorDB table definition files"),
+  ),
+  ignores: v.optional(
+    v.pipe(v.array(v.string()), v.description("Glob patterns to exclude from table discovery")),
+  ),
+  migration: v.optional(
+    v.pipe(TailorDBMigrationConfigSchema, v.description("Migration configuration")),
+  ),
+  gqlOperations: v.optional(
+    v.pipe(
+      GqlOperationsSchema,
+      v.description("Default GraphQL operations for all tables in this service"),
+    ),
   ),
 });

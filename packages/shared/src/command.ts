@@ -1,4 +1,4 @@
-import { createDefineCommand } from "politty";
+import { createDefineCommand } from "@politty/valibot";
 import type { CommonArgsType } from "./args";
 
 /**

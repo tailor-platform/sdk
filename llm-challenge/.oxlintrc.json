@@ -3,9 +3,7 @@
   "rules": {
     "unicorn/no-array-reverse": "error",
     "unicorn/no-array-sort": "error",
-    "tailor-zod/require-object-policy-comment": "error",
-    "zod/prefer-loose-object": "error",
-    "zod/prefer-strict-object": "error",
+    "tailor-valibot/require-object-policy-comment": "error",
     "typescript/await-thenable": "error",
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",
@@ -19,5 +17,5 @@
     ],
     "no-param-reassign": "error"
   },
-  "jsPlugins": ["eslint-plugin-zod", "../scripts/oxlint/tailor-zod-plugin.cjs"]
+  "jsPlugins": ["../scripts/oxlint/tailor-valibot-plugin.cjs"]
 }

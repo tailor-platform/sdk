@@ -1,7 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { arg } from "@politty/valibot";
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { pagedLogArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -295,10 +295,10 @@ Stack traces are mapped only when the execution includes a content hash for the 
       desc: "Get execution details as JSON",
     },
   ],
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...pagedLogArgs,
-    "execution-id": arg(z.string().optional(), {
+    "execution-id": arg(v.optional(v.string()), {
       positional: true,
       description: "Execution ID (if provided, shows details with logs)",
     }),

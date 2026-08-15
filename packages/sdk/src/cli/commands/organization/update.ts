@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,12 +10,12 @@ import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 // strip unknown keys
-const updateOrganizationOptionsSchema = z.object({
-  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
-  name: z.string().min(1, "Name must not be empty"),
+const updateOrganizationOptionsSchema = v.object({
+  organizationId: v.pipe(v.string(), v.uuid("organization-id must be a valid UUID")),
+  name: v.pipe(v.string(), v.minLength(1, "Name must not be empty")),
 });
 
-export type UpdateOrganizationOptions = z.input<typeof updateOrganizationOptionsSchema>;
+export type UpdateOrganizationOptions = v.InferInput<typeof updateOrganizationOptionsSchema>;
 
 /**
  * Update an organization's name.
@@ -25,21 +25,21 @@ export type UpdateOrganizationOptions = z.input<typeof updateOrganizationOptions
 export async function updateOrganization(
   options: UpdateOrganizationOptions,
 ): Promise<OrganizationInfo> {
-  const result = updateOrganizationOptionsSchema.safeParse(options);
+  const result = v.safeParse(updateOrganizationOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.updateOrganization({
-    organizationId: result.data.organizationId,
-    organizationName: result.data.name,
+    organizationId: result.output.organizationId,
+    organizationName: result.output.name,
   });
 
   if (!response.organization) {
-    throw new Error(`Failed to update organization "${result.data.organizationId}".`);
+    throw new Error(`Failed to update organization "${result.output.organizationId}".`);
   }
 
   return organizationInfo(response.organization);
@@ -48,9 +48,9 @@ export async function updateOrganization(
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update an organization's name.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...organizationArgs,
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       alias: "n",
       description: "New organization name",
     }),

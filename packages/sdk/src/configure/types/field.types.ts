@@ -1,6 +1,6 @@
 // Generic field structural types, options, and validation types.
 //
-// This is a pure type module: type declarations only, no zod/schema
+// This is a pure type module: type declarations only, no valibot/schema
 // references, importable type-only from any layer.
 
 export interface EnumValue {

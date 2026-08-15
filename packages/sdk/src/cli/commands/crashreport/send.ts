@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { sendCrashReport } from "#/cli/crashreport/sender";
 import { JSON_FOOTER_MARKER } from "#/cli/crashreport/writer";
 import { userAgent } from "#/cli/shared/client";
@@ -11,8 +11,8 @@ import type { CrashReport } from "#/cli/crashreport/report";
 export const sendCommand = defineAppCommand({
   name: "send",
   description: "Submit a crash report to help improve the SDK.",
-  args: z.strictObject({
-    file: arg(z.string(), {
+  args: v.strictObject({
+    file: arg(v.string(), {
       description: "Path to the crash report file",
       required: true,
       completion: { type: "file", extensions: ["log"] },

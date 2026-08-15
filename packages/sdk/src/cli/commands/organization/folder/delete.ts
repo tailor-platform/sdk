@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { confirmationArgs, folderArgs, organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -9,12 +9,12 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
-const deleteFolderOptionsSchema = z.object({
-  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
-  folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
+const deleteFolderOptionsSchema = v.object({
+  organizationId: v.pipe(v.string(), v.uuid("organization-id must be a valid UUID")),
+  folderId: v.pipe(v.string(), v.uuid("folder-id must be a valid UUID")),
 });
 
-export type DeleteFolderOptions = z.input<typeof deleteFolderOptionsSchema>;
+export type DeleteFolderOptions = v.InferInput<typeof deleteFolderOptionsSchema>;
 
 /**
  * Delete a folder from an organization.
@@ -22,24 +22,24 @@ export type DeleteFolderOptions = z.input<typeof deleteFolderOptionsSchema>;
  * @returns Promise that resolves when deletion completes
  */
 export async function deleteFolder(options: DeleteFolderOptions): Promise<void> {
-  const result = deleteFolderOptionsSchema.safeParse(options);
+  const result = v.safeParse(deleteFolderOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   await client.deleteOrganizationFolder({
-    organizationId: result.data.organizationId,
-    folderId: result.data.folderId,
+    organizationId: result.output.organizationId,
+    folderId: result.output.folderId,
   });
 }
 
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a folder from an organization.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...organizationArgs,
     ...folderArgs,
     ...confirmationArgs,

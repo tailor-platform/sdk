@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { arg, defineCommand, runMain } from "@politty/valibot";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
-import { arg, defineCommand, runMain } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { automationLevel } from "./migration-doc";
 import { allCodemods, getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";
@@ -29,7 +29,7 @@ interface RuleSummary {
 const listCommand = defineCommand({
   name: "list",
   description: "List the available codemod rules (id, name, kind, version range).",
-  args: z.strictObject({}),
+  args: v.strictObject({}),
   run: () => {
     const rules: RuleSummary[] = allCodemods.map((codemod) => ({
       id: codemod.id,
@@ -105,17 +105,17 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
       desc: "Preview the changes and any LLM-review prompts without writing files",
     },
   ],
-  args: z.strictObject({
-    from: arg(z.string(), {
+  args: v.strictObject({
+    from: arg(v.string(), {
       description: "Source SDK version (the version before upgrade)",
     }),
-    to: arg(z.string(), {
+    to: arg(v.string(), {
       description: "Target SDK version (the version after upgrade)",
     }),
-    target: arg(z.string().default("."), {
+    target: arg(v.optional(v.string(), "."), {
       description: "Project directory to transform",
     }),
-    "dry-run": arg(z.boolean().default(false), {
+    "dry-run": arg(v.optional(v.boolean(), false), {
       alias: "d",
       description: "Preview changes without modifying files",
     }),

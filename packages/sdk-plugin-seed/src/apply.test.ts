@@ -1,7 +1,7 @@
+import { runCommand } from "@politty/valibot";
 import { commonArgs } from "@tailor-platform/shared/args";
-import { runCommand } from "politty";
+import * as v from "valibot";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { z } from "zod";
 import { seedApplyCommand } from "./apply";
 
 const sdk = vi.hoisted(() => ({
@@ -93,7 +93,7 @@ afterEach(() => {
 function runApplyCommand(args: string[]) {
   return runCommand(seedApplyCommand, args, {
     // Strip unknown global arguments like the plugin entrypoint.
-    globalArgs: z.object(commonArgs({ verboseAlias: "v" })),
+    globalArgs: v.object(commonArgs({ verboseAlias: "v" })),
   });
 }
 

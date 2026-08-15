@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { chdir } from "node:process";
 import { intro, outro } from "@clack/prompts";
+import { arg, defineCommand, runMain } from "@politty/valibot";
 import pc from "picocolors";
 import { readPackageJSON } from "pkg-types";
-import { arg, defineCommand, runMain } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { collectContext } from "./context";
 import { copyProject } from "./copy";
 import { initProject } from "./init";
@@ -16,12 +16,12 @@ const main = async () => {
     name: packageJson.name ?? "create-sdk",
     description: packageJson.description,
     // strip unknown keys
-    args: z.object({
-      name: arg(z.string().optional(), {
+    args: v.object({
+      name: arg(v.optional(v.string()), {
         positional: true,
         description: "Project name",
       }),
-      template: arg(z.string().optional(), {
+      template: arg(v.optional(v.string()), {
         description: "Template name",
       }),
     }),

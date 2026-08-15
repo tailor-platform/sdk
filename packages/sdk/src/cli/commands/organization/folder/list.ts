@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { orderArg, organizationArgs, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -9,14 +9,14 @@ import { assertDefined } from "#/utils/assert";
 import { folderListInfo, type FolderListInfo } from "../transform";
 
 // strip unknown keys
-const listFoldersOptionsSchema = z.object({
-  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
-  parentFolderId: z.string().optional(),
-  order: orderArg.optional(),
-  limit: z.number().int().nonnegative().optional(),
+const listFoldersOptionsSchema = v.object({
+  organizationId: v.pipe(v.string(), v.uuid("organization-id must be a valid UUID")),
+  parentFolderId: v.optional(v.string()),
+  order: v.optional(orderArg),
+  limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
-export type ListFoldersOptions = z.input<typeof listFoldersOptionsSchema>;
+export type ListFoldersOptions = v.InferInput<typeof listFoldersOptionsSchema>;
 
 /**
  * List folders in an organization.
@@ -24,12 +24,12 @@ export type ListFoldersOptions = z.input<typeof listFoldersOptionsSchema>;
  * @returns List of folders
  */
 export async function listFolders(options: ListFoldersOptions): Promise<FolderListInfo[]> {
-  const result = listFoldersOptionsSchema.safeParse(options);
+  const result = v.safeParse(listFoldersOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const { organizationId, parentFolderId, order, limit } = result.data;
+  const { organizationId, parentFolderId, order, limit } = result.output;
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
@@ -55,9 +55,9 @@ export async function listFolders(options: ListFoldersOptions): Promise<FolderLi
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List folders in an organization.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...organizationArgs,
-    "parent-folder-id": arg(z.string().optional(), {
+    "parent-folder-id": arg(v.optional(v.string()), {
       description: "Parent folder ID to list children of",
     }),
     ...paginationArgs(),

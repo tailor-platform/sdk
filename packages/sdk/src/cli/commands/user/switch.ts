@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
@@ -13,8 +13,8 @@ import ml from "#/utils/multiline";
 export const switchCommand = defineAppCommand({
   name: "switch",
   description: "Set current user.",
-  args: z.strictObject({
-    user: arg(z.string(), {
+  args: v.strictObject({
+    user: arg(v.string(), {
       positional: true,
       description: "User email address or machine user client ID",
     }),

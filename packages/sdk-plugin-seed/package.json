@@ -28,16 +28,15 @@
     "publint": "publint --strict"
   },
   "dependencies": {
+    "@politty/valibot": "0.1.1",
     "pathe": "2.0.3",
     "pkg-types": "2.3.1",
-    "politty": "0.11.6",
-    "zod": "4.4.3"
+    "valibot": "1.4.2"
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/shared": "workspace:^",
     "@types/node": "24.13.3",
-    "eslint-plugin-zod": "4.9.1",
     "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.22.14",

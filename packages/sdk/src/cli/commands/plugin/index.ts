@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "politty";
+import { defineCommand, runCommand } from "@politty/valibot";
 import { listCommand } from "./list";
 
 export const pluginCommand = defineCommand({

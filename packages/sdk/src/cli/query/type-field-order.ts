@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import * as v from "valibot";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
@@ -33,14 +34,15 @@ export async function loadTypeFieldOrder(
         const module = await import(pathToFileURL(typeFile).href);
 
         for (const exportedValue of Object.values(module)) {
-          const result = TailorDBTypeSchema.safeParse(
+          const result = v.safeParse(
+            TailorDBTypeSchema,
             stripTailorDBTypeBuilderHelpers(exportedValue),
           );
           if (!result.success) {
             continue;
           }
 
-          fieldOrder.set(result.data.name, Object.keys(result.data.fields));
+          fieldOrder.set(result.output.name, Object.keys(result.output.fields));
         }
       } catch {
         // Skip files that fail to load

@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -11,9 +11,9 @@ import { statusLabels } from "./status";
 export const domainGetCommand = defineAppCommand({
   name: "get",
   description: "Get details of a custom domain.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    domain: arg(z.string(), {
+    domain: arg(v.string(), {
       positional: true,
       description: "Custom domain name",
     }),

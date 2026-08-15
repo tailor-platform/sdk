@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { positiveIntArg } from "#/cli/shared/args";
 import { fetchAll, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -162,13 +162,13 @@ export async function organizationTree(
 export const treeCommand = defineAppCommand({
   name: "tree",
   description: "Display organization folder hierarchy as a tree.",
-  args: z.strictObject({
-    "organization-id": arg(z.string().optional(), {
+  args: v.strictObject({
+    "organization-id": arg(v.optional(v.string()), {
       alias: "o",
       description: "Organization ID (show all if omitted)",
       env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     }),
-    depth: arg(positiveIntArg.optional(), {
+    depth: arg(v.optional(positiveIntArg), {
       alias: "d",
       description: "Maximum folder depth to display",
     }),

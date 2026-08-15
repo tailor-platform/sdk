@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
@@ -8,7 +8,7 @@ export const tokenCommand = defineAppCommand({
   name: "token",
   description:
     "Print a valid Tailor Platform access token to stdout, refreshing it first if expired.",
-  args: z.strictObject({
+  args: v.strictObject({
     profile: workspaceArgs.profile,
   }),
   run: async ({ profile }) => {

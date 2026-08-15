@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
 import * as http from "node:http";
+import { arg } from "@politty/valibot";
 import { loadConfig, type LoadedConfig } from "@tailor-platform/sdk/cli";
 import { configArg } from "@tailor-platform/shared/args";
 import { defineAppCommand } from "@tailor-platform/shared/command";
@@ -10,8 +11,7 @@ import { watch, type FSWatcher } from "chokidar";
 import { lookup as lookupMime } from "mime-types";
 import open from "open";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { prepareErdBuildsFromContext, type ErdBuildResult } from "./export";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
 import { initErdCommand } from "./utils";
@@ -427,16 +427,22 @@ async function waitForShutdown(server: http.Server, watcher: FSWatcher): Promise
 export const erdServeCommand = defineAppCommand({
   name: "serve",
   description: "Generate and serve TailorDB ERD locally with watch reload. (beta)",
-  args: z.strictObject({
+  args: v.strictObject({
     ...configArg,
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "TailorDB namespace name (uses first namespace in config if not specified)",
     }),
-    port: arg(z.coerce.number().int().min(0).max(65535).default(0), {
-      description: "Local server port (0 selects a free port)",
-    }),
-    open: arg(z.boolean().default(false), {
+    port: arg(
+      v.optional(
+        v.pipe(v.unknown(), v.transform(Number), v.integer(), v.minValue(0), v.maxValue(65535)),
+        0,
+      ),
+      {
+        description: "Local server port (0 selects a free port)",
+      },
+    ),
+    open: arg(v.optional(v.boolean(), false), {
       description: "Open the ERD viewer in the default browser",
     }),
   }),

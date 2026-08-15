@@ -19,7 +19,7 @@
     "./tsdown.config.ts",
     "./vitest.config.ts",
     "./vitest.setup.ts",
-    "./zinfer.config.ts"
+    "./vinfer.config.ts"
   ],
   "exclude": ["node_modules", "dist", "e2e/fixtures", "**/__test_fixtures__/**"]
 }

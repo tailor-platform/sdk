@@ -1,17 +1,17 @@
+import { arg } from "@politty/valibot";
 import { loadSeedContext } from "@tailor-platform/sdk/cli";
 import { configArg } from "@tailor-platform/shared/args";
 import { defineAppCommand } from "@tailor-platform/shared/command";
 import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 
 export const seedValidateCommand = defineAppCommand({
   name: "validate",
   description: "Validate JSONL seed data against generated schema definitions.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...configArg,
-    path: arg(z.string().optional(), {
+    path: arg(v.optional(v.string()), {
       positional: true,
       description:
         "File or directory to validate (default: the data directory under the seedPlugin distPath)",

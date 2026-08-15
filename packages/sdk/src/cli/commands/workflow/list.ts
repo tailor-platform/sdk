@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -48,7 +48,7 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all workflows in the workspace.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...paginationArgs(),
   }),

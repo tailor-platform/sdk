@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -10,31 +10,31 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
-const removeUserOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
-  profile: z.string().optional(),
-  email: z.string().email({ message: "email must be a valid email address" }),
+const removeUserOptionsSchema = v.object({
+  workspaceId: v.optional(v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID"))),
+  profile: v.optional(v.string()),
+  email: v.pipe(v.string(), v.email("email must be a valid email address")),
 });
 
-export type RemoveUserOptions = z.input<typeof removeUserOptionsSchema>;
+export type RemoveUserOptions = v.InferInput<typeof removeUserOptionsSchema>;
 
 async function loadOptions(options: RemoveUserOptions) {
-  const result = removeUserOptionsSchema.safeParse(options);
+  const result = v.safeParse(removeUserOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.output.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
 
   return {
     client,
     workspaceId,
-    email: result.data.email,
+    email: result.output.email,
   };
 }
 
@@ -55,9 +55,9 @@ export async function removeUser(options: RemoveUserOptions): Promise<void> {
 export const removeCommand = defineAppCommand({
   name: "remove",
   description: "Remove a user from a workspace",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    email: arg(z.email(), {
+    email: arg(v.pipe(v.string(), v.email()), {
       description: "Email address of the user to remove",
     }),
     ...confirmationArgs,

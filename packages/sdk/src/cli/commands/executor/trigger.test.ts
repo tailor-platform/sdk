@@ -1,9 +1,9 @@
+import { runCommand } from "@politty/valibot";
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";

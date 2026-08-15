@@ -1,26 +1,26 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { extractFields, isLazyCommand, runCommand } from "@politty/valibot";
 import { join } from "pathe";
-import { extractFields, isLazyCommand, runCommand } from "politty";
+import * as v from "valibot";
 import { describe, expect, test, vi } from "vitest";
-import { z } from "zod";
 import { mainCommand } from "./main";
 import { commonArgs } from "./shared/args";
 import { logger } from "./shared/logger";
 import { tempCwd } from "./shared/test-helpers/temp-cwd";
-import type { AnyCommand, RunResult, SubCommandValue } from "politty";
+import type { AnyCommand, RunResult, SubCommandValue } from "@politty/valibot";
 
 vi.mock("node:module", async () => {
   const actual = await vi.importActual("node:module");
   return { ...actual, register: vi.fn() };
 });
 
-vi.mock("politty", async () => {
-  const actual = await vi.importActual("politty");
+vi.mock("@politty/valibot", async () => {
+  const actual = await vi.importActual("@politty/valibot");
   return { ...actual, runMain: vi.fn() };
 });
 
 // strip unknown global args to match the CLI runner.
-const testGlobalArgs = z.object(commonArgs);
+const testGlobalArgs = v.object(commonArgs);
 
 async function resolveCommand(cmd: SubCommandValue): Promise<AnyCommand> {
   if (isLazyCommand(cmd)) {
@@ -73,8 +73,12 @@ describe("skills command", () => {
     const addCommand = await resolveCommand(expectDefined(skillSubCommands.add));
     const listCommand = await resolveCommand(expectDefined(skillSubCommands.list));
 
-    expect(expectDefined(addCommand.args).parse({})).not.toHaveProperty("verbose");
-    expect(expectDefined(listCommand.args).parse({})).not.toHaveProperty("json");
+    expect(
+      extractFields(expectDefined(addCommand.args)).fields.map((field) => field.name),
+    ).not.toEqual(expect.arrayContaining(["verbose"]));
+    expect(
+      extractFields(expectDefined(listCommand.args)).fields.map((field) => field.name),
+    ).not.toEqual(expect.arrayContaining(["json"]));
 
     const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     try {

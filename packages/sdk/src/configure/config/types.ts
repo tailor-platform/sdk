@@ -1,6 +1,6 @@
 // Application configuration input types for defineConfig().
 //
-// This is a pure type module: type declarations only, no zod/schema
+// This is a pure type module: type declarations only, no valibot/schema
 // references, importable type-only from any layer.
 import type { AIGatewayConfig } from "#/configure/services/aigateway/types";
 import type { AuthConfig } from "#/configure/services/auth/types";

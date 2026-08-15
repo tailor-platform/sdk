@@ -1,18 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { readFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "pathe";
-import { z } from "zod";
+import * as v from "valibot";
 import { getDistDir } from "#/cli/shared/dist-dir";
 
 // strip unknown keys
-const workspaceContextSchema = z.object({
-  version: z.literal(1),
-  platformUrl: z.url(),
-  applicationId: z.string().min(1).optional(),
-  workspaceId: z.uuid(),
+const workspaceContextSchema = v.object({
+  version: v.literal(1),
+  platformUrl: v.pipe(v.string(), v.url()),
+  applicationId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  workspaceId: v.pipe(v.string(), v.uuid()),
 });
 
-export type WorkspaceContext = z.output<typeof workspaceContextSchema>;
+export type WorkspaceContext = v.InferOutput<typeof workspaceContextSchema>;
 
 function defaultConfigPath(): string {
   return resolve(process.cwd(), "tailor.config.ts");
@@ -50,15 +50,15 @@ export async function loadWorkspaceContext(
     return undefined;
   }
 
-  const result = workspaceContextSchema.safeParse(value);
+  const result = v.safeParse(workspaceContextSchema, value);
   if (
     !result.success ||
-    result.data.platformUrl !== platformUrl ||
-    (applicationId !== undefined && result.data.applicationId !== applicationId)
+    result.output.platformUrl !== platformUrl ||
+    (applicationId !== undefined && result.output.applicationId !== applicationId)
   ) {
     return undefined;
   }
-  return result.data;
+  return result.output;
 }
 
 /**
@@ -72,7 +72,7 @@ export async function saveWorkspaceContext(
   configPath = defaultConfigPath(),
   applicationId?: string,
 ): Promise<void> {
-  const validated = workspaceContextSchema.parse({
+  const validated = v.parse(workspaceContextSchema, {
     ...context,
     ...(applicationId === undefined ? {} : { applicationId }),
   });

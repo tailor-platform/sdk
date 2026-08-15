@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -48,7 +48,7 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all executors",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...paginationArgs(),
   }),

@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { defaultPlatformBaseUrl, initOAuth2Client, isDefaultPlatform } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
@@ -16,8 +16,8 @@ import { logger } from "#/cli/shared/logger";
 export const logoutCommand = defineAppCommand({
   name: "logout",
   description: "Logout from Tailor Platform.",
-  args: z.strictObject({
-    profile: arg(z.string().optional(), {
+  args: v.strictObject({
+    profile: arg(v.optional(v.string()), {
       alias: "p",
       description: "Workspace profile whose platform settings should be used for logout.",
       env: "TAILOR_PLATFORM_PROFILE",

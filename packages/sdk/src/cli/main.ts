@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
+import { defineCommand, runCommand, runMain, type AnyCommand } from "@politty/valibot";
+import { withCompletionCommand } from "@politty/valibot/completion";
+import { withSkillCommand } from "@politty/valibot/skill";
 import { dirname, resolve } from "pathe";
 import { resolvePackageJSON } from "pkg-types";
-import { defineCommand, runCommand, runMain, type AnyCommand } from "politty";
-import { withCompletionCommand } from "politty/completion";
-import { withSkillCommand } from "politty/skill";
-import { z } from "zod";
+import * as v from "valibot";
 import { apiCommand } from "./commands/api";
 import { authCommand } from "./commands/auth";
 import { authconnectionCommand } from "./commands/authconnection";
@@ -114,7 +114,7 @@ Run \`${cliName} plugin list\` to see which plugins are installed and where they
     mode: "copy",
     descriptionAppend: false,
     // strip unknown keys
-    globalArgs: z.object(commonArgs),
+    globalArgs: v.object(commonArgs),
     commandMap: { add: ["add"], remove: ["remove"] },
     unknownKeys: "strict",
     descriptions: {
@@ -138,7 +138,7 @@ export const mainCommand = withCompletionCommand({
 void runMain(mainCommand, {
   version: packageJson.version,
   // strip unknown keys
-  globalArgs: z.object(commonArgs),
+  globalArgs: v.object(commonArgs),
   displayErrors: false,
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.

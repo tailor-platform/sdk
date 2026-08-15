@@ -1,12 +1,12 @@
 import { create } from "@bufbuild/protobuf";
+import { arg } from "@politty/valibot";
 import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
 } from "@tailor-platform/tailor-proto/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import {
   type Order,
   pagedLogArgs,
@@ -327,32 +327,34 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
 export const executionsCommand = defineAppCommand({
   name: "executions",
   description: "List or get workflow executions.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...pagedLogArgs,
-    "execution-id": arg(z.string().optional(), {
+    "execution-id": arg(v.optional(v.string()), {
       positional: true,
       description: "Execution ID (if provided, shows details)",
     }),
     "workflow-name": arg(
-      z
-        .string()
-        .regex(
-          /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
-          "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
-        )
-        .optional(),
+      v.optional(
+        v.pipe(
+          v.string(),
+          v.regex(
+            /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
+            "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
+          ),
+        ),
+      ),
       {
         alias: "n",
         description: "Filter by workflow name (list mode only)",
       },
     ),
-    status: arg(z.string().optional(), {
+    status: arg(v.optional(v.string()), {
       alias: "s",
       description: "Filter by status (list mode only)",
     }),
     ...waitArgs,
-    logs: arg(z.boolean().default(false), {
+    logs: arg(v.optional(v.boolean(), false), {
       description: "Display job execution logs (detail mode only)",
     }),
   }),

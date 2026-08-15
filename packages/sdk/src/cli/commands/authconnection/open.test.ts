@@ -1,5 +1,5 @@
+import { runCommand } from "@politty/valibot";
 import open from "open";
-import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";

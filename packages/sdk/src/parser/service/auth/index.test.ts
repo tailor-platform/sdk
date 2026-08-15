@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
@@ -6,7 +7,6 @@ import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
 import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 import type { OptionalKeysOf } from "type-fest";
-import type { z } from "zod";
 
 // Define userType for type inference
 const userType = db.table("User", {
@@ -29,7 +29,7 @@ type AttributeList = ["externalId"];
 type AuthInput = AuthServiceInput<typeof userType, Attributes, AttributeList, "admin">;
 
 type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
-type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
+type AuthSchemaInput = Omit<v.InferInput<typeof AuthConfigSchema>, "name">;
 type IsUnknown<T> = unknown extends T ? ([keyof T] extends [never] ? true : false) : false;
 
 describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
@@ -171,7 +171,7 @@ describe("AuthConfigSchema machine user attribute normalization", () => {
       },
     };
 
-    const result = AuthConfigSchema.parse(config);
+    const result = v.parse(AuthConfigSchema, config);
     expect(result.machineUsers?.admin?.attributes).toEqual({ role: "ADMIN" });
   });
 
@@ -182,7 +182,7 @@ describe("AuthConfigSchema machine user attribute normalization", () => {
       machineUsers: { admin: {} },
     };
 
-    const result = AuthConfigSchema.parse(config);
+    const result = v.parse(AuthConfigSchema, config);
     expect(result.machineUsers?.admin?.attributes).toBeUndefined();
   });
 });
@@ -196,7 +196,7 @@ describe("OAuth2ClientSchema validation", () => {
       clientType: "confidential",
     };
 
-    expect(() => OAuth2ClientSchema.parse(validClient)).not.toThrow();
+    expect(() => v.parse(OAuth2ClientSchema, validClient)).not.toThrow();
   });
 
   test.each([
@@ -212,7 +212,7 @@ describe("OAuth2ClientSchema validation", () => {
         refreshTokenLifetimeSeconds,
       };
 
-      const result = OAuth2ClientSchema.parse(client);
+      const result = v.parse(OAuth2ClientSchema, client);
       expect(result.accessTokenLifetimeSeconds).toEqual({
         seconds: BigInt(accessTokenLifetimeSeconds),
         nanos: 0,
@@ -235,7 +235,7 @@ describe("OAuth2ClientSchema validation", () => {
       [field]: value,
     };
 
-    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(error);
+    expect(() => v.parse(OAuth2ClientSchema, invalidClient)).toThrow(error);
   });
 
   test("rejects non-integer token lifetime values", () => {
@@ -244,7 +244,7 @@ describe("OAuth2ClientSchema validation", () => {
       accessTokenLifetimeSeconds: 3600.5,
     };
 
-    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(/Invalid input/);
+    expect(() => v.parse(OAuth2ClientSchema, invalidClient)).toThrow(/Invalid integer/);
   });
 
   test("accepts client without token lifetime fields", () => {
@@ -253,7 +253,7 @@ describe("OAuth2ClientSchema validation", () => {
       grantTypes: ["authorization_code", "refresh_token"],
     };
 
-    const result = OAuth2ClientSchema.parse(clientWithoutLifetimes);
+    const result = v.parse(OAuth2ClientSchema, clientWithoutLifetimes);
     expect(result.accessTokenLifetimeSeconds).toBeUndefined();
     expect(result.refreshTokenLifetimeSeconds).toBeUndefined();
   });
@@ -268,7 +268,7 @@ describe("OAuth2ClientSchema validation", () => {
       ...(input === undefined ? {} : { requireDpop: input }),
     };
 
-    const result = OAuth2ClientSchema.parse(client);
+    const result = v.parse(OAuth2ClientSchema, client);
     expect(result.requireDpop).toBe(expected);
   });
 
@@ -279,7 +279,7 @@ describe("OAuth2ClientSchema validation", () => {
       requireDpop: true,
     };
 
-    expect(() => OAuth2ClientSchema.parse(browserClientWithDpop)).toThrow(
+    expect(() => v.parse(OAuth2ClientSchema, browserClientWithDpop)).toThrow(
       /requireDpop cannot be set to true for browser clients/,
     );
   });
@@ -295,7 +295,7 @@ describe("OAuth2ClientSchema validation", () => {
       requireDpop,
     };
 
-    const result = OAuth2ClientSchema.parse(client);
+    const result = v.parse(OAuth2ClientSchema, client);
     expect(result.clientType).toBe(clientType);
     expect(result.requireDpop).toBe(requireDpop);
   });
@@ -312,7 +312,7 @@ describe("AuthConfigSchema publishSessionEvents validation", () => {
       ...(input === undefined ? {} : { publishSessionEvents: input }),
     };
 
-    const result = AuthConfigSchema.parse(config);
+    const result = v.parse(AuthConfigSchema, config);
     expect(result.publishSessionEvents).toBe(expected);
   });
 });
@@ -330,7 +330,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       },
     };
 
-    expect(() => AuthConfigSchema.parse(config)).toThrow(
+    expect(() => v.parse(AuthConfigSchema, config)).toThrow(
       /Specify either `userProfile` or `machineUserAttributes`, not both/,
     );
   });
@@ -345,12 +345,12 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       },
     };
 
-    const result = AuthConfigSchema.parse(config);
+    const result = v.parse(AuthConfigSchema, config);
     expect(result.userProfile?.namespace).toBe("external-ns");
   });
 
   test("strips TailorDB table builder helpers from userProfile.type", () => {
-    const result = AuthConfigSchema.parse({
+    const result = v.parse(AuthConfigSchema, {
       name: "my-auth",
       userProfile: {
         type: userType,
@@ -367,7 +367,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
   });
 
   test("rejects unbranded userProfile.type copies with unknown keys", () => {
-    const result = AuthConfigSchema.safeParse({
+    const result = v.safeParse(AuthConfigSchema, {
       name: "my-auth",
       userProfile: {
         type: { ...userType, unknownOption: true },
@@ -379,7 +379,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
     if (result.success) {
       throw new Error("Expected AuthConfigSchema parsing to fail");
     }
-    expect(JSON.stringify(result.error.issues)).toContain("unknownOption");
+    expect(JSON.stringify(result.issues)).toContain("unknownOption");
   });
 
   test("omits unknown outer userProfile.type keys with TailorDB builder helpers", () => {
@@ -391,7 +391,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       "tailordb-type",
     );
 
-    const result = AuthConfigSchema.parse({
+    const result = v.parse(AuthConfigSchema, {
       name: "my-auth",
       userProfile: {
         type: typeWithUnknownKey,
@@ -417,7 +417,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       "tailordb-type",
     );
 
-    const result = AuthConfigSchema.safeParse({
+    const result = v.safeParse(AuthConfigSchema, {
       name: "my-auth",
       userProfile: {
         type: typeWithInvalidField,
@@ -429,6 +429,6 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
     if (result.success) {
       throw new Error("Expected AuthConfigSchema parsing to fail");
     }
-    expect(JSON.stringify(result.error.issues)).toContain("unsupported");
+    expect(JSON.stringify(result.issues)).toContain("unsupported");
   });
 });

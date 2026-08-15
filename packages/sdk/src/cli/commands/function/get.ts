@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -11,31 +11,31 @@ import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 // strip unknown keys
-const getFunctionRegistryOptionsSchema = z.object({
-  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
-  profile: z.string().optional(),
-  name: z.string().min(1, { message: "name is required" }),
+const getFunctionRegistryOptionsSchema = v.object({
+  workspaceId: v.optional(v.pipe(v.string(), v.uuid("workspace-id must be a valid UUID"))),
+  profile: v.optional(v.string()),
+  name: v.pipe(v.string(), v.minLength(1, "name is required")),
 });
 
-export type GetFunctionRegistryOptions = z.input<typeof getFunctionRegistryOptionsSchema>;
+export type GetFunctionRegistryOptions = v.InferInput<typeof getFunctionRegistryOptionsSchema>;
 
 async function loadOptions(options: GetFunctionRegistryOptions) {
-  const result = getFunctionRegistryOptionsSchema.safeParse(options);
+  const result = v.safeParse(getFunctionRegistryOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
+  const accessToken = await loadAccessToken({ profile: result.output.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
 
   return {
     client,
     workspaceId,
-    name: result.data.name,
+    name: result.output.name,
   };
 }
 
@@ -72,9 +72,9 @@ export async function getFunctionRegistry(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get a function registry by name",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    name: arg(z.string(), {
+    name: arg(v.string(), {
       description: "Function name",
       alias: "n",
     }),

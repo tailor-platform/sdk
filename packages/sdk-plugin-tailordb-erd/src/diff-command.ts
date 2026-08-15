@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
+import { arg } from "@politty/valibot";
 import { defineAppCommand } from "@tailor-platform/shared/command";
 import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import {
   buildErdDiffViewerSchema,
   buildErdSchemaDiff,
@@ -96,25 +96,25 @@ export function writeErdDiff(options: WriteErdDiffOptions): WriteErdDiffResult {
 export const erdDiffCommand = defineAppCommand({
   name: "diff",
   description: "Render TailorDB ERD schema diff HTML from exported ERD viewers.",
-  args: z.strictObject({
-    "base-html": arg(z.string().optional(), {
+  args: v.strictObject({
+    "base-html": arg(v.optional(v.string()), {
       description: "Base ERD viewer HTML file",
       completion: { type: "file", matcher: [".html"] },
     }),
-    "head-html": arg(z.string().optional(), {
+    "head-html": arg(v.optional(v.string()), {
       description: "Head ERD viewer HTML file",
       completion: { type: "file", matcher: [".html"] },
     }),
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "TailorDB namespace name (defaults to the provided ERD schema namespace)",
     }),
-    output: arg(z.string().min(1), {
+    output: arg(v.pipe(v.string(), v.minLength(1)), {
       alias: "o",
       description: "Output ERD diff HTML file",
       completion: { type: "file", matcher: [".html"] },
     }),
-    "output-json": arg(z.string().optional(), {
+    "output-json": arg(v.optional(v.string()), {
       description: "Optional output JSON file for the computed diff",
       completion: { type: "file", matcher: [".json"] },
     }),

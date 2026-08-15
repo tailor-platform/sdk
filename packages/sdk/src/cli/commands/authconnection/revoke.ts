@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -15,7 +15,7 @@ export const revokeAuthConnectionCommand = defineAppCommand({
     "Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove it).",
   notes:
     "Revoke invalidates the connection's active session and tokens but keeps the connection and its stored credentials, so it can be re-authorized later. Use `delete` to remove the connection entirely.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...connectionNameArgs,
     ...confirmationArgs,

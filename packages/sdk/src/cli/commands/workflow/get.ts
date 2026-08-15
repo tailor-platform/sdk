@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -72,7 +72,7 @@ export async function getWorkflow<W extends WorkflowLike>(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get workflow details.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
     ...nameArgs,
   }),

@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { importUserModule } from "#/cli/shared/user-modules";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { isSdkBranded } from "#/utils/brand";
@@ -26,10 +27,10 @@ export async function loadExecutor(executorFilePath: string): Promise<Executor |
   const executorModule = await importUserModule(executorFilePath);
   const executor = executorModule.default;
 
-  const parseResult = ExecutorSchema.safeParse(stripExecutorTriggerArgs(executor));
+  const parseResult = v.safeParse(ExecutorSchema, stripExecutorTriggerArgs(executor));
   if (!parseResult.success) {
     return null;
   }
 
-  return parseResult.data;
+  return parseResult.output;
 }

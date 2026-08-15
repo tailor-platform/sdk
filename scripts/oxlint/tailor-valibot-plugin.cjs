@@ -18,11 +18,11 @@ function getPropertyName(property) {
   return undefined;
 }
 
-function isZObjectCall(node) {
+function isVObjectCall(node) {
   return (
     node.callee.type === "MemberExpression" &&
     node.callee.object.type === "Identifier" &&
-    node.callee.object.name === "z" &&
+    node.callee.object.name === "v" &&
     getPropertyName(node.callee.property) === "object"
   );
 }
@@ -38,19 +38,19 @@ function hasObjectPolicyComment(sourceCode, node) {
 
 module.exports = {
   meta: {
-    name: "tailor-zod",
+    name: "tailor-valibot",
   },
   rules: {
     "require-object-policy-comment": {
       meta: {
         type: "problem",
         docs: {
-          description: "Require an unknown-key policy comment for z.object().",
+          description: "Require an unknown-key policy comment for v.object().",
         },
         schema: [],
         messages: {
           missingObjectPolicyComment:
-            'Add a previous-line comment containing "strip" or "catchall" for z.object(), or use z.strictObject() / z.looseObject().',
+            'Add a previous-line comment containing "strip" or "catchall" for v.object(), or use v.strictObject() / v.looseObject().',
         },
       },
       create(context) {
@@ -58,7 +58,7 @@ module.exports = {
 
         return {
           CallExpression(node) {
-            if (isZObjectCall(node) && !hasObjectPolicyComment(sourceCode, node)) {
+            if (isVObjectCall(node) && !hasObjectPolicyComment(sourceCode, node)) {
               context.report({
                 node,
                 messageId: "missingObjectPolicyComment",

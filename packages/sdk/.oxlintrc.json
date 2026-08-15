@@ -105,9 +105,7 @@
     "typescript/no-unsafe-function-type": "error",
     "local/no-deprecated-type-matcher": "error",
     "local/require-param-strict": "error",
-    "tailor-zod/require-object-policy-comment": "error",
-    "zod/prefer-loose-object": "error",
-    "zod/prefer-strict-object": "error"
+    "tailor-valibot/require-object-policy-comment": "error"
   },
   "overrides": [
     {
@@ -236,9 +234,9 @@
                 "message": "Configure module can only import `brand`, `wait-point-registry` or `test/*` from utils module."
               },
               {
-                "group": ["zod"],
+                "group": ["valibot"],
                 "allowTypeImports": true,
-                "message": "Configure module can import only types from zod module."
+                "message": "Configure module can import only types from valibot module."
               }
             ]
           }
@@ -358,12 +356,12 @@
                 "message": "types.ts can import only types."
               },
               {
-                "group": ["zod", "zod/**"],
-                "message": "Pure type modules must not reference zod even type-only — derive types from zinfer output (src/types/*.generated.ts) instead."
+                "group": ["valibot", "valibot/**"],
+                "message": "Pure type modules must not reference valibot even type-only — derive types from vinfer output (src/types/*.generated.ts) instead."
               },
               {
                 "group": ["**/schema", "./schema", "../schema"],
-                "message": "Pure type modules must not import schema modules even type-only — schema-derived types come from zinfer output (src/types/*.generated.ts)."
+                "message": "Pure type modules must not import schema modules even type-only — schema-derived types come from vinfer output (src/types/*.generated.ts)."
               }
             ]
           }
@@ -498,9 +496,5 @@
   "options": {
     "typeAware": true
   },
-  "jsPlugins": [
-    "./oxlint-plugins/index.js",
-    "eslint-plugin-zod",
-    "../../scripts/oxlint/tailor-zod-plugin.cjs"
-  ]
+  "jsPlugins": ["./oxlint-plugins/index.js", "../../scripts/oxlint/tailor-valibot-plugin.cjs"]
 }

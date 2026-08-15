@@ -1,4 +1,4 @@
-import { defineCommand } from "politty";
+import { defineCommand } from "@politty/valibot";
 import { migrationCommand } from "./migrate";
 import { truncateCommand } from "./truncate";
 

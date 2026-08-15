@@ -1,12 +1,12 @@
+import { pathToFileURL } from "node:url";
 /**
  * Function type detection for the function run command
  *
  * Detects the function type (resolver, executor, workflow job, or plain function)
  * by dynamically importing the module and checking against known schemas.
  */
-
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import * as v from "valibot";
 import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
@@ -70,7 +70,7 @@ export async function detectFunctionType(
   // Priority: resolver → executor → workflow job → plain function
 
   // 1. Check resolver
-  const resolverResult = ResolverSchema.safeParse(module.default);
+  const resolverResult = v.safeParse(ResolverSchema, module.default);
   if (resolverResult.success) {
     const rawInput = module.default.input;
     let inputSchema: DetectedFunction["inputSchema"];
@@ -84,19 +84,19 @@ export async function detectFunctionType(
     }
     return {
       type: "resolver",
-      name: resolverResult.data.name,
+      name: resolverResult.output.name,
       hasInput: rawInput != null,
       inputSchema,
-      permission: resolverResult.data.permission,
+      permission: resolverResult.output.permission,
     };
   }
 
   // 2. Check executor (only function/jobFunction kinds)
-  const executorResult = ExecutorSchema.safeParse(stripExecutorTriggerArgs(module.default));
+  const executorResult = v.safeParse(ExecutorSchema, stripExecutorTriggerArgs(module.default));
   if (executorResult.success) {
-    const { operation } = executorResult.data;
+    const { operation } = executorResult.output;
     if (operation.kind === "function" || operation.kind === "jobFunction") {
-      return { type: "executor", name: executorResult.data.name };
+      return { type: "executor", name: executorResult.output.name };
     }
   }
 
@@ -145,9 +145,9 @@ function detectWorkflowJob(
 
   for (const [exportName, exportValue] of Object.entries(module)) {
     if (exportName === "default") continue;
-    const result = WorkflowJobSchema.safeParse(exportValue);
+    const result = v.safeParse(WorkflowJobSchema, exportValue);
     if (result.success) {
-      jobs.push({ name: result.data.name, exportName });
+      jobs.push({ name: result.output.name, exportName });
     }
   }
 

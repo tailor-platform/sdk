@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { folderArgs, organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -9,12 +9,12 @@ import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
 // strip unknown keys
-const getFolderOptionsSchema = z.object({
-  organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
-  folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
+const getFolderOptionsSchema = v.object({
+  organizationId: v.pipe(v.string(), v.uuid("organization-id must be a valid UUID")),
+  folderId: v.pipe(v.string(), v.uuid("folder-id must be a valid UUID")),
 });
 
-export type GetFolderOptions = z.input<typeof getFolderOptionsSchema>;
+export type GetFolderOptions = v.InferInput<typeof getFolderOptionsSchema>;
 
 /**
  * Get detailed information about a folder.
@@ -22,21 +22,21 @@ export type GetFolderOptions = z.input<typeof getFolderOptionsSchema>;
  * @returns Folder details
  */
 export async function getFolder(options: GetFolderOptions): Promise<FolderInfo> {
-  const result = getFolderOptionsSchema.safeParse(options);
+  const result = v.safeParse(getFolderOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
   }
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.getOrganizationFolder({
-    organizationId: result.data.organizationId,
-    folderId: result.data.folderId,
+    organizationId: result.output.organizationId,
+    folderId: result.output.folderId,
   });
 
   if (!response.folder) {
-    throw new Error(`Folder "${result.data.folderId}" not found.`);
+    throw new Error(`Folder "${result.output.folderId}" not found.`);
   }
 
   return folderInfo(response.folder);
@@ -45,7 +45,7 @@ export async function getFolder(options: GetFolderOptions): Promise<FolderInfo> 
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about a folder.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...organizationArgs,
     ...folderArgs,
   }),

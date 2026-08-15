@@ -1,20 +1,20 @@
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 
 export const upgradeCommand = defineAppCommand({
   name: "upgrade",
   description: "Run codemods to upgrade your project to a newer SDK version.",
-  args: z.strictObject({
-    from: arg(z.string(), {
+  args: v.strictObject({
+    from: arg(v.string(), {
       description: "SDK version before the upgrade (e.g., 1.33.0)",
     }),
-    "dry-run": arg(z.boolean().default(false), {
+    "dry-run": arg(v.optional(v.boolean(), false), {
       alias: "d",
       description: "Preview changes without modifying files",
     }),
-    path: arg(z.string().default("."), {
+    path: arg(v.optional(v.string(), "."), {
       description: "Project directory to upgrade",
       completion: { type: "directory" },
     }),

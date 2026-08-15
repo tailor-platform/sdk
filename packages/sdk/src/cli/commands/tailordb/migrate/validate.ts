@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
@@ -550,13 +550,13 @@ export const validateCommand = defineAppCommand({
   name: "validate",
   description:
     "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local tables vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       alias: "n",
       description: "Target TailorDB namespace (validates all namespaces if not specified)",
     }),
-    strict: arg(z.boolean().default(false), {
+    strict: arg(v.optional(v.boolean(), false), {
       description: "Also fail when a pending migration can drop data without an acknowledgment",
     }),
   }),

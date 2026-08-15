@@ -1,6 +1,6 @@
 import { loadTailorDBNamespaces } from "@tailor-platform/sdk/cli";
 import { logger } from "@tailor-platform/shared/logger";
-import { z } from "zod";
+import * as v from "valibot";
 import { TailorDBErdPluginID } from "./index";
 import type { LoadedConfig, Plugin, TailorDBNamespaceData } from "@tailor-platform/sdk/cli";
 
@@ -18,8 +18,8 @@ export interface LocalErdSchemaContext {
 }
 
 // strip: tolerate extra keys from other plugin versions
-const ErdPluginConfigSchema = z.object({
-  sites: z.record(z.string(), z.string()),
+const ErdPluginConfigSchema = v.object({
+  sites: v.record(v.string(), v.string()),
 });
 
 export interface ErdSiteIssue {
@@ -57,7 +57,7 @@ export function resolveErdSites(
     throw new Error("tailordbErdPlugin() is registered more than once in definePlugins().");
   }
 
-  const parsed = ErdPluginConfigSchema.safeParse(instances[0]!.pluginConfig);
+  const parsed = v.safeParse(ErdPluginConfigSchema, instances[0]!.pluginConfig);
   if (!parsed.success) {
     throw new Error(
       'Invalid tailordbErdPlugin() configuration. Expected { sites: { "<namespace>": "<static-website-name>" } }.',
@@ -66,7 +66,7 @@ export function resolveErdSites(
 
   const issues: ErdSiteIssue[] = [];
   const websiteNames = new Set((config.staticWebsites ?? []).map((website) => website.name));
-  for (const [namespace, site] of Object.entries(parsed.data.sites)) {
+  for (const [namespace, site] of Object.entries(parsed.output.sites)) {
     const dbConfig = config.db?.[namespace];
     if (!dbConfig || "external" in dbConfig) {
       const available = Object.entries(config.db ?? {})
@@ -90,7 +90,7 @@ export function resolveErdSites(
     }
   }
 
-  return { sites: parsed.data.sites, issues };
+  return { sites: parsed.output.sites, issues };
 }
 
 export interface ResolveLocalErdSchemaNamespacesOptions {

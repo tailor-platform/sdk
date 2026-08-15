@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
@@ -9,41 +9,41 @@ import type { ProfileInfo } from "./types";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new profile.",
-  args: z.strictObject({
-    name: arg(z.string(), {
+  args: v.strictObject({
+    name: arg(v.string(), {
       positional: true,
       description: "Profile name",
     }),
-    user: arg(z.string(), {
+    user: arg(v.string(), {
       alias: "u",
       description: "User email address or machine user client ID",
     }),
-    "workspace-id": arg(z.string(), {
+    "workspace-id": arg(v.string(), {
       alias: "w",
       description: "Workspace ID",
     }),
-    permission: arg(z.enum(["write", "read"]).default("write"), {
+    permission: arg(v.optional(v.picklist(["write", "read"]), "write"), {
       description:
         "Profile permission. 'read' blocks all write commands while the profile is active.",
     }),
-    "machine-user": arg(z.string().optional(), {
+    "machine-user": arg(v.optional(v.string()), {
       alias: "m",
       description:
         "Default machine user name for application-data commands (query, workflow start, function run, machineuser token).",
     }),
-    "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+    "machine-user-override": arg(v.optional(v.picklist(["allow", "deny"])), {
       description:
         "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user.",
     }),
-    "platform-url": arg(z.url().optional(), {
+    "platform-url": arg(v.optional(v.pipe(v.string(), v.url())), {
       description: "Platform API base URL for this profile.",
       env: "TAILOR_PLATFORM_URL",
     }),
-    "oauth2-client-id": arg(z.string().optional(), {
+    "oauth2-client-id": arg(v.optional(v.string()), {
       description: "OAuth2 client ID for logging in to this profile's platform.",
       env: "TAILOR_PLATFORM_OAUTH2_CLIENT_ID",
     }),
-    "console-url": arg(z.url().optional(), {
+    "console-url": arg(v.optional(v.pipe(v.string(), v.url())), {
       description: "Console base URL for this profile.",
       env: "TAILOR_PLATFORM_CONSOLE_URL",
     }),

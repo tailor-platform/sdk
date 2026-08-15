@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "politty";
+import { defineCommand, runCommand } from "@politty/valibot";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
 import { listCommand } from "./list";

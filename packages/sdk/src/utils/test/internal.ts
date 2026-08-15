@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 /**
  * Internal test utilities for SDK development.
@@ -16,11 +17,17 @@ export function toSchemaOutput(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Accept any db.table() result for testing
   type: any,
 ): TailorDBTypeSchemaOutput {
-  const parsed = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(type));
+  const parsed = v.safeParse(TailorDBTypeSchema, stripTailorDBTypeBuilderHelpers(type));
   if (!parsed.success) {
-    throw new Error(`Failed to parse table ${type.name}: ${parsed.error.message}`);
+    const message = parsed.issues
+      .map((issue) => {
+        const path = issue.path?.map((segment) => segment.key).join(".");
+        return path ? `${issue.message} at "${path}"` : issue.message;
+      })
+      .join("; ");
+    throw new Error(`Failed to parse table ${type.name}: ${message}`);
   }
-  return parsed.data;
+  return parsed.output;
 }
 
 /**

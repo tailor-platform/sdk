@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/valibot";
 import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { durationArg, parseDuration, workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -17,43 +17,41 @@ import type { JsonObject } from "@bufbuild/protobuf";
  * Schema for JSON string validation (object only)
  * Transforms the string to a parsed object
  */
-const jsonDataArg = z
-  .string()
-  .transform((val) => {
+const jsonDataArg = v.pipe(
+  v.string(),
+  v.transform((val): unknown => {
     try {
-      return JSON.parse(val) as unknown;
+      return JSON.parse(val);
     } catch {
       throw new Error(`Invalid JSON data: ${val}. Please provide a valid JSON string.`);
     }
-  })
-  .refine((v): v is JsonObject => typeof v === "object" && v !== null && !Array.isArray(v), {
-    message: "JSON data must be an object, not an array or primitive value",
-  });
+  }),
+  v.guard(
+    (val): val is JsonObject => typeof val === "object" && val !== null && !Array.isArray(val),
+    "JSON data must be an object, not an array or primitive value",
+  ),
+);
 
 /**
  * Schema for header string validation (format: "Key: Value")
  * Transforms the string to an object with key and value properties
  */
-const headerArg = z
-  .string()
-  .superRefine((val, ctx) => {
+const headerArg = v.pipe(
+  v.string(),
+  v.rawTransform(({ dataset, addIssue, NEVER }) => {
+    const val = dataset.value;
     if (!val.includes(":")) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Invalid header format: '${val}'. Expected format: 'Key: Value'`,
-      });
+      addIssue({ message: `Invalid header format: '${val}'. Expected format: 'Key: Value'` });
+      return NEVER;
     }
-  })
-  .transform((val) => {
     const colonIndex = val.indexOf(":");
     return {
       key: val.slice(0, colonIndex).trim(),
       value: val.slice(colonIndex + 1).trim(),
     };
-  })
-  .refine((h) => h.key.length > 0, {
-    message: "Header name cannot be empty",
-  });
+  }),
+  v.check((h) => h.key.length > 0, "Header name cannot be empty"),
+);
 
 type ManualTrigger = IncomingWebhookTrigger | ScheduleTriggerInput;
 
@@ -170,35 +168,35 @@ The \`--logs\` option displays logs from the downstream execution when available
     { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
     { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
   ],
-  args: z.strictObject({
+  args: v.strictObject({
     ...workspaceArgs,
-    "executor-name": arg(z.string(), {
+    "executor-name": arg(v.string(), {
       positional: true,
       description: "Executor name",
     }),
-    data: arg(jsonDataArg.optional(), {
+    data: arg(v.optional(jsonDataArg), {
       alias: "d",
       description: "Request body (JSON string)",
     }),
-    header: arg(headerArg.array().optional(), {
+    header: arg(v.optional(v.array(headerArg)), {
       alias: "H",
       overrideBuiltinAlias: true,
       description: "Request header (format: 'Key: Value', can be specified multiple times)",
     }),
-    wait: arg(z.boolean().default(false), {
+    wait: arg(v.optional(v.boolean(), false), {
       alias: "W",
       description:
         "Wait for job completion and downstream execution (workflow/function) if applicable",
     }),
-    interval: arg(durationArg.default("3s"), {
+    interval: arg(v.optional(durationArg, "3s"), {
       alias: "i",
       description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
     }),
-    timeout: arg(durationArg.default("5m"), {
+    timeout: arg(v.optional(durationArg, "5m"), {
       alias: "t",
       description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
     }),
-    logs: arg(z.boolean().default(false), {
+    logs: arg(v.optional(v.boolean(), false), {
       alias: "l",
       description: "Display function execution logs after completion (requires --wait)",
     }),

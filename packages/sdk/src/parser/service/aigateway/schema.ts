@@ -1,28 +1,33 @@
-import { z } from "zod";
+import * as v from "valibot";
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 const AUTH_NAMESPACE_PATTERN = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 
 // strip unknown keys
-export const AIGatewaySchema = z
-  .strictObject({
-    name: z
-      .string()
-      .regex(NAME_PATTERN, "Must be 3-30 lowercase alphanumeric characters or hyphens")
-      .describe("AI Gateway name"),
-    authNamespace: z
-      .string()
-      .regex(AUTH_NAMESPACE_PATTERN, "Must be 3-63 lowercase alphanumeric characters or hyphens")
-      .optional()
-      .describe(
-        "Auth namespace used to resolve request tokens against the workspace's auth. Defaults to the application's own auth service when omitted; omitting it without an Auth service configured is rejected.",
+export const AIGatewaySchema = v.pipe(
+  v.strictObject({
+    name: v.pipe(
+      v.string(),
+      v.regex(NAME_PATTERN, "Must be 3-30 lowercase alphanumeric characters or hyphens"),
+      v.description("AI Gateway name"),
+    ),
+    authNamespace: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(AUTH_NAMESPACE_PATTERN, "Must be 3-63 lowercase alphanumeric characters or hyphens"),
+        v.description(
+          "Auth namespace used to resolve request tokens against the workspace's auth. Defaults to the application's own auth service when omitted; omitting it without an Auth service configured is rejected.",
+        ),
       ),
-    cors: z
-      .array(z.string())
-      .optional()
-      .describe(
-        "Allowed CORS origins for browser-based clients. Each entry is `*`, `http(s)://*`, `http(s)://*.example.com`, or `http(s)://app.example.com`, optionally with `:port`. Empty list disables cross-origin access.",
+    ),
+    cors: v.optional(
+      v.pipe(
+        v.array(v.string()),
+        v.description(
+          "Allowed CORS origins for browser-based clients. Each entry is `*`, `http(s)://*`, `http(s)://*.example.com`, or `http(s)://app.example.com`, optionally with `:port`. Empty list disables cross-origin access.",
+        ),
       ),
-  })
-
-  .brand("AIGatewayConfig");
+    ),
+  }),
+  v.brand("AIGatewayConfig"),
+);

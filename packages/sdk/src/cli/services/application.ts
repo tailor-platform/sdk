@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import * as v from "valibot";
 import { generatePluginExecutorFiles } from "#/cli/commands/generate/plugin-executor-generator";
 import { generatePluginTableFiles } from "#/cli/commands/generate/plugin-table-generator";
 import { bundleAuthHooks } from "#/cli/services/auth/bundler";
@@ -117,7 +118,7 @@ function defineTailorDB(
       externalTailorDBNamespaces.push(namespace);
     } else {
       // Parse config through schema to normalize gqlOperations
-      const parsedConfig = TailorDBServiceConfigSchema.parse(serviceConfig);
+      const parsedConfig = v.parse(TailorDBServiceConfigSchema, serviceConfig);
       const tailorDB = createTailorDBService({
         namespace,
         config: parsedConfig,
@@ -187,7 +188,7 @@ function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
     }
     idpNames.add(name);
     if (!("external" in idpConfig)) {
-      const idp = IdPSchema.parse(stripIdpProviderHelper(idpConfig));
+      const idp = v.parse(IdPSchema, stripIdpProviderHelper(idpConfig));
       idpServices.push(idp);
     }
     subgraphs.push({ Type: "idp", Name: name });
@@ -215,7 +216,7 @@ function defineAuth(
   let authService: AuthService | undefined;
   if (!("external" in config)) {
     authService = createAuthService(
-      AuthConfigSchema.parse(config),
+      v.parse(AuthConfigSchema, config),
       tailorDBServices,
       externalTailorDBNamespaces,
     );
@@ -270,7 +271,7 @@ function defineStaticWebsites(
   const websiteNames = new Set<string>();
 
   (websites ?? []).forEach((config) => {
-    const website = StaticWebsiteSchema.parse(stripStaticWebsiteUrlHelper(config));
+    const website = v.parse(StaticWebsiteSchema, stripStaticWebsiteUrlHelper(config));
     if (websiteNames.has(website.name)) {
       throw new Error(`Static website with name "${website.name}" already defined.`);
     }
@@ -289,7 +290,7 @@ function defineAIGateways(
   const gatewayNames = new Set<string>();
 
   (gateways ?? []).forEach((config) => {
-    const gateway = AIGatewaySchema.parse(config);
+    const gateway = v.parse(AIGatewaySchema, config);
     if (gatewayNames.has(gateway.name)) {
       throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
     }
@@ -317,7 +318,7 @@ function parseSecretManager(config: AppConfig["secrets"]): {
     return { secrets: [], ignoreNullishValues: false };
   }
 
-  const parsed = SecretsSchema.parse(config);
+  const parsed = v.parse(SecretsSchema, config);
   const { ignoreNullishValues } = parsed.options;
 
   const secrets = Object.entries(parsed.vaults).map(([vaultName, vaultSecrets]) => ({

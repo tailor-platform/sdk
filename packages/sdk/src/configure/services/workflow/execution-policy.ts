@@ -19,7 +19,7 @@ export type {
 
 // Mirrors the non-wildcard branch of ExecutionPolicyKeySchema's grammar
 // (parser/service/workflow/schema.ts). Duplicated, not imported, because
-// configure code must stay zod-free — it ships inside the same runtime
+// configure code must stay valibot-free — it ships inside the same runtime
 // bundle as user workflow job functions.
 const EXECUTION_POLICY_EXACT_KEY_REGEX = /^[a-z0-9][a-z0-9_:.-]{0,62}[a-z0-9]$/;
 

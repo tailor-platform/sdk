@@ -1,5 +1,5 @@
-import { arg } from "politty";
-import { z } from "zod";
+import { arg } from "@politty/valibot";
+import * as v from "valibot";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
@@ -14,40 +14,40 @@ import type { ProfileInfo } from "./types";
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update profile properties.",
-  args: z.strictObject({
-    name: arg(z.string(), {
+  args: v.strictObject({
+    name: arg(v.string(), {
       positional: true,
       description: "Profile name",
     }),
-    user: arg(z.string().optional(), {
+    user: arg(v.optional(v.string()), {
       alias: "u",
       description: "New user email address or machine user client ID",
     }),
-    "workspace-id": arg(z.string().optional(), {
+    "workspace-id": arg(v.optional(v.string()), {
       alias: "w",
       description: "New workspace ID",
     }),
-    permission: arg(z.enum(["write", "read"]).optional(), {
+    permission: arg(v.optional(v.picklist(["write", "read"])), {
       description:
         "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
     }),
-    "machine-user": arg(z.string().optional(), {
+    "machine-user": arg(v.optional(v.string()), {
       alias: "m",
       description:
         "Default machine user name for application-data commands (query, workflow start, function run, machineuser token). Pass an empty string to clear.",
     }),
-    "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+    "machine-user-override": arg(v.optional(v.picklist(["allow", "deny"])), {
       description:
         "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction.",
     }),
-    "platform-url": arg(z.union([z.url(), z.literal("")]).optional(), {
+    "platform-url": arg(v.optional(v.union([v.pipe(v.string(), v.url()), v.literal("")])), {
       description: "Platform API base URL for this profile. Pass an empty string to clear.",
     }),
-    "oauth2-client-id": arg(z.string().optional(), {
+    "oauth2-client-id": arg(v.optional(v.string()), {
       description:
         "OAuth2 client ID for logging in to this profile's platform. Pass an empty string to clear.",
     }),
-    "console-url": arg(z.union([z.url(), z.literal("")]).optional(), {
+    "console-url": arg(v.optional(v.union([v.pipe(v.string(), v.url()), v.literal("")])), {
       description: "Console base URL for this profile. Pass an empty string to clear.",
     }),
   }),

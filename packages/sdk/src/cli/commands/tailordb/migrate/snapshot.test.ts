@@ -2806,7 +2806,7 @@ describe("snapshot", () => {
       expect(thrownError).toBeInstanceOf(Error);
       const message = (thrownError as Error).message;
       expect(message).toContain(filePath);
-      // z.prettifyError includes the field path ("namespace") in the output
+      // formatValiError includes the field path ("namespace") in the output
       expect(message).toContain("namespace");
     });
 

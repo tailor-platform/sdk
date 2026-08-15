@@ -1,5 +1,7 @@
 import * as path from "pathe";
+import * as v from "valibot";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { formatValiIssues } from "#/cli/shared/vali-issues";
 import { ResolverPermissionSchema } from "#/parser/service/resolver/index";
 import type { ResolverServiceConfig, ResolverServiceInput } from "#/configure/config/types";
 import type { Resolver } from "#/types/resolver.generated";
@@ -23,14 +25,14 @@ export function parseResolverDefaultPermission(
   if (config.defaultPermission === undefined) {
     return undefined;
   }
-  const result = ResolverPermissionSchema.safeParse(config.defaultPermission);
+  const result = v.safeParse(ResolverPermissionSchema, config.defaultPermission);
   if (!result.success) {
     throw new Error(
       `Invalid \`defaultPermission\` for resolver namespace "${namespace}": ` +
-        result.error.issues.map((issue) => issue.message).join("; "),
+        formatValiIssues(result.issues),
     );
   }
-  return result.data;
+  return result.output;
 }
 
 type ResolveForFileParams = {

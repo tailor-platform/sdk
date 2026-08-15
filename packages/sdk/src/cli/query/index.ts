@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { create } from "@bufbuild/protobuf";
+import { arg } from "@politty/valibot";
 import {
   AuthInvokerSchema,
   type AuthInvoker,
@@ -9,9 +10,8 @@ import {
 import { createPrompt } from "@toiroakr/read-multiline";
 import * as path from "pathe";
 import { parse as parseSql } from "pgsql-ast-parser";
-import { arg } from "politty";
+import * as v from "valibot";
 import { xdgConfig } from "xdg-basedir";
-import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { deploymentArgs, resolveMachineUserInputSource } from "../shared/args";
@@ -40,22 +40,24 @@ import type { Application } from "@tailor-platform/tailor-proto/application_reso
 
 export type { QueryEngine } from "./types";
 
-const queryEngineSchema = z.enum(queryEngines);
+const queryEngineSchema = v.picklist(queryEngines);
 // strip unknown keys
-const queryBaseOptionsSchema = z.object({
-  workspaceId: z.string().optional(),
-  profile: z.string().optional(),
-  configPath: z.string().optional(),
+const queryBaseOptionsSchema = v.object({
+  workspaceId: v.optional(v.string()),
+  profile: v.optional(v.string()),
+  configPath: v.optional(v.string()),
   engine: queryEngineSchema,
-  machineUser: z.string().optional(),
-  machineUserSource: z.enum(["option", "env"]).optional(),
+  machineUser: v.optional(v.string()),
+  machineUserSource: v.optional(v.picklist(["option", "env"])),
 });
-const queryOptionsSchema = queryBaseOptionsSchema.extend({
-  query: z.string(),
+// strip unknown keys
+const queryOptionsSchema = v.object({
+  ...queryBaseOptionsSchema.entries,
+  query: v.string(),
 });
 
-type QueryOptions = z.input<typeof queryOptionsSchema>;
-type QueryBaseOptions = z.input<typeof queryBaseOptionsSchema>;
+type QueryOptions = v.InferInput<typeof queryOptionsSchema>;
+type QueryBaseOptions = v.InferInput<typeof queryBaseOptionsSchema>;
 type QuerySharedOptions = Omit<QueryOptions, "engine">;
 type Client = Awaited<ReturnType<typeof initOperatorClient>>;
 
@@ -138,18 +140,16 @@ async function getNamespaceFromSqlQuery(
 }
 
 async function loadOptions(options: QueryBaseOptions) {
-  const result = queryBaseOptionsSchema.safeParse(options);
+  const result = v.safeParse(queryBaseOptionsSchema, options);
 
   if (!result.success) {
-    throw new Error(
-      assertDefined(result.error.issues[0], "validation error missing issues").message,
-    );
+    throw new Error(assertDefined(result.issues[0], "validation error missing issues").message);
   }
 
   const machineUser = await loadMachineUserName({
-    machineUser: result.data.machineUser,
-    machineUserSource: result.data.machineUserSource,
-    profile: result.data.profile,
+    machineUser: result.output.machineUser,
+    machineUserSource: result.output.machineUserSource,
+    profile: result.output.profile,
   });
   if (!machineUser) {
     throw new Error(
@@ -158,12 +158,12 @@ async function loadOptions(options: QueryBaseOptions) {
   }
 
   const accessToken = await loadAccessToken({
-    profile: result.data.profile,
+    profile: result.output.profile,
   });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: result.output.workspaceId,
+    profile: result.output.profile,
   });
   const { config } = await loadConfig(options.configPath);
   const namespaces = extractAllNamespaces(config);
@@ -187,7 +187,7 @@ async function loadOptions(options: QueryBaseOptions) {
   }
 
   return {
-    engine: result.data.engine,
+    engine: result.output.engine,
     client,
     workspaceId,
     config,
@@ -370,15 +370,13 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  const result = queryOptionsSchema.safeParse(options);
+  const result = v.safeParse(queryOptionsSchema, options);
   if (!result.success) {
-    throw new Error(
-      assertDefined(result.error.issues[0], "validation error missing issues").message,
-    );
+    throw new Error(assertDefined(result.issues[0], "validation error missing issues").message);
   }
 
-  const executor = await prepareQueryExecutor(result.data);
-  return await executor(result.data.query);
+  const executor = await prepareQueryExecutor(result.output);
+  return await executor(result.output.query);
 }
 
 async function prepareQueryExecutor(
@@ -745,62 +743,56 @@ function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLRe
   return ordered;
 }
 
+const queryCommandArgsSchema = v.strictObject({
+  ...deploymentArgs,
+  engine: arg(queryEngineSchema, {
+    description: "Query engine (sql or gql)",
+  }),
+  query: arg(v.optional(v.string()), {
+    alias: "q",
+    description: "Query string to execute directly; omit to start REPL mode",
+  }),
+  file: arg(v.optional(v.string()), {
+    alias: "f",
+    description: "Read query string from file; omit to start REPL mode",
+  }),
+  edit: arg(v.optional(v.boolean(), false), {
+    description: "Open a temporary file in your editor; omit to start REPL mode",
+  }),
+  "machine-user": arg(v.optional(v.string()), {
+    alias: "m",
+    description:
+      "Machine user name for query execution. Falls back to the active profile's default machine user.",
+    env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
+  }),
+  "newline-on-enter": arg(v.optional(v.boolean()), {
+    description:
+      "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap.",
+  }),
+});
+
 export const queryCommand = defineAppCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
-  args: z
-    .strictObject({
-      ...deploymentArgs,
-      engine: arg(queryEngineSchema, {
-        description: "Query engine (sql or gql)",
-      }),
-      query: arg(z.string().optional(), {
-        alias: "q",
-        description: "Query string to execute directly; omit to start REPL mode",
-      }),
-      file: arg(z.string().optional(), {
-        alias: "f",
-        description: "Read query string from file; omit to start REPL mode",
-      }),
-      edit: arg(z.boolean().default(false), {
-        description: "Open a temporary file in your editor; omit to start REPL mode",
-      }),
-      "machine-user": arg(z.string().optional(), {
-        alias: "m",
-        description:
-          "Machine user name for query execution. Falls back to the active profile's default machine user.",
-        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
-      }),
-      "newline-on-enter": arg(z.boolean().optional(), {
-        description:
-          "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap.",
-      }),
-    })
-    .superRefine((args, ctx) => {
+  args: v.pipe(
+    queryCommandArgsSchema,
+    v.rawCheck(({ dataset, addIssue }) => {
+      if (!dataset.typed) return;
+      const args = dataset.value;
+
       if (args.query != null && args.file != null) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["file"],
-          message: "Pass either -q/--query or -f/--file, not both.",
-        });
+        addIssue({ message: "Pass either -q/--query or -f/--file, not both." });
       }
 
       if (args.edit && args.query != null) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["edit"],
-          message: "Pass only one of --edit, -q/--query, or -f/--file.",
-        });
+        addIssue({ message: "Pass only one of --edit, -q/--query, or -f/--file." });
       }
 
       if (args.edit && args.file != null) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["edit"],
-          message: "Pass only one of --edit, -q/--query, or -f/--file.",
-        });
+        addIssue({ message: "Pass only one of --edit, -q/--query, or -f/--file." });
       }
     }),
+  ),
   run: async (args) => {
     const mode = await resolveQueryCommandInput({
       query: args.query,

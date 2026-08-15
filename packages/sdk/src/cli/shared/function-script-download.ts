@@ -16,7 +16,7 @@ import type { OperatorClient } from "#/cli/shared/client";
  * The platform records executions under a script-name format that
  * differs from the registry name. The execution `type` is used as the
  * primary discriminator because workflow job names are unconstrained
- * strings (`WorkflowJobSchema.name: z.string()`) and may contain dots
+ * strings (`WorkflowJobSchema.name: v.string()`) and may contain dots
  * that collide with the resolver / executor / hook filename suffixes.
  *
  *   JOB:                        `<jobName>`                       -> `workflow--<jobName>`

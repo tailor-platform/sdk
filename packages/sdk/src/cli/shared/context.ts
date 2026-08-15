@@ -3,8 +3,8 @@ import { parseYAML, stringifyYAML } from "confbox";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { lt as semverLt } from "semver";
+import * as v from "valibot";
 import { xdgConfig } from "xdg-basedir";
-import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import { type MachineUserInputSource } from "./args";
@@ -30,56 +30,60 @@ import {
 } from "./token-store";
 
 // strip unknown keys
-const pfProfileSchema = z.object({
-  user: z.string(),
-  workspace_id: z.string(),
-  readonly: z.boolean().optional(),
-  machine_user: z.string().optional(),
-  machine_user_override: z.enum(["allow", "deny"]).optional(),
-  platform_url: z.url().optional(),
-  oauth2_client_id: z.string().optional(),
-  console_url: z.url().optional(),
+const pfProfileSchema = v.object({
+  user: v.string(),
+  workspace_id: v.string(),
+  readonly: v.optional(v.boolean()),
+  machine_user: v.optional(v.string()),
+  machine_user_override: v.optional(v.picklist(["allow", "deny"])),
+  platform_url: v.optional(v.pipe(v.string(), v.url())),
+  oauth2_client_id: v.optional(v.string()),
+  console_url: v.optional(v.pipe(v.string(), v.url())),
 });
 
 // strip unknown keys
-const pfUserSchemaV1 = z.object({
-  access_token: z.string(),
-  refresh_token: z.string().optional(),
-  token_expires_at: z.string(),
+const pfUserSchemaV1 = v.object({
+  access_token: v.string(),
+  refresh_token: v.optional(v.string()),
+  token_expires_at: v.string(),
 });
 
 // strip unknown keys
-const pfUserKeyringSchema = z.object({
-  storage: z.literal("keyring"),
-  token_expires_at: z.string(),
+const pfUserKeyringSchema = v.object({
+  storage: v.literal("keyring"),
+  token_expires_at: v.string(),
 });
 
 // strip unknown keys
-const pfUserFileSchema = z.object({
-  storage: z.literal("file"),
-  token_expires_at: z.string(),
-  access_token: z.string(),
-  refresh_token: z.string().optional(),
+const pfUserFileSchema = v.object({
+  storage: v.literal("file"),
+  token_expires_at: v.string(),
+  access_token: v.string(),
+  refresh_token: v.optional(v.string()),
 });
 
-const pfUserSchemaV2 = z.discriminatedUnion("storage", [pfUserKeyringSchema, pfUserFileSchema]);
-
-const pfUserKeyringSchemaV3 = pfUserKeyringSchema.extend({
-  email: z.string().optional(),
-});
-
-const pfUserFileSchemaV3 = pfUserFileSchema.extend({
-  email: z.string().optional(),
-});
-
-const pfUserSchemaV3 = z.discriminatedUnion("storage", [pfUserKeyringSchemaV3, pfUserFileSchemaV3]);
+const pfUserSchemaV2 = v.variant("storage", [pfUserKeyringSchema, pfUserFileSchema]);
 
 // strip unknown keys
-const pfConfigSchemaV1 = z.object({
-  version: z.literal(1),
-  users: z.partialRecord(z.string(), pfUserSchemaV1),
-  profiles: z.partialRecord(z.string(), pfProfileSchema),
-  current_user: z.string().nullable(),
+const pfUserKeyringSchemaV3 = v.object({
+  ...pfUserKeyringSchema.entries,
+  email: v.optional(v.string()),
+});
+
+// strip unknown keys
+const pfUserFileSchemaV3 = v.object({
+  ...pfUserFileSchema.entries,
+  email: v.optional(v.string()),
+});
+
+const pfUserSchemaV3 = v.variant("storage", [pfUserKeyringSchemaV3, pfUserFileSchemaV3]);
+
+// strip unknown keys
+const pfConfigSchemaV1 = v.object({
+  version: v.literal(1),
+  users: v.record(v.string(), pfUserSchemaV1),
+  profiles: v.record(v.string(), pfProfileSchema),
+  current_user: v.nullable(v.string()),
 });
 
 const V2_CONFIG_VERSION = 2;
@@ -87,40 +91,35 @@ const LATEST_CONFIG_VERSION = 3;
 const V2_MIN_SDK_VERSION = "1.29.0";
 const V3_MIN_SDK_VERSION = "2.0.0";
 
-const semverSchema = z.templateLiteral([
-  z.number().int(),
-  ".",
-  z.number().int(),
-  ".",
-  z.number().int(),
-]);
+// No valibot template-literal schema exists; validated with a regex instead.
+const semverSchema = v.pipe(v.string(), v.regex(/^\d+\.\d+\.\d+$/));
 
 // strip unknown keys
-const pfConfigSchemaV2 = z.object({
-  version: z.literal(V2_CONFIG_VERSION),
+const pfConfigSchemaV2 = v.object({
+  version: v.literal(V2_CONFIG_VERSION),
   min_sdk_version: semverSchema,
-  latest_version: z.number().int().optional(),
-  latest_min_sdk_version: semverSchema.optional(),
-  users: z.partialRecord(z.string(), pfUserSchemaV2),
-  profiles: z.partialRecord(z.string(), pfProfileSchema),
-  current_user: z.string().nullable(),
+  latest_version: v.optional(v.pipe(v.number(), v.integer())),
+  latest_min_sdk_version: v.optional(semverSchema),
+  users: v.record(v.string(), pfUserSchemaV2),
+  profiles: v.record(v.string(), pfProfileSchema),
+  current_user: v.nullable(v.string()),
 });
 
 // strip unknown keys
-const pfConfigSchemaV3 = z.object({
-  version: z.literal(LATEST_CONFIG_VERSION),
+const pfConfigSchemaV3 = v.object({
+  version: v.literal(LATEST_CONFIG_VERSION),
   min_sdk_version: semverSchema,
-  latest_version: z.number().int().optional(),
-  latest_min_sdk_version: semverSchema.optional(),
-  users: z.partialRecord(z.string(), pfUserSchemaV3),
-  profiles: z.partialRecord(z.string(), pfProfileSchema),
-  current_user: z.string().nullable(),
+  latest_version: v.optional(v.pipe(v.number(), v.integer())),
+  latest_min_sdk_version: v.optional(semverSchema),
+  users: v.record(v.string(), pfUserSchemaV3),
+  profiles: v.record(v.string(), pfProfileSchema),
+  current_user: v.nullable(v.string()),
 });
 
-type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
-type PfConfigV2 = z.output<typeof pfConfigSchemaV2>;
-type PfConfig = z.output<typeof pfConfigSchemaV3>;
-type PfUser = z.output<typeof pfUserSchemaV3>;
+type PfConfigV1 = v.InferOutput<typeof pfConfigSchemaV1>;
+type PfConfigV2 = v.InferOutput<typeof pfConfigSchemaV2>;
+type PfConfig = v.InferOutput<typeof pfConfigSchemaV3>;
+type PfUser = v.InferOutput<typeof pfUserSchemaV3>;
 type UserTokens = { accessToken: string; refreshToken?: string };
 type PfConfigV3 = PfConfig;
 type LoadWorkspaceIdOptions = {
@@ -211,7 +210,7 @@ function findUserByEmail(
   const platformPrefix = `${platformUrl}|`;
   const defaultPlatform = platformUrl === normalizeBaseUrl(defaultPlatformBaseUrl);
   return Object.entries(users).find(([key, entry]) => {
-    if (entry?.email !== email) return false;
+    if (entry.email !== email) return false;
     return defaultPlatform ? !key.includes("|") : key.startsWith(platformPrefix);
   });
 }
@@ -291,7 +290,7 @@ function hasUserKeyForName(users: Record<string, unknown>, user: string): boolea
 }
 
 function hasUserEmailEntry(users: PfConfig["users"], user: string): boolean {
-  return Object.values(users).some((entry) => entry?.email === user);
+  return Object.values(users).some((entry) => entry.email === user);
 }
 
 /**
@@ -319,8 +318,6 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfigV2 {
   const users: PfConfigV2["users"] = {};
 
   for (const [name, v1User] of Object.entries(v1Config.users)) {
-    if (!v1User) continue;
-
     users[name] = {
       access_token: v1User.access_token,
       refresh_token: v1User.refresh_token,
@@ -339,14 +336,13 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfigV2 {
 }
 
 function inferEmailFromUserId(user: string): string | undefined {
-  return z.email().safeParse(user).success ? user : undefined;
+  return v.safeParse(v.pipe(v.string(), v.email()), user).success ? user : undefined;
 }
 
 function migrateV2ToV3(v2Config: PfConfigV2): PfConfig {
   const users: PfConfig["users"] = {};
 
   for (const [user, entry] of Object.entries(v2Config.users)) {
-    if (!entry) continue;
     const email = inferEmailFromUserId(user);
     users[user] = {
       ...entry,
@@ -445,23 +441,23 @@ export async function readPlatformConfig(): Promise<PfConfig> {
   }
 
   // Try v3 first
-  const v3Result = pfConfigSchemaV3.safeParse(rawConfig);
+  const v3Result = v.safeParse(pfConfigSchemaV3, rawConfig);
   if (v3Result.success) {
-    await warnIfNewerConfigAvailable(v3Result.data);
-    return v3Result.data;
+    await warnIfNewerConfigAvailable(v3Result.output);
+    return v3Result.output;
   }
 
   // Try v2 next
-  const v2Result = pfConfigSchemaV2.safeParse(rawConfig);
+  const v2Result = v.safeParse(pfConfigSchemaV2, rawConfig);
   if (v2Result.success) {
-    await warnIfNewerConfigAvailable(v2Result.data);
-    return migrateV2ToV3(v2Result.data);
+    await warnIfNewerConfigAvailable(v2Result.output);
+    return migrateV2ToV3(v2Result.output);
   }
 
   // Fall back to v1 (convert to v3 in memory, but don't rewrite disk)
-  const v1Result = pfConfigSchemaV1.safeParse(rawConfig);
+  const v1Result = v.safeParse(pfConfigSchemaV1, rawConfig);
   if (v1Result.success) {
-    return migrateV1ToV3(v1Result.data);
+    return migrateV1ToV3(v1Result.output);
   }
 
   // Neither v1, v2, nor v3
@@ -474,7 +470,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
 function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
   const users: PfConfigV1["users"] = {};
   for (const [name, entry] of Object.entries(config.users)) {
-    if (!entry || entry.storage === "keyring") continue;
+    if (entry.storage === "keyring") continue;
     users[name] = {
       access_token: entry.access_token,
       refresh_token: entry.refresh_token,
@@ -496,9 +492,9 @@ function toV1ForDisk(config: PfConfigV2): PfConfigV1 {
 function hasProfilePlatformSettings(config: Pick<PfConfig | PfConfigV1, "profiles">): boolean {
   return Object.values(config.profiles).some(
     (profile) =>
-      profile?.platform_url !== undefined ||
-      profile?.oauth2_client_id !== undefined ||
-      profile?.console_url !== undefined,
+      profile.platform_url !== undefined ||
+      profile.oauth2_client_id !== undefined ||
+      profile.console_url !== undefined,
   );
 }
 
@@ -539,7 +535,7 @@ function toLatestForDisk(config: PfConfig | PfConfigV2 | PfConfigV1): PfConfigV3
 export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) {
   const configPath = platformConfigPath();
   const hasKeyringUser =
-    config.version !== 1 && Object.values(config.users).some((u) => u?.storage === "keyring");
+    config.version !== 1 && Object.values(config.users).some((u) => u.storage === "keyring");
   const diskConfig =
     config.version === LATEST_CONFIG_VERSION ||
     hasProfilePlatformSettings(config) ||
@@ -553,11 +549,11 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
 }
 
 function validateUUID(value: string, source: string): string {
-  const result = z.uuid().safeParse(value);
+  const result = v.safeParse(v.pipe(v.string(), v.uuid()), value);
   if (!result.success) {
     throw new Error(`Invalid value from ${source}: must be a valid UUID`);
   }
-  return result.data;
+  return result.output;
 }
 
 /**
@@ -871,7 +867,7 @@ function updateUserReferences(config: PfConfig, fromUser: string, toUser: string
     config.current_user = toUser;
   }
   for (const profile of Object.values(config.profiles)) {
-    if (profile?.user === fromUser) {
+    if (profile.user === fromUser) {
       profile.user = toUser;
     }
   }

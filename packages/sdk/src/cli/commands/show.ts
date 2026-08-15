@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { z } from "zod";
+import * as v from "valibot";
 import { deploymentArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -136,7 +136,7 @@ const showWorkspaceNameTransformer = createWorkspaceNameTransformer(
 export const showCommand = defineAppCommand({
   name: "show",
   description: "Show information about the deployed application.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
   }),
   run: async (args) => {

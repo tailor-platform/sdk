@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
@@ -11,7 +11,7 @@ import ml from "#/utils/multiline";
 export const currentCommand = defineAppCommand({
   name: "current",
   description: "Show current user.",
-  args: z.strictObject({}),
+  args: v.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const profile = process.env.TAILOR_PLATFORM_PROFILE;

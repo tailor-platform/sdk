@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
 import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
@@ -196,7 +196,7 @@ export async function remove(options?: RemoveOptions): Promise<void> {
 export const removeCommand = defineAppCommand({
   name: "remove",
   description: "Remove all resources managed by the application from the workspace.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
   }),

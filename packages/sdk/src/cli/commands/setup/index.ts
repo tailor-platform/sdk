@@ -1,5 +1,5 @@
-import { arg, defineCommand } from "politty";
-import { z } from "zod";
+import { arg, defineCommand } from "@politty/valibot";
+import * as v from "valibot";
 import { confirmationArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
@@ -11,8 +11,8 @@ import { setupRenovate } from "./renovate";
 const checkCommand = defineAppCommand({
   name: "check",
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
-  args: z.strictObject({
-    ci: arg(z.boolean().default(false), {
+  args: v.strictObject({
+    ci: arg(v.optional(v.boolean(), false), {
       description:
         "Run in CI mode: skip checks that are handled by the runtime " +
         "(e.g. TAILOR_PLATFORM_WORKSPACE_ID).",
@@ -27,25 +27,25 @@ const coordinateCommand = defineAppCommand({
   name: "coordinate",
   description:
     "Generate a coordinator workflow that orchestrates multiple --action-generated composite actions.",
-  args: z.strictObject({
-    name: arg(z.string().min(1), {
+  args: v.strictObject({
+    name: arg(v.pipe(v.string(), v.minLength(1)), {
       alias: "n",
       description: "Coordinator name (used in the generated workflow file name and job names)",
     }),
-    action: arg(z.array(z.string().min(1)).min(1), {
+    action: arg(v.pipe(v.array(v.pipe(v.string(), v.minLength(1))), v.minLength(1)), {
       description:
         "Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. tailor- prefix optional.",
     }),
-    branch: arg(z.string().min(1).optional(), {
+    branch: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "Branch target: deploy trigger branch (defaults to the detected default branch)",
     }),
-    tag: arg(z.boolean().default(false), {
+    tag: arg(v.optional(v.boolean(), false), {
       description: "Generate a tag target coordinator",
     }),
-    environment: arg(z.string().min(1).optional(), {
+    environment: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "GitHub Environment for the plan/deploy jobs",
     }),
-    force: arg(z.boolean().default(false), {
+    force: arg(v.optional(v.boolean(), false), {
       description: "Discard hand edits and regenerate",
     }),
   }),
@@ -67,19 +67,19 @@ const actionCommand = defineAppCommand({
   name: "action",
   description:
     "Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).",
-  args: z.strictObject({
-    name: arg(z.string().min(1).optional(), {
+  args: v.strictObject({
+    name: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       alias: "n",
       description: "Name (defaults to the config 'name')",
     }),
-    dir: arg(z.string().min(1).default("."), {
+    dir: arg(v.optional(v.pipe(v.string(), v.minLength(1)), "."), {
       alias: "d",
       description: "App directory",
     }),
-    environment: arg(z.string().min(1).optional(), {
+    environment: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "GitHub Environment (defaults to the workspace name)",
     }),
-    force: arg(z.boolean().default(false), {
+    force: arg(v.optional(v.boolean(), false), {
       description: "Discard hand edits and regenerate",
     }),
   }),
@@ -98,26 +98,26 @@ const actionCommand = defineAppCommand({
 const branchCommand = defineAppCommand({
   name: "branch",
   description: "Generate a branch-target deploy workflow (push to branch triggers deploy).",
-  args: z.strictObject({
-    name: arg(z.string().min(1).optional(), {
+  args: v.strictObject({
+    name: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       alias: "n",
       description: "Name (defaults to the config 'name')",
     }),
-    target: arg(z.string().min(1).optional(), {
+    target: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       hiddenAlias: "branch",
       description: "Deploy trigger branch (defaults to the detected default branch)",
     }),
-    environment: arg(z.string().min(1).optional(), {
+    environment: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
     }),
-    "erd-preview": arg(z.boolean().default(false), {
+    "erd-preview": arg(v.optional(v.boolean(), false), {
       description: "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
     }),
-    dir: arg(z.string().min(1).default("."), {
+    dir: arg(v.optional(v.pipe(v.string(), v.minLength(1)), "."), {
       alias: "d",
       description: "App directory (for monorepo setups)",
     }),
-    force: arg(z.boolean().default(false), {
+    force: arg(v.optional(v.boolean(), false), {
       description: "Discard hand edits / take over unmanaged files and regenerate",
     }),
   }),
@@ -144,25 +144,25 @@ const branchCommand = defineAppCommand({
 const tagCommand = defineAppCommand({
   name: "tag",
   description: "Generate a tag-target deploy workflow (tag push triggers deploy).",
-  args: z.strictObject({
-    name: arg(z.string().min(1).optional(), {
+  args: v.strictObject({
+    name: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       alias: "n",
       description: "Name (defaults to the config 'name')",
     }),
-    "tag-pattern": arg(z.string().min(1).default("v*"), {
+    "tag-pattern": arg(v.optional(v.pipe(v.string(), v.minLength(1)), "v*"), {
       description: "Tag glob to match (defaults to v*)",
     }),
-    branch: arg(z.string().min(1).optional(), {
+    branch: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "Tag-reachability guard branch (no guard when omitted)",
     }),
-    environment: arg(z.string().min(1).optional(), {
+    environment: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
     }),
-    dir: arg(z.string().min(1).default("."), {
+    dir: arg(v.optional(v.pipe(v.string(), v.minLength(1)), "."), {
       alias: "d",
       description: "App directory (for monorepo setups)",
     }),
-    force: arg(z.boolean().default(false), {
+    force: arg(v.optional(v.boolean(), false), {
       description: "Discard hand edits / take over unmanaged files and regenerate",
     }),
   }),
@@ -183,28 +183,28 @@ const tagCommand = defineAppCommand({
 const previewCommand = defineAppCommand({
   name: "preview",
   description: "Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).",
-  args: z.strictObject({
-    name: arg(z.string().min(1).optional(), {
+  args: v.strictObject({
+    name: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       alias: "n",
       description: "Name (defaults to the config 'name')",
     }),
-    branch: arg(z.string().min(1).optional(), {
+    branch: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "Branch to filter PRs by (defaults to the detected default branch)",
     }),
-    region: arg(z.string().min(1), {
+    region: arg(v.pipe(v.string(), v.minLength(1)), {
       description: "Workspace region for preview workspace creation (e.g. us-west). Required.",
     }),
-    "require-preview-label": arg(z.boolean().default(false), {
+    "require-preview-label": arg(v.optional(v.boolean(), false), {
       description: "Deploy preview only for PRs labeled `tailor:preview` instead of all PRs.",
     }),
-    environment: arg(z.string().min(1).optional(), {
+    environment: arg(v.optional(v.pipe(v.string(), v.minLength(1))), {
       description: "GitHub Environment for the preview jobs (defaults to the workspace name)",
     }),
-    dir: arg(z.string().min(1).default("."), {
+    dir: arg(v.optional(v.pipe(v.string(), v.minLength(1)), "."), {
       alias: "d",
       description: "App directory (for monorepo setups)",
     }),
-    force: arg(z.boolean().default(false), {
+    force: arg(v.optional(v.boolean(), false), {
       description: "Discard hand edits / take over unmanaged files and regenerate",
     }),
   }),
@@ -226,7 +226,7 @@ const previewCommand = defineAppCommand({
 const renovateCommand = defineAppCommand({
   name: "renovate",
   description: "Generate a Renovate config for Tailor dependency and workflow updates.",
-  args: z.strictObject({}),
+  args: v.strictObject({}),
   run: async () => {
     await setupRenovate({ outputDir: process.cwd() });
   },
@@ -235,9 +235,9 @@ const renovateCommand = defineAppCommand({
 const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete managed workflow/action file(s) and their .github/tailor.lock entries.",
-  args: z.strictObject({
+  args: v.strictObject({
     ...confirmationArgs,
-    files: arg(z.string().array().min(1), {
+    files: arg(v.pipe(v.array(v.string()), v.minLength(1)), {
       positional: true,
       description:
         "Workflow/action file(s) to delete, as generated under .github/workflows or .github/actions",

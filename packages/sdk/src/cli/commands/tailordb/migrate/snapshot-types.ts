@@ -129,7 +129,7 @@ export type SnapshotFieldRefOperand =
 /**
  * Literal value operand (right-hand side of a permission condition). Matches
  * the SDK-level value operand surface — primitives and their arrays — as
- * defined in the Zod parser schema (RecordPermissionOperandSchema /
+ * defined in the Valibot parser schema (RecordPermissionOperandSchema /
  * GqlPermissionOperandSchema in parser/service/tailordb/schema.ts).
  */
 export type SnapshotValueOperand = string | boolean | string[] | boolean[];
@@ -161,7 +161,7 @@ export type SnapshotPermissionCondition = readonly [
 export function isSnapshotFieldRefOperand(
   operand: SnapshotPermissionOperand,
 ): operand is SnapshotFieldRefOperand {
-  // snapshot JSON may contain null; z.unknown() does not reject it
+  // snapshot JSON may contain null; v.unknown() does not reject it
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   return typeof operand === "object" && operand !== null && !Array.isArray(operand);
 }

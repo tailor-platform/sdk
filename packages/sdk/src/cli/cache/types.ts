@@ -1,30 +1,30 @@
-import { z } from "zod";
+import * as v from "valibot";
 
 // strip unknown keys
-const cacheOutputFileSchema = z.object({
-  outputPath: z.string(),
-  contentHash: z.string(),
+const cacheOutputFileSchema = v.object({
+  outputPath: v.string(),
+  contentHash: v.string(),
 });
 
 // strip unknown keys
-const cacheEntrySchema = z.object({
-  kind: z.literal("bundle"),
-  inputHash: z.string(),
-  dependencyPaths: z.array(z.string()),
-  outputFiles: z.array(cacheOutputFileSchema),
-  createdAt: z.string(),
+const cacheEntrySchema = v.object({
+  kind: v.literal("bundle"),
+  inputHash: v.string(),
+  dependencyPaths: v.array(v.string()),
+  outputFiles: v.array(cacheOutputFileSchema),
+  createdAt: v.string(),
 });
 
 // strip unknown keys
-const cacheManifestSchema = z.object({
-  version: z.literal(1),
-  sdkVersion: z.string(),
-  lockfileHash: z.string().optional(),
-  entries: z.record(z.string(), cacheEntrySchema),
+const cacheManifestSchema = v.object({
+  version: v.literal(1),
+  sdkVersion: v.string(),
+  lockfileHash: v.optional(v.string()),
+  entries: v.record(v.string(), cacheEntrySchema),
 });
 
-type CacheEntry = z.infer<typeof cacheEntrySchema>;
-type CacheManifest = z.infer<typeof cacheManifestSchema>;
+type CacheEntry = v.InferOutput<typeof cacheEntrySchema>;
+type CacheManifest = v.InferOutput<typeof cacheManifestSchema>;
 
 /**
  * Runtime configuration for the caching subsystem.

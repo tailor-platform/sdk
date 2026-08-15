@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
+import { runCommand } from "@politty/valibot";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "#/cli/shared/context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";

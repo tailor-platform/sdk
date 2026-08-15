@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { logger } from "./logger";
 
-type ArgsShape = Record<string, z.ZodType>;
+type ArgsShape = Record<string, v.GenericSchema>;
 
 type EnvFileArg = string | string[] | undefined;
 
@@ -55,12 +55,12 @@ interface CommonArgsOptions {
  */
 export function commonArgs(options: CommonArgsOptions = {}) {
   return {
-    "env-file": arg(z.string().optional(), {
+    "env-file": arg(v.optional(v.string()), {
       alias: "e",
       description: "Path to the environment file (error if not found)",
       completion: { type: "file", matcher: [".env.*", ".env"] },
     }),
-    "env-file-if-exists": arg(z.string().optional(), {
+    "env-file-if-exists": arg(v.optional(v.string()), {
       description: "Path to the environment file (ignored if not found)",
       completion: { type: "file", matcher: [".env.*", ".env"] },
       effect: (_value, { args }) => {
@@ -70,14 +70,14 @@ export function commonArgs(options: CommonArgsOptions = {}) {
         );
       },
     }),
-    verbose: arg(z.boolean().default(false), {
+    verbose: arg(v.optional(v.boolean(), false), {
       ...(options.verboseAlias === undefined ? {} : { alias: options.verboseAlias }),
       description: "Enable verbose logging",
       effect: (value) => {
         logger.verbose = value;
       },
     }),
-    json: arg(z.boolean().default(false), {
+    json: arg(v.optional(v.boolean(), false), {
       alias: "j",
       description: "Output as JSON",
       effect: (value) => {
@@ -91,13 +91,13 @@ export function commonArgs(options: CommonArgsOptions = {}) {
  * Arguments for commands that require workspace context
  */
 export const workspaceArgs = {
-  "workspace-id": arg(z.string().optional(), {
+  "workspace-id": arg(v.optional(v.string()), {
     alias: "w",
     description: "Workspace ID",
     env: "TAILOR_PLATFORM_WORKSPACE_ID",
     completion: { type: "none" },
   }),
-  profile: arg(z.string().optional(), {
+  profile: arg(v.optional(v.string()), {
     alias: "p",
     description: "Workspace profile",
     env: "TAILOR_PLATFORM_PROFILE",
@@ -109,7 +109,7 @@ export const workspaceArgs = {
  * Shared config arg for commands that accept a config file path
  */
 export const configArg = {
-  config: arg(z.string().default("tailor.config.ts"), {
+  config: arg(v.optional(v.string(), "tailor.config.ts"), {
     alias: "c",
     description: "Path to Tailor config file",
     env: "TAILOR_CONFIG_PATH",
@@ -125,4 +125,6 @@ export const deploymentArgs = {
   ...configArg,
 } satisfies ArgsShape;
 
-export type CommonArgsType = z.infer<z.ZodObject<ReturnType<typeof commonArgs>>>;
+export type CommonArgsType = v.InferOutput<
+  v.ObjectSchema<ReturnType<typeof commonArgs>, undefined>
+>;
