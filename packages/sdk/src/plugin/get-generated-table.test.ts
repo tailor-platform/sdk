@@ -55,8 +55,6 @@ export default {
       await getGeneratedTable(configPath, "ns-plugin", null, "auditLog");
 
       // onNamespaceLoaded for "main" should be called exactly once.
-      // Bug: currently called twice - once in resolveNamespaceForNamespacePlugin (result discarded),
-      // and once again in getGeneratedTableForNamespacePlugin.
       expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
     });
   });
