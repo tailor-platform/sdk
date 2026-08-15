@@ -26,20 +26,20 @@ import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type {
   PluginExecutorInfoExtended,
-  PluginTypeGenerationResult,
-  SourceTypeInfo,
+  PluginTableGenerationResult,
+  SourceTableInfo,
 } from "#/plugin/manager";
 
 /**
- * Information needed for type import resolution.
+ * Information needed for table import resolution.
  */
-interface TypeImportInfo {
+interface TableImportInfo {
   /** Variable name to use in generated code */
   variableName: string;
   /** Import path for the table */
   importPath: string;
   /** Whether this is a generated table (vs user-defined) */
-  isGeneratedType: boolean;
+  isGeneratedTable: boolean;
 }
 
 /**
@@ -47,16 +47,16 @@ interface TypeImportInfo {
  * These files will be processed by the standard executor bundler.
  * @param executors - Array of plugin executor information
  * @param outputDir - Base output directory (e.g., .tailor)
- * @param typeGenerationResult - Result from plugin type generation (for import resolution)
- * @param sourceTypeInfoMap - Map of source table names to their source info
+ * @param tableGenerationResult - Result from plugin table generation (for import resolution)
+ * @param sourceTableInfoMap - Map of source table names to their source info
  * @param configPath - Path to tailor.config.ts (used for resolving plugin import paths)
  * @returns Array of generated file paths
  */
 export function generatePluginExecutorFiles(
   executors: ReadonlyArray<PluginExecutorInfoExtended>,
   outputDir: string,
-  typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
+  tableGenerationResult?: PluginTableGenerationResult,
+  sourceTableInfoMap?: Map<string, SourceTableInfo>,
   configPath?: string,
 ): string[] {
   if (executors.length === 0) {
@@ -70,8 +70,8 @@ export function generatePluginExecutorFiles(
     const filePath = generateSingleExecutorFile(
       info,
       outputDir,
-      typeGenerationResult,
-      sourceTypeInfoMap,
+      tableGenerationResult,
+      sourceTableInfoMap,
       baseDirs,
     );
     generatedFiles.push(filePath);
@@ -89,16 +89,16 @@ export function generatePluginExecutorFiles(
  * Generate a single executor file.
  * @param info - Plugin executor metadata and definition
  * @param outputDir - Base output directory (e.g., .tailor)
- * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeInfoMap - Map of source table names to their source info
+ * @param tableGenerationResult - Result from plugin table generation
+ * @param sourceTableInfoMap - Map of source table names to their source info
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns Absolute path to the generated file
  */
 function generateSingleExecutorFile(
   info: PluginExecutorInfoExtended,
   outputDir: string,
-  typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
+  tableGenerationResult?: PluginTableGenerationResult,
+  sourceTableInfoMap?: Map<string, SourceTableInfo>,
   baseDirs: string[] = [],
 ): string {
   const pluginDir = sanitizePluginId(info.pluginId);
@@ -114,8 +114,8 @@ function generateSingleExecutorFile(
       info,
       info.executor,
       outputDir,
-      typeGenerationResult,
-      sourceTypeInfoMap,
+      tableGenerationResult,
+      sourceTableInfoMap,
       baseDirs,
     );
   } else {
@@ -132,8 +132,8 @@ function generateSingleExecutorFile(
  * @param info - Plugin executor information
  * @param executor - Executor definition with resolve
  * @param outputDir - Base output directory
- * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeInfoMap - Map of source table names to their source info
+ * @param tableGenerationResult - Result from plugin table generation
+ * @param sourceTableInfoMap - Map of source table names to their source info
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns TypeScript source code for executor file
  */
@@ -141,8 +141,8 @@ function generateExecutorFileContentNew(
   info: PluginExecutorInfoExtended,
   executor: PluginGeneratedExecutorWithFile,
   outputDir: string,
-  typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
+  tableGenerationResult?: PluginTableGenerationResult,
+  sourceTableInfoMap?: Map<string, SourceTableInfo>,
   baseDirs: string[] = [],
 ): string {
   const { resolve, context } = executor;
@@ -156,24 +156,24 @@ function generateExecutorFileContentNew(
     baseDirs,
   );
 
-  // Collect type imports from context
-  const typeImports = collectTypeImports(
+  // Collect table imports from context
+  const tableImports = collectTableImports(
     context,
     outputDir,
     info.pluginId,
-    typeGenerationResult,
-    sourceTypeInfoMap,
+    tableGenerationResult,
+    sourceTableInfoMap,
   );
 
   // Generate import statements
   const imports: string[] = [];
 
-  for (const [, importInfo] of typeImports) {
+  for (const [, importInfo] of tableImports) {
     imports.push(`import { ${importInfo.variableName} } from "${importInfo.importPath}";`);
   }
 
   // Generate context object code
-  const contextCode = generateContextCode(context, typeImports);
+  const contextCode = generateContextCode(context, tableImports);
 
   return ml /* ts */ `
     /**
@@ -193,47 +193,47 @@ function generateExecutorFileContentNew(
 }
 
 /**
- * Collect type imports needed for context.
+ * Collect table imports needed for context.
  * @param context - Executor context values from plugin
  * @param outputDir - Base output directory for generated files
  * @param pluginId - Plugin identifier used for output paths
- * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeInfoMap - Map of source table names to their source info
+ * @param tableGenerationResult - Result from plugin table generation
+ * @param sourceTableInfoMap - Map of source table names to their source info
  * @returns Map of context keys to their import information
  */
-function collectTypeImports(
+function collectTableImports(
   context: PluginExecutorContext,
   outputDir: string,
   pluginId: string,
-  typeGenerationResult?: PluginTypeGenerationResult,
-  sourceTypeInfoMap?: Map<string, SourceTypeInfo>,
-): Map<string, TypeImportInfo> {
-  const typeImports = new Map<string, TypeImportInfo>();
+  tableGenerationResult?: PluginTableGenerationResult,
+  sourceTableInfoMap?: Map<string, SourceTableInfo>,
+): Map<string, TableImportInfo> {
+  const tableImports = new Map<string, TableImportInfo>();
   const pluginDir = sanitizePluginId(pluginId);
   const executorDir = path.join(outputDir, pluginDir, "executors");
 
   for (const [key, value] of Object.entries(context)) {
-    if (isTypeObject(value)) {
-      const typeName = value.name;
-      const sourceInfo = sourceTypeInfoMap?.get(typeName);
-      const variableName = sourceInfo?.exportName ?? toCamelCase(typeName);
+    if (isTableObject(value)) {
+      const tableName = value.name;
+      const sourceInfo = sourceTableInfoMap?.get(tableName);
+      const variableName = sourceInfo?.exportName ?? toCamelCase(tableName);
 
       // Check if it's a generated table
       let importPath: string;
-      let isGeneratedType = false;
+      let isGeneratedTable = false;
 
-      if (typeGenerationResult?.typeFilePaths.has(typeName)) {
+      if (tableGenerationResult?.tableFilePaths.has(tableName)) {
         // It's a generated table - import from plugin types directory
-        const typeFilePath = assertDefined(
-          typeGenerationResult.typeFilePaths.get(typeName),
-          "type file path missing",
+        const tableFilePath = assertDefined(
+          tableGenerationResult.tableFilePaths.get(tableName),
+          "table file path missing",
         );
-        const absoluteTypePath = path.join(outputDir, typeFilePath);
-        importPath = path.relative(executorDir, absoluteTypePath).replace(/\.ts$/, "");
+        const absoluteTablePath = path.join(outputDir, tableFilePath);
+        importPath = path.relative(executorDir, absoluteTablePath).replace(/\.ts$/, "");
         if (!importPath.startsWith(".")) {
           importPath = `./${importPath}`;
         }
-        isGeneratedType = true;
+        isGeneratedTable = true;
       } else if (sourceInfo) {
         // It's a user-defined table
         const sourceFilePath = sourceInfo.filePath;
@@ -244,35 +244,35 @@ function collectTypeImports(
       } else {
         // Fallback: generate relative path assumption
         // This might need adjustment based on actual project structure
-        importPath = `../../../../tailordb/${toKebabCase(typeName)}`;
+        importPath = `../../../../tailordb/${toKebabCase(tableName)}`;
       }
 
-      typeImports.set(key, {
+      tableImports.set(key, {
         variableName,
         importPath,
-        isGeneratedType,
+        isGeneratedTable,
       });
     }
   }
 
-  return typeImports;
+  return tableImports;
 }
 
 /**
  * Generate TypeScript code for context object.
  * @param context - Executor context values from plugin
- * @param typeImports - Resolved type import information for context keys
+ * @param tableImports - Resolved table import information for context keys
  * @returns TypeScript object literal code
  */
 function generateContextCode(
   context: PluginExecutorContext,
-  typeImports: Map<string, TypeImportInfo>,
+  tableImports: Map<string, TableImportInfo>,
 ): string {
   const entries: string[] = [];
 
   for (const [key, value] of Object.entries(context)) {
-    if (isTypeObject(value)) {
-      const importInfo = typeImports.get(key);
+    if (isTableObject(value)) {
+      const importInfo = tableImports.get(key);
       if (importInfo) {
         entries.push(`  ${key}: ${importInfo.variableName}`);
       }
@@ -289,7 +289,7 @@ function generateContextCode(
  * @param value - Value to inspect
  * @returns True if value is a table object with name and fields
  */
-function isTypeObject(value: unknown): value is { name: string; fields: Record<string, unknown> } {
+function isTableObject(value: unknown): value is { name: string; fields: Record<string, unknown> } {
   return (
     typeof value === "object" &&
     value !== null &&

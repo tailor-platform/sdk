@@ -23,13 +23,13 @@ describe("PluginManager", () => {
     const manager = new PluginManager([plugin]);
     await manager.processNamespacePlugins("main");
 
-    const generatedTypes = manager.getPluginGeneratedTypes();
-    expect(generatedTypes).toHaveLength(1);
-    expect(generatedTypes[0]).toMatchObject({
+    const generatedTables = manager.getPluginGeneratedTables();
+    expect(generatedTables).toHaveLength(1);
+    expect(generatedTables[0]).toMatchObject({
       pluginId: "namespace-plugin",
-      sourceTypeName: "(namespace)",
+      sourceTableName: "(namespace)",
       kind: "auditLog",
-      type: {
+      table: {
         name: "AuditLog",
       },
     });
@@ -60,7 +60,7 @@ describe("PluginManager", () => {
     await manager.processNamespacePlugins("main");
     await manager.processNamespacePlugins("analytics");
 
-    expect(manager.getPluginGeneratedTypes()).toHaveLength(1);
+    expect(manager.getPluginGeneratedTables()).toHaveLength(1);
     expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);
   });
 

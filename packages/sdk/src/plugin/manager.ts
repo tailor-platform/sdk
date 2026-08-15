@@ -30,17 +30,17 @@ export interface ProcessAttachmentContext {
 /**
  * Information about a plugin-generated table (for table file generation)
  */
-export interface PluginGeneratedTypeInfo {
+export interface PluginGeneratedTableInfo {
   /** Plugin ID that generated this table */
   pluginId: string;
   /** Plugin import path for resolving executor files */
   pluginImportPath: string;
   /** Source table name that triggered the plugin */
-  sourceTypeName: string;
+  sourceTableName: string;
   /** Kind identifier for this generated table */
   kind: string;
   /** The generated TailorDB table object */
-  type: PluginGeneratedType;
+  table: PluginGeneratedType;
   /** Namespace where this table was generated */
   namespace: string;
   /** Plugin config used to generate this table */
@@ -121,7 +121,7 @@ export interface PluginExecutorInfo {
   /** Namespace where the executor was generated */
   namespace: string;
   /** Source table name (for table-attached executors, undefined for namespace) */
-  sourceTypeName?: string;
+  sourceTableName?: string;
 }
 
 /**
@@ -130,8 +130,8 @@ export interface PluginExecutorInfo {
 export class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
   private generatedExecutors: PluginExecutorInfo[] = [];
-  private generatedTypes: PluginGeneratedTypeInfo[] = [];
-  private namespaceGeneratedTypeKeys: Set<string> = new Set();
+  private generatedTables: PluginGeneratedTableInfo[] = [];
+  private namespaceGeneratedTableKeys: Set<string> = new Set();
   private namespaceGeneratedExecutorKeys: Set<string> = new Set();
 
   /** Generated plugin executor file paths */
@@ -207,13 +207,13 @@ export class PluginManager {
         plugin.importPath,
         `plugin "${plugin.id}" missing importPath`,
       );
-      for (const [kind, type] of Object.entries(output.types)) {
-        this.generatedTypes.push({
+      for (const [kind, table] of Object.entries(output.types)) {
+        this.generatedTables.push({
           pluginId: context.pluginId,
           pluginImportPath: importPath,
-          sourceTypeName: context.type.name,
+          sourceTableName: context.type.name,
           kind,
-          type,
+          table,
           namespace: context.namespace,
           pluginConfig: plugin.pluginConfig,
         });
@@ -227,7 +227,7 @@ export class PluginManager {
           executor,
           pluginId: context.pluginId,
           namespace: context.namespace,
-          sourceTypeName: context.type.name,
+          sourceTableName: context.type.name,
         });
       }
     }
@@ -301,18 +301,18 @@ export class PluginManager {
           plugin.importPath,
           `plugin "${plugin.id}" missing importPath`,
         );
-        for (const [kind, type] of Object.entries(output.types)) {
-          const typeKey = `${pluginId}:${kind}:${type.name}`;
-          if (this.namespaceGeneratedTypeKeys.has(typeKey)) {
+        for (const [kind, table] of Object.entries(output.types)) {
+          const tableKey = `${pluginId}:${kind}:${table.name}`;
+          if (this.namespaceGeneratedTableKeys.has(tableKey)) {
             continue;
           }
-          this.namespaceGeneratedTypeKeys.add(typeKey);
-          this.generatedTypes.push({
+          this.namespaceGeneratedTableKeys.add(tableKey);
+          this.generatedTables.push({
             pluginId,
             pluginImportPath: importPath,
-            sourceTypeName: "(namespace)",
+            sourceTableName: "(namespace)",
             kind,
-            type,
+            table,
             namespace,
             pluginConfig: plugin.pluginConfig,
           });
@@ -451,8 +451,8 @@ export class PluginManager {
    * Get all plugin-generated tables
    * @returns Array of plugin-generated table info
    */
-  getPluginGeneratedTypes(): ReadonlyArray<PluginGeneratedTypeInfo> {
-    return this.generatedTypes;
+  getPluginGeneratedTables(): ReadonlyArray<PluginGeneratedTableInfo> {
+    return this.generatedTables;
   }
 
   /**
@@ -489,18 +489,18 @@ export class PluginManager {
    * @returns Generated executor file paths
    */
   generatePluginFiles(params: GeneratePluginFilesParams): string[] {
-    const { outputDir, sourceTypeInfoMap, configPath, typeGenerator, executorGenerator } = params;
+    const { outputDir, sourceTableInfoMap, configPath, tableGenerator, executorGenerator } = params;
 
     // Generate table files
-    const typeGenerationResult = typeGenerator(this.generatedTypes, outputDir);
+    const tableGenerationResult = tableGenerator(this.generatedTables, outputDir);
 
     // Generate executor files
     const pluginExecutors = this.getPluginGeneratedExecutorsWithImportPath();
     this.pluginExecutorFiles = executorGenerator(
       pluginExecutors,
       outputDir,
-      typeGenerationResult,
-      sourceTypeInfoMap,
+      tableGenerationResult,
+      sourceTableInfoMap,
       configPath,
     );
 
@@ -544,7 +544,7 @@ export class PluginManager {
 /**
  * Source info for user-defined tables
  */
-export type SourceTypeInfo = {
+export type SourceTableInfo = {
   filePath: string;
   exportName: string;
 };
@@ -552,9 +552,9 @@ export type SourceTypeInfo = {
 /**
  * Result of generating plugin table files
  */
-export interface PluginTypeGenerationResult {
+export interface PluginTableGenerationResult {
   /** Map of table name to generated file path (relative to outputDir) */
-  typeFilePaths: Map<string, string>;
+  tableFilePaths: Map<string, string>;
   /** List of all generated file paths (absolute) */
   generatedFiles: string[];
 }
@@ -566,20 +566,20 @@ export interface GeneratePluginFilesParams {
   /** Base output directory (e.g., .tailor/plugin) */
   outputDir: string;
   /** Map of source table names to their source info */
-  sourceTypeInfoMap: Map<string, SourceTypeInfo>;
+  sourceTableInfoMap: Map<string, SourceTableInfo>;
   /** Path to tailor.config.ts (used for resolving plugin import paths) */
   configPath: string;
   /** Function to generate table files */
-  typeGenerator: (
-    types: ReadonlyArray<PluginGeneratedTypeInfo>,
+  tableGenerator: (
+    tables: ReadonlyArray<PluginGeneratedTableInfo>,
     outputDir: string,
-  ) => PluginTypeGenerationResult;
+  ) => PluginTableGenerationResult;
   /** Function to generate executor files */
   executorGenerator: (
     executors: ReadonlyArray<PluginExecutorInfoExtended>,
     outputDir: string,
-    typeGenerationResult: PluginTypeGenerationResult,
-    sourceTypeInfoMap: Map<string, SourceTypeInfo>,
+    tableGenerationResult: PluginTableGenerationResult,
+    sourceTableInfoMap: Map<string, SourceTableInfo>,
     configPath: string,
   ) => string[];
 }
