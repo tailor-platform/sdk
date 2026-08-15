@@ -436,10 +436,12 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
 
 /**
  * Request fields never included in error dumps, by RPC method name.
- * `TestExecScript` carries the full script source in `code` and arbitrary
- * script input in `arg` — seed runs put user credentials there.
+ * `ExecScript` (and its deprecated alias `TestExecScript`) carries the full
+ * script source in `code` and arbitrary script input in `arg` — seed runs put
+ * user credentials there.
  */
 const REDACTED_REQUEST_FIELDS: Record<string, readonly string[]> = {
+  ExecScript: ["code", "arg"],
   TestExecScript: ["code", "arg"],
 };
 

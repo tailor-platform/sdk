@@ -291,9 +291,14 @@ describe("seedApplyCommand", () => {
 
     expect(result.exitCode).toBe(0);
     const idpCalls = sdk.executeScript.mock.calls
-      .map(([options]) => options as { name: string; arg?: { users?: unknown[] } })
+      .map(
+        ([options]) =>
+          options as { name: string; arg?: { users?: unknown[]; offset?: number; total?: number } },
+      )
       .filter((options) => options.name === "seed-idp-user.ts");
     expect(idpCalls.map((options) => options.arg?.users?.length)).toEqual([25, 25, 1]);
+    expect(idpCalls.map((options) => options.arg?.offset)).toEqual([0, 25, 50]);
+    expect(idpCalls.map((options) => options.arg?.total)).toEqual([51, 51, 51]);
     const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
     expect(loggedLines.some((line) => line.includes("Split into 3 chunks"))).toBe(true);
     expect(logger.out).toHaveBeenCalledWith({ success: true, processed: { _User: 51 } });
@@ -340,6 +345,57 @@ describe("seedApplyCommand", () => {
     expect(result.exitCode).toBe(1);
     const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
     expect(warnedLines.some((line) => line.includes("25/30") && line.includes("--upsert"))).toBe(
+      true,
+    );
+  });
+
+  test("stops and reports progress when a _User chunk execution fails without a result", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    let idpCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name !== "seed-idp-user.ts") {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: '{"success":true,"deleted":1}',
+            success: true,
+          });
+        }
+        idpCallCount += 1;
+        if (idpCallCount > 1) {
+          return Promise.resolve({
+            error: "execution failed",
+            logs: "",
+            result: "",
+            success: false,
+          });
+        }
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: true,
+            processed: arg?.users?.length ?? 0,
+            created: arg?.users?.length ?? 0,
+            updated: 0,
+            skipped: 0,
+            errors: [],
+          }),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(idpCallCount).toBe(2);
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(warnedLines.some((line) => line.includes("25/51") && line.includes("--upsert"))).toBe(
       true,
     );
   });

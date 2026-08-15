@@ -53,6 +53,10 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       let updated = 0;
       let skipped = 0;
       const upsert = input.upsert === true;
+      // Rows may arrive as one chunk of a larger dataset; report row numbers
+      // relative to the whole dataset so they match the source JSONL.
+      const offset = typeof input.offset === "number" ? input.offset : 0;
+      const total = typeof input.total === "number" ? input.total : input.users.length;
 
       for (let i = 0; i < input.users.length; i++) {
         try {
@@ -90,11 +94,11 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
             created++;
           }
           processed++;
-          console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
+          console.log(\`[_User] \${offset + i + 1}/\${total}: \${input.users[i].name}\`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          errors.push(\`Row \${i} (\${input.users[i].name}): \${message}\`);
-          console.error(\`[_User] Row \${i} failed: \${message}\`);
+          errors.push(\`Row \${offset + i} (\${input.users[i].name}): \${message}\`);
+          console.error(\`[_User] Row \${offset + i} failed: \${message}\`);
         }
       }
 

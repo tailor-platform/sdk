@@ -69,6 +69,7 @@ function parseExecutionResult(
   success: boolean;
   parsed: Record<string, unknown>;
   errors: string[];
+  executionFailed: boolean;
 } {
   logExecutionLogs(result.logs, indent);
 
@@ -77,6 +78,7 @@ function parseExecutionResult(
       success: false,
       parsed: {},
       errors: [result.error ?? "Script execution failed"],
+      executionFailed: true,
     };
   }
 
@@ -90,6 +92,7 @@ function parseExecutionResult(
       success: false,
       parsed: {},
       errors: [`Failed to parse result: ${message}`],
+      executionFailed: false,
     };
   }
 
@@ -99,10 +102,11 @@ function parseExecutionResult(
       success: false,
       parsed,
       errors: errors.length > 0 ? errors : ["Script reported failure"],
+      executionFailed: false,
     };
   }
 
-  return { success: true, parsed, errors: [] };
+  return { success: true, parsed, errors: [], executionFailed: false };
 }
 
 interface SeedResult {
@@ -201,14 +205,14 @@ interface IdpScriptRun {
   execution: SeedExecutionContext;
   scriptCode: string;
   scriptName: string;
-  arg?: { users: SeedData[string]; upsert?: boolean };
+  arg?: { users: SeedData[string]; upsert?: boolean; offset?: number; total?: number };
   indent: string;
   reportSuccess: (parsed: Record<string, unknown>) => void;
 }
 
 async function runIdpScript(
   params: IdpScriptRun,
-): Promise<{ success: boolean; parsed: Record<string, unknown> }> {
+): Promise<{ success: boolean; parsed: Record<string, unknown>; executionFailed: boolean }> {
   const { execution, scriptCode, scriptName, arg, indent, reportSuccess } = params;
 
   const result = await executeScript({
@@ -223,14 +227,14 @@ async function runIdpScript(
     },
   });
 
-  const { success, parsed, errors } = parseExecutionResult(result, indent);
+  const { success, parsed, errors, executionFailed } = parseExecutionResult(result, indent);
   reportSuccess(parsed);
   if (!success) {
     for (const error of errors) {
       logger.error(`${indent}${error}`, { mode: "plain" });
     }
   }
-  return { success, parsed };
+  return { success, parsed, executionFailed };
 }
 
 // The generated seed script upserts IdP users one call at a time (seconds per
@@ -282,29 +286,41 @@ async function seedIdpUser(
 
   let success = true;
   const totals = { processed: 0, created: 0, updated: 0 };
+  const warnInterruptedChunk = () => {
+    logger.warn(
+      `    _User: ${totals.processed}/${rows.length} rows confirmed processed before the failure ` +
+        `(${totals.created} created, ${totals.updated} updated). ` +
+        "The interrupted chunk may still have been applied server-side; " +
+        "re-run with --upsert to retry safely.",
+      { mode: "plain" },
+    );
+  };
   for (const [index, chunk] of chunks.entries()) {
     if (chunks.length > 1) {
       logger.log(styles.dim(`    Chunk ${index + 1}/${chunks.length}: ${chunk.length} rows`));
     }
-    let run: { success: boolean; parsed: Record<string, unknown> };
+    let run: { success: boolean; parsed: Record<string, unknown>; executionFailed: boolean };
     try {
       run = await runIdpScript({
         execution,
         scriptCode,
         scriptName: "seed-idp-user.ts",
-        arg: { users: chunk, upsert },
+        arg: {
+          users: chunk,
+          upsert,
+          offset: index * IDP_USER_CHUNK_SIZE,
+          total: rows.length,
+        },
         indent: "    ",
         reportSuccess: reportChunkCounts,
       });
     } catch (error) {
-      logger.warn(
-        `    _User: ${totals.processed}/${rows.length} rows confirmed processed before the failure ` +
-          `(${totals.created} created, ${totals.updated} updated). ` +
-          "The interrupted chunk may still have been applied server-side; " +
-          "re-run with --upsert to retry safely.",
-        { mode: "plain" },
-      );
+      warnInterruptedChunk();
       throw error;
+    }
+    if (run.executionFailed) {
+      warnInterruptedChunk();
+      return { success: false, processed: totals.processed };
     }
     totals.processed += readCount(run.parsed, "processed");
     totals.created += readCount(run.parsed, "created");

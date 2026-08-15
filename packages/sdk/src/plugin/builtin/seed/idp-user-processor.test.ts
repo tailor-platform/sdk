@@ -43,12 +43,12 @@ async function loadGeneratedMain(code: string): Promise<() => Promise<TruncateRe
  * @param code - Generated script source that exports `main`
  * @returns The exported `main` function
  */
-async function loadSeedMain(
-  code: string,
-): Promise<(input: { users: SeedUser[]; upsert?: boolean }) => Promise<SeedResult>> {
+type SeedInput = { users: SeedUser[]; upsert?: boolean; offset?: number; total?: number };
+
+async function loadSeedMain(code: string): Promise<(input: SeedInput) => Promise<SeedResult>> {
   const url = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
   const mod = (await import(/* @vite-ignore */ url)) as {
-    main: (input: { users: SeedUser[]; upsert?: boolean }) => Promise<SeedResult>;
+    main: (input: SeedInput) => Promise<SeedResult>;
   };
   return mod.main;
 }
@@ -191,6 +191,38 @@ describe("generateIdpSeedScriptCode", () => {
       updated: 0,
     });
     expect(result.errors).toHaveLength(1);
+  });
+
+  test("reports row numbers relative to the chunk offset", async () => {
+    stubIdp({ existing: { id: "existing-id" } });
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+    const result = await main({
+      users: [
+        { name: "fresh", password: "p1" },
+        { name: "existing", password: "p2" },
+      ],
+      offset: 25,
+      total: 51,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors[0]).toContain("Row 26 (existing)");
+  });
+
+  test("defaults to zero-based row numbers when no offset is provided", async () => {
+    stubIdp({ existing: { id: "existing-id" } });
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+    const result = await main({
+      users: [
+        { name: "fresh", password: "p1" },
+        { name: "existing", password: "p2" },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors[0]).toContain("Row 1 (existing)");
   });
 
   test("looks users up before creating or updating them when upsert is enabled", async () => {

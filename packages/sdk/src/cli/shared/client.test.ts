@@ -677,11 +677,14 @@ describe("errorHandlingInterceptor", () => {
     } as unknown as UnaryRequest;
   }
 
-  test("redacts script code and arg in TestExecScript error dumps", async () => {
+  test.each([
+    ["ExecScript", OperatorService.method.execScript],
+    ["TestExecScript", OperatorService.method.testExecScript],
+  ])("redacts script code and arg in %s error dumps", async (_label, method) => {
     const next = vi
       .fn()
       .mockRejectedValue(new ConnectError("context deadline exceeded", Code.DeadlineExceeded));
-    const req = makeReq(OperatorService.method.testExecScript, {
+    const req = makeReq(method, {
       workspaceId: "ws",
       name: "seed-idp-user.ts",
       code: "script-body",
