@@ -120,7 +120,7 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
       if (byteSize(JSON.stringify({ data: { [type]: [record] }, order: [type] })) > argBudget) {
         const singleRecordSize = byteSize(JSON.stringify(record));
         throw new Error(
-          `A single record in type "${type}" (${singleRecordSize} bytes) exceeds the message size budget ` +
+          `A single record in table "${type}" (${singleRecordSize} bytes) exceeds the message size budget ` +
             `(${argBudget} bytes). Consider increasing maxMessageSize or reducing the record size.`,
         );
       }
