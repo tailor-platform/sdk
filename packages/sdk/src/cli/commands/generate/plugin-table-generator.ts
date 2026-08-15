@@ -79,7 +79,7 @@ export function generatePluginTableFiles(
 
     const displayPath = path.relative(process.cwd(), filePath);
     logger.log(
-      `  Plugin Type File: ${styles.success(displayPath)} (${styles.dim(info.kind)}) from plugin ${styles.info(info.pluginId)}`,
+      `  Plugin Table File: ${styles.success(displayPath)} (${styles.dim(info.kind)}) from plugin ${styles.info(info.pluginId)}`,
     );
   }
 
