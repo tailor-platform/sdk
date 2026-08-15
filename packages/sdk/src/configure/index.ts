@@ -39,18 +39,18 @@ export type {
   Plugin,
   PluginConfigs,
   PluginOutput,
-  TypePluginOutput,
+  TablePluginOutput,
   NamespacePluginOutput,
-  PluginProcessContext,
+  PluginTableProcessContext,
   PluginNamespaceProcessContext,
   PluginAttachment,
-  PluginGeneratedType,
+  PluginGeneratedTable,
   PluginGeneratedResolver,
   PluginGeneratedExecutor,
   PluginGeneratedExecutorWithFile,
   PluginExecutorContext,
   PluginExecutorContextBase,
-  TailorDBTypeForPlugin,
+  TailorDBTableForPlugin,
 } from "#/plugin/types";
 
 // Generation-time hook context types for plugin development

@@ -10,7 +10,7 @@ import * as path from "pathe";
 import { logger, styles } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { PluginGeneratedTableInfo, PluginTableGenerationResult } from "#/plugin/manager";
-import type { PluginGeneratedType } from "#/plugin/types";
+import type { PluginGeneratedTable } from "#/plugin/types";
 
 type FieldMetadata = {
   required?: boolean;
@@ -118,7 +118,7 @@ function generateTableFileContent(info: PluginGeneratedTableInfo): string {
  * @param table - TailorDB table
  * @returns TypeScript code for fields object
  */
-function generateFieldsCode(table: PluginGeneratedType): string {
+function generateFieldsCode(table: PluginGeneratedTable): string {
   const fieldEntries: string[] = [];
 
   for (const [fieldName, field] of Object.entries(table.fields)) {

@@ -88,15 +88,15 @@ export type PluginRecord = { id: string } & Record<string, unknown>;
  * import { getDB } from "@tailor-platform/function-kysely-tailordb";
  *
  * interface MyContext {
- *   sourceType: TailorAnyDBType;
+ *   sourceTable: TailorAnyDBType;
  *   historyType: TailorAnyDBType;
  *   namespace: string;
  * }
  *
  * export default withPluginContext<MyContext>((ctx) =>
  *   createExecutor({
- *     name: `${ctx.sourceType.name.toLowerCase()}-on-create`,
- *     trigger: recordCreatedTrigger({ type: ctx.sourceType }),
+ *     name: `${ctx.sourceTable.name.toLowerCase()}-on-create`,
+ *     trigger: recordCreatedTrigger({ type: ctx.sourceTable }),
  *     operation: {
  *       kind: "function",
  *       body: async (args) => {

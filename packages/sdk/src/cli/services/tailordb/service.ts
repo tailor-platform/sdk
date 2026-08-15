@@ -158,52 +158,53 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
   /**
    * Process plugins for a table and add generated tables to rawTypes
-   * @param rawType - The raw TailorDB table being processed
+   * @param rawTable - The raw TailorDB table being processed
    * @param attachments - Plugin attachments for this table
    * @param sourceFilePath - The file path where the table was loaded from
    */
-  const processPluginsForType = async (
-    rawType: TailorDBTypeSchemaOutput,
+  const processPluginsForTable = async (
+    rawTable: TailorDBTypeSchemaOutput,
     attachments: PluginAttachment[],
     sourceFilePath: string,
   ): Promise<void> => {
     if (!pluginManager) return;
 
-    const { extendedType, generatedTypes, events } = await pluginManager.processAttachmentsForType({
-      rawType,
-      attachments,
-      namespace,
-    });
+    const { extendedTable, generatedTables, events } =
+      await pluginManager.processAttachmentsForTable({
+        rawTable,
+        attachments,
+        namespace,
+      });
 
-    if (extendedType) {
+    if (extendedTable) {
       assertDefined(
         rawTypes[sourceFilePath],
         `raw table entry missing for file: ${sourceFilePath}`,
-      )[rawType.name] = extendedType;
+      )[rawTable.name] = extendedTable;
     }
-    for (const gen of generatedTypes) {
+    for (const generatedTable of generatedTables) {
       // Plugin-generated tables don't have a source file.
       // Generators that need to import these tables should generate their own type files.
       const sourceInfo: TypeSourceInfoEntry = {
-        exportName: gen.typeName,
-        pluginId: gen.pluginId,
-        pluginImportPath: gen.pluginImportPath,
+        exportName: generatedTable.tableName,
+        pluginId: generatedTable.pluginId,
+        pluginImportPath: generatedTable.pluginImportPath,
         originalFilePath: sourceFilePath,
-        originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
-        generatedTypeKind: gen.kind,
-        pluginConfig: gen.pluginConfig,
+        originalExportName: typeSourceInfo[rawTable.name]?.exportName || rawTable.name,
+        generatedTableKind: generatedTable.kind,
+        pluginConfig: generatedTable.pluginConfig,
         namespace,
       };
-      registerRawType(sourceFilePath, gen.typeName, gen.type, sourceInfo);
+      registerRawType(sourceFilePath, generatedTable.tableName, generatedTable.table, sourceInfo);
     }
     for (const ev of events) {
       if (ev.kind === "extended") {
         logger.log(
-          `  Extended: ${styles.success(ev.typeName)} with ${styles.highlight(ev.fieldCount.toString())} fields by plugin ${styles.info(ev.pluginId)}`,
+          `  Extended: ${styles.success(ev.tableName)} with ${styles.highlight(ev.fieldCount.toString())} fields by plugin ${styles.info(ev.pluginId)}`,
         );
       } else {
         logger.log(
-          `  Generated: ${styles.success(ev.typeName)} by plugin ${styles.info(ev.pluginId)}`,
+          `  Generated: ${styles.success(ev.tableName)} by plugin ${styles.info(ev.pluginId)}`,
         );
       }
     }
@@ -250,7 +251,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             `  Plugin attachments: ${styles.info(rawType.plugins.map((p) => p.pluginId).join(", "))}`,
           );
 
-          await processPluginsForType(rawType, rawType.plugins, typeFile);
+          await processPluginsForTable(rawType, rawType.plugins, typeFile);
         }
       }
     } catch (error) {
@@ -319,49 +320,49 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         return { pluginId, config, output: result.output };
       });
 
-      const hasPreviousGeneratedTypes = Object.hasOwn(rawTypes, pluginGeneratedKey);
-      const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
-      const previousGeneratedTypeKeys = previousGeneratedTypes
-        ? Object.keys(previousGeneratedTypes)
+      const hasPreviousGeneratedTables = Object.hasOwn(rawTypes, pluginGeneratedKey);
+      const previousGeneratedTables = rawTypes[pluginGeneratedKey];
+      const previousGeneratedTableKeys = previousGeneratedTables
+        ? Object.keys(previousGeneratedTables)
         : [];
-      const hadPreviousGeneratedTypes = previousGeneratedTypeKeys.length > 0;
-      if (hasPreviousGeneratedTypes) {
-        for (const typeName of previousGeneratedTypeKeys) {
-          delete typeSourceInfo[typeName];
+      const hadPreviousGeneratedTables = previousGeneratedTableKeys.length > 0;
+      if (hasPreviousGeneratedTables) {
+        for (const tableName of previousGeneratedTableKeys) {
+          delete typeSourceInfo[tableName];
         }
       }
       rawTypes[pluginGeneratedKey] = createRawTypesByName();
 
-      let hasGeneratedTypes = false;
+      let hasGeneratedTables = false;
       for (const { pluginId, config, output } of successfulResults) {
         // Add generated tables to rawTypes
-        for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
+        for (const [kind, generatedTable] of Object.entries(output.tables ?? {})) {
           const sourceInfo: TypeSourceInfoEntry = {
-            exportName: generatedType.name,
+            exportName: generatedTable.name,
             pluginId,
             pluginImportPath: pluginManager.getPluginImportPath(pluginId) ?? "",
             originalFilePath: "",
             originalExportName: "",
-            generatedTypeKind: kind,
+            generatedTableKind: kind,
             pluginConfig: config,
             namespace,
           };
           registerRawType(
             pluginGeneratedKey,
-            generatedType.name,
-            generatedType as TailorDBTypeSchemaOutput,
+            generatedTable.name,
+            generatedTable as TailorDBTypeSchemaOutput,
             sourceInfo,
           );
-          hasGeneratedTypes = true;
+          hasGeneratedTables = true;
 
           logger.log(
-            `  Generated: ${styles.success(generatedType.name)} by namespace plugin ${styles.info(pluginId)}`,
+            `  Generated: ${styles.success(generatedTable.name)} by namespace plugin ${styles.info(pluginId)}`,
           );
         }
       }
 
       // Re-parse tables to include namespace plugin tables
-      if (hasGeneratedTypes || hadPreviousGeneratedTypes) {
+      if (hasGeneratedTables || hadPreviousGeneratedTables) {
         doParseTypes();
         validateRequiredPermissions();
       }
