@@ -1136,7 +1136,7 @@ describe("formatTailorDBResourceChangeEntries", () => {
           action: "create",
           symbol: symbols.create,
           name: "Project",
-          labels: ["type", "gqlPermission"],
+          labels: ["table", "gqlPermission"],
         },
       ],
     },
@@ -1150,7 +1150,7 @@ describe("formatTailorDBResourceChangeEntries", () => {
         replaces: [],
       },
       expected: [
-        { action: "create", symbol: symbols.create, name: "Project", labels: ["type"] },
+        { action: "create", symbol: symbols.create, name: "Project", labels: ["table"] },
         { action: "update", symbol: symbols.update, name: "Project", labels: ["gqlPermission"] },
       ],
     },
