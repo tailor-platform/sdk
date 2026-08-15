@@ -22,7 +22,7 @@ export function processLinesDb(type: TailorDBType, source: TypeSourceInfoEntry):
 
   // User-defined table
   if (!source.filePath) {
-    throw new Error(`Missing source info for type ${type.name}`);
+    throw new Error(`Missing source info for table ${type.name}`);
   }
   if (!source.exportName) {
     throw new Error(`Missing export name for type ${type.name}`);
@@ -160,7 +160,7 @@ function generateSchemaOptions(
 }
 
 /**
- * Generates the schema file content for lines-db (for user-defined types with import)
+ * Generates the schema file content for lines-db (for user-defined tables with import)
  * @param metadata - lines-db metadata
  * @param importPath - Import path for the TailorDB table
  * @returns Schema file contents

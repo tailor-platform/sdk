@@ -1519,7 +1519,7 @@ export function isBreakingIndexChange(
 /**
  * Compare table-level indexes
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {Record<string, SnapshotIndexConfig> | undefined} oldIndexes - Previous indexes
  * @param {Record<string, SnapshotIndexConfig> | undefined} newIndexes - Current indexes
  * @returns {void}
@@ -1600,7 +1600,7 @@ function compareIndexes(
 /**
  * Compare table-level file fields
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {Record<string, string> | undefined} oldFiles - Previous file fields
  * @param {Record<string, string> | undefined} newFiles - Current file fields
  * @returns {void}
@@ -1662,7 +1662,7 @@ function compareFiles(
 /**
  * Compare table-level relationships
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {"forward" | "backward"} relationshipType - Relationship direction to compare
  * @param {Record<string, SnapshotRelationship> | undefined} oldRelationships - Previous relationships
  * @param {Record<string, SnapshotRelationship> | undefined} newRelationships - Current relationships
@@ -1741,7 +1741,7 @@ function compareRelationships(
 /**
  * Compare table-level permissions
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {SnapshotRecordPermission | undefined} oldRecordPerm - Previous record permission
  * @param {SnapshotRecordPermission | undefined} newRecordPerm - Current record permission
  * @param {SnapshotGqlPermission | undefined} oldGqlPerm - Previous GQL permission

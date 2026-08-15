@@ -7,7 +7,7 @@ import type { SchemaSnapshot, SnapshotFieldConfig, TailorDBSnapshotType } from "
 /**
  * Parsed-table shape consumed by createSnapshotFromLocalTypes / createSnapshotType;
  * produces the same snapshot table as {@link snapshotType}.
- * @param {string} name - Type name
+ * @param {string} name - Table name
  * @returns {TailorDBType} Minimal parsed TailorDB table
  */
 export function parsedType(name: string): TailorDBType {
@@ -40,7 +40,7 @@ export function snapshotField(
 
 /**
  * Snapshot-shaped counterpart of {@link parsedType}
- * @param {string} name - Type name
+ * @param {string} name - Table name
  * @returns {TailorDBSnapshotType} Minimal snapshot table
  */
 export function snapshotType(name: string): TailorDBSnapshotType {

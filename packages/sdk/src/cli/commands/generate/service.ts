@@ -257,7 +257,7 @@ export function createGenerationManager(params: {
 
       const app = application;
 
-      // Load TailorDB tables (includes plugin-generated types)
+      // Load TailorDB tables (includes plugin-generated tables)
       await withSpan("generate.loadTailorDBTypes", async (span) => {
         span.setAttribute("generate.namespace_count", app.tailorDBServices.length);
         for (const db of app.tailorDBServices) {
