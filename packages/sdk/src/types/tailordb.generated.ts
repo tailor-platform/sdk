@@ -1044,7 +1044,18 @@ export type TailorDBTypeRaw = {
   name: string;
   fields: {
     [x: string]: {
-      type: string;
+      type:
+        | "uuid"
+        | "string"
+        | "boolean"
+        | "integer"
+        | "float"
+        | "decimal"
+        | "enum"
+        | "date"
+        | "datetime"
+        | "time"
+        | "nested";
       fields?: any | undefined;
       metadata: {
         required?: boolean | undefined | undefined;
