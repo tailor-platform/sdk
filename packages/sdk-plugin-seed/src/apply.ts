@@ -265,36 +265,37 @@ async function seedIdpUser(
     logger.log(styles.dim(`    Split into ${chunks.length} chunks`));
   }
 
+  const reportChunkCounts = (result: Record<string, unknown>) => {
+    const created = readCount(result, "created");
+    const updated = readCount(result, "updated");
+    const skipped = readCount(result, "skipped");
+    const processed = readCount(result, "processed");
+    if (created === 0 && updated === 0 && skipped === 0) {
+      return;
+    }
+    const skippedSuffix = skipped > 0 ? `, ${skipped} skipped` : "";
+    const message = upsert
+      ? `${created} created, ${updated} updated${skippedSuffix}`
+      : `${processed} rows processed`;
+    logger.log(styles.success(`    ✓ _User: ${message}`));
+  };
+
   let success = true;
-  const totals = { processed: 0, created: 0, updated: 0, skipped: 0 };
+  const totals = { processed: 0, created: 0, updated: 0 };
   for (const [index, chunk] of chunks.entries()) {
     if (chunks.length > 1) {
       logger.log(styles.dim(`    Chunk ${index + 1}/${chunks.length}: ${chunk.length} rows`));
     }
-    let chunkSuccess: boolean;
-    let parsed: Record<string, unknown>;
+    let run: { success: boolean; parsed: Record<string, unknown> };
     try {
-      ({ success: chunkSuccess, parsed } = await runIdpScript({
+      run = await runIdpScript({
         execution,
         scriptCode,
         scriptName: "seed-idp-user.ts",
         arg: { users: chunk, upsert },
         indent: "    ",
-        reportSuccess: (result) => {
-          const created = readCount(result, "created");
-          const updated = readCount(result, "updated");
-          const skipped = readCount(result, "skipped");
-          const processed = readCount(result, "processed");
-          if (created === 0 && updated === 0 && skipped === 0) {
-            return;
-          }
-          const skippedSuffix = skipped > 0 ? `, ${skipped} skipped` : "";
-          const message = upsert
-            ? `${created} created, ${updated} updated${skippedSuffix}`
-            : `${processed} rows processed`;
-          logger.log(styles.success(`    ✓ _User: ${message}`));
-        },
-      }));
+        reportSuccess: reportChunkCounts,
+      });
     } catch (error) {
       logger.warn(
         `    _User: ${totals.processed}/${rows.length} rows confirmed processed before the failure ` +
@@ -305,11 +306,10 @@ async function seedIdpUser(
       );
       throw error;
     }
-    totals.processed += readCount(parsed, "processed");
-    totals.created += readCount(parsed, "created");
-    totals.updated += readCount(parsed, "updated");
-    totals.skipped += readCount(parsed, "skipped");
-    if (!chunkSuccess) {
+    totals.processed += readCount(run.parsed, "processed");
+    totals.created += readCount(run.parsed, "created");
+    totals.updated += readCount(run.parsed, "updated");
+    if (!run.success) {
       success = false;
     }
   }
