@@ -5,7 +5,7 @@ export interface SelectEntitiesOptions {
   hasIdpUser: boolean;
   /** Namespace filter (mutually exclusive with `types`). */
   namespace?: string | undefined;
-  /** Explicit type names to process (mutually exclusive with `namespace`). */
+  /** Explicit entity names to process (mutually exclusive with `namespace`). */
   types: string[];
   /** Whether to exclude the IdP `_User` entity. */
   skipIdp: boolean;
@@ -21,7 +21,7 @@ export interface EntitySelection {
 }
 
 /**
- * Resolve which entities a seed run should process from the namespace/type
+ * Resolve which entities a seed run should process from the namespace/entity
  * filters, mirroring the selection rules of the generated seed script.
  * @param options - Selection filters and available entities
  * @returns The resolved selection and any warnings

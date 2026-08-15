@@ -37,7 +37,7 @@ describe("selectEntities", () => {
     expect(skippedIdp.hasEntitiesToProcess).toBe(false);
   });
 
-  test("rejects combining --namespace with type names", () => {
+  test("rejects combining --namespace with entity names", () => {
     expect(() =>
       selectEntities({
         namespaceEntities,
