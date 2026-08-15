@@ -435,17 +435,30 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
 }
 
 /**
+ * Request fields never included in error dumps, by RPC method name.
+ * `TestExecScript` carries the full script source in `code` and arbitrary
+ * script input in `arg` — seed runs put user credentials there.
+ */
+const REDACTED_REQUEST_FIELDS: Record<string, readonly string[]> = {
+  TestExecScript: ["code", "arg"],
+};
+
+/**
  * Create an interceptor that enhances error messages from the Operator API.
+ * @internal
  * @returns Error handling interceptor
  */
-function errorHandlingInterceptor(): Interceptor {
+export function errorHandlingInterceptor(): Interceptor {
   return (next) => async (req) => {
     try {
       return await next(req);
     } catch (error) {
       if (error instanceof ConnectError) {
         const { operation, resourceType } = parseMethodName(req.method.name);
-        const requestParams = formatRequestParams(req.message);
+        const requestParams = formatRequestParams(
+          req.message,
+          REDACTED_REQUEST_FIELDS[req.method.name],
+        );
 
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
@@ -494,14 +507,24 @@ function bigIntReplacer(_key: string, value: unknown): unknown {
 /**
  * @internal
  * @param message - Request message to format
+ * @param redactFields - Top-level field names to replace with a placeholder
  * @returns Pretty-printed JSON or error placeholder
  */
-export function formatRequestParams(message: unknown): string {
+export function formatRequestParams(message: unknown, redactFields?: readonly string[]): string {
   try {
-    if (message && typeof message === "object" && "toJson" in message) {
-      return JSON.stringify((message as { toJson: () => unknown }).toJson(), bigIntReplacer, 2);
+    let value =
+      message && typeof message === "object" && "toJson" in message
+        ? (message as { toJson: () => unknown }).toJson()
+        : message;
+    if (redactFields && value && typeof value === "object" && !Array.isArray(value)) {
+      value = Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [
+          key,
+          redactFields.includes(key) ? "(redacted)" : entry,
+        ]),
+      );
     }
-    return JSON.stringify(message, bigIntReplacer, 2);
+    return JSON.stringify(value, bigIntReplacer, 2);
   } catch {
     return "(unable to serialize request)";
   }

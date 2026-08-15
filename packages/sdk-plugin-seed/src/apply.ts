@@ -233,6 +233,16 @@ async function runIdpScript(
   return { success, parsed };
 }
 
+// The generated seed script upserts IdP users one call at a time (seconds per
+// row), so each TestExecScript request must carry few enough rows to finish
+// within the operator API deadline. Byte-size chunking cannot capture this.
+const IDP_USER_CHUNK_SIZE = 25;
+
+function readCount(result: Record<string, unknown>, key: string): number {
+  const value = result[key];
+  return typeof value === "number" ? value : 0;
+}
+
 async function seedIdpUser(
   execution: SeedExecutionContext,
   scriptCode: string,
@@ -247,31 +257,63 @@ async function seedIdpUser(
   }
   logger.log(styles.dim(`    Processing ${rows.length} _User records...`));
 
-  const { success, parsed } = await runIdpScript({
-    execution,
-    scriptCode,
-    scriptName: "seed-idp-user.ts",
-    arg: { users: rows, upsert },
-    indent: "    ",
-    reportSuccess: (result) => {
-      const created = typeof result.created === "number" ? result.created : 0;
-      const updated = typeof result.updated === "number" ? result.updated : 0;
-      const skipped = typeof result.skipped === "number" ? result.skipped : 0;
-      const processed = typeof result.processed === "number" ? result.processed : 0;
-      if (created === 0 && updated === 0 && skipped === 0) {
-        return;
-      }
-      const skippedSuffix = skipped > 0 ? `, ${skipped} skipped` : "";
-      const message = upsert
-        ? `${created} created, ${updated} updated${skippedSuffix}`
-        : `${processed} rows processed`;
-      logger.log(styles.success(`    ✓ _User: ${message}`));
-    },
-  });
-  return {
-    success,
-    processed: typeof parsed.processed === "number" ? parsed.processed : 0,
-  };
+  const chunks: SeedData[string][] = [];
+  for (let i = 0; i < rows.length; i += IDP_USER_CHUNK_SIZE) {
+    chunks.push(rows.slice(i, i + IDP_USER_CHUNK_SIZE));
+  }
+  if (chunks.length > 1) {
+    logger.log(styles.dim(`    Split into ${chunks.length} chunks`));
+  }
+
+  let success = true;
+  const totals = { processed: 0, created: 0, updated: 0, skipped: 0 };
+  for (const [index, chunk] of chunks.entries()) {
+    if (chunks.length > 1) {
+      logger.log(styles.dim(`    Chunk ${index + 1}/${chunks.length}: ${chunk.length} rows`));
+    }
+    let chunkSuccess: boolean;
+    let parsed: Record<string, unknown>;
+    try {
+      ({ success: chunkSuccess, parsed } = await runIdpScript({
+        execution,
+        scriptCode,
+        scriptName: "seed-idp-user.ts",
+        arg: { users: chunk, upsert },
+        indent: "    ",
+        reportSuccess: (result) => {
+          const created = readCount(result, "created");
+          const updated = readCount(result, "updated");
+          const skipped = readCount(result, "skipped");
+          const processed = readCount(result, "processed");
+          if (created === 0 && updated === 0 && skipped === 0) {
+            return;
+          }
+          const skippedSuffix = skipped > 0 ? `, ${skipped} skipped` : "";
+          const message = upsert
+            ? `${created} created, ${updated} updated${skippedSuffix}`
+            : `${processed} rows processed`;
+          logger.log(styles.success(`    ✓ _User: ${message}`));
+        },
+      }));
+    } catch (error) {
+      logger.warn(
+        `    _User: ${totals.processed}/${rows.length} rows confirmed processed before the failure ` +
+          `(${totals.created} created, ${totals.updated} updated). ` +
+          "The interrupted chunk may still have been applied server-side; " +
+          "re-run with --upsert to retry safely.",
+        { mode: "plain" },
+      );
+      throw error;
+    }
+    totals.processed += readCount(parsed, "processed");
+    totals.created += readCount(parsed, "created");
+    totals.updated += readCount(parsed, "updated");
+    totals.skipped += readCount(parsed, "skipped");
+    if (!chunkSuccess) {
+      success = false;
+    }
+  }
+  return { success, processed: totals.processed };
 }
 
 async function truncateIdpUser(

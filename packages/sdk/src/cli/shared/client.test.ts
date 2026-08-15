@@ -9,6 +9,7 @@ import {
   closeConnectionPool,
   concurrencyLimitInterceptor,
   createTransport,
+  errorHandlingInterceptor,
   fetchAll,
   fetchAllTolerant,
   fetchMachineUserToken,
@@ -655,6 +656,69 @@ describe("parseMethodName", () => {
   });
 });
 
+describe("errorHandlingInterceptor", () => {
+  /**
+   * Build a minimal unary request bound to a real OperatorService method with
+   * the given request message.
+   * @param method - OperatorService method descriptor to bind the request to
+   * @param message - Request message to attach
+   * @returns A minimal unary request usable by the interceptor under test
+   */
+  function makeReq(
+    method: (typeof OperatorService.method)[keyof typeof OperatorService.method],
+    message: Record<string, unknown>,
+  ) {
+    return {
+      stream: false,
+      service: OperatorService,
+      method,
+      header: new Headers(),
+      message,
+    } as unknown as UnaryRequest;
+  }
+
+  test("redacts script code and arg in TestExecScript error dumps", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValue(new ConnectError("context deadline exceeded", Code.DeadlineExceeded));
+    const req = makeReq(OperatorService.method.testExecScript, {
+      workspaceId: "ws",
+      name: "seed-idp-user.ts",
+      code: "script-body",
+      arg: '{"users":[{"name":"ada","password":"s3cret"}]}',
+    });
+
+    const error = await errorHandlingInterceptor()(next)(req).then(
+      () => {
+        throw new Error("expected rejection");
+      },
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(ConnectError);
+    const message = (error as ConnectError).message;
+    expect(message).toContain('"code": "(redacted)"');
+    expect(message).toContain('"arg": "(redacted)"');
+    expect(message).toContain('"workspaceId": "ws"');
+    expect(message).not.toContain("script-body");
+    expect(message).not.toContain("s3cret");
+  });
+
+  test("keeps request fields for methods without sensitive fields", async () => {
+    const next = vi.fn().mockRejectedValue(new ConnectError("boom", Code.Internal));
+    const req = makeReq(OperatorService.method.getWorkspace, { workspaceId: "ws" });
+
+    const error = await errorHandlingInterceptor()(next)(req).then(
+      () => {
+        throw new Error("expected rejection");
+      },
+      (e: unknown) => e,
+    );
+
+    expect((error as ConnectError).message).toContain('"workspaceId": "ws"');
+  });
+});
+
 describe("formatRequestParams", () => {
   test("serializes plain objects to JSON", () => {
     const obj = { workspaceId: "test-id", name: "test-name" };
@@ -686,6 +750,32 @@ describe("formatRequestParams", () => {
     expect(formatRequestParams("string")).toBe('"string"');
     expect(formatRequestParams(123)).toBe("123");
     expect(formatRequestParams(true)).toBe("true");
+  });
+
+  test("redacts requested top-level fields", () => {
+    const result = formatRequestParams({ workspaceId: "ws", code: "script-body", arg: "{}" }, [
+      "code",
+      "arg",
+    ]);
+    expect(result).toContain('"code": "(redacted)"');
+    expect(result).toContain('"arg": "(redacted)"');
+    expect(result).toContain('"workspaceId": "ws"');
+    expect(result).not.toContain("script-body");
+  });
+
+  test("redacts fields on the toJson result", () => {
+    const protoMessage = {
+      toJson: () => ({ workspaceId: "ws", code: "script-body" }),
+    };
+    const result = formatRequestParams(protoMessage, ["code"]);
+    expect(result).toContain('"code": "(redacted)"');
+    expect(result).toContain('"workspaceId": "ws"');
+  });
+
+  test("does not add absent redact fields", () => {
+    expect(formatRequestParams({ workspaceId: "ws" }, ["code"])).toBe(
+      JSON.stringify({ workspaceId: "ws" }, null, 2),
+    );
   });
 
   test("returns error message for circular references", () => {
