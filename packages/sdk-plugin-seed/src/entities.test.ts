@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { selectEntities } from "./entities";
 
-const namespaceEntities = {
+const namespaceTables = {
   "main-db": ["User", "Order"],
   "sub-db": ["Event"],
 };
@@ -9,9 +9,9 @@ const namespaceEntities = {
 describe("selectEntities", () => {
   test("processes everything when no filter is given", () => {
     const selection = selectEntities({
-      namespaceEntities,
+      namespaceTables,
       hasIdpUser: true,
-      types: [],
+      entities: [],
       skipIdp: false,
     });
     expect(selection.entitiesToProcess).toBeNull();
@@ -21,17 +21,17 @@ describe("selectEntities", () => {
 
   test("reports when the resolved selection has no seed targets", () => {
     const empty = selectEntities({
-      namespaceEntities: {},
+      namespaceTables: {},
       hasIdpUser: false,
-      types: [],
+      entities: [],
       skipIdp: false,
     });
     expect(empty.hasEntitiesToProcess).toBe(false);
 
     const skippedIdp = selectEntities({
-      namespaceEntities: {},
+      namespaceTables: {},
       hasIdpUser: true,
-      types: [],
+      entities: [],
       skipIdp: true,
     });
     expect(skippedIdp.hasEntitiesToProcess).toBe(false);
@@ -40,21 +40,21 @@ describe("selectEntities", () => {
   test("rejects combining --namespace with entity names", () => {
     expect(() =>
       selectEntities({
-        namespaceEntities,
+        namespaceTables,
         hasIdpUser: false,
         namespace: "main-db",
-        types: ["User"],
+        entities: ["User"],
         skipIdp: false,
       }),
     ).toThrow(/mutually exclusive/);
   });
 
-  test("selects all types of the given namespace", () => {
+  test("selects all tables of the given namespace", () => {
     const selection = selectEntities({
-      namespaceEntities,
+      namespaceTables,
       hasIdpUser: true,
       namespace: "main-db",
-      types: [],
+      entities: [],
       skipIdp: false,
     });
     expect(selection.entitiesToProcess).toEqual(["User", "Order"]);
@@ -63,10 +63,10 @@ describe("selectEntities", () => {
   test("rejects an unknown namespace with available names", () => {
     expect(() =>
       selectEntities({
-        namespaceEntities,
+        namespaceTables,
         hasIdpUser: false,
         namespace: "nope",
-        types: [],
+        entities: [],
         skipIdp: false,
       }),
     ).toThrow(/Available namespaces: main-db, sub-db/);
@@ -74,18 +74,18 @@ describe("selectEntities", () => {
 
   test("accepts _User as an entity only when the config has an IdP user", () => {
     const selection = selectEntities({
-      namespaceEntities,
+      namespaceTables,
       hasIdpUser: true,
-      types: ["_User", "User"],
+      entities: ["_User", "User"],
       skipIdp: false,
     });
     expect(selection.entitiesToProcess).toEqual(["_User", "User"]);
 
     expect(() =>
       selectEntities({
-        namespaceEntities,
+        namespaceTables,
         hasIdpUser: false,
-        types: ["_User"],
+        entities: ["_User"],
         skipIdp: false,
       }),
     ).toThrow(/entities were not found: _User/);
@@ -93,17 +93,17 @@ describe("selectEntities", () => {
 
   test("--skip-idp removes _User from the selection", () => {
     const explicit = selectEntities({
-      namespaceEntities,
+      namespaceTables,
       hasIdpUser: true,
-      types: ["_User", "User"],
+      entities: ["_User", "User"],
       skipIdp: true,
     });
     expect(explicit.entitiesToProcess).toEqual(["User"]);
 
     const all = selectEntities({
-      namespaceEntities,
+      namespaceTables,
       hasIdpUser: true,
-      types: [],
+      entities: [],
       skipIdp: true,
     });
     expect(all.entitiesToProcess).toEqual(["User", "Order", "Event"]);
@@ -111,10 +111,10 @@ describe("selectEntities", () => {
 
   test("warns that --skip-idp is redundant with --namespace", () => {
     const selection = selectEntities({
-      namespaceEntities,
+      namespaceTables,
       hasIdpUser: true,
       namespace: "main-db",
-      types: [],
+      entities: [],
       skipIdp: true,
     });
     expect(selection.warnings).toEqual([
