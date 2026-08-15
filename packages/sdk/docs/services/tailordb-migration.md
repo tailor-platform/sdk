@@ -471,19 +471,19 @@ Executors are omitted from the baseline deployment so loading fixture or cloned 
 
 ### Seed mode
 
-Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing seed types, then populate its `data/*.jsonl` files:
+Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing the seeded tables, then populate its `data/*.jsonl` files:
 
 ```bash
 tailor tailordb migration test --data seed
 ```
 
-Rows are loaded only for types present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing type files are treated as empty. IdP `_User` fixtures are not loaded by this command.
+Rows are loaded only for tables present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. A table with no data file is treated as empty. IdP `_User` fixtures are not loaded by this command.
 
 Use `--machine-user` to override the seed plugin's `machineUserName`, the namespace migration setting, and the first configured Auth machine user for seed and assertion execution.
 
 ### Clone mode
 
-Clone mode copies TailorDB records from the source workspace after the identical application, namespace names, and pre-migration schemas exist in the target. For namespaces without migration history, the command reproduces the deployed source schema rather than uncommitted local type changes:
+Clone mode copies TailorDB records from the source workspace after the identical application, namespace names, and pre-migration schemas exist in the target. For namespaces without migration history, the command reproduces the deployed source schema rather than uncommitted local table changes:
 
 ```bash
 tailor tailordb migration test --data clone
@@ -595,7 +595,7 @@ Before running it:
 
 1. Apply the latest migration to every environment. The CLI verifies the connected workspace, but it cannot inspect other workspaces.
 2. Commit or otherwise preserve the existing migration history. Files after `0000`, including `migrate.ts` and `db.ts`, disappear from the working tree; Git history retains committed files.
-3. Make sure local type changes have been captured with `tailor tailordb migration generate`.
+3. Make sure local table changes have been captured with `tailor tailordb migration generate`.
 
 Then re-baseline one namespace:
 
@@ -603,7 +603,7 @@ Then re-baseline one namespace:
 tailor tailordb migration rebaseline --namespace tailordb
 ```
 
-The command validates the migration files, verifies that replaying the latest migration exactly reproduces the local types, and checks that the connected workspace is at that latest migration with no schema drift. After confirmation, it replaces the local history with the reconstructed baseline, records a new migration history ID in both `0000/schema.json` and remote metadata, and resets the connected workspace's `sdk-migration` label to `0000`. Use `--yes` only after arranging the same operational preconditions in non-interactive automation.
+The command validates the migration files, verifies that replaying the latest migration exactly reproduces the local table definitions, and checks that the connected workspace is at that latest migration with no schema drift. After confirmation, it replaces the local history with the reconstructed baseline, records a new migration history ID in both `0000/schema.json` and remote metadata, and resets the connected workspace's `sdk-migration` label to `0000`. Use `--yes` only after arranging the same operational preconditions in non-interactive automation.
 
 Commit the resulting `migrations/` change before generating any new migrations. For another environment still carrying the exact checkpoint and history ID that the new baseline replaced, the next `tailor deploy` checks whether its remote schema exactly matches the new `0000`. If it does, deploy offers to reset the checkpoint to `0000` and move the environment to the new history ID before applying any later local migrations. A markerless history is eligible only for the first rebaseline, at the exact migration recorded as replaced. Any other checkpoint or history ID is rejected without changing remote metadata, even if its schema happens to match the baseline.
 
