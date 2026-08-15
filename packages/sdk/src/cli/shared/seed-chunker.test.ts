@@ -52,7 +52,7 @@ describe("chunkSeedData", () => {
     expect(chunks).toHaveLength(0);
   });
 
-  test("returns empty array when all types have empty arrays", () => {
+  test("returns empty array when all tables have empty arrays", () => {
     const chunks = chunkSeedData({
       data: { User: [], Order: [] },
       order: ["User", "Order"],

@@ -16,7 +16,7 @@ export interface PluginExecutor {
   executor: Executor;
   /** Plugin ID that generated this executor */
   pluginId: string;
-  /** Source type name (for type-attached executors) */
+  /** Source table name (for table-attached executors) */
   sourceTypeName?: string;
 }
 

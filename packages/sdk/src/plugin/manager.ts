@@ -28,7 +28,7 @@ export interface ProcessAttachmentContext {
 }
 
 /**
- * Information about a plugin-generated table (for type file generation)
+ * Information about a plugin-generated table (for table file generation)
  */
 export interface PluginGeneratedTypeInfo {
   /** Plugin ID that generated this table */
@@ -56,7 +56,7 @@ export interface PluginExecutorInfoExtended extends PluginExecutorInfo {
 }
 
 /**
- * Result of processing a type-attached plugin
+ * Result of processing a table-attached plugin
  */
 export type ProcessAttachmentResult =
   | { success: true; output: TypePluginOutput }
@@ -120,7 +120,7 @@ export interface PluginExecutorInfo {
   pluginId: string;
   /** Namespace where the executor was generated */
   namespace: string;
-  /** Source table name (for type-attached executors, undefined for namespace) */
+  /** Source table name (for table-attached executors, undefined for namespace) */
   sourceTypeName?: string;
 }
 
@@ -150,7 +150,7 @@ export class PluginManager {
 
   /**
    * Process a single plugin attachment on a raw TailorDBType.
-   * This method is called during type loading before parsing.
+   * This method is called during table loading before parsing.
    * @param context - Context containing the raw table, config, namespace, and plugin ID
    * @returns Result with plugin output on success, or error message on failure
    */
@@ -175,11 +175,11 @@ export class PluginManager {
       };
     }
 
-    // Check if plugin supports type-attached processing
+    // Check if plugin supports table-attached processing
     if (!plugin.onTypeLoaded) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" does not support type-attached processing (missing onTypeLoaded method). Use onNamespaceLoaded via definePlugins() instead.`,
+        error: `Plugin "${plugin.id}" does not support table-attached processing (missing onTypeLoaded method). Use onNamespaceLoaded via definePlugins() instead.`,
       };
     }
 
@@ -200,7 +200,7 @@ export class PluginManager {
       };
     }
 
-    // Collect generated types
+    // Collect generated tables
     if (output.types && Object.keys(output.types).length > 0) {
       // importPath is guaranteed by schema validation for plugins with definition-time hooks
       const importPath = assertDefined(
@@ -484,14 +484,14 @@ export class PluginManager {
   }
 
   /**
-   * Generate plugin files (types and executors) and store the executor file paths.
+   * Generate plugin files (tables and executors) and store the executor file paths.
    * @param params - Parameters for file generation
    * @returns Generated executor file paths
    */
   generatePluginFiles(params: GeneratePluginFilesParams): string[] {
     const { outputDir, sourceTypeInfoMap, configPath, typeGenerator, executorGenerator } = params;
 
-    // Generate type files
+    // Generate table files
     const typeGenerationResult = typeGenerator(this.generatedTypes, outputDir);
 
     // Generate executor files
@@ -542,7 +542,7 @@ export class PluginManager {
 }
 
 /**
- * Source info for user-defined types
+ * Source info for user-defined tables
  */
 export type SourceTypeInfo = {
   filePath: string;
@@ -550,7 +550,7 @@ export type SourceTypeInfo = {
 };
 
 /**
- * Result of generating plugin type files
+ * Result of generating plugin table files
  */
 export interface PluginTypeGenerationResult {
   /** Map of table name to generated file path (relative to outputDir) */
@@ -565,11 +565,11 @@ export interface PluginTypeGenerationResult {
 export interface GeneratePluginFilesParams {
   /** Base output directory (e.g., .tailor/plugin) */
   outputDir: string;
-  /** Map of source type names to their source info */
+  /** Map of source table names to their source info */
   sourceTypeInfoMap: Map<string, SourceTypeInfo>;
   /** Path to tailor.config.ts (used for resolving plugin import paths) */
   configPath: string;
-  /** Function to generate type files */
+  /** Function to generate table files */
   typeGenerator: (
     types: ReadonlyArray<PluginGeneratedTypeInfo>,
     outputDir: string,

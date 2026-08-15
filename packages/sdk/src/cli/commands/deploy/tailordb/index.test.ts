@@ -2134,7 +2134,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   });
 
-  test("rejects a stale removed type before a pending migration re-adds the same name", async () => {
+  test("rejects a stale removed table before a pending migration re-adds the same name", async () => {
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);
     const removalDir = path.join(tmpDir, "0001");
@@ -2659,7 +2659,7 @@ describe("applyTailorDB migration label reconciliation", () => {
   });
 });
 
-describe("applyTailorDB type apply concurrency", () => {
+describe("applyTailorDB table apply concurrency", () => {
   test("applies type creates and updates sequentially", async () => {
     const probe = createConcurrencyProbe();
     const client = {

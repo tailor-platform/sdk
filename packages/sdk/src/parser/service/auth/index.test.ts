@@ -349,7 +349,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
     expect(result.userProfile?.namespace).toBe("external-ns");
   });
 
-  test("strips TailorDB type builder helpers from userProfile.type", () => {
+  test("strips TailorDB table builder helpers from userProfile.type", () => {
     const result = AuthConfigSchema.parse({
       name: "my-auth",
       userProfile: {

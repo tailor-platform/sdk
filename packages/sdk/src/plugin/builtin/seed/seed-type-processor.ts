@@ -5,10 +5,10 @@ import type { TailorDBNamespaceData } from "#/plugin/types";
 import type { SeedTypeInfo } from "./types";
 
 /**
- * Processes TailorDB tables to extract seed type information
+ * Processes TailorDB tables to extract seed table information
  * @param type - Parsed TailorDB table
  * @param namespace - Namespace of the table
- * @returns Seed type information
+ * @returns Seed table information
  */
 export function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInfo {
   // Extract dependencies from relations (including keyOnly which only sets foreignKeyType)
@@ -53,7 +53,7 @@ export interface SeedNamespaceConfig {
 
 /**
  * Build per-namespace seed ordering information from TailorDB namespace data.
- * @param tailordb - TailorDB namespaces with their types
+ * @param tailordb - TailorDB namespaces with their tables
  * @returns Seed namespace configs, in namespace order
  */
 export function buildSeedNamespaceConfigs(

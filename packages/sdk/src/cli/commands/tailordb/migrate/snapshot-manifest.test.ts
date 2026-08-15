@@ -308,7 +308,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
-    test("aggregates field hooks into a type-level hook script", () => {
+    test("aggregates field hooks into a table-level hook script", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -328,7 +328,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.updatedAt?.optionalOnCreate).toBe(true);
       expect(manifest.schema?.fields?.updatedAt?.hooks).toBeUndefined();
 
-      // They are aggregated into a single type-level script that binds a shared
+      // They are aggregated into a single table-level script that binds a shared
       // timestamp once and dispatches each field's hook.
       const createHook = manifest.schema?.typeHook?.create?.expr ?? "";
       expect(createHook).toContain("const _now = new Date()");
@@ -337,7 +337,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.typeValidate).toBeUndefined();
     });
 
-    test("aggregates nested field hooks and validators into type-level scripts", () => {
+    test("aggregates nested field hooks and validators into table-level scripts", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -395,7 +395,7 @@ describe("snapshot-manifest", () => {
       expect(emailField?.hooks).toBeUndefined();
       expect(emailField?.validate ?? []).toHaveLength(0);
 
-      // Hooks are aggregated into a type-level script that reconstructs nested
+      // Hooks are aggregated into a table-level script that reconstructs nested
       // objects so unhooked siblings are preserved.
       const hookExpr = manifest.schema?.typeHook?.create?.expr ?? "";
       expect(hookExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
@@ -406,7 +406,7 @@ describe("snapshot-manifest", () => {
       );
       expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
 
-      // Validators are aggregated into a type-level validate script using ?? chain.
+      // Validators are aggregated into a table-level validate script using ?? chain.
       const validateExpr = manifest.schema?.typeValidate?.create?.expr ?? "";
       expect(validateExpr).toContain('__errs["profile.displayName"]');
       expect(validateExpr).toContain("((_value ?? '').length > 0)");
@@ -415,7 +415,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
     });
 
-    test("type-level create hook does not make required fields optionalOnCreate", () => {
+    test("table-level create hook does not make required fields optionalOnCreate", () => {
       const snapshotType = createTestSnapshotType("Customer", {
         fields: {
           id: { type: "uuid", required: true },
@@ -493,7 +493,7 @@ describe("snapshot-manifest", () => {
   });
 
   describe("generateAllTypeManifestsFromSnapshot", () => {
-    test("generates manifests for all types in snapshot", () => {
+    test("generates manifests for all tables in snapshot", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -560,7 +560,7 @@ describe("snapshot-manifest", () => {
       }
     });
 
-    test("applies namespace gqlOperations to all types", () => {
+    test("applies namespace gqlOperations to all tables", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),

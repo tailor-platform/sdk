@@ -429,7 +429,7 @@ export interface DefineApplicationParams {
 /**
  * Define a Tailor application from the given configuration.
  * This is a lightweight, synchronous function that creates the application
- * structure without loading types or bundling files.
+ * structure without loading tables or bundling files.
  * @param params - Parameters for defining the application
  * @returns Configured application instance
  */
@@ -497,7 +497,7 @@ function assertWaitPointKeys(): void {
 
 /**
  * Load and fully initialize a Tailor application.
- * This performs all I/O-heavy operations: loading types, processing plugins,
+ * This performs all I/O-heavy operations: loading tables, processing plugins,
  * generating plugin files, bundling, and loading definitions for validation.
  * @param params - Parameters for defining and loading the application
  * @returns Fully initialized application with workflow results

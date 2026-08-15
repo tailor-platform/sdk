@@ -40,7 +40,7 @@ interface DiffChangeBase {
 }
 
 /**
- * Type-level settings patch carried by legacy `type_modified` changes.
+ * Table-level settings patch carried by legacy `type_modified` changes.
  * Current SDK versions no longer produce this kind, but persisted
  * diff.json files written by older versions may still contain it.
  */

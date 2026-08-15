@@ -9,7 +9,7 @@ import { assertDefined } from "#/utils/assert";
 import type { JsonObject } from "type-fest";
 
 /**
- * Seed data keyed by type name, with an array of records per type.
+ * Seed data keyed by table name, with an array of records per table.
  */
 export type SeedData = Record<string, JsonObject[]>;
 

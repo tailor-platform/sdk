@@ -88,7 +88,7 @@ describe("PluginManager", () => {
   test("requires per-table config when typeConfigRequired is true", async () => {
     const plugin: Plugin = {
       id: "requires-config",
-      description: "requires per-type config",
+      description: "requires per-table config",
       importPath: "@example/require-config",
       typeConfigRequired: true,
       onTypeLoaded: () => ({}),

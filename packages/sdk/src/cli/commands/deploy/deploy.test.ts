@@ -395,7 +395,7 @@ describe("parseDeployConfigPaths", () => {
 });
 
 describe("visible same-run namespaces", () => {
-  test("ignores TailorDB types in namespaces not visible to the current app", () => {
+  test("ignores TailorDB tables in namespaces not visible to the current app", () => {
     const current = {
       tailorDBServices: [],
       externalTailorDBNamespaces: ["shared"],

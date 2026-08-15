@@ -84,7 +84,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       );
     }
 
-    assertDefined(rawTypes[rawTypesKey], `raw types entry missing for key: ${rawTypesKey}`)[
+    assertDefined(rawTypes[rawTypesKey], `raw table entry missing for key: ${rawTypesKey}`)[
       typeName
     ] = type;
     typeSourceInfo[typeName] = sourceInfo;
@@ -178,7 +178,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     if (extendedType) {
       assertDefined(
         rawTypes[sourceFilePath],
-        `raw types entry missing for file: ${sourceFilePath}`,
+        `raw table entry missing for file: ${sourceFilePath}`,
       )[rawType.name] = extendedType;
     }
     for (const gen of generatedTypes) {

@@ -40,7 +40,7 @@ interface BreakingChangeFieldInfo {
   renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
   /** Map of tableName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
-  /** Map of new tableName -> TailorDBSnapshotType for renamed types */
+  /** Map of new tableName -> TailorDBSnapshotType for renamed tables */
   renamedTypes: Map<string, TailorDBSnapshotType>;
 }
 
@@ -124,7 +124,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         change.after,
       );
     } else if (change.kind === "table_renamed") {
-      // The new type is missing from the pre-migration snapshot; inject it so
+      // The new table is missing from the pre-migration snapshot; inject it so
       // the copy script can insert into it (the old type stays readable as-is).
       renamedTypes.set(change.tableName, change.after);
     }

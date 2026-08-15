@@ -266,7 +266,7 @@ export function createGenerationManager(params: {
             try {
               await db.loadTypes();
 
-              // Process namespace plugins after loading types
+              // Process namespace plugins after loading tables
               // These plugins generate tables without requiring a source table
               await db.processNamespacePlugins();
 
@@ -417,7 +417,7 @@ export async function generate(options?: GenerateOptions) {
       pluginManager = new PluginManager(plugins);
     }
 
-    // Create a lightweight application (types not yet loaded)
+    // Create a lightweight application (tables not yet loaded)
     const application = defineApplication({ config, pluginManager });
 
     rootSpan.setAttribute("app.name", application.config.name);

@@ -161,7 +161,7 @@ type GenerateIdpUserSchemaFileOptions = {
   userTypeName: string;
   /**
    * When `true` (default), emit a foreign key from `_User.name` to the
-   * userProfile type's username field so that seed validation rejects `_User`
+   * userProfile table's username field so that seed validation rejects `_User`
    * rows without a matching userProfile row. Set to `false` to seed `_User`
    * rows that do not yet have a corresponding userProfile row.
    */

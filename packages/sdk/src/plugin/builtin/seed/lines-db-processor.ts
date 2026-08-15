@@ -42,7 +42,7 @@ export function processLinesDb(type: TailorDBType, source: TypeSourceInfoEntry):
 }
 
 /**
- * Process lines-db metadata for plugin-generated types
+ * Process lines-db metadata for plugin-generated tables
  * @param type - Parsed TailorDB table
  * @param source - Plugin-generated table source info
  * @returns Generated lines-db metadata with plugin source
@@ -195,12 +195,12 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
 }
 
 /**
- * Parameters for generating plugin-type schema file
+ * Parameters for generating a plugin-generated table's schema file
  */
 export interface PluginSchemaParams {
   /** Relative path from schema output to tailor.config.ts */
   configImportPath: string;
-  /** Relative import path to the original table file (for type-attached plugins) */
+  /** Relative import path to the original table file (for table-attached plugins) */
   originalImportPath?: string;
 }
 
@@ -233,7 +233,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
   const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
 
-  // Type-attached plugin (e.g., changeset): import the original table and use getGeneratedType(configPath, pluginId, type, kind)
+  // Table-attached plugin (e.g., changeset): import the original table and use getGeneratedType(configPath, pluginId, type, kind)
   if (pluginSource.originalExportName && originalImportPath && pluginSource.generatedTypeKind) {
     return ml /* ts */ `
     import { join } from "node:path";

@@ -41,7 +41,7 @@ describe("resolveTypeNamespaces", () => {
     expect(result.get("User")).toBe("analytics");
   });
 
-  test("stops querying when all types are resolved", async () => {
+  test("stops querying when all tables are resolved", async () => {
     const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("User")) };
 
     await resolveTypeNamespaces({

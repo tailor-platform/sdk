@@ -999,7 +999,7 @@ describe("snapshot", () => {
       });
     });
 
-    describe("type-level index changes", () => {
+    describe("table-level index changes", () => {
       function snapshotWithIndexes(
         indexes: Record<string, { fields: string[]; unique?: boolean }> | undefined,
       ): SchemaSnapshot {
@@ -1607,7 +1607,7 @@ describe("snapshot", () => {
   // compareLocalTypesWithSnapshot
   // ==========================================================================
   describe("compareLocalTypesWithSnapshot", () => {
-    test("compares local types with existing snapshot", () => {
+    test("compares local tables with existing snapshot", () => {
       const previousSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -3062,7 +3062,7 @@ describe("snapshot", () => {
       });
     });
 
-    test("applies type_renamed diff (old type dropped, new type added)", () => {
+    test("applies type_renamed diff (old table dropped, new table added)", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -3163,7 +3163,7 @@ describe("snapshot", () => {
       expect(reconstructed?.tables.User!.fields.age!.type).toBe("float");
     });
 
-    test("applies added type names that match Object prototype keys", () => {
+    test("applies added table names that match Object prototype keys", () => {
       const initialSnapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -3747,7 +3747,7 @@ describe("snapshot", () => {
       expect(snapshot.tables.Order?.fields.amount?.scale).toBe(6);
     });
 
-    test("reconstructs remote type-level schema elements", () => {
+    test("reconstructs remote table-level schema elements", () => {
       const snapshot = createSnapshotFromRemoteTypes(
         [
           createMockRemoteType(
@@ -3962,7 +3962,7 @@ describe("snapshot", () => {
       expect(drifts).toEqual([]);
     });
 
-    test("detects remote drift in type-level schema elements", () => {
+    test("detects remote drift in table-level schema elements", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -4023,7 +4023,7 @@ describe("snapshot", () => {
       );
     });
 
-    test("detects mismatched type-level schema element configs", () => {
+    test("detects mismatched table-level schema element configs", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,

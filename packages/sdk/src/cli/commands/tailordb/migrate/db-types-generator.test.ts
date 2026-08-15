@@ -400,7 +400,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
     });
 
-    test("injects the new table for a renamed type alongside the old one", async () => {
+    test("injects the new table for a rename alongside the old one", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -439,7 +439,7 @@ describe("db-types-generator", () => {
       expect(personBlock).toContain("email: string | null;");
     });
 
-    test("injects a renamed type's table even when the previous snapshot is empty", async () => {
+    test("injects a renamed table even when the previous snapshot is empty", async () => {
       const snapshot = createMockSnapshot({}, "tailordb");
       const diff = createMockMigrationDiff({
         changes: [

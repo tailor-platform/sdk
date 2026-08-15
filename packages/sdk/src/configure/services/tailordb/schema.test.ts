@@ -1382,7 +1382,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     defineProductModule({ item: itemModule.item });
   });
 
-  test("type-level validate function stores in metadata", () => {
+  test("table-level validate function stores in metadata", () => {
     const type = db
       .table("Test", {
         name: db.string(),
@@ -1392,7 +1392,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     expect(type.metadata.typeValidate).toBeDefined();
   });
 
-  test("type-level validate receives newRecord and oldRecord with correct types", () => {
+  test("table-level validate receives newRecord and oldRecord with correct types", () => {
     db.table("Test", {
       name: db.string(),
       age: db.int({ optional: true }),

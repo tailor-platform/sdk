@@ -672,10 +672,10 @@ function availableTypeRenameTargets(
 
 /**
  * Ask the user whether a removed type was renamed to one of the compatible
- * added types. Returns the confirmed new type name, or undefined.
+ * added tables. Returns the confirmed new table name, or undefined.
  * @param {TypeRenameCandidate} candidate - Candidate to confirm
- * @param {string[]} addedTypeNames - Added type names still available as rename targets
- * @returns {Promise<string | undefined>} Confirmed new type name, if any
+ * @param {string[]} addedTypeNames - Added table names still available as rename targets
+ * @returns {Promise<string | undefined>} Confirmed new table name, if any
  */
 async function promptTypeRenameCandidate(
   candidate: TypeRenameCandidate,

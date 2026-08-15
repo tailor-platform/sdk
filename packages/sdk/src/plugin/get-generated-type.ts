@@ -89,7 +89,7 @@ interface DbNamespaceConfig {
 }
 
 /**
- * Resolve the namespace for a type-attached sourceType by checking config.db file patterns.
+ * Resolve the namespace for a table-attached sourceType by checking config.db file patterns.
  * Uses ESM module cache identity: same file path yields same object references.
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
@@ -216,7 +216,7 @@ function getCacheKey(baseKey: string, pluginConfig: unknown): string {
 
 /**
  * Get a generated table from a plugin by loading the config and resolving everything automatically.
- * For type-attached plugins, calls onTypeLoaded() with the sourceType.
+ * For table-attached plugins, calls onTypeLoaded() with the sourceType.
  * For namespace plugins, calls onNamespaceLoaded() with auto-resolved namespace.
  * Results are cached per config path, plugin, namespace, and pluginConfig to avoid redundant processing.
  * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
@@ -260,7 +260,7 @@ export async function getGeneratedType(
 }
 
 /**
- * Get a generated table from a type-attached plugin.
+ * Get a generated table from a table-attached plugin.
  * @param plugin - The plugin instance (must have onTypeLoaded() method)
  * @param sourceType - The source TailorDB table
  * @param kind - The generated table kind

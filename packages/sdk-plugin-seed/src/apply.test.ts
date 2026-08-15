@@ -214,7 +214,7 @@ describe("seedApplyCommand", () => {
     expect(sdk.executeScript).not.toHaveBeenCalled();
   });
 
-  test("truncates and seeds only the IdP user when it is the selected type", async () => {
+  test("truncates and seeds only the IdP user when it is the selected entity", async () => {
     await runApply(["--truncate", "--yes", "_User"]);
 
     expect(sdk.truncate).not.toHaveBeenCalled();

@@ -1,5 +1,5 @@
 /**
- * Breaking type-level index changes must be relaxed in the Pre-phase (previous
+ * Breaking table-level index changes must be relaxed in the Pre-phase (previous
  * definition, or absent for additions) so migrate.ts can reconcile duplicate
  * rows before the Post-phase enforces the unique index.
  */

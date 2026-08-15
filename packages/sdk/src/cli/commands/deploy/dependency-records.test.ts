@@ -79,7 +79,7 @@ function clientRecording(
 }
 
 describe("fetchMissingDependentApps", () => {
-  test("reads a TailorDB type's own TRN, not the application's", async () => {
+  test("reads a TailorDB table's own TRN, not the application's", async () => {
     // The application TRN embeds the app name, so a record there is missed the
     // moment the config is renamed. The type's TRN does not.
     const client = clientRecording([`trn:v1:workspace:ws:tailordb:db:type:Order`]);
