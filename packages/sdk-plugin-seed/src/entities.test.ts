@@ -72,7 +72,7 @@ describe("selectEntities", () => {
     ).toThrow(/Available namespaces: main-db, sub-db/);
   });
 
-  test("accepts _User as a type only when the config has an IdP user", () => {
+  test("accepts _User as an entity only when the config has an IdP user", () => {
     const selection = selectEntities({
       namespaceEntities,
       hasIdpUser: true,
@@ -88,7 +88,7 @@ describe("selectEntities", () => {
         types: ["_User"],
         skipIdp: false,
       }),
-    ).toThrow(/tables were not found: _User/);
+    ).toThrow(/entities were not found: _User/);
   });
 
   test("--skip-idp removes _User from the selection", () => {

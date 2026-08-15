@@ -33,7 +33,7 @@ export function selectEntities(options: SelectEntitiesOptions): EntitySelection 
   const warnings: string[] = [];
 
   if (namespace && types.length > 0) {
-    throw new Error("Options --namespace and table names are mutually exclusive.");
+    throw new Error("Options --namespace and entity names are mutually exclusive.");
   }
 
   if (skipIdp && namespace) {
@@ -59,8 +59,8 @@ export function selectEntities(options: SelectEntitiesOptions): EntitySelection 
     const notFoundTypes = types.filter((type) => !allEntities.includes(type));
     if (notFoundTypes.length > 0) {
       throw new Error(
-        `The following tables were not found: ${notFoundTypes.join(", ")}. ` +
-          `Available tables: ${allEntities.join(", ")}`,
+        `The following entities were not found: ${notFoundTypes.join(", ")}. ` +
+          `Available entities: ${allEntities.join(", ")}`,
       );
     }
     entitiesToProcess = types;

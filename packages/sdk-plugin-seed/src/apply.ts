@@ -323,7 +323,7 @@ export const seedApplyCommand = defineAppCommand({
     }),
     types: arg(z.array(z.string()).default([]), {
       positional: true,
-      description: "Table names to seed (default: all tables)",
+      description: "Entity names to seed, including _User (default: all)",
     }),
   }),
   run: async (args) => {
@@ -347,7 +347,7 @@ export const seedApplyCommand = defineAppCommand({
       logger.info(`Filtering by namespace: ${args.namespace}`);
       logger.log(styles.dim(`Entities: ${(selection.entitiesToProcess ?? []).join(", ")}`));
     } else if (args.types.length > 0) {
-      logger.info(`Filtering by tables: ${(selection.entitiesToProcess ?? []).join(", ")}`);
+      logger.info(`Filtering by entities: ${(selection.entitiesToProcess ?? []).join(", ")}`);
     }
 
     if (!selection.hasEntitiesToProcess) {
