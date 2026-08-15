@@ -94,6 +94,9 @@ const V3_MIN_SDK_VERSION = "2.0.0";
 // No valibot template-literal schema exists; validated with a regex instead.
 const semverSchema = v.pipe(v.string(), v.regex(/^\d+\.\d+\.\d+$/));
 
+const emailSchema = v.pipe(v.string(), v.email());
+const uuidSchema = v.pipe(v.string(), v.uuid());
+
 // strip unknown keys
 const pfConfigSchemaV2 = v.object({
   version: v.literal(V2_CONFIG_VERSION),
@@ -336,7 +339,7 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfigV2 {
 }
 
 function inferEmailFromUserId(user: string): string | undefined {
-  return v.safeParse(v.pipe(v.string(), v.email()), user).success ? user : undefined;
+  return v.is(emailSchema, user) ? user : undefined;
 }
 
 function migrateV2ToV3(v2Config: PfConfigV2): PfConfig {
@@ -549,11 +552,10 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
 }
 
 function validateUUID(value: string, source: string): string {
-  const result = v.safeParse(v.pipe(v.string(), v.uuid()), value);
-  if (!result.success) {
+  if (!v.is(uuidSchema, value)) {
     throw new Error(`Invalid value from ${source}: must be a valid UUID`);
   }
-  return result.output;
+  return value;
 }
 
 /**

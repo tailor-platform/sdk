@@ -5,7 +5,6 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
 // strip unknown keys
@@ -24,7 +23,7 @@ export type GetFolderOptions = v.InferInput<typeof getFolderOptionsSchema>;
 export async function getFolder(options: GetFolderOptions): Promise<FolderInfo> {
   const result = v.safeParse(getFolderOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken();

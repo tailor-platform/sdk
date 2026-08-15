@@ -6,7 +6,6 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { stringToRole, validRoles } from "./transform";
 
 // strip unknown keys
@@ -22,7 +21,7 @@ export type UpdateUserOptions = v.InferInput<typeof updateUserOptionsSchema>;
 async function loadOptions(options: UpdateUserOptions) {
   const result = v.safeParse(updateUserOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken({ profile: result.output.profile });

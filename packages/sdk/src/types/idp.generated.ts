@@ -2591,42 +2591,7 @@ export type IdPInput = {
   /** UI language for IdP pages */
   lang?: "en" | "ja" | undefined;
   /** User authentication policy configuration */
-  userAuthPolicy?:
-    | {
-        /** Use non-email identifier for usernames */
-        useNonEmailIdentifier?: boolean | undefined;
-        /** Allow users to reset their own passwords */
-        allowSelfPasswordReset?: boolean | undefined;
-        /** Require uppercase letters in passwords */
-        passwordRequireUppercase?: boolean | undefined;
-        /** Require lowercase letters in passwords */
-        passwordRequireLowercase?: boolean | undefined;
-        /** Require non-alphanumeric characters in passwords */
-        passwordRequireNonAlphanumeric?: boolean | undefined;
-        /** Require numeric characters in passwords */
-        passwordRequireNumeric?: boolean | undefined;
-        /** Minimum password length (6-30) */
-        passwordMinLength?: number | undefined;
-        /** Maximum password length (6-4096) */
-        passwordMaxLength?: number | undefined;
-        /** Restrict registration to these email domains */
-        allowedEmailDomains?: string[] | undefined;
-        /** Enable Google OAuth login */
-        allowGoogleOauth?: boolean | undefined;
-        /** Enable Microsoft OAuth login */
-        allowMicrosoftOauth?: boolean | undefined;
-        /** Disable password-based authentication */
-        disablePasswordAuth?: boolean | undefined;
-        /** Make TOTP MFA available for users in this namespace */
-        enableMfa?: boolean | undefined;
-        /** Require TOTP MFA enrollment and challenge for password-authenticated users (requires enableMfa) */
-        requireMfa?: boolean | undefined;
-        /** Application origins (scheme + host + optional port) allowed as MFA self-service return targets */
-        allowedReturnOrigins?: string[] | undefined;
-        /** Label shown next to the user account in authenticator apps */
-        mfaIssuer?: string | undefined;
-      }
-    | undefined;
+  userAuthPolicy?: IdPUserAuthPolicy;
   /** Enable publishing user lifecycle events */
   publishEvents?: boolean | undefined;
   /** Configure which GraphQL operations are enabled */
@@ -2671,42 +2636,7 @@ export type IdP = {
   /** UI language for IdP pages */
   lang?: "en" | "ja" | undefined;
   /** User authentication policy configuration */
-  userAuthPolicy?:
-    | {
-        /** Use non-email identifier for usernames */
-        useNonEmailIdentifier?: boolean | undefined;
-        /** Allow users to reset their own passwords */
-        allowSelfPasswordReset?: boolean | undefined;
-        /** Require uppercase letters in passwords */
-        passwordRequireUppercase?: boolean | undefined;
-        /** Require lowercase letters in passwords */
-        passwordRequireLowercase?: boolean | undefined;
-        /** Require non-alphanumeric characters in passwords */
-        passwordRequireNonAlphanumeric?: boolean | undefined;
-        /** Require numeric characters in passwords */
-        passwordRequireNumeric?: boolean | undefined;
-        /** Minimum password length (6-30) */
-        passwordMinLength?: number | undefined;
-        /** Maximum password length (6-4096) */
-        passwordMaxLength?: number | undefined;
-        /** Restrict registration to these email domains */
-        allowedEmailDomains?: string[] | undefined;
-        /** Enable Google OAuth login */
-        allowGoogleOauth?: boolean | undefined;
-        /** Enable Microsoft OAuth login */
-        allowMicrosoftOauth?: boolean | undefined;
-        /** Disable password-based authentication */
-        disablePasswordAuth?: boolean | undefined;
-        /** Make TOTP MFA available for users in this namespace */
-        enableMfa?: boolean | undefined;
-        /** Require TOTP MFA enrollment and challenge for password-authenticated users (requires enableMfa) */
-        requireMfa?: boolean | undefined;
-        /** Application origins (scheme + host + optional port) allowed as MFA self-service return targets */
-        allowedReturnOrigins?: string[] | undefined;
-        /** Label shown next to the user account in authenticator apps */
-        mfaIssuer?: string | undefined;
-      }
-    | undefined;
+  userAuthPolicy?: IdPUserAuthPolicy;
   /** Enable publishing user lifecycle events */
   publishEvents?: boolean | undefined;
   /** Configure which GraphQL operations are enabled */

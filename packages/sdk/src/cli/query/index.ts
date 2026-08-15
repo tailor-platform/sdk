@@ -143,7 +143,7 @@ async function loadOptions(options: QueryBaseOptions) {
   const result = v.safeParse(queryBaseOptionsSchema, options);
 
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "validation error missing issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const machineUser = await loadMachineUserName({
@@ -372,7 +372,7 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
   const result = v.safeParse(queryOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "validation error missing issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const executor = await prepareQueryExecutor(result.output);

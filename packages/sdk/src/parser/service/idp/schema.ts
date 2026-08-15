@@ -109,7 +109,8 @@ export const IdPUserAuthPolicySchema = v.pipe(
       v.pipe(
         v.number(),
         v.integer(),
-        v.check((val) => val >= 6 && val <= 30, "passwordMinLength must be between 6 and 30"),
+        v.minValue(6, "passwordMinLength must be between 6 and 30"),
+        v.maxValue(30, "passwordMinLength must be between 6 and 30"),
         v.description("Minimum password length (6-30)"),
       ),
     ),
@@ -117,7 +118,8 @@ export const IdPUserAuthPolicySchema = v.pipe(
       v.pipe(
         v.number(),
         v.integer(),
-        v.check((val) => val >= 6 && val <= 4096, "passwordMaxLength must be between 6 and 4096"),
+        v.minValue(6, "passwordMaxLength must be between 6 and 4096"),
+        v.maxValue(4096, "passwordMaxLength must be between 6 and 4096"),
         v.description("Maximum password length (6-4096)"),
       ),
     ),
@@ -365,15 +367,7 @@ export const IdPSchema = v.pipe(
     ),
     lang: v.optional(v.pipe(IdPLangSchema, v.description("UI language for IdP pages"))),
     userAuthPolicy: v.optional(
-      v.pipe(
-        IdPUserAuthPolicySchema,
-        v.transform((input) =>
-          // transform input may be undefined before schema parse
-          // oxlint-disable-next-line typescript/no-unnecessary-condition
-          v.parse(IdPUserAuthPolicySchema, input ?? {}),
-        ),
-        v.description("User authentication policy configuration"),
-      ),
+      v.pipe(IdPUserAuthPolicySchema, v.description("User authentication policy configuration")),
     ),
     publishEvents: v.optional(
       v.pipe(v.boolean(), v.description("Enable publishing user lifecycle events")),

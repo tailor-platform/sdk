@@ -5,7 +5,6 @@ import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
 import { folderListInfo, type FolderListInfo } from "../transform";
 
 // strip unknown keys
@@ -26,7 +25,7 @@ export type ListFoldersOptions = v.InferInput<typeof listFoldersOptionsSchema>;
 export async function listFolders(options: ListFoldersOptions): Promise<FolderListInfo[]> {
   const result = v.safeParse(listFoldersOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const { organizationId, parentFolderId, order, limit } = result.output;

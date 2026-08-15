@@ -7,7 +7,6 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 // strip unknown keys
@@ -22,7 +21,7 @@ export type GetFunctionRegistryOptions = v.InferInput<typeof getFunctionRegistry
 async function loadOptions(options: GetFunctionRegistryOptions) {
   const result = v.safeParse(getFunctionRegistryOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken({ profile: result.output.profile });

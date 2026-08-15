@@ -5,7 +5,6 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 // strip unknown keys
@@ -23,7 +22,7 @@ export type GetOrganizationOptions = v.InferInput<typeof getOrganizationOptionsS
 export async function getOrganization(options: GetOrganizationOptions): Promise<OrganizationInfo> {
   const result = v.safeParse(getOrganizationOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken();

@@ -22,7 +22,7 @@ export const LogLevelSchema = v.picklist(LOG_LEVELS);
 const logLevelSchema = v.pipe(
   v.string(),
   v.check(
-    (value) => v.safeParse(LogLevelSchema, value.trim().toUpperCase()).success,
+    (value) => v.is(LogLevelSchema, value.trim().toUpperCase()),
     `'logLevel' must be one of: ${LOG_LEVELS.join(", ")}.`,
   ),
 );

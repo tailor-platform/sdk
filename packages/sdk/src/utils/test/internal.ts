@@ -21,7 +21,7 @@ export function toSchemaOutput(
   if (!parsed.success) {
     const message = parsed.issues
       .map((issue) => {
-        const path = issue.path?.map((segment) => segment.key).join(".");
+        const path = v.getDotPath(issue);
         return path ? `${issue.message} at "${path}"` : issue.message;
       })
       .join("; ");

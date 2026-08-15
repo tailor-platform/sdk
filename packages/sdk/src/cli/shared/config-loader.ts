@@ -65,9 +65,7 @@ export async function loadConfig(
   const validated = v.safeParse(AppConfigSchema, configModule.default);
   if (!validated.success) {
     const issues = validated.issues
-      .map(
-        (i) => `  - ${i.path?.map((segment) => segment.key).join(".") || "(root)"}: ${i.message}`,
-      )
+      .map((i) => `  - ${v.getDotPath(i) || "(root)"}: ${i.message}`)
       .join("\n");
     throw new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`);
   }

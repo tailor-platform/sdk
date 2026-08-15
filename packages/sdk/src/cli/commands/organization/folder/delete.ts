@@ -6,7 +6,6 @@ import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
 const deleteFolderOptionsSchema = v.object({
@@ -24,7 +23,7 @@ export type DeleteFolderOptions = v.InferInput<typeof deleteFolderOptionsSchema>
 export async function deleteFolder(options: DeleteFolderOptions): Promise<void> {
   const result = v.safeParse(deleteFolderOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken();

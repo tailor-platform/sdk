@@ -5,7 +5,6 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
 import { appInfo, type AppInfo } from "./transform";
 
 // strip unknown keys
@@ -21,7 +20,7 @@ export type ListAppsOptions = v.InferInput<typeof listAppsOptionsSchema>;
 async function loadOptions(options: ListAppsOptions) {
   const result = v.safeParse(listAppsOptionsSchema, options);
   if (!result.success) {
-    throw new Error(assertDefined(result.issues[0], "Valibot returned no issues").message);
+    throw new Error(result.issues[0].message);
   }
 
   const accessToken = await loadAccessToken({ profile: result.output.profile });

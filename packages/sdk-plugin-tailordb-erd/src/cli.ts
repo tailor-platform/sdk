@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { defineCommand, runMain } from "@politty/valibot";
 import { commonArgs } from "@tailor-platform/shared/args";
 import { logger } from "@tailor-platform/shared/logger";
+import { formatValiIssuePaths } from "@tailor-platform/shared/vali";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import * as v from "valibot";
@@ -11,17 +12,6 @@ import { erdDeployCommand } from "./deploy";
 import { erdDiffCommand } from "./diff-command";
 import { erdExportCommand } from "./export";
 import { erdServeCommand } from "./serve";
-
-function formatValiError(error: v.ValiError<v.GenericSchema>): string {
-  const flat = v.flatten(error.issues);
-  const lines: string[] = [...(flat.root ?? [])];
-  for (const [fieldPath, messages] of Object.entries(flat.nested ?? {})) {
-    for (const message of messages ?? []) {
-      lines.push(`${fieldPath}: ${message}`);
-    }
-  }
-  return lines.join("\n");
-}
 
 function hasFormat(error: unknown): error is { format(): string } {
   return (
@@ -56,7 +46,7 @@ void runMain(mainCommand, {
   cleanup: ({ error }) => {
     if (!error) return;
     if (error instanceof v.ValiError) {
-      logger.log(formatValiError(error));
+      logger.log(formatValiIssuePaths(error.issues));
     } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {

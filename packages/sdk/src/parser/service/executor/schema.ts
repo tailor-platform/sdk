@@ -210,18 +210,11 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function jsonRecordSchema(): v.GenericSchema<Record<string, JsonValue>> {
+  // The cast is only needed because the guard widens the input type to
+  // `Record<string, unknown>`, which no longer matches `JsonValue`.
   return v.pipe(
     v.custom<Record<string, unknown>>(isPlainRecord, "Expected a plain object"),
-    v.rawTransform(({ dataset, addIssue, NEVER }) => {
-      const result = v.safeParse(v.record(v.string(), JsonValueSchema), dataset.value);
-      if (!result.success) {
-        for (const issue of result.issues) {
-          addIssue({ message: issue.message, path: issue.path });
-        }
-        return NEVER;
-      }
-      return result.output;
-    }),
+    v.record(v.string(), JsonValueSchema),
   ) as unknown as v.GenericSchema<Record<string, JsonValue>>;
 }
 

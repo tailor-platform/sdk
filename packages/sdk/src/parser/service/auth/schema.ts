@@ -97,7 +97,7 @@ export const IdProviderSchema = v.variant("kind", [
 ]);
 
 export const OAuth2ClientGrantTypeSchema = v.pipe(
-  v.union([v.literal("authorization_code"), v.literal("refresh_token")]),
+  v.picklist(["authorization_code", "refresh_token"]),
   v.description("OAuth2 grant type"),
 );
 
@@ -114,6 +114,7 @@ const oauth2RedirectURISchema = v.custom<
       val.startsWith("http://") ||
       val.endsWith(":url") ||
       val.includes(":url/")),
+  'Redirect URI must be an absolute http(s) URL or a static-website placeholder like "<name>:url"',
 );
 
 export const OAuth2ClientSchema = v.pipe(
@@ -126,7 +127,7 @@ export const OAuth2ClientSchema = v.pipe(
     redirectURIs: v.pipe(v.array(oauth2RedirectURISchema), v.description("Allowed redirect URIs")),
     clientType: v.optional(
       v.pipe(
-        v.union([v.literal("confidential"), v.literal("public"), v.literal("browser")]),
+        v.picklist(["confidential", "public", "browser"]),
         v.description("OAuth2 client type"),
       ),
     ),
@@ -171,23 +172,14 @@ export const OAuth2ClientSchema = v.pipe(
 );
 
 export const SCIMAuthorizationSchema = v.strictObject({
-  type: v.pipe(
-    v.union([v.literal("oauth2"), v.literal("bearer")]),
-    v.description("SCIM authorization type"),
-  ),
+  type: v.pipe(v.picklist(["oauth2", "bearer"]), v.description("SCIM authorization type")),
   bearerSecret: v.optional(
     v.pipe(secretValueSchema, v.description("Bearer token secret (required for bearer type)")),
   ),
 });
 
 export const SCIMAttributeTypeSchema = v.pipe(
-  v.union([
-    v.literal("string"),
-    v.literal("number"),
-    v.literal("boolean"),
-    v.literal("datetime"),
-    v.literal("complex"),
-  ]),
+  v.picklist(["string", "number", "boolean", "datetime", "complex"]),
   v.description("SCIM attribute data type"),
 );
 
@@ -209,7 +201,7 @@ export const SCIMAttributeSchema = v.strictObject({
   description: v.optional(v.pipe(v.string(), v.description("Attribute description"))),
   mutability: v.optional(
     v.pipe(
-      v.union([v.literal("readOnly"), v.literal("readWrite"), v.literal("writeOnly")]),
+      v.picklist(["readOnly", "readWrite", "writeOnly"]),
       v.description("Attribute mutability"),
     ),
   ),
@@ -218,10 +210,7 @@ export const SCIMAttributeSchema = v.strictObject({
     v.pipe(v.boolean(), v.description("Whether the attribute can have multiple values")),
   ),
   uniqueness: v.optional(
-    v.pipe(
-      v.union([v.literal("none"), v.literal("server"), v.literal("global")]),
-      v.description("Uniqueness constraint"),
-    ),
+    v.pipe(v.picklist(["none", "server", "global"]), v.description("Uniqueness constraint")),
   ),
   canonicalValues: v.optional(
     v.nullable(v.pipe(v.array(v.string()), v.description("List of canonical values"))),
@@ -272,6 +261,8 @@ const UserProfileSchema = v.strictObject({
     v.pipe(v.string(), v.description("TailorDB namespace where the user type is defined")),
   ),
   type: v.pipe(
+    // Accepts anything: the shape is validated by TailorDBTypeSchema at the end of this pipe.
+    // This entry only pins the pipe's input type so vinfer generates `type: TailorDBInstance`.
     v.custom<TailorDBInstance>(() => true),
     v.transform((val: TailorDBInstance) => stripTailorDBTypeBuilderHelpers(val)),
     TailorDBTypeSchema,

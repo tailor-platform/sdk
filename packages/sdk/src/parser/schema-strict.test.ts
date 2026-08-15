@@ -20,10 +20,19 @@ type StrictSchemaCase = {
   readonly value: Record<string, unknown>;
 };
 
+// A missing required key also reports `type: "strict_object"`; only an unknown key
+// carries `expected: "never"`, so both are needed to identify a rejected extra key.
 function hasUnrecognizedKeyIssue(issues: readonly unknown[]): boolean {
   return issues.some((issue) => {
     if (typeof issue !== "object" || issue === null) return false;
-    if ("type" in issue && issue.type === "strict_object") return true;
+    if (
+      "type" in issue &&
+      issue.type === "strict_object" &&
+      "expected" in issue &&
+      issue.expected === "never"
+    ) {
+      return true;
+    }
     if (!("issues" in issue) || !Array.isArray(issue.issues)) return false;
     return hasUnrecognizedKeyIssue(issue.issues);
   });
