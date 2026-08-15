@@ -64,7 +64,7 @@ const snapshotFixtures = vi.hoisted(() => {
     fields,
   });
 
-  // Migration 1 adds a new type (StockReservation) and a `note` field on GoodsReceipt.
+  // Migration 1 adds a new table (StockReservation) and a `note` field on GoodsReceipt.
   const typesByMigration: Record<number, unknown> = {
     0: {
       GoodsReceipt: buildType("GoodsReceipt", "goodsReceipts", {
@@ -498,7 +498,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("rolls back types the pre-phase created via missingTypeCreates, not just diff types", async () => {
+  test("rolls back tables the pre-phase created via missingTypeCreates, not just diff tables", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
     // LeakedType is not in this migration's diff, but the pre-phase creates it
@@ -899,7 +899,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
 
-    // Prior snapshot is unavailable: new and pre-existing types are then
+    // Prior snapshot is unavailable: new and pre-existing tables are then
     // indistinguishable, so nothing must be deleted.
     await withOverriddenSnapshot(
       (migrationsDir, maxVersion) =>

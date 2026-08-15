@@ -268,7 +268,7 @@ describe("tailordb migration sync", () => {
       expect.objectContaining({ namespaceName: "tailordb", typeName: "User" }),
     );
     expect(state.updateTailorDBGQLPermission).not.toHaveBeenCalled();
-    // Stale's permission has no snapshot counterpart → deleted before the type.
+    // Stale's permission has no snapshot counterpart → deleted before the table.
     expect(state.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "tailordb", typeName: "Stale" }),
     );
@@ -334,7 +334,7 @@ describe("tailordb migration sync", () => {
     });
   });
 
-  test("enables publishRecordEvents for types used by executor record triggers", async () => {
+  test("enables publishRecordEvents for tables used by executor record triggers", async () => {
     state.executors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);

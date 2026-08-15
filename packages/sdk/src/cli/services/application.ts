@@ -437,7 +437,7 @@ export function defineApplication(params: DefineApplicationParams): Application 
   const { config, pluginManager } = params;
   const baseDir = path.dirname(config.path);
   const services = defineServices(config, baseDir, pluginManager);
-  // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
+  // Plugin executors are not known at define-time; generate/apply flows handle them after table loading.
   const executorService = defineExecutor(config.executor, baseDir, false);
   const workflowService = defineWorkflow(config.workflow, baseDir);
   const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);

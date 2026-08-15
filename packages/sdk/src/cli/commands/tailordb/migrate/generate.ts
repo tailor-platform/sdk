@@ -190,7 +190,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
   // Parse --rename/--drop flags before any destructive step so a malformed
   // value fails the command while the migrations directories are still intact.
-  // A value containing "." targets a field; a bare "Old:New" / "Type" value
+  // A value containing "." targets a field; a bare "Old:New" / "Table" value
   // targets a table.
   const renameFlags: RenameFlag[] = [];
   const typeRenameFlags: TypeRenameFlag[] = [];

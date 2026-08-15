@@ -294,7 +294,7 @@ export function createGenerationManager(params: {
       });
 
       // Generate plugin type and executor files
-      // This must happen after TailorDB tables are loaded since plugins process during type loading
+      // This must happen after TailorDB tables are loaded since plugins process during table loading
       const { pluginExecutorFiles, executorService } = await withSpan(
         "generate.pluginFiles",
         async () => {

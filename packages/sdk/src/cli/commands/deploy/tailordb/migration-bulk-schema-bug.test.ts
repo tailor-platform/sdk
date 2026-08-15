@@ -314,7 +314,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     expect(userUpdates).toHaveLength(0);
   });
 
-  test("creates migration prePhase types sequentially", async () => {
+  test("creates migration prePhase tables sequentially", async () => {
     const createStarts: string[] = [];
     let firstCreateStarted!: () => void;
     let releaseFirstCreate!: () => void;

@@ -306,7 +306,7 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
 }
 
 // ============================================================================
-// Type Renames
+// Table Renames
 // ============================================================================
 
 /**

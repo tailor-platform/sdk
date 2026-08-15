@@ -158,7 +158,7 @@ describe("assertValidFieldRenames", () => {
 });
 
 describe("findRenameCandidates", () => {
-  test("pairs a removed field with compatible added fields in the same type", () => {
+  test("pairs a removed field with compatible added fields in the same table", () => {
     const diff = createMockMigrationDiff({
       changes: [
         {
@@ -190,7 +190,7 @@ describe("findRenameCandidates", () => {
     expect(candidates[0]!.added.map((a) => a.fieldName)).toEqual(["displayName"]);
   });
 
-  test("does not pair fields across types", () => {
+  test("does not pair fields across tables", () => {
     const diff = createMockMigrationDiff({
       changes: [
         {
@@ -342,7 +342,7 @@ describe("dropSpecApplies", () => {
 });
 
 describe("parseDropOption", () => {
-  test("parses Type.field", () => {
+  test("parses Table.field", () => {
     expect(parseDropOption("User.fullName")).toEqual({
       tableName: "User",
       fieldName: "fullName",
@@ -358,7 +358,7 @@ describe("parseDropOption", () => {
 });
 
 describe("parseRenameOption", () => {
-  test("parses Type.old:new", () => {
+  test("parses Table.old:new", () => {
     expect(parseRenameOption("User.fullName:displayName")).toEqual({
       tableName: "User",
       previousFieldName: "fullName",
@@ -501,7 +501,7 @@ describe("isTypeRenameCompatible", () => {
     );
   });
 
-  test("rejects types with serial or file fields", () => {
+  test("rejects tables with serial or file fields", () => {
     expect(
       isTypeRenameCompatible(
         snapshotType("User", {
@@ -782,7 +782,7 @@ describe("parseTypeRenameOption", () => {
 });
 
 describe("parseTypeDropOption", () => {
-  test("parses Type", () => {
+  test("parses Table", () => {
     expect(parseTypeDropOption("User")).toEqual({ tableName: "User" });
   });
 

@@ -262,8 +262,8 @@ describe("db-types-generator", () => {
     });
   });
 
-  describe("writeDbTypesFile with multiple types", () => {
-    test("generates types with multiple types", async () => {
+  describe("writeDbTypesFile with multiple tables", () => {
+    test("generates types for multiple tables", async () => {
       const snapshot = createMockSnapshot({
         User: { fields: { name: { type: "string", required: true } } },
         Order: { fields: { total: { type: "float", required: true } } },

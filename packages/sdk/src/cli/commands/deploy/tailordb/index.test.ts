@@ -211,7 +211,7 @@ describe("planTailorDB (service level)", () => {
     await runTest();
   });
 
-  test("plans a migration-test baseline snapshot instead of current types", async () => {
+  test("plans a migration-test baseline snapshot instead of current tables", async () => {
     const tailordb = createMockTailorDBService("tailordb");
     Object.defineProperty(tailordb, "types", {
       value: {
@@ -270,7 +270,7 @@ describe("planTailorDB (service level)", () => {
     );
   });
 
-  test("plans a migration-test target snapshot instead of drifted current types", async () => {
+  test("plans a migration-test target snapshot instead of drifted current tables", async () => {
     const tailordb = createMockTailorDBService("tailordb");
     Object.defineProperty(tailordb, "types", {
       value: {
@@ -445,7 +445,7 @@ describe("planTailorDB (service level)", () => {
   });
 
   describe("nested field manifest mapping", () => {
-    test("enables publishRecordEvents when a peer executor targets the type", async () => {
+    test("enables publishRecordEvents when a peer executor targets the table", async () => {
       const tailorDBService = createMockTailorDBService("shared-db");
       const userType: TailorDBType = {
         name: "User",
@@ -562,7 +562,7 @@ describe("planTailorDB (service level)", () => {
         );
       });
 
-      test("rejects a conflicting opt-out before listing remote types", async () => {
+      test("rejects a conflicting opt-out before listing remote tables", async () => {
         const client = createMockClient([{ name: "shared-db", label: appName }]);
         const tailorDBService = createMockTailorDBService("shared-db");
         const userType = createTypeWith(false);

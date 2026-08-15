@@ -4,7 +4,7 @@ import { resolveTypeNamespace, resolveTypeNamespaces } from "./tailordb-namespac
 const namesResult = (...names: string[]) => ({ tailordbTypes: names.map((name) => ({ name })) });
 
 describe("resolveTypeNamespaces", () => {
-  test("resolves multiple types from different namespaces", async () => {
+  test("resolves multiple tables from different namespaces", async () => {
     const client = {
       listTailorDBTypes: vi
         .fn()

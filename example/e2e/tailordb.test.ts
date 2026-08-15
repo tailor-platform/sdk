@@ -21,7 +21,7 @@ describe("controlplane", () => {
     expect(tailordbService?.namespace?.name).toBe(namespaceName);
   });
 
-  test("type applied", async () => {
+  test("table applied", async () => {
     const { tailordbTypes } = await client.listTailorDBTypes({
       workspaceId,
       namespaceName,
