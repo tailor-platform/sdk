@@ -54,7 +54,6 @@ export default {
 
       await getGeneratedTable(configPath, "ns-plugin", null, "auditLog");
 
-      // onNamespaceLoaded for "main" should be called exactly once.
       expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
     });
   });
