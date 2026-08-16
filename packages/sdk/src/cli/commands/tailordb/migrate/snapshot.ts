@@ -3262,7 +3262,15 @@ function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig 
   return rest;
 }
 
-function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
+/**
+ * Project a snapshot onto the shape comparable with remote-derived state:
+ * system fields, script-bearing props (hooks, validate, default), and
+ * type-level script expressions are stripped, since the platform stores them
+ * in a transformed or unrepresented form.
+ * @param {SchemaSnapshot} snapshot - Snapshot to project
+ * @returns {NormalizedSchemaSnapshot} Normalized snapshot without script-bearing props
+ */
+export function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
   const tables = createSnapshotRecord<TailorDBSnapshotType>();
 
   for (const [tableName, type] of Object.entries(snapshot.tables)) {

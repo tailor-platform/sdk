@@ -14,6 +14,8 @@ import { hasChanges, formatMigrationDiff } from "#/cli/commands/tailordb/migrate
 import { fetchRemoteSchemaSnapshot } from "#/cli/commands/tailordb/migrate/schema-checks";
 import {
   compareLocalTypesWithSnapshot,
+  compareSnapshots,
+  createRemoteComparableSnapshot,
   createSnapshotType,
   normalizeSchemaSnapshot,
   type NormalizedSchemaSnapshot,
@@ -213,7 +215,12 @@ export async function verifyScriptSchemaSnapshot(
       const localTables: Record<string, TailorDBSnapshotType> = Object.fromEntries(
         Object.values(namespaceData.types).map((type) => [type.name, createSnapshotType(type)]),
       );
-      const diff = compareLocalTypesWithSnapshot(snapshot, localTables, namespace);
+      // The remote-derived sidecar cannot textually match local script-bearing
+      // props (hooks, validate, default), so compare remote-comparable projections.
+      const diff = compareSnapshots(
+        createRemoteComparableSnapshot(snapshot),
+        createRemoteComparableSnapshot({ ...snapshot, tables: localTables }),
+      );
       if (hasChanges(diff)) {
         throw schemaDriftError("the local table definitions", diff, options);
       }

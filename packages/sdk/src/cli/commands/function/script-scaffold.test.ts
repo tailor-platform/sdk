@@ -190,6 +190,59 @@ describe("verifyScriptSchemaSnapshot", () => {
     await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(/--allow-schema-drift/);
   });
 
+  test("ignores script-bearing props the platform does not store verbatim", async () => {
+    const localProduct = {
+      name: "Product",
+      pluralForm: "products",
+      settings: {},
+      typeHookExpr: "compiled-type-hook",
+      forwardRelationships: {},
+      backwardRelationships: {},
+      permissions: {},
+      fields: {
+        name: { config: { type: "string", required: true, default: "unnamed" } },
+        status: {
+          config: {
+            type: "enum",
+            required: false,
+            allowedValues: [{ value: "draft" }, { value: "active" }],
+          },
+        },
+        tags: { config: { type: "string", required: true, array: true } },
+        shippedAt: { config: { type: "datetime", required: false } },
+        invoiceNumber: { config: { type: "string", required: true, serial: { start: 1 } } },
+        createdAt: {
+          config: {
+            type: "datetime",
+            required: true,
+            hooks: { create: { expr: "locally-compiled-now()" } },
+          },
+        },
+        profile: {
+          config: {
+            type: "nested",
+            required: false,
+            fields: { bio: { type: "string", required: false } },
+          },
+        },
+      },
+    };
+    vi.mocked(loadTailorDBNamespaces).mockResolvedValue({
+      config: {} as never,
+      plugins: [],
+      namespaces: [
+        { namespace: "tailordb", types: { Product: localProduct }, sourceInfo: new Map() },
+      ],
+    } as never);
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
+
+    await expect(
+      verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } })),
+    ).resolves.toBeUndefined();
+    expect(loadTailorDBNamespaces).toHaveBeenCalled();
+    expect(fetchRemoteSchemaSnapshot).toHaveBeenCalled();
+  });
+
   test("rejects when the local table definitions drifted", async () => {
     vi.mocked(loadTailorDBNamespaces).mockResolvedValue({
       config: {} as never,
