@@ -2,3 +2,7 @@ jobs:
   smoke:
     steps:
       - run: tailor function test-run resolvers/add.ts
+list-shaped-not-a-command:
+  - tailor
+  - function
+  - test-run
