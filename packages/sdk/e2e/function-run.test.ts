@@ -54,7 +54,7 @@ const env = { foo: 1, bar: "hello", baz: true };
 const AUTH_NAMESPACE = "my-auth";
 const MACHINE_USER_NAME = "manager-machine-user";
 
-interface TestRunResult extends ScriptExecutionResult {
+interface RunFunctionResult extends ScriptExecutionResult {
   scriptName: string;
   functionType?: string;
   functionName?: string;
@@ -67,7 +67,7 @@ async function runFunction(
     arg?: string;
     name?: string;
   },
-): Promise<TestRunResult> {
+): Promise<RunFunctionResult> {
   const filePath = path.resolve(exampleDir, file);
 
   if (filePath.endsWith(".js")) {
