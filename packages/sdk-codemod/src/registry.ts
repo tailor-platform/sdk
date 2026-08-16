@@ -1653,8 +1653,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
-    legacyPatterns: ["function test-run"],
-    sourceStringLegacyPatterns: ["function test-run"],
+    legacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
+    sourceStringLegacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
     examples: [
       {
         lang: "sh",
