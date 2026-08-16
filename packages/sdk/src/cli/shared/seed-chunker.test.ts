@@ -163,7 +163,7 @@ describe("chunkSeedData", () => {
         codeByteSize: 1000,
         maxMessageSize: 100_000,
       }),
-    ).toThrow(/single record in type "HugeType"/);
+    ).toThrow(/single record in table "HugeType"/);
   });
 
   test("uses default maxMessageSize when not specified", () => {
