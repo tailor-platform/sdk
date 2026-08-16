@@ -15,9 +15,6 @@ function replaceCommand(value: string): string {
 }
 
 function transformText(source: string): string | null {
-  COMMAND_PATTERN.lastIndex = 0;
-  if (!COMMAND_PATTERN.test(source)) return null;
-  COMMAND_PATTERN.lastIndex = 0;
   const updated = replaceCommand(source);
   return updated === source ? null : updated;
 }

@@ -61,7 +61,7 @@ interface TestRunResult extends ScriptExecutionResult {
 }
 
 // Bundle and execute a function file via internal APIs.
-async function runTestRun(
+async function runFunction(
   file: string,
   options?: {
     arg?: string;
@@ -180,7 +180,7 @@ describe.sequential("E2E: function run", () => {
 
   describe("resolver", () => {
     test("runs add resolver with input arguments", async () => {
-      const result = await runTestRun("resolvers/add.ts", {
+      const result = await runFunction("resolvers/add.ts", {
         arg: '{"a":1,"b":2}',
       });
 
@@ -192,7 +192,7 @@ describe.sequential("E2E: function run", () => {
     });
 
     test("returns machine user context from userInfo resolver", async () => {
-      const result = await runTestRun("resolvers/userInfo.ts");
+      const result = await runFunction("resolvers/userInfo.ts");
 
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.result);
@@ -213,7 +213,7 @@ describe.sequential("E2E: function run", () => {
     });
 
     test("injects environment variables into resolver", async () => {
-      const result = await runTestRun("resolvers/env.ts", {
+      const result = await runFunction("resolvers/env.ts", {
         arg: '{"multiplier":3}',
       });
 
@@ -226,7 +226,7 @@ describe.sequential("E2E: function run", () => {
     });
 
     test("supports getDB in resolver (stepChain)", async () => {
-      const result = await runTestRun("resolvers/stepChain.ts", {
+      const result = await runFunction("resolvers/stepChain.ts", {
         arg: '{"user":{"name":{"first":"John","last":"Doe"}}}',
       });
 
@@ -239,7 +239,7 @@ describe.sequential("E2E: function run", () => {
     });
 
     test("inserts nested object with Date and verifies round-trip", async () => {
-      const result = await runTestRun("resolvers/insertNestedProfileWithDate.ts", {
+      const result = await runFunction("resolvers/insertNestedProfileWithDate.ts", {
         arg: '{"name":"Test User","email":"test@example.com"}',
       });
 
@@ -254,7 +254,7 @@ describe.sequential("E2E: function run", () => {
     });
 
     test("reports validation errors for invalid input", async () => {
-      const result = await runTestRun("resolvers/add.ts", {
+      const result = await runFunction("resolvers/add.ts", {
         arg: '{"a":100,"b":2}',
       });
 
@@ -264,7 +264,7 @@ describe.sequential("E2E: function run", () => {
 
   describe("executor", () => {
     test("runs webhook executor with body args", async () => {
-      const result = await runTestRun("executors/testWebhook.ts", {
+      const result = await runFunction("executors/testWebhook.ts", {
         arg: '{"body":{"message":"hello"},"headers":{}}',
       });
 
@@ -277,7 +277,7 @@ describe.sequential("E2E: function run", () => {
 
   describe("workflow job", () => {
     test("runs workflow job by name (check-inventory)", async () => {
-      const result = await runTestRun("workflows/sample.ts", {
+      const result = await runFunction("workflows/sample.ts", {
         name: "check-inventory",
       });
 

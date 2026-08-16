@@ -10,6 +10,7 @@ import { executeScript } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { runFunctionCommand } from "./run";
+import { functionCommand } from "./index";
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -139,6 +140,23 @@ describe("function run --json", () => {
     }
 
     expect(stderr.output).not.toContain("deprecated");
+  });
+
+  test("dispatches the deprecated test-run alias to the run command", async () => {
+    using stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    const originalArgv = process.argv;
+    process.argv = ["node", "tailor", "function", "test-run", scriptPath];
+    try {
+      await runCommand(functionCommand, ["test-run", scriptPath, "--machine-user", "admin"]);
+    } finally {
+      process.argv = originalArgv;
+    }
+
+    expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
+    expect(stderr.output).toContain("`tailor function test-run` is deprecated");
   });
 
   test("forwards the --machine-user flag to machine user resolution and uses the resolved name", async () => {
