@@ -1647,7 +1647,7 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.22.0",
     until: "3.0.0",
     scriptPath: "v3/function-test-run-rename/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}", "**/*.md"],
     legacyPatterns: ["function test-run"],
     examples: [
       {
