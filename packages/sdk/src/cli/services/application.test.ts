@@ -100,6 +100,23 @@ describe("AI Gateway authNamespace default", () => {
     expect(application.aiGatewayServices[0]?.authNamespace).toBe("my-auth");
   });
 
+  test("defaults an omitted authNamespace to an external auth service's name", () => {
+    const aiGateway = defineAIGateway("my-aigateway", {});
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        auth: { name: "shared-auth", external: true },
+        aiGateways: [aiGateway],
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const application = defineApplication({ config });
+
+    expect(application.aiGatewayServices[0]?.authNamespace).toBe("shared-auth");
+  });
+
   test("keeps an explicit authNamespace even when it differs from the local auth service", () => {
     const auth = defineAuth("my-auth", { machineUserAttributes: {}, machineUsers: {} });
     const aiGateway = defineAIGateway("my-aigateway", { authNamespace: "other-apps-auth" });
