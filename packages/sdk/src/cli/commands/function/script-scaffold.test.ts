@@ -50,6 +50,7 @@ function makeSnapshot(): SchemaSnapshot {
           shippedAt: { type: "datetime", required: false },
           invoiceNumber: { type: "string", required: true, serial: { start: 1 } },
           createdAt: { type: "datetime", required: true, hooks: { create: { expr: "now()" } } },
+          updatedAt: { type: "datetime", required: true, optionalOnCreate: true },
           profile: {
             type: "nested",
             required: false,
@@ -77,6 +78,7 @@ describe("generateScriptDbTypes", () => {
     expect(content).toContain("shippedAt: Timestamp | null;");
     expect(content).toContain("invoiceNumber: Serial<string>;");
     expect(content).toContain("createdAt: Generated<Timestamp>;");
+    expect(content).toContain("updatedAt: Generated<Timestamp>;");
     expect(content).toContain("ObjectColumnType<{");
     expect(content).toContain("id: Generated<string>;");
   });
@@ -175,7 +177,7 @@ describe("verifyScriptSchemaSnapshot", () => {
     vi.mocked(loadTailorDBNamespaces).mockReset();
   });
 
-  function makeOptions(config: { db?: unknown } = {}) {
+  function makeOptions(config: { db?: unknown } = {}, snapshot: SchemaSnapshot = makeSnapshot()) {
     return {
       client,
       workspaceId: "ws-1",
@@ -184,7 +186,7 @@ describe("verifyScriptSchemaSnapshot", () => {
       scriptArgValue: "scripts/fix.ts",
       sidecar: {
         snapshotPath: `/proj/scripts/${SCRIPT_SNAPSHOT_FILE_NAME}`,
-        snapshot: normalizeSchemaSnapshot(makeSnapshot()),
+        snapshot: normalizeSchemaSnapshot(snapshot),
       },
     };
   }
@@ -238,6 +240,13 @@ describe("verifyScriptSchemaSnapshot", () => {
             hooks: { create: { expr: "locally-compiled-now()" } },
           },
         },
+        updatedAt: {
+          config: {
+            type: "datetime",
+            required: true,
+            hooks: { update: { expr: "locally-compiled-now()" } },
+          },
+        },
         profile: {
           config: {
             type: "nested",
@@ -254,10 +263,20 @@ describe("verifyScriptSchemaSnapshot", () => {
         { namespace: "tailordb", types: { Product: localProduct }, sourceInfo: new Map() },
       ],
     } as never);
-    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
+    const remoteDerived = makeSnapshot();
+    remoteDerived.tables.Product!.forwardRelationships = {
+      author: {
+        targetType: "User",
+        targetField: "id",
+        sourceField: "authorID",
+        isArray: false,
+        description: "",
+      },
+    };
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(remoteDerived));
 
     await expect(
-      verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } })),
+      verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } }, remoteDerived)),
     ).resolves.toBeUndefined();
     expect(loadTailorDBNamespaces).toHaveBeenCalled();
     expect(fetchRemoteSchemaSnapshot).toHaveBeenCalled();

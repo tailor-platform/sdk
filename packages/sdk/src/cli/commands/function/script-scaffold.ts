@@ -234,11 +234,13 @@ export async function verifyScriptSchemaSnapshot(
       const localTables: Record<string, TailorDBSnapshotType> = Object.fromEntries(
         Object.values(namespaceData.types).map((type) => [type.name, createSnapshotType(type)]),
       );
-      // The remote-derived sidecar cannot textually match local script-bearing
-      // props (hooks, validate, default), so compare remote-comparable projections.
+      // The generated db.ts depends only on table fields, and remote-derived
+      // snapshots cannot faithfully carry script-bearing props (hooks,
+      // validate, default), relationship directions, settings, or
+      // permissions, so compare a fields-only projection of both sides.
       const diff = compareSnapshots(
-        createRemoteComparableSnapshot(snapshot),
-        createRemoteComparableSnapshot({ ...snapshot, tables: localTables }),
+        fieldsOnlySnapshot(snapshot),
+        fieldsOnlySnapshot({ ...snapshot, tables: localTables }),
       );
       if (hasChanges(diff)) {
         throw schemaDriftError("the local table definitions", diff, options);
@@ -251,6 +253,24 @@ export async function verifyScriptSchemaSnapshot(
   if (hasChanges(remoteDiff)) {
     throw schemaDriftError("the deployed schema", remoteDiff, options);
   }
+}
+
+/**
+ * Project a snapshot down to what the generated db.ts depends on: table
+ * fields, with script-bearing props stripped by the remote-comparable
+ * projection.
+ * @param snapshot - Snapshot to project
+ * @returns Normalized snapshot carrying only table names and fields
+ */
+function fieldsOnlySnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
+  const comparable = createRemoteComparableSnapshot(snapshot);
+  const tables = Object.fromEntries(
+    Object.entries(comparable.tables).map(([tableName, table]) => [
+      tableName,
+      { name: table.name, pluralForm: table.pluralForm, fields: table.fields },
+    ]),
+  );
+  return normalizeSchemaSnapshot({ ...comparable, tables });
 }
 
 function schemaDriftError(

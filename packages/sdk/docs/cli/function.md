@@ -181,7 +181,7 @@ $ tailor function run build/resolvers/add.js --arg '{"a":1,"b":2}'
 You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
 When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
 
-A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway.
+A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
 
 `test-run` is a deprecated alias of this command and will be removed in v3.
 
@@ -234,6 +234,6 @@ $ tailor function script scripts/fix-prices.ts --namespace tailordb
 
 The scaffolded script is a plain default-exported function; execute it with `tailor function run <file>`.
 
-When the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types. Otherwise the command fetches the namespace's deployed schema and writes a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined schema.
+When the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types. Otherwise the command fetches the namespace's deployed schema and writes a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
 Re-running the command for an existing script refreshes `db.ts` and `db.snapshot.json` from the currently deployed schema and leaves the script itself untouched.

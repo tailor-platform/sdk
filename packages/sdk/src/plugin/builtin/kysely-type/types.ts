@@ -14,6 +14,7 @@ export interface KyselyFieldConfig {
   allowedValues?: readonly (string | { value: string })[];
   serial?: unknown;
   default?: unknown;
+  optionalOnCreate?: boolean;
   hooks?: {
     create?: object;
     update?: object;

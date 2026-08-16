@@ -48,7 +48,7 @@ export const scriptCommand = defineAppCommand({
   }),
   notes: `The scaffolded script is a plain default-exported function; execute it with \`tailor function run <file>\`.
 
-When the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types. Otherwise the command fetches the namespace's deployed schema and writes a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined schema.
+When the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types. Otherwise the command fetches the namespace's deployed schema and writes a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
 Re-running the command for an existing script refreshes \`db.ts\` and \`db.snapshot.json\` from the currently deployed schema and leaves the script itself untouched.`,
   examples: [

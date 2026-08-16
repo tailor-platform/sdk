@@ -86,6 +86,8 @@ export interface SnapshotFieldConfig {
   serial?: SnapshotSerial;
   scale?: number;
   default?: unknown;
+  /** Recorded on remote-derived snapshots when the platform fills the value on create. */
+  optionalOnCreate?: boolean;
   /** Nested fields (recursive) */
   fields?: Record<string, SnapshotFieldConfig>;
 }

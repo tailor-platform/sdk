@@ -68,7 +68,8 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
 
   const hasOptionalFields = Object.values(fields).some((config) => config.required !== true);
   const hasGeneratedFields = Object.values(fields).some(
-    (config) => config.hooks?.create || config.default !== undefined,
+    (config) =>
+      config.hooks?.create || config.default !== undefined || config.optionalOnCreate === true,
   );
   if (aggregatedUtilityTypes.Timestamp || hasOptionalFields || hasGeneratedFields) {
     return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
@@ -156,7 +157,11 @@ function generateFieldType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
     usedUtilityTypes.Serial = true;
     finalType = `Serial<${finalType}>`;
   }
-  if (fieldConfig.hooks?.create || fieldConfig.default !== undefined) {
+  if (
+    fieldConfig.hooks?.create ||
+    fieldConfig.default !== undefined ||
+    fieldConfig.optionalOnCreate === true
+  ) {
     finalType = `Generated<${finalType}>`;
   }
 

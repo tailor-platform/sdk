@@ -2462,6 +2462,7 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
   }
 
   if (remoteField.scale !== undefined) config.scale = remoteField.scale;
+  if (remoteField.optionalOnCreate) config.optionalOnCreate = true;
 
   const nestedFields = remoteField.fields;
   if (Object.keys(nestedFields).length > 0) {
@@ -3251,7 +3252,13 @@ function compareScriptHashes(
 }
 
 function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
-  const { hooks: _hooks, validate: _validate, default: _default, ...rest } = field;
+  const {
+    hooks: _hooks,
+    validate: _validate,
+    default: _default,
+    optionalOnCreate: _optionalOnCreate,
+    ...rest
+  } = field;
   if (rest.fields) {
     const nested = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [name, f] of Object.entries(rest.fields)) {
