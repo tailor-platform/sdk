@@ -27,6 +27,7 @@ import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { assertDefined } from "#/utils/assert";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
+import { loadScriptSchemaSnapshot, verifyScriptSchemaSnapshot } from "./script-scaffold";
 import type { Jsonifiable } from "type-fest";
 
 export const runFunctionCommand = defineAppCommand({
@@ -58,9 +59,14 @@ export const runFunctionCommand = defineAppCommand({
       alias: "c",
       description: "Path to SDK config file",
     }),
+    "allow-schema-drift": arg(z.boolean().default(false), {
+      description: "Run a scaffolded script even when its schema snapshot no longer matches",
+    }),
   }),
   notes: `You can pass either a source file (\`.ts\`) or a pre-bundled file (\`.js\`).
 When a \`.js\` file is provided, detection and bundling are skipped and the file is executed as-is.
+
+A script scaffolded by \`function script\` with a generated \`db.ts\` is checked against its \`db.snapshot.json\` before execution and refused on schema drift; pass \`--allow-schema-drift\` to run it anyway.
 
 \`test-run\` is a deprecated alias of this command and will be removed in v3.
 
@@ -128,6 +134,25 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     // 4. Resolve bundled code and script name
     const relativePath = path.relative(process.cwd(), filePath);
     const isPreBundled = filePath.endsWith(".js");
+
+    if (!isPreBundled) {
+      const sidecar = loadScriptSchemaSnapshot(filePath);
+      if (sidecar) {
+        if (args["allow-schema-drift"]) {
+          logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
+        } else {
+          logger.info("Checking the script's schema snapshot for drift...");
+          await verifyScriptSchemaSnapshot({
+            client,
+            workspaceId,
+            config,
+            configArgValue: args.config,
+            scriptArgValue: args.file,
+            sidecar,
+          });
+        }
+      }
+    }
     let bundledCode: string;
     let scriptName: string;
     let functionType: string | undefined;
