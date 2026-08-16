@@ -65,7 +65,7 @@ export function buildSeedNamespaceConfigs(
     const selfRefTypes: string[] = [];
     const requiredFields: Record<string, string[]> = {};
 
-    for (const [typeName, type] of Object.entries(ns.types)) {
+    for (const [typeName, type] of Object.entries(ns.tables)) {
       const typeInfo = processSeedTypeInfo(type, ns.namespace);
       types.push(typeInfo.name);
       dependencies[typeInfo.name] = typeInfo.dependencies;

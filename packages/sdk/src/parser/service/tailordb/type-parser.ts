@@ -1,5 +1,5 @@
 import * as inflection from "inflection";
-import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
+import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import { convertTypeHookToExpr, convertTypeValidateToExpr, parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
@@ -428,7 +428,7 @@ function formatTypeSourceLocation(sourceInfo: TypeSourceInfo[string] | undefined
   if (!sourceInfo) {
     return "";
   }
-  return isPluginGeneratedType(sourceInfo)
+  return isPluginGeneratedTable(sourceInfo)
     ? ` (plugin: ${sourceInfo.pluginId})`
     : ` (${sourceInfo.filePath})`;
 }

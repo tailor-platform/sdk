@@ -22,7 +22,7 @@ export {
   type DeployResult as StaticWebsiteDeployResult,
 } from "./commands/staticwebsite/deploy";
 export { assertWritable } from "./shared/readonly-guard";
-export { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
+export { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 export type {
   GeneratorResult,
   Plugin,
@@ -34,7 +34,7 @@ export type {
   TypeSourceInfoEntry,
   ParsedField,
   OperatorFieldConfig,
-  PluginGeneratedTypeSource,
+  PluginGeneratedTableSource,
 } from "#/parser/service/tailordb/types";
 export type { Resolver } from "#/types/resolver.generated";
 export type { Executor } from "#/types/executor.generated";

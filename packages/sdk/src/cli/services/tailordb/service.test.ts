@@ -138,7 +138,7 @@ export const user = db.table("User", {
       description: "namespace generator",
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
-        types: {
+        tables: {
           auditLog: db
             .table("AuditLog", {
               message: db.string(),
@@ -169,7 +169,7 @@ export const user = db.table("User", {
       description: "namespace generator",
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
-        types: {
+        tables: {
           auditLog: db.table("AuditLogNoPermission", {
             message: db.string(),
           }),

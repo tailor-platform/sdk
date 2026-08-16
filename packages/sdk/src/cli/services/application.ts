@@ -1,6 +1,6 @@
 import * as path from "pathe";
 import { generatePluginExecutorFiles } from "#/cli/commands/generate/plugin-executor-generator";
-import { generatePluginTypeFiles } from "#/cli/commands/generate/plugin-type-generator";
+import { generatePluginTableFiles } from "#/cli/commands/generate/plugin-table-generator";
 import { bundleAuthHooks } from "#/cli/services/auth/bundler";
 import { createAuthService, type AuthService } from "#/cli/services/auth/service";
 import { bundleExecutors } from "#/cli/services/executor/bundler";
@@ -453,7 +453,7 @@ export function defineApplication(params: DefineApplicationParams): Application 
 }
 
 /**
- * Generate plugin type and executor files if a plugin manager is provided.
+ * Generate plugin table and executor files if a plugin manager is provided.
  * Collects source table info from TailorDB services and delegates to PluginManager.
  * @param pluginManager - Plugin manager instance (skips if undefined)
  * @param tailorDBServices - TailorDB services to collect table source info from
@@ -467,12 +467,12 @@ export function generatePluginFilesIfNeeded(
 ): string[] {
   if (!pluginManager) return [];
 
-  const sourceTypeInfoMap = new Map<string, { filePath: string; exportName: string }>();
+  const sourceTableInfoMap = new Map<string, { filePath: string; exportName: string }>();
   for (const db of tailorDBServices) {
-    const typeSourceInfo = db.typeSourceInfo;
-    for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
+    const tableSourceInfo = db.typeSourceInfo;
+    for (const [tableName, sourceInfo] of Object.entries(tableSourceInfo)) {
       if (sourceInfo.filePath) {
-        sourceTypeInfoMap.set(typeName, {
+        sourceTableInfoMap.set(tableName, {
           filePath: sourceInfo.filePath,
           exportName: sourceInfo.exportName,
         });
@@ -482,9 +482,9 @@ export function generatePluginFilesIfNeeded(
 
   return pluginManager.generatePluginFiles({
     outputDir: path.join(getDistDir(), "plugin"),
-    sourceTypeInfoMap,
+    sourceTableInfoMap,
     configPath,
-    typeGenerator: generatePluginTypeFiles,
+    tableGenerator: generatePluginTableFiles,
     executorGenerator: generatePluginExecutorFiles,
   });
 }

@@ -17,7 +17,7 @@ export interface PluginExecutor {
   /** Plugin ID that generated this executor */
   pluginId: string;
   /** Source table name (for table-attached executors) */
-  sourceTypeName?: string;
+  sourceTableName?: string;
 }
 
 export type ExecutorService = {
@@ -116,7 +116,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
           pluginExecutors.push({
             executor,
             pluginId: "plugin-generated",
-            sourceTypeName: undefined,
+            sourceTableName: undefined,
           });
         }
       }

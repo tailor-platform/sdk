@@ -84,7 +84,7 @@ export function createGenerationManager(params: {
   function buildTailorDBData(): TailorDBNamespaceData[] {
     return Object.entries(services.tailordb).map(([namespace, info]) => ({
       namespace,
-      types: info.types,
+      tables: info.types,
       sourceInfo: new Map(Object.entries(info.sourceInfo)),
       pluginAttachments: info.pluginAttachments,
     }));

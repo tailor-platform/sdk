@@ -32,7 +32,7 @@ export function fileUtilsPlugin(
       for (const ns of ctx.tailordb) {
         const typesWithFiles: FileUtilMetadata[] = [];
 
-        for (const type of Object.values(ns.types)) {
+        for (const type of Object.values(ns.tables)) {
           const metadata = await processFileType(type);
           if (metadata.fileFields.length > 0) {
             typesWithFiles.push(metadata);

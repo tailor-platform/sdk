@@ -58,7 +58,7 @@ export interface TailorDBNamespaceData {
   /** Namespace name */
   namespace: string;
   /** All TailorDB tables in this namespace, keyed by table name */
-  types: Record<string, TailorDBType>;
+  tables: Record<string, TailorDBType>;
   /** Source info for each table (file path, export name, plugin info) */
   sourceInfo: ReadonlyMap<string, TypeSourceInfoEntry>;
   /** Plugin attachments configured on each table via .plugin() method */
@@ -132,7 +132,7 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
 }
 
-export type TypeConfigRequired<PluginConfig = unknown> =
+export type TableConfigRequired<PluginConfig = unknown> =
   | boolean
   | ((pluginConfig: PluginConfig | undefined) => boolean);
 
@@ -148,9 +148,9 @@ export interface PluginConfigs<Fields extends string = string> {
 /**
  * Context passed to plugin's process method
  */
-export interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
-  type: TailorAnyDBType;
-  typeConfig: TypeConfig;
+export interface PluginTableProcessContext<TableConfig = unknown, PluginConfig = unknown> {
+  table: TailorAnyDBType;
+  tableConfig: TableConfig;
   pluginConfig: PluginConfig;
   namespace: string;
 }
@@ -166,14 +166,14 @@ export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
 /**
  * Interface representing a TailorDB table for plugin output.
  */
-export interface TailorDBTypeForPlugin {
+export interface TailorDBTableForPlugin {
   readonly name: string;
   readonly fields: Record<string, unknown>;
 }
 
-export type PluginGeneratedType = TailorDBTypeForPlugin;
+export type PluginGeneratedTable = TailorDBTableForPlugin;
 
-export type PluginGeneratedTypes = Record<string, PluginGeneratedType>;
+export type PluginGeneratedTables = Record<string, PluginGeneratedTable>;
 
 export interface PluginGeneratedResolver {
   name: string;
@@ -249,7 +249,7 @@ export type PluginExecutorContextValue =
   | undefined;
 
 export interface PluginExecutorContextBase {
-  sourceType: TailorAnyDBType | null;
+  sourceTable: TailorAnyDBType | null;
   namespace: string;
 }
 
@@ -283,12 +283,12 @@ export interface PluginExtends {
 }
 
 export interface PluginOutput {
-  types?: PluginGeneratedTypes;
+  tables?: PluginGeneratedTables;
   resolvers?: PluginGeneratedResolver[];
   executors?: PluginGeneratedExecutor[];
 }
 
-export interface TypePluginOutput extends PluginOutput {
+export interface TablePluginOutput extends PluginOutput {
   extends?: PluginExtends;
 }
 
@@ -296,19 +296,19 @@ export type NamespacePluginOutput = PluginOutput;
 
 /**
  * Plugin interface that all plugins must implement.
- * @template TypeConfig - Type for per-table configuration passed via .plugin() method
+ * @template TableConfig - Type for per-table configuration passed via .plugin() method
  * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
  */
-export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
+export interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
   readonly id: string;
   readonly description: string;
   readonly importPath?: string;
-  readonly typeConfigRequired?: TypeConfigRequired<PluginConfig>;
+  readonly tableConfigRequired?: TableConfigRequired<PluginConfig>;
   readonly pluginConfig?: PluginConfig;
 
-  onTypeLoaded?(
-    context: PluginProcessContext<TypeConfig, PluginConfig>,
-  ): TypePluginOutput | Promise<TypePluginOutput>;
+  onTableLoaded?(
+    context: PluginTableProcessContext<TableConfig, PluginConfig>,
+  ): TablePluginOutput | Promise<TablePluginOutput>;
 
   onNamespaceLoaded?(
     context: PluginNamespaceProcessContext<PluginConfig>,

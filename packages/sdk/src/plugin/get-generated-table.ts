@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
-import type { Plugin, PluginOutput, TypePluginOutput } from "#/plugin/types";
+import type { Plugin, PluginOutput, TablePluginOutput } from "#/plugin/types";
 
 // ========================================
 // Config loading and caching
@@ -89,18 +89,18 @@ interface DbNamespaceConfig {
 }
 
 /**
- * Resolve the namespace for a table-attached sourceType by checking config.db file patterns.
+ * Resolve the namespace for a table-attached source table by checking config.db file patterns.
  * Uses ESM module cache identity: same file path yields same object references.
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
  * @param configDir - Directory containing the config file
- * @param sourceType - The TailorDB table to look up
+ * @param sourceTable - The TailorDB table to look up
  * @returns The namespace name
  */
-async function resolveNamespaceForType(
+async function resolveNamespaceForTable(
   config: { db?: Record<string, unknown> },
   configDir: string,
-  sourceType: TailorAnyDBType,
+  sourceTable: TailorAnyDBType,
 ): Promise<string> {
   if (!config.db) {
     throw new Error(`No db configuration found in config`);
@@ -123,7 +123,7 @@ async function resolveNamespaceForType(
       for (const file of matchedFiles) {
         const mod = await import(pathToFileURL(file).href);
         for (const exported of Object.values(mod)) {
-          if (exported === sourceType) {
+          if (exported === sourceTable) {
             return namespace;
           }
         }
@@ -132,8 +132,8 @@ async function resolveNamespaceForType(
   }
 
   throw new Error(
-    `Could not resolve namespace for type "${sourceType.name}". ` +
-      `Ensure the type file is included in a db namespace's files pattern.`,
+    `Could not resolve namespace for table "${sourceTable.name}". ` +
+      `Ensure the table file is included in a db namespace's files pattern.`,
   );
 }
 
@@ -170,14 +170,14 @@ async function resolveNamespaceForNamespacePlugin(
       namespace,
     });
 
-    if (output.types?.[kind]) {
+    if (output.tables?.[kind]) {
       return { namespace, output };
     }
   }
 
   throw new Error(
     `Could not resolve namespace for plugin "${plugin.id}" with kind "${kind}". ` +
-      `No namespace produced a type with that kind.`,
+      `No namespace produced a table with that kind.`,
   );
 }
 
@@ -185,8 +185,8 @@ async function resolveNamespaceForNamespacePlugin(
 // Process caching
 // ========================================
 
-// Cache: plugin -> cacheKey -> TypePluginOutput
-const processCache = new WeakMap<Plugin, Map<string, TypePluginOutput>>();
+// Cache: plugin -> cacheKey -> TablePluginOutput
+const processCache = new WeakMap<Plugin, Map<string, TablePluginOutput>>();
 
 // Cache for namespace plugins: plugin -> cacheKey -> PluginOutput
 const namespaceProcessCache = new WeakMap<Plugin, Map<string, PluginOutput>>();
@@ -216,19 +216,19 @@ function getCacheKey(baseKey: string, pluginConfig: unknown): string {
 
 /**
  * Get a generated table from a plugin by loading the config and resolving everything automatically.
- * For table-attached plugins, calls onTypeLoaded() with the sourceType.
+ * For table-attached plugins, calls onTableLoaded() with the source table.
  * For namespace plugins, calls onNamespaceLoaded() with auto-resolved namespace.
  * Results are cached per config path, plugin, namespace, and pluginConfig to avoid redundant processing.
  * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
  * @param pluginId - The plugin's unique identifier
- * @param sourceType - The source TailorDB table (null for namespace plugins)
+ * @param sourceTable - The source TailorDB table (null for namespace plugins)
  * @param kind - The generated table kind (e.g., "request", "step")
  * @returns The generated TailorDB table
  */
-export async function getGeneratedType(
+export async function getGeneratedTable(
   configPath: string,
   pluginId: string,
-  sourceType: TailorAnyDBType | null,
+  sourceTable: TailorAnyDBType | null,
   kind: string,
 ): Promise<TailorAnyDBType> {
   const cache = await loadAndCacheConfig(configPath);
@@ -251,32 +251,38 @@ export async function getGeneratedType(
 
   const { plugin, pluginConfig } = pluginEntry;
 
-  if (sourceType === null) {
-    return getGeneratedTypeForNamespacePlugin(config, plugin, kind, pluginConfig);
+  if (sourceTable === null) {
+    return getGeneratedTableForNamespacePlugin(config, plugin, kind, pluginConfig);
   }
 
-  const namespace = await resolveNamespaceForType(config, configDir, sourceType);
-  return getGeneratedTypeForTypeAttachedPlugin(plugin, sourceType, kind, pluginConfig, namespace);
+  const namespace = await resolveNamespaceForTable(config, configDir, sourceTable);
+  return getGeneratedTableForTableAttachedPlugin(
+    plugin,
+    sourceTable,
+    kind,
+    pluginConfig,
+    namespace,
+  );
 }
 
 /**
  * Get a generated table from a table-attached plugin.
- * @param plugin - The plugin instance (must have onTypeLoaded() method)
- * @param sourceType - The source TailorDB table
+ * @param plugin - The plugin instance (must have onTableLoaded() method)
+ * @param sourceTable - The source TailorDB table
  * @param kind - The generated table kind
  * @param pluginConfig - Plugin-level configuration
  * @param namespace - Resolved namespace
  * @returns The generated TailorDB table
  */
-async function getGeneratedTypeForTypeAttachedPlugin(
+async function getGeneratedTableForTableAttachedPlugin(
   plugin: Plugin,
-  sourceType: TailorAnyDBType,
+  sourceTable: TailorAnyDBType,
   kind: string,
   pluginConfig: unknown,
   namespace: string,
 ): Promise<TailorAnyDBType> {
-  if (!plugin.onTypeLoaded) {
-    throw new Error(`Plugin "${plugin.id}" does not have a onTypeLoaded() method`);
+  if (!plugin.onTableLoaded) {
+    throw new Error(`Plugin "${plugin.id}" does not have an onTableLoaded() method`);
   }
 
   // Check cache first
@@ -286,28 +292,28 @@ async function getGeneratedTypeForTypeAttachedPlugin(
     processCache.set(plugin, pluginCache);
   }
 
-  const cacheKey = getCacheKey(`${sourceType.name}:ns=${namespace}`, pluginConfig);
+  const cacheKey = getCacheKey(`${sourceTable.name}:ns=${namespace}`, pluginConfig);
   let output = pluginCache.get(cacheKey);
 
   if (!output) {
-    const typeConfig = sourceType.plugins.find((p) => p.pluginId === plugin.id)?.config;
-    output = await plugin.onTypeLoaded({
-      type: sourceType,
-      typeConfig: typeConfig ?? {},
+    const tableConfig = sourceTable.plugins.find((p) => p.pluginId === plugin.id)?.config;
+    output = await plugin.onTableLoaded({
+      table: sourceTable,
+      tableConfig: tableConfig ?? {},
       pluginConfig,
       namespace,
     });
     pluginCache.set(cacheKey, output);
   }
 
-  const generatedType = output.types?.[kind];
-  if (!generatedType) {
+  const generatedTable = output.tables?.[kind];
+  if (!generatedTable) {
     throw new Error(
-      `Generated type not found: plugin=${plugin.id}, sourceType=${sourceType.name}, kind=${kind}`,
+      `Generated table not found: plugin=${plugin.id}, sourceTable=${sourceTable.name}, kind=${kind}`,
     );
   }
 
-  return generatedType as TailorAnyDBType;
+  return generatedTable as TailorAnyDBType;
 }
 
 /**
@@ -320,7 +326,7 @@ async function getGeneratedTypeForTypeAttachedPlugin(
  * @param pluginConfig - Plugin-level configuration
  * @returns The generated TailorDB table
  */
-async function getGeneratedTypeForNamespacePlugin(
+async function getGeneratedTableForNamespacePlugin(
   config: { db?: Record<string, unknown> },
   plugin: Plugin,
   kind: string,
@@ -345,8 +351,8 @@ async function getGeneratedTypeForNamespacePlugin(
 
       const cacheKey = getCacheKey(`namespace:ns=${namespace}`, pluginConfig);
       const cached = pluginCache.get(cacheKey);
-      if (cached?.types?.[kind]) {
-        return cached.types[kind] as TailorAnyDBType;
+      if (cached?.tables?.[kind]) {
+        return cached.tables[kind] as TailorAnyDBType;
       }
     }
   }
@@ -362,12 +368,12 @@ async function getGeneratedTypeForNamespacePlugin(
   const cacheKey = getCacheKey(`namespace:ns=${namespace}`, pluginConfig);
   pluginCache.set(cacheKey, output);
 
-  const generatedType = output.types?.[kind];
-  if (!generatedType) {
-    throw new Error(`Generated type not found: plugin=${plugin.id}, kind=${kind}`);
+  const generatedTable = output.tables?.[kind];
+  if (!generatedTable) {
+    throw new Error(`Generated table not found: plugin=${plugin.id}, kind=${kind}`);
   }
 
-  return generatedType as TailorAnyDBType;
+  return generatedTable as TailorAnyDBType;
 }
 
 /**
