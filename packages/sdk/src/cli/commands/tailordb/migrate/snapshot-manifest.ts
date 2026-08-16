@@ -31,6 +31,7 @@ import {
 import * as inflection from "inflection";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
+import { defineRecordEntry } from "./record";
 import { isSnapshotFieldRefOperand } from "./snapshot";
 import type {
   SchemaSnapshot,
@@ -146,7 +147,7 @@ export function generateTailorDBTypeManifestFromSnapshot(
   const indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>> = {};
   if (snapshotType.indexes) {
     for (const [indexName, indexConfig] of Object.entries(snapshotType.indexes)) {
-      indexes[indexName] = convertIndexToProto(indexConfig);
+      defineRecordEntry(indexes, indexName, convertIndexToProto(indexConfig));
     }
   }
 
@@ -259,7 +260,7 @@ function processNestedFieldsFromSnapshot(
   for (const [fieldName, fieldConfig] of Object.entries(fields)) {
     if (fieldConfig.type === "nested" && fieldConfig.fields) {
       const deepNestedFields = processNestedFieldsFromSnapshot(fieldConfig.fields);
-      nestedFields[fieldName] = {
+      defineRecordEntry(nestedFields, fieldName, {
         type: "nested",
         allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
         description: fieldConfig.description || "",
@@ -271,9 +272,9 @@ function processNestedFieldsFromSnapshot(
         vector: false,
         fields: deepNestedFields,
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
+      });
     } else {
-      nestedFields[fieldName] = {
+      defineRecordEntry(nestedFields, fieldName, {
         type: fieldConfig.type,
         allowedValues:
           fieldConfig.type === "enum"
@@ -299,7 +300,7 @@ function processNestedFieldsFromSnapshot(
           },
         }),
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
+      });
     }
   }
 

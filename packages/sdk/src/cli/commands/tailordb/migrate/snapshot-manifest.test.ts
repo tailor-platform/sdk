@@ -174,6 +174,26 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.__proto__?.type).toBe("string");
     });
 
+    test("records a nested field named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        fields: {
+          id: { type: "uuid", required: true },
+          profile: {
+            type: "nested",
+            required: false,
+            fields: Object.fromEntries([["__proto__", { type: "string", required: false }]]),
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const nestedFields = manifest.schema?.fields?.profile?.fields ?? {};
+
+      expect(Object.hasOwn(nestedFields, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(nestedFields)).toBe(Object.prototype);
+      expect(nestedFields["__proto__"]?.type).toBe("string");
+    });
+
     test("handles foreign key relationships", () => {
       const snapshotType = createTestSnapshotType("Post", {
         fields: {
@@ -215,6 +235,19 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.indexes?.email_unique?.unique).toBe(true);
       expect(manifest.schema?.indexes?.name_status?.fieldNames).toEqual(["name", "status"]);
       expect(manifest.schema?.indexes?.name_status?.unique).toBe(false);
+    });
+
+    test("records an index named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        indexes: Object.fromEntries([["__proto__", { fields: ["name"], unique: true }]]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const indexes = manifest.schema?.indexes ?? {};
+
+      expect(Object.hasOwn(indexes, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(indexes)).toBe(Object.prototype);
+      expect(indexes["__proto__"]?.fieldNames).toEqual(["name"]);
     });
 
     test("handles file fields", () => {
