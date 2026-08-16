@@ -1,0 +1,4 @@
+jobs:
+  smoke:
+    steps:
+      - run: tailor function test-run resolvers/add.ts

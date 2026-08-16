@@ -56,7 +56,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "executor/jobs.ts",
   "executor/list.ts",
   "executor/webhook.ts",
-  // Function (read-only / local execution). `function/test-run.ts` is exempt
+  // Function (read-only / local execution). `function/run.ts` is exempt
   // because it runs under a machine user via `testExecScript` whose own
   // permissions gate any application-data effects.
   "function/index.ts",
@@ -64,7 +64,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "function/get.ts",
   "function/list.ts",
   "function/logs.ts",
-  "function/test-run.ts",
+  "function/run.ts",
   // Generate (local code generation)
   "generate/index.ts",
   // Machine user (read-only; token retrieval only fetches, does not mutate)

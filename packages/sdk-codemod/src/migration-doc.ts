@@ -77,18 +77,16 @@ function renderNotice(codemod: CodemodPackage): string {
 }
 
 /**
- * Render the v2 migration guide from the codemod registry. The registry is the
- * single source of truth; missing detail is added to the codemod definitions.
- * @param codemods - All registered codemods, in registration order
+ * Render one major version's migration guide from the codemod registry. The
+ * registry is the single source of truth; missing detail is added to the
+ * codemod definitions.
+ * @param codemods - The codemods targeting this major, in registration order
+ * @param major - The major version the guide migrates to (default: 2)
  * @returns The migration guide as Markdown
  */
-export function renderMigrationDoc(codemods: CodemodPackage[]): string {
-  // NOTE: This generator is currently v1→v2-specific: the title, `v2.md` output
-  // path, and `v2/*` rule ids / `until: "2.0.0"` ranges are all hardcoded.
-  // Supporting future major migrations would require parameterizing the target
-  // version, output path, and rule namespace.
+export function renderMigrationDoc(codemods: CodemodPackage[], major = 2): string {
   const header = [
-    "# Migrating to v2",
+    `# Migrating to v${major}`,
     "",
     "<!-- Generated from the sdk-codemod registry. Run `pnpm codemod:docs:update` and edit `packages/sdk-codemod/src/registry.ts` instead of this file. -->",
     "",
@@ -109,7 +107,7 @@ export function renderMigrationDoc(codemods: CodemodPackage[]): string {
       [
         "## Behavioral changes (no migration required)",
         "",
-        "These v2 changes alter runtime or CLI behavior; no source change is needed.",
+        `These v${major} changes alter runtime or CLI behavior; no source change is needed.`,
         "",
         notices.map(renderNotice).join("\n"),
       ].join("\n"),

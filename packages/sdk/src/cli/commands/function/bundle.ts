@@ -1,5 +1,5 @@
 /**
- * Bundler for function test-run command
+ * Bundler for the function run command
  *
  * Bundles a single function file for execution via the TestExecScript API.
  * Generates an entry file based on the detected function type and bundles
@@ -40,7 +40,7 @@ export interface ResolvedMachineUser {
   attributeList: unknown[];
 }
 
-interface BundleForTestRunOptions {
+interface BundleForRunOptions {
   /** Detected function info */
   detected: DetectedFunction;
   /** Absolute path to the source file */
@@ -61,7 +61,7 @@ interface BundleForTestRunOptions {
   defaultPermission?: Resolver["permission"];
 }
 
-interface BundleForTestRunResult {
+interface BundleForRunResult {
   /** The bundled JavaScript code */
   bundledCode: string;
   /** Name used for the script */
@@ -69,13 +69,11 @@ interface BundleForTestRunResult {
 }
 
 /**
- * Bundle a function file for test-run execution via TestExecScript API.
+ * Bundle a function file for `function run` execution via the TestExecScript API.
  * @param options - Bundle options
  * @returns Bundled code and script name
  */
-export async function bundleForTestRun(
-  options: BundleForTestRunOptions,
-): Promise<BundleForTestRunResult> {
+export async function bundleForRun(options: BundleForRunOptions): Promise<BundleForRunResult> {
   const { detected, sourceFile, baseDir, env = {}, machineUser, workspaceId } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
@@ -174,7 +172,7 @@ function generateEntry(options: GenerateEntryOptions): string {
       // both call buildResolverPermissionAndInputCheckExpr so the permission
       // guard and input validation can't drift between the two entry points.
       // In production, the operationHook injects caller/env into context.
-      // For test-run, we embed machine user info since there's no operationHook.
+      // For function run, we embed machine user info since there's no operationHook.
       const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
       const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr({
         permission: detected.permission,
@@ -199,7 +197,7 @@ function generateEntry(options: GenerateEntryOptions): string {
     case "executor": {
       // Mirrors the production executor bundler (services/executor/bundler.ts).
       // In production, buildExecutorArgsExpr injects actor/env into args.
-      // For test-run, we embed machine user as actor.
+      // For function run, we embed machine user as actor.
       const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
       return ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";

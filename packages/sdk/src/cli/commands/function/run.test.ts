@@ -9,7 +9,7 @@ import { loadMachineUserName } from "#/cli/shared/context";
 import { executeScript } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { testRunCommand } from "./test-run";
+import { runFunctionCommand } from "./run";
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -29,12 +29,12 @@ vi.mock("#/cli/shared/script-executor", () => ({
   executeScript: vi.fn(),
 }));
 
-describe("function test-run --json", () => {
+describe("function run --json", () => {
   let scriptPath: string;
   let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
 
   aroundEach(async (runTest) => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-test-run-json-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-run-json-test-"));
     scriptPath = path.join(tmpDir, "fn.js");
     fs.writeFileSync(scriptPath, "export default async function main() { return { ok: true }; }");
 
@@ -72,7 +72,7 @@ describe("function test-run --json", () => {
     using stderr = captureStderr();
     using _json = jsonMode();
 
-    await runCommand(testRunCommand, [scriptPath, "--machine-user", "admin"]);
+    await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
 
     expect(JSON.parse(stdout.output)).toEqual({
       success: true,
@@ -89,7 +89,7 @@ describe("function test-run --json", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    await runCommand(testRunCommand, [scriptPath]);
+    await runCommand(runFunctionCommand, [scriptPath]);
 
     expect(getAuthMachineUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: "profile-bot" }),
@@ -103,10 +103,42 @@ describe("function test-run --json", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    await runCommand(testRunCommand, [scriptPath]);
+    await runCommand(runFunctionCommand, [scriptPath]);
 
     expect(getAuthMachineUserMock).toHaveBeenCalledWith(expect.objectContaining({ name: "admin" }));
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
+  });
+
+  test("warns when invoked via the deprecated test-run alias", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    const originalArgv = process.argv;
+    process.argv = ["node", "tailor", "function", "test-run", scriptPath];
+    try {
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+    } finally {
+      process.argv = originalArgv;
+    }
+
+    expect(stderr.output).toContain("`tailor function test-run` is deprecated");
+  });
+
+  test("does not warn when invoked via the run command name", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    const originalArgv = process.argv;
+    process.argv = ["node", "tailor", "function", "run", scriptPath];
+    try {
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+    } finally {
+      process.argv = originalArgv;
+    }
+
+    expect(stderr.output).not.toContain("deprecated");
   });
 
   test("forwards the --machine-user flag to machine user resolution and uses the resolved name", async () => {
@@ -116,7 +148,7 @@ describe("function test-run --json", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    await runCommand(testRunCommand, [scriptPath, "--machine-user", "flag-bot"]);
+    await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "flag-bot"]);
 
     expect(loadMachineUserName).toHaveBeenCalledWith(
       expect.objectContaining({ machineUser: "flag-bot", machineUserSource: "option" }),

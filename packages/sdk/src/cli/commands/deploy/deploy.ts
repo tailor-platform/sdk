@@ -2679,7 +2679,7 @@ async function deployInternal(
 
     // Note: the normal apply path intentionally skips writing bundle files to
     // .tailor/. Bundles are kept in memory and uploaded directly to the
-    // function registry. To test a function locally, use `function test-run`
+    // function registry. To test a function locally, use `function run`
     // with a .ts source file instead of a pre-bundled .js file.
 
     if (!workspace) throw new Error("Workspace was not resolved");

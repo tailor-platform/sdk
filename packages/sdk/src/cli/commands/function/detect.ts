@@ -1,5 +1,5 @@
 /**
- * Function type detection for test-run command
+ * Function type detection for the function run command
  *
  * Detects the function type (resolver, executor, workflow job, or plain function)
  * by dynamically importing the module and checking against known schemas.

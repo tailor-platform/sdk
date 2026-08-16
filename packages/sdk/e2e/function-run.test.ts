@@ -1,10 +1,10 @@
 /**
- * E2E tests for `function test-run` CLI command
+ * E2E tests for `function run` CLI command
  *
- * Verifies that the function test-run command correctly bundles and executes
+ * Verifies that the function run command correctly bundles and executes
  * different function types on the Tailor Platform server via TestExecScript API.
  *
- * Uses internal APIs directly (detectFunctionType, bundleForTestRun, executeScript)
+ * Uses internal APIs directly (detectFunctionType, bundleForRun, executeScript)
  * instead of spawning CLI subprocesses. The deploy step still uses subprocess
  * since it orchestrates multiple services.
  *
@@ -27,7 +27,7 @@ import {
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, test, expect, aroundAll } from "vitest";
-import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
+import { bundleForRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
@@ -94,7 +94,7 @@ async function runTestRun(
     resolvedArg = undefined;
   }
 
-  const { bundledCode, scriptName } = await bundleForTestRun({
+  const { bundledCode, scriptName } = await bundleForRun({
     detected,
     sourceFile: filePath,
     baseDir: exampleDir,
@@ -115,7 +115,7 @@ async function runTestRun(
   return { ...result, scriptName, functionType: detected.type, functionName: detected.name };
 }
 
-describe.sequential("E2E: function test-run", () => {
+describe.sequential("E2E: function run", () => {
   aroundAll(async (runSuite) => {
     // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
@@ -294,7 +294,7 @@ describe.sequential("E2E: function test-run", () => {
       // Bundle the resolver first to create the .js file
       const sourceFile = path.resolve(exampleDir, "resolvers/add.ts");
       const detected = await detectFunctionType({ filePath: sourceFile });
-      const { bundledCode } = await bundleForTestRun({
+      const { bundledCode } = await bundleForRun({
         detected,
         sourceFile,
         baseDir: exampleDir,
@@ -329,11 +329,11 @@ describe.sequential("E2E: function test-run", () => {
 
   describe("error handling", () => {
     test("separates logs from error in failure output", async () => {
-      const fixtureDir = path.join(__dirname, "fixtures", "function-test-run");
+      const fixtureDir = path.join(__dirname, "fixtures", "function-run");
       const filePath = path.join(fixtureDir, "error-function.ts");
 
       const detected = await detectFunctionType({ filePath });
-      const { bundledCode, scriptName } = await bundleForTestRun({
+      const { bundledCode, scriptName } = await bundleForRun({
         detected,
         sourceFile: filePath,
         baseDir: fixtureDir,
