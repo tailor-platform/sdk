@@ -19,14 +19,15 @@ import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { assertDefined } from "#/utils/assert";
 import {
   SCRIPT_DB_TYPES_FILE_NAME,
   SCRIPT_SNAPSHOT_FILE_NAME,
+  assertGeneratedTypeScript,
   generateScriptDbTypes,
   generateScriptSkeleton,
   isGeneratedScriptDbTypes,
   loadScriptSchemaSnapshot,
-  type ScriptSchemaSnapshotSidecar,
 } from "./script-scaffold";
 import type { Plugin } from "#/plugin/types";
 
@@ -67,27 +68,54 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
     }
     const scriptDir = path.dirname(filePath);
     const scriptExists = fs.existsSync(filePath);
+    const dbTypesPath = path.join(scriptDir, SCRIPT_DB_TYPES_FILE_NAME);
+    const snapshotPath = path.join(scriptDir, SCRIPT_SNAPSHOT_FILE_NAME);
+    if (filePath === dbTypesPath) {
+      throw new Error(
+        `${SCRIPT_DB_TYPES_FILE_NAME} is reserved for the generated Kysely types written next to the script. Choose a different script file name.`,
+      );
+    }
 
     const { config, plugins } = await loadConfig(args.config);
     const kyselyPlugin = plugins.find((plugin) => plugin.id === KyselyGeneratorID);
+    // A directory that already carries a snapshot sidecar keeps using
+    // script-scoped generated types, even when the project has since
+    // configured kyselyTypePlugin: its scripts import ./db.
+    const useGeneratedDbTypes = kyselyPlugin === undefined || fs.existsSync(snapshotPath);
+
+    let existingSidecarNamespace: string | undefined;
+    if (useGeneratedDbTypes) {
+      try {
+        existingSidecarNamespace = loadScriptSchemaSnapshot(filePath)?.snapshot.namespace;
+      } catch {
+        // A corrupt sidecar is regenerated below; resolve from the config instead.
+      }
+    }
     const namespace = resolveNamespace({
       config,
       explicit: args.namespace,
-      scriptPath: filePath,
-      usesKyselyPlugin: kyselyPlugin !== undefined,
+      sidecarNamespace: existingSidecarNamespace,
+      ownedOnly: !useGeneratedDbTypes,
     });
+    if (existingSidecarNamespace !== undefined && existingSidecarNamespace !== namespace) {
+      throw new Error(
+        `This directory's generated types target namespace "${existingSidecarNamespace}" (${SCRIPT_SNAPSHOT_FILE_NAME}). ` +
+          `Scaffold scripts for namespace "${namespace}" in a separate directory.`,
+      );
+    }
 
     const created: string[] = [];
     let getDBImportPath: string;
+    let resolvedWorkspaceId: string | undefined;
 
-    if (kyselyPlugin) {
+    if (!useGeneratedDbTypes) {
       if (scriptExists) {
         throw new Error(
           `Script already exists: ${path.relative(process.cwd(), filePath)}. ` +
             "It imports the project's generated Kysely types, so there is nothing to refresh.",
         );
       }
-      const generatedTypesPath = resolveKyselyTypesPath(kyselyPlugin, config);
+      const generatedTypesPath = resolveKyselyTypesPath(assertDefined(kyselyPlugin, "plugin"));
       getDBImportPath = toImportSpecifier(path.relative(scriptDir, generatedTypesPath));
       if (!fs.existsSync(generatedTypesPath)) {
         logger.warn(
@@ -101,6 +129,7 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
         workspaceId: args["workspace-id"],
         profile: args.profile,
       });
+      resolvedWorkspaceId = workspaceId;
 
       logger.info(`Fetching deployed schema of namespace ${styles.bold(namespace)}...`);
       const snapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
@@ -111,12 +140,6 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
         );
       }
 
-      const dbTypesPath = path.join(scriptDir, SCRIPT_DB_TYPES_FILE_NAME);
-      if (filePath === dbTypesPath) {
-        throw new Error(
-          `${SCRIPT_DB_TYPES_FILE_NAME} is reserved for the generated Kysely types written next to the script. Choose a different script file name.`,
-        );
-      }
       if (fs.existsSync(dbTypesPath)) {
         const existing = fs.readFileSync(dbTypesPath, "utf-8");
         if (!isGeneratedScriptDbTypes(existing)) {
@@ -126,18 +149,21 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
           );
         }
       }
+      const dbTypesContent = generateScriptDbTypes(snapshot);
+      assertGeneratedTypeScript(dbTypesPath, dbTypesContent);
       fs.mkdirSync(scriptDir, { recursive: true });
-      fs.writeFileSync(dbTypesPath, generateScriptDbTypes(snapshot));
+      fs.writeFileSync(dbTypesPath, dbTypesContent);
       created.push(dbTypesPath);
-      const snapshotPath = path.join(scriptDir, SCRIPT_SNAPSHOT_FILE_NAME);
       fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2) + "\n");
       created.push(snapshotPath);
       getDBImportPath = "./db";
     }
 
     if (!scriptExists) {
+      const skeleton = generateScriptSkeleton({ getDBImportPath, namespace });
+      assertGeneratedTypeScript(filePath, skeleton);
       fs.mkdirSync(scriptDir, { recursive: true });
-      fs.writeFileSync(filePath, generateScriptSkeleton({ getDBImportPath, namespace }));
+      fs.writeFileSync(filePath, skeleton);
       created.unshift(filePath);
     }
 
@@ -146,13 +172,20 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
     if (args.config !== DEFAULT_CONFIG_PATH) {
       runArgv.push(`--config=${args.config}`);
     }
+    const workspaceIdForHint = resolvedWorkspaceId ?? args["workspace-id"];
+    if (workspaceIdForHint !== undefined) {
+      runArgv.push(`--workspace-id=${workspaceIdForHint}`);
+    }
+    if (args.profile !== undefined) {
+      runArgv.push(`--profile=${args.profile}`);
+    }
 
     if (logger.jsonMode) {
       logger.out({
         script: filePath,
         created,
         namespace,
-        usesGeneratedDbTypes: !kyselyPlugin,
+        usesGeneratedDbTypes: useGeneratedDbTypes,
       });
       return;
     }
@@ -170,8 +203,8 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
 interface ResolveNamespaceOptions {
   config: LoadedConfig;
   explicit: string | undefined;
-  scriptPath: string;
-  usesKyselyPlugin: boolean;
+  sidecarNamespace: string | undefined;
+  ownedOnly: boolean;
 }
 
 /**
@@ -180,13 +213,11 @@ interface ResolveNamespaceOptions {
  * @returns The namespace name
  */
 function resolveNamespace(options: ResolveNamespaceOptions): string {
-  const { config, explicit, scriptPath, usesKyselyPlugin } = options;
-  const configured = usesKyselyPlugin
-    ? extractOwnedNamespaces(config)
-    : extractAllNamespaces(config);
+  const { config, explicit, sidecarNamespace, ownedOnly } = options;
+  const configured = ownedOnly ? extractOwnedNamespaces(config) : extractAllNamespaces(config);
 
   if (explicit) {
-    if (usesKyselyPlugin && !configured.includes(explicit)) {
+    if (ownedOnly && !configured.includes(explicit)) {
       throw new Error(
         `Namespace "${explicit}" is not an owned namespace in the config, so the project's generated Kysely types do not cover it.` +
           (configured.length > 0 ? ` Available namespaces: ${configured.join(", ")}` : ""),
@@ -195,16 +226,8 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
     return explicit;
   }
 
-  let sidecar: ScriptSchemaSnapshotSidecar | null = null;
-  if (!usesKyselyPlugin) {
-    try {
-      sidecar = loadScriptSchemaSnapshot(scriptPath);
-    } catch {
-      // A corrupt sidecar is regenerated by this command; resolve from the config instead.
-    }
-  }
-  if (sidecar) {
-    return sidecar.snapshot.namespace;
+  if (sidecarNamespace !== undefined) {
+    return sidecarNamespace;
   }
 
   if (configured.length === 1) {
@@ -223,16 +246,17 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
 
 /**
  * Resolve the absolute path of the kysely-type plugin's generated types file.
+ * The plugin's relative `distPath` resolves against the working directory,
+ * matching where `tailor generate` writes it.
  * @param plugin - The configured kysely-type plugin instance
- * @param config - Loaded config (for the config directory)
  * @returns Absolute path of the generated types file
  */
-function resolveKyselyTypesPath(plugin: Plugin, config: LoadedConfig): string {
+function resolveKyselyTypesPath(plugin: Plugin): string {
   const distPath = (plugin as { pluginConfig?: { distPath?: unknown } }).pluginConfig?.distPath;
   if (typeof distPath !== "string" || distPath.length === 0) {
     throw new Error("kyselyTypePlugin is configured without a distPath; cannot locate getDB().");
   }
-  return path.resolve(path.dirname(config.path), distPath);
+  return path.resolve(distPath);
 }
 
 /**

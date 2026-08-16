@@ -11,6 +11,7 @@ import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import {
   SCRIPT_SNAPSHOT_FILE_NAME,
+  assertGeneratedTypeScript,
   generateScriptDbTypes,
   generateScriptSkeleton,
   isGeneratedScriptDbTypes,
@@ -99,6 +100,25 @@ describe("generateScriptSkeleton", () => {
     expect(content).toContain("export default async function main()");
     expect(content).toContain("db.transaction().execute(async (trx)");
     expect(content).toContain("Performance and Large Tables");
+  });
+
+  test("escapes literals so unusual names still produce parseable TypeScript", () => {
+    const content = generateScriptSkeleton({
+      getDBImportPath: './weird"path',
+      namespace: 'ta"ilordb',
+    });
+
+    expect(() => assertGeneratedTypeScript("fix.ts", content)).not.toThrow();
+    expect(content).toContain('getDB("ta\\"ilordb")');
+  });
+});
+
+describe("assertGeneratedTypeScript", () => {
+  test("accepts parseable TypeScript and rejects broken output", () => {
+    expect(() => assertGeneratedTypeScript("ok.ts", "export const a = 1;")).not.toThrow();
+    expect(() => assertGeneratedTypeScript("broken.ts", 'const x = "unterminated;')).toThrow(
+      /does not parse as TypeScript/,
+    );
   });
 });
 

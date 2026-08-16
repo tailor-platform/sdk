@@ -202,6 +202,42 @@ describe("function script", () => {
     expect(script).toContain('getDB("tailordb")');
   });
 
+  test("rejects a namespace conflicting with the directory's existing sidecar", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir), { db: { tailordb: {}, other: {} } });
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
+    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+
+    const result = await runCommand(scriptCommand, ["scripts/other.ts", "--namespace", "other"]);
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/target namespace "tailordb"/);
+  });
+
+  test("keeps refreshing generated types when kyselyTypePlugin is added later", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir));
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
+    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+
+    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    const refreshed = makeSnapshot();
+    refreshed.tables.Product!.fields.price = { type: "float", required: false };
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(refreshed));
+
+    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+
+    const dbTypes = fs.readFileSync(
+      path.join(tmp.dir, "scripts", SCRIPT_DB_TYPES_FILE_NAME),
+      "utf-8",
+    );
+    expect(dbTypes).toContain("price: number | null;");
+    expect(fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8")).toContain(
+      'import { getDB } from "./db";',
+    );
+  });
+
   test("requires --namespace when the config defines multiple namespaces", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");

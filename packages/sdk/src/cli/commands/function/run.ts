@@ -154,6 +154,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
             config,
             configArgValue: args.config,
             scriptArgValue: args.file,
+            profileArgValue: args.profile,
             sidecar,
           });
         }
