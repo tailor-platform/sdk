@@ -134,6 +134,17 @@ describe("loadScriptSchemaSnapshot", () => {
 
     expect(() => loadScriptSchemaSnapshot(scriptPath)).toThrow(/unexpected shape/);
   });
+
+  test("rejects a snapshot whose tables cannot be normalized", () => {
+    using tmp = tempCwd("sdk-script-scaffold-");
+    const scriptPath = path.join(tmp.dir, "fix.ts");
+    fs.writeFileSync(
+      path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME),
+      JSON.stringify({ namespace: "tailordb", tables: { Product: { name: "Product" } } }),
+    );
+
+    expect(() => loadScriptSchemaSnapshot(scriptPath)).toThrow(/unexpected shape/);
+  });
 });
 
 describe("verifyScriptSchemaSnapshot", () => {

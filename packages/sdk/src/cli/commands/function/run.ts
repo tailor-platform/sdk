@@ -27,7 +27,11 @@ import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { assertDefined } from "#/utils/assert";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
-import { loadScriptSchemaSnapshot, verifyScriptSchemaSnapshot } from "./script-scaffold";
+import {
+  SCRIPT_SNAPSHOT_FILE_NAME,
+  loadScriptSchemaSnapshot,
+  verifyScriptSchemaSnapshot,
+} from "./script-scaffold";
 import type { Jsonifiable } from "type-fest";
 
 export const runFunctionCommand = defineAppCommand({
@@ -136,11 +140,13 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
     const isPreBundled = filePath.endsWith(".js");
 
     if (!isPreBundled) {
-      const sidecar = loadScriptSchemaSnapshot(filePath);
-      if (sidecar) {
-        if (args["allow-schema-drift"]) {
+      if (args["allow-schema-drift"]) {
+        if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
           logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
-        } else {
+        }
+      } else {
+        const sidecar = loadScriptSchemaSnapshot(filePath);
+        if (sidecar) {
           logger.info("Checking the script's schema snapshot for drift...");
           await verifyScriptSchemaSnapshot({
             client,

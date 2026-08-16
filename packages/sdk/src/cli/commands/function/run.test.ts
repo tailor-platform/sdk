@@ -42,10 +42,14 @@ vi.mock("./bundle", () => ({
   }),
 }));
 
-vi.mock("./script-scaffold", () => ({
-  loadScriptSchemaSnapshot: vi.fn().mockReturnValue(null),
-  verifyScriptSchemaSnapshot: vi.fn(),
-}));
+vi.mock("./script-scaffold", async (importActual) => {
+  const actual = await importActual<object>();
+  return {
+    ...actual,
+    loadScriptSchemaSnapshot: vi.fn().mockReturnValue(null),
+    verifyScriptSchemaSnapshot: vi.fn(),
+  };
+});
 
 describe("function run --json", () => {
   let scriptPath: string;
@@ -215,13 +219,13 @@ describe("function run --json", () => {
     expect(executeScript).not.toHaveBeenCalled();
   });
 
-  test("skips the schema snapshot check with --allow-schema-drift", async () => {
-    vi.mocked(loadScriptSchemaSnapshot).mockReturnValueOnce({
-      snapshotPath: "/tmp/db.snapshot.json",
-      snapshot: { namespace: "tailordb" },
-    } as never);
+  test("skips the schema snapshot check with --allow-schema-drift, even when the sidecar cannot be loaded", async () => {
+    fs.writeFileSync(path.join(path.dirname(tsScriptPath), "db.snapshot.json"), "{broken");
+    vi.mocked(loadScriptSchemaSnapshot).mockImplementation(() => {
+      throw new Error("Failed to parse schema snapshot");
+    });
     using stdout = captureStdout();
-    using _stderr = captureStderr();
+    using stderr = captureStderr();
     using _json = jsonMode();
 
     await runCommand(runFunctionCommand, [
@@ -231,7 +235,9 @@ describe("function run --json", () => {
       "--allow-schema-drift",
     ]);
 
+    expect(loadScriptSchemaSnapshot).not.toHaveBeenCalled();
     expect(verifyScriptSchemaSnapshot).not.toHaveBeenCalled();
+    expect(stderr.output).toContain("Skipping the schema snapshot check");
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 

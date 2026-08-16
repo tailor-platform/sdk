@@ -148,6 +148,60 @@ describe("function script", () => {
     expect(result.error?.message).toMatch(/Refusing to overwrite/);
   });
 
+  test("rejects a script named db.ts when the generated types would share the path", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir));
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
+
+    const result = await runCommand(scriptCommand, ["scripts/db.ts"]);
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/reserved for the generated Kysely types/);
+  });
+
+  test("re-scaffolds over a corrupt snapshot sidecar", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir));
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
+    fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "{broken");
+
+    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+
+    const snapshot = JSON.parse(
+      fs.readFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "utf-8"),
+    );
+    expect(snapshot.namespace).toBe("tailordb");
+  });
+
+  test("rejects --namespace outside the owned namespaces when kyselyTypePlugin is configured", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir), {
+      plugins: [kyselyPluginStub],
+      db: { tailordb: {}, theirs: { external: true } },
+    });
+
+    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "theirs"]);
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/not an owned namespace/);
+  });
+
+  test("auto-selects the single owned namespace over external ones when kyselyTypePlugin is configured", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir), {
+      plugins: [kyselyPluginStub],
+      db: { tailordb: {}, theirs: { external: true } },
+    });
+
+    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+
+    const script = fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8");
+    expect(script).toContain('getDB("tailordb")');
+  });
+
   test("requires --namespace when the config defines multiple namespaces", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");

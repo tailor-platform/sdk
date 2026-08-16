@@ -154,16 +154,24 @@ export function loadScriptSchemaSnapshot(scriptPath: string): ScriptSchemaSnapsh
     typeof candidate.tables !== "object" ||
     candidate.tables === null
   ) {
-    throw new Error(
-      `Schema snapshot ${snapshotPath} has an unexpected shape. ` +
-        "Re-run `tailor function script` to regenerate it.",
-    );
+    throw unexpectedSnapshotShapeError(snapshotPath);
   }
 
-  return {
-    snapshotPath,
-    snapshot: normalizeSchemaSnapshot(parsed as SchemaSnapshot),
-  };
+  try {
+    return {
+      snapshotPath,
+      snapshot: normalizeSchemaSnapshot(parsed as SchemaSnapshot),
+    };
+  } catch {
+    throw unexpectedSnapshotShapeError(snapshotPath);
+  }
+}
+
+function unexpectedSnapshotShapeError(snapshotPath: string): Error {
+  return new Error(
+    `Schema snapshot ${snapshotPath} has an unexpected shape. ` +
+      "Re-run `tailor function script` to regenerate it.",
+  );
 }
 
 /** Options for {@link verifyScriptSchemaSnapshot}. */
