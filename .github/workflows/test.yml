@@ -65,12 +65,6 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      - name: Login as machine user
-        run: pnpm tailor login --machine-user
-        env:
-          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
-          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
-
       - name: Build packages
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
