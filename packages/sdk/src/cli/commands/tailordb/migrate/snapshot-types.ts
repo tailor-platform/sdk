@@ -56,6 +56,7 @@ export const SNAPSHOT_FIELD_BOOLEAN_PROPS = [
   "unique",
   "foreignKey",
   "vector",
+  "optionalOnCreate",
 ] as const;
 
 /**

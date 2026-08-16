@@ -198,6 +198,37 @@ describe("verifyScriptSchemaSnapshot", () => {
     expect(loadTailorDBNamespaces).not.toHaveBeenCalled();
   });
 
+  test("ignores deployed metadata the generated types do not depend on", async () => {
+    const remoteWithMetadata = makeSnapshot();
+    remoteWithMetadata.tables.Product!.description = "added later";
+    remoteWithMetadata.tables.Product!.settings = { aggregation: true };
+    remoteWithMetadata.tables.Product!.forwardRelationships = {
+      author: {
+        targetType: "User",
+        targetField: "id",
+        sourceField: "authorID",
+        isArray: false,
+        description: "",
+      },
+    };
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
+      normalizeSchemaSnapshot(remoteWithMetadata),
+    );
+
+    await expect(verifyScriptSchemaSnapshot(makeOptions())).resolves.toBeUndefined();
+  });
+
+  test("rejects when a field's platform-filled-on-create contract flips remotely", async () => {
+    const drifted = makeSnapshot();
+    const nameField = drifted.tables.Product!.fields.name;
+    drifted.tables.Product!.fields.name = { ...nameField!, optionalOnCreate: true };
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(drifted));
+
+    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(
+      /no longer matches the deployed schema/,
+    );
+  });
+
   test("rejects when the deployed schema drifted", async () => {
     const drifted = makeSnapshot();
     drifted.tables.Product!.fields.price = { type: "float", required: false };

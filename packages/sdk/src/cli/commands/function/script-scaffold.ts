@@ -11,10 +11,13 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { hasChanges, formatMigrationDiff } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import {
+  hasChanges,
+  formatMigrationDiff,
+  type MigrationDiff,
+} from "#/cli/commands/tailordb/migrate/diff-calculator";
 import { fetchRemoteSchemaSnapshot } from "#/cli/commands/tailordb/migrate/schema-checks";
 import {
-  compareLocalTypesWithSnapshot,
   compareSnapshots,
   createRemoteComparableSnapshot,
   createSnapshotType,
@@ -249,7 +252,13 @@ export async function verifyScriptSchemaSnapshot(
   }
 
   const remoteSnapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
-  const remoteDiff = compareLocalTypesWithSnapshot(snapshot, remoteSnapshot.tables, namespace);
+  // Both sides are remote-derived, so field hooks and optionalOnCreate are
+  // comparable verbatim; table-level metadata the generated types do not
+  // depend on is projected away like the local check does.
+  const remoteDiff = compareSnapshots(
+    normalizeSchemaSnapshot(pickTableFields(snapshot)),
+    normalizeSchemaSnapshot(pickTableFields(remoteSnapshot)),
+  );
   if (hasChanges(remoteDiff)) {
     throw schemaDriftError("the deployed schema", remoteDiff, options);
   }
@@ -263,19 +272,27 @@ export async function verifyScriptSchemaSnapshot(
  * @returns Normalized snapshot carrying only table names and fields
  */
 function fieldsOnlySnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
-  const comparable = createRemoteComparableSnapshot(snapshot);
+  return normalizeSchemaSnapshot(pickTableFields(createRemoteComparableSnapshot(snapshot)));
+}
+
+/**
+ * Keep only what the generated db.ts is built from: table names and fields.
+ * @param snapshot - Snapshot to project
+ * @returns Snapshot whose tables carry only name, pluralForm, and fields
+ */
+function pickTableFields(snapshot: SchemaSnapshot): SchemaSnapshot {
   const tables = Object.fromEntries(
-    Object.entries(comparable.tables).map(([tableName, table]) => [
+    Object.entries(snapshot.tables).map(([tableName, table]) => [
       tableName,
       { name: table.name, pluralForm: table.pluralForm, fields: table.fields },
     ]),
   );
-  return normalizeSchemaSnapshot({ ...comparable, tables });
+  return { ...snapshot, tables };
 }
 
 function schemaDriftError(
   target: string,
-  diff: ReturnType<typeof compareLocalTypesWithSnapshot>,
+  diff: MigrationDiff,
   options: VerifyScriptSchemaSnapshotOptions,
 ): Error {
   const contextFlags = [

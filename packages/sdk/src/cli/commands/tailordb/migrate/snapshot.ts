@@ -2462,7 +2462,11 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
   }
 
   if (remoteField.scale !== undefined) config.scale = remoteField.scale;
-  if (remoteField.optionalOnCreate) config.optionalOnCreate = true;
+  // Preserve the platform-filled-on-create contract when the source that
+  // implied it (a create hook or a default) is not itself representable.
+  if (remoteField.optionalOnCreate && !config.hooks?.create && config.default === undefined) {
+    config.optionalOnCreate = true;
+  }
 
   const nestedFields = remoteField.fields;
   if (Object.keys(nestedFields).length > 0) {
