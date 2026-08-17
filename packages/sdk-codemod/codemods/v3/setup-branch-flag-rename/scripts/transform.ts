@@ -34,7 +34,7 @@ function replaceCommand(value: string): string {
       const bare = quoted ? quoted[2]! : word;
       if (bare === "--branch" || bare.startsWith("--branch=")) {
         const separator = chunk.slice(0, chunk.length - word.length);
-        result += `${separator}${quote}--trigger-branch${bare.slice("--branch".length)}${quote}`;
+        result += `${separator}${quote}--target${bare.slice("--branch".length)}${quote}`;
       } else {
         result += chunk;
       }
@@ -83,10 +83,10 @@ function transformPackageJson(source: string): string | null {
 
 /**
  * Rename the `--branch` option of `tailor setup branch` invocations to
- * `--trigger-branch`.
+ * `--target`.
  *
  * `--branch` remains as a deprecated alias until v3, where only
- * `--trigger-branch` is recognized. `setup tag`, `setup preview`, and
+ * `--target` is recognized. `setup tag`, `setup preview`, and
  * `setup coordinate` keep their own `--branch` option unchanged.
  * @param source - File contents
  * @param filePath - Absolute path to the file (used to dispatch package.json vs text)

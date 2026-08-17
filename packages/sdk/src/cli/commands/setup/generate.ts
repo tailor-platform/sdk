@@ -361,8 +361,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     }
     branchAutoDetected = options.branch === undefined;
     branch =
-      options.branch ??
-      detectDefaultBranch(options.outputDir, options.gitRunner, "--trigger-branch");
+      options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner, "--target");
     validateBranch(branch);
     hasMigrations = await loadHasMigrations(configPath);
     hasSeeds = await loadHasSeeds(configPath);

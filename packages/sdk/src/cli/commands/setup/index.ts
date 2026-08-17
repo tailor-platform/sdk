@@ -103,7 +103,7 @@ const branchCommand = defineAppCommand({
       alias: "n",
       description: "Name (defaults to the config 'name')",
     }),
-    "trigger-branch": arg(z.string().min(1).optional(), {
+    target: arg(z.string().min(1).optional(), {
       hiddenAlias: "branch",
       description: "Deploy trigger branch (defaults to the detected default branch)",
     }),
@@ -121,17 +121,17 @@ const branchCommand = defineAppCommand({
       description: "Discard hand edits / take over unmanaged files and regenerate",
     }),
   }),
-  notes: "`--branch` is a deprecated alias of `--trigger-branch` and will be removed in v3.",
+  notes: "`--branch` is a deprecated alias of `--target` and will be removed in v3.",
   run: async (args) => {
     if (usedDeprecatedBranchFlag(process.argv)) {
       logger.warn(
-        "`tailor setup branch --branch` is deprecated and will be removed in v3. Use `--trigger-branch` instead.",
+        "`tailor setup branch --branch` is deprecated and will be removed in v3. Use `--target` instead.",
       );
     }
     await setupTarget({
       kind: "branch",
       workspaceName: args.name,
-      branch: args["trigger-branch"],
+      branch: args.target,
       environment: args.environment,
       erdPreview: args["erd-preview"],
       dir: args.dir,
@@ -249,7 +249,7 @@ const deleteCommand = defineAppCommand({
 });
 
 /**
- * Detect whether the deprecated `--branch` spelling of `--trigger-branch` was
+ * Detect whether the deprecated `--branch` spelling of `--target` was
  * used. politty resolves hidden aliases before dispatch, so the spelling is
  * only observable from the raw argv.
  * @param argv - Process argv tokens

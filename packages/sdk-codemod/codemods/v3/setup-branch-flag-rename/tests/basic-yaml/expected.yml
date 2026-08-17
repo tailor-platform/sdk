@@ -3,9 +3,9 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - run: tailor setup branch --name my-app-stg --trigger-branch main
+      - run: tailor setup branch --name my-app-stg --target main
       - run: |
           tailor setup branch \
             --name my-app \
-            --trigger-branch main
+            --target main
       - run: tailor setup tag --name my-app-prod --branch main

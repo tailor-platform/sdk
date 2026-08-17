@@ -3,7 +3,7 @@
 Generate the staging workflow:
 
 ```bash
-tailor setup branch --name my-app-stg --trigger-branch main
+tailor setup branch --name my-app-stg --target main
 ```
 
 Generate the production workflow (the tag guard keeps its `--branch`):

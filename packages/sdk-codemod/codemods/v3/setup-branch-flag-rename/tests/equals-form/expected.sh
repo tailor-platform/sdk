@@ -1,2 +1,2 @@
-tailor setup branch --name=my-app --trigger-branch=main
-tailor setup branch --trigger-branch='release' --force
+tailor setup branch --name=my-app --target=main
+tailor setup branch --target='release' --force

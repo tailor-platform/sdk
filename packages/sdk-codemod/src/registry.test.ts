@@ -55,23 +55,21 @@ describe("getApplicableCodemods", () => {
     expect(matchesPattern("npx @tailor-platform/sdk@latest setup branch --branch main")).toBe(true);
     expect(matchesPattern("tailor-sdk setup branch --branch main")).toBe(true);
     expect(matchesPattern("tailor setup branch --name my-app \\\n--branch main")).toBe(true);
-    expect(matchesPattern("tailor setup branch --name my-app --trigger-branch main")).toBe(false);
+    expect(matchesPattern("tailor setup branch --name my-app --target main")).toBe(false);
     expect(matchesPattern("tailor setup tag --name my-app --branch main")).toBe(false);
     expect(matchesPattern("tailor setup branch --name x && tailor setup tag --branch main")).toBe(
       false,
     );
     expect(
-      matchesPattern("tailor setup branch --environment 'prod--branch' --trigger-branch release"),
+      matchesPattern("tailor setup branch --environment 'prod--branch' --target release"),
     ).toBe(false);
     expect(
-      matchesPattern(
-        "tailor setup branch --environment 'notes about --branch here' --trigger-branch x",
-      ),
+      matchesPattern("tailor setup branch --environment 'notes about --branch here' --target x"),
     ).toBe(false);
     expect(matchesPattern("other-cli setup branch --branch main")).toBe(false);
     expect(matchesPattern("custom-tailor setup branch --branch main")).toBe(false);
     expect(
-      matchesPattern("tailor setup branch --trigger-branch main # setup tag keeps --branch main"),
+      matchesPattern("tailor setup branch --target main # setup tag keeps --branch main"),
     ).toBe(false);
   });
 

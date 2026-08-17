@@ -23,10 +23,10 @@ describe("setup branch trigger branch flag", () => {
     }
   });
 
-  test("--trigger-branch sets the deploy trigger branch without a warning", async () => {
+  test("--target sets the deploy trigger branch without a warning", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-    const result = await runCommand(setupCommand, ["branch", "--trigger-branch", "release"]);
+    const result = await runCommand(setupCommand, ["branch", "--target", "release"]);
 
     expect(result.success).toBe(true);
     expect(setupTarget).toHaveBeenCalledWith(
@@ -45,7 +45,7 @@ describe("setup branch trigger branch flag", () => {
     expect(setupTarget).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "branch", branch: "release" }),
     );
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("--trigger-branch"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("--target"));
   });
 
   test("--branch= form also warns", async () => {
@@ -58,7 +58,7 @@ describe("setup branch trigger branch flag", () => {
     expect(setupTarget).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "branch", branch: "release" }),
     );
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("--trigger-branch"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("--target"));
   });
 
   test("other subcommands keep --branch without a warning", async () => {

@@ -1,1 +1,1 @@
-tailor setup branch --name my-app-stg --trigger-branch main
+tailor setup branch --name my-app-stg --target main

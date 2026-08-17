@@ -1,8 +1,8 @@
 tailor setup branch \
   --name my-app-stg \
-  --trigger-branch main \
+  --target main \
   --environment staging
 tailor \
   setup \
   branch \
-  --trigger-branch release
+  --target release

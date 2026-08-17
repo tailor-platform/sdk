@@ -1,6 +1,6 @@
 name: "@tailor-platform/setup-branch-flag-rename"
 version: "1.0.0"
-description: "Rename the `--branch` option of `tailor setup branch` invocations to `--trigger-branch`"
+description: "Rename the `--branch` option of `tailor setup branch` invocations to `--target`"
 engine: jssg
 language: text
 since: "1.72.0"
