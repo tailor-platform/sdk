@@ -657,6 +657,11 @@ describe("detectDefaultBranch", () => {
     const run = vi.fn().mockReturnValue(null);
     expect(() => detectDefaultBranch("/repo", run)).toThrow(/--branch|set-head/);
   });
+
+  test("suggests the caller's branch flag in the remediation hint", () => {
+    const run = vi.fn().mockReturnValue(null);
+    expect(() => detectDefaultBranch("/repo", run, "--trigger-branch")).toThrow(/--trigger-branch/);
+  });
 });
 
 describe("decideAction", () => {

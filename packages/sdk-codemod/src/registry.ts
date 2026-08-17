@@ -1685,8 +1685,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
-    legacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n]*--branch(?![\w-])/],
-    sourceStringLegacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n]*--branch(?![\w-])/],
+    legacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n;&|]*--branch(?![\w-])/],
+    sourceStringLegacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n;&|]*--branch(?![\w-])/],
     examples: [
       {
         lang: "sh",
