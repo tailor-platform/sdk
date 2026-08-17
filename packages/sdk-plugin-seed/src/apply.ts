@@ -251,7 +251,7 @@ async function seedIdpUser(
   execution: SeedExecutionContext,
   scriptCode: string,
   upsert: boolean,
-): Promise<{ success: boolean; processed: number }> {
+): Promise<{ success: boolean; processed: number; transportError?: unknown }> {
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
   const rows = loadSeedData(execution.dataDir, ["_User"])._User ?? [];
@@ -316,7 +316,7 @@ async function seedIdpUser(
       });
     } catch (error) {
       warnInterruptedChunk();
-      throw error;
+      return { success: false, processed: totals.processed, transportError: error };
     }
     if (run.outcomeUnknown) {
       warnInterruptedChunk();
@@ -506,6 +506,7 @@ export const seedApplyCommand = defineAppCommand({
 
     let allSuccess = true;
     const allProcessed: Record<string, number> = {};
+    let transportFailure: { error: unknown } | undefined;
 
     const namespacesToProcess = args.namespace
       ? [args.namespace]
@@ -549,11 +550,17 @@ export const seedApplyCommand = defineAppCommand({
       if (!seeded.success) {
         allSuccess = false;
       }
+      if ("transportError" in seeded) {
+        transportFailure = { error: seeded.transportError };
+      }
     }
 
     logger.newline();
     if (args.json) {
       logger.out({ success: allSuccess, processed: allProcessed });
+    }
+    if (transportFailure) {
+      throw transportFailure.error;
     }
     if (!allSuccess) {
       throw new Error("Seed data generation completed with errors");

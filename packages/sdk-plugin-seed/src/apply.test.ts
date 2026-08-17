@@ -309,6 +309,7 @@ describe("seedApplyCommand", () => {
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
       Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
     );
+    const transportError = new Error("[deadline_exceeded] context deadline exceeded");
     let idpCallCount = 0;
     sdk.executeScript.mockImplementation(
       ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
@@ -322,7 +323,7 @@ describe("seedApplyCommand", () => {
         }
         idpCallCount += 1;
         if (idpCallCount > 1) {
-          return Promise.reject(new Error("[deadline_exceeded] context deadline exceeded"));
+          return Promise.reject(transportError);
         }
         return Promise.resolve({
           error: undefined,
@@ -340,9 +341,11 @@ describe("seedApplyCommand", () => {
       },
     );
 
-    const result = await runApplyCommand(["--machine-user", "manager"]);
+    const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
 
     expect(result.exitCode).toBe(1);
+    expect(result.error).toBe(transportError);
+    expect(logger.out).toHaveBeenCalledWith({ success: false, processed: { _User: 25 } });
     const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
     expect(
       warnedLines.some(
@@ -351,6 +354,49 @@ describe("seedApplyCommand", () => {
           line.includes("re-run the same command narrowed to `_User` with `--upsert`"),
       ),
     ).toBe(true);
+  });
+
+  test("continues after a known _User row failure and reports confirmed totals", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    let idpCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name !== "seed-idp-user.ts") {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: '{"success":true,"deleted":1}',
+            success: true,
+          });
+        }
+        idpCallCount += 1;
+        const rowCount = arg?.users?.length ?? 0;
+        const hasRowFailure = idpCallCount === 2;
+        const processed = hasRowFailure ? rowCount - 1 : rowCount;
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: !hasRowFailure,
+            processed,
+            created: processed,
+            updated: 0,
+            skipped: 0,
+            errors: hasRowFailure ? ["Row 27 (user-26): create failed"] : [],
+          }),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(idpCallCount).toBe(3);
+    expect(logger.out).toHaveBeenCalledWith({ success: false, processed: { _User: 50 } });
   });
 
   test("stops and reports progress when a _User chunk execution fails without a result", async () => {
