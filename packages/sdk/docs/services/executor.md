@@ -374,7 +374,7 @@ must return the same input type.
 
 ### Authentication for Operations
 
-GraphQL and Workflow operations can specify an `invoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
+`graphql`, `function`, `jobFunction`, and `workflow` operations can specify an `invoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
 
 ```typescript
 import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
@@ -389,6 +389,10 @@ export default createExecutor({
   },
 });
 ```
+
+The machine user is resolved in your application's auth namespace — the name of your Auth service, local or external. `webhook` is the only operation kind that does not accept `invoker`, since it calls an external URL rather than acting inside your workspace.
+
+Without an `invoker`, the operation runs as whoever raised the trigger event, or anonymously when there is no such principal — as with a `schedule` trigger. Declare an `invoker` whenever the operation needs an identity of its own.
 
 ## Event Payloads
 

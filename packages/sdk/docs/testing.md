@@ -661,7 +661,7 @@ describe("retryFailedWorkflow resolver", () => {
 
 ### Testing Executors
 
-Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the type's output, plus runtime fields such as `env`, `actor`, and `invoker`. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
+Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the table's output, plus runtime fields such as `env`, `actor`, and `invoker`. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
 
 The `executor` template extracts shared DB access into a helper (`shared.ts`) and tests the helper directly against a mocked `tailordb.Client` (same TailorDB-mocking pattern as the resolver section). Executor handlers themselves stay thin and can be tested by spying on the helper:
 
