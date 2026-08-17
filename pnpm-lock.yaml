@@ -520,8 +520,8 @@ importers:
         specifier: 0.1.3
         version: 0.1.3(kysely@0.29.4)
       '@toiroakr/lines-db':
-        specifier: 0.12.0
-        version: 0.12.0
+        specifier: 0.12.2
+        version: 0.12.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))
       '@toiroakr/read-multiline':
         specifier: 0.4.1
         version: 0.4.1
@@ -2247,9 +2247,9 @@ packages:
     peerDependencies:
       kysely: '>= 0.24.0 < 1'
 
-  '@toiroakr/lines-db@0.12.0':
-    resolution: {integrity: sha512-GRCHbSICqqwODI9Fv5Tm6gMKTJKzJXEF+RouMlD5BjpYYvzQe1o6X6pydGHbzHEcBdUtFH3vUDwNenmY33a0GQ==}
-    engines: {node: '>=22.12.0'}
+  '@toiroakr/lines-db@0.12.2':
+    resolution: {integrity: sha512-prKq8E3hap89924S69DP65ggs8b9fCHjDYU+iU/1Nwubqs85hc5OCA9uk4UFUdvj61Ek2IXb0ZygXyCAPfluew==}
+    engines: {node: '>=22.23.2'}
     hasBin: true
 
   '@toiroakr/read-multiline@0.4.1':
@@ -5164,10 +5164,15 @@ snapshots:
     dependencies:
       kysely: 0.29.4
 
-  '@toiroakr/lines-db@0.12.0':
+  '@toiroakr/lines-db@0.12.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))':
     dependencies:
       '@standard-schema/spec': 1.1.0
       amaro: 1.1.11
+      politty: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@clack/prompts'
+      - '@inquirer/prompts'
 
   '@toiroakr/read-multiline@0.4.1': {}
 
