@@ -114,6 +114,17 @@ interface SeedResult {
   processed: Record<string, number>;
 }
 
+function createChunkProgressLogger(total: number): (index: number, details: string) => void {
+  if (total > 1) {
+    logger.log(styles.dim(`    Split into ${total} chunks`));
+  }
+  return (index, details) => {
+    if (total > 1) {
+      logger.log(styles.dim(`    Chunk ${index + 1}/${total}: ${details}`));
+    }
+  };
+}
+
 async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   const {
     execution,
@@ -154,17 +165,11 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     logger.log(styles.dim(`  [${namespace}] No data to seed`));
     return { success: true, processed: processedTotals };
   }
-  if (chunks.length > 1) {
-    logger.log(styles.dim(`    Split into ${chunks.length} chunks`));
-  }
+  const logChunkProgress = createChunkProgressLogger(chunks.length);
 
   let success = true;
   for (const chunk of chunks) {
-    if (chunks.length > 1) {
-      logger.log(
-        styles.dim(`    Chunk ${chunk.index + 1}/${chunk.total}: ${chunk.order.join(", ")}`),
-      );
-    }
+    logChunkProgress(chunk.index, chunk.order.join(", "));
 
     const result = await executeScript({
       client: execution.operatorClient,
@@ -265,9 +270,7 @@ async function seedIdpUser(
   for (let i = 0; i < rows.length; i += IDP_USER_CHUNK_SIZE) {
     chunks.push(rows.slice(i, i + IDP_USER_CHUNK_SIZE));
   }
-  if (chunks.length > 1) {
-    logger.log(styles.dim(`    Split into ${chunks.length} chunks`));
-  }
+  const logChunkProgress = createChunkProgressLogger(chunks.length);
 
   const reportChunkCounts = (result: Record<string, unknown>) => {
     const created = readCount(result, "created");
@@ -296,9 +299,7 @@ async function seedIdpUser(
     );
   };
   for (const [index, chunk] of chunks.entries()) {
-    if (chunks.length > 1) {
-      logger.log(styles.dim(`    Chunk ${index + 1}/${chunks.length}: ${chunk.length} rows`));
-    }
+    logChunkProgress(index, `${chunk.length} rows`);
     let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
     try {
       run = await runIdpScript({

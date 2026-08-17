@@ -301,6 +301,9 @@ describe("seedApplyCommand", () => {
     expect(idpCalls.map((options) => options.arg?.total)).toEqual([51, 51, 51]);
     const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
     expect(loggedLines.some((line) => line.includes("Split into 3 chunks"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("Chunk 1/3: 25 rows"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("Chunk 2/3: 25 rows"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("Chunk 3/3: 1 rows"))).toBe(true);
     expect(logger.out).toHaveBeenCalledWith({ success: true, processed: { _User: 51 } });
   });
 
