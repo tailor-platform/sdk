@@ -9,12 +9,12 @@ import {
   closeConnectionPool,
   concurrencyLimitInterceptor,
   createTransport,
+  errorHandlingInterceptor,
   fetchAll,
   fetchAllTolerant,
   fetchMachineUserToken,
   fetchPaged,
   fetchPlatformMachineUserToken,
-  formatRequestParams,
   getConsoleBaseUrl,
   getEffectivePlatformConfig,
   getOAuth2ClientId,
@@ -655,72 +655,137 @@ describe("parseMethodName", () => {
   });
 });
 
-describe("formatRequestParams", () => {
-  test("serializes plain objects to JSON", () => {
-    const obj = { workspaceId: "test-id", name: "test-name" };
-    const result = formatRequestParams(obj);
-    expect(result).toBe(JSON.stringify(obj, null, 2));
-  });
-
-  test("uses toJson method if available (protobuf messages)", () => {
-    const protoMessage = {
-      workspaceId: "test-id",
-      name: "test-name",
-      toJson: () => ({ workspaceId: "test-id", name: "test-name" }),
-    };
-    const result = formatRequestParams(protoMessage);
-    expect(result).toBe(JSON.stringify({ workspaceId: "test-id", name: "test-name" }, null, 2));
-  });
-
-  test("handles null and undefined", () => {
-    expect(formatRequestParams(null)).toBe("null");
-    expect(formatRequestParams(undefined)).toBe(undefined);
-  });
-
-  test("handles arrays", () => {
-    const arr = [1, 2, 3];
-    expect(formatRequestParams(arr)).toBe(JSON.stringify(arr, null, 2));
-  });
-
-  test("handles primitive values", () => {
-    expect(formatRequestParams("string")).toBe('"string"');
-    expect(formatRequestParams(123)).toBe("123");
-    expect(formatRequestParams(true)).toBe("true");
-  });
-
-  test("returns error message for circular references", () => {
-    const circular: Record<string, unknown> = {};
-    circular.self = circular;
-    expect(formatRequestParams(circular)).toBe("(unable to serialize request)");
-  });
-
-  test("returns error message when toJson throws", () => {
-    const badProto = {
-      toJson: () => {
-        throw new Error("serialization failed");
+describe("errorHandlingInterceptor", () => {
+  test("does not leak the request payload into the enhanced error message", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.testExecScript,
+      header: new Headers(),
+      message: {
+        workspaceId: "workspace-id",
+        name: "query-gql.js",
+        code: "export async function main() {}",
+        arg: '{"endpoint":"https://app.example.com/query","accessToken":"not-a-real-token","query":"mutation { m }"}',
       },
-    };
-    expect(formatRequestParams(badProto)).toBe("(unable to serialize request)");
+    } as unknown as UnaryRequest;
+    const next = vi
+      .fn()
+      .mockRejectedValue(new ConnectError("context deadline exceeded", Code.DeadlineExceeded));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("context deadline exceeded");
+    expect(error.message).not.toContain("not-a-real-token");
+    expect(error.message).not.toContain('"arg"');
   });
 
-  test("serializes objects containing BigInt values", () => {
-    const objWithBigInt = {
-      workspaceId: "test-id",
-      duration: { seconds: BigInt(3600), nanos: 0 },
-    };
-    const result = formatRequestParams(objWithBigInt);
-    expect(result).toContain('"seconds": "3600"');
-    expect(result).toContain('"nanos": 0');
+  test("includes allowlisted resource identifiers in the enhanced error message", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.createTailorDBType,
+      header: new Headers(),
+      message: {
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+        namespaceName: "shared-db",
+        tailordbType: {
+          $typeName: "tailor.v1.TailorDBType",
+          name: "Order",
+          description: "do-not-print-payload",
+        },
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("already exists", Code.AlreadyExists));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain(
+      "Failed to create TailorDBType (workspaceId: 22222222-2222-2222-2222-222222222222, namespaceName: shared-db, tailordbType.name: Order): already exists",
+    );
+    expect(error.message).not.toContain("do-not-print-payload");
   });
 
-  test("serializes nested BigInt values in toJson result", () => {
-    const protoWithBigInt = {
-      toJson: () => ({
-        accessTokenLifetime: { seconds: BigInt(86400), nanos: 0 },
-      }),
-    };
-    const result = formatRequestParams(protoWithBigInt);
-    expect(result).toContain('"seconds": "86400"');
+  test("surfaces id-like identifiers while keeping sensitive fields out", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.resumeWorkflowExecution,
+      header: new Headers(),
+      message: {
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+        executionId: "0189aaaa-bbbb-cccc-dddd-eeeeffff0000",
+        authNamespace: "my-auth",
+        email: "admin@example.com",
+        secretmanagerSecretValue: "do-not-print-secret",
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("workspaceId: 22222222-2222-2222-2222-222222222222");
+    expect(error.message).toContain("executionId: 0189aaaa-bbbb-cccc-dddd-eeeeffff0000");
+    expect(error.message).toContain("authNamespace: my-auth");
+    expect(error.message).not.toContain("admin@example.com");
+    expect(error.message).not.toContain("do-not-print-secret");
+  });
+
+  test("surfaces method-scoped identifiers only on the methods that define them", async () => {
+    const message = { trn: "trn:v1:workspace/staffing:tailordb/shared-db" };
+    const makeReq = (
+      method: (typeof OperatorService.method)[keyof typeof OperatorService.method],
+    ) =>
+      ({
+        stream: false,
+        service: OperatorService,
+        method,
+        header: new Headers(),
+        message,
+      }) as unknown as UnaryRequest;
+    const next = () => vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const onMetadata = await errorHandlingInterceptor()(next())(
+      makeReq(OperatorService.method.setMetadata),
+    ).catch((e: unknown) => e as ConnectError);
+    const onOtherMethod = await errorHandlingInterceptor()(next())(
+      makeReq(OperatorService.method.resumeWorkflowExecution),
+    ).catch((e: unknown) => e as ConnectError);
+
+    expect((onMetadata as ConnectError).message).toContain(
+      "trn: trn:v1:workspace/staffing:tailordb/shared-db",
+    );
+    expect((onOtherMethod as ConnectError).message).not.toContain("trn:");
+  });
+
+  test("does not read names out of map or struct fields", async () => {
+    // Map fields (e.g. metadata labels merged from the remote resource) and
+    // google.protobuf.Struct payloads materialize without a nested message
+    // $typeName, and their entries are not under the SDK's control.
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.setMetadata,
+      header: new Headers(),
+      message: {
+        trn: "trn:v1:workspace/staffing:tailordb/shared-db",
+        labels: { name: "arbitrary-remote-value" },
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("trn: trn:v1:workspace/staffing:tailordb/shared-db");
+    expect(error.message).not.toContain("arbitrary-remote-value");
   });
 });
 

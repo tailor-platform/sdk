@@ -15,3 +15,16 @@ export function getApplicationAuthNamespace(
 ): string | undefined {
   return application.authService?.config.name ?? application.config?.auth?.name;
 }
+
+/**
+ * Resolve the auth namespace configured for an application, throwing when none is configured.
+ * @param application - Loaded application with local or external Auth config
+ * @returns Auth namespace
+ */
+export function requireApplicationAuthNamespace(application: AuthNamespaceApplication): string {
+  const authNamespace = getApplicationAuthNamespace(application);
+  if (!authNamespace) {
+    throw new Error("No Auth service configured");
+  }
+  return authNamespace;
+}

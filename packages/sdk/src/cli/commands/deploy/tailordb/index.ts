@@ -1483,7 +1483,7 @@ function collectTailorDBDisplayEntries(
     action,
     symbol: ACTION_SYMBOLS[action],
     name: item.name,
-    labels: gqlPermissionKeys.has(itemKey(item)) ? ["type", "gqlPermission"] : ["type"],
+    labels: gqlPermissionKeys.has(itemKey(item)) ? ["table", "gqlPermission"] : ["table"],
     namespace: item.request?.namespaceName,
   }));
   const gqlPermissionOnlyEntries = gqlPermissionItems
