@@ -97,8 +97,8 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
           console.log(\`[_User] \${offset + i + 1}/\${total}: \${input.users[i].name}\`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          errors.push(\`Row \${offset + i} (\${input.users[i].name}): \${message}\`);
-          console.error(\`[_User] Row \${offset + i} failed: \${message}\`);
+          errors.push(\`Row \${offset + i + 1} (\${input.users[i].name}): \${message}\`);
+          console.error(\`[_User] Row \${offset + i + 1} failed: \${message}\`);
         }
       }
 

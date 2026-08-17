@@ -207,10 +207,10 @@ describe("generateIdpSeedScriptCode", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.errors[0]).toContain("Row 26 (existing)");
+    expect(result.errors[0]).toContain("Row 27 (existing)");
   });
 
-  test("defaults to zero-based row numbers when no offset is provided", async () => {
+  test("defaults to one-based row numbers when no offset is provided", async () => {
     stubIdp({ existing: { id: "existing-id" } });
     const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
 
@@ -222,7 +222,7 @@ describe("generateIdpSeedScriptCode", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.errors[0]).toContain("Row 1 (existing)");
+    expect(result.errors[0]).toContain("Row 2 (existing)");
   });
 
   test("looks users up before creating or updating them when upsert is enabled", async () => {
