@@ -768,6 +768,23 @@ describe("tailordb migration generate --data-only", () => {
     expect(fs.existsSync(path.join(untouched.migrationsDir, "0001"))).toBe(false);
   });
 
+  test("ignores invalid migration files outside the target namespace", async () => {
+    const unrelated = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const targeted = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    fs.writeFileSync(path.join(unrelated.migrationsDir, "0000", "schema.json"), "{");
+
+    const result = await runCommand(generateCommand, [
+      "--data-only",
+      "--yes",
+      "--namespace",
+      "analyticsdb",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(targeted.migrationsDir, "0001", "migrate.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(unrelated.migrationsDir, "0001"))).toBe(false);
+  });
+
   test("rejects --namespace without --data-only", async () => {
     addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
 

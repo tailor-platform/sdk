@@ -277,6 +277,14 @@ export async function generate(options: GenerateOptions): Promise<void> {
     );
   }
 
+  const dataOnlyTargetNamespace = options.dataOnly
+    ? resolveTargetNamespace(namespacesWithMigrations, options.namespace)
+    : undefined;
+  const namespacesToLoad =
+    dataOnlyTargetNamespace === undefined
+      ? namespacesWithMigrations
+      : namespacesWithMigrations.filter(({ namespace }) => namespace === dataOnlyTargetNamespace);
+
   // Handle --init option: delete existing migrations directory
   if (options.init) {
     await handleInitOption(namespacesWithMigrations, options.yes);
@@ -292,10 +300,10 @@ export async function generate(options: GenerateOptions): Promise<void> {
   const { defineApplication } = await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
-  // Load every namespace's snapshots first so --rename flags can be validated
-  // against all of them before any migration file is written
+  // Schema generation loads every namespace before writing so --rename flags
+  // can be validated globally; data-only generation loads only its target.
   const generations: NamespaceGeneration[] = [];
-  for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+  for (const { namespace, migrationsDir } of namespacesToLoad) {
     logger.info(`Processing namespace: ${styles.bold(namespace)}`);
 
     // Validate existing migration files before generating new ones
@@ -325,8 +333,8 @@ export async function generate(options: GenerateOptions): Promise<void> {
     });
   }
 
-  if (options.dataOnly) {
-    await generateDataOnlyMigration(generations, namespacesWithMigrations, options);
+  if (dataOnlyTargetNamespace !== undefined) {
+    await generateDataOnlyMigration(generations, dataOnlyTargetNamespace, options);
     return;
   }
 
@@ -478,16 +486,15 @@ export async function generate(options: GenerateOptions): Promise<void> {
  * Generate a data-only migration: a numbered entry with an empty diff that
  * exists to run a migration script against the unchanged schema.
  * @param {readonly NamespaceGeneration[]} generations - Snapshots per namespace
- * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
+ * @param {string} namespace - Target namespace
  * @param {GenerateOptions} options - Generate options
  * @returns {Promise<void>} Promise that resolves when the migration is written
  */
 async function generateDataOnlyMigration(
   generations: readonly NamespaceGeneration[],
-  namespacesWithMigrations: NamespaceWithMigrations[],
+  namespace: string,
   options: GenerateOptions,
 ): Promise<void> {
-  const namespace = resolveTargetNamespace(namespacesWithMigrations, options.namespace);
   const generation = generations.find((g) => g.namespace === namespace);
   if (!generation) {
     throw new Error(`No TailorDB service found for namespace "${namespace}"`);
