@@ -175,12 +175,16 @@ describe("login --profile", () => {
   });
 
   test("fails login when the authorization URL cannot be prepared", async () => {
-    getAuthorizeUriMock.mockRejectedValue(new Error("authorize uri failed"));
+    getAuthorizeUriMock.mockRejectedValue(new TypeError("fetch failed"));
 
     const result = await runCommand(loginCommand, ["--profile", "dev"]);
 
     expect(result.success).toBe(false);
-    expect((result as { error?: Error }).error?.message).toContain("authorize uri failed");
+    const error = (result as { error?: Error }).error;
+    expect(error?.message).toContain("Failed to prepare the login authorization URL: fetch failed");
+    // A plain Error keeps this normal failure out of crash reporting.
+    expect(error).not.toBeInstanceOf(TypeError);
+    expect(error?.cause).toBeInstanceOf(TypeError);
   });
 
   test("quotes dynamic profile update command arguments", async () => {

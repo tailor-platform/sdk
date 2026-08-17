@@ -220,7 +220,11 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
     server.listen(redirectPort, () => {
       openLoginUrl().catch((error: unknown) => {
         server.close();
-        reject(toError(error));
+        reject(
+          new Error(`Failed to prepare the login authorization URL: ${toError(error).message}`, {
+            cause: error,
+          }),
+        );
       });
     });
   });
