@@ -10,6 +10,10 @@ import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { fetchRemoteSchemaSnapshot } from "#/cli/commands/tailordb/migrate/schema-checks";
+import {
+  createSnapshotFromLocalTypes,
+  type NormalizedSchemaSnapshot,
+} from "#/cli/commands/tailordb/migrate/snapshot";
 import { workspaceArgs, configArg, DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -18,6 +22,7 @@ import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { assertDefined } from "#/utils/assert";
 import {
@@ -45,12 +50,15 @@ export const scriptCommand = defineAppCommand({
     namespace: arg(z.string().optional(), {
       description: "Target TailorDB namespace (required when the config does not pin one)",
     }),
+    remote: arg(z.boolean().default(false), {
+      description: "Generate script-scoped DB types from the deployed schema",
+    }),
   }),
   notes: `The scaffolded script is a plain default-exported function; execute it with \`tailor function run <file>\`.
 
-When the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types. Otherwise the command fetches the namespace's deployed schema and writes a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
+By default, when the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
-Re-running the command for an existing script refreshes \`db.ts\` and \`db.snapshot.json\` from the currently deployed schema and leaves the script itself untouched.`,
+Pass \`--remote\` to generate the script-scoped files from the deployed schema instead, even when \`kyselyTypePlugin\` is configured. This is required for an external namespace. Re-running the command refreshes \`db.ts\` and \`db.snapshot.json\` from the selected source and leaves the script itself untouched.`,
   examples: [
     {
       cmd: "scripts/fix-prices.ts",
@@ -59,6 +67,10 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
     {
       cmd: "scripts/fix-prices.ts --namespace tailordb",
       desc: "Scaffold a script targeting a specific namespace",
+    },
+    {
+      cmd: "scripts/fix-prices.ts --namespace shared --remote",
+      desc: "Scaffold from a deployed or external namespace",
     },
   ],
   run: async (args) => {
@@ -78,10 +90,17 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
 
     const { config, plugins } = await loadConfig(args.config);
     const kyselyPlugin = plugins.find((plugin) => plugin.id === KyselyGeneratorID);
+    const hasSnapshotSidecar = fs.existsSync(snapshotPath);
+    if (args.remote && kyselyPlugin !== undefined && scriptExists && !hasSnapshotSidecar) {
+      throw new Error(
+        `Script already exists: ${path.relative(process.cwd(), filePath)}. ` +
+          "Scaffold --remote at a new path so the generated script imports its script-scoped db.ts.",
+      );
+    }
     // A directory that already carries a snapshot sidecar keeps using
     // script-scoped generated types, even when the project has since
     // configured kyselyTypePlugin: its scripts import ./db.
-    const useGeneratedDbTypes = kyselyPlugin === undefined || fs.existsSync(snapshotPath);
+    const useGeneratedDbTypes = args.remote || kyselyPlugin === undefined || hasSnapshotSidecar;
 
     let existingSidecarNamespace: string | undefined;
     if (useGeneratedDbTypes) {
@@ -95,7 +114,7 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
       config,
       explicit: args.namespace,
       sidecarNamespace: existingSidecarNamespace,
-      ownedOnly: !useGeneratedDbTypes,
+      remote: args.remote,
     });
     if (existingSidecarNamespace !== undefined && existingSidecarNamespace !== namespace) {
       throw new Error(
@@ -123,21 +142,32 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
         );
       }
     } else {
-      const accessToken = await loadAccessToken({ profile: args.profile });
-      const client = await initOperatorClient(accessToken);
-      const workspaceId = await loadWorkspaceId({
-        workspaceId: args["workspace-id"],
-        profile: args.profile,
-      });
-      resolvedWorkspaceId = workspaceId;
+      let snapshot: NormalizedSchemaSnapshot;
+      if (args.remote) {
+        const accessToken = await loadAccessToken({ profile: args.profile });
+        const client = await initOperatorClient(accessToken);
+        const workspaceId = await loadWorkspaceId({
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+        });
+        resolvedWorkspaceId = workspaceId;
 
-      logger.info(`Fetching deployed schema of namespace ${styles.bold(namespace)}...`);
-      const snapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
+        logger.info(`Fetching deployed schema of namespace ${styles.bold(namespace)}...`);
+        snapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
+      } else {
+        logger.info(`Loading local definitions of namespace ${styles.bold(namespace)}...`);
+        const { namespaces } = await loadTailorDBNamespaces({
+          configPath: args.config,
+          namespaces: [namespace],
+        });
+        const namespaceData = assertDefined(namespaces[0], `namespace ${namespace}`);
+        snapshot = createSnapshotFromLocalTypes(namespaceData.types, namespace);
+      }
       if (Object.keys(snapshot.tables).length === 0) {
-        throw new Error(
-          `Namespace "${namespace}" has no deployed tables in workspace ${workspaceId}. ` +
-            "Check the namespace name (--namespace) and workspace.",
-        );
+        const sourceDescription = args.remote
+          ? `deployed tables in workspace ${assertDefined(resolvedWorkspaceId, "workspace ID")}`
+          : "locally defined tables";
+        throw new Error(`Namespace "${namespace}" has no ${sourceDescription}.`);
       }
 
       if (fs.existsSync(dbTypesPath)) {
@@ -154,7 +184,10 @@ Re-running the command for an existing script refreshes \`db.ts\` and \`db.snaps
       fs.mkdirSync(scriptDir, { recursive: true });
       fs.writeFileSync(dbTypesPath, dbTypesContent);
       created.push(dbTypesPath);
-      fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2) + "\n");
+      fs.writeFileSync(
+        snapshotPath,
+        JSON.stringify({ ...snapshot, source: args.remote ? "remote" : "local" }, null, 2) + "\n",
+      );
       created.push(snapshotPath);
       getDBImportPath = "./db";
     }
@@ -204,7 +237,7 @@ interface ResolveNamespaceOptions {
   config: LoadedConfig;
   explicit: string | undefined;
   sidecarNamespace: string | undefined;
-  ownedOnly: boolean;
+  remote: boolean;
 }
 
 /**
@@ -213,20 +246,24 @@ interface ResolveNamespaceOptions {
  * @returns The namespace name
  */
 function resolveNamespace(options: ResolveNamespaceOptions): string {
-  const { config, explicit, sidecarNamespace, ownedOnly } = options;
-  const configured = ownedOnly ? extractOwnedNamespaces(config) : extractAllNamespaces(config);
+  const { config, explicit, sidecarNamespace, remote } = options;
+  const allNamespaces = extractAllNamespaces(config);
+  const ownedNamespaces = extractOwnedNamespaces(config);
+  const configured = remote ? allNamespaces : ownedNamespaces;
 
   if (explicit) {
-    if (ownedOnly && !configured.includes(explicit)) {
-      throw new Error(
-        `Namespace "${explicit}" is not an owned namespace in the config, so the project's generated Kysely types do not cover it.` +
-          (configured.length > 0 ? ` Available namespaces: ${configured.join(", ")}` : ""),
-      );
+    if (!remote && !ownedNamespaces.includes(explicit)) {
+      throw new Error(`Namespace "${explicit}" is not owned by the config and requires --remote.`);
     }
     return explicit;
   }
 
   if (sidecarNamespace !== undefined) {
+    if (!remote && !ownedNamespaces.includes(sidecarNamespace)) {
+      throw new Error(
+        `Namespace "${sidecarNamespace}" is not owned by the config and requires --remote.`,
+      );
+    }
     return sidecarNamespace;
   }
 
@@ -239,9 +276,12 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
       `Multiple TailorDB namespaces are defined (${configured.join(", ")}). Specify one with --namespace.`,
     );
   }
-  throw new Error(
-    "No TailorDB namespace is defined in the config. Specify the deployed namespace with --namespace.",
-  );
+  if (!remote && allNamespaces.length > 0) {
+    throw new Error(
+      `No owned TailorDB namespace is defined in the config. External namespaces require --remote: ${allNamespaces.join(", ")}.`,
+    );
+  }
+  throw new Error("No TailorDB namespace is defined in the config.");
 }
 
 /**

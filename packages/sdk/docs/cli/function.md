@@ -213,6 +213,7 @@ tailor function script [options] <file>
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                     | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
 | `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
 | `--namespace <NAMESPACE>`       | -     | Target TailorDB namespace (required when the config does not pin one) | No       | -                    | -                              |
+| `--remote`                      | -     | Generate script-scoped DB types from the deployed schema              | No       | `false`              | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -230,10 +231,16 @@ $ tailor function script scripts/fix-prices.ts
 $ tailor function script scripts/fix-prices.ts --namespace tailordb
 ```
 
+**Scaffold from a deployed or external namespace**
+
+```bash
+$ tailor function script scripts/fix-prices.ts --namespace shared --remote
+```
+
 **Notes**
 
 The scaffolded script is a plain default-exported function; execute it with `tailor function run <file>`.
 
-When the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types. Otherwise the command fetches the namespace's deployed schema and writes a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
+By default, when the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
-Re-running the command for an existing script refreshes `db.ts` and `db.snapshot.json` from the currently deployed schema and leaves the script itself untouched.
+Pass `--remote` to generate the script-scoped files from the deployed schema instead, even when `kyselyTypePlugin` is configured. This is required for an external namespace. Re-running the command refreshes `db.ts` and `db.snapshot.json` from the selected source and leaves the script itself untouched.

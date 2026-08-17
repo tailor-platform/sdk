@@ -134,11 +134,35 @@ describe("loadScriptSchemaSnapshot", () => {
   test("loads and normalizes a snapshot sidecar", () => {
     using tmp = tempCwd("sdk-script-scaffold-");
     const scriptPath = path.join(tmp.dir, "fix.ts");
-    fs.writeFileSync(path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME), JSON.stringify(makeSnapshot()));
+    fs.writeFileSync(
+      path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME),
+      JSON.stringify({ ...makeSnapshot(), source: "local" }),
+    );
 
     const sidecar = loadScriptSchemaSnapshot(scriptPath);
     expect(sidecar?.snapshot.namespace).toBe("tailordb");
     expect(Object.keys(sidecar?.snapshot.tables ?? {})).toEqual(["Product"]);
+    expect(sidecar?.source).toBe("local");
+    expect(sidecar?.snapshot).not.toHaveProperty("source");
+  });
+
+  test("treats a legacy snapshot without a source as remote", () => {
+    using tmp = tempCwd("sdk-script-scaffold-");
+    const scriptPath = path.join(tmp.dir, "fix.ts");
+    fs.writeFileSync(path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME), JSON.stringify(makeSnapshot()));
+
+    expect(loadScriptSchemaSnapshot(scriptPath)?.source).toBe("remote");
+  });
+
+  test("rejects an unknown snapshot source", () => {
+    using tmp = tempCwd("sdk-script-scaffold-");
+    const scriptPath = path.join(tmp.dir, "fix.ts");
+    fs.writeFileSync(
+      path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME),
+      JSON.stringify({ ...makeSnapshot(), source: "cache" }),
+    );
+
+    expect(() => loadScriptSchemaSnapshot(scriptPath)).toThrow(/unexpected shape/);
   });
 
   test("rejects an unparseable snapshot with a regenerate hint", () => {
@@ -177,7 +201,11 @@ describe("verifyScriptSchemaSnapshot", () => {
     vi.mocked(loadTailorDBNamespaces).mockReset();
   });
 
-  function makeOptions(config: { db?: unknown } = {}, snapshot: SchemaSnapshot = makeSnapshot()) {
+  function makeOptions(
+    config: { db?: unknown } = {},
+    snapshot: SchemaSnapshot = makeSnapshot(),
+    source: "local" | "remote" = "remote",
+  ) {
     return {
       client,
       workspaceId: "ws-1",
@@ -187,6 +215,7 @@ describe("verifyScriptSchemaSnapshot", () => {
       sidecar: {
         snapshotPath: `/proj/scripts/${SCRIPT_SNAPSHOT_FILE_NAME}`,
         snapshot: normalizeSchemaSnapshot(snapshot),
+        source,
       },
     };
   }
@@ -240,7 +269,38 @@ describe("verifyScriptSchemaSnapshot", () => {
     await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(
       /tailor function script scripts\/fix\.ts/,
     );
+    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(/--remote/);
     await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(/--allow-schema-drift/);
+  });
+
+  test("accepts a local snapshot when the deployed schema carries the same generated contract", async () => {
+    const remoteDerived = makeSnapshot();
+    const createdAt = remoteDerived.tables.Product!.fields.createdAt!;
+    remoteDerived.tables.Product!.fields.createdAt = {
+      ...createdAt,
+      hooks: undefined,
+      optionalOnCreate: true,
+    };
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(remoteDerived));
+
+    await expect(
+      verifyScriptSchemaSnapshot(makeOptions({}, makeSnapshot(), "local")),
+    ).resolves.toBeUndefined();
+  });
+
+  test("rejects a local snapshot when its generated-on-create contract drifted", async () => {
+    const remoteDerived = makeSnapshot();
+    const createdAt = remoteDerived.tables.Product!.fields.createdAt!;
+    remoteDerived.tables.Product!.fields.createdAt = {
+      ...createdAt,
+      hooks: undefined,
+      optionalOnCreate: undefined,
+    };
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(remoteDerived));
+
+    await expect(
+      verifyScriptSchemaSnapshot(makeOptions({}, makeSnapshot(), "local")),
+    ).rejects.toThrow(/no longer matches the deployed schema/);
   });
 
   test("ignores script-bearing props the platform does not store verbatim", async () => {
@@ -253,6 +313,7 @@ describe("verifyScriptSchemaSnapshot", () => {
       backwardRelationships: {},
       permissions: {},
       fields: {
+        id: { config: { type: "uuid", required: true } },
         name: { config: { type: "string", required: true, default: "unnamed" } },
         status: {
           config: {
@@ -295,6 +356,19 @@ describe("verifyScriptSchemaSnapshot", () => {
       ],
     } as never);
     const remoteDerived = makeSnapshot();
+    remoteDerived.tables.Product!.fields.id = {
+      type: "uuid",
+      required: true,
+      optionalOnCreate: true,
+    };
+    remoteDerived.tables.Product!.fields.name = {
+      ...remoteDerived.tables.Product!.fields.name!,
+      optionalOnCreate: true,
+    };
+    remoteDerived.tables.Product!.fields.updatedAt = {
+      ...remoteDerived.tables.Product!.fields.updatedAt!,
+      optionalOnCreate: undefined,
+    };
     remoteDerived.tables.Product!.forwardRelationships = {
       author: {
         targetType: "User",
