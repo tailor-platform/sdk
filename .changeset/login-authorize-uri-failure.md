@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Report `tailor login` failures that occur while preparing the authorization URL through normal CLI error output, instead of crashing with an unhandled promise rejection and leaving the local callback server running.
+Fail `tailor login` with a normal command error when preparing the authorization URL fails, instead of treating the failure as an SDK crash through an unhandled promise rejection.
