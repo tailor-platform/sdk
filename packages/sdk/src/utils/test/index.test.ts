@@ -217,7 +217,7 @@ describe("createTailorDBHook", () => {
     });
   });
 
-  describe("type-level create hook", () => {
+  describe("table-level create hook", () => {
     test("invokes the create hook and applies field overrides", () => {
       const seen: { input: unknown; invoker: unknown }[] = [];
       const type = db.table("Order", { total: db.float(), tax: db.float() }).hooks({
@@ -244,7 +244,7 @@ describe("createTailorDBHook", () => {
       expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
     });
 
-    test("shares the same now timestamp between field-level and type-level hooks", () => {
+    test("shares the same now timestamp between field-level and table-level hooks", () => {
       let fieldNow: Date | undefined;
       let typeNow: Date | undefined;
       const type = db
@@ -309,7 +309,7 @@ describe("createStandardSchema", () => {
     expect(result).toHaveProperty("value");
   });
 
-  test("returns issues for a type-level validate failure, naming the field", () => {
+  test("returns issues for a table-level validate failure, naming the field", () => {
     const type = db
       .table("Range", { start: db.int(), end: db.int() })
       .validate(({ newRecord }, issues) => {
@@ -329,7 +329,7 @@ describe("createStandardSchema", () => {
     expect(schema["~standard"].validate({ start: 1, end: 10 })).toHaveProperty("value");
   });
 
-  test("leaves a type-level validate out of it when the type is not given", () => {
+  test("leaves a table-level validate out of it when the table is not given", () => {
     const type = db
       .table("Range", { start: db.int(), end: db.int() })
       .validate((_record, issues) => issues("start", "always fails"));

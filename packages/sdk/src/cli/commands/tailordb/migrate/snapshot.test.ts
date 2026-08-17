@@ -999,7 +999,7 @@ describe("snapshot", () => {
       });
     });
 
-    describe("type-level index changes", () => {
+    describe("table-level index changes", () => {
       function snapshotWithIndexes(
         indexes: Record<string, { fields: string[]; unique?: boolean }> | undefined,
       ): SchemaSnapshot {
@@ -3747,7 +3747,7 @@ describe("snapshot", () => {
       expect(snapshot.tables.Order?.fields.amount?.scale).toBe(6);
     });
 
-    test("reconstructs remote type-level schema elements", () => {
+    test("reconstructs remote table-level schema elements", () => {
       const snapshot = createSnapshotFromRemoteTypes(
         [
           createMockRemoteType(
@@ -3962,7 +3962,7 @@ describe("snapshot", () => {
       expect(drifts).toEqual([]);
     });
 
-    test("detects remote drift in type-level schema elements", () => {
+    test("detects remote drift in table-level schema elements", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -4023,7 +4023,7 @@ describe("snapshot", () => {
       );
     });
 
-    test("detects mismatched type-level schema element configs", () => {
+    test("detects mismatched table-level schema element configs", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,

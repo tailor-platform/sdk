@@ -190,7 +190,7 @@ describe("diff-calculator", () => {
       expect(result).toContain("User.email: Required field added");
     });
 
-    test("should format breaking changes without field (type-level)", () => {
+    test("should format breaking changes without field (table-level)", () => {
       const breakingChanges: BreakingChangeInfo[] = [
         { tableName: "OldType", reason: "Type removed" },
       ];
@@ -228,7 +228,7 @@ describe("diff-calculator", () => {
       );
     });
 
-    test("should format warnings without field (type-level)", () => {
+    test("should format warnings without field (table-level)", () => {
       const warnings: WarningChangeInfo[] = [
         {
           tableName: "OldType",
