@@ -123,7 +123,7 @@ describe("WorkflowJob type inference", () => {
       });
       const parent = createWorkflowJob({
         name: "propagate-parent-invoker-without-get-builtin-module",
-        body: async () => await child.start(),
+        body: async () => child.start(),
       });
 
       await withRegisteredJobRuntime(async () => {
@@ -152,7 +152,7 @@ describe("WorkflowJob type inference", () => {
     });
     const parent = createWorkflowJob({
       name: "propagate-parent-invoker",
-      body: async () => await child.start(),
+      body: async () => child.start(),
     });
 
     await withRegisteredJobRuntime(async () => {
@@ -195,7 +195,7 @@ describe("WorkflowJob type inference", () => {
       name: "capture-concurrent-parent-invoker",
       body: async (input: { gate: "first" | "second" }) => {
         await gates[input.gate];
-        return await child.start();
+        return child.start();
       },
     });
 

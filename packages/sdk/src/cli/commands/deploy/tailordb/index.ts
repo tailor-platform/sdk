@@ -952,7 +952,9 @@ function buildSnapshotTypeManifest(
 async function awaitAllSettledOrThrow(
   promises: ReadonlyArray<Promise<unknown> | undefined>,
 ): Promise<void> {
-  const results = await Promise.allSettled(promises);
+  const results = await Promise.allSettled(
+    promises.filter((promise): promise is Promise<unknown> => promise !== undefined),
+  );
   const rejected = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
   if (rejected) {
     throw rejected.reason;

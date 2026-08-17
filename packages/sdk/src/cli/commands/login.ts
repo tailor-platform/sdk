@@ -125,7 +125,10 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
   const codeVerifier = await generateCodeVerifier();
 
   return new Promise<void>((resolve, reject) => {
-    const server = http.createServer(async (req, res) => {
+    const handleCallback = async (
+      req: http.IncomingMessage,
+      res: http.ServerResponse,
+    ): Promise<void> => {
       try {
         if (!req.url?.startsWith("/callback")) {
           throw new Error("Invalid callback URL");
@@ -175,12 +178,13 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       } catch (error) {
         res.writeHead(401);
         res.end("Authentication failed");
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       } finally {
         // Close the server after handling one request.
         server.close();
       }
-    });
+    };
+    const server = http.createServer((req, res) => void handleCallback(req, res));
 
     const timeout = setTimeout(
       () => {
@@ -198,7 +202,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       reject(error);
     });
 
-    server.listen(redirectPort, async () => {
+    const openLoginUrl = async (): Promise<void> => {
       const authorizeUri = await client.authorizationCode.getAuthorizeUri({
         redirectUri,
         state,
@@ -211,6 +215,12 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       } catch {
         logger.warn("Failed to open browser automatically. Please open the URL above manually.");
       }
+    };
+    server.listen(redirectPort, () => {
+      openLoginUrl().catch((error: unknown) => {
+        server.close();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
     });
   });
 };

@@ -174,6 +174,15 @@ describe("login --profile", () => {
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
   });
 
+  test("fails login when the authorization URL cannot be prepared", async () => {
+    getAuthorizeUriMock.mockRejectedValue(new Error("authorize uri failed"));
+
+    const result = await runCommand(loginCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(false);
+    expect((result as { error?: Error }).error?.message).toContain("authorize uri failed");
+  });
+
   test("quotes dynamic profile update command arguments", async () => {
     writePlatformConfig({
       version: 2,

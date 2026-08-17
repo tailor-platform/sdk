@@ -141,7 +141,7 @@ type DeleteOperation = {
 
 async function deleteAllSettled(operations: readonly DeleteOperation[]) {
   const results = await Promise.allSettled(operations.map((operation) => operation.run()));
-  const errors: unknown[] = [];
+  const errors: Error[] = [];
   results.forEach((result, index) => {
     if (result.status === "fulfilled") {
       return;
@@ -157,7 +157,7 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
       );
       return;
     }
-    errors.push(error);
+    errors.push(error instanceof Error ? error : new Error(String(error)));
   });
   const firstError = errors[0];
   if (firstError) {

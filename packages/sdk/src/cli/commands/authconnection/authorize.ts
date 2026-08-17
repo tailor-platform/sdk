@@ -106,7 +106,10 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
     authUrl.searchParams.set("access_type", "offline");
 
     await new Promise<void>((resolve, reject) => {
-      const server = http.createServer(async (req, res) => {
+      const handleCallback = async (
+        req: http.IncomingMessage,
+        res: http.ServerResponse,
+      ): Promise<void> => {
         if (!req.url?.startsWith("/callback")) {
           res.writeHead(404);
           res.end("Not found");
@@ -149,9 +152,10 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           res.writeHead(400, { "Content-Type": "text/plain" });
           res.end(`Authorization failed: ${err instanceof Error ? err.message : "Unknown error"}`);
           server.close();
-          reject(err);
+          reject(err instanceof Error ? err : new Error(String(err)));
         }
-      });
+      };
+      const server = http.createServer((req, res) => void handleCallback(req, res));
 
       const timeout = setTimeout(
         () => {
@@ -184,7 +188,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         reject(err);
       });
 
-      server.listen(args.port, async () => {
+      const announceAuthorizeUrl = async (): Promise<void> => {
         const authorizeUrl = authUrl.toString();
         logger.info(
           args["no-browser"]
@@ -204,7 +208,8 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
             );
           }
         }
-      });
+      };
+      server.listen(args.port, () => void announceAuthorizeUrl());
     });
 
     logger.success(`Auth connection "${args.name}" authorized successfully.`);
