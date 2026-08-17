@@ -34,6 +34,9 @@ function replaceCommand(value: string): string {
         result += chunk;
       }
       pos = NEXT_TOKEN.lastIndex;
+      // A command substitution starts a nested command whose own `--branch`
+      // must not be renamed; leave the rest for residual detection.
+      if (word.includes("$(") || word.includes("`")) break;
     }
     cursor = pos;
     COMMAND_START.lastIndex = pos;

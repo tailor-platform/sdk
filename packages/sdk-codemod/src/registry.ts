@@ -114,6 +114,12 @@ const V2_NEXT_11 = "2.0.0-next.11";
  */
 export const V2_NEXT_PENDING = "pending";
 
+// Residual `--branch` on a `setup branch` invocation: skip quoted spans, cross
+// backslash/caret/backtick line continuations but not command separators, and
+// require a token boundary so quoted values containing `--branch` don't match.
+const SETUP_BRANCH_RESIDUAL_FLAG =
+  /\bsetup[\s\\^`]{1,16}branch\b(?:'[^'\n]*'|"[^"\n]*"|[^\n;&|'"]|[\\^`]\r?\n)*[ \t]--branch(?![\w-])/;
+
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
   {
@@ -1685,8 +1691,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
-    legacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n;&|]*--branch(?![\w-])/],
-    sourceStringLegacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n;&|]*--branch(?![\w-])/],
+    legacyPatterns: [SETUP_BRANCH_RESIDUAL_FLAG],
+    sourceStringLegacyPatterns: [SETUP_BRANCH_RESIDUAL_FLAG],
     examples: [
       {
         lang: "sh",
