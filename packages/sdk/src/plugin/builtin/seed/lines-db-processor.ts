@@ -25,7 +25,7 @@ export function processLinesDb(type: TailorDBType, source: TypeSourceInfoEntry):
     throw new Error(`Missing source info for table ${type.name}`);
   }
   if (!source.exportName) {
-    throw new Error(`Missing export name for type ${type.name}`);
+    throw new Error(`Missing export name for table ${type.name}`);
   }
 
   const { optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);

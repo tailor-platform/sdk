@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { generateLinesDbSchemaFileWithPluginAPI } from "./lines-db-processor";
+import { generateLinesDbSchemaFileWithPluginAPI, processLinesDb } from "./lines-db-processor";
+import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 import type { LinesDbMetadata } from "./types";
 
 describe("generateLinesDbSchemaFileWithPluginAPI", () => {
@@ -29,5 +30,20 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
     expect(source).toContain('import { getGeneratedTable } from "@tailor-platform/sdk/plugin";');
     expect(source).toContain('getGeneratedTable(configPath, "audit-plugin", null, "auditLog")');
     expect(source).not.toContain(["getGenerated", "Type"].join(""));
+  });
+});
+
+describe("processLinesDb", () => {
+  test("reports a missing export name for a table", () => {
+    const type = {
+      name: "User",
+      fields: {},
+    } as TailorDBType;
+    const source = {
+      filePath: "/test/user.ts",
+      exportName: "",
+    } satisfies TypeSourceInfoEntry;
+
+    expect(() => processLinesDb(type, source)).toThrow("Missing export name for table User");
   });
 });
