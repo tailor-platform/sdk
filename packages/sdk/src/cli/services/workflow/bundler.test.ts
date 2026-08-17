@@ -212,6 +212,73 @@ export default createWorkflow({ name: "workflow", mainJob });
       expect(result.usedJobNames).toEqual(["main-job"]);
       expect(result.bundledCode.get("main-job")).not.toContain("execJobFunction");
     });
+
+    test("throws when a job's name/body is not statically literal", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+const nonLiteralBody = async () => "value";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: nonLiteralBody,
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/main-job/);
+    });
+
+    test("throws when a start() call is factored outside any job body", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+
+async function runStep() {
+  return await step.start();
+}
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await runStep(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [
+            { name: "step-a", exportName: "step", sourceFile: workflowFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/step-a/);
+    });
   });
 
   describe("cross-file workflow default import", () => {

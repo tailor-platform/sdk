@@ -39,6 +39,12 @@ interface JobInfo {
   sourceFile: string;
 }
 
+/**
+ * Thrown when a job's dependency graph cannot be statically determined, so the
+ * job or a call to it would otherwise be silently dropped from the bundle.
+ */
+class WorkflowJobDetectionError extends Error {}
+
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
   mainJobDeps: Record<string, string[]>;
@@ -178,7 +184,14 @@ async function filterUsedJobs(
 
         for (const job of jobs) {
           const detectedJob = detectedJobs.find((d) => d.name === job.name);
-          if (!detectedJob) continue;
+          if (!detectedJob) {
+            throw new WorkflowJobDetectionError(
+              `Workflow job "${job.name}" (export "${job.exportName}" in ${sourceFile}) could not be ` +
+                `statically detected: createWorkflowJob's "name" must be a string literal and "body" ` +
+                `must be a function expression. Dynamic or computed values (e.g. body: someWrapper(fn)) ` +
+                `cannot be bundled and would be silently dropped.`,
+            );
+          }
 
           const jobDeps = new Set<string>();
 
@@ -198,8 +211,26 @@ async function filterUsedJobs(
           }
         }
 
+        for (const call of startCalls) {
+          if (call.kind !== "job") continue;
+          const isInsideAJobBody = detectedJobs.some(
+            (detectedJob) =>
+              call.callRange.start >= detectedJob.bodyValueRange.start &&
+              call.callRange.end <= detectedJob.bodyValueRange.end,
+          );
+          if (!isInsideAJobBody) {
+            throw new WorkflowJobDetectionError(
+              `Call to job "${call.targetName}".start() in ${sourceFile} is not inside any workflow ` +
+                `job's body: it was factored into a helper function. Dependency detection only sees ` +
+                `.start() calls lexically inside a job body, so this call would silently drop "${call.targetName}" ` +
+                `from the bundle. Move the call directly into the calling job's body.`,
+            );
+          }
+        }
+
         return jobDependencies;
-      } catch {
+      } catch (error) {
+        if (error instanceof WorkflowJobDetectionError) throw error;
         // If we can't parse a file, assume no dependencies from it
         return [];
       }

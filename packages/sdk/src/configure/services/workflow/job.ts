@@ -125,7 +125,7 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   const start = process.env.__TAILOR_PLATFORM_BUNDLE
     ? () => {
         throw new Error(
-          "This workflow job's .start() is rewritten at build time and is unavailable in the bundle",
+          `Workflow job "${config.name}"'s .start() is rewritten at build time and is unavailable in the bundle`,
         );
       }
     : // Preserve arity: use `arguments.length` (regular function, not arrow) so

@@ -613,3 +613,24 @@ describe("start without tailor.workflow", () => {
     await expect(workflow.start()).rejects.toThrow(/tailor\.workflow is not available/);
   });
 });
+
+describe("start stub in a platform bundle", () => {
+  test("throws an error naming the job", () => {
+    const previous = process.env.__TAILOR_PLATFORM_BUNDLE;
+    process.env.__TAILOR_PLATFORM_BUNDLE = "1";
+    try {
+      const job = createWorkflowJob({
+        name: "unrewritten-bundle-job",
+        body: () => ({ ok: true }),
+      });
+
+      expect(() => job.start()).toThrow(/unrewritten-bundle-job/);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.__TAILOR_PLATFORM_BUNDLE;
+      } else {
+        process.env.__TAILOR_PLATFORM_BUNDLE = previous;
+      }
+    }
+  });
+});
