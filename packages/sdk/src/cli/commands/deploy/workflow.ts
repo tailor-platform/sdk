@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { parseDuration } from "#/cli/shared/args";
 import { type OperatorClient, fetchAll } from "#/cli/shared/client";
+import { toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
@@ -157,7 +158,7 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
       );
       return;
     }
-    errors.push(error instanceof Error ? error : new Error(String(error)));
+    errors.push(toError(error));
   });
   const firstError = errors[0];
   if (firstError) {

@@ -20,6 +20,7 @@ import {
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
@@ -178,7 +179,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       } catch (error) {
         res.writeHead(401);
         res.end("Authentication failed");
-        reject(error instanceof Error ? error : new Error(String(error)));
+        reject(toError(error));
       } finally {
         // Close the server after handling one request.
         server.close();
@@ -219,7 +220,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
     server.listen(redirectPort, () => {
       openLoginUrl().catch((error: unknown) => {
         server.close();
-        reject(error instanceof Error ? error : new Error(String(error)));
+        reject(toError(error));
       });
     });
   });

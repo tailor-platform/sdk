@@ -6,6 +6,7 @@ import { workspaceArgs } from "#/cli/shared/args";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
@@ -152,7 +153,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           res.writeHead(400, { "Content-Type": "text/plain" });
           res.end(`Authorization failed: ${err instanceof Error ? err.message : "Unknown error"}`);
           server.close();
-          reject(err instanceof Error ? err : new Error(String(err)));
+          reject(toError(err));
         }
       };
       const server = http.createServer((req, res) => void handleCallback(req, res));
