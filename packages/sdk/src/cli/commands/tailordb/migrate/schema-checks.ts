@@ -418,7 +418,7 @@ export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInpu
   if (driftResults && isLikelyPreV2ScriptHashDrift(driftResults)) {
     logger.newline();
     logger.info(
-      "Every listed drift is 'has no script hash on remote' — this is expected the first time v2 deploys to an environment that was last deployed with the pre-v2 CLI, which never wrote script hashes. 'migration sync <N>' above is the fix for this case.",
+      "Every listed drift is 'has no script hash on remote'. Run 'migration sync <N>' above to add the missing hashes.",
     );
   }
 }

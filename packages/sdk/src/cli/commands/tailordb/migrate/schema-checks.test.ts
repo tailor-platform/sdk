@@ -17,12 +17,12 @@ const scriptsDifferDrift: SchemaDrift = {
 
 function hintWasLogged(infoSpy: ReturnType<typeof vi.spyOn>): boolean {
   return (infoSpy.mock.calls as unknown[][]).some(
-    ([message]) => typeof message === "string" && message.includes("pre-v2 CLI"),
+    ([message]) => typeof message === "string" && message.includes("Run 'migration sync <N>'"),
   );
 }
 
 describe("logRemoteDriftGuidance", () => {
-  test("adds the pre-v2 hint when every drift is a missing script hash", () => {
+  test("adds the missing-hash hint when every drift is a missing script hash", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     logRemoteDriftGuidance([{ hasDrift: true, drifts: [missingHashDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(true);
