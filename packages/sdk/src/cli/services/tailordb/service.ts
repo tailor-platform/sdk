@@ -121,7 +121,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   // fails closed for record operations without a .permission(), producing an
   // opaque "internal error" instead of a clear denial when only
   // .gqlPermission() is set. Catching the omission here, rather than at
-  // deploy/insert time, surfaces it while the type is still local.
+  // deploy/insert time, surfaces it while the table is still local.
   const validateRequiredPermissions = (): void => {
     const errors: string[] = [];
     for (const fileTypes of Object.values(rawTypes)) {
@@ -157,10 +157,10 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   };
 
   /**
-   * Process plugins for a type and add generated types to rawTypes
-   * @param rawType - The raw TailorDB type being processed
-   * @param attachments - Plugin attachments for this type
-   * @param sourceFilePath - The file path where the type was loaded from
+   * Process plugins for a table and add generated tables to rawTypes
+   * @param rawType - The raw TailorDB table being processed
+   * @param attachments - Plugin attachments for this table
+   * @param sourceFilePath - The file path where the table was loaded from
    */
   const processPluginsForType = async (
     rawType: TailorDBTypeSchemaOutput,
@@ -182,8 +182,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       )[rawType.name] = extendedType;
     }
     for (const gen of generatedTypes) {
-      // Plugin-generated types don't have a source file.
-      // Generators that need to import these types should generate their own type files.
+      // Plugin-generated tables don't have a source file.
+      // Generators that need to import these tables should generate their own type files.
       const sourceInfo: TypeSourceInfoEntry = {
         exportName: gen.typeName,
         pluginId: gen.pluginId,
@@ -334,7 +334,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
       let hasGeneratedTypes = false;
       for (const { pluginId, config, output } of successfulResults) {
-        // Add generated types to rawTypes
+        // Add generated tables to rawTypes
         for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
           const sourceInfo: TypeSourceInfoEntry = {
             exportName: generatedType.name,
@@ -360,7 +360,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         }
       }
 
-      // Re-parse types to include namespace plugin types
+      // Re-parse tables to include namespace plugin tables
       if (hasGeneratedTypes || hadPreviousGeneratedTypes) {
         doParseTypes();
         validateRequiredPermissions();

@@ -469,9 +469,9 @@ export function defineApplication(params: DefineApplicationParams): Application 
 
 /**
  * Generate plugin type and executor files if a plugin manager is provided.
- * Collects source type info from TailorDB services and delegates to PluginManager.
+ * Collects source table info from TailorDB services and delegates to PluginManager.
  * @param pluginManager - Plugin manager instance (skips if undefined)
- * @param tailorDBServices - TailorDB services to collect type source info from
+ * @param tailorDBServices - TailorDB services to collect table source info from
  * @param configPath - Path to tailor.config.ts for resolving plugin imports
  * @returns Generated executor file paths
  */
@@ -535,7 +535,7 @@ export async function loadApplication(
     ignoreNullishValues,
   } = defineServices(config, baseDir, pluginManager);
 
-  // 2. Load TailorDB types and process namespace plugins
+  // 2. Load TailorDB tables and process namespace plugins
   for (const tailordb of tailordbResult.tailorDBServices) {
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();

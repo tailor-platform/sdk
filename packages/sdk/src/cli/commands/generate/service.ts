@@ -257,7 +257,7 @@ export function createGenerationManager(params: {
 
       const app = application;
 
-      // Load TailorDB types (includes plugin-generated types)
+      // Load TailorDB tables (includes plugin-generated tables)
       await withSpan("generate.loadTailorDBTypes", async (span) => {
         span.setAttribute("generate.namespace_count", app.tailorDBServices.length);
         for (const db of app.tailorDBServices) {
@@ -267,7 +267,7 @@ export function createGenerationManager(params: {
               await db.loadTypes();
 
               // Process namespace plugins after loading types
-              // These plugins generate types without requiring a source type
+              // These plugins generate tables without requiring a source table
               await db.processNamespacePlugins();
 
               services.tailordb[namespace] = {
@@ -294,7 +294,7 @@ export function createGenerationManager(params: {
       });
 
       // Generate plugin type and executor files
-      // This must happen after TailorDB types are loaded since plugins process during type loading
+      // This must happen after TailorDB tables are loaded since plugins process during type loading
       const { pluginExecutorFiles, executorService } = await withSpan(
         "generate.pluginFiles",
         async () => {
@@ -320,7 +320,7 @@ export function createGenerationManager(params: {
         );
       }
 
-      // Add blank line after TailorDB types loaded
+      // Add blank line after TailorDB tables loaded
       if (app.tailorDBServices.length > 0 || pluginExecutorFiles.length > 0) {
         logger.newline();
       }

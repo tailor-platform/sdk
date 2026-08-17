@@ -111,8 +111,8 @@ export const tailorPrincipalMap = makePrincipalExpr({
   },
 });
 
-// Identifier the type-level wrapper (buildTypeScripts in type-script.ts) binds
-// tailorPrincipalMap's result to, at most once per type, so per-hook exprs
+// Identifier the table-level wrapper (buildTypeScripts in type-script.ts) binds
+// tailorPrincipalMap's result to, at most once per table, so per-hook exprs
 // below can reference it instead of re-embedding the full mapping on every hook.
 export const PRINCIPAL_VAR = "_principal";
 

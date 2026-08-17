@@ -2,7 +2,7 @@
  * Schema validation checks shared between `deploy` and
  * `tailordb migration validate`.
  *
- * These checks are read-only: they compare local type definitions, the
+ * These checks are read-only: they compare local table definitions, the
  * migration snapshot history, and the remote schema without mutating any
  * state.
  */
@@ -75,11 +75,11 @@ export function toTailorDBDeployInput(service: TailorDBService): TailorDBDeployI
 // ============================================================================
 
 /**
- * Fetch all TailorDB types from remote for a namespace
+ * Fetch all TailorDB tables from remote for a namespace
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {string} namespace - TailorDB namespace
- * @returns {Promise<ProtoTailorDBType[]>} Remote TailorDB types
+ * @returns {Promise<ProtoTailorDBType[]>} Remote TailorDB tables
  */
 async function fetchRemoteTypes(
   client: OperatorClient,
@@ -331,7 +331,7 @@ export async function verifyRemoteSchema(
       continue;
     }
 
-    // Fetch remote types
+    // Fetch remote tables
     const [remoteTypes, remoteGqlPermissions] = await Promise.all([
       fetchRemoteTypes(client, workspaceId, namespace),
       fetchRemoteGqlPermissions(client, workspaceId, namespace),
@@ -418,7 +418,7 @@ export interface MigrationCheckResult {
 
 /**
  * Check if there are schema differences between migration snapshots and local definitions
- * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Snapshot-shaped local types by namespace
+ * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Snapshot-shaped local tables by namespace
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
  * @returns {Promise<MigrationCheckResult[]>} Results for each namespace
  */
@@ -449,7 +449,7 @@ export async function checkMigrationDiffs(
       continue;
     }
 
-    // Compare with local types
+    // Compare with local tables
     const diff = compareLocalTypesWithSnapshot(previousSnapshot, localTypes, namespace);
 
     results.push({

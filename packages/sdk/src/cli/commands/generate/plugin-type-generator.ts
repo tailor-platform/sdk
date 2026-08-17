@@ -1,8 +1,8 @@
 /**
  * Plugin Type Generator
  *
- * Generates TypeScript files for plugin-generated types (TailorDB types).
- * These files can be imported by plugin executors to reference generated types.
+ * Generates TypeScript files for plugin-generated types (TailorDB tables).
+ * These files can be imported by plugin executors to reference generated tables.
  */
 
 import * as fs from "node:fs";
@@ -31,8 +31,8 @@ function isFieldDefinition(value: unknown): value is FieldDefinition {
 }
 
 /**
- * Generate TypeScript files for plugin-generated types.
- * These files export the type definition and can be imported by executor files.
+ * Generate TypeScript files for plugin-generated tables.
+ * These files export the table definition and can be imported by executor files.
  * @param types - Array of plugin type information
  * @param outputDir - Base output directory (e.g., .tailor)
  * @returns Generation result with file paths
@@ -114,8 +114,8 @@ function generateTypeFileContent(info: PluginGeneratedTypeInfo): string {
 
 /**
  * Generate TypeScript code for field definitions.
- * This creates a simplified version of the type's fields.
- * @param type - TailorDB type
+ * This creates a simplified version of the table's fields.
+ * @param type - TailorDB table
  * @returns TypeScript code for fields object
  */
 function generateFieldsCode(type: PluginGeneratedType): string {
@@ -133,7 +133,7 @@ function generateFieldsCode(type: PluginGeneratedType): string {
 }
 
 /**
- * Map from TailorDB type to SDK method name.
+ * Map from TailorDB table to SDK method name.
  */
 const typeToMethodMap: Record<string, string> = {
   string: "string",

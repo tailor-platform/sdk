@@ -161,7 +161,7 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
 
 /**
  * Generate the table interface.
- * @param type - The parsed TailorDB type
+ * @param type - The parsed TailorDB table
  * @returns The type definition and used utility types
  */
 function generateTableInterface(type: TailorDBType): {
@@ -200,7 +200,7 @@ function generateTableInterface(type: TailorDBType): {
 
 /**
  * Convert a TailorDBType into KyselyTypeMetadata.
- * @param type - Parsed TailorDB type
+ * @param type - Parsed TailorDB table
  * @returns Generated Kysely type metadata
  */
 export async function processKyselyType(type: TailorDBType): Promise<KyselyTypeMetadata> {
