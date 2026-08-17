@@ -634,6 +634,107 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(restoredFields).not.toContain("extra");
   });
 
+  test("rolls back only types touched by the failed migration", async () => {
+    const table = (name: string, fields: SchemaSnapshot["tables"][string]["fields"]) => ({
+      name,
+      pluralForm: `${name}s`,
+      fields,
+    });
+    const snapshots: Record<number, SchemaSnapshot> = {
+      0: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        tables: {
+          Audit: table("Audit", { message: { type: "string", required: true } }),
+          Existing: table("Existing", { code: { type: "string", required: true } }),
+        },
+      },
+      1: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        tables: {
+          Audit: table("Audit", { message: { type: "string", required: true } }),
+          Existing: table("Existing", { code: { type: "string", required: true } }),
+          New1: table("New1", { value: { type: "string", required: false } }),
+        },
+      },
+      2: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        tables: {
+          Audit: table("Audit", { message: { type: "string", required: true } }),
+          Existing: table("Existing", {
+            code: { type: "string", required: true },
+            extra: { type: "string", required: false },
+          }),
+          New1: table("New1", { value: { type: "string", required: false } }),
+          New2: table("New2", { value: { type: "string", required: false } }),
+        },
+      },
+    };
+    const client = createMockClient();
+    const planResult = buildPlanResult({
+      creates: ["Audit", "Existing", "New1", "New2"].map((name) => ({
+        name,
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-ns",
+          tailordbType: { name, schema: { fields: [] } },
+        },
+      })),
+    });
+    const migration2 = mkAddTypeMigration(2, "New2");
+    migration2.diff.changes.push({
+      kind: "field_added",
+      tableName: "Existing",
+      fieldName: "extra",
+      after: { type: "string", required: false },
+    });
+    setPendingMigrations([mkAddTypeMigration(1, "New1"), migration2]);
+    vi.mocked(migrationModule.executeMigrations).mockImplementation(
+      (_ctx: unknown, migrations: PendingMigration[]) =>
+        migrations.some((migration) => migration.number === 2)
+          ? Promise.reject(new Error("migration 2 failed"))
+          : Promise.resolve(undefined),
+    );
+
+    await withOverriddenSnapshot(
+      (_migrationsDir, maxVersion) => snapshots[maxVersion ?? 0]!,
+      async () => {
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          "migration 2 failed",
+        );
+      },
+    );
+
+    const createdTypeNames = vi
+      .mocked(client.createTailorDBType)
+      .mock.calls.map((call) => call[0].tailordbType?.name);
+    expect(createdTypeNames).toContain("Audit");
+    expect(createdTypeNames).toContain("New1");
+    expect(
+      vi.mocked(migrationModule.updateMigrationLabel).mock.calls.map((call) => call[3]),
+    ).toEqual([1]);
+
+    const updatedTypeNames = vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.map((call) => call[0].tailordbType?.name);
+    expect(updatedTypeNames.filter((name) => name === "Existing")).toHaveLength(2);
+    expect(updatedTypeNames).not.toContain("Audit");
+    expect(updatedTypeNames).not.toContain("New1");
+    expect(deletedTypeNames(client)).toEqual(["New2"]);
+
+    const restoredExisting = vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.filter((call) => call[0].tailordbType?.name === "Existing")
+      .at(-1)?.[0].tailordbType;
+    expect(Object.keys(restoredExisting?.schema?.fields ?? {})).toContain("code");
+    expect(Object.keys(restoredExisting?.schema?.fields ?? {})).not.toContain("extra");
+  });
+
   test("restores every updated type when the post-phase fails partway through", async () => {
     const typeNames = ["Alpha", "Beta"];
     const snapshots = (number: number) => ({

@@ -573,6 +573,7 @@ export async function applyTailorDB(
       }
 
       for (const migration of pendingMigrations) {
+        const attemptedTypes = new Set<string>();
         try {
           // Pre-migration phase: Create/update types with breaking fields as optional
           await executeSingleMigrationPrePhase(
@@ -581,6 +582,7 @@ export async function applyTailorDB(
             migration,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTypes,
+            attemptedTypes,
           );
 
           // Script execution (only if migrate.ts exists for this migration)
@@ -590,11 +592,11 @@ export async function applyTailorDB(
         } catch (error) {
           await rollbackSingleMigrationAfterFailure(
             client,
-            changeSet,
             migration,
             migrationContext.workspaceId,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTypes,
+            attemptedTypes,
           );
           throw error;
         }
@@ -606,15 +608,16 @@ export async function applyTailorDB(
             migration,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTypes,
+            attemptedTypes,
           );
         } catch (error) {
           await rollbackSingleMigrationAfterFailure(
             client,
-            changeSet,
             migration,
             migrationContext.workspaceId,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTypes,
+            attemptedTypes,
           );
           throw error;
         }
@@ -963,6 +966,7 @@ async function awaitAllSettledOrThrow(
  * @param {PendingMigration} migration - Single pending migration
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
  * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
+ * @param attemptedTypes - Types whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when pre-migration phase completes
  */
 async function executeSingleMigrationPrePhase(
@@ -971,6 +975,7 @@ async function executeSingleMigrationPrePhase(
   migration: PendingMigration,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
+  attemptedTypes: Set<string>,
 ): Promise<void> {
   // Build pre-migration changes maps for this single migration. Includes both
   // breaking changes (required-add, unique-add, enum value removal) and the
@@ -1008,6 +1013,7 @@ async function executeSingleMigrationPrePhase(
     }
 
     processedTypes.created.add(tableName);
+    attemptedTypes.add(tableName);
     await client.createTailorDBType(clonedRequest);
   }
 
@@ -1036,6 +1042,7 @@ async function executeSingleMigrationPrePhase(
     }
 
     processedTypes.updated.add(tableName);
+    attemptedTypes.add(tableName);
     await client.updateTailorDBType({
       workspaceId: create.request.workspaceId,
       namespaceName: create.request.namespaceName,
@@ -1068,6 +1075,7 @@ async function executeSingleMigrationPrePhase(
     }
 
     processedTypes.updated.add(tableName);
+    attemptedTypes.add(tableName);
     await client.updateTailorDBType(clonedRequest);
   }
 
@@ -1095,7 +1103,10 @@ async function executeSingleMigrationPrePhase(
     if (missingTypeCreates.length > 0) {
       for (const create of missingTypeCreates) {
         const tableName = create.request.tailordbType?.name;
-        if (tableName) processedTypes.created.add(tableName);
+        if (tableName) {
+          processedTypes.created.add(tableName);
+          attemptedTypes.add(tableName);
+        }
         await client.createTailorDBType(create.request);
       }
     }
@@ -1125,20 +1136,20 @@ const deletedResources = {
 
 async function rollbackSingleMigrationAfterFailure(
   client: OperatorClient,
-  changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
+  attemptedTypes: ReadonlySet<string>,
 ): Promise<void> {
   try {
     await rollbackSingleMigrationPrePhase(
       client,
-      changeSet,
       migration,
       workspaceId,
       tailorDBInputs,
       executorUsedTypes,
+      attemptedTypes,
     );
   } catch (rollbackError) {
     logger.warn(
@@ -1155,6 +1166,7 @@ async function rollbackSingleMigrationAfterFailure(
  * @param {PendingMigration} migration - Single pending migration
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
  * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
+ * @param attemptedTypes - Types whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when post-migration phase completes
  */
 async function executeSingleMigrationPostPhase(
@@ -1163,6 +1175,7 @@ async function executeSingleMigrationPostPhase(
   migration: PendingMigration,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
+  attemptedTypes: Set<string>,
 ): Promise<void> {
   // Re-use the pre-migration changes maps to know which types were touched in
   // this migration (so we send the post-phase final-schema update for them).
@@ -1192,6 +1205,7 @@ async function executeSingleMigrationPostPhase(
         executorUsedTypes,
       );
       if (!snapshotType) continue;
+      attemptedTypes.add(tableName);
       await client.updateTailorDBType({
         workspaceId: create.request.workspaceId,
         namespaceName: create.request.namespaceName,
@@ -1212,6 +1226,7 @@ async function executeSingleMigrationPostPhase(
         executorUsedTypes,
       );
       if (!snapshotType) continue;
+      attemptedTypes.add(tableName);
       await client.updateTailorDBType({
         workspaceId: update.request.workspaceId,
         namespaceName: update.request.namespaceName,
@@ -1259,43 +1274,24 @@ async function executeSingleMigrationPostPhaseDeletions(
 /**
  * Revert a single migration's Pre-phase DDL to the prior checkpoint's schema.
  * @param client - Operator client instance
- * @param changeSet - TailorDB change set
  * @param migration - The migration whose Pre-phase DDL must be reverted
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
  * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
+ * @param attemptedTypes - Types whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when rollback attempts complete
  */
 async function rollbackSingleMigrationPrePhase(
   client: OperatorClient,
-  changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
+  attemptedTypes: ReadonlySet<string>,
 ): Promise<void> {
   // The baseline migration has no prior checkpoint to revert to.
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
-
-  // `processedTypes` spans every namespace touched in this apply run; restrict
-  // rollback to this migration's namespace (its diff plus this namespace's
-  // change-set entries). Type names are unique across namespaces, so a name from
-  // another namespace simply won't appear in this set.
-  const namespaceTypes = getAffectedTypeNames(migration);
-  for (const create of changeSet.type.creates) {
-    const name = create.request.tailordbType?.name;
-    if (create.request.namespaceName === migration.namespace && name) namespaceTypes.add(name);
-  }
-  for (const update of changeSet.type.updates) {
-    const name = update.request.tailordbType?.name;
-    if (update.request.namespaceName === migration.namespace && name) namespaceTypes.add(name);
-  }
-
-  // Of those, only the types this apply run actually created or updated (so
-  // rollback is a no-op when nothing was applied and never touches drift).
-  const applied = new Set([...processedTypes.created, ...processedTypes.updated]);
-  const rollbackTypes = new Set([...namespaceTypes].filter((name) => applied.has(name)));
-  if (rollbackTypes.size === 0) return;
+  if (attemptedTypes.size === 0) return;
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
     migration.migrationsDir,
@@ -1321,11 +1317,11 @@ async function rollbackSingleMigrationPrePhase(
   // Restore pre-existing types before deleting new ones, so no restored type
   // still references a new type (e.g. a foreign key retargeted at a renamed
   // type) at the moment that type is deleted.
-  const restoredTypes = [...rollbackTypes].flatMap((tableName) => {
+  const restoredTypes = [...attemptedTypes].flatMap((tableName) => {
     const priorType = priorSnapshot.tables[tableName];
     return priorType ? [{ tableName, priorType }] : [];
   });
-  const newTypes = [...rollbackTypes].filter((tableName) => !priorSnapshot.tables[tableName]);
+  const newTypes = [...attemptedTypes].filter((tableName) => !priorSnapshot.tables[tableName]);
 
   for (const { tableName, priorType } of restoredTypes) {
     try {
