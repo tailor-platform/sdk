@@ -287,7 +287,9 @@ export async function load(url, context, nextLoad) {
   return nextLoad(url, context);
 }
 
-// Sync hooks for module.registerHooks() (Node >= 22.15.0).
+// Sync hooks for module.registerHooks() (Node >= 22.15.0). Node < 22.18.0 crashes
+// on require() of scheme-only builtins (node:sqlite, node:test, node:sea) once both
+// resolve and load are registered — nodejs/node#58607, fixed by nodejs/node#58612.
 export function resolveSync(specifier, context, nextResolve) {
   const resolved = resolveTsSync(specifier, context, nextResolve);
   return isProjectLocalSpecifier(specifier) ? propagateImportNonce(resolved, context) : resolved;

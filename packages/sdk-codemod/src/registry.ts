@@ -1588,7 +1588,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/node-minimum-22-15-0",
     name: "Node.js minimum version raised to 22.15.0",
     description:
-      "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. No source change is required; ensure your environment runs Node.js 22.15.0+.",
+      "v2 requires Node.js **22.15.0** or later. This is the first version that includes `module.registerHooks()`, which the SDK uses to register its TypeScript loader hook synchronously in the main thread. The actual floor is now **22.18.0**: Node 22.15.0–22.17.x has a bug ([nodejs/node#58607](https://github.com/nodejs/node/issues/58607)) that crashes `tailor seed validate` when requiring `node:`-scheme-only builtins such as `node:sqlite`, fixed upstream in 22.18.0. No source change is required; ensure your environment runs Node.js 22.18.0+.",
     since: "1.0.0",
     until: "2.0.0",
     notice: true,
@@ -1637,6 +1637,38 @@ export const allCodemods: CodemodPackage[] = [
       "values keep working and need no change. Do not restore the old behavior by",
       "editing `tailor.d.ts`: it is generated and will be overwritten, and embedding",
       "env values there is what leaked configured secrets into version control.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/function-test-run-rename",
+    name: "function test-run → function run",
+    description:
+      "Rename `tailor function test-run` invocations to `tailor function run`. `test-run` remains as a deprecated alias until it is removed in v3.",
+    since: "1.22.0",
+    until: "3.0.0",
+    scriptPath: "v3/function-test-run-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
+    sourceStringLegacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
+    examples: [
+      {
+        lang: "sh",
+        before: 'tailor function test-run resolvers/add.ts --arg \'{"a":1,"b":2}\'',
+        after: 'tailor function run resolvers/add.ts --arg \'{"a":1,"b":2}\'',
+      },
+    ],
+    prompt: [
+      "The `tailor function test-run` subcommand is renamed to `tailor function run`;",
+      "the old name is removed in v3. Replace any remaining `function test-run`",
+      "invocations the codemod did not rewrite (e.g. wrapped across lines or invoked",
+      "through a package runner such as `npx @tailor-platform/sdk`) with",
+      "`function run`. Leave prose that merely mentions the old subcommand name",
+      "unchanged unless it documents a command to type.",
     ].join("\n"),
   },
 ];

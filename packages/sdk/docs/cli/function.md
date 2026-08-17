@@ -16,12 +16,12 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                   | Description                                                     |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| [`function get`](#function-get)           | Get a function registry by name                                 |
-| [`function list`](#function-list)         | List function registries in a workspace                         |
-| [`function logs`](#function-logs)         | List or get function execution logs.                            |
-| [`function test-run`](#function-test-run) | Run a function on the Tailor Platform server without deploying. |
+| Command                           | Aliases    | Description                                                     |
+| --------------------------------- | ---------- | --------------------------------------------------------------- |
+| [`function get`](#function-get)   | -          | Get a function registry by name                                 |
+| [`function list`](#function-list) | -          | List function registries in a workspace                         |
+| [`function logs`](#function-logs) | -          | List or get function execution logs.                            |
+| [`function run`](#function-run)   | `test-run` | Run a function on the Tailor Platform server without deploying. |
 
 ### function get
 
@@ -119,18 +119,20 @@ $ tailor function logs <execution-id> --json
 
 **Notes**
 
-When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function test-run` output).
+When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function run` output).
 
 Stack traces are mapped only when the execution includes a content hash for the exact build that ran. If the content hash is missing or the build is no longer available, the command falls back to a plain-text error display.
 
-### function test-run
+### function run
 
 Run a function on the Tailor Platform server without deploying.
+
+**Aliases:** `test-run`
 
 **Usage**
 
 ```
-tailor function test-run [options] <file>
+tailor function run [options] <file>
 ```
 
 **Arguments**
@@ -157,19 +159,19 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Run a resolver with input arguments**
 
 ```bash
-$ tailor function test-run resolvers/add.ts --arg '{"a":1,"b":2}'
+$ tailor function run resolvers/add.ts --arg '{"a":1,"b":2}'
 ```
 
 **Run a specific workflow job by name**
 
 ```bash
-$ tailor function test-run workflows/sample.ts --name validate-order
+$ tailor function run workflows/sample.ts --name validate-order
 ```
 
 **Run a pre-bundled .js file directly**
 
 ```bash
-$ tailor function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
+$ tailor function run build/resolvers/add.js --arg '{"a":1,"b":2}'
 ```
 
 **Notes**
@@ -177,6 +179,8 @@ $ tailor function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
 You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
 When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
 
+`test-run` is a deprecated alias of this command and will be removed in v3.
+
 > [!WARNING]
-> Workflow job `.start()` calls do not work in test-run mode.
+> Workflow job `.start()` calls do not work in this mode.
 > Started jobs are not executed; only the target job's `body` function runs in isolation.

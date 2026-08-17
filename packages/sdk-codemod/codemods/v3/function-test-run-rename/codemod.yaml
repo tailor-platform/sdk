@@ -1,0 +1,7 @@
+name: "@tailor-platform/function-test-run-rename"
+version: "1.0.0"
+description: "Rename `tailor function test-run` invocations to `tailor function run`"
+engine: jssg
+language: text
+since: "1.22.0"
+until: "3.0.0"

@@ -76,7 +76,7 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_DTS_PATH`                            | Output path for generated `tailor.d.ts` type definition file                                          |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                  |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                              |
-| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`, `machineuser token`     |
+| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function run`, `machineuser token`          |
 | `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`               |
 | `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id` |
 | `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                     |
@@ -323,13 +323,13 @@ Commands for managing workflows and executions.
 
 Commands for managing function registries and viewing function execution logs.
 
-| Command                                                  | Description                                                     |
-| -------------------------------------------------------- | --------------------------------------------------------------- |
-| [function](./cli/function.md#function)                   | Manage functions                                                |
-| [function get](./cli/function.md#function-get)           | Get a function registry by name                                 |
-| [function list](./cli/function.md#function-list)         | List function registries in a workspace                         |
-| [function logs](./cli/function.md#function-logs)         | List or get function execution logs.                            |
-| [function test-run](./cli/function.md#function-test-run) | Run a function on the Tailor Platform server without deploying. |
+| Command                                          | Description                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------- |
+| [function](./cli/function.md#function)           | Manage functions                                                |
+| [function get](./cli/function.md#function-get)   | Get a function registry by name                                 |
+| [function list](./cli/function.md#function-list) | List function registries in a workspace                         |
+| [function logs](./cli/function.md#function-logs) | List or get function execution logs.                            |
+| [function run](./cli/function.md#function-run)   | Run a function on the Tailor Platform server without deploying. |
 
 ### [Executor Commands](./cli/executor.md)
 

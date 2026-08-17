@@ -1,6 +1,6 @@
 /**
  * Stack trace parsing, sourcemap-based source identification, and
- * formatted error display for the test-run command.
+ * formatted error display for the function run command.
  *
  * The platform runtime automatically applies inline sourcemaps to V8
  * stack traces, so frame positions are already original source positions.
@@ -322,7 +322,7 @@ export function formatMappedError(
 
 /**
  * Format an error string with sourcemap-based source locations.
- * This is the main entry point for test-run error display.
+ * This is the main entry point for function run error display.
  *
  * The platform runtime applies inline sourcemaps automatically, so V8
  * stack frames already contain original source positions. This function

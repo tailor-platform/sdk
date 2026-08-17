@@ -1,5 +1,5 @@
 /**
- * `tailor function test-run` command
+ * `tailor function run` command
  *
  * Bundles and executes a function on the Tailor Platform server
  * without deploying (applying) the application.
@@ -25,12 +25,13 @@ import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { assertDefined } from "#/utils/assert";
-import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
+import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
 import type { Jsonifiable } from "type-fest";
 
-export const testRunCommand = defineAppCommand({
-  name: "test-run",
+export const runFunctionCommand = defineAppCommand({
+  name: "run",
+  aliases: ["test-run"],
   description: "Run a function on the Tailor Platform server without deploying.",
   // strip unknown keys
   args: z.object({
@@ -61,8 +62,10 @@ export const testRunCommand = defineAppCommand({
   notes: `You can pass either a source file (\`.ts\`) or a pre-bundled file (\`.js\`).
 When a \`.js\` file is provided, detection and bundling are skipped and the file is executed as-is.
 
+\`test-run\` is a deprecated alias of this command and will be removed in v3.
+
 > [!WARNING]
-> Workflow job \`.start()\` calls do not work in test-run mode.
+> Workflow job \`.start()\` calls do not work in this mode.
 > Started jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
@@ -79,6 +82,12 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     },
   ],
   run: async (args) => {
+    if (invokedViaTestRunAlias(process.argv)) {
+      logger.warn(
+        "`tailor function test-run` is deprecated and will be removed in v3. Use `tailor function run` instead.",
+      );
+    }
+
     const jsonOutput = logger.jsonMode;
 
     // 1. Resolve and validate file path
@@ -151,7 +160,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
       logger.info("Bundling...");
       const baseDir = path.dirname(config.path);
-      ({ bundledCode, scriptName } = await bundleForTestRun({
+      ({ bundledCode, scriptName } = await bundleForRun({
         detected,
         sourceFile: filePath,
         baseDir,
@@ -251,6 +260,17 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     }
   },
 });
+
+/**
+ * Detect whether the command was invoked through the deprecated `test-run`
+ * alias. politty resolves aliases before dispatch, so the invoked name is only
+ * observable from the raw argv.
+ * @param argv - Process argv tokens
+ * @returns true when the `test-run` alias follows the `function` subcommand
+ */
+function invokedViaTestRunAlias(argv: readonly string[]): boolean {
+  return argv.some((token, i) => token === "function" && argv[i + 1] === "test-run");
+}
 
 /**
  * Resolve auth namespace from config.

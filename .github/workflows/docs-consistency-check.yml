@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@e63208cb983318a44e3f945e959ef894b707dcfa # v1.0.192
+        uses: anthropics/claude-code-action@9d7150bc8a3dae8149739a88019d192b579ad90c # v1.0.193
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -129,46 +129,69 @@ jobs:
             posts (or updates) the PR review for you. Your only deliverable is
             the file.
 
-            **If any issues are found** (consistency and/or reader-perspective), write a review summary in this format. Omit a subsection if it has no findings:
+            Write the review summary in this format regardless of outcome
+            (Omit a `<details>` block's table/content only where noted below):
+
+            **Recommended Actions heading**: This is the only section shown
+            without collapsing, so reviewers must be able to tell at a
+            glance whether the review requires action. Choose the heading
+            based on your conclusion:
+            - `### ✅ Recommended Actions` — no action is required (docs are
+              consistent and contain no user-facing internal-detail leaks).
+              Write a one-line reason, e.g. "None — docs are consistent with
+              the implementation and contain no user-facing internal-detail
+              leaks."
+            - `### ❌ Recommended Actions` — action is required. List the
+              concrete fixes the author must make.
+
+            The heading line must appear exactly as
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`,
+            before any `<details>` block — a later workflow step checks for
+            this exact text at the top of the file and asks you to fix it
+            if it's missing, so don't paraphrase or add extra words to the
+            line.
 
             ```markdown
             ## 📖 Docs Quality & Consistency Check
 
-            ### ⚠️ Consistency Issues
+            ### {✅ or ❌} Recommended Actions
+            {If no action is needed, state so explicitly. If action is
+            needed, list the concrete fixes required.}
+
+            <details>
+            <summary>⚠️ Consistency Issues</summary>
+
+            {If none were found, write "No consistency issues found."
+            Otherwise, a table:}
 
             | File | Issue | Suggested Fix |
             |------|-------|---------------|
             | `path/to/doc.md` | Description of mismatch with the implementation | What should be updated |
 
-            ### 📝 Reader-Perspective Issues
+            </details>
+
+            <details>
+            <summary>📝 Reader-Perspective Issues</summary>
+
+            {If none were found, write "No reader-perspective issues found."
+            Otherwise, a table:}
 
             | File | Issue | Suggested Fix |
             |------|-------|---------------|
             | `packages/sdk/docs/...` | Internal detail / JSDoc duplication / private reference that a user does not need | What to remove or rephrase |
 
-            ### Details
+            </details>
 
-            (For each issue, explain the mismatch — what the implementation does vs what the docs say — or
-            why the flagged content is internal-only, with specific file paths and line numbers.)
+            <details>
+            <summary>🔍 Details</summary>
 
-            ### Recommended Actions
-            - ...
+            {If issues were found, explain each mismatch — what the
+            implementation does vs what the docs say — or why the flagged
+            content is internal-only, with specific file paths and line
+            numbers. If no issues were found, instead list the areas that
+            were checked.}
 
-            > Re-run this check by adding the `docs-check` label to the PR.
-
-            ---
-            <!-- docs-consistency-check -->
-            ```
-
-            **If no issues are found**, write a review summary in this format:
-
-            ```markdown
-            ## 📖 Docs Quality & Consistency Check
-
-            ✅ Docs are consistent with the implementation and contain no user-facing internal-detail leaks.
-
-            **Checked areas:**
-            - (list what was checked)
+            </details>
 
             > Re-run this check by adding the `docs-check` label to the PR.
 
@@ -192,6 +215,42 @@ jobs:
           claude_args: |
             --model claude-sonnet-4-5-20250929
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Read,Glob,Grep,Write"
+
+      - name: Validate Recommended Actions heading
+        id: validate-heading
+        if: always()
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          elif awk '/<details>/{exit} {print}' "$REVIEW_BODY_FILE" \
+              | grep -qE '^### (✅|❌) Recommended Actions$'; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_fix=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fix Recommended Actions heading with Claude
+        if: always() && steps.validate-heading.outputs.needs_fix == 'true'
+        uses: anthropics/claude-code-action@e63208cb983318a44e3f945e959ef894b707dcfa # v1.0.192
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            The file `${{ env.REVIEW_BODY_FILE }}` is missing a
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`
+            heading (the exact literal text on its own line, appearing
+            before any `<details>` block).
+
+            Read the file, decide from its existing content whether action
+            is required, then fix **only** the heading — either correct its
+            text, or move it (or add it, if entirely absent) so it reads
+            exactly `### ✅ Recommended Actions` (no action needed) or
+            `### ❌ Recommended Actions` (action needed) as the first
+            heading in the file, before any `<details>` block. Do not change
+            any other content in the file. Save your change with the Write
+            tool.
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Read,Write"
 
       - name: Post docs consistency review
         if: always()
