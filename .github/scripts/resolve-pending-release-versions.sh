@@ -26,7 +26,7 @@ original_ref="$(git rev-parse HEAD)"
 # plain `git checkout` refuses to switch away from a dirty tracked file.
 trap 'git reset --hard --quiet "$original_ref"' EXIT
 
-# changesets/action's github-api commit mode applies `changeset version`'s file
+# changesets/action applies `changeset version`'s file
 # edits (package.json bumps, CHANGELOG.md, consumed .changeset/*.md deletions)
 # straight to this worktree and pushes them to the release PR branch through the
 # API, but never commits them locally — leaving this checkout dirty. Without
