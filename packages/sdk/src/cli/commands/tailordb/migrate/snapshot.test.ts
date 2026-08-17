@@ -196,6 +196,95 @@ describe("snapshot", () => {
       expect(snapshot.tables.Order!.fields.customerId!.foreignKeyField).toBe("id");
     });
 
+    test("preserves a nested field named __proto__", () => {
+      const user = createMockType("User", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+        profile: {
+          name: "profile",
+          config: {
+            type: "nested",
+            required: true,
+            fields: Object.fromEntries([["__proto__", { type: "string", required: false }]]),
+          },
+        },
+      });
+
+      const snapshot = createSnapshotFromLocalTypes({ User: user }, namespace);
+      const fields = snapshot.tables.User!.fields.profile!.fields ?? {};
+
+      expect(Object.hasOwn(fields, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(fields)).toBe(Object.prototype);
+      expect(fields["__proto__"]?.type).toBe("string");
+    });
+
+    test("preserves an index named __proto__", () => {
+      const user = createMockType("User", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+        name: { name: "name", config: { type: "string", required: true } },
+      });
+      user.indexes = Object.fromEntries([["__proto__", { fields: ["name"], unique: true }]]);
+
+      const snapshot = createSnapshotFromLocalTypes({ User: user }, namespace);
+      const indexes = snapshot.tables.User!.indexes ?? {};
+
+      expect(Object.hasOwn(indexes, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(indexes)).toBeNull();
+      expect(indexes["__proto__"]).toEqual({ fields: ["name"], unique: true });
+    });
+
+    test("preserves a forward relationship named __proto__", () => {
+      const post = createMockType("Post", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+        authorId: { name: "authorId", config: { type: "uuid", required: true } },
+      });
+      post.forwardRelationships = Object.fromEntries([
+        [
+          "__proto__",
+          {
+            name: "__proto__",
+            targetType: "User",
+            targetField: "authorId",
+            sourceField: "id",
+            isArray: false,
+            description: "Post author",
+          },
+        ],
+      ]);
+
+      const snapshot = createSnapshotFromLocalTypes({ Post: post }, namespace);
+      const relationships = snapshot.tables.Post!.forwardRelationships ?? {};
+
+      expect(Object.hasOwn(relationships, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(relationships)).toBeNull();
+      expect(relationships["__proto__"]?.targetType).toBe("User");
+    });
+
+    test("preserves a backward relationship named __proto__", () => {
+      const user = createMockType("User", {
+        id: { name: "id", config: { type: "uuid", required: true } },
+      });
+      user.backwardRelationships = Object.fromEntries([
+        [
+          "__proto__",
+          {
+            name: "__proto__",
+            targetType: "Post",
+            targetField: "authorId",
+            sourceField: "id",
+            isArray: true,
+            description: "User posts",
+          },
+        ],
+      ]);
+
+      const snapshot = createSnapshotFromLocalTypes({ User: user }, namespace);
+      const relationships = snapshot.tables.User!.backwardRelationships ?? {};
+
+      expect(Object.hasOwn(relationships, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(relationships)).toBeNull();
+      expect(relationships["__proto__"]?.targetType).toBe("Post");
+    });
+
     test("captures enum fields with allowedValues", () => {
       const mockTypes: Record<string, TailorDBType> = {
         Task: createMockType("Task", {

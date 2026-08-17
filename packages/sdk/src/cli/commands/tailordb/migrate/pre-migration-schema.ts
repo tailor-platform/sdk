@@ -31,7 +31,6 @@
  * to fix up data.
  */
 
-import { defineRecordEntry } from "./record";
 import { isBreakingIndexChange } from "./snapshot";
 import { convertFieldConfigToProto, convertIndexToProto } from "./snapshot-manifest";
 import type {
@@ -47,6 +46,15 @@ import type {
   TailorDBType_FieldConfigSchema,
   TailorDBType_IndexSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+
+function defineRecordEntry<T>(record: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
 
 /**
  * Diff change kinds that require pre-migration schema adjustments.

@@ -473,10 +473,11 @@ function createSnapshotFieldConfigFromOperatorConfig(
 
   // Recursive for nested fields
   if (fieldConfig.fields && Object.keys(fieldConfig.fields).length > 0) {
-    config.fields = {};
+    const fields = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [nestedName, nestedConfig] of Object.entries(fieldConfig.fields)) {
-      config.fields[nestedName] = createSnapshotFieldConfigFromOperatorConfig(nestedConfig);
+      fields[nestedName] = createSnapshotFieldConfigFromOperatorConfig(nestedConfig);
     }
+    config.fields = fields;
   }
 
   return normalizeSnapshotField(config);
@@ -531,13 +532,14 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   }
 
   if (type.indexes && Object.keys(type.indexes).length > 0) {
-    snapshotType.indexes = {};
+    const indexes = createSnapshotRecord<SnapshotIndexConfig>();
     for (const [indexName, indexConfig] of Object.entries(type.indexes)) {
-      snapshotType.indexes[indexName] = {
+      indexes[indexName] = {
         fields: indexConfig.fields,
         unique: indexConfig.unique,
       };
     }
+    snapshotType.indexes = indexes;
   }
 
   if (type.files && Object.keys(type.files).length > 0) {
@@ -553,9 +555,9 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   }
 
   if (Object.keys(type.forwardRelationships).length > 0) {
-    snapshotType.forwardRelationships = {};
+    const forwardRelationships = createSnapshotRecord<SnapshotRelationship>();
     for (const [relName, rel] of Object.entries(type.forwardRelationships)) {
-      snapshotType.forwardRelationships[relName] = {
+      forwardRelationships[relName] = {
         targetType: rel.targetType,
         targetField: rel.targetField,
         sourceField: rel.sourceField,
@@ -563,12 +565,13 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
         description: rel.description,
       };
     }
+    snapshotType.forwardRelationships = forwardRelationships;
   }
 
   if (Object.keys(type.backwardRelationships).length > 0) {
-    snapshotType.backwardRelationships = {};
+    const backwardRelationships = createSnapshotRecord<SnapshotRelationship>();
     for (const [relName, rel] of Object.entries(type.backwardRelationships)) {
-      snapshotType.backwardRelationships[relName] = {
+      backwardRelationships[relName] = {
         targetType: rel.targetType,
         targetField: rel.targetField,
         sourceField: rel.sourceField,
@@ -576,6 +579,7 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
         description: rel.description,
       };
     }
+    snapshotType.backwardRelationships = backwardRelationships;
   }
 
   if (type.permissions.record || type.permissions.gql) {
