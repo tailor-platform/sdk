@@ -120,7 +120,7 @@ export const V2_NEXT_PENDING = "pending";
 // command separators, and require a token boundary so quoted values containing
 // `--branch` don't match.
 const SETUP_BRANCH_RESIDUAL_FLAG =
-  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk)[\s\\^`]{1,16}setup[\s\\^`]{1,16}branch\b(?:'[^'\n]*'|"[^"\n]*"|[^\n;&|'"]|[\\^`]\r?\n)*[ \t]--branch(?![\w-])/;
+  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@\S{1,32})?)[\s\\^`]{1,16}setup[\s\\^`]{1,16}branch\b(?:'[^'\n]*'|"[^"\n]*"|[^\n;&|'"#]|[\\^`]\r?\n)*(?:[ \t]|[\\^`]\r?\n)--branch(?![\w-])/;
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [

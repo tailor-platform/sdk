@@ -27,8 +27,11 @@ function replaceCommand(value: string): string {
     for (let token = NEXT_TOKEN.exec(value); token; token = NEXT_TOKEN.exec(value)) {
       const chunk = token[0];
       const word = token[1]!;
-      const quote = word === "'--branch'" || word === '"--branch"' ? word[0] : "";
-      const bare = quote ? word.slice(1, -1) : word;
+      // An unquoted `#` starts a shell comment; stop before rewriting it.
+      if (word.startsWith("#")) break;
+      const quoted = /^(['"])(--branch(?:=.*)?)\1$/.exec(word);
+      const quote = quoted ? quoted[1]! : "";
+      const bare = quoted ? quoted[2]! : word;
       if (bare === "--branch" || bare.startsWith("--branch=")) {
         const separator = chunk.slice(0, chunk.length - word.length);
         result += `${separator}${quote}--trigger-branch${bare.slice("--branch".length)}${quote}`;
@@ -36,9 +39,9 @@ function replaceCommand(value: string): string {
         result += chunk;
       }
       pos = NEXT_TOKEN.lastIndex;
-      // A command substitution starts a nested command whose own `--branch`
-      // must not be renamed; leave the rest for residual detection.
-      if (word.includes("$(") || word.includes("`")) break;
+      // A command or process substitution starts a nested command whose own
+      // `--branch` must not be renamed; leave the rest for residual detection.
+      if (/\$\(|`|<\(|>\(/.test(word)) break;
     }
     cursor = pos;
     COMMAND_START.lastIndex = pos;
