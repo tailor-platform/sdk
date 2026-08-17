@@ -16,7 +16,7 @@ export const TailorDBTriggerSchema = z.strictObject({
     .min(1)
     .transform((arr) => [...new Set(arr)])
     .describe("TailorDB event types to trigger on"),
-  typeName: z.string().describe("TailorDB type name to watch for events"),
+  typeName: z.string().describe("TailorDB table name to watch for events"),
   condition: functionSchema.optional().describe("Condition function to filter events"),
 });
 

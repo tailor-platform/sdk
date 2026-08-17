@@ -40,7 +40,7 @@ type ValidateSeedResult =
  * A JSONL seed file that received values.
  */
 type FilledSeedFile = {
-  /** Name of the seeded type, matching the JSONL file name */
+  /** Name of the seeded table, matching the JSONL file name */
   table: string;
   /** Absolute path to the updated JSONL file */
   file: string;
@@ -262,7 +262,7 @@ async function loadSeedHook(dataDir: string, table: string): Promise<SeedHook | 
  * are missing them, so a row can be referenced by `id` or carry a timestamp
  * before it is ever seeded.
  *
- * The values come from the type's own create-time behavior — its `id`, its field
+ * The values come from the table's own create-time behavior — its `id`, its field
  * defaults, and its create hooks — applied to each row on its own. Nothing is
  * validated, so a row can be filled while the data around it is still
  * incomplete: that is what lets you get the ids you need in order to write the
@@ -271,8 +271,8 @@ async function loadSeedHook(dataDir: string, table: string): Promise<SeedHook | 
  * Only the named fields are written, and only into a row that has no value for
  * them, so a value already in the file is never replaced. A line that gains
  * nothing is written back exactly as it was, byte for byte; a line that does get
- * a value is re-serialized with its keys in the order the type declares its
- * fields, so a filled-in `id` lands at the front. A field the type gives no
+ * a value is re-serialized with its keys in the order the table declares its
+ * fields, so a filled-in `id` lands at the front. A field the table gives no
  * value to — one it does not declare, or one the platform assigns such as a
  * serial field — is skipped, so one field list covers a whole data directory.
  *

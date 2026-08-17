@@ -18,7 +18,7 @@ export function toSchemaOutput(
 ): TailorDBTypeSchemaOutput {
   const parsed = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(type));
   if (!parsed.success) {
-    throw new Error(`Failed to parse type ${type.name}: ${parsed.error.message}`);
+    throw new Error(`Failed to parse table ${type.name}: ${parsed.error.message}`);
   }
   return parsed.data;
 }

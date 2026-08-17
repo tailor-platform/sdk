@@ -16,7 +16,7 @@ function setField(record: Record<string, unknown>, key: string, value: unknown):
 }
 
 /**
- * Creates a hook function that processes TailorDB type fields
+ * Creates a hook function that processes TailorDB table fields
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
@@ -24,7 +24,7 @@ function setField(record: Record<string, unknown>, key: string, value: unknown):
  *   member of `Object` such as `toString` is read from the record rather than
  *   from the prototype
  * @template T - The output type of the hook function
- * @param type - TailorDB type definition
+ * @param type - TailorDB table definition
  * @returns A function that transforms input data according to field hooks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,7 +94,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   };
 }
 
-// Collect the issues the type's own `validate` reports for a record, so they
+// Collect the issues the table's own `validate` reports for a record, so they
 // surface the same way a field's do instead of ending the run.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unknown) {
@@ -117,13 +117,13 @@ function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unkno
 
 /**
  * Creates the standard schema definition used to validate seed rows.
- * Runs the hook, then the type's own `validate`, and the field schema only when
+ * Runs the hook, then the table's own `validate`, and the field schema only when
  * that reported nothing, so both levels of validation report as issues rather
  * than by throwing.
  * @template T - The output type after validation
  * @param schemaType - TailorDB field schema for validation
  * @param hook - Hook function to transform data before validation
- * @param type - TailorDB type definition, when it carries a type-level `validate`
+ * @param type - TailorDB table definition, when it carries a table-level `validate`
  * @returns Schema object with ~standard section for defineSchema
  */
 export function createStandardSchema<T = Record<string, unknown>>(

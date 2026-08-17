@@ -426,7 +426,7 @@ export interface TailorDBField<
   description: DBFieldDescriptionMethod<Defined, Output, Nested>;
 
   /**
-   * Define a relation to another type.
+   * Define a relation to another table.
    */
   relation: DBFieldRelationMethod<Defined, Output, Nested>;
 

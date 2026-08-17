@@ -218,7 +218,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
       password: t.string(),
     });
 
-    // Simple identity hook for _User (no TailorDB backing type)
+    // Simple identity hook for _User (no TailorDB backing table)
     export const hook = <T>(data: unknown) => data as T;
 
     export const schema = defineSchema(

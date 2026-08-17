@@ -26,9 +26,7 @@ Configure an AI Gateway using `defineAIGateway()`:
 ```typescript
 import { defineAIGateway, defineConfig } from "@tailor-platform/sdk";
 
-const aiGateway = defineAIGateway("my-aigateway", {
-  authNamespace: "default",
-});
+const aiGateway = defineAIGateway("my-aigateway", {});
 
 export default defineConfig({
   name: "my-app",
@@ -40,13 +38,41 @@ export default defineConfig({
 
 ### authNamespace
 
-The auth namespace used to resolve request tokens against your workspace's auth configuration. Must match an existing auth namespace.
+The auth namespace used to resolve request tokens against your workspace's auth configuration. Optional — when omitted, it defaults to your application's own Auth service (local or external, the name passed to `defineAuth()`), which is what most AI Gateways need. Omitting it without an Auth service configured is rejected by `deploy`/`generate`, asking you to either define one or set `authNamespace` explicitly:
 
 ```typescript
-defineAIGateway("my-aigateway", {
-  authNamespace: "default",
+import { defineAIGateway, defineAuth, defineConfig } from "@tailor-platform/sdk";
+
+const auth = defineAuth("my-auth", {
+  // ...auth configuration...
+});
+
+const aiGateway = defineAIGateway("my-aigateway", {}); // defaults to "my-auth"
+
+export default defineConfig({
+  name: "my-app",
+  auth,
+  aiGateways: [aiGateway],
 });
 ```
+
+Type-checked and autocompleted against your own Auth service name via the generated `tailor.d.ts` (the `AuthNamespaceNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining an Auth service to refresh it. Before the first generate run, `authNamespace` accepts any string.
+
+To authenticate against a **different** application's Auth service, reference it as an [external resource](../configuration.md#external-resources) in your own config — `authNamespace` then defaults to it like any other Auth service:
+
+```typescript
+import { defineAIGateway, defineConfig } from "@tailor-platform/sdk";
+
+const aiGateway = defineAIGateway("my-aigateway", {}); // defaults to "shared-auth"
+
+export default defineConfig({
+  name: "my-app",
+  auth: { name: "shared-auth", external: true },
+  aiGateways: [aiGateway],
+});
+```
+
+An `authNamespace` that doesn't match any auth namespace in your workspace surfaces only at runtime, as `401 Unauthorized` on every request to the gateway.
 
 ### cors
 
@@ -61,7 +87,6 @@ An optional `:port` may be appended in all URL forms. Omitting `cors` (or passin
 
 ```typescript
 defineAIGateway("my-aigateway", {
-  authNamespace: "default",
   cors: ["https://app.example.com", "https://*.example.com"],
 });
 ```
@@ -81,8 +106,7 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const aiGateway = defineAIGateway("my-aigateway", {
-  // Name of an auth namespace in your workspace; request tokens are resolved against it.
-  authNamespace: "default",
+  // authNamespace omitted: defaults to this app's own Auth service, declared below.
   cors: [website.url],
 });
 

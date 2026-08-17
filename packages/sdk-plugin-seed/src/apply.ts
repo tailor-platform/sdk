@@ -139,7 +139,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   }
 
   logger.info(
-    `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch ${upsert ? "upsert" : "insert"}...`,
+    `  [${namespace}] Seeding ${typesWithData.length} tables via Kysely batch ${upsert ? "upsert" : "insert"}...`,
     { mode: "plain" },
   );
 
@@ -364,7 +364,7 @@ export const seedApplyCommand = defineAppCommand({
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",
-      description: "Seed all types in the specified TailorDB namespace (excludes _User)",
+      description: "Seed all tables in the specified TailorDB namespace (excludes _User)",
     }),
     "skip-idp": arg(z.boolean().default(false), {
       description: "Skip the IdP user (_User) entity",
@@ -379,23 +379,23 @@ export const seedApplyCommand = defineAppCommand({
       alias: "y",
       description: "Skip confirmation prompts (for --truncate)",
     }),
-    types: arg(z.array(z.string()).default([]), {
+    entities: arg(z.array(z.string()).default([]), {
       positional: true,
-      description: "Type names to seed (default: all types)",
+      description: "Entity names to seed, including _User (default: all)",
     }),
   }),
   run: async (args) => {
     const context = await loadSeedContext({ configPath: args.config });
 
-    const namespaceEntities = Object.fromEntries(
+    const namespaceTables = Object.fromEntries(
       context.namespaces.map((ns) => [ns.namespace, ns.types]),
     );
     const hasIdpUser = context.idpUser !== null;
     const selection = selectEntities({
-      namespaceEntities,
+      namespaceTables,
       hasIdpUser,
       namespace: args.namespace,
-      types: args.types,
+      entities: args.entities,
       skipIdp: args["skip-idp"],
     });
     for (const warning of selection.warnings) {
@@ -404,8 +404,8 @@ export const seedApplyCommand = defineAppCommand({
     if (args.namespace) {
       logger.info(`Filtering by namespace: ${args.namespace}`);
       logger.log(styles.dim(`Entities: ${(selection.entitiesToProcess ?? []).join(", ")}`));
-    } else if (args.types.length > 0) {
-      logger.info(`Filtering by types: ${(selection.entitiesToProcess ?? []).join(", ")}`);
+    } else if (args.entities.length > 0) {
+      logger.info(`Filtering by entities: ${(selection.entitiesToProcess ?? []).join(", ")}`);
     }
 
     if (!selection.hasEntitiesToProcess) {
@@ -461,7 +461,7 @@ export const seedApplyCommand = defineAppCommand({
           workspaceId: args["workspace-id"],
           namespace: args.namespace,
         });
-      } else if (args.types.length > 0) {
+      } else if (args.entities.length > 0) {
         const typesToTruncate = (selection.entitiesToProcess ?? []).filter(
           (type) => type !== "_User",
         );
@@ -488,7 +488,7 @@ export const seedApplyCommand = defineAppCommand({
         hasIdpUser &&
         !args["skip-idp"] &&
         !args.namespace &&
-        (args.types.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
+        (args.entities.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
       if (shouldTruncateUser && context.idpUser) {
         const truncated = await truncateIdpUser(execution, context.idpUser.truncateScriptCode);
         if (!truncated) {

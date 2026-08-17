@@ -435,17 +435,6 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
 }
 
 /**
- * Request fields never included in error dumps, by RPC method name.
- * `ExecScript` (and its deprecated alias `TestExecScript`) carries the full
- * script source in `code` and arbitrary script input in `arg` — seed runs put
- * user credentials there.
- */
-const REDACTED_REQUEST_FIELDS: Record<string, readonly string[]> = {
-  ExecScript: ["code", "arg"],
-  TestExecScript: ["code", "arg"],
-};
-
-/**
  * Create an interceptor that enhances error messages from the Operator API.
  * @internal
  * @returns Error handling interceptor
@@ -457,15 +446,12 @@ export function errorHandlingInterceptor(): Interceptor {
     } catch (error) {
       if (error instanceof ConnectError) {
         const { operation, resourceType } = parseMethodName(req.method.name);
-        const requestParams = formatRequestParams(
-          req.message,
-          REDACTED_REQUEST_FIELDS[req.method.name],
-        );
+        const identity = formatRequestIdentity(req.message, req.method.name);
 
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
         throw new ConnectError(
-          `Failed to ${operation} ${resourceType}: ${error.rawMessage}\nRequest: ${requestParams}`,
+          `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
           error.code,
           error.metadata,
         );
@@ -493,43 +479,75 @@ export function parseMethodName(methodName: string): {
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 
-/**
- * JSON.stringify replacer that converts BigInt values to strings.
- * @param _key - Object key (unused)
- * @param value - Value to serialize
- * @returns Serializable value
- */
-function bigIntReplacer(_key: string, value: unknown): unknown {
-  if (typeof value === "bigint") {
-    return value.toString();
+// Identifier fields surfaced in enhanced error messages. Never add fields
+// that can carry secrets or PII (tokens, scripts, query args, secret values,
+// emails), and never add a suffix that could match them (e.g. "Key" would
+// match future key material).
+//
+// Platform-wide naming conventions: on every API, a top-level string field
+// with one of these names or suffixes is a resource identifier.
+const IDENTITY_KEYS = new Set(["name", "id"]);
+const IDENTITY_KEY_SUFFIXES = ["Name", "Id", "Namespace"];
+// Key read from nested resource messages (e.g. the type in a create request).
+// Only materialized protobuf messages (marked by $typeName) qualify: map and
+// Struct fields materialize without one, and their entries can carry values
+// the SDK does not control (e.g. metadata labels merged from the remote).
+const NESTED_IDENTITY_KEY = "name";
+// API-specific identifier fields, scoped to the RPC methods that define them
+// so a same-named field on an unrelated API is never surfaced by accident.
+const METHOD_IDENTITY_KEYS: Readonly<Record<string, readonly string[]>> = {
+  GetMetadata: ["trn"],
+  SetMetadata: ["trn"],
+  AddCustomDomain: ["domain"],
+  GetCustomDomain: ["domain"],
+  RemoveCustomDomain: ["domain"],
+  CreateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  UpdateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  GetWorkflowJobFunctionExecutionPolicyByKey: ["executionPolicyKey"],
+};
+
+function isIdentityKey(key: string, methodName: string): boolean {
+  if (key.startsWith("$")) {
+    return false;
   }
-  return value;
+  return (
+    IDENTITY_KEYS.has(key) ||
+    IDENTITY_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix)) ||
+    (METHOD_IDENTITY_KEYS[methodName]?.includes(key) ?? false)
+  );
 }
 
 /**
- * @internal
- * @param message - Request message to format
- * @param redactFields - Top-level field names to replace with a placeholder
- * @returns Pretty-printed JSON or error placeholder
+ * Format an allowlisted identity suffix for enhanced error messages.
+ *
+ * Only resource identifiers are included — the rest of the request payload
+ * can carry credentials and must never reach terminal or CI logs.
+ * @param message - Request message to extract identifiers from
+ * @param methodName - RPC method name used to resolve method-scoped identifiers
+ * @returns Identity suffix like " (namespaceName: x, type.name: y)", or an empty string
  */
-export function formatRequestParams(message: unknown, redactFields?: readonly string[]): string {
-  try {
-    let value =
-      message && typeof message === "object" && "toJson" in message
-        ? (message as { toJson: () => unknown }).toJson()
-        : message;
-    if (redactFields && value && typeof value === "object" && !Array.isArray(value)) {
-      value = Object.fromEntries(
-        Object.entries(value).map(([key, entry]) => [
-          key,
-          redactFields.includes(key) ? "(redacted)" : entry,
-        ]),
-      );
-    }
-    return JSON.stringify(value, bigIntReplacer, 2);
-  } catch {
-    return "(unable to serialize request)";
+function formatRequestIdentity(message: unknown, methodName: string): string {
+  if (typeof message !== "object" || message === null) {
+    return "";
   }
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(message)) {
+    if (typeof value === "string" && value !== "" && isIdentityKey(key, methodName)) {
+      parts.push(`${key}: ${value}`);
+    } else if (
+      !key.startsWith("$") &&
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).$typeName === "string"
+    ) {
+      const nestedName = (value as Record<string, unknown>)[NESTED_IDENTITY_KEY];
+      if (typeof nestedName === "string" && nestedName !== "") {
+        parts.push(`${key}.${NESTED_IDENTITY_KEY}: ${nestedName}`);
+      }
+    }
+  }
+  return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
 }
 
 export const MAX_PAGE_SIZE = 1000;

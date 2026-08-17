@@ -225,7 +225,7 @@ export type SCIMResource = {
   name: string;
   /** TailorDB namespace for the resource */
   tailorDBNamespace: string;
-  /** TailorDB type name for the resource */
+  /** TailorDB table name for the resource */
   tailorDBType: string;
   /** Core SCIM schema definition */
   coreSchema: {
@@ -268,9 +268,9 @@ export type SCIMConfig = {
 export type SCIMConfigInput = SCIMConfig;
 
 export type TenantProvider = {
-  /** TailorDB namespace for the tenant type */
+  /** TailorDB namespace for the tenant table */
   namespace: string;
-  /** TailorDB type name for tenants */
+  /** TailorDB table name for tenants */
   type: string;
   /** Field used as the tenant signature */
   signatureField: string;
@@ -408,7 +408,7 @@ export type AuthConfigInput =
               name: string;
               /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
-              /** TailorDB type name for the resource */
+              /** TailorDB table name for the resource */
               tailorDBType: string;
               /** Core SCIM schema definition */
               coreSchema: {
@@ -448,9 +448,9 @@ export type AuthConfigInput =
       /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
-            /** TailorDB namespace for the tenant type */
+            /** TailorDB namespace for the tenant table */
             namespace: string;
-            /** TailorDB type name for tenants */
+            /** TailorDB table name for tenants */
             type: string;
             /** Field used as the tenant signature */
             signatureField: string;
@@ -1391,7 +1391,7 @@ export type AuthConfigInput =
               }[];
             };
             usernameField: string;
-            /** TailorDB namespace where the user type is defined */
+            /** TailorDB namespace where the user table is defined */
             namespace?: string | undefined;
             attributes?:
               | {
@@ -1572,7 +1572,7 @@ export type AuthConfigInput =
               name: string;
               /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
-              /** TailorDB type name for the resource */
+              /** TailorDB table name for the resource */
               tailorDBType: string;
               /** Core SCIM schema definition */
               coreSchema: {
@@ -1612,9 +1612,9 @@ export type AuthConfigInput =
       /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
-            /** TailorDB namespace for the tenant type */
+            /** TailorDB namespace for the tenant table */
             namespace: string;
-            /** TailorDB type name for tenants */
+            /** TailorDB table name for tenants */
             type: string;
             /** Field used as the tenant signature */
             signatureField: string;
@@ -1781,7 +1781,7 @@ export type AuthConfig =
               name: string;
               /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
-              /** TailorDB type name for the resource */
+              /** TailorDB table name for the resource */
               tailorDBType: string;
               /** Core SCIM schema definition */
               coreSchema: {
@@ -1821,9 +1821,9 @@ export type AuthConfig =
       /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
-            /** TailorDB namespace for the tenant type */
+            /** TailorDB namespace for the tenant table */
             namespace: string;
-            /** TailorDB type name for tenants */
+            /** TailorDB table name for tenants */
             type: string;
             /** Field used as the tenant signature */
             signatureField: string;
@@ -2808,7 +2808,7 @@ export type AuthConfig =
               };
             };
             usernameField: string;
-            /** TailorDB namespace where the user type is defined */
+            /** TailorDB namespace where the user table is defined */
             namespace?: string | undefined;
             attributes?:
               | {
@@ -2999,7 +2999,7 @@ export type AuthConfig =
               name: string;
               /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
-              /** TailorDB type name for the resource */
+              /** TailorDB table name for the resource */
               tailorDBType: string;
               /** Core SCIM schema definition */
               coreSchema: {
@@ -3039,9 +3039,9 @@ export type AuthConfig =
       /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
-            /** TailorDB namespace for the tenant type */
+            /** TailorDB namespace for the tenant table */
             namespace: string;
-            /** TailorDB type name for tenants */
+            /** TailorDB table name for tenants */
             type: string;
             /** Field used as the tenant signature */
             signatureField: string;
