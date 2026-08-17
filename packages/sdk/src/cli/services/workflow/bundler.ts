@@ -22,6 +22,7 @@ import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
 import type { LogLevel } from "#/configure/config/types";
+import type { ASTNode } from "./ast-utils";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);
@@ -44,6 +45,69 @@ interface JobInfo {
  * job or a call to it would otherwise be silently dropped from the bundle.
  */
 class WorkflowJobDetectionError extends Error {}
+
+function isExecJobFunctionCallee(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const callee = node as ASTNode;
+  if (callee.type !== "MemberExpression") return false;
+  const property = callee.property as ASTNode | undefined;
+  if (property?.type !== "Identifier" || property.name !== "execJobFunction") return false;
+  const object = callee.object as ASTNode | undefined;
+  if (object?.type !== "MemberExpression") return false;
+  const workflowProperty = object.property as ASTNode | undefined;
+  if (workflowProperty?.type !== "Identifier" || workflowProperty.name !== "workflow") {
+    return false;
+  }
+  const root = object.object as ASTNode | undefined;
+  return root?.type === "Identifier" && root.name === "tailor";
+}
+
+function extractStaticStringValue(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const value = node as ASTNode;
+  if (value.type === "Literal" && typeof value.value === "string") {
+    return value.value;
+  }
+  if (value.type === "TemplateLiteral") {
+    const quasis = value.quasis as Array<{ value?: { cooked?: string } }> | undefined;
+    const expressions = value.expressions as unknown[] | undefined;
+    if (quasis?.length === 1 && (expressions?.length ?? 0) === 0) {
+      return quasis[0]?.value?.cooked;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Find the job names a bundled job's code calls `.start()` on, by looking for
+ * `tailor.workflow.execJobFunction(<name>, ...)` calls with a static string name.
+ * @param code - Bundled job code
+ * @returns Target job names referenced with a statically known name
+ */
+function collectExecJobFunctionTargets(code: string): string[] {
+  const { program } = parseSync("input.js", code);
+  const targets: string[] = [];
+
+  function walk(node: ASTNode | null | undefined): void {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "CallExpression" && isExecJobFunctionCallee(node.callee)) {
+      const args = node.arguments as unknown[] | undefined;
+      const target = extractStaticStringValue(args?.[0]);
+      if (target !== undefined) targets.push(target);
+    }
+    for (const key of Object.keys(node)) {
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode);
+      }
+    }
+  }
+
+  walk(program as unknown as ASTNode);
+  return targets;
+}
 
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
@@ -122,6 +186,24 @@ export async function bundleWorkflowJobs(
   }
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
+
+  // Backstop for dependency-graph gaps the source-level checks in
+  // filterUsedJobs cannot see (e.g. a factored-out .start() call inside a
+  // helper file outside `workflow.files`): the rewrite still resolves and
+  // produces a valid execJobFunction call, but the target was never bundled.
+  const usedJobNameSet = new Set(usedJobs.map((job) => job.name));
+  for (const [callerJobName, code] of bundledCode) {
+    for (const targetJobName of collectExecJobFunctionTargets(code)) {
+      if (!usedJobNameSet.has(targetJobName)) {
+        throw new WorkflowJobDetectionError(
+          `Workflow job "${callerJobName}" calls .start() on job "${targetJobName}", but "${targetJobName}" ` +
+            `was not detected as a dependency and is not included in the bundle. Move the .start() call to ` +
+            `a function defined inside the body of workflow job "${callerJobName}", or make sure the file ` +
+            `containing it is covered by the workflow service's "files" pattern.`,
+        );
+      }
+    }
+  }
 
   return {
     mainJobDeps,
@@ -237,9 +319,10 @@ async function filterUsedJobs(
           if (!isInsideAJobBody) {
             throw new WorkflowJobDetectionError(
               `Call to job "${call.targetName}".start() in ${sourceFile} is not inside any workflow ` +
-                `job's body: it was factored into a helper function. Dependency detection only sees ` +
-                `.start() calls lexically inside a job body, so this call would silently drop "${call.targetName}" ` +
-                `from the bundle. Move the call directly into the calling job's body.`,
+                `job's body: it was factored into a function defined outside the calling job's body. ` +
+                `Dependency detection only sees .start() calls lexically inside a job body, so this call ` +
+                `would silently drop "${call.targetName}" from the bundle. Move the call to a function ` +
+                `defined inside the calling job's body.`,
             );
           }
         }

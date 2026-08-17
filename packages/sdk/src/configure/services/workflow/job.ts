@@ -47,9 +47,10 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
    * Accepts an optional second argument to pass `executionPolicyKey` for
    * platform-side concurrency enforcement.
    *
-   * Must be called directly inside another job's `body` — not factored into a
-   * helper function called from there. The build cannot see through that
-   * indirection to find the call, and fails instead of silently dropping it.
+   * Must be called from within another job's `body` (a function defined
+   * inside `body` may call it too) — not from a function defined outside
+   * `body`. The build cannot see through that indirection to find the call,
+   * and fails instead of silently dropping it.
    * @example
    * body: async (input) => {
    *   const a = jobA.start({ id: input.id });
@@ -134,7 +135,7 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   const start = process.env.__TAILOR_PLATFORM_BUNDLE
     ? () => {
         throw new Error(
-          `Workflow job "${config.name}"'s .start() is rewritten at build time and is unavailable in the bundle`,
+          `.start() on workflow job "${config.name}" is rewritten at build time and is unavailable in the bundle`,
         );
       }
     : // Preserve arity: use `arguments.length` (regular function, not arrow) so

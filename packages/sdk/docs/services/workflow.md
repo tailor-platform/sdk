@@ -26,14 +26,14 @@ All workflow components must follow these rules:
 - **Job name uniqueness**: Job names must be unique across the entire project (not just within one file)
 - **mainJob required**: Every workflow must specify a `mainJob`
 
-| Rule                                                                     | Description                                                                                                                                                          |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createWorkflow` result must be default export                           | Workflow files must export the workflow as default                                                                                                                   |
-| All jobs must be named exports                                           | Includes `mainJob` and any job started via `.start()` (even if referenced only within the same file)                                                                 |
-| Job `name` values must be unique                                         | Job names must be unique across the entire project                                                                                                                   |
-| `mainJob` is required                                                    | Every workflow must specify a `mainJob`                                                                                                                              |
-| `createWorkflowJob`'s `name`/`body` must be written directly in the call | Not as a reference to a variable or the result of another function — the build cannot see through that indirection and fails instead of silently leaving the job out |
-| `.start()` must be called directly inside the calling job's `body`       | Not factored into a helper function called from there — the build cannot see through that indirection and fails instead of silently leaving the call out             |
+| Rule                                                                     | Description                                                                                                                                                                                    |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createWorkflow` result must be default export                           | Workflow files must export the workflow as default                                                                                                                                             |
+| All jobs must be named exports                                           | Includes `mainJob` and any job started via `.start()` (even if referenced only within the same file)                                                                                           |
+| Job `name` values must be unique                                         | Job names must be unique across the entire project                                                                                                                                             |
+| `mainJob` is required                                                    | Every workflow must specify a `mainJob`                                                                                                                                                        |
+| `createWorkflowJob`'s `name`/`body` must be written directly in the call | Not as a reference to a variable or the result of another function — the build cannot see through that indirection and fails instead of silently leaving the job out                           |
+| `.start()` must be called from within the calling job's `body`           | A function defined inside `body` may call it too, but not a function defined outside `body` — the build cannot see through that indirection and fails instead of silently leaving the call out |
 
 ## Creating a Workflow Job
 

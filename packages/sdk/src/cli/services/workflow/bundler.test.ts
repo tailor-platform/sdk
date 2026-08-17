@@ -355,6 +355,64 @@ export default createWorkflow({ name: "workflow", mainJob });
         ),
       ).rejects.toThrow(/step-a/);
     });
+
+    test("throws when a factored-out start() call lives in a file outside workflow.files", async () => {
+      const dir = createTempDir();
+      const workflowsDir = path.join(dir, "workflows");
+      const sharedDir = path.join(dir, "shared");
+      fs.mkdirSync(workflowsDir);
+      fs.mkdirSync(sharedDir);
+
+      const jobsFile = path.join(workflowsDir, "jobs.ts");
+      const helpersFile = path.join(sharedDir, "helpers.ts");
+      const workflowFile = path.join(workflowsDir, "workflow.ts");
+      fs.writeFileSync(
+        jobsFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+`,
+      );
+      fs.writeFileSync(
+        helpersFile,
+        `
+import { step } from "../workflows/jobs";
+export async function runStep() {
+  return await step.start();
+}
+`,
+      );
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { runStep } from "../shared/helpers";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await runStep(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      // workflow.files only covers workflows/**, not shared/** — the start-call
+      // rewrite still resolves helpersFile's import, but StartContext.modules
+      // never scans it, so this case can only be caught at the bundle output.
+      const context = await buildStartContext({ files: [jobsFile, workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [
+            { name: "step-a", exportName: "step", sourceFile: jobsFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/step-a/);
+    });
   });
 
   describe("cross-file workflow default import", () => {
