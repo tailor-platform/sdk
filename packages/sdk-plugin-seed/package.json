@@ -37,9 +37,9 @@
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/shared": "workspace:^",
     "@types/node": "24.13.3",
-    "eslint-plugin-zod": "4.9.0",
+    "eslint-plugin-zod": "4.9.1",
     "oxlint": "1.76.0",
-    "tsdown": "0.22.5",
+    "tsdown": "0.22.14",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   },
