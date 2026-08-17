@@ -34,7 +34,7 @@ export const updateCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
-        "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.",
+        "Default machine user name for application-data commands (query, workflow start, function run, machineuser token). Pass an empty string to clear.",
     }),
     "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
       description:

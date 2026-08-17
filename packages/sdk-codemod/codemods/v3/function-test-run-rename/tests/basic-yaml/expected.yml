@@ -1,0 +1,8 @@
+jobs:
+  smoke:
+    steps:
+      - run: tailor function run resolvers/add.ts
+list-shaped-not-a-command:
+  - tailor
+  - function
+  - test-run

@@ -13,7 +13,25 @@ describe("getApplicableCodemods", () => {
 
   test("returns all v2 codemods when upgrading to the stable boundary", () => {
     expect(getApplicableCodemods("1.67.1", "2.0.0").map((codemod) => codemod.id)).toEqual(
-      allCodemods.map((codemod) => codemod.id),
+      allCodemods.filter((codemod) => codemod.until === "2.0.0").map((codemod) => codemod.id),
+    );
+  });
+
+  test("returns the function run rename only when crossing the v3 boundary", () => {
+    expect(getApplicableCodemods("1.67.1", "2.0.0").map((codemod) => codemod.id)).not.toContain(
+      "v3/function-test-run-rename",
+    );
+    expect(getApplicableCodemods("2.3.0", "2.9.0").map((codemod) => codemod.id)).not.toContain(
+      "v3/function-test-run-rename",
+    );
+    expect(getApplicableCodemods("2.3.0", "3.0.0").map((codemod) => codemod.id)).toContain(
+      "v3/function-test-run-rename",
+    );
+    expect(getApplicableCodemods("1.22.0", "3.0.0").map((codemod) => codemod.id)).toContain(
+      "v3/function-test-run-rename",
+    );
+    expect(getApplicableCodemods("1.21.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
+      "v3/function-test-run-rename",
     );
   });
 
@@ -226,7 +244,7 @@ describe("getApplicableCodemods", () => {
   });
 
   test("returns empty when both versions are after the codemod boundary", () => {
-    expect(getApplicableCodemods("2.0.0", "3.0.0")).toEqual([]);
+    expect(getApplicableCodemods("3.0.0", "4.0.0")).toEqual([]);
   });
 
   test("returns empty when from is already at the codemod boundary", () => {

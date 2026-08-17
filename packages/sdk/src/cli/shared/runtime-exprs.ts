@@ -269,7 +269,7 @@ export type ResolverPermissionResolution = {
 
 /**
  * Build the permission guard and input-validation statements shared by every
- * resolver entry wrapper (production bundling and `function test-run`).
+ * resolver entry wrapper (production bundling and `function run`).
  *
  * Kept as a single generator so a resolver-wrapping behavior (like the
  * permission guard) can't be added to one entry-point template and forgotten

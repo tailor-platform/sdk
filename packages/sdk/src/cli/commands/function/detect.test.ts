@@ -49,7 +49,7 @@ export default {
       expect(result.name).toBe("my-resolver");
     });
 
-    test("carries the resolver's `permission` config through for test-run to enforce", async () => {
+    test("carries the resolver's `permission` config through for function run to enforce", async () => {
       const filePath = writeFile(
         "resolver-permission.mjs",
         `

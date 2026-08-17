@@ -42,7 +42,7 @@ type ResolveForFileParams = {
 /**
  * Find the `defaultPermission` of the resolver namespace a file belongs to.
  *
- * `function test-run` receives a single file rather than a namespace, so the
+ * `function run` receives a single file rather than a namespace, so the
  * namespace is recovered by matching the file against each namespace's own
  * patterns — otherwise a test run would skip a guard the deployed resolver has.
  *

@@ -1,10 +1,10 @@
 /**
- * E2E tests for `function test-run` CLI command
+ * E2E tests for `function run` CLI command
  *
- * Verifies that the function test-run command correctly bundles and executes
+ * Verifies that the function run command correctly bundles and executes
  * different function types on the Tailor Platform server via TestExecScript API.
  *
- * Uses internal APIs directly (detectFunctionType, bundleForTestRun, executeScript)
+ * Uses internal APIs directly (detectFunctionType, bundleForRun, executeScript)
  * instead of spawning CLI subprocesses. The deploy step still uses subprocess
  * since it orchestrates multiple services.
  *
@@ -27,7 +27,7 @@ import {
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, test, expect, aroundAll } from "vitest";
-import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
+import { bundleForRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
@@ -54,20 +54,20 @@ const env = { foo: 1, bar: "hello", baz: true };
 const AUTH_NAMESPACE = "my-auth";
 const MACHINE_USER_NAME = "manager-machine-user";
 
-interface TestRunResult extends ScriptExecutionResult {
+interface RunFunctionResult extends ScriptExecutionResult {
   scriptName: string;
   functionType?: string;
   functionName?: string;
 }
 
 // Bundle and execute a function file via internal APIs.
-async function runTestRun(
+async function runFunction(
   file: string,
   options?: {
     arg?: string;
     name?: string;
   },
-): Promise<TestRunResult> {
+): Promise<RunFunctionResult> {
   const filePath = path.resolve(exampleDir, file);
 
   if (filePath.endsWith(".js")) {
@@ -94,7 +94,7 @@ async function runTestRun(
     resolvedArg = undefined;
   }
 
-  const { bundledCode, scriptName } = await bundleForTestRun({
+  const { bundledCode, scriptName } = await bundleForRun({
     detected,
     sourceFile: filePath,
     baseDir: exampleDir,
@@ -115,7 +115,7 @@ async function runTestRun(
   return { ...result, scriptName, functionType: detected.type, functionName: detected.name };
 }
 
-describe.sequential("E2E: function test-run", () => {
+describe.sequential("E2E: function run", () => {
   aroundAll(async (runSuite) => {
     // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
@@ -180,7 +180,7 @@ describe.sequential("E2E: function test-run", () => {
 
   describe("resolver", () => {
     test("runs add resolver with input arguments", async () => {
-      const result = await runTestRun("resolvers/add.ts", {
+      const result = await runFunction("resolvers/add.ts", {
         arg: '{"a":1,"b":2}',
       });
 
@@ -192,7 +192,7 @@ describe.sequential("E2E: function test-run", () => {
     });
 
     test("returns machine user context from userInfo resolver", async () => {
-      const result = await runTestRun("resolvers/userInfo.ts");
+      const result = await runFunction("resolvers/userInfo.ts");
 
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.result);
@@ -213,7 +213,7 @@ describe.sequential("E2E: function test-run", () => {
     });
 
     test("injects environment variables into resolver", async () => {
-      const result = await runTestRun("resolvers/env.ts", {
+      const result = await runFunction("resolvers/env.ts", {
         arg: '{"multiplier":3}',
       });
 
@@ -226,7 +226,7 @@ describe.sequential("E2E: function test-run", () => {
     });
 
     test("supports getDB in resolver (stepChain)", async () => {
-      const result = await runTestRun("resolvers/stepChain.ts", {
+      const result = await runFunction("resolvers/stepChain.ts", {
         arg: '{"user":{"name":{"first":"John","last":"Doe"}}}',
       });
 
@@ -239,7 +239,7 @@ describe.sequential("E2E: function test-run", () => {
     });
 
     test("inserts nested object with Date and verifies round-trip", async () => {
-      const result = await runTestRun("resolvers/insertNestedProfileWithDate.ts", {
+      const result = await runFunction("resolvers/insertNestedProfileWithDate.ts", {
         arg: '{"name":"Test User","email":"test@example.com"}',
       });
 
@@ -254,7 +254,7 @@ describe.sequential("E2E: function test-run", () => {
     });
 
     test("reports validation errors for invalid input", async () => {
-      const result = await runTestRun("resolvers/add.ts", {
+      const result = await runFunction("resolvers/add.ts", {
         arg: '{"a":100,"b":2}',
       });
 
@@ -264,7 +264,7 @@ describe.sequential("E2E: function test-run", () => {
 
   describe("executor", () => {
     test("runs webhook executor with body args", async () => {
-      const result = await runTestRun("executors/testWebhook.ts", {
+      const result = await runFunction("executors/testWebhook.ts", {
         arg: '{"body":{"message":"hello"},"headers":{}}',
       });
 
@@ -277,7 +277,7 @@ describe.sequential("E2E: function test-run", () => {
 
   describe("workflow job", () => {
     test("runs workflow job by name (check-inventory)", async () => {
-      const result = await runTestRun("workflows/sample.ts", {
+      const result = await runFunction("workflows/sample.ts", {
         name: "check-inventory",
       });
 
@@ -294,7 +294,7 @@ describe.sequential("E2E: function test-run", () => {
       // Bundle the resolver first to create the .js file
       const sourceFile = path.resolve(exampleDir, "resolvers/add.ts");
       const detected = await detectFunctionType({ filePath: sourceFile });
-      const { bundledCode } = await bundleForTestRun({
+      const { bundledCode } = await bundleForRun({
         detected,
         sourceFile,
         baseDir: exampleDir,
@@ -329,11 +329,11 @@ describe.sequential("E2E: function test-run", () => {
 
   describe("error handling", () => {
     test("separates logs from error in failure output", async () => {
-      const fixtureDir = path.join(__dirname, "fixtures", "function-test-run");
+      const fixtureDir = path.join(__dirname, "fixtures", "function-run");
       const filePath = path.join(fixtureDir, "error-function.ts");
 
       const detected = await detectFunctionType({ filePath });
-      const { bundledCode, scriptName } = await bundleForTestRun({
+      const { bundledCode, scriptName } = await bundleForRun({
         detected,
         sourceFile: filePath,
         baseDir: fixtureDir,

@@ -158,4 +158,8 @@ describe("codemod transforms", () => {
   test("v2/idp-publish-events-rename transforms correctly", async () => {
     await expect(runFixtureCases("v2/idp-publish-events-rename")).resolves.toBeUndefined();
   });
+
+  test("v3/function-test-run-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v3/function-test-run-rename")).resolves.toBeUndefined();
+  });
 });

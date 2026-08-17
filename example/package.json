@@ -39,7 +39,7 @@
     "@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
     "@types/node": "24.13.3",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "eslint-plugin-zod": "4.9.0",
+    "eslint-plugin-zod": "4.9.1",
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
@@ -52,6 +52,6 @@
     "vitest": "4.1.10"
   },
   "engines": {
-    "node": ">= 22.15.0"
+    "node": ">= 22.18.0"
   }
 }
