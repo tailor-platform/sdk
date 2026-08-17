@@ -1,5 +1,5 @@
 import type { AIGatewayInput } from "#/types/aigateway.generated";
-import type { AIGatewayDefinitionBrand } from "./types";
+import type { AIGatewayDefinitionBrand, AIGatewayServiceInput } from "./types";
 export type { AIGatewayConfig } from "./types";
 
 /**
@@ -9,7 +9,7 @@ export type { AIGatewayConfig } from "./types";
  * @returns Defined AI Gateway
  */
 /* @__NO_SIDE_EFFECTS__ */
-export function defineAIGateway(name: string, config: Omit<AIGatewayInput, "name">) {
+export function defineAIGateway(name: string, config: Omit<AIGatewayServiceInput, "name">) {
   const result = {
     ...config,
     name,

@@ -18,6 +18,9 @@ declare module "@tailor-platform/sdk" {
   }
   interface ConnectionNameRegistry {}
   interface AIGatewayNameRegistry {}
+  interface AuthNamespaceNameRegistry {
+    "main-auth": true;
+  }
 }
 
 export {};
