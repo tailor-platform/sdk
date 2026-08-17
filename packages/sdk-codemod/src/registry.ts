@@ -114,11 +114,13 @@ const V2_NEXT_11 = "2.0.0-next.11";
  */
 export const V2_NEXT_PENDING = "pending";
 
-// Residual `--branch` on a `setup branch` invocation: skip quoted spans, cross
-// backslash/caret/backtick line continuations but not command separators, and
-// require a token boundary so quoted values containing `--branch` don't match.
+// Residual `--branch` on a Tailor `setup branch` invocation (the CLI binaries,
+// their Windows launcher forms, or the package name used by npx/dlx runners):
+// skip quoted spans, cross backslash/caret/backtick line continuations but not
+// command separators, and require a token boundary so quoted values containing
+// `--branch` don't match.
 const SETUP_BRANCH_RESIDUAL_FLAG =
-  /\bsetup[\s\\^`]{1,16}branch\b(?:'[^'\n]*'|"[^"\n]*"|[^\n;&|'"]|[\\^`]\r?\n)*[ \t]--branch(?![\w-])/;
+  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk)[\s\\^`]{1,16}setup[\s\\^`]{1,16}branch\b(?:'[^'\n]*'|"[^"\n]*"|[^\n;&|'"]|[\\^`]\r?\n)*[ \t]--branch(?![\w-])/;
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [

@@ -27,9 +27,11 @@ function replaceCommand(value: string): string {
     for (let token = NEXT_TOKEN.exec(value); token; token = NEXT_TOKEN.exec(value)) {
       const chunk = token[0];
       const word = token[1]!;
-      if (word === "--branch" || word.startsWith("--branch=")) {
+      const quote = word === "'--branch'" || word === '"--branch"' ? word[0] : "";
+      const bare = quote ? word.slice(1, -1) : word;
+      if (bare === "--branch" || bare.startsWith("--branch=")) {
         const separator = chunk.slice(0, chunk.length - word.length);
-        result += `${separator}--trigger-branch${word.slice("--branch".length)}`;
+        result += `${separator}${quote}--trigger-branch${bare.slice("--branch".length)}${quote}`;
       } else {
         result += chunk;
       }
