@@ -15,15 +15,15 @@
  * - `field_type_modified`: keep the complete previous field config until
  *   Post-phase so migrate.ts runs against the previous type contract.
  *
- * and the type-level index adjustments:
+ * and the table-level index adjustments:
  *
  * - `index_added` with `unique: true`: withhold the index until Post-phase.
  * - `index_modified` that gains a unique constraint or re-points a unique
  *   index at different fields: keep the previous definition until Post-phase.
  *
- * Type-level deletions (`table_removed`) and renames (`table_renamed`) are
- * handled by the deploy flow rather than via this module: the old type is
- * retained until Post-phase, and a renamed type's new type is created with
+ * Table-level deletions (`table_removed`) and renames (`table_renamed`) are
+ * handled by the deploy flow rather than via this module: the old table is
+ * retained until Post-phase, and a renamed table's new table is created with
  * its full constraints in the Pre-phase (the copy script writes complete
  * rows, so nothing needs relaxing).
  *
@@ -79,15 +79,15 @@ function isPreMigrationFieldChange(change: DiffChange): change is FieldDiffChang
 export type PreMigrationChangesMap = Map<string, Map<string, FieldDiffChange>>;
 
 /**
- * Create the type snapshot used to build a Pre-phase manifest.
+ * Create the table snapshot used to build a Pre-phase manifest.
  *
  * This adjustment happens before manifest generation because field hooks and
- * validators are aggregated into type-level scripts by the manifest builder.
+ * validators are aggregated into table-level scripts by the manifest builder.
  * Replacing only the generated field proto would leave those scripts on the
  * target field contract while migrate.ts still runs against the previous one.
  * @param snapshotType - Final snapshot state for this migration
- * @param typeChanges - Field changes for this type, keyed by field name
- * @param typeScriptsChange - Type-level scripts changed by the same migration
+ * @param typeChanges - Field changes for this table, keyed by field name
+ * @param typeScriptsChange - Table-level scripts changed by the same migration
  * @returns A snapshot with Pre-phase field contracts
  */
 export function createPreMigrationSnapshotType(
@@ -155,7 +155,7 @@ export function buildPreMigrationChangesMap(
  * - Modified fields keep the looser side of unique/required/enum.
  *
  * @param {Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>} fields - Field map to adjust (mutated in place)
- * @param {Map<string, FieldDiffChange>} typeChanges - Changes for this type, keyed by fieldName
+ * @param {Map<string, FieldDiffChange>} typeChanges - Changes for this table, keyed by fieldName
  */
 export function applyPreMigrationFieldAdjustments(
   fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
@@ -237,7 +237,7 @@ export function applyPreMigrationFieldAdjustments(
 export type PreMigrationIndexChangesMap = Map<string, Map<string, IndexDiffChange>>;
 
 /**
- * Build a map of type-level index changes that require pre-migration schema
+ * Build a map of table-level index changes that require pre-migration schema
  * adjustment (the breaking ones — see {@link isBreakingIndexChange}).
  * @param {PendingMigration[]} pendingMigrations - Pending migrations to scan
  * @returns {PreMigrationIndexChangesMap} Map of changes keyed by tableName/indexName
@@ -262,7 +262,7 @@ export function buildPreMigrationIndexChangesMap(
 }
 
 /**
- * Apply pre-migration schema adjustments to a type's index map in place.
+ * Apply pre-migration schema adjustments to a table's index map in place.
  *
  * The indexes map is the proto-shape `TailorDBType.schema.indexes` that will
  * be sent in the Pre-phase. We mutate it so that:
@@ -271,7 +271,7 @@ export function buildPreMigrationIndexChangesMap(
  * - Modified indexes keep their previous definition until Post-phase.
  *
  * @param {Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>>} indexes - Index map to adjust (mutated in place)
- * @param {Map<string, IndexDiffChange>} typeIndexChanges - Changes for this type, keyed by indexName
+ * @param {Map<string, IndexDiffChange>} typeIndexChanges - Changes for this table, keyed by indexName
  */
 export function applyPreMigrationIndexAdjustments(
   indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>>,

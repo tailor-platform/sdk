@@ -58,7 +58,7 @@ export function resourceTrn(workspaceId: string, kind: ResourceKind, name: strin
  *
  * The platform reads everything after the workspace id as alternating key/value
  * pairs and matches the pair list against one resource type, so a nested
- * resource is the parent's pair followed by its own. A TailorDB type is
+ * resource is the parent's pair followed by its own. A TailorDB table is
  * `tailordb:<namespace>:type:<name>`, distinct from the namespace's own
  * `tailordb:<namespace>`.
  * @param workspaceId - Workspace ID
@@ -78,10 +78,10 @@ function nestedResourceTrn(
 type NestedResourceKey = "type" | "resolver";
 
 /**
- * Build the TRN for one TailorDB type.
+ * Build the TRN for one TailorDB table.
  * @param workspaceId - Workspace ID
- * @param namespace - TailorDB namespace holding the type
- * @param typeName - Type name
+ * @param namespace - TailorDB namespace holding the table
+ * @param typeName - Table name
  * @returns Fully-qualified TRN string
  */
 export function tailorDBTypeTrn(workspaceId: string, namespace: string, typeName: string): string {

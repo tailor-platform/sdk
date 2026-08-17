@@ -40,7 +40,7 @@ interface DiffChangeBase {
 }
 
 /**
- * Type-level settings patch carried by legacy `type_modified` changes.
+ * Table-level settings patch carried by legacy `type_modified` changes.
  * Current SDK versions no longer produce this kind, but persisted
  * diff.json files written by older versions may still contain it.
  */
@@ -49,7 +49,7 @@ export interface TypeSettingsPatch {
   files?: Record<string, string>;
 }
 
-/** Type-level settings and metadata state used by current diffs. */
+/** Table-level settings and metadata state used by current diffs. */
 export interface SnapshotTypeSettingsState {
   description?: string;
   pluralForm: string;
@@ -223,7 +223,7 @@ export interface RelationshipModifiedChange extends DiffChangeBase {
 }
 
 /**
- * Type-level permissions were modified. `before`/`after` are optional for
+ * Table-level permissions were modified. `before`/`after` are optional for
  * robustness against hand-edited or legacy diff.json files; consumers guard
  * on their presence.
  */
@@ -233,7 +233,7 @@ export interface PermissionModifiedChange extends DiffChangeBase {
   after?: SnapshotPermissionState;
 }
 
-/** Type-level hook/validate script state for diff tracking. */
+/** Table-level hook/validate script state for diff tracking. */
 export interface TypeScriptsState {
   typeHookExpr?: { create?: string; update?: string };
   typeValidateExpr?: string;

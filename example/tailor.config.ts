@@ -23,7 +23,7 @@ const erdSite = defineStaticWebSite("my-erd-site", {
 });
 
 const aiGateway = defineAIGateway("my-aigateway", {
-  authNamespace: "default",
+  // authNamespace omitted: defaults to this app's own Auth service ("my-auth" below).
   cors: [website.url],
 });
 

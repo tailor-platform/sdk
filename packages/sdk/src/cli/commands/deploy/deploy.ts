@@ -302,9 +302,9 @@ function ownedSubscriptions(
 }
 
 /**
- * Collect the TailorDB types subscribed to among the given subscriptions.
+ * Collect the TailorDB tables subscribed to among the given subscriptions.
  * @param subscriptions - Subscriptions owned by the target being planned
- * @returns Subscribed type names
+ * @returns Subscribed table names
  */
 function subscribedTailorDBTypes(
   subscriptions: ReadonlyArray<EventSubscription>,

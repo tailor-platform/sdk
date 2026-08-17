@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { PRINCIPAL_VAR, tailorPrincipalMap } from "./field";
 
-// Platform-injected record map for type-level hook/validate scripts.
+// Platform-injected record map for table-level hook/validate scripts.
 const INPUT = "_input";
 const NEW_RECORD = "_newRecord";
 const OLD_RECORD = "_oldRecord";
@@ -20,7 +20,7 @@ interface ScriptRef {
 
 /**
  * Minimal structural shape shared by parser `OperatorFieldConfig` and migration
- * `SnapshotFieldConfig`. Only the parts needed to aggregate type-level scripts.
+ * `SnapshotFieldConfig`. Only the parts needed to aggregate table-level scripts.
  */
 export interface ScriptFieldConfig {
   type: string;
@@ -269,13 +269,13 @@ function wrapValidate(statements: string[], typeValidateExpr?: string): string {
 
 /**
  * Aggregate every field's create/update hook, default, and validate into
- * type-level scripts.  Hooks compute a single shared timestamp (`now`) per
+ * table-level scripts.  Hooks compute a single shared timestamp (`now`) per
  * operation, so all fields touched in one create/update observe the same
  * instant.  Defaults are applied after hooks on create only.  Validators
  * run with the same rules on create and update.
  * @param fields - Per-field script configuration
- * @param options - Optional type-level hook/validate expressions
- * @returns Aggregated type-level scripts
+ * @param options - Optional table-level hook/validate expressions
+ * @returns Aggregated table-level scripts
  */
 export function buildTypeScripts(
   fields: Record<string, ScriptFieldConfig>,

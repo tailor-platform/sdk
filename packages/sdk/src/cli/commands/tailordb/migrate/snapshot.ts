@@ -280,15 +280,15 @@ function normalizeSnapshotField(field: SnapshotFieldConfig): SnapshotFieldConfig
 }
 
 /**
- * Normalize a snapshot type into the canonical comparison shape, returning a
+ * Normalize a snapshot table into the canonical comparison shape, returning a
  * new object rather than mutating the input. Currently fills:
  *   - `pluralForm` via inflection when missing (legacy snapshots written
  *     before `pluralForm` became required may omit it)
  *   - per-field `scale` defaults via {@link normalizeSnapshotField}
  *
  * Idempotent — safe to call multiple times on the same input.
- * @param {TailorDBSnapshotType} type - Snapshot type to normalize
- * @returns {TailorDBSnapshotType} A new, normalized snapshot type object
+ * @param {TailorDBSnapshotType} type - Snapshot table to normalize
+ * @returns {TailorDBSnapshotType} A new, normalized snapshot table object
  */
 function normalizeSnapshotType(type: TailorDBSnapshotType): TailorDBSnapshotType {
   // `pluralForm` is typed as required by TailorDBSnapshotType, but JSON.parse'd legacy
@@ -483,9 +483,9 @@ function createSnapshotFieldConfigFromOperatorConfig(
 }
 
 /**
- * Create a snapshot type from a parsed type
- * @param {TailorDBType} type - Parsed TailorDB type definition
- * @returns {TailorDBSnapshotType} Snapshot type configuration
+ * Create a snapshot table from a parsed table
+ * @param {TailorDBType} type - Parsed TailorDB table definition
+ * @returns {TailorDBSnapshotType} Snapshot table configuration
  */
 export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   const fields = createSnapshotRecord<SnapshotFieldConfig>();
@@ -619,8 +619,8 @@ function convertActionPermission(
 }
 
 /**
- * Create a schema snapshot from local type definitions
- * @param {Record<string, TailorDBType>} types - Local type definitions
+ * Create a schema snapshot from local table definitions
+ * @param {Record<string, TailorDBType>} types - Local table definitions
  * @param {string} namespace - Namespace for the snapshot
  * @returns {NormalizedSchemaSnapshot} Normalized schema snapshot
  */
@@ -1209,11 +1209,11 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
 
 /**
  * Collect breaking changes for a field change
- * @param {string} tableName - Name of the type containing the field
+ * @param {string} tableName - Name of the table containing the field
  * @param {string} fieldName - Name of the field being changed
  * @param {SnapshotFieldConfig | undefined} oldField - Old field configuration
  * @param {SnapshotFieldConfig | undefined} newField - New field configuration
- * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
+ * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed table renames (old name → new name)
  * @returns {BreakingChangeInfo[]} Breaking change information
  */
 function getBreakingFieldChanges(
@@ -1270,7 +1270,7 @@ function getBreakingFieldChanges(
   }
 
   // Foreign key relationship changed - breaking (existing references may become
-  // invalid), unless it retargets a confirmed type rename: record ids are
+  // invalid), unless it retargets a confirmed table rename: record ids are
   // preserved by the rename copy, so the stored references stay valid.
   if (oldField && newField && isBreakingForeignKeyRetarget(oldField, newField, typeRenameTargets)) {
     breakingChanges.push({
@@ -1329,7 +1329,7 @@ interface DiffContext {
   changes: DiffChange[];
   breakingChanges: BreakingChangeInfo[];
   warnings: WarningChangeInfo[];
-  /** Confirmed type renames (old name → new name), for reference retargets. */
+  /** Confirmed table renames (old name → new name), for reference retargets. */
   typeRenameTargets?: ReadonlyMap<string, string>;
 }
 
@@ -1478,11 +1478,11 @@ function compareTypeFields(
 }
 
 /**
- * Determine if a type-level index change is breaking. Mirrors the field-level
+ * Determine if a table-level index change is breaking. Mirrors the field-level
  * unique reasoning: enforcing a unique constraint over existing rows can fail
  * on duplicates, so both adding a unique index and re-pointing an existing
  * unique index at a different field set require a data migration.
- * @param {string} tableName - Name of the type containing the index
+ * @param {string} tableName - Name of the table containing the index
  * @param {string} indexName - Name of the index being changed
  * @param {SnapshotIndexConfig | undefined} oldIndex - Old index configuration
  * @param {SnapshotIndexConfig | undefined} newIndex - New index configuration
@@ -1517,9 +1517,9 @@ export function isBreakingIndexChange(
 }
 
 /**
- * Compare type-level indexes
+ * Compare table-level indexes
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {Record<string, SnapshotIndexConfig> | undefined} oldIndexes - Previous indexes
  * @param {Record<string, SnapshotIndexConfig> | undefined} newIndexes - Current indexes
  * @returns {void}
@@ -1598,9 +1598,9 @@ function compareIndexes(
 }
 
 /**
- * Compare type-level file fields
+ * Compare table-level file fields
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {Record<string, string> | undefined} oldFiles - Previous file fields
  * @param {Record<string, string> | undefined} newFiles - Current file fields
  * @returns {void}
@@ -1660,9 +1660,9 @@ function compareFiles(
 }
 
 /**
- * Compare type-level relationships
+ * Compare table-level relationships
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {"forward" | "backward"} relationshipType - Relationship direction to compare
  * @param {Record<string, SnapshotRelationship> | undefined} oldRelationships - Previous relationships
  * @param {Record<string, SnapshotRelationship> | undefined} newRelationships - Current relationships
@@ -1739,9 +1739,9 @@ function compareRelationships(
 }
 
 /**
- * Compare type-level permissions
+ * Compare table-level permissions
  * @param {DiffContext} ctx - Diff context
- * @param {string} tableName - Type name
+ * @param {string} tableName - Table name
  * @param {SnapshotRecordPermission | undefined} oldRecordPerm - Previous record permission
  * @param {SnapshotRecordPermission | undefined} newRecordPerm - Current record permission
  * @param {SnapshotGqlPermission | undefined} oldGqlPerm - Previous GQL permission
@@ -2030,7 +2030,7 @@ export interface CompareSnapshotsOptions {
    */
   fieldRenames?: readonly FieldRenameSpec[];
   /**
-   * Confirmed type renames. Each spec replaces the corresponding
+   * Confirmed table renames. Each spec replaces the corresponding
    * `table_removed` + `table_added` pair with a single breaking
    * `table_renamed` change. Specs are validated against both snapshots.
    */
@@ -2072,7 +2072,7 @@ export function compareSnapshots(
   const previousTypeNames = new Set(Object.keys(previous.tables));
   const currentTypeNames = new Set(Object.keys(current.tables));
 
-  // Record confirmed type renames
+  // Record confirmed table renames
   for (const rename of typeRenames) {
     const prevType = assertDefined(
       previous.tables[rename.previousTableName],
@@ -2101,7 +2101,7 @@ export function compareSnapshots(
     });
   }
 
-  // Check for added types
+  // Check for added tables
   for (const [tableName, type] of Object.entries(current.tables)) {
     if (renamedToTypeNames.has(tableName)) continue;
     if (!previousTypeNames.has(tableName)) {
@@ -2113,7 +2113,7 @@ export function compareSnapshots(
     }
   }
 
-  // Check for removed types
+  // Check for removed tables
   for (const [tableName, type] of Object.entries(previous.tables)) {
     if (typeRenameTargets.has(tableName)) continue;
     if (!currentTypeNames.has(tableName)) {
@@ -2129,7 +2129,7 @@ export function compareSnapshots(
     }
   }
 
-  // Check for modified types
+  // Check for modified tables
   for (const tableName of currentTypeNames) {
     if (!previousTypeNames.has(tableName)) continue;
 
@@ -2142,10 +2142,10 @@ export function compareSnapshots(
       `table "${tableName}" missing from current snapshot`,
     );
 
-    // Compare type-level settings and metadata
+    // Compare table-level settings and metadata
     compareTypeSettings(ctx, tableName, prevType, currType);
 
-    // Compare type-level hook/validate scripts
+    // Compare table-level hook/validate scripts
     compareTypeScripts(ctx, tableName, prevType, currType);
 
     // Compare fields
@@ -2198,13 +2198,13 @@ export function compareSnapshots(
 }
 
 /**
- * Compare a snapshot against canonical TailorDBSnapshotType-shaped local types.
+ * Compare a snapshot against canonical TailorDBSnapshotType-shaped local tables.
  * Callers are expected to pre-convert TailorDBService.types to TailorDBSnapshotType via
  * `createSnapshotType`. As a safety net, both sides are re-run through idempotent
  * normalization here, so a caller that forgets will still get correct
  * comparisons (no silent false drift).
  * @param {SchemaSnapshot} snapshot - Schema snapshot to compare against
- * @param {Record<string, TailorDBSnapshotType>} localTypes - Local snapshot-shaped types
+ * @param {Record<string, TailorDBSnapshotType>} localTypes - Local snapshot-shaped tables
  * @param {string} namespace - Namespace for comparison
  * @returns {MigrationDiff} Migration diff
  */
@@ -2481,7 +2481,7 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
 
 /**
  * Convert remote ParsedTailorDBType to SnapshotFieldConfig for comparison
- * @param {ProtoTailorDBType} remoteType - Remote TailorDB type from API
+ * @param {ProtoTailorDBType} remoteType - Remote TailorDB table from API
  * @returns {Record<string, SnapshotFieldConfig>} Converted field configs
  */
 function convertRemoteFieldsToSnapshot(
@@ -2819,8 +2819,8 @@ function convertRemoteTypeToSnapshot(
 }
 
 /**
- * Convert remote TailorDB types into the normalized snapshot shape used by drift checks.
- * @param {ProtoTailorDBType[]} remoteTypes - Remote TailorDB types from the API
+ * Convert remote TailorDB tables into the normalized snapshot shape used by drift checks.
+ * @param {ProtoTailorDBType[]} remoteTypes - Remote TailorDB tables from the API
  * @param {string} namespace - Namespace for the reconstructed snapshot
  * @param {readonly RemoteGqlPermission[]} remoteGqlPermissions - Remote GQL permissions for the namespace
  * @param {SchemaSnapshot} expectedSnapshot - Optional snapshot used to disambiguate remote relationship direction
@@ -3126,7 +3126,7 @@ function addFieldDifferences(
 
 /**
  * Compare a single field between remote and snapshot
- * @param {string} tableName - Name of the type
+ * @param {string} tableName - Name of the table
  * @param {string} fieldName - Name of the field
  * @param {SnapshotFieldConfig} remoteField - Remote field config
  * @param {SnapshotFieldConfig} snapshotField - Snapshot field config
@@ -3159,8 +3159,8 @@ function compareFields(
 const SYSTEM_FIELDS = new Set(["id"]);
 
 /**
- * Compare remote TailorDB types with a local snapshot
- * @param {ProtoTailorDBType[]} remoteTypes - Remote types from listParsedTailorDBTypes API
+ * Compare remote TailorDB tables with a local snapshot
+ * @param {ProtoTailorDBType[]} remoteTypes - Remote tables from listParsedTailorDBTypes API
  * @param {SchemaSnapshot} snapshot - Local schema snapshot
  * @param {readonly RemoteGqlPermission[]} remoteGqlPermissions - Remote GQL permissions for the namespace
  * @returns {SchemaDrift[]} List of drifts detected
@@ -3474,7 +3474,7 @@ export function formatSchemaDrifts(drifts: SchemaDrift[]): string {
 
   const lines: string[] = [];
 
-  // Group drifts by type
+  // Group drifts by table
   const driftsByType = new Map<string, SchemaDrift[]>();
   for (const drift of drifts) {
     const existing = driftsByType.get(drift.tableName) ?? [];

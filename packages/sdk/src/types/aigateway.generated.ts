@@ -3,8 +3,8 @@
 export type AIGateway = {
   /** AI Gateway name */
   name: string;
-  /** Auth namespace used to resolve request tokens against the workspace's auth */
-  authNamespace: string;
+  /** Auth namespace used to resolve request tokens against the workspace's auth. Defaults to the application's own auth service when omitted; omitting it without an Auth service configured is rejected. */
+  authNamespace?: string | undefined;
   /** Allowed CORS origins for browser-based clients. Each entry is `*`, `http(s)://*`, `http(s)://*.example.com`, or `http(s)://app.example.com`, optionally with `:port`. Empty list disables cross-origin access. */
   cors?: string[] | undefined;
 };

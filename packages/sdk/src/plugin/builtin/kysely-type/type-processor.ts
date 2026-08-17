@@ -232,7 +232,7 @@ export function processKyselyFields(
 
 /**
  * Convert a TailorDBType into KyselyTypeMetadata.
- * @param type - Parsed TailorDB type
+ * @param type - Parsed TailorDB table
  * @returns Generated Kysely type metadata
  */
 export async function processKyselyType(type: TailorDBType): Promise<KyselyTypeMetadata> {

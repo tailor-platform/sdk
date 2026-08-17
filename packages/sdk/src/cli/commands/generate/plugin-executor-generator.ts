@@ -36,9 +36,9 @@ import type {
 interface TypeImportInfo {
   /** Variable name to use in generated code */
   variableName: string;
-  /** Import path for the type */
+  /** Import path for the table */
   importPath: string;
-  /** Whether this is a generated type (vs user-defined) */
+  /** Whether this is a generated table (vs user-defined) */
   isGeneratedType: boolean;
 }
 
@@ -48,7 +48,7 @@ interface TypeImportInfo {
  * @param executors - Array of plugin executor information
  * @param outputDir - Base output directory (e.g., .tailor)
  * @param typeGenerationResult - Result from plugin type generation (for import resolution)
- * @param sourceTypeInfoMap - Map of source type names to their source info
+ * @param sourceTypeInfoMap - Map of source table names to their source info
  * @param configPath - Path to tailor.config.ts (used for resolving plugin import paths)
  * @returns Array of generated file paths
  */
@@ -90,7 +90,7 @@ export function generatePluginExecutorFiles(
  * @param info - Plugin executor metadata and definition
  * @param outputDir - Base output directory (e.g., .tailor)
  * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeInfoMap - Map of source type names to their source info
+ * @param sourceTypeInfoMap - Map of source table names to their source info
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns Absolute path to the generated file
  */
@@ -133,7 +133,7 @@ function generateSingleExecutorFile(
  * @param executor - Executor definition with resolve
  * @param outputDir - Base output directory
  * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeInfoMap - Map of source type names to their source info
+ * @param sourceTypeInfoMap - Map of source table names to their source info
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns TypeScript source code for executor file
  */
@@ -198,7 +198,7 @@ function generateExecutorFileContentNew(
  * @param outputDir - Base output directory for generated files
  * @param pluginId - Plugin identifier used for output paths
  * @param typeGenerationResult - Result from plugin type generation
- * @param sourceTypeInfoMap - Map of source type names to their source info
+ * @param sourceTypeInfoMap - Map of source table names to their source info
  * @returns Map of context keys to their import information
  */
 function collectTypeImports(
@@ -218,12 +218,12 @@ function collectTypeImports(
       const sourceInfo = sourceTypeInfoMap?.get(typeName);
       const variableName = sourceInfo?.exportName ?? toCamelCase(typeName);
 
-      // Check if it's a generated type
+      // Check if it's a generated table
       let importPath: string;
       let isGeneratedType = false;
 
       if (typeGenerationResult?.typeFilePaths.has(typeName)) {
-        // It's a generated type - import from plugin types directory
+        // It's a generated table - import from plugin types directory
         const typeFilePath = assertDefined(
           typeGenerationResult.typeFilePaths.get(typeName),
           "type file path missing",
@@ -235,7 +235,7 @@ function collectTypeImports(
         }
         isGeneratedType = true;
       } else if (sourceInfo) {
-        // It's a user-defined type
+        // It's a user-defined table
         const sourceFilePath = sourceInfo.filePath;
         importPath = path.relative(executorDir, sourceFilePath).replace(/\.ts$/, "");
         if (!importPath.startsWith(".")) {
@@ -285,9 +285,9 @@ function generateContextCode(
 }
 
 /**
- * Check if a value is a TailorDB type object.
+ * Check if a value is a TailorDB table object.
  * @param value - Value to inspect
- * @returns True if value is a type object with name and fields
+ * @returns True if value is a table object with name and fields
  */
 function isTypeObject(value: unknown): value is { name: string; fields: Record<string, unknown> } {
   return (

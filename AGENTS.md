@@ -122,6 +122,10 @@ Args include `event` (short name like `"created"`) and `rawEvent` (full event ty
 
 - Static website `.url` property is resolved at deployment time — use it in CORS and redirect URIs
 
+## Git Workflow
+
+- Merge pull requests with a merge commit; do not squash or rebase.
+
 ## Developer Guides
 
 See [docs/](docs/README.md) for developer and contributor documentation.

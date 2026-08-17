@@ -281,7 +281,10 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
-function defineAIGateways(gateways: readonly AIGatewayInput[] | undefined): AIGateway[] {
+function defineAIGateways(
+  gateways: readonly AIGatewayInput[] | undefined,
+  applicationAuthNamespace: string | undefined,
+): AIGateway[] {
   const aiGatewayServices: AIGateway[] = [];
   const gatewayNames = new Set<string>();
 
@@ -291,6 +294,15 @@ function defineAIGateways(gateways: readonly AIGatewayInput[] | undefined): AIGa
       throw new Error(`AI Gateway with name "${gateway.name}" already defined.`);
     }
     gatewayNames.add(gateway.name);
+    if (gateway.authNamespace === undefined) {
+      if (!applicationAuthNamespace) {
+        throw new Error(
+          `AI Gateway "${gateway.name}" has no "authNamespace" and no Auth service is configured ` +
+            `to default to. Define an Auth service, or set "authNamespace" explicitly.`,
+        );
+      }
+      gateway.authNamespace = applicationAuthNamespace;
+    }
     aiGatewayServices.push(gateway);
   });
 
@@ -355,7 +367,10 @@ function defineServices(
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
-  const aiGatewayServices = defineAIGateways(config.aiGateways);
+  const aiGatewayServices = defineAIGateways(
+    config.aiGateways,
+    getApplicationAuthNamespace({ authService: authResult.authService, config }),
+  );
   const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets);
   return {
     tailordbResult,
@@ -454,9 +469,9 @@ export function defineApplication(params: DefineApplicationParams): Application 
 
 /**
  * Generate plugin type and executor files if a plugin manager is provided.
- * Collects source type info from TailorDB services and delegates to PluginManager.
+ * Collects source table info from TailorDB services and delegates to PluginManager.
  * @param pluginManager - Plugin manager instance (skips if undefined)
- * @param tailorDBServices - TailorDB services to collect type source info from
+ * @param tailorDBServices - TailorDB services to collect table source info from
  * @param configPath - Path to tailor.config.ts for resolving plugin imports
  * @returns Generated executor file paths
  */
@@ -520,7 +535,7 @@ export async function loadApplication(
     ignoreNullishValues,
   } = defineServices(config, baseDir, pluginManager);
 
-  // 2. Load TailorDB types and process namespace plugins
+  // 2. Load TailorDB tables and process namespace plugins
   for (const tailordb of tailordbResult.tailorDBServices) {
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();

@@ -94,7 +94,7 @@ interface DbNamespaceConfig {
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
  * @param configDir - Directory containing the config file
- * @param sourceType - The TailorDB type to look up
+ * @param sourceType - The TailorDB table to look up
  * @returns The namespace name
  */
 async function resolveNamespaceForType(
@@ -143,7 +143,7 @@ async function resolveNamespaceForType(
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
  * @param plugin - Plugin instance
- * @param kind - The generated type kind to look for
+ * @param kind - The generated table kind to look for
  * @param pluginConfig - Plugin-level configuration
  * @returns The namespace name
  */
@@ -215,15 +215,15 @@ function getCacheKey(baseKey: string, pluginConfig: unknown): string {
 // ========================================
 
 /**
- * Get a generated type from a plugin by loading the config and resolving everything automatically.
+ * Get a generated table from a plugin by loading the config and resolving everything automatically.
  * For type-attached plugins, calls onTypeLoaded() with the sourceType.
  * For namespace plugins, calls onNamespaceLoaded() with auto-resolved namespace.
  * Results are cached per config path, plugin, namespace, and pluginConfig to avoid redundant processing.
  * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
  * @param pluginId - The plugin's unique identifier
- * @param sourceType - The source TailorDB type (null for namespace plugins)
- * @param kind - The generated type kind (e.g., "request", "step")
- * @returns The generated TailorDB type
+ * @param sourceType - The source TailorDB table (null for namespace plugins)
+ * @param kind - The generated table kind (e.g., "request", "step")
+ * @returns The generated TailorDB table
  */
 export async function getGeneratedType(
   configPath: string,
@@ -235,7 +235,7 @@ export async function getGeneratedType(
 
   if (!cache) {
     // Config not available (e.g., running in bundled executor on platform server).
-    // Return a placeholder. The actual type is resolved at generate/apply time.
+    // Return a placeholder. The actual table is resolved at generate/apply time.
     return { name: `__placeholder_${kind}__`, fields: {} } as TailorAnyDBType;
   }
 
@@ -260,13 +260,13 @@ export async function getGeneratedType(
 }
 
 /**
- * Get a generated type from a type-attached plugin.
+ * Get a generated table from a type-attached plugin.
  * @param plugin - The plugin instance (must have onTypeLoaded() method)
- * @param sourceType - The source TailorDB type
- * @param kind - The generated type kind
+ * @param sourceType - The source TailorDB table
+ * @param kind - The generated table kind
  * @param pluginConfig - Plugin-level configuration
  * @param namespace - Resolved namespace
- * @returns The generated TailorDB type
+ * @returns The generated TailorDB table
  */
 async function getGeneratedTypeForTypeAttachedPlugin(
   plugin: Plugin,
@@ -311,14 +311,14 @@ async function getGeneratedTypeForTypeAttachedPlugin(
 }
 
 /**
- * Get a generated type from a namespace plugin.
+ * Get a generated table from a namespace plugin.
  * Auto-resolves the namespace by trying each one.
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
  * @param plugin - The plugin instance (must have onNamespaceLoaded() method)
- * @param kind - The generated type kind
+ * @param kind - The generated table kind
  * @param pluginConfig - Plugin-level configuration
- * @returns The generated TailorDB type
+ * @returns The generated TailorDB table
  */
 async function getGeneratedTypeForNamespacePlugin(
   config: { db?: Record<string, unknown> },

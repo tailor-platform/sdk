@@ -13,7 +13,10 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
+import {
+  getApplicationAuthNamespace,
+  requireApplicationAuthNamespace,
+} from "#/cli/shared/auth-namespace";
 import { type OperatorClient } from "#/cli/shared/client";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
@@ -352,9 +355,9 @@ export function resolveSameRunNamespace(
 }
 
 /**
- * Find the local TailorDB namespace that declares the given type.
+ * Find the local TailorDB namespace that declares the given table.
  * @param application - Loaded application
- * @param typeName - TailorDB type name to look up
+ * @param typeName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
 export function findTailorDBNamespace(
@@ -483,14 +486,6 @@ function resolveIdpNamespace(
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
 
-function resolveAuthNamespace(application: Readonly<Application>): string {
-  const authNamespace = getApplicationAuthNamespace(application);
-  if (!authNamespace) {
-    throw new Error("No Auth service configured");
-  }
-  return authNamespace;
-}
-
 function protoExecutor(
   context: PlanContext,
   executor: Executor,
@@ -604,7 +599,7 @@ function protoExecutor(
         case: "auth",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveAuthNamespace(application),
+          namespaceName: requireApplicationAuthNamespace(application),
         },
       });
       break;

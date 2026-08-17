@@ -12,9 +12,9 @@ type ResolveTypeNamespacesArgs = {
 };
 
 /**
- * Resolve TailorDB type names to namespace names.
+ * Resolve TailorDB table names to namespace names.
  * @param args - Resolution inputs
- * @returns Type to namespace map for found types
+ * @returns Table to namespace map for found tables
  */
 export async function resolveTypeNamespaces(
   args: ResolveTypeNamespacesArgs,
@@ -74,7 +74,7 @@ type ResolveTypeNamespaceArgs = {
 };
 
 /**
- * Resolve a single TailorDB type name to namespace.
+ * Resolve a single TailorDB table name to namespace.
  * @param args - Resolution inputs
  * @returns Namespace name if found
  */

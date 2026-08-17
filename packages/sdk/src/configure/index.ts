@@ -29,6 +29,10 @@ export {
   type ConnectionName,
 } from "#/configure/types/connection-name";
 export { type AIGatewayNameRegistry, type AIGatewayName } from "#/configure/types/aigateway-name";
+export {
+  type AuthNamespaceNameRegistry,
+  type AuthNamespaceName,
+} from "#/configure/types/auth-namespace-name";
 
 export * from "#/configure/services/index";
 

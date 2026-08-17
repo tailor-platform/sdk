@@ -309,11 +309,11 @@ db.string().hooks({
 });
 ```
 
-Field-level hooks operate on a single field and cannot access other fields. Use type-level hooks for cross-field logic.
+Field-level hooks operate on a single field and cannot access other fields. Use table-level hooks for cross-field logic.
 
-#### Type-level Hooks
+#### Table-level Hooks
 
-Set hooks across multiple fields using `db.table().hooks()`. The hook returns an object with the fields to override. When both field-level and type-level hooks exist for the same field, type-level hooks take priority.
+Set hooks across multiple fields using `db.table().hooks()`. The hook returns an object with the fields to override. When both field-level and table-level hooks exist for the same field, table-level hooks take priority.
 
 Create hooks receive:
 
@@ -356,7 +356,7 @@ export const order = db
   });
 ```
 
-**Note:** `.hooks()` can only be called once on a table. Duplicate type-level calls fail at compile time and throw at runtime.
+**Note:** `.hooks()` can only be called once on a table. Duplicate table-level calls fail at compile time and throw at runtime.
 
 ### Validation
 
@@ -380,7 +380,7 @@ db.string().validate(
 );
 ```
 
-#### Type-level Validation
+#### Table-level Validation
 
 Set a validator across all fields using `db.table().validate()`. The validator receives `{ newRecord, oldRecord, invoker }` and an `issues()` callback to report errors per field:
 
@@ -415,7 +415,7 @@ For datetime/date/time fields, pass `"now"` to use the operation timestamp:
 db.datetime().default("now");
 ```
 
-**Note:** `.validate()` can only be called once on a table. Duplicate type-level calls fail at compile time and throw at runtime.
+**Note:** `.validate()` can only be called once on a table. Duplicate table-level calls fail at compile time and throw at runtime.
 
 ### Vector Search
 
@@ -450,7 +450,7 @@ export const user = db.table("User", {
 
 ## Table Modifiers
 
-Table builder methods that set one type-level configuration can be called only once on the same table. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+Table builder methods that set one table-level configuration can be called only once on the same table. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
 
 Conditional assignment is still supported when only one branch calls the method:
 

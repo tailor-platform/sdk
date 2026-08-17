@@ -190,7 +190,9 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 ```json
 {
   "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0 },
-  "changes": [{ "action": "create", "name": "Order", "labels": ["type"], "namespace": "tailordb" }],
+  "changes": [
+    { "action": "create", "name": "Order", "labels": ["table"], "namespace": "tailordb" }
+  ],
   "warnings": [
     { "type": "unmanaged", "resourceType": "tailorDB", "name": "LegacyType" },
     { "type": "skippedSecret", "resourceType": "secret", "name": "DB_PASSWORD" }
