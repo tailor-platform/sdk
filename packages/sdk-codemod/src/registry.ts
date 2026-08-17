@@ -1671,6 +1671,39 @@ export const allCodemods: CodemodPackage[] = [
       "unchanged unless it documents a command to type.",
     ].join("\n"),
   },
+  {
+    id: "v3/setup-branch-flag-rename",
+    name: "setup branch --branch → --trigger-branch",
+    description:
+      "Rename the `--branch` option of `tailor setup branch` invocations to `--trigger-branch`. `--branch` remains as a deprecated alias until it is removed in v3. The `--branch` option of `setup tag`, `setup preview`, and `setup coordinate` is unchanged.",
+    since: "1.72.0",
+    until: "3.0.0",
+    scriptPath: "v3/setup-branch-flag-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n]*--branch(?![\w-])/],
+    sourceStringLegacyPatterns: [/\bsetup[\s\\]{1,16}branch\b[^\n]*--branch(?![\w-])/],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor setup branch --name my-app-stg --branch main",
+        after: "tailor setup branch --name my-app-stg --trigger-branch main",
+      },
+    ],
+    prompt: [
+      "The `--branch` option of `tailor setup branch` is renamed to `--trigger-branch`;",
+      "the old spelling is removed in v3. Replace any remaining `--branch` options of",
+      "`setup branch` invocations the codemod did not rewrite (e.g. wrapped across",
+      "lines or invoked through a package runner such as `npx @tailor-platform/sdk`)",
+      "with `--trigger-branch`. Do not touch the `--branch` option of `setup tag`,",
+      "`setup preview`, or `setup coordinate`, which keeps its name, and leave prose",
+      "that merely mentions the option unchanged unless it documents a command to type.",
+    ].join("\n"),
+  },
 ];
 
 /**

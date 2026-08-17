@@ -35,6 +35,21 @@ describe("getApplicableCodemods", () => {
     );
   });
 
+  test("returns the setup branch flag rename only when crossing the v3 boundary", () => {
+    expect(getApplicableCodemods("2.3.0", "2.9.0").map((codemod) => codemod.id)).not.toContain(
+      "v3/setup-branch-flag-rename",
+    );
+    expect(getApplicableCodemods("2.3.0", "3.0.0").map((codemod) => codemod.id)).toContain(
+      "v3/setup-branch-flag-rename",
+    );
+    expect(getApplicableCodemods("1.72.0", "3.0.0").map((codemod) => codemod.id)).toContain(
+      "v3/setup-branch-flag-rename",
+    );
+    expect(getApplicableCodemods("1.71.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
+      "v3/setup-branch-flag-rename",
+    );
+  });
+
   test("bundles every registered transform script", () => {
     const tsdownConfig = fs.readFileSync(path.resolve(__dirname, "../tsdown.config.ts"), "utf-8");
     const missing = allCodemods

@@ -1,0 +1,8 @@
+{
+  "name": "my-app",
+  "scripts": {
+    "setup:stg": "tailor setup branch --name my-app-stg --trigger-branch main",
+    "setup:prod": "tailor setup tag --name my-app-prod --branch main",
+    "build": "tsc"
+  }
+}
