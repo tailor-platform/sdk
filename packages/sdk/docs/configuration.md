@@ -243,7 +243,7 @@ export default defineConfig({
 
 If the same config defines an auth before-login hook, make sure the config module can be evaluated without Node-only globals in the platform runtime. Avoid arbitrary `process.env` reads in that module; pass literal values, or values generated into a config module before deployment, and read them from the hook's `env` argument.
 
-When the SDK deploys application code or runs detected service code with `function test-run`, it passes the resolved values as the `env` argument. Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
+When the SDK deploys application code or runs detected service code with `function run`, it passes the resolved values as the `env` argument. Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
 
 | Code location             | Runtime access                                                                                                                            |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -252,7 +252,7 @@ When the SDK deploys application code or runs detected service code with `functi
 | Workflow job body         | `body: (input, { env }) => ...`                                                                                                           |
 | Auth before-login hook    | `handler: async ({ env }) => ...`                                                                                                         |
 | TailorDB migration script | `main(trx, { env }: MigrationContext)`                                                                                                    |
-| `function test-run`       | Same `env` argument shape as the detected resolver, executor, or workflow job                                                             |
+| `function run`            | Same `env` argument shape as the detected resolver, executor, or workflow job                                                             |
 
 ```typescript
 // In resolvers

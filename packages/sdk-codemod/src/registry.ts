@@ -1639,6 +1639,38 @@ export const allCodemods: CodemodPackage[] = [
       "env values there is what leaked configured secrets into version control.",
     ].join("\n"),
   },
+  {
+    id: "v3/function-test-run-rename",
+    name: "function test-run → function run",
+    description:
+      "Rename `tailor function test-run` invocations to `tailor function run`. `test-run` remains as a deprecated alias until it is removed in v3.",
+    since: "1.22.0",
+    until: "3.0.0",
+    scriptPath: "v3/function-test-run-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
+    sourceStringLegacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
+    examples: [
+      {
+        lang: "sh",
+        before: 'tailor function test-run resolvers/add.ts --arg \'{"a":1,"b":2}\'',
+        after: 'tailor function run resolvers/add.ts --arg \'{"a":1,"b":2}\'',
+      },
+    ],
+    prompt: [
+      "The `tailor function test-run` subcommand is renamed to `tailor function run`;",
+      "the old name is removed in v3. Replace any remaining `function test-run`",
+      "invocations the codemod did not rewrite (e.g. wrapped across lines or invoked",
+      "through a package runner such as `npx @tailor-platform/sdk`) with",
+      "`function run`. Leave prose that merely mentions the old subcommand name",
+      "unchanged unless it documents a command to type.",
+    ].join("\n"),
+  },
 ];
 
 /**

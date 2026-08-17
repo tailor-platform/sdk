@@ -244,7 +244,7 @@ export async function downloadScriptForMapping(
   const registryName = scriptNameToRegistryName(scriptName, executionType);
   if (registryName == null) {
     logger.debug(
-      `Script "${scriptName}" is not a deployed registry script (e.g. test-run or seed); skipping sourcemap mapping.`,
+      `Script "${scriptName}" is not a deployed registry script (e.g. function run or seed); skipping sourcemap mapping.`,
     );
     return null;
   }
@@ -274,7 +274,7 @@ export async function downloadScriptForMapping(
 export const logsCommand = defineAppCommand({
   name: "logs",
   description: "List or get function execution logs.",
-  notes: `When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching \`function test-run\` output).
+  notes: `When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching \`function run\` output).
 
 Stack traces are mapped only when the execution includes a content hash for the exact build that ran. If the content hash is missing or the build is no longer available, the command falls back to a plain-text error display.`,
   examples: [

@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
-import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
+import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 import type * as pkgTypes from "pkg-types";
 
@@ -26,7 +26,7 @@ const defaultMachineUser: ResolvedMachineUser = {
 
 const defaultWorkspaceId = "11111111-2222-3333-4444-555555555555";
 
-describe("bundleForTestRun", () => {
+describe("bundleForRun", () => {
   let testDir: string;
 
   aroundEach(async (runTest) => {
@@ -50,11 +50,11 @@ describe("bundleForTestRun", () => {
     fileName: string,
     source: string,
     detected: DetectedFunction,
-    options?: Partial<Omit<Parameters<typeof bundleForTestRun>[0], "detected" | "sourceFile">>,
+    options?: Partial<Omit<Parameters<typeof bundleForRun>[0], "detected" | "sourceFile">>,
   ) {
     const sourceFile = path.join(testDir, fileName);
     fs.writeFileSync(sourceFile, source);
-    return bundleForTestRun({
+    return bundleForRun({
       detected,
       sourceFile,
       baseDir: testDir,
@@ -179,7 +179,7 @@ export function main() {
         );
         process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
 
-        const result = await bundleForTestRun({
+        const result = await bundleForRun({
           detected: { type: "resolver", name: "cross-project" },
           sourceFile,
           baseDir: projectDir,

@@ -50,7 +50,7 @@ When editing files matching these globs, read and follow the linked rule documen
 
 - `pnpm agent:rules:update` - Regenerate `AGENTS.md`'s path-scoped rule index and `.claude/rules/*.md`
 - `pnpm agent:rules:check` - Verify generated agent rule files are up to date
-- `pnpm codemod:docs:update` - Regenerate `packages/sdk/docs/migration/v2.md` from the codemod registry
+- `pnpm codemod:docs:update` - Regenerate `packages/sdk/docs/migration/v<major>.md` from the codemod registry
 - `pnpm codemod:docs:check` - Verify migration docs are up to date
 - `pnpm check:deprecations` - Verify every `@deprecated` in `packages/sdk/src` states its `since` version and codemod (see [Deprecating a Public API](.agents/rules/deprecation.md))
 
