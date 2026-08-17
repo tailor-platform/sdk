@@ -4,7 +4,7 @@ Guide for new SDK contributors.
 
 ## Prerequisites
 
-- **Node.js** >= 22.15.0
+- **Node.js** >= 22.18.0
 - **pnpm** (version pinned by `packageManager` in root `package.json`)
 - **GPG key** for commit signing (enforced by Lefthook post-commit hook)
 
