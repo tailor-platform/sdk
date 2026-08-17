@@ -164,16 +164,32 @@ async function filterUsedJobs(
     jobsBySourceFile.set(job.sourceFile, existing);
   }
 
+  // Files with no job of their own (e.g. a shared helper module factoring out
+  // .start() calls) still need scanning for stray start calls below; otherwise
+  // a call factored into such a file is never checked at all.
+  const filesToScan = new Map(jobsBySourceFile);
+  const knownRealpaths = new Set([...jobsBySourceFile.keys()].map(safeRealpath));
+  for (const binding of startContext.modules.values()) {
+    if (!knownRealpaths.has(safeRealpath(binding.sourceFile))) {
+      filesToScan.set(binding.sourceFile, []);
+    }
+  }
+
   // Detect start calls and build dependency graph
   // Maps job name -> set of job names it starts
   const dependencies = new Map<string, Set<string>>();
 
   // Process all source files in parallel
   const fileResults = await Promise.all(
-    Array.from(jobsBySourceFile.entries()).map(async ([sourceFile, jobs]) => {
+    Array.from(filesToScan.entries()).map(async ([sourceFile, jobs]) => {
       try {
         const source = await fs.promises.readFile(sourceFile, "utf-8");
-        const { program } = parseSync("input.ts", source);
+        const { program, errors } = parseSync("input.ts", source);
+        if (errors.length > 0) {
+          throw new WorkflowJobDetectionError(
+            `Failed to parse ${sourceFile}: ${errors.map((e) => e.message).join("; ")}`,
+          );
+        }
 
         // Find all jobs in this file to get body ranges
         const detectedJobs = findAllJobs(program, source);

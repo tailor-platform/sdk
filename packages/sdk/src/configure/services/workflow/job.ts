@@ -46,6 +46,10 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
    * Start this job with the given input and return the job's output value.
    * Accepts an optional second argument to pass `executionPolicyKey` for
    * platform-side concurrency enforcement.
+   *
+   * Must be called directly inside another job's `body` — not factored into a
+   * helper function called from there. The build cannot see through that
+   * indirection to find the call, and fails instead of silently dropping it.
    * @example
    * body: async (input) => {
    *   const a = jobA.start({ id: input.id });
@@ -84,9 +88,14 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * Input and output must be JsonValue-compatible (primitives, plain objects, arrays).
  * Functions and objects with a `toJSON` method are rejected at the type level;
  * class instances exposing methods are rejected via the property walk.
+ * `name` and `body` must be written directly in this call — as a string literal and an
+ * inline function expression, respectively — not as a reference to a variable or the
+ * result of another function call. The build cannot see through that indirection to find
+ * the job, and fails instead of silently leaving it out.
  * @param config - Job configuration with name and body function.
- * @param config.name - Unique job name across the project.
- * @param config.body - Function that processes the job input.
+ * @param config.name - Unique job name across the project. Must be a string literal.
+ * @param config.body - Function that processes the job input. Must be an inline function
+ * expression, not a reference to a separately-defined function.
  * @returns A WorkflowJob that can be started from other jobs.
  * @example
  * // Simple job with async body:

@@ -243,6 +243,32 @@ export default createWorkflow({ name: "workflow", mainJob });
       ).rejects.toThrow(/main-job/);
     });
 
+    test("throws a parse error (not a misleading literal-config error) for a syntax error", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+
+this is not valid syntax &&&
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [{ name: "step-a", exportName: "step", sourceFile: workflowFile }],
+          ["step-a"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/parse/i);
+    });
+
     test("throws when a start() call is factored outside any job body", async () => {
       const dir = createTempDir();
       const workflowFile = path.join(dir, "workflow.ts");
@@ -270,6 +296,56 @@ export default createWorkflow({ name: "workflow", mainJob });
         bundleWorkflowJobs(
           [
             { name: "step-a", exportName: "step", sourceFile: workflowFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/step-a/);
+    });
+
+    test("throws when a start() call is factored into a helper in another file", async () => {
+      const dir = createTempDir();
+      const jobsFile = path.join(dir, "jobs.ts");
+      const helpersFile = path.join(dir, "helpers.ts");
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        jobsFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+`,
+      );
+      fs.writeFileSync(
+        helpersFile,
+        `
+import { step } from "./jobs";
+export async function runStep() {
+  return await step.start();
+}
+`,
+      );
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { runStep } from "./helpers";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await runStep(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [jobsFile, helpersFile, workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [
+            { name: "step-a", exportName: "step", sourceFile: jobsFile },
             { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
           ],
           ["main-job"],
@@ -357,6 +433,7 @@ export default createWorkflow({
           [
             normalizeFilePath(simpleFile),
             {
+              sourceFile: simpleFile,
               localBindings: new Map([["step1", { kind: "job" as const, name: "step1" }]]),
               exports: new Map([
                 ["step1", { kind: "job" as const, name: "step1" }],
@@ -367,6 +444,7 @@ export default createWorkflow({
           [
             normalizeFilePath(callerFile),
             {
+              sourceFile: callerFile,
               localBindings: new Map([["callerJob", { kind: "job" as const, name: "caller-job" }]]),
               exports: new Map([
                 ["callerJob", { kind: "job" as const, name: "caller-job" }],

@@ -16,8 +16,8 @@ describe("serializeStartContext", () => {
     return { modules: new Map() };
   }
 
-  function bindings(localBindings: StartModuleBindings["localBindings"]) {
-    return { localBindings, exports: new Map(localBindings) };
+  function bindings(localBindings: StartModuleBindings["localBindings"]): StartModuleBindings {
+    return { sourceFile: "test.ts", localBindings, exports: new Map(localBindings) };
   }
 
   test("returns empty string for undefined", () => {
