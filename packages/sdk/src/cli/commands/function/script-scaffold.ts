@@ -245,7 +245,7 @@ export async function verifyScriptSchemaSnapshot(
     const namespaceData = namespaces[0];
     if (namespaceData) {
       const localTables: Record<string, TailorDBSnapshotType> = Object.fromEntries(
-        Object.values(namespaceData.types).map((type) => [type.name, createSnapshotType(type)]),
+        Object.values(namespaceData.tables).map((table) => [table.name, createSnapshotType(table)]),
       );
       // Compare the field contract that generated db.ts consumes. Local
       // create hooks and defaults are represented remotely as

@@ -31,7 +31,7 @@ export function kyselyTypePlugin(
       for (const ns of ctx.tailordb) {
         const typeMetadataList: KyselyTypeMetadata[] = [];
 
-        for (const type of Object.values(ns.types)) {
+        for (const type of Object.values(ns.tables)) {
           const metadata = await processKyselyType(type);
           typeMetadataList.push(metadata);
         }

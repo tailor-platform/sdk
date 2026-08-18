@@ -4,7 +4,7 @@ import { resolveTypeNamespace, resolveTypeNamespaces } from "./tailordb-namespac
 const namesResult = (...names: string[]) => ({ tailordbTypes: names.map((name) => ({ name })) });
 
 describe("resolveTypeNamespaces", () => {
-  test("resolves multiple types from different namespaces", async () => {
+  test("resolves multiple tables from different namespaces", async () => {
     const client = {
       listTailorDBTypes: vi
         .fn()
@@ -41,7 +41,7 @@ describe("resolveTypeNamespaces", () => {
     expect(result.get("User")).toBe("analytics");
   });
 
-  test("stops querying when all types are resolved", async () => {
+  test("stops querying when all tables are resolved", async () => {
     const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("User")) };
 
     await resolveTypeNamespaces({

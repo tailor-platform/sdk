@@ -3,7 +3,7 @@
  * migration flow — but that flow must not drop changes planned for OTHER
  * namespaces that have no pending migration (e.g. a fresh deploy where the
  * main namespace runs its baseline migration while a second namespace has
- * plain types to create).
+ * plain tables to create).
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -172,7 +172,7 @@ describe("migration flow: namespaces without pending migrations", () => {
             },
           ],
           unchanged: [],
-          title: "TailorDB Types",
+          title: "TailorDB tables",
           isEmpty: () => false,
           lines: () => [],
         },
@@ -287,8 +287,8 @@ describe("migration flow: namespaces without pending migrations", () => {
     });
     expect(deletedTypes).toContain("analytics-ns/Legacy");
   });
-  test("writes the metadata of types planned alongside a migration", async () => {
-    // The migration flow applies types through its own phases, so it has to write
+  test("writes the metadata of tables planned alongside a migration", async () => {
+    // The migration flow applies tables through its own phases, so it has to write
     // their metadata itself. Leaving it to the non-migration branch would skip a
     // cross-config dependency record on any deploy that carries a migration, and
     // the owner's next solo deploy would turn publishing off without asking.

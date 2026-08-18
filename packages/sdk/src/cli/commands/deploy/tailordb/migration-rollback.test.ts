@@ -64,7 +64,7 @@ const snapshotFixtures = vi.hoisted(() => {
     fields,
   });
 
-  // Migration 1 adds a new type (StockReservation) and a `note` field on GoodsReceipt.
+  // Migration 1 adds a new table (StockReservation) and a `note` field on GoodsReceipt.
   const typesByMigration: Record<number, unknown> = {
     0: {
       GoodsReceipt: buildType("GoodsReceipt", "goodsReceipts", {
@@ -176,7 +176,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     return {
       changeSet: {
         service: changeSetGroup("TailorDB Services"),
-        type: changeSetGroup("TailorDB Types", typeChanges),
+        type: changeSetGroup("TailorDB tables", typeChanges),
         gqlPermission: changeSetGroup("TailorDB GQL Permissions"),
       },
       conflicts: [],
@@ -445,7 +445,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       "supplierSnapshotName",
     );
 
-    // Pre-phase committed the DDL (the new type was created)...
+    // Pre-phase committed the DDL (the new table was created)...
     expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
 
     // ...so the failed apply must roll it back: StockReservation did not exist at
@@ -456,10 +456,10 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("deletes the new type's GQL permission before dropping the type on rollback", async () => {
+  test("deletes the new table's GQL permission before dropping the table on rollback", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
-    // The Pre-phase also created a GQL permission for the new type.
+    // The Pre-phase also created a GQL permission for the new table.
     planResult.changeSet.gqlPermission.creates = [
       {
         name: "StockReservation",
@@ -498,7 +498,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("rolls back types the pre-phase created via missingTypeCreates, not just diff types", async () => {
+  test("rolls back tables the pre-phase created via missingTypeCreates, not just diff tables", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
     // LeakedType is not in this migration's diff, but the pre-phase creates it
@@ -891,7 +891,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
   });
 
-  test("advances the checkpoint before deleting a removed type", async () => {
+  test("advances the checkpoint before deleting a removed table", async () => {
     const tableName = "RetiredType";
     const snapshots = (number: number): SchemaSnapshot => ({
       version: 1 as const,
@@ -1002,7 +1002,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     );
 
     // Prior snapshot becomes unavailable at rollback time: new and
-    // pre-existing types are then indistinguishable, so nothing must be
+    // pre-existing tables are then indistinguishable, so nothing must be
     // deleted.
     let baselineReads = 0;
     await withOverriddenSnapshot(

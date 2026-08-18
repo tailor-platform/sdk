@@ -118,7 +118,7 @@ export interface AppConfig<
   allowedIpAddresses?: string[];
   /** Disable GraphQL introspection in production. */
   disableIntrospection?: boolean;
-  /** TailorDB service configuration with type definition files. */
+  /** TailorDB service configuration with table definition files. */
   db?: TailorDBServiceInput;
   /** Resolver service configuration with resolver files. */
   resolver?: ResolverServiceInput;

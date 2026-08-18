@@ -13,7 +13,7 @@ export function generateUnifiedFileUtils(
     return "";
   }
 
-  // Collect all types with their namespace
+  // Collect all tables with their namespace
   const typeNamespaceMap = new Map<string, string>();
   const typeFieldsMap = new Map<string, string[]>();
 

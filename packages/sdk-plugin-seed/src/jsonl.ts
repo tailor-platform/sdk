@@ -28,17 +28,17 @@ export function assertSeedDataDirectory(dataDir: string): void {
 export interface LoadSeedDataOptions {
   /** Reject rows without an `id` (enforced with `--upsert`, which matches existing rows by id). */
   requireId?: boolean;
-  /** Field names a row must supply per type, enforced alongside `requireId`. */
+  /** Field names a row must supply per entity, enforced alongside `requireId`. */
   requiredFieldsByType?: Record<string, string[]>;
 }
 
 /**
- * Load seed rows from `<dataDir>/<typeName>.jsonl` for each type. Missing
+ * Load seed rows from `<dataDir>/<typeName>.jsonl` for each entity. Missing
  * files load as empty lists.
  * @param dataDir - Directory containing the JSONL files
- * @param typeNames - Type names to load
+ * @param typeNames - Entity names to load
  * @param options - Row validation options
- * @returns Seed rows per type
+ * @returns Seed rows per entity
  */
 export function loadSeedData(
   dataDir: string,

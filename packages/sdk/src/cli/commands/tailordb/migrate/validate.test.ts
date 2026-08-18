@@ -176,7 +176,7 @@ describe("tailordb migration validate", () => {
     ]);
   });
 
-  test("fails when local types have changes not covered by migration files", async () => {
+  test("fails when local tables have changes not covered by migration files", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };

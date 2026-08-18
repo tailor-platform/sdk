@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
-import { isPluginGeneratedType } from "@tailor-platform/sdk/cli";
+import { isPluginGeneratedTable } from "@tailor-platform/sdk/cli";
 import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
 import type {
@@ -56,14 +56,14 @@ function buildRevision(schema: Omit<TailorDbErdSchema, "generatedAt" | "revision
 
 function toTypeSource(source: TypeSourceInfoEntry | undefined): TailorDbErdTypeSource | undefined {
   if (!source) return undefined;
-  if (isPluginGeneratedType(source)) {
+  if (isPluginGeneratedTable(source)) {
     return {
       kind: "plugin",
       exportName: source.exportName,
       pluginId: source.pluginId,
       pluginImportPath: source.pluginImportPath,
       originalExportName: source.originalExportName,
-      generatedTypeKind: source.generatedTypeKind,
+      generatedTypeKind: source.generatedTableKind,
       namespace: source.namespace,
     };
   }
@@ -255,7 +255,7 @@ function buildRelations(types: Record<string, TailorDBType>): TailorDbErdRelatio
  */
 export function buildTailorDbErdSchema(options: BuildTailorDbErdSchemaOptions): TailorDbErdSchema {
   const { namespaceData } = options;
-  const tables = Object.values(namespaceData.types)
+  const tables = Object.values(namespaceData.tables)
     .toSorted((a, b) => a.name.localeCompare(b.name))
     .map((type) => toTable(type, namespaceData.sourceInfo.get(type.name)));
 
@@ -268,7 +268,7 @@ export function buildTailorDbErdSchema(options: BuildTailorDbErdSchemaOptions): 
       notes: CLEAN_ROOM_NOTES,
     },
     tables,
-    relations: buildRelations(namespaceData.types),
+    relations: buildRelations(namespaceData.tables),
   };
 
   return {

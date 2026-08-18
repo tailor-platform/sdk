@@ -2,7 +2,7 @@
  * E2E tests for TailorDB migrations
  *
  * These tests verify the complete migration workflow:
- * - Initial migration generation from type definitions
+ * - Initial migration generation from table definitions
  * - Schema changes and diff detection
  * - Breaking change detection
  * - Apply with migrations
@@ -21,7 +21,7 @@
  * - Optional Field Addition (Non-breaking): Adding optional fields
  * - Required Field Addition (Breaking): Adding required fields
  * - Stability and Verification: No changes detection
- * - Type Addition (Non-breaking): Adding new types
+ * - Table Addition (Non-breaking): Adding new tables
  * - Field Removal (Non-breaking): Removing fields
  * - Final Schema Reconstruction: Complete migration chain verification (skipped)
  *
@@ -296,8 +296,8 @@ export async function main(db: Kysely<any>): Promise<void> {
   }
 
   /**
-   * Update type file with new content
-   * @param {string} content - New content for the type file
+   * Update table file with new content
+   * @param {string} content - New content for the table file
    */
   function updateTypeFile(content: string): void {
     const typePath = path.join(tempDir, "tailordb", "user.ts");
@@ -414,9 +414,9 @@ export async function main(db: Kysely<any>): Promise<void> {
   }
 
   /**
-   * Helper to list all TailorDB type names in a namespace
+   * Helper to list all TailorDB table names in a namespace
    * @param namespace - TailorDB namespace name
-   * @returns List of type names in the namespace
+   * @returns List of table names in the namespace
    */
   async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
     const types: string[] = [];
@@ -438,9 +438,9 @@ export async function main(db: Kysely<any>): Promise<void> {
   }
 
   /**
-   * Helper to get field names for a TailorDB type
+   * Helper to get field names for a TailorDB table
    * @param namespace - TailorDB namespace name
-   * @param tableName - Type name
+   * @param tableName - Table name
    * @returns List of field names
    */
   async function getTailorDBTypeFields(namespace: string, tableName: string): Promise<string[]> {
@@ -478,7 +478,7 @@ export async function main(db: Kysely<any>): Promise<void> {
     /**
      * Scenario 1: Initial migration generation
      *
-     * Creates initial type definition and generates 0000/schema.json
+     * Creates initial table definition and generates 0000/schema.json
      */
     test("generates initial schema migration", async () => {
       // Create config with migrations enabled
@@ -513,7 +513,7 @@ export async function main(db: Kysely<any>): Promise<void> {
       const services = await listTailorDBServiceNames();
       expect(services).toContain(tailordbName);
 
-      // Verify: User type should exist with expected fields
+      // Verify: User table should exist with expected fields
       const types = await listTailorDBTypeNames(tailordbName);
       expect(types).toContain("User");
 
@@ -528,7 +528,7 @@ export async function main(db: Kysely<any>): Promise<void> {
      * Scenario 2: Non-breaking change (adding optional field)
      */
     test("detects non-breaking change when adding optional field", async () => {
-      // Update type to add optional field
+      // Update table to add optional field
       updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -602,7 +602,7 @@ export type user = typeof user;
 
       runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: phone field should be added to User type
+      // Verify: phone field should be added to User table
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).toContain("phone");
     }, 120000);
@@ -613,7 +613,7 @@ export type user = typeof user;
      * Scenario 3: Breaking change (adding required field)
      */
     test("detects breaking change when adding required field", async () => {
-      // Update type to add required field (breaking change)
+      // Update table to add required field (breaking change)
       updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -666,7 +666,7 @@ export type user = typeof user;
 
       runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: requiredField should be added to User type
+      // Verify: requiredField should be added to User table
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).toContain("requiredField");
     }, 120000);
@@ -694,12 +694,12 @@ export type user = typeof user;
 
   describe("Type Addition (Non-breaking)", () => {
     /**
-     * Scenario 6: Type addition (non-breaking)
+     * Scenario 6: Table addition (non-breaking)
      *
-     * Adds a new Post type to the schema
+     * Adds a new Post table to the schema
      */
-    test("detects type addition as non-breaking change", async () => {
-      // Copy Post type fixture
+    test("detects table addition as non-breaking change", async () => {
+      // Copy Post table fixture
       const srcPost = path.join(FIXTURE_DIR, "tailordb", "post.ts");
       const destPost = path.join(tempDir, "tailordb", "post.ts");
       fs.copyFileSync(srcPost, destPost);
@@ -725,14 +725,14 @@ export type user = typeof user;
     }, 60000);
 
     /**
-     * Scenario 6b: Apply type addition
+     * Scenario 6b: Apply table addition
      */
-    test("applies type addition to workspace", async () => {
+    test("applies table addition to workspace", async () => {
       const configPath = createConfig();
 
       runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: Post type should be added
+      // Verify: Post table should be added
       const types = await listTailorDBTypeNames(tailordbName);
       expect(types).toContain("Post");
     }, 120000);
@@ -742,10 +742,10 @@ export type user = typeof user;
     /**
      * Scenario 7: Field removal (non-breaking change)
      *
-     * Removes requiredField from User type
+     * Removes requiredField from User table
      */
     test("detects field removal as non-breaking change", async () => {
-      // Update User type to remove requiredField
+      // Update User table to remove requiredField
       updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
@@ -786,7 +786,7 @@ export type user = typeof user;
 
       runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: requiredField should be removed from User type
+      // Verify: requiredField should be removed from User table
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).not.toContain("requiredField");
     }, 120000);

@@ -76,7 +76,7 @@ function mockLocalNamespace(snapshot: SchemaSnapshot = makeSnapshot()): void {
   vi.mocked(loadTailorDBNamespaces).mockResolvedValue({
     config: {} as never,
     plugins: [],
-    namespaces: [{ namespace: snapshot.namespace, types, sourceInfo: new Map() }],
+    namespaces: [{ namespace: snapshot.namespace, tables: types, sourceInfo: new Map() }],
   } as never);
 }
 

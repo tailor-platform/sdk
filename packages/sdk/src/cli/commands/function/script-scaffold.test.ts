@@ -352,7 +352,7 @@ describe("verifyScriptSchemaSnapshot", () => {
       config: {} as never,
       plugins: [],
       namespaces: [
-        { namespace: "tailordb", types: { Product: localProduct }, sourceInfo: new Map() },
+        { namespace: "tailordb", tables: { Product: localProduct }, sourceInfo: new Map() },
       ],
     } as never);
     const remoteDerived = makeSnapshot();
@@ -391,7 +391,7 @@ describe("verifyScriptSchemaSnapshot", () => {
     vi.mocked(loadTailorDBNamespaces).mockResolvedValue({
       config: {} as never,
       plugins: [],
-      namespaces: [{ namespace: "tailordb", types: {}, sourceInfo: new Map() }],
+      namespaces: [{ namespace: "tailordb", tables: {}, sourceInfo: new Map() }],
     } as never);
 
     await expect(verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } }))).rejects.toThrow(

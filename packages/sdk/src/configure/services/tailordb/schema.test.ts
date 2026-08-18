@@ -1192,7 +1192,7 @@ describe("TailorDBType plural form tests", () => {
     expect(emailMetadata.validate).toHaveLength(1);
   });
 
-  test("plural form works correctly for types with relations", () => {
+  test("plural form works correctly for tables with relations", () => {
     const _categoryType = db.table(["Category", "Categories"], {
       name: db.string(),
     });
@@ -1239,7 +1239,7 @@ describe("TailorDBType hooks modifier tests", () => {
 
   test("type hook return type excludes id", () => {
     db.table("Test", { name: db.string() }).hooks({
-      // @ts-expect-error id cannot be returned from type hook
+      // @ts-expect-error id cannot be returned from a table-level hook
       create: () => ({ id: "00000000-0000-0000-0000-000000000001" }),
     });
   });
@@ -1382,7 +1382,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     defineProductModule({ item: itemModule.item });
   });
 
-  test("type-level validate function stores in metadata", () => {
+  test("table-level validate function stores in metadata", () => {
     const type = db
       .table("Test", {
         name: db.string(),
@@ -1392,7 +1392,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     expect(type.metadata.typeValidate).toBeDefined();
   });
 
-  test("type-level validate receives newRecord and oldRecord with correct types", () => {
+  test("table-level validate receives newRecord and oldRecord with correct types", () => {
     db.table("Test", {
       name: db.string(),
       age: db.int({ optional: true }),

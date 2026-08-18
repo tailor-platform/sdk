@@ -159,6 +159,78 @@ export async function generateDiffFiles(
   return result;
 }
 
+/** Inputs for {@link generateDataOnlyMigrationFiles}. */
+interface GenerateDataOnlyFilesOptions {
+  /** Empty diff marked as requiring a migration script. */
+  diff: MigrationDiff;
+  migrationsDir: string;
+  migrationNumber: number;
+  /** Schema the migration runs against, used for db.ts generation. */
+  snapshot: SchemaSnapshot;
+  description?: string;
+}
+
+/** Files written for a data-only migration. */
+interface GenerateDataOnlyFilesResult {
+  diffFilePath: string;
+  migrateFilePath: string;
+  dbTypesFilePath: string;
+  migrationNumber: number;
+}
+
+/**
+ * Generate the files for a data-only migration: an empty diff and a migration
+ * script skeleton typed against the unchanged schema.
+ * @param {GenerateDataOnlyFilesOptions} options - Diff, output location, and schema for db.ts
+ * @returns {Promise<GenerateDataOnlyFilesResult>} Generated file info
+ */
+export async function generateDataOnlyMigrationFiles(
+  options: GenerateDataOnlyFilesOptions,
+): Promise<GenerateDataOnlyFilesResult> {
+  const { migrationsDir, migrationNumber, snapshot, description } = options;
+  const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
+  await fs.mkdir(migrationDir, { recursive: true });
+
+  const diffFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  const migrateFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+  const dbTypesFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
+
+  await ensureFileNotExists(diffFilePath);
+  await ensureFileNotExists(migrateFilePath);
+  await ensureFileNotExists(dbTypesFilePath);
+
+  const diff = description ? { ...options.diff, description } : options.diff;
+  await fs.writeFile(diffFilePath, JSON.stringify(diff, null, 2));
+  await fs.writeFile(migrateFilePath, generateDataOnlyMigrationScript(diff.namespace));
+  await writeDbTypesFile(snapshot, migrationsDir, migrationNumber, diff);
+
+  return { diffFilePath, migrateFilePath, dbTypesFilePath, migrationNumber };
+}
+
+/**
+ * Generate the script skeleton for a data-only migration
+ * @param {string} namespace - TailorDB namespace the migration belongs to
+ * @returns {string} Migration script content
+ */
+export function generateDataOnlyMigrationScript(namespace: string): string {
+  return `/**
+ * Data-only migration script for ${namespace}
+ *
+ * This migration carries no schema change; it exists to run this script.
+ * Edit this file to implement the data transformation.
+ *
+ * The transaction is managed by the deploy command.
+ * If any operation fails, all changes will be rolled back.
+ */
+
+import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  // TODO: Implement the data transformation for this migration
+}
+`;
+}
+
 /**
  * Generate migration script content based on diff
  * @param {MigrationDiff} diff - Migration diff

@@ -55,7 +55,7 @@ export function fieldKey(tableName: string, fieldName: string): string {
  * Field names cannot hold an underscore, so the suffix is camelCase and a
  * collision is resolved by an ordinal rather than a separator.
  * @param fieldName - Field being converted
- * @param taken - Field names already in use for the same type
+ * @param taken - Field names already in use for the same table
  * @returns Unused temporary field name
  * @throws {Error} When no candidate fits within the platform's length limit
  */
@@ -129,8 +129,8 @@ export interface CanConvertFieldOptions {
 }
 
 /**
- * Names a type already exposes, which a temporary field cannot reuse.
- * @param type - Type to enumerate
+ * Names a table already exposes, which a temporary field cannot reuse.
+ * @param type - Table to enumerate
  * @returns Field, file, and relationship names
  */
 function typeMemberNames(type: TailorDBSnapshotType | undefined): string[] {
@@ -353,9 +353,9 @@ function permissionsReferenceField(
  * The pair moves values through a differently named field, and only the field
  * list is rewritten. An index, relationship, permission, or script naming the
  * field would keep pointing at the name the pair drops.
- * @param type - Type holding the field
+ * @param type - Table holding the field
  * @param fieldName - Field being converted
- * @returns Whether another part of the type names the field
+ * @returns Whether another part of the table names the field
  */
 function isFieldReferenced(type: TailorDBSnapshotType | undefined, fieldName: string): boolean {
   if (!type) return false;
@@ -403,7 +403,7 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
       continue;
     }
 
-    // A temporary field shares the type's GraphQL namespace with its files and
+    // A temporary field shares the table's GraphQL namespace with its files and
     // relationships, so a name taken by either is not available.
     const taken = new Set([
       ...typeMemberNames(previous.tables[change.tableName]),

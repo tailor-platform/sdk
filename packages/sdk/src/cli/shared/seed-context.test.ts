@@ -19,7 +19,7 @@ function fakeType(name: string, fields: Record<string, object>): TailorDBType {
 function fakeNamespace(namespace: string, types: TailorDBType[]): TailorDBNamespaceData {
   return {
     namespace,
-    types: Object.fromEntries(types.map((type) => [type.name, type])),
+    tables: Object.fromEntries(types.map((type) => [type.name, type])),
     sourceInfo: new Map(
       types.map((type) => [
         type.name,

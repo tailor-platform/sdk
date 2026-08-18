@@ -161,7 +161,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
           namespaces: [namespace],
         });
         const namespaceData = assertDefined(namespaces[0], `namespace ${namespace}`);
-        snapshot = createSnapshotFromLocalTypes(namespaceData.types, namespace);
+        snapshot = createSnapshotFromLocalTypes(namespaceData.tables, namespace);
       }
       if (Object.keys(snapshot.tables).length === 0) {
         const sourceDescription = args.remote

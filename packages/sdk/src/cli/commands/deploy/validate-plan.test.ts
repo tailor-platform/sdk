@@ -164,7 +164,7 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
-    name: "(b2) TailorDB type with valid name passes",
+    name: "(b2) TailorDB table with valid name passes",
     mutate: (input) => {
       input.tailorDB.changeSet.type.creates.push({
         name: "ValidTypeName",
@@ -312,7 +312,7 @@ const validCases: Case<undefined>[] = [
 
 const invalidCases: Case<RegExp>[] = [
   {
-    name: "(b) TailorDB type name violating ^[A-Z][a-zA-Z0-9]{0,62}$ produces a violation",
+    name: "(b) TailorDB table name violating ^[A-Z][a-zA-Z0-9]{0,62}$ produces a violation",
     mutate: (input) => {
       input.tailorDB.changeSet.type.creates.push({
         name: "invalidLowercaseName",
