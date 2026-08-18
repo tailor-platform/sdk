@@ -5,7 +5,7 @@ import {
   generateIdpTruncateScriptCode,
   processIdpUser,
 } from "#/plugin/builtin/seed/idp-user-processor";
-import { SeedGeneratorID, type SeedPluginOptions } from "#/plugin/builtin/seed/index";
+import { resolveSeedPluginConfig } from "#/plugin/builtin/seed/resolve-config";
 import {
   buildSeedNamespaceConfigs,
   type SeedNamespaceConfig,
@@ -71,15 +71,14 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
   // same cross-namespace uniqueness that generation and deploy enforce.
   assertUniqueLocalTailorDBTypeNames({ tailorDBServices: application.tailorDBServices });
 
-  const seedPlugin = plugins.find((plugin) => plugin.id === SeedGeneratorID);
-  if (!seedPlugin) {
+  const pluginOptions = resolveSeedPluginConfig(plugins);
+  if (!pluginOptions) {
     throw new Error(
       `seedPlugin is not configured in ${config.path}. ` +
         'Add seedPlugin({ distPath: "./seed" }) from "@tailor-platform/sdk/plugin/seed" to definePlugins().',
     );
   }
-  const pluginOptions = seedPlugin.pluginConfig as SeedPluginOptions | undefined;
-  if (typeof pluginOptions?.distPath !== "string" || pluginOptions.distPath === "") {
+  if (typeof pluginOptions.distPath !== "string" || pluginOptions.distPath === "") {
     throw new Error(
       `seedPlugin in ${config.path} has no distPath option. ` +
         'Pass seedPlugin({ distPath: "./seed" }) so seed data has a location.',
