@@ -10,6 +10,7 @@ import {
   buildSeedNamespaceConfigs,
   type SeedNamespaceConfig,
 } from "#/plugin/builtin/seed/seed-type-processor";
+import { getPluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
 import { loadApplicationNamespaces } from "./tailordb-namespaces";
 import type { LoadedConfig } from "./config-loader";
@@ -78,7 +79,7 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
         'Add seedPlugin({ distPath: "./seed" }) from "@tailor-platform/sdk/plugin/seed" to definePlugins().',
     );
   }
-  const pluginOptions = seedPlugin.pluginConfig as SeedPluginOptions | undefined;
+  const pluginOptions = getPluginConfig<SeedPluginOptions>(seedPlugin);
   if (typeof pluginOptions?.distPath !== "string" || pluginOptions.distPath === "") {
     throw new Error(
       `seedPlugin in ${config.path} has no distPath option. ` +

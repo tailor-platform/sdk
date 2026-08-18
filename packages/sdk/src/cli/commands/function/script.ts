@@ -23,7 +23,7 @@ import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
-import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import { KyselyGeneratorID, getKyselyTypePluginDistPath } from "#/plugin/builtin/kysely-type/index";
 import { assertDefined } from "#/utils/assert";
 import {
   SCRIPT_DB_TYPES_FILE_NAME,
@@ -292,7 +292,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
  * @returns Absolute path of the generated types file
  */
 function resolveKyselyTypesPath(plugin: Plugin): string {
-  const distPath = (plugin as { pluginConfig?: { distPath?: unknown } }).pluginConfig?.distPath;
+  const distPath = getKyselyTypePluginDistPath(plugin);
   if (typeof distPath !== "string" || distPath.length === 0) {
     throw new Error("kyselyTypePlugin is configured without a distPath; cannot locate getDB().");
   }

@@ -1,3 +1,4 @@
+import { getPluginConfig } from "#/plugin/get-plugin-config";
 import { processKyselyType, generateUnifiedKyselyTypes } from "./type-processor";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 import type { KyselyTypeMetadata, KyselyNamespaceMetadata } from "./types";
@@ -8,6 +9,15 @@ export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 type KyselyTypePluginOptions = {
   distPath: string;
 };
+
+/**
+ * Get the file path `kyselyTypePlugin` writes its generated Kysely types to.
+ * @param plugin - The plugin instance found by matching `id` against {@link KyselyGeneratorID}
+ * @returns The configured output path, or `undefined` if the plugin has no `distPath` configured
+ */
+export function getKyselyTypePluginDistPath(plugin: Plugin): string | undefined {
+  return getPluginConfig<KyselyTypePluginOptions>(plugin)?.distPath;
+}
 
 /**
  * Plugin that generates Kysely type definitions for TailorDB tables.
