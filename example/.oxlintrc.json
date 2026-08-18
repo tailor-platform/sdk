@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["../oxlint.shared.json"],
   "plugins": ["typescript", "import", "unicorn"],
   "categories": {
     "correctness": "error"
@@ -64,19 +65,7 @@
     "typescript/prefer-string-starts-ends-with": "error",
     "tailor-zod/require-object-policy-comment": "error",
     "zod/prefer-loose-object": "error",
-    "zod/prefer-strict-object": "error",
-    "typescript/await-thenable": "error",
-    "typescript/no-floating-promises": "error",
-    "typescript/no-misused-promises": "error",
-    "typescript/only-throw-error": "error",
-    "typescript/prefer-promise-reject-errors": "error",
-    "typescript/switch-exhaustiveness-check": [
-      "error",
-      {
-        "considerDefaultExhaustiveForUnions": true
-      }
-    ],
-    "no-param-reassign": "error"
+    "zod/prefer-strict-object": "error"
   },
   "overrides": [
     {
