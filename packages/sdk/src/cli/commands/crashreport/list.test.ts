@@ -41,7 +41,7 @@ describe("crashreport list command", () => {
     const config = await mockConfigWithLocalDir(tmpDir);
 
     const files = fs
-      .readdirSync(config.localDir!)
+      .readdirSync(config.localDir)
       .filter((f) => f.endsWith(".crash.log"))
       .toSorted()
       .toReversed();
@@ -52,7 +52,7 @@ describe("crashreport list command", () => {
   test("returns empty list when no crash reports exist", async () => {
     const config = await mockConfigWithLocalDir(tmpDir);
 
-    const files = fs.readdirSync(config.localDir!).filter((f) => f.endsWith(".crash.log"));
+    const files = fs.readdirSync(config.localDir).filter((f) => f.endsWith(".crash.log"));
 
     expect(files).toEqual([]);
   });
@@ -60,7 +60,7 @@ describe("crashreport list command", () => {
   test("handles non-existent directory gracefully", async () => {
     const config = await mockConfigWithLocalDir(path.join(tmpDir, "does-not-exist"));
 
-    expect(fs.existsSync(config.localDir!)).toBe(false);
+    expect(fs.existsSync(config.localDir)).toBe(false);
   });
 });
 

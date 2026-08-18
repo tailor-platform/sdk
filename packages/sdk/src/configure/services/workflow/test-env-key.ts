@@ -91,5 +91,5 @@ export function buildJobContext(): { env: TailorEnv; invoker: TailorPrincipal | 
   const invoker = storedInvoker === undefined ? readRuntimeInvoker() : storedInvoker;
   const fromGlobal = readWorkflowTestEnv();
   if (fromGlobal !== undefined) return { env: { ...fromGlobal }, invoker };
-  return { env: {} as TailorEnv, invoker };
+  return { env: {}, invoker };
 }

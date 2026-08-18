@@ -71,7 +71,7 @@ describe("PluginManager", () => {
         name: db.string(),
       })
       // PluginConfigs is open; use cast to attach plugin config in tests.
-      .plugin({ "test-plugin": { enabled: true } } as Record<string, unknown>);
+      .plugin({ "test-plugin": { enabled: true } });
 
     const extended = manager.extendTable({
       originalTable: original,

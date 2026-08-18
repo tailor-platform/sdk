@@ -195,8 +195,6 @@ describe("normalizeIdPPermission", () => {
 });
 
 describe("findOmittedPermitRules", () => {
-  type RawIdPPermission = NonNullable<Parameters<typeof findOmittedPermitRules>[0]>;
-
   test.each([
     [
       "flags object-form rules that omit permit",
@@ -247,7 +245,7 @@ describe("findOmittedPermitRules", () => {
       ["unenrollMfa[0]"],
     ],
   ] as const)("%s", (_name, permission, expected) => {
-    const result = findOmittedPermitRules(permission as RawIdPPermission);
+    const result = findOmittedPermitRules(permission);
     expect(result).toEqual(expected);
   });
 

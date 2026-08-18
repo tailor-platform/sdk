@@ -12,8 +12,7 @@ type GlobalsShape = {
   "shared-node-browser"?: Record<string, boolean>;
 };
 const globalsMap: GlobalsShape =
-  (globals as unknown as { default?: GlobalsShape }).default ??
-  (globals as unknown as GlobalsShape);
+  (globals as unknown as { default?: GlobalsShape }).default ?? globals;
 
 // Globals allowed in the Tailor Platform runtime.
 // Mirrors ES_BUILTINS in src/cli/services/tailordb/es-builtins.ts so the

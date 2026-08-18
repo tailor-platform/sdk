@@ -131,7 +131,7 @@ function collectFunctionVarBindings(root: ASTNode, names: Set<string>): void {
     }
     for (const key of Object.keys(node)) {
       if (key === "parent") continue;
-      const child = node[key] as unknown;
+      const child = node[key];
       if (Array.isArray(child)) {
         for (const item of child) walk(item as ASTNode | null);
       } else if (child && typeof child === "object") {
@@ -224,7 +224,7 @@ function walkBindingAware(
 
     for (const key of Object.keys(node)) {
       if (key === "parent") continue;
-      const child = node[key] as unknown;
+      const child = node[key];
       if (Array.isArray(child)) {
         for (const item of child) {
           walk(item as ASTNode | null, nestedShadowedNames, node, key);

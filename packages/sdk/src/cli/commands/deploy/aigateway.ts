@@ -185,7 +185,7 @@ export async function planAIGateway(context: PlanContext) {
       if (
         owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areAIGatewaysEqual(existing.resource as ProtoAIGateway, desired)
+        areAIGatewaysEqual(existing.resource, desired)
       ) {
         changeSet.unchanged.push({ name });
       } else {

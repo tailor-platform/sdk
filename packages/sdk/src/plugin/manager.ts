@@ -657,7 +657,7 @@ function copyMetadataToExtendedTable(
       // Use type assertion as plugin ID is dynamic at runtime
       result = result.plugin({
         [plugin.pluginId]: plugin.config,
-      } as Parameters<typeof result.plugin>[0]);
+      });
     }
   }
 

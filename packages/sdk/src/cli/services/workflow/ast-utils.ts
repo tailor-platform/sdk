@@ -1,11 +1,8 @@
 import { assertDefined } from "#/utils/assert";
 import type {
   Expression,
-  AwaitExpression,
-  ImportExpression,
   CallExpression,
   StaticMemberExpression,
-  IdentifierReference,
   ObjectPropertyKind,
   ObjectProperty,
   ArrowFunctionExpression,
@@ -65,7 +62,7 @@ export function getImportSource(node: Expression | null | undefined): string | n
   if (!node) return null;
   // await import("@tailor-platform/sdk")
   if (node.type === "ImportExpression") {
-    const importExpr = node as ImportExpression;
+    const importExpr = node;
     const source = importExpr.source;
     if (source.type === "Literal" && typeof source.value === "string") {
       return source.value;
@@ -73,7 +70,7 @@ export function getImportSource(node: Expression | null | undefined): string | n
   }
   // require("@tailor-platform/sdk")
   if (node.type === "CallExpression") {
-    const callExpr = node as CallExpression;
+    const callExpr = node;
     if (callExpr.callee.type === "Identifier" && callExpr.callee.name === "require") {
       const arg = callExpr.arguments[0];
       if (
@@ -131,7 +128,7 @@ export function getStartCallInfo(
   }
 
   return {
-    identifierName: (memberExpr.object as IdentifierReference).name,
+    identifierName: memberExpr.object.name,
     callRange: { start: callExpr.start, end: callExpr.end },
     argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
     optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
@@ -145,7 +142,7 @@ export function getStartCallInfo(
  */
 export function unwrapAwait(node: Expression | null | undefined): Expression | null | undefined {
   if (node?.type === "AwaitExpression") {
-    return (node as AwaitExpression).argument;
+    return node.argument;
   }
   return node;
 }
@@ -183,7 +180,7 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
   for (const prop of properties) {
     // Note: oxc uses "Property" for object properties
     if (prop.type === "Property") {
-      const objProp = prop as ObjectProperty;
+      const objProp = prop;
       const keyName =
         objProp.key.type === "Identifier"
           ? objProp.key.name

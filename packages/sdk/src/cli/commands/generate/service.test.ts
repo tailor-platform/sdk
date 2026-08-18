@@ -68,7 +68,7 @@ function loadedTailorDBService(namespace: string, typeNames: string[]): TailorDB
     pluginAttachments: new Map(),
     loadTypes: vi.fn().mockResolvedValue(types),
     processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
-  } as unknown as TailorDBService;
+  };
 }
 
 function applicationWithTailorDBServices(

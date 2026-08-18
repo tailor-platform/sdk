@@ -55,7 +55,7 @@ function findDefineConfigCalls(node: unknown, results: ConfigCallSite[]): void {
       const arg = ce.arguments[0];
       // callee may be a ComputedMemberExpression at runtime
       // oxlint-disable-next-line typescript/no-unnecessary-condition
-      const configObj = arg && arg.type === "ObjectExpression" ? (arg as ObjectExpression) : null;
+      const configObj = arg && arg.type === "ObjectExpression" ? arg : null;
       results.push({ callExpr: ce, configObj });
     }
   }

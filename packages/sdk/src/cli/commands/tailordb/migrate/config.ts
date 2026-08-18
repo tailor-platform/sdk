@@ -26,11 +26,11 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
   if (typeof dbConfig !== "object" || dbConfig === null) return false;
   if (!("migration" in dbConfig)) return false;
 
-  const migration = (dbConfig as { migration: unknown }).migration;
+  const migration = dbConfig.migration;
   if (typeof migration !== "object" || migration === null) return false;
   if (!("directory" in migration)) return false;
 
-  return typeof (migration as { directory: unknown }).directory === "string";
+  return typeof migration.directory === "string";
 }
 
 /**

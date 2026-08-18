@@ -165,7 +165,7 @@ const LEGACY_CHANGE_KINDS = new Map<string, DiffChangeKind>([
  */
 function normalizeLegacyChangeKinds(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null || !("changes" in raw)) return raw;
-  const changes = (raw as { changes: unknown }).changes;
+  const changes = raw.changes;
   if (!Array.isArray(changes)) return raw;
 
   const normalized = changes.map((change) => {
@@ -616,7 +616,7 @@ function convertActionPermission(
   permission: StandardActionPermission<"record">,
 ): SnapshotActionPermission {
   return {
-    conditions: permission.conditions as SnapshotPermissionCondition[],
+    conditions: permission.conditions,
     permit: permission.permit,
     ...(permission.description && { description: permission.description }),
   };

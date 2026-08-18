@@ -266,7 +266,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
      */
     get executedQueries(): ExecutedQuery[] {
       return queryObject.mock.calls.map(([query, params]) => ({
-        query: query as string,
+        query: query,
         // vitest records an omitted argument as undefined
         // oxlint-disable-next-line typescript/no-unnecessary-condition
         params: (params as unknown[]) ?? [],

@@ -811,7 +811,7 @@ describe("mock", () => {
       // Resolvers using early-return style (`if (...) return;`) implicitly
       // return undefined for unhandled methods. That should fall through to
       // the type-consistent default rather than leaking undefined.
-      iconv.setResolver(() => undefined as unknown as null);
+      iconv.setResolver(() => undefined);
       const result = (globalThis as any).tailor.iconv.convert("hi", "UTF-8", "Shift_JIS");
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result).toHaveLength(0);

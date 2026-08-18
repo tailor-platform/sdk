@@ -102,7 +102,7 @@ describe("query", () => {
     const { extractTypeNamesFromSql, extractColumnTemplate } = await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
-    vi.mocked(readFile).mockResolvedValue('select * from "User";' as never);
+    vi.mocked(readFile).mockResolvedValue('select * from "User";');
     vi.mocked(getEditorCommand).mockReturnValue("vim");
     vi.mocked(openInEditor).mockResolvedValue(true);
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
@@ -283,7 +283,7 @@ describe("query", () => {
     });
 
     expect(executeScript).toHaveBeenCalled();
-    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
+    const call = vi.mocked(executeScript).mock.calls[0]![0];
     const arg = call.arg as unknown as { queries: string[] };
     expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
   });
@@ -299,7 +299,7 @@ describe("query", () => {
       query: `INSERT INTO t VALUES ('hello;world')`,
     });
 
-    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
+    const call = vi.mocked(executeScript).mock.calls[0]![0];
     const arg = call.arg as unknown as { queries: string[] };
     expect(arg.queries).toHaveLength(1);
   });

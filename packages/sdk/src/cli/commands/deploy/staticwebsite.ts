@@ -219,7 +219,7 @@ export async function planStaticWebsite(context: PlanContext) {
       if (
         owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areStaticWebsitesEqual(existing.resource as ProtoStaticWebsite, desired)
+        areStaticWebsitesEqual(existing.resource, desired)
       ) {
         changeSet.unchanged.push({ name });
       } else {
