@@ -2462,9 +2462,9 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
   }
 
   if (remoteField.scale !== undefined) config.scale = remoteField.scale;
-  // Preserve the platform-filled-on-create contract when the source that
-  // implied it (a create hook or a default) is not itself representable.
-  if (remoteField.optionalOnCreate && !config.hooks?.create && config.default === undefined) {
+  // Remote schemas do not expose field defaults, so optionalOnCreate is the
+  // only signal when no field-level create hook carries the same contract.
+  if (remoteField.optionalOnCreate && !config.hooks?.create) {
     config.optionalOnCreate = true;
   }
 
