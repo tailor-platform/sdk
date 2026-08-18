@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { logRemoteDriftGuidance } from "./schema-checks";
 import { MISSING_REMOTE_SCRIPT_HASH_SUFFIX } from "./snapshot";
@@ -23,25 +23,26 @@ function hintWasLogged(infoSpy: ReturnType<typeof vi.spyOn>): boolean {
 }
 
 describe("logRemoteDriftGuidance", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test("adds the missing-hash hint when every drift is a missing script hash", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     logRemoteDriftGuidance([{ hasDrift: true, drifts: [missingHashDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(true);
-    infoSpy.mockRestore();
   });
 
   test("omits the hint when a drift is not a missing script hash", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     logRemoteDriftGuidance([{ hasDrift: true, drifts: [missingHashDrift, scriptsDifferDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(false);
-    infoSpy.mockRestore();
   });
 
   test("omits the hint when no drift results are passed", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     logRemoteDriftGuidance();
     expect(hintWasLogged(infoSpy)).toBe(false);
-    infoSpy.mockRestore();
   });
 
   test("omits the hint when only one of several namespaces has a non-missing-hash drift", () => {
@@ -51,7 +52,6 @@ describe("logRemoteDriftGuidance", () => {
       { hasDrift: true, drifts: [scriptsDifferDrift] },
     ]);
     expect(hintWasLogged(infoSpy)).toBe(false);
-    infoSpy.mockRestore();
   });
 
   test("shows the hint when namespaces without drift are ignored", () => {
@@ -61,6 +61,5 @@ describe("logRemoteDriftGuidance", () => {
       { hasDrift: false, drifts: [] },
     ]);
     expect(hintWasLogged(infoSpy)).toBe(true);
-    infoSpy.mockRestore();
   });
 });
