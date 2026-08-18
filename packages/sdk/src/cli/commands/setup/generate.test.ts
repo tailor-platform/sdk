@@ -46,8 +46,8 @@ type GeneratedWorkflow = {
   jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
 };
 
-const TAILOR_ACTIONS_SHA = "85f0ec85d3bcbdec915daa315b6ddf46ce9b6d2c";
-const TAILOR_ACTIONS_VERSION = "v2.2.0";
+const TAILOR_ACTIONS_SHA = "33ae978702edd2de673419e84b66065e7a364dab";
+const TAILOR_ACTIONS_VERSION = "v2.3.0";
 
 describe("detectPackageManager", () => {
   const testDir = path.join(
@@ -519,7 +519,7 @@ describe("renderTagWorkflow", () => {
 });
 
 describe("Tailor Platform action pins", () => {
-  test("pins every generated Tailor Platform action to v2.2.0", () => {
+  test("pins every generated Tailor Platform action to v2.3.0", () => {
     const contents = [
       renderBranchWorkflow({ ...branchBase, migrationDriftCheck: true }).content,
       renderTagWorkflow({ ...tagBase, branch: "main" }).content,
