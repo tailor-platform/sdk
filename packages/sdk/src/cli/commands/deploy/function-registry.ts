@@ -311,12 +311,10 @@ export async function planFunctionRegistry(
         pageSize: maxPageSize,
       });
       return [
-        response.functions.map(
-          (f): ExistingFunction => ({
-            name: f.name,
-            contentHash: f.contentHash,
-          }),
-        ),
+        response.functions.map((f): ExistingFunction => ({
+          name: f.name,
+          contentHash: f.contentHash,
+        })),
         response.nextPageToken,
       ];
     },
