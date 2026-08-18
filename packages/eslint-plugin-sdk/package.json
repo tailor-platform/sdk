@@ -26,13 +26,11 @@
     "build": "tsdown",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
+    "knip": "knip",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "prepare": "tsdown",
     "publint": "publint --strict"
-  },
-  "dependencies": {
-    "@types/eslint": "9.6.1"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

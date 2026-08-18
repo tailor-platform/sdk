@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk-codemod": patch
+"@tailor-platform/eslint-plugin-sdk": patch
 ---
 
-Remove the unreferenced `src/helpers.ts` module. It was never exported from the package, so `parseTS`/`parseTSX` were unreachable; codemod transforms parse with `@ast-grep/napi` directly.
+Drop the `@types/eslint` runtime dependency. ESLint 9.0 and later ship their own type declarations, so installing this plugin no longer pulls in a redundant types package.
