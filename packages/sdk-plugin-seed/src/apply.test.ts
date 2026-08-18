@@ -262,6 +262,250 @@ describe("seedApplyCommand", () => {
     expect(loggedLines.some((line) => line.includes("✓ _User"))).toBe(false);
   });
 
+  test("splits _User rows into row-count chunks and aggregates processed counts", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) =>
+        Promise.resolve({
+          error: undefined,
+          logs: "",
+          result:
+            name === "seed-idp-user.ts"
+              ? JSON.stringify({
+                  success: true,
+                  processed: arg?.users?.length ?? 0,
+                  created: arg?.users?.length ?? 0,
+                  updated: 0,
+                  skipped: 0,
+                  errors: [],
+                })
+              : '{"success":true,"deleted":1}',
+          success: true,
+        }),
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
+
+    expect(result.exitCode).toBe(0);
+    const idpCalls = sdk.executeScript.mock.calls
+      .map(
+        ([options]) =>
+          options as { name: string; arg?: { users?: unknown[]; offset?: number; total?: number } },
+      )
+      .filter((options) => options.name === "seed-idp-user.ts");
+    expect(idpCalls.map((options) => options.arg?.users?.length)).toEqual([25, 25, 1]);
+    expect(idpCalls.map((options) => options.arg?.offset)).toEqual([0, 25, 50]);
+    expect(idpCalls.map((options) => options.arg?.total)).toEqual([51, 51, 51]);
+    const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
+    expect(loggedLines.some((line) => line.includes("Split into 3 chunks"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("Chunk 1/3: 25 rows"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("Chunk 2/3: 25 rows"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("Chunk 3/3: 1 rows"))).toBe(true);
+    expect(logger.out).toHaveBeenCalledWith({ success: true, processed: { _User: 51 } });
+  });
+
+  test("reports confirmed progress before rethrowing a _User chunk transport error", async () => {
+    const rows = Array.from({ length: 30 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    const transportError = new Error("[deadline_exceeded] context deadline exceeded");
+    let idpCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name !== "seed-idp-user.ts") {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: '{"success":true,"deleted":1}',
+            success: true,
+          });
+        }
+        idpCallCount += 1;
+        if (idpCallCount > 1) {
+          return Promise.reject(transportError);
+        }
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: true,
+            processed: arg?.users?.length ?? 0,
+            created: arg?.users?.length ?? 0,
+            updated: 0,
+            skipped: 0,
+            errors: [],
+          }),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toBe(transportError);
+    expect(logger.out).toHaveBeenCalledWith({ success: false, processed: { _User: 25 } });
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(
+      warnedLines.some(
+        (line) =>
+          line.includes("25/30") &&
+          line.includes("re-run the same command narrowed to `_User` with `--upsert`"),
+      ),
+    ).toBe(true);
+  });
+
+  test("continues after a known _User row failure and reports confirmed totals", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    let idpCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name !== "seed-idp-user.ts") {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: '{"success":true,"deleted":1}',
+            success: true,
+          });
+        }
+        idpCallCount += 1;
+        const rowCount = arg?.users?.length ?? 0;
+        const hasRowFailure = idpCallCount === 2;
+        const processed = hasRowFailure ? rowCount - 1 : rowCount;
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: !hasRowFailure,
+            processed,
+            created: processed,
+            updated: 0,
+            skipped: 0,
+            errors: hasRowFailure ? ["Row 27 (user-26): create failed"] : [],
+          }),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--json"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(idpCallCount).toBe(3);
+    expect(logger.out).toHaveBeenCalledWith({ success: false, processed: { _User: 50 } });
+  });
+
+  test("stops and reports progress when a _User chunk execution fails without a result", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    let idpCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name !== "seed-idp-user.ts") {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: '{"success":true,"deleted":1}',
+            success: true,
+          });
+        }
+        idpCallCount += 1;
+        if (idpCallCount > 1) {
+          return Promise.resolve({
+            error: "execution failed",
+            logs: "",
+            result: "",
+            success: false,
+          });
+        }
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: true,
+            processed: arg?.users?.length ?? 0,
+            created: arg?.users?.length ?? 0,
+            updated: 0,
+            skipped: 0,
+            errors: [],
+          }),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(idpCallCount).toBe(2);
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(
+      warnedLines.some(
+        (line) =>
+          line.includes("25/51") &&
+          line.includes("re-run the same command narrowed to `_User` with `--upsert`"),
+      ),
+    ).toBe(true);
+  });
+
+  test("stops and reports progress when a _User chunk returns an unparseable result", async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => ({ name: `user-${i}` }));
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, typeName === "_User" ? rows : []])),
+    );
+    let idpCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name !== "seed-idp-user.ts") {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: '{"success":true,"deleted":1}',
+            success: true,
+          });
+        }
+        idpCallCount += 1;
+        if (idpCallCount > 1) {
+          return Promise.resolve({
+            error: undefined,
+            logs: "",
+            result: "not-json",
+            success: true,
+          });
+        }
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: true,
+            processed: arg?.users?.length ?? 0,
+            created: arg?.users?.length ?? 0,
+            updated: 0,
+            skipped: 0,
+            errors: [],
+          }),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(idpCallCount).toBe(2);
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(warnedLines.some((line) => line.includes("25/51"))).toBe(true);
+  });
+
   test("passes --upsert through to the TailorDB and IdP seed scripts", async () => {
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
       Object.fromEntries(
