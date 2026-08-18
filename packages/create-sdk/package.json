@@ -21,6 +21,7 @@
     "build": "tsdown",
     "lint": "oxlint --type-aware . --ignore-pattern \"templates/**\"",
     "lint:fix": "oxlint --type-aware . --ignore-pattern \"templates/**\" --fix",
+    "knip": "knip",
     "typecheck": "tsc --noEmit",
     "prepublish": "node scripts/prepare-templates.js && pnpm run build",
     "publint": "publint --strict"

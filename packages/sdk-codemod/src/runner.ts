@@ -19,11 +19,11 @@ import type { SgNode } from "@ast-grep/napi";
  * A transform function that receives source text and file path,
  * and returns modified source or null if no changes are needed.
  *
- * For AST-based transforms, use `parseTS`/`parseTSX` from helpers:
+ * For AST-based transforms, parse with ast-grep:
  * ```typescript
- * import { parseTS } from "@tailor-platform/sdk-codemod/helpers";
+ * import { parse, Lang } from "@ast-grep/napi";
  * export default function transform(source: string): string | null {
- *   const root = parseTS(source);
+ *   const root = parse(Lang.TypeScript, source).root();
  *   // ... findAll, replace, commitEdits
  * }
  * ```

@@ -20,6 +20,7 @@
     "build": "tsdown",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
+    "knip": "knip",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "prepublish": "pnpm run build",
