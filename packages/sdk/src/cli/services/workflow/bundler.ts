@@ -116,6 +116,44 @@ export function collectExecJobFunctionTargets(code: string): string[] {
   return targets;
 }
 
+/**
+ * Check every bundled job's code for execJobFunction targets that were not
+ * bundled, throwing a WorkflowJobDetectionError naming the caller job when
+ * one is found (or when the caller's own bundled code fails to parse).
+ * @param bundledCode - Bundled job code by job name
+ * @param usedJobNames - Job names that were actually bundled
+ */
+export function validateBundledDependencies(
+  bundledCode: Map<string, string>,
+  usedJobNames: readonly string[],
+): void {
+  const usedJobNameSet = new Set(usedJobNames);
+  for (const [callerJobName, code] of bundledCode) {
+    let targets: string[];
+    try {
+      targets = collectExecJobFunctionTargets(code);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new WorkflowJobDetectionError(
+        `Failed to check the bundled output of workflow job "${callerJobName}" for missed ` +
+          `dependencies: ${message}`,
+      );
+    }
+
+    for (const targetJobName of targets) {
+      if (!usedJobNameSet.has(targetJobName)) {
+        throw new WorkflowJobDetectionError(
+          `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...) — usually the ` +
+            `result of a "${targetJobName}".start() rewrite — but "${targetJobName}" was not detected as a ` +
+            `dependency and is not included in the bundle. Move the .start() call (or the direct ` +
+            `execJobFunction call) to a function defined inside the body of workflow job "${callerJobName}", ` +
+            `or make sure the file containing it is covered by the workflow service's "files" pattern.`,
+        );
+      }
+    }
+  }
+}
+
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
   mainJobDeps: Record<string, string[]>;
@@ -198,20 +236,10 @@ export async function bundleWorkflowJobs(
   // filterUsedJobs cannot see (e.g. a factored-out .start() call inside a
   // helper file outside `workflow.files`): the rewrite still resolves and
   // produces a valid execJobFunction call, but the target was never bundled.
-  const usedJobNameSet = new Set(usedJobs.map((job) => job.name));
-  for (const [callerJobName, code] of bundledCode) {
-    for (const targetJobName of collectExecJobFunctionTargets(code)) {
-      if (!usedJobNameSet.has(targetJobName)) {
-        throw new WorkflowJobDetectionError(
-          `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...) — usually the ` +
-            `result of a "${targetJobName}".start() rewrite — but "${targetJobName}" was not detected as a ` +
-            `dependency and is not included in the bundle. Move the .start() call (or the direct ` +
-            `execJobFunction call) to a function defined inside the body of workflow job "${callerJobName}", ` +
-            `or make sure the file containing it is covered by the workflow service's "files" pattern.`,
-        );
-      }
-    }
-  }
+  validateBundledDependencies(
+    bundledCode,
+    usedJobs.map((job) => job.name),
+  );
 
   return {
     mainJobDeps,
@@ -274,7 +302,7 @@ async function filterUsedJobs(
     Array.from(filesToScan.entries()).map(async ([sourceFile, jobs]) => {
       try {
         const source = await fs.promises.readFile(sourceFile, "utf-8");
-        const { program, errors } = parseSync("input.ts", source);
+        const { program, errors } = parseSync(sourceFile, source);
         if (errors.length > 0) {
           throw new WorkflowJobDetectionError(
             `Failed to parse ${sourceFile}: ${errors.map((e) => e.message).join("; ")}`,

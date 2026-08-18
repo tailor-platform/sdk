@@ -3,7 +3,11 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
-import { bundleWorkflowJobs, collectExecJobFunctionTargets } from "./bundler";
+import {
+  bundleWorkflowJobs,
+  collectExecJobFunctionTargets,
+  validateBundledDependencies,
+} from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   test("does not throw when no workflow jobs are provided", async () => {
@@ -572,6 +576,20 @@ export default createWorkflow({
       expect(
         collectExecJobFunctionTargets("tailor.workflow.execJobFunction(`step-a`, void 0)"),
       ).toEqual(["step-a"]);
+    });
+  });
+
+  describe("validateBundledDependencies", () => {
+    test("names the caller job when its bundled code fails to parse", () => {
+      const bundledCode = new Map([["main-job", "this is not valid js &&&"]]);
+      expect(() => validateBundledDependencies(bundledCode, ["main-job"])).toThrow(/main-job/);
+    });
+
+    test("does not throw when every target is bundled", () => {
+      const bundledCode = new Map([
+        ["main-job", "tailor.workflow.execJobFunction(`step-a`, void 0)"],
+      ]);
+      expect(() => validateBundledDependencies(bundledCode, ["main-job", "step-a"])).not.toThrow();
     });
   });
 });
