@@ -3211,6 +3211,13 @@ function remoteHasScripts(remoteType: ProtoTailorDBType): boolean {
   );
 }
 
+/**
+ * Detail suffix used when a script-carrying table has no script hash on the
+ * remote at all — the pattern left by an environment whose last deploy used
+ * the pre-v2 CLI, which never wrote script hashes.
+ */
+export const MISSING_REMOTE_SCRIPT_HASH_SUFFIX = "has no script hash on remote";
+
 function compareScriptHashes(
   remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
@@ -3235,7 +3242,7 @@ function compareScriptHashes(
           kind: "script_mismatch",
           details: remoteHash
             ? `Table '${tableName}' scripts differ between remote and snapshot`
-            : `Table '${tableName}' has no script hash on remote`,
+            : `Table '${tableName}' ${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}`,
         });
       }
     } else if (remoteHasScripts(remoteType)) {

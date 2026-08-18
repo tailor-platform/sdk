@@ -26,6 +26,7 @@ import {
   createSnapshotType,
   createSnapshotFromRemoteTypes,
   getLatestMigrationNumber,
+  MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
   type RemoteGqlPermission,
   type SchemaSnapshot,
   type SnapshotGqlOperations,
@@ -372,7 +373,9 @@ interface DriftGuidanceInput {
 }
 
 function isMissingRemoteScriptHashDrift(drift: SchemaDrift): boolean {
-  return drift.kind === "script_mismatch" && drift.details.endsWith("has no script hash on remote");
+  return (
+    drift.kind === "script_mismatch" && drift.details.endsWith(MISSING_REMOTE_SCRIPT_HASH_SUFFIX)
+  );
 }
 
 /**
@@ -418,7 +421,7 @@ export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInpu
   if (driftResults && isLikelyPreV2ScriptHashDrift(driftResults)) {
     logger.newline();
     logger.info(
-      "Every listed drift is 'has no script hash on remote'. Run 'migration sync <N>' above to add the missing hashes.",
+      `Every listed drift is '${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}'. Run 'migration sync <N>' above to add the missing hashes.`,
     );
   }
 }

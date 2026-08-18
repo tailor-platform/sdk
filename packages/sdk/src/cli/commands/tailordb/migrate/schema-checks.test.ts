@@ -1,12 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { logRemoteDriftGuidance } from "./schema-checks";
+import { MISSING_REMOTE_SCRIPT_HASH_SUFFIX } from "./snapshot";
 import type { SchemaDrift } from "./types";
 
 const missingHashDrift: SchemaDrift = {
   tableName: "Foo",
   kind: "script_mismatch",
-  details: "Table 'Foo' has no script hash on remote",
+  details: `Table 'Foo' ${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}`,
 };
 
 const scriptsDifferDrift: SchemaDrift = {
@@ -40,6 +41,26 @@ describe("logRemoteDriftGuidance", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     logRemoteDriftGuidance();
     expect(hintWasLogged(infoSpy)).toBe(false);
+    infoSpy.mockRestore();
+  });
+
+  test("omits the hint when only one of several namespaces has a non-missing-hash drift", () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    logRemoteDriftGuidance([
+      { hasDrift: true, drifts: [missingHashDrift] },
+      { hasDrift: true, drifts: [scriptsDifferDrift] },
+    ]);
+    expect(hintWasLogged(infoSpy)).toBe(false);
+    infoSpy.mockRestore();
+  });
+
+  test("shows the hint when namespaces without drift are ignored", () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    logRemoteDriftGuidance([
+      { hasDrift: true, drifts: [missingHashDrift] },
+      { hasDrift: false, drifts: [] },
+    ]);
+    expect(hintWasLogged(infoSpy)).toBe(true);
     infoSpy.mockRestore();
   });
 });
