@@ -587,7 +587,7 @@ describe("snapshot-manifest", () => {
   });
 
   describe("generateAllTypeManifestsFromSnapshot", () => {
-    test("generates manifests for all types in snapshot", () => {
+    test("generates manifests for all tables in snapshot", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -654,7 +654,7 @@ describe("snapshot-manifest", () => {
       }
     });
 
-    test("applies namespace gqlOperations to all types", () => {
+    test("applies namespace gqlOperations to all tables", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),

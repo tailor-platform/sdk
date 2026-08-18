@@ -88,7 +88,7 @@ export async function loadApplicationNamespaces(
     await db.processNamespacePlugins();
     namespaces.push({
       namespace: db.namespace,
-      types: { ...db.types },
+      tables: { ...db.types },
       sourceInfo: new Map(Object.entries(db.typeSourceInfo)),
       pluginAttachments: db.pluginAttachments,
     });

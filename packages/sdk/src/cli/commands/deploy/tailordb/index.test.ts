@@ -211,7 +211,7 @@ describe("planTailorDB (service level)", () => {
     await runTest();
   });
 
-  test("plans a migration-test baseline snapshot instead of current types", async () => {
+  test("plans a migration-test baseline snapshot instead of current tables", async () => {
     const tailordb = createMockTailorDBService("tailordb");
     Object.defineProperty(tailordb, "types", {
       value: {
@@ -270,7 +270,7 @@ describe("planTailorDB (service level)", () => {
     );
   });
 
-  test("plans a migration-test target snapshot instead of drifted current types", async () => {
+  test("plans a migration-test target snapshot instead of drifted current tables", async () => {
     const tailordb = createMockTailorDBService("tailordb");
     Object.defineProperty(tailordb, "types", {
       value: {
@@ -445,12 +445,12 @@ describe("planTailorDB (service level)", () => {
   });
 
   describe("nested field manifest mapping", () => {
-    test("enables publishRecordEvents when a peer executor targets the type", async () => {
+    test("enables publishRecordEvents when a peer executor targets the table", async () => {
       const tailorDBService = createMockTailorDBService("shared-db");
       const userType: TailorDBType = {
         name: "User",
         pluralForm: "Users",
-        description: "User type",
+        description: "User table",
         fields: {
           name: {
             name: "name",
@@ -492,7 +492,7 @@ describe("planTailorDB (service level)", () => {
         return {
           name: "User",
           pluralForm: "Users",
-          description: "User type",
+          description: "User table",
           fields: { name: { name: "name", config: { type: "string" } } },
           forwardRelationships: {},
           backwardRelationships: {},
@@ -562,7 +562,7 @@ describe("planTailorDB (service level)", () => {
         );
       });
 
-      test("rejects a conflicting opt-out before listing remote types", async () => {
+      test("rejects a conflicting opt-out before listing remote tables", async () => {
         const client = createMockClient([{ name: "shared-db", label: appName }]);
         const tailorDBService = createMockTailorDBService("shared-db");
         const userType = createTypeWith(false);
@@ -608,7 +608,7 @@ describe("planTailorDB (service level)", () => {
       const testType: TailorDBType = {
         name: "User",
         pluralForm: "users",
-        description: "User type",
+        description: "User table",
         fields: {
           profile: {
             name: "profile",
@@ -705,7 +705,7 @@ describe("planTailorDB (service level)", () => {
       const tailordbType: TailorDBType = {
         name: "Invoice",
         pluralForm: "Invoices",
-        description: "Invoice type",
+        description: "Invoice table",
         fields: {
           code: {
             name: "code",
@@ -740,7 +740,7 @@ describe("planTailorDB (service level)", () => {
 
       const client = createRemoteTypeClient("test-tailordb", {
         name: "Invoice",
-        description: "Invoice type",
+        description: "Invoice table",
         pluralForm: "invoices",
         fields: {
           code: {
@@ -808,7 +808,7 @@ describe("planTailorDB (service level)", () => {
         ({
           name: "Invoice",
           pluralForm: "Invoices",
-          description: "Invoice type",
+          description: "Invoice table",
           fields,
           forwardRelationships: {},
           backwardRelationships: {},
@@ -835,7 +835,7 @@ describe("planTailorDB (service level)", () => {
 
       const client = createRemoteTypeClient("test-tailordb", {
         name: "Invoice",
-        description: "Invoice type",
+        description: "Invoice table",
         pluralForm: "invoices",
         fields: {},
       });
@@ -864,7 +864,7 @@ describe("planTailorDB (service level)", () => {
       const tailordbType: TailorDBType = {
         name: "Invoice",
         pluralForm: "Invoices",
-        description: "Invoice type",
+        description: "Invoice table",
         fields: {
           code: {
             name: "code",
@@ -888,7 +888,7 @@ describe("planTailorDB (service level)", () => {
 
       const client = createRemoteTypeClient("test-tailordb", {
         name: "Invoice",
-        description: "Invoice type",
+        description: "Invoice table",
         pluralForm: "invoices",
         fields: {
           code: {
@@ -932,7 +932,7 @@ describe("planTailorDB (service level)", () => {
       const tailordbType: TailorDBType = {
         name: "Invoice",
         pluralForm: "Invoices",
-        description: "Invoice type",
+        description: "Invoice table",
         fields: {
           code: {
             name: "code",
@@ -997,7 +997,7 @@ describe("planTailorDB (service level)", () => {
       const tailordbType: TailorDBType = {
         name: "Event",
         pluralForm: "Events",
-        description: "Event type",
+        description: "Event table",
         fields: {
           name: {
             name: "name",
@@ -1024,7 +1024,7 @@ describe("planTailorDB (service level)", () => {
       // These must compare as equal.
       const client = createRemoteTypeClient("test-tailordb", {
         name: "Event",
-        description: "Event type",
+        description: "Event table",
         pluralForm: "events",
         fields: {
           name: {
@@ -1232,7 +1232,7 @@ describe("applyTailorDB phase separation", () => {
             },
           ],
           unchanged: [],
-          title: "TailorDB Types",
+          title: "TailorDB tables",
           isEmpty: () => false,
           lines: () => [],
         },
@@ -1704,7 +1704,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           updates: [],
           deletes: [],
           unchanged: [],
-          title: "TailorDB Types",
+          title: "TailorDB tables",
           isEmpty: () => true,
           lines: () => [],
         },
@@ -2180,7 +2180,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   });
 
-  test("rejects a stale removed type before a pending migration re-adds the same name", async () => {
+  test("rejects a stale removed table before a pending migration re-adds the same name", async () => {
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);
     const removalDir = path.join(tmpDir, "0001");
@@ -2705,7 +2705,7 @@ describe("applyTailorDB migration label reconciliation", () => {
   });
 });
 
-describe("applyTailorDB type apply concurrency", () => {
+describe("applyTailorDB table apply concurrency", () => {
   test("applies type creates and updates sequentially", async () => {
     const probe = createConcurrencyProbe();
     const client = {
@@ -2746,7 +2746,7 @@ describe("applyTailorDB type apply concurrency", () => {
           updates: ["UpdateA", "UpdateB", "UpdateC"].map(changeOf),
           deletes: [],
           unchanged: [],
-          title: "TailorDB Types",
+          title: "TailorDB tables",
           isEmpty: () => false,
           lines: () => [],
         },

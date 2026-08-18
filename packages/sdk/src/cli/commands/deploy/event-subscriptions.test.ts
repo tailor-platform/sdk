@@ -19,7 +19,7 @@ type TargetSpec = {
   jobsByWorkflow?: Record<string, string[]>;
   /** Jobs that declare `publishEvents`, pinning the jobs' value. */
   declaredJobs?: string[];
-  /** TailorDB types that declare `publishEvents`, pinning the value. */
+  /** TailorDB tables that declare `publishEvents`, pinning the value. */
   pinnedTypes?: string[];
   /**
    * A second resolver namespace on this config, listed before the one `resolvers`

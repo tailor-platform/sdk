@@ -198,8 +198,8 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
   // Parse --rename/--drop flags before any destructive step so a malformed
   // value fails the command while the migrations directories are still intact.
-  // A value containing "." targets a field; a bare "Old:New" / "Type" value
-  // targets a type.
+  // A value containing "." targets a field; a bare "Old:New" / "Table" value
+  // targets a table.
   const renameFlags: RenameFlag[] = [];
   const typeRenameFlags: TypeRenameFlag[] = [];
   for (const raw of options.renames ?? []) {
@@ -296,7 +296,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     pluginManager = new PluginManager(plugins);
   }
 
-  // Load application and all types
+  // Load application and all tables
   const { defineApplication } = await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
@@ -316,7 +316,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
       continue;
     }
 
-    // Load types for this service
+    // Load tables for this service
     await tailordbService.loadTypes();
     await tailordbService.processNamespacePlugins();
 
@@ -325,7 +325,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     generations.push({
       namespace,
       migrationsDir,
-      // Create snapshot from current local types
+      // Create snapshot from current local tables
       currentSnapshot: createSnapshotFromLocalTypes(localTypesObj, namespace),
       // Returns null when the migrations directory is missing or empty;
       // throws when existing migration files are invalid.
@@ -339,8 +339,8 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   // A flag applies to a namespace only when that namespace actually removed
-  // the old field or type (and, for renames, added the new one); another
-  // namespace may define a type with the same name
+  // the old field or table (and, for renames, added the new one); another
+  // namespace may define a table with the same name
   const renameSpecsByNamespace = matchFlagsToNamespaces(
     renameFlags,
     generations,
@@ -443,7 +443,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
   // Failing beats warning here: a candidate left unresolved in a
   // non-interactive run would be written as remove + add and silently drop
-  // the field's or type's data at deploy
+  // the field's or table's data at deploy
   if (unresolvedCandidates.length > 0) {
     const details = unresolvedCandidates
       .map(
@@ -688,7 +688,7 @@ function matchFlagsToNamespaces<S>(
   return specsByNamespace;
 }
 
-/** A parsed type-form `--rename` flag together with its raw value. */
+/** A parsed table-form `--rename` flag together with its raw value. */
 interface TypeRenameFlag {
   raw: string;
   spec: TypeRenameSpec;
@@ -706,7 +706,7 @@ interface ExpandContractFlag {
   spec: FieldExpandContractSpec;
 }
 
-/** A parsed type-form `--drop` flag together with its raw value. */
+/** A parsed table-form `--drop` flag together with its raw value. */
 interface TypeDropFlag {
   raw: string;
   spec: TypeDropSpec;
@@ -799,10 +799,10 @@ function availableTypeRenameTargets(
 
 /**
  * Ask the user whether a removed type was renamed to one of the compatible
- * added types. Returns the confirmed new type name, or undefined.
+ * added tables. Returns the confirmed new table name, or undefined.
  * @param {TypeRenameCandidate} candidate - Candidate to confirm
- * @param {string[]} addedTypeNames - Added type names still available as rename targets
- * @returns {Promise<string | undefined>} Confirmed new type name, if any
+ * @param {string[]} addedTypeNames - Added table names still available as rename targets
+ * @returns {Promise<string | undefined>} Confirmed new table name, if any
  */
 async function promptTypeRenameCandidate(
   candidate: TypeRenameCandidate,
@@ -1028,7 +1028,7 @@ async function generateDiffFromSnapshot(
     }
   }
 
-  // Warn about non-breaking but data-loss-possible changes (e.g. field/type removal)
+  // Warn about non-breaking but data-loss-possible changes (e.g. field/table removal)
   if (diff.hasWarnings) {
     logger.newline();
     logger.warn(formatWarnings(diff.warnings));

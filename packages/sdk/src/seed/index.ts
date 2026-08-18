@@ -230,8 +230,8 @@ function splitLines(content: string): SeedLine[] {
   });
 }
 
-// Keys go in the order the hook produced them, which is the order the type
-// declares its fields. Keys the type does not declare follow the declared ones.
+// Keys go in the order the hook produced them, which is the order the table
+// declares its fields. Keys the table does not declare follow the declared ones.
 function serializeRow(row: JsonObject, fieldOrder: string[]): string {
   const rank = new Map(fieldOrder.map((field, index) => [field, index]));
   const rankOf = (key: string): number => rank.get(key) ?? fieldOrder.length;

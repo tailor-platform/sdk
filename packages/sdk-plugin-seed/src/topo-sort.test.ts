@@ -12,7 +12,7 @@ describe("topologicalSort", () => {
     expect(sorted).toEqual(["Order"]);
   });
 
-  test("keeps input order for independent types", () => {
+  test("keeps input order for independent tables", () => {
     const sorted = topologicalSort(["B", "A"], {});
     expect(sorted).toEqual(["B", "A"]);
   });
