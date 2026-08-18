@@ -208,6 +208,21 @@ describe("function script", () => {
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
   });
 
+  test("refuses to re-scaffold an existing kyselyTypePlugin script", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(tmp.dir, "scripts/fix.ts"), "export default function main() {}\n");
+
+    const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/nothing to refresh/);
+    expect(loadTailorDBNamespaces).not.toHaveBeenCalled();
+    expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
+  });
+
   test("refreshes generated types and keeps the script when it already exists", async () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
