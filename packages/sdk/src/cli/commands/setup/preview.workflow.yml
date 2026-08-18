@@ -33,7 +33,7 @@ jobs:
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@85f0ec85d3bcbdec915daa315b6ddf46ce9b6d2c # v2.2.0
+        uses: tailor-platform/actions/install@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
@@ -84,7 +84,7 @@ jobs:
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@85f0ec85d3bcbdec915daa315b6ddf46ce9b6d2c # v2.2.0
+        uses: tailor-platform/actions/install@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-preview-cleanup
