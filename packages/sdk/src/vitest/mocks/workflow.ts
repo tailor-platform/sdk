@@ -36,6 +36,15 @@ type ResolveHandler = (
   callback: (payload: unknown) => unknown,
 ) => unknown | Promise<unknown>;
 
+// Overloaded so TypeScript narrows to WaitHandlerFn first (giving inferred
+// `(key: string, payload: unknown) => …` for callers) before falling back
+// to the static-value form. A union type would let `unknown` swallow the
+// function variant and break inference.
+type SetWaitHandler = {
+  (handler: WaitHandlerFn): void;
+  (handler: unknown): void;
+};
+
 interface StartedJob {
   jobName: string;
   args: unknown;
@@ -241,6 +250,14 @@ export function mockWorkflow() {
       _callback: (payload: unknown) => unknown,
     ): Promise<void> => {},
   );
+
+  const setWaitHandler: SetWaitHandler = (handler: unknown) => {
+    wait.mockImplementation(
+      typeof handler === "function"
+        ? (key, payload) => (handler as WaitHandlerFn)(key, payload)
+        : () => handler,
+    );
+  };
 
   // Preserve arity: recording `undefined` as the third element only when the
   // caller supplied it, mirroring `.execJobFunction(name, args, options)`.
@@ -491,13 +508,7 @@ export function mockWorkflow() {
      * other value to return it for every call. Default: `null`.
      * @param handler - Static value or a function returning one
      */
-    setWaitHandler: (handler: unknown) => {
-      wait.mockImplementation(
-        typeof handler === "function"
-          ? (key, payload) => (handler as WaitHandlerFn)(key, payload)
-          : () => handler,
-      );
-    },
+    setWaitHandler,
 
     /**
      * Set the `env` passed to job bodies invoked via `createWorkflowJob().start()`.
