@@ -35,6 +35,13 @@ export type PlannedDeployment = {
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
+export type PlanResults = Omit<PlannedDeployment, "application">;
+
+export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
+  const { application: _application, ...results } = deployment;
+  return results;
+}
+
 /**
  * Apply planned deploy changes for one or more applications.
  * @param client - Operator client instance

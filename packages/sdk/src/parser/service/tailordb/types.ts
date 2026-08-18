@@ -29,19 +29,19 @@ export interface UserDefinedTypeSource {
   pluginId?: never;
 }
 
-export interface PluginGeneratedTypeSource {
+export interface PluginGeneratedTableSource {
   filePath?: never;
   exportName: string;
   pluginId: string;
   pluginImportPath: string;
   originalFilePath: string;
   originalExportName: string;
-  generatedTypeKind?: string;
+  generatedTableKind?: string;
   pluginConfig?: unknown;
   namespace?: string;
 }
 
-export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTypeSource;
+export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTableSource;
 
 // Operator field types
 export interface Script {

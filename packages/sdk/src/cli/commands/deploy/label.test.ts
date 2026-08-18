@@ -239,7 +239,7 @@ describe("nested resource TRNs", () => {
   // key/value pairs (pkg/trn ParseWorkspace) and matches the pair list against
   // one resource type: tailordb_type is [tailordb, type], pipeline_resolver is
   // [pipeline, resolver]. A wrong shape parses as a different type or not at all.
-  test("names a TailorDB type as the namespace pair followed by the type pair", () => {
+  test("names a TailorDB table as the namespace pair followed by the type pair", () => {
     expect(tailorDBTypeTrn(ws, "db", "Order")).toBe(
       `trn:v1:workspace:${ws}:tailordb:db:type:Order`,
     );

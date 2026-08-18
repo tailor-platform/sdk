@@ -30,7 +30,7 @@ export function enumConstantsPlugin(
       const allEnums: EnumDefinition[] = [];
 
       for (const ns of ctx.tailordb) {
-        for (const type of Object.values(ns.types)) {
+        for (const type of Object.values(ns.tables)) {
           const metadata = await processEnumType(type);
           allEnums.push(...metadata.enums);
         }

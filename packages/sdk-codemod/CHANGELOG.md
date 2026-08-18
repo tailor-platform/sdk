@@ -1,5 +1,19 @@
 # @tailor-platform/sdk-codemod
 
+## 0.6.0
+
+### Minor Changes
+
+- [#2075](https://github.com/tailor-platform/sdk/pull/2075) [`bd0e397`](https://github.com/tailor-platform/sdk/commit/bd0e39720015248e6ebb2c31efca49f9238b7060) Thanks [@dqn](https://github.com/dqn)! - `tailor function test-run` is renamed to `tailor function run`. The old name keeps working as a deprecated alias until v3 and prints a deprecation warning when used; `tailor upgrade` offers the `v3/function-test-run-rename` codemod to rewrite `function test-run` invocations across package.json scripts, shell and Windows scripts, YAML, Markdown, and JavaScript/TypeScript sources.
+
+### Patch Changes
+
+- [#2031](https://github.com/tailor-platform/sdk/pull/2031) [`ecc18ee`](https://github.com/tailor-platform/sdk/commit/ecc18eebc4e5c03c78e362a9b17bacc31bc88a31) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.45.1
+
+- [#2065](https://github.com/tailor-platform/sdk/pull/2065) [`5a3a0e1`](https://github.com/tailor-platform/sdk/commit/5a3a0e1ce8bfadb769dc4540ef257e944f0c077e) Thanks [@toiroakr](https://github.com/toiroakr)! - Raise the minimum supported Node.js version to 22.18.0 (from 22.15.0).
+  
+  `tailor seed validate` crashed on Node 22.15.0–22.17.x with `Expected a string, an ArrayBuffer, or a TypedArray to be returned for the "source" from the "load" hook but got null`. This is a Node.js bug ([nodejs/node#58607](https://github.com/nodejs/node/issues/58607)): requiring a `node:`-scheme-only builtin (`node:sqlite`, used internally by the seed validator) while both a synchronous `resolve` and `load` hook are registered via `module.registerHooks()` crashes the loader on those versions. The SDK always registers both hooks, so any project on Node 22.15.0–22.17.x hit this. Node fixed it upstream in 22.18.0 ([nodejs/node#58612](https://github.com/nodejs/node/pull/58612)); this release raises `engines.node` to match, since Node 22.15.0–22.17.x never actually supported `tailor seed validate`.
+
 ## 0.5.0
 
 ### Minor Changes

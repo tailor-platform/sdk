@@ -58,17 +58,17 @@ function createType(
   };
 }
 
-function createNamespace(types: Record<string, TailorDBType>): TailorDBNamespaceData {
+function createNamespace(tables: Record<string, TailorDBType>): TailorDBNamespaceData {
   return {
     namespace: "shop",
-    types,
+    tables,
     sourceInfo: new Map(),
     pluginAttachments: new Map(),
   };
 }
 
 describe("buildTailorDbErdSchema", () => {
-  test("maps TailorDB types into TailorDB ERD schema v1", () => {
+  test("maps TailorDB tables into TailorDB ERD schema v1", () => {
     const customer = createType(
       "Customer",
       {
@@ -246,7 +246,7 @@ describe("buildTailorDbErdSchema", () => {
           pluginImportPath: "@example/audit",
           originalFilePath: "/Users/example/project/tailordb/user.ts",
           originalExportName: "User",
-          generatedTypeKind: "history",
+          generatedTableKind: "history",
           namespace: "shop",
         },
       ],

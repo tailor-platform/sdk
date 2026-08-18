@@ -437,7 +437,7 @@ describe("template-generator", () => {
       expect(dbTypesContent).toContain("displayName: ColumnType<string | null, string, string>;");
     });
 
-    test("should generate an id-preserving batched copy script for type renames", async () => {
+    test("should generate an id-preserving batched copy script for table renames", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
         User: {
           name: "User",
@@ -466,7 +466,7 @@ describe("template-generator", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Table renamed from User to Person" }],
         requiresMigrationScript: true,
       });
 
@@ -528,7 +528,7 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { tableName: "Section", reason: "Type renamed from Category to Section" },
+          { tableName: "Section", reason: "Table renamed from Category to Section" },
         ],
         requiresMigrationScript: true,
       });
@@ -547,7 +547,7 @@ describe("template-generator", () => {
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
 
-    test("should not scaffold a reference fixup for a retarget that follows a type rename", async () => {
+    test("should not scaffold a reference fixup for a retarget that follows a table rename", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
         User: {
           name: "User",
@@ -598,7 +598,7 @@ describe("template-generator", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [{ tableName: "Person", reason: "Type renamed from User to Person" }],
+        breakingChanges: [{ tableName: "Person", reason: "Table renamed from User to Person" }],
         requiresMigrationScript: true,
       });
 
@@ -756,7 +756,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain('.set({ ["__proto__"]: normalizedValue })');
     });
 
-    test("should fail closed on unresolved duplicates when a type change adds unique", async () => {
+    test("should fail closed on unresolved duplicates when a table change adds unique", async () => {
       const snapshotWithIntegerAge = createTestSnapshot({
         User: {
           name: "User",
