@@ -233,11 +233,11 @@ export async function waitForCloneApplicationData(
 }
 
 /**
- * Load generated JSONL seed rows for the types in a baseline snapshot.
+ * Load generated JSONL seed rows for the tables in a baseline snapshot.
  * @param dataDir - Directory containing `<Type>.jsonl` files
  * @param typeNames - Baseline type names to load
  * @param snapshot - Baseline schema used to remove fields introduced by pending migrations
- * @returns Seed rows keyed by type name
+ * @returns Seed rows keyed by table name
  */
 export function loadSnapshotSeedData(
   dataDir: string,
@@ -311,7 +311,7 @@ function isJsonObject(value: JsonValue): value is JsonObject {
 }
 
 /**
- * Derive insertion order and self-referencing types from a baseline snapshot.
+ * Derive insertion order and self-referencing tables from a baseline snapshot.
  * @param snapshot - Baseline schema snapshot
  * @returns Dependency-ordered type names and self-referencing types
  */
@@ -431,7 +431,7 @@ export async function assertSourceBaselineFresh(
 /**
  * Delete the target workspace's user profile config when one exists.
  *
- * A retained target may carry a user profile config referencing types the
+ * A retained target may carry a user profile config referencing tables the
  * baseline deploy replaces; deleting it up front lets the baseline's planAuth
  * see no existing config instead of reordering delete phases.
  * @param state - Prepared migration test runtime state

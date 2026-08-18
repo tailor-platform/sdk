@@ -615,7 +615,7 @@ describe("parseTypes", () => {
       expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid option/);
     });
 
-    test("should throw error when target type does not exist", () => {
+    test("should throw error when target table does not exist", () => {
       const user = db.table("User", {
         name: db.string(),
       });

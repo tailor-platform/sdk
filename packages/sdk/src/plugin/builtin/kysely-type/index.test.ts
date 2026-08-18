@@ -49,12 +49,12 @@ describe("KyselyTypePlugin integration tests", () => {
   const testDistPath = "/test/dist/kysely-types.ts";
 
   function createCtx(
-    namespaces: { namespace: string; types: Record<string, TailorDBType> }[],
+    namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
   ): TailorDBReadyContext<{ distPath: string }> {
     return {
       tailordb: namespaces.map((ns) => ({
         namespace: ns.namespace,
-        types: ns.types,
+        tables: ns.tables,
         sourceInfo: new Map(),
         pluginAttachments: new Map(),
       })),
@@ -66,7 +66,7 @@ describe("KyselyTypePlugin integration tests", () => {
   }
 
   async function runOnTailorDBReady(
-    namespaces: { namespace: string; types: Record<string, TailorDBType> }[],
+    namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
   ) {
     const plugin = kyselyTypePlugin({ distPath: testDistPath });
     return plugin.onTailorDBReady!(createCtx(namespaces));
@@ -152,7 +152,7 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await runOnTailorDBReady([
         {
           namespace: "test-namespace",
-          types: { User: parseTailorDBType(toSchemaOutput(mockBasicType)) },
+          tables: { User: parseTailorDBType(toSchemaOutput(mockBasicType)) },
         },
       ]);
 
@@ -180,7 +180,7 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await runOnTailorDBReady([
         {
           namespace: "test-namespace",
-          types: {
+          tables: {
             User: parseTailorDBType(toSchemaOutput(mockBasicType)),
             Status: parseTailorDBType(toSchemaOutput(mockEnumType)),
           },
@@ -232,11 +232,11 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await runOnTailorDBReady([
         {
           namespace: "tailordb",
-          types: { User: parseTailorDBType(toSchemaOutput(userType)) },
+          tables: { User: parseTailorDBType(toSchemaOutput(userType)) },
         },
         {
           namespace: "analytics",
-          types: { Event: parseTailorDBType(toSchemaOutput(eventType)) },
+          tables: { Event: parseTailorDBType(toSchemaOutput(eventType)) },
         },
       ]);
 
@@ -257,7 +257,7 @@ describe("KyselyTypePlugin integration tests", () => {
       const result = await runOnTailorDBReady([
         {
           namespace: "test",
-          types: { Simple: parseTailorDBType(toSchemaOutput(simpleType)) },
+          tables: { Simple: parseTailorDBType(toSchemaOutput(simpleType)) },
         },
       ]);
 

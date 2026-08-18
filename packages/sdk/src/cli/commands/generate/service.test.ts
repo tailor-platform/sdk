@@ -176,7 +176,7 @@ describe("GenerationManager", () => {
           tailordb: [
             expect.objectContaining({
               namespace: "main",
-              types: expect.objectContaining({ User: expect.objectContaining({ name: "User" }) }),
+              tables: expect.objectContaining({ User: expect.objectContaining({ name: "User" }) }),
             }),
           ],
           baseDir: expect.stringContaining("test-plugin"),

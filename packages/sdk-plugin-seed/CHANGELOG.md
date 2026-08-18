@@ -1,5 +1,30 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.2.2
+
+### Patch Changes
+
+- [#2065](https://github.com/tailor-platform/sdk/pull/2065) [`5a3a0e1`](https://github.com/tailor-platform/sdk/commit/5a3a0e1ce8bfadb769dc4540ef257e944f0c077e) Thanks [@toiroakr](https://github.com/toiroakr)! - Raise the minimum supported Node.js version to 22.18.0 (from 22.15.0).
+  
+  `tailor seed validate` crashed on Node 22.15.0–22.17.x with `Expected a string, an ArrayBuffer, or a TypedArray to be returned for the "source" from the "load" hook but got null`. This is a Node.js bug ([nodejs/node#58607](https://github.com/nodejs/node/issues/58607)): requiring a `node:`-scheme-only builtin (`node:sqlite`, used internally by the seed validator) while both a synchronous `resolve` and `load` hook are registered via `module.registerHooks()` crashes the loader on those versions. The SDK always registers both hooks, so any project on Node 22.15.0–22.17.x hit this. Node fixed it upstream in 22.18.0 ([nodejs/node#58612](https://github.com/nodejs/node/pull/58612)); this release raises `engines.node` to match, since Node 22.15.0–22.17.x never actually supported `tailor seed validate`.
+
+- [#2062](https://github.com/tailor-platform/sdk/pull/2062) [`153a780`](https://github.com/tailor-platform/sdk/commit/153a78038c65f4376f2f9f75eec8a7a37ea3f6dc) Thanks [@dqn](https://github.com/dqn)! - `tailor seed` now calls a `db.table()` definition a table instead of a type, in its help, progress, and errors — `Seeding 3 tables via Kysely batch insert`. The `fillSeedData` documentation and the `create-sdk` template hint follow.
+  
+  Messages that list the seed targets say entities rather than tables, because `_User` is an IdP entity rather than a TailorDB table and can appear in the same list.
+  
+  The positional is now named `entities`, so `--help` shows `[entities]` instead of `[types]`. Positionals are matched by argv order, so existing invocations are unaffected.
+
+- [#2057](https://github.com/tailor-platform/sdk/pull/2057) [`6bee645`](https://github.com/tailor-platform/sdk/commit/6bee645ed513df1e18af4e1178a40b7c55b84166) Thanks [@dqn](https://github.com/dqn)! - `tailor tailordb truncate` now calls a `db.table()` definition a table instead of a type, in its help, prompts, and results. The positional argument is named `tables`, and `TruncateOptions.types` from `@tailor-platform/sdk/cli` is now `TruncateOptions.tables`:
+  
+  ```ts
+  await truncate({ types: ["User"] }); // before
+  await truncate({ tables: ["User"] }); // after
+  ```
+  
+  Passing table names positionally is unchanged, as in `tailor tailordb truncate User Post`. The argument also binds by name, so an invocation spelled `--types User` now has to read `--tables User`.
+- Updated dependencies [[`6a753cb`](https://github.com/tailor-platform/sdk/commit/6a753cb750df779c91b29b0103bdd24343f18dbb), [`bd0e397`](https://github.com/tailor-platform/sdk/commit/bd0e39720015248e6ebb2c31efca49f9238b7060), [`7ae89fe`](https://github.com/tailor-platform/sdk/commit/7ae89fefb9510b7fea217ccd0d05c79de9fb7d98), [`a124fed`](https://github.com/tailor-platform/sdk/commit/a124fede0d692c8dc4e60ac7d6da9acee9d02e52), [`2b70c30`](https://github.com/tailor-platform/sdk/commit/2b70c30502e84bcf57ab2b237ec9f075cbc9e600), [`d8ec141`](https://github.com/tailor-platform/sdk/commit/d8ec141c16c284a7337f6b7723a686ecb3dcdcf5), [`228e394`](https://github.com/tailor-platform/sdk/commit/228e3944237cd6d17022e66792efff3826ee594d), [`5a3a0e1`](https://github.com/tailor-platform/sdk/commit/5a3a0e1ce8bfadb769dc4540ef257e944f0c077e), [`80260b3`](https://github.com/tailor-platform/sdk/commit/80260b38787da3ed7d7e67ca4ae3116cc8cd07e3), [`d07a120`](https://github.com/tailor-platform/sdk/commit/d07a120950c5bac0bd8b5d2e341ad80dd6694448), [`153a780`](https://github.com/tailor-platform/sdk/commit/153a78038c65f4376f2f9f75eec8a7a37ea3f6dc), [`5d16dc9`](https://github.com/tailor-platform/sdk/commit/5d16dc918f77bd4c76d0d90811207ec15ac30f4e), [`c880f23`](https://github.com/tailor-platform/sdk/commit/c880f236be87d9cf2bed968fc15d9034e5200793), [`303e209`](https://github.com/tailor-platform/sdk/commit/303e2098804c44f63cee2724b917b9158f327802), [`c2be0d3`](https://github.com/tailor-platform/sdk/commit/c2be0d3fe6422d0161943c858bbc560b234281a8), [`6bee645`](https://github.com/tailor-platform/sdk/commit/6bee645ed513df1e18af4e1178a40b7c55b84166)]:
+  - @tailor-platform/sdk@2.4.0
+
 ## 0.2.1
 
 ### Patch Changes

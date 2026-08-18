@@ -16,7 +16,7 @@ const sdkUrls = {
 };
 
 /**
- * The shape `seedPlugin` generates for a TailorDB type: `id` and the
+ * The shape `seedPlugin` generates for a TailorDB table: `id` and the
  * hook-computed timestamps are optional in the schema, and the hook fills them
  * in before validation.
  */
@@ -88,7 +88,7 @@ describe("fillSeedData", () => {
     const rows = await readRows(jsonlPath);
     expect(rows.map((row) => row.name)).toEqual(["second", "first"]);
     expect(rows[1]?.note).toBe("kept");
-    // Keys follow the type's field order, with undeclared ones after them.
+    // Keys follow the table's field order, with undeclared ones after them.
     expect(Object.keys(rows[0] ?? {})).toEqual(["id", "name"]);
     expect(Object.keys(rows[1] ?? {})).toEqual(["id", "name", "note"]);
     for (const row of rows) {
@@ -134,7 +134,7 @@ describe("fillSeedData", () => {
     await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
   });
 
-  test("warns about a field no seeded type produces", async () => {
+  test("warns about a field no seeded table produces", async () => {
     const jsonlPath = await writeTable("Widget", ['{"name":"first"}']);
     const before = await readFile(jsonlPath, "utf-8");
 
@@ -239,7 +239,7 @@ describe("fillSeedData", () => {
     expect((await readRows(stalePath))[0]).not.toHaveProperty("id");
   });
 
-  test("fills a row the type's own validate would reject", async () => {
+  test("fills a row the table's own validate would reject", async () => {
     // The type requires `name`; this row has none, which is exactly the state
     // the fill exists to get ids into.
     const jsonlPath = await writeTable("Widget", ['{"note":"no name yet"}']);

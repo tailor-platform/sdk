@@ -176,7 +176,7 @@ describe("parseFieldConfig script expression validation", () => {
     );
   });
 
-  test("includes the type and field path in conversion errors from type parsing", () => {
+  test("includes the table and field path in conversion errors from table parsing", () => {
     const check = function check({ value }: { value: string }): string | void {
       if (value.length === 0) return "must not be empty";
     }.bind(null);

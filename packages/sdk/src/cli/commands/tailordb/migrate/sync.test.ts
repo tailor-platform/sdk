@@ -108,7 +108,7 @@ describe("tailordb migration sync", () => {
     ]);
     writeDiff(state.migrationsDir, 2, []);
     mockConfig();
-    // Local types matching reconstruct(latest) so the pre-apply consistency
+    // Local tables matching reconstruct(latest) so the pre-apply consistency
     // check passes by default.
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
     state.executors = {};
@@ -268,7 +268,7 @@ describe("tailordb migration sync", () => {
       expect.objectContaining({ namespaceName: "tailordb", typeName: "User" }),
     );
     expect(state.updateTailorDBGQLPermission).not.toHaveBeenCalled();
-    // Stale's permission has no snapshot counterpart → deleted before the type.
+    // Stale's permission has no snapshot counterpart → deleted before the table.
     expect(state.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "tailordb", typeName: "Stale" }),
     );
@@ -334,7 +334,7 @@ describe("tailordb migration sync", () => {
     });
   });
 
-  test("enables publishRecordEvents for types used by executor record triggers", async () => {
+  test("enables publishRecordEvents for tables used by executor record triggers", async () => {
     state.executors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
@@ -395,8 +395,8 @@ describe("tailordb migration sync", () => {
     expect(String(result.error)).toMatch(/not found or does not have migrations configured/);
   });
 
-  test("refuses to apply when the migration history does not reproduce local types", async () => {
-    // Local types lack Post, but reconstruct(latest) contains it — the
+  test("refuses to apply when the migration history does not reproduce local tables", async () => {
+    // Local tables lack Post, but reconstruct(latest) contains it — the
     // history (or the working tree) is inconsistent and nothing may be sent.
     state.localTypes = { User: parsedType("User") };
 

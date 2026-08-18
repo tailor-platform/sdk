@@ -1,7 +1,7 @@
 /**
- * Plugin Type Generator
+ * Plugin Table Generator
  *
- * Generates TypeScript files for plugin-generated types (TailorDB tables).
+ * Generates TypeScript files for plugin-generated TailorDB tables.
  * These files can be imported by plugin executors to reference generated tables.
  */
 
@@ -9,8 +9,8 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logger, styles } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
-import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "#/plugin/manager";
-import type { PluginGeneratedType } from "#/plugin/types";
+import type { PluginGeneratedTableInfo, PluginTableGenerationResult } from "#/plugin/manager";
+import type { PluginGeneratedTable } from "#/plugin/types";
 
 type FieldMetadata = {
   required?: boolean;
@@ -33,95 +33,95 @@ function isFieldDefinition(value: unknown): value is FieldDefinition {
 /**
  * Generate TypeScript files for plugin-generated tables.
  * These files export the table definition and can be imported by executor files.
- * @param types - Array of plugin type information
+ * @param tables - Array of plugin table information
  * @param outputDir - Base output directory (e.g., .tailor)
  * @returns Generation result with file paths
  */
-export function generatePluginTypeFiles(
-  types: ReadonlyArray<PluginGeneratedTypeInfo>,
+export function generatePluginTableFiles(
+  tables: ReadonlyArray<PluginGeneratedTableInfo>,
   outputDir: string,
-): PluginTypeGenerationResult {
-  const typeFilePaths = new Map<string, string>();
+): PluginTableGenerationResult {
+  const tableFilePaths = new Map<string, string>();
   const generatedFiles: string[] = [];
 
-  if (types.length === 0) {
-    return { typeFilePaths, generatedFiles };
+  if (tables.length === 0) {
+    return { tableFilePaths, generatedFiles };
   }
 
-  const seenTypeNames = new Map<string, PluginGeneratedTypeInfo>();
+  const seenTableNames = new Map<string, PluginGeneratedTableInfo>();
 
-  for (const info of types) {
-    const existing = seenTypeNames.get(info.type.name);
+  for (const info of tables) {
+    const existing = seenTableNames.get(info.table.name);
     if (existing) {
       throw new Error(
-        `Duplicate plugin-generated table name "${info.type.name}" detected. ` +
-          `First: plugin "${existing.pluginId}" (kind: "${existing.kind}", source: "${existing.sourceTypeName}"), ` +
-          `Second: plugin "${info.pluginId}" (kind: "${info.kind}", source: "${info.sourceTypeName}"). ` +
+        `Duplicate plugin-generated table name "${info.table.name}" detected. ` +
+          `First: plugin "${existing.pluginId}" (kind: "${existing.kind}", source: "${existing.sourceTableName}"), ` +
+          `Second: plugin "${info.pluginId}" (kind: "${info.kind}", source: "${info.sourceTableName}"). ` +
           `Plugin-generated table names must be unique.`,
       );
     }
-    seenTypeNames.set(info.type.name, info);
+    seenTableNames.set(info.table.name, info);
 
     const pluginDir = sanitizePluginId(info.pluginId);
-    const typeOutputDir = path.join(outputDir, pluginDir, "types");
-    fs.mkdirSync(typeOutputDir, { recursive: true });
+    const tableOutputDir = path.join(outputDir, pluginDir, "types");
+    fs.mkdirSync(tableOutputDir, { recursive: true });
 
-    const fileName = `${toKebabCase(info.type.name)}.ts`;
-    const filePath = path.join(typeOutputDir, fileName);
-    const content = generateTypeFileContent(info);
+    const fileName = `${toKebabCase(info.table.name)}.ts`;
+    const filePath = path.join(tableOutputDir, fileName);
+    const content = generateTableFileContent(info);
 
     fs.writeFileSync(filePath, content);
     generatedFiles.push(filePath);
 
     // Store relative path from outputDir for import resolution
     const relativePath = path.relative(outputDir, filePath);
-    typeFilePaths.set(info.type.name, relativePath);
+    tableFilePaths.set(info.table.name, relativePath);
 
     const displayPath = path.relative(process.cwd(), filePath);
     logger.log(
-      `  Plugin Type File: ${styles.success(displayPath)} (${styles.dim(info.kind)}) from plugin ${styles.info(info.pluginId)}`,
+      `  Plugin Table File: ${styles.success(displayPath)} (${styles.dim(info.kind)}) from plugin ${styles.info(info.pluginId)}`,
     );
   }
 
-  return { typeFilePaths, generatedFiles };
+  return { tableFilePaths, generatedFiles };
 }
 
 /**
- * Generate TypeScript file content for a single type.
- * @param info - Plugin type information
+ * Generate TypeScript file content for a single table.
+ * @param info - Plugin table information
  * @returns TypeScript source code
  */
-function generateTypeFileContent(info: PluginGeneratedTypeInfo): string {
-  const { type, pluginId, sourceTypeName, kind } = info;
-  const variableName = toCamelCase(type.name);
-  const fieldsCode = generateFieldsCode(type);
+function generateTableFileContent(info: PluginGeneratedTableInfo): string {
+  const { table, pluginId, sourceTableName, kind } = info;
+  const variableName = toCamelCase(table.name);
+  const fieldsCode = generateFieldsCode(table);
 
   return ml /* ts */ `
     /**
      * Auto-generated table by plugin: ${pluginId}
-     * Source: ${sourceTypeName}
+     * Source: ${sourceTableName}
      * Kind: ${kind}
      *
      * DO NOT EDIT - This file is generated by @tailor-platform/sdk
      */
     import { db } from "@tailor-platform/sdk";
 
-    export const ${variableName} = db.table(${JSON.stringify(type.name)}, ${fieldsCode});
+    export const ${variableName} = db.table(${JSON.stringify(table.name)}, ${fieldsCode});
 
-    export type ${type.name} = typeof ${variableName};
+    export type ${table.name} = typeof ${variableName};
   `;
 }
 
 /**
  * Generate TypeScript code for field definitions.
  * This creates a simplified version of the table's fields.
- * @param type - TailorDB table
+ * @param table - TailorDB table
  * @returns TypeScript code for fields object
  */
-function generateFieldsCode(type: PluginGeneratedType): string {
+function generateFieldsCode(table: PluginGeneratedTable): string {
   const fieldEntries: string[] = [];
 
-  for (const [fieldName, field] of Object.entries(type.fields)) {
+  for (const [fieldName, field] of Object.entries(table.fields)) {
     if (!isFieldDefinition(field)) continue;
     const fieldCode = generateSingleFieldCode(field);
     if (fieldCode) {

@@ -73,7 +73,7 @@ export const customer = db
 ### Per-table Config Requirement
 
 Per-table config is optional by default. Plugin authors can change this with
-`typeConfigRequired` (boolean or function). When a function is used, it receives
+`tableConfigRequired` (boolean or function). When a function is used, it receives
 the plugin-level config from `definePlugins()`.
 
 ### Global Plugin Configuration
@@ -116,7 +116,7 @@ Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific 
 tailor generate
 │
 ├─ Load TailorDB tables
-│   ├─ onTypeLoaded        ← per table with .plugin() attached
+│   ├─ onTableLoaded       ← per table with .plugin() attached
 │   └─ onNamespaceLoaded   ← once per namespace (namespace plugins)
 │
 ├─ Resolve Auth
@@ -136,7 +136,7 @@ tailor generate
 
 | Hook                | Trigger                              | Can do                                                            |
 | ------------------- | ------------------------------------ | ----------------------------------------------------------------- |
-| `onTypeLoaded`      | Each table with `.plugin()` attached | Generate tables, resolvers, executors; extend source table fields |
+| `onTableLoaded`     | Each table with `.plugin()` attached | Generate tables, resolvers, executors; extend source table fields |
 | `onNamespaceLoaded` | Once per namespace                   | Generate tables, resolvers, executors                             |
 
 These hooks produce TailorDB tables, resolvers, and executors that become part of the application. Requires `importPath` on the plugin.

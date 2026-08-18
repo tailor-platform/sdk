@@ -105,11 +105,11 @@ async function fetchRemoteTypes(
 
 /**
  * Verify that replaying the full migration history reproduces the current
- * local type definitions, before anything is sent to the remote.
+ * local table definitions, before anything is sent to the remote.
  *
  * Sync force-applies a snapshot reconstructed from the migration history, so
  * the history itself must be trustworthy. When the reconstruction at the
- * latest migration does not match the schema defined in the local type files,
+ * latest migration does not match the schema defined in the local table files,
  * either the migration files were edited incorrectly or a schema change has
  * not been recorded as a migration yet — and overwriting the remote with an
  * unverified snapshot could destroy data. Fails before any RPC is issued.
@@ -138,14 +138,14 @@ async function assertMigrationsReproduceLocalTypes(
     throw new Error(`No TailorDB service found for namespace "${target.namespace}"`);
   }
   // Load every namespace (not just the target): plugin executors are
-  // registered while types load, and may trigger on the target's types.
+  // registered while tables load, and may trigger on the target's tables.
   for (const service of application.tailorDBServices) {
     await service.loadTypes();
     await service.processNamespacePlugins();
   }
 
   // Mirror loadApplication: plugin-generated executor files must be loaded
-  // too, or publishRecordEvents would be applied as false for the types
+  // too, or publishRecordEvents would be applied as false for the tables
   // their record triggers depend on. Read the executors getter rather than
   // the loadExecutors() result — the latter is undefined for plugin-only
   // executor configurations.
@@ -218,7 +218,7 @@ async function assertMigrationsReproduceLocalTypes(
  * then issues create/update/delete RPCs so the remote matches that snapshot.
  * Updates the migration label to `<number>` on success. Before any remote
  * mutation, verifies that the migration history reproduces the current local
- * type definitions (see {@link assertMigrationsReproduceLocalTypes}).
+ * table definitions (see {@link assertMigrationsReproduceLocalTypes}).
  *
  * Intended for recovering from drift introduced by `deploy --no-schema-check`
  * runs against an older revision: instead of having to `git checkout` that
@@ -265,10 +265,10 @@ async function sync(options: SyncOptions): Promise<void> {
   const existingTypeNames = new Set(remoteTypes.map((t) => t.name));
   const { creates, updates, deletes } = compareSnapshotWithRemote(snapshot, existingTypeNames);
 
-  // GQL permissions are reconciled alongside types: upsert the ones defined
+  // GQL permissions are reconciled alongside tables: upsert the ones defined
   // in the snapshot, delete remote ones with no snapshot counterpart
-  // (including those of deleted types — an orphaned permission can block
-  // the type deletion).
+  // (including those of deleted tables — an orphaned permission can block
+  // the table deletion).
   const remoteGqlPermissions = await fetchRemoteGqlPermissions(
     client,
     workspaceId,

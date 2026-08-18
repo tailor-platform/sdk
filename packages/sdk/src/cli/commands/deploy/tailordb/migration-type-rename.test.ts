@@ -1,5 +1,5 @@
 /**
- * A type rename migration must create the new type in the Pre-phase, keep the
+ * A table rename migration must create the new table in the Pre-phase, keep the
  * old type alive while the copy script runs, and drop the old type (and its
  * GQL permission) only after the checkpoint advances.
  */
@@ -171,7 +171,7 @@ describe("applyTailorDB: type rename migration flow", () => {
     return {
       changeSet: {
         service: changeSetGroup("TailorDB Services"),
-        type: changeSetGroup("TailorDB Types", {
+        type: changeSetGroup("TailorDB tables", {
           creates: [
             {
               name: "Person",
@@ -330,7 +330,7 @@ describe("applyTailorDB: type rename migration flow", () => {
     await runTest();
   });
 
-  test("creates the new type before the script and drops the old type after the checkpoint", async () => {
+  test("creates the new table before the script and drops the old table after the checkpoint", async () => {
     const client = createMockClient();
     const planResult = buildPlanResult();
     setPendingMigrations([mkTypeRenameMigration(1)]);
@@ -390,7 +390,7 @@ describe("applyTailorDB: type rename migration flow", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("restores retargeted types before deleting the new type on rollback", async () => {
+  test("restores retargeted tables before deleting the new table on rollback", async () => {
     const client = createMockClient();
     const planResult = buildPlanResult({ withOrderUpdate: true });
     setPendingMigrations([mkTypeRenameMigration(1, { withOrderRetarget: true })]);
