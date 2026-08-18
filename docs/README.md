@@ -17,3 +17,4 @@ For **SDK users**, see:
 - [Testing](testing.md) - Test strategy and conventions
 - [Changeset Conventions](changeset.md) - Version bump level guidelines
 - [Telemetry / Performance Profiling](telemetry.md) - OTLP tracing for CLI performance analysis
+- [Upstream Tooling Issues](upstream-tooling-issues.md) - Reproduced vinfer/zinfer defects and the reports to hand upstream

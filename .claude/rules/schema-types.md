@@ -96,10 +96,14 @@ Shape>> { return v.record(v.string(), ThisSchema); }`. When the recursive
     (`fields: { [x: string]: { ... fields: { [x: string]: TailorField } } }`
     where zinfer emitted `fields: { [x: string]: TailorField }`), and that
     inlined copy carries no `v.description` TSDoc.
-  - A recursive schema referenced from a schema in **another** output file is
-    inlined there and bottoms out at bare `any` (see `input` / `output` in
-    `types/resolver.generated.ts`), because vinfer does not import the type it
-    already generated into `types/field.generated.ts`.
+  - A recursive schema reached through a schema vinfer generates no type for —
+    an unexported intermediate, or one in another output file — is inlined and
+    bottoms out at bare `any` (see `input` / `output` in
+    `types/resolver.generated.ts`).
+
+  These and the rest of the reproduced generator defects are written up in
+  [Upstream Tooling Issues](../../docs/upstream-tooling-issues.md).
+
 - **Degraded but usable — same getter pattern, on an optional property**:
   vinfer resolves only one level deep, then falls back to `any` for the rest.
   When annotating the return type for an optional recursive property, use
