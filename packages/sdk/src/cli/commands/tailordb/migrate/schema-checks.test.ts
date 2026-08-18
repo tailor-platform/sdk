@@ -18,7 +18,7 @@ const scriptsDifferDrift: SchemaDrift = {
 
 function hintWasLogged(infoSpy: ReturnType<typeof vi.spyOn>): boolean {
   return (infoSpy.mock.calls as unknown[][]).some(
-    ([message]) => typeof message === "string" && message.includes("Run 'migration sync <N>'"),
+    ([message]) => typeof message === "string" && message.includes("add the missing hashes"),
   );
 }
 
