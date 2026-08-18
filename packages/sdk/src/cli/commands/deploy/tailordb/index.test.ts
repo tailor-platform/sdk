@@ -1428,6 +1428,27 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.name!.type).toBe("string");
   });
 
+  test("re-inserts a removed field named __proto__ as an own property", () => {
+    const fields: Record<string, ProtoField> = {};
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "__proto__",
+        {
+          kind: "field_removed",
+          tableName: "User",
+          fieldName: "__proto__",
+          before: { type: "string", required: false },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(Object.hasOwn(fields, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(fields)).toBe(Object.prototype);
+    expect(fields["__proto__"]?.type).toBe("string");
+  });
+
   test("relaxes newly-added required field to optional", () => {
     const fields: Record<string, ProtoField> = {
       newField: { type: "string", required: true },
@@ -1486,6 +1507,31 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.fullName!.required).toBe(false);
     expect(fields.displayName!.required).toBe(false);
     expect(fields.displayName!.unique).toBe(false);
+  });
+
+  test("keeps a renamed field whose previous name was __proto__", () => {
+    const fields: Record<string, ProtoField> = {
+      displayName: { type: "string", required: true },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "displayName",
+        {
+          kind: "field_renamed",
+          tableName: "User",
+          fieldName: "displayName",
+          previousFieldName: "__proto__",
+          before: { type: "string", required: false },
+          after: { type: "string", required: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(Object.hasOwn(fields, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(fields)).toBe(Object.prototype);
+    expect(fields["__proto__"]?.type).toBe("string");
   });
 
   test("relaxes a rename target's unique constraint even when the old field was unique", () => {

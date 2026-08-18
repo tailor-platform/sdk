@@ -47,6 +47,15 @@ import type {
   TailorDBType_IndexSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
+function defineRecordEntry<T>(record: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /**
  * Diff change kinds that require pre-migration schema adjustments.
  */
@@ -101,7 +110,7 @@ export function createPreMigrationSnapshotType(
   for (const [fieldName, change] of typeChanges) {
     if (change.kind !== "field_type_modified") continue;
     hasFieldTypeChange = true;
-    fields[fieldName] = structuredClone(change.before);
+    defineRecordEntry(fields, fieldName, structuredClone(change.before));
   }
 
   const preSnapshotType = { ...snapshotType, fields };
@@ -163,7 +172,7 @@ export function applyPreMigrationFieldAdjustments(
 ): void {
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      fields[fieldName] = convertFieldConfigToProto(change.before);
+      defineRecordEntry(fields, fieldName, convertFieldConfigToProto(change.before));
       continue;
     }
 
@@ -174,7 +183,7 @@ export function applyPreMigrationFieldAdjustments(
       // constraints. Unique is always deferred because stored values of a
       // previously removed field with the new name may still contain
       // duplicates until the copy overwrites them.
-      fields[change.previousFieldName] = convertFieldConfigToProto(change.before);
+      defineRecordEntry(fields, change.previousFieldName, convertFieldConfigToProto(change.before));
       const newField = fields[fieldName];
       if (newField) {
         if (change.after.required) newField.required = false;
@@ -194,7 +203,7 @@ export function applyPreMigrationFieldAdjustments(
     }
 
     if (change.kind === "field_type_modified") {
-      fields[fieldName] = convertFieldConfigToProto(change.before);
+      defineRecordEntry(fields, fieldName, convertFieldConfigToProto(change.before));
       continue;
     }
 
@@ -283,7 +292,7 @@ export function applyPreMigrationIndexAdjustments(
       continue;
     }
     if (change.kind === "index_modified") {
-      indexes[indexName] = convertIndexToProto(change.before);
+      defineRecordEntry(indexes, indexName, convertIndexToProto(change.before));
     }
   }
 }
