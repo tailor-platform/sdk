@@ -217,20 +217,32 @@ const previewCommand = defineAppCommand({
   },
 });
 
+const DEPS_PROVIDERS = ["renovate"] as const;
+
+const depsProviders: Record<
+  (typeof DEPS_PROVIDERS)[number],
+  (options: { outputDir: string }) => Promise<void>
+> = {
+  renovate: setupRenovate,
+};
+
 const depsCommand = defineAppCommand({
   name: "deps",
   aliases: ["renovate"],
-  description:
-    "Generate a dependency update config (Renovate) for Tailor dependency and workflow updates.",
-  args: z.strictObject({}),
+  description: "Generate a dependency update config for Tailor dependency and workflow updates.",
+  args: z.strictObject({
+    provider: arg(z.enum(DEPS_PROVIDERS).default("renovate"), {
+      description: "Dependency update provider to configure",
+    }),
+  }),
   notes: "`renovate` is a deprecated alias of this command and will be removed in v3.",
-  run: async () => {
+  run: async (args) => {
     if (invokedViaAlias({ parent: "setup", alias: "renovate", argv: process.argv })) {
       logger.warn(
         "`tailor setup renovate` is deprecated and will be removed in v3. Use `tailor setup deps` instead.",
       );
     }
-    await setupRenovate({ outputDir: process.cwd() });
+    await depsProviders[args.provider]({ outputDir: process.cwd() });
   },
 });
 

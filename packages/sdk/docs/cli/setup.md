@@ -23,7 +23,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`setup preview`](#setup-preview)       | -          | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
 | [`setup action`](#setup-action)         | -          | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
 | [`setup coordinate`](#setup-coordinate) | -          | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
-| [`setup deps`](#setup-deps)             | `renovate` | Generate a dependency update config (Renovate) for Tailor dependency and workflow updates.       |
+| [`setup deps`](#setup-deps)             | `renovate` | Generate a dependency update config for Tailor dependency and workflow updates.                  |
 | [`setup check`](#setup-check)           | -          | Audit generated workflows for drift against the current config/repo (read-only).                 |
 | [`setup delete`](#setup-delete)         | -          | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
 
@@ -138,15 +138,21 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### setup deps
 
-Generate a dependency update config (Renovate) for Tailor dependency and workflow updates.
+Generate a dependency update config for Tailor dependency and workflow updates.
 
 **Aliases:** `renovate`
 
 **Usage**
 
 ```
-tailor setup deps
+tailor setup deps [options]
 ```
+
+**Options**
+
+| Option                  | Alias | Description                             | Required | Default      |
+| ----------------------- | ----- | --------------------------------------- | -------- | ------------ |
+| `--provider <PROVIDER>` | -     | Dependency update provider to configure | No       | `"renovate"` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

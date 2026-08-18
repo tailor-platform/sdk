@@ -69,6 +69,35 @@ describe("setupRenovate", () => {
     expect(stderr.output).not.toContain("deprecated");
   });
 
+  test("generates the Renovate config when the provider is named explicitly", async () => {
+    const originalCwd = process.cwd();
+    process.chdir(testDir);
+    try {
+      await runCommand(setupCommand, ["deps", "--provider", "renovate"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
+  });
+
+  test("rejects a provider that is not supported yet", async () => {
+    const originalCwd = process.cwd();
+    process.chdir(testDir);
+    let result: Awaited<ReturnType<typeof runCommand>>;
+    try {
+      result = await runCommand(setupCommand, ["deps", "--provider", "dependabot"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain(
+      'provider: Invalid input: expected "renovate"',
+    );
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
+  });
+
   test("does not write a lock file", async () => {
     await setupRenovate({ outputDir: testDir });
 
