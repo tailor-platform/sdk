@@ -88,6 +88,8 @@ Key files:
 - All jobs **must** be named exports (including mainJob and triggered jobs)
 - Job names must be unique across the entire project
 - Job `.trigger()` returns `Awaited<Output>` directly; read the value synchronously unless the job output itself is promise-like
+- `createWorkflowJob`'s `name` and `body` must be static literals (a string literal name, an inline function expression body) — not a variable or the result of another function call — or the build fails instead of silently dropping the job
+- `.start()` calls must be lexically inside the calling job's `body` (a function defined inside `body` may call it too) — not a function defined outside `body` — or the build fails instead of silently dropping the call
 - `createWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
 - Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; acquire the mock with `using wf = mockWorkflow()` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) and use `wf.setWaitHandler` / `wf.setResolveHandler` to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
 - Use `wps.key.wait()` for namespaced access, or `export const { key } = createWaitPoints(...)` for destructured 2-level access
