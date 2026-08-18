@@ -3,7 +3,7 @@ import {
   assertRecordableDependencies,
   collectDependentApps,
   collectEventSubscriptions,
-} from "./deploy";
+} from "./event-subscriptions";
 
 type TargetSpec = {
   configPath: string;

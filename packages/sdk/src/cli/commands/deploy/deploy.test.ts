@@ -3,26 +3,27 @@ import { logger } from "#/cli/shared/logger";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { mergeBundledScripts } from "./bundled-scripts";
 import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
-  assertUniqueGlobalResourceNames,
-  buildDeploymentTargets,
   confirmDeploymentPlans,
-  computeRenamedAppDeletions,
   collectExternalAuthIdpConfigNames,
+  planDeploymentTargets,
+  shouldForceApplyAll,
+} from "./deploy";
+import { buildDeploymentTargets, parseDeployConfigPaths } from "./deployment-target";
+import {
+  assertUniqueGlobalResourceNames,
+  computeRenamedAppDeletions,
+  dropCrossDeploymentManagedDeletes,
+} from "./managed-resources";
+import { printDeploymentPlans, printPlanResults, summarizePlanResults } from "./plan-report";
+import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
-  dropCrossDeploymentManagedDeletes,
-  mergeBundledScripts,
-  parseDeployConfigPaths,
-  planDeploymentTargets,
-  printDeploymentPlans,
-  printPlanResults,
-  shouldForceApplyAll,
-  summarizePlanResults,
-} from "./deploy";
+} from "./visible-resources";
 import type { PlannedDeployment } from "./apply-phases";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
