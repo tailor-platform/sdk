@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
-import { bundleWorkflowJobs } from "./bundler";
+import { bundleWorkflowJobs, collectExecJobFunctionTargets } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   test("does not throw when no workflow jobs are provided", async () => {
@@ -560,6 +560,18 @@ export default createWorkflow({
 
       expect(callerCode).toContain("startWorkflow");
       expect(callerCode).not.toContain("simpleWorkflow.start");
+    });
+  });
+
+  describe("collectExecJobFunctionTargets", () => {
+    test("throws instead of silently returning no targets for unparseable code", () => {
+      expect(() => collectExecJobFunctionTargets("this is not valid js &&&")).toThrow(/parse/i);
+    });
+
+    test("finds a statically-named execJobFunction target", () => {
+      expect(
+        collectExecJobFunctionTargets("tailor.workflow.execJobFunction(`step-a`, void 0)"),
+      ).toEqual(["step-a"]);
     });
   });
 });

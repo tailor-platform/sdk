@@ -79,13 +79,20 @@ function extractStaticStringValue(node: unknown): string | undefined {
 }
 
 /**
- * Find the job names a bundled job's code calls `.start()` on, by looking for
- * `tailor.workflow.execJobFunction(<name>, ...)` calls with a static string name.
+ * Find the job names a bundled job's code calls `execJobFunction` on, by
+ * looking for `tailor.workflow.execJobFunction(<name>, ...)` calls with a
+ * static string name.
  * @param code - Bundled job code
  * @returns Target job names referenced with a statically known name
  */
-function collectExecJobFunctionTargets(code: string): string[] {
-  const { program } = parseSync("input.js", code);
+export function collectExecJobFunctionTargets(code: string): string[] {
+  const { program, errors } = parseSync("input.js", code);
+  if (errors.length > 0) {
+    throw new WorkflowJobDetectionError(
+      `Failed to parse bundled job code while checking for missed dependencies: ` +
+        `${errors.map((e) => e.message).join("; ")}`,
+    );
+  }
   const targets: string[] = [];
 
   function walk(node: ASTNode | null | undefined): void {
@@ -196,10 +203,11 @@ export async function bundleWorkflowJobs(
     for (const targetJobName of collectExecJobFunctionTargets(code)) {
       if (!usedJobNameSet.has(targetJobName)) {
         throw new WorkflowJobDetectionError(
-          `Workflow job "${callerJobName}" calls .start() on job "${targetJobName}", but "${targetJobName}" ` +
-            `was not detected as a dependency and is not included in the bundle. Move the .start() call to ` +
-            `a function defined inside the body of workflow job "${callerJobName}", or make sure the file ` +
-            `containing it is covered by the workflow service's "files" pattern.`,
+          `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...) — usually the ` +
+            `result of a "${targetJobName}".start() rewrite — but "${targetJobName}" was not detected as a ` +
+            `dependency and is not included in the bundle. Move the .start() call (or the direct ` +
+            `execJobFunction call) to a function defined inside the body of workflow job "${callerJobName}", ` +
+            `or make sure the file containing it is covered by the workflow service's "files" pattern.`,
         );
       }
     }
