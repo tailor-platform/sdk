@@ -2,6 +2,7 @@ import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { confirmationArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupCoordinate, setupTarget } from "./generate";
@@ -217,13 +218,32 @@ const previewCommand = defineAppCommand({
 
 const depsCommand = defineAppCommand({
   name: "deps",
+  aliases: ["renovate"],
   description:
     "Generate a dependency update config (Renovate) for Tailor dependency and workflow updates.",
   args: z.strictObject({}),
+  notes:
+    "`renovate` is a deprecated alias of this command and will be removed in a future release.",
   run: async () => {
+    if (invokedViaRenovateAlias(process.argv)) {
+      logger.warn(
+        "`tailor setup renovate` is deprecated and will be removed in a future release. Use `tailor setup deps` instead.",
+      );
+    }
     await setupRenovate({ outputDir: process.cwd() });
   },
 });
+
+/**
+ * Detect whether the command was invoked through the deprecated `renovate`
+ * alias. politty resolves aliases before dispatch, so the invoked name is only
+ * observable from the raw argv.
+ * @param argv - Process argv tokens
+ * @returns true when the `renovate` alias follows the `setup` subcommand
+ */
+function invokedViaRenovateAlias(argv: readonly string[]): boolean {
+  return argv.some((token, i) => token === "setup" && argv[i + 1] === "renovate");
+}
 
 const deleteCommand = defineAppCommand({
   name: "delete",

@@ -1,7 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { aroundEach, describe, expect, test } from "vitest";
+import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { RENOVATE_CONFIG_FILE, RENOVATE_PRESET, setupRenovate } from "./renovate";
+import { setupCommand } from "./index";
 
 describe("setupRenovate", () => {
   const testDir = path.join(
@@ -30,6 +33,23 @@ describe("setupRenovate", () => {
         2,
       )}\n`,
     );
+  });
+
+  test("dispatches the deprecated renovate alias to the deps command with a warning", async () => {
+    using stderr = captureStderr();
+    const originalArgv = process.argv;
+    const originalCwd = process.cwd();
+    process.argv = ["node", "tailor", "setup", "renovate"];
+    process.chdir(testDir);
+    try {
+      await runCommand(setupCommand, ["renovate"]);
+    } finally {
+      process.argv = originalArgv;
+      process.chdir(originalCwd);
+    }
+
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
+    expect(stderr.output).toContain("`tailor setup renovate` is deprecated");
   });
 
   test("does not write a lock file", async () => {
