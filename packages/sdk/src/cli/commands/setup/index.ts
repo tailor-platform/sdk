@@ -223,12 +223,11 @@ const depsCommand = defineAppCommand({
   description:
     "Generate a dependency update config (Renovate) for Tailor dependency and workflow updates.",
   args: z.strictObject({}),
-  notes:
-    "`renovate` is a deprecated alias of this command and will be removed in a future release.",
+  notes: "`renovate` is a deprecated alias of this command and will be removed in v3.",
   run: async () => {
     if (invokedViaAlias({ parent: "setup", alias: "renovate", argv: process.argv })) {
       logger.warn(
-        "`tailor setup renovate` is deprecated and will be removed in a future release. Use `tailor setup deps` instead.",
+        "`tailor setup renovate` is deprecated and will be removed in v3. Use `tailor setup deps` instead.",
       );
     }
     await setupRenovate({ outputDir: process.cwd() });

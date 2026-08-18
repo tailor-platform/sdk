@@ -152,7 +152,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-`renovate` is a deprecated alias of this command and will be removed in a future release.
+`renovate` is a deprecated alias of this command and will be removed in v3.
 
 ### setup preview
 

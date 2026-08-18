@@ -142,17 +142,13 @@ describe("function run --json", () => {
     expect(stderr.output).not.toContain("deprecated");
   });
 
-  test.each([
-    [["function", "test-run"]],
-    [["function", "--verbose", "test-run"]],
-    [["function", "--env-file", ".env", "test-run"]],
-  ])("dispatches the deprecated test-run alias invoked as %j to the run command", async (argv) => {
+  test("dispatches the deprecated test-run alias to the run command", async () => {
     using stdout = captureStdout();
     using stderr = captureStderr();
     using _json = jsonMode();
 
     const originalArgv = process.argv;
-    process.argv = ["node", "tailor", ...argv, scriptPath];
+    process.argv = ["node", "tailor", "function", "test-run", scriptPath];
     try {
       await runCommand(functionCommand, ["test-run", scriptPath, "--machine-user", "admin"]);
     } finally {

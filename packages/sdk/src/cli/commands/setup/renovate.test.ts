@@ -35,25 +35,39 @@ describe("setupRenovate", () => {
     );
   });
 
-  test.each([[["setup", "renovate"]], [["setup", "--verbose", "renovate"]]])(
-    "warns when the deprecated renovate alias is invoked as %j",
-    async (argv) => {
-      using stderr = captureStderr();
-      const originalArgv = process.argv;
-      const originalCwd = process.cwd();
-      process.argv = ["node", "tailor", ...argv];
-      process.chdir(testDir);
-      try {
-        await runCommand(setupCommand, ["renovate"]);
-      } finally {
-        process.argv = originalArgv;
-        process.chdir(originalCwd);
-      }
+  test("dispatches the deprecated renovate alias to the deps command with a warning", async () => {
+    using stderr = captureStderr();
+    const originalArgv = process.argv;
+    const originalCwd = process.cwd();
+    process.argv = ["node", "tailor", "setup", "renovate"];
+    process.chdir(testDir);
+    try {
+      await runCommand(setupCommand, ["renovate"]);
+    } finally {
+      process.argv = originalArgv;
+      process.chdir(originalCwd);
+    }
 
-      expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
-      expect(stderr.output).toContain("`tailor setup renovate` is deprecated");
-    },
-  );
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
+    expect(stderr.output).toContain("`tailor setup renovate` is deprecated");
+  });
+
+  test("does not warn when the canonical deps command is invoked", async () => {
+    using stderr = captureStderr();
+    const originalArgv = process.argv;
+    const originalCwd = process.cwd();
+    process.argv = ["node", "tailor", "setup", "deps"];
+    process.chdir(testDir);
+    try {
+      await runCommand(setupCommand, ["deps"]);
+    } finally {
+      process.argv = originalArgv;
+      process.chdir(originalCwd);
+    }
+
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
+    expect(stderr.output).not.toContain("deprecated");
+  });
 
   test("does not write a lock file", async () => {
     await setupRenovate({ outputDir: testDir });

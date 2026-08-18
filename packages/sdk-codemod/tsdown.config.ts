@@ -62,6 +62,8 @@ export default defineConfig([
         "codemods/v2/idp-publish-events-rename/scripts/transform.ts",
       "v3/function-test-run-rename/scripts/transform":
         "codemods/v3/function-test-run-rename/scripts/transform.ts",
+      "v3/setup-renovate-rename/scripts/transform":
+        "codemods/v3/setup-renovate-rename/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node22",

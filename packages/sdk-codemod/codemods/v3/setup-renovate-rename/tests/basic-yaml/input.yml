@@ -1,0 +1,2 @@
+steps:
+  - run: tailor setup renovate

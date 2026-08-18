@@ -21,9 +21,26 @@ describe("invokedViaAlias", () => {
     expect(detect("setup", "--env-file=.env", "renovate")).toBe(true);
   });
 
+  test("detects the alias after global options preceding the parent", () => {
+    expect(detect("--json", "setup", "renovate")).toBe(true);
+    expect(detect("--env-file", ".env", "setup", "renovate")).toBe(true);
+  });
+
   test("does not treat a global option value as the subcommand name", () => {
     expect(detect("setup", "--env-file", "renovate")).toBe(false);
     expect(detect("setup", "-e", "renovate")).toBe(false);
+  });
+
+  test("skips values of camelCase global options, which politty also accepts", () => {
+    expect(detect("setup", "--envFileIfExists", ".env", "renovate")).toBe(true);
+    expect(detect("setup", "--envFileIfExists", "renovate")).toBe(false);
+    expect(detect("setup", "--envFileIfExists", "renovate", "deps")).toBe(false);
+  });
+
+  test("does not treat a global option value as the parent name", () => {
+    expect(detect("--env-file", "setup", "setup", "renovate")).toBe(true);
+    expect(detect("-e", "setup", "setup", "renovate")).toBe(true);
+    expect(detect("--env-file", "setup", "renovate")).toBe(false);
   });
 
   test("rejects the canonical name and unrelated subcommands", () => {
