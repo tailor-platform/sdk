@@ -105,7 +105,14 @@ export async function buildStartContext(
   for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
     try {
       const source = await fs.promises.readFile(file, "utf-8");
-      const { program } = parseSync(file, source);
+      const { program, errors } = parseSync(file, source);
+      if (errors.length > 0) {
+        logger.warn(
+          `Failed to parse workflow file ${file}: ${errors.map((e) => e.message).join("; ")}`,
+          { mode: "stream" },
+        );
+        continue;
+      }
       modules.set(normalizeFilePath(file), createModuleBindings(file, program, source));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

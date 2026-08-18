@@ -230,16 +230,18 @@ export async function bundleWorkflowJobs(
     bundledCode.set(name, code);
   }
 
-  logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
-
   // Backstop for dependency-graph gaps the source-level checks in
   // filterUsedJobs cannot see (e.g. a factored-out .start() call inside a
   // helper file outside `workflow.files`): the rewrite still resolves and
   // produces a valid execJobFunction call, but the target was never bundled.
+  // Runs before the success log below so a failure here doesn't print a
+  // misleading "Bundled" message right before throwing.
   validateBundledDependencies(
     bundledCode,
     usedJobs.map((job) => job.name),
   );
+
+  logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
 
   return {
     mainJobDeps,

@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
 import {
   bundleWorkflowJobs,
@@ -416,6 +417,68 @@ export default createWorkflow({ name: "workflow", mainJob });
           dir,
         ),
       ).rejects.toThrow(/step-a/);
+    });
+
+    test("does not log a success message when bundle-output validation fails", async () => {
+      const dir = createTempDir();
+      const workflowsDir = path.join(dir, "workflows");
+      const sharedDir = path.join(dir, "shared");
+      fs.mkdirSync(workflowsDir);
+      fs.mkdirSync(sharedDir);
+
+      const jobsFile = path.join(workflowsDir, "jobs.ts");
+      const helpersFile = path.join(sharedDir, "helpers.ts");
+      const workflowFile = path.join(workflowsDir, "workflow.ts");
+      fs.writeFileSync(
+        jobsFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+`,
+      );
+      fs.writeFileSync(
+        helpersFile,
+        `
+import { step } from "../workflows/jobs";
+export async function runStep() {
+  return await step.start();
+}
+`,
+      );
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { runStep } from "../shared/helpers";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await runStep(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [jobsFile, workflowFile] });
+
+      const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+      try {
+        await expect(
+          bundleWorkflowJobs(
+            [
+              { name: "step-a", exportName: "step", sourceFile: jobsFile },
+              { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+            ],
+            ["main-job"],
+            {},
+            context,
+            dir,
+          ),
+        ).rejects.toThrow(/step-a/);
+
+        expect(logSpy.mock.calls.some(([message]) => message.includes("Bundled"))).toBe(false);
+      } finally {
+        logSpy.mockRestore();
+      }
     });
   });
 
