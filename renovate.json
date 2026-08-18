@@ -90,6 +90,11 @@
       "groupName": "aquaproj"
     },
     {
+      "description": "Group all tailor-platform/actions pins so every generated reference bumps atomically",
+      "matchPackageNames": ["tailor-platform/actions"],
+      "groupName": "tailor-platform/actions"
+    },
+    {
       "matchManagers": ["npm"],
       "matchPackageNames": ["@inquirer/*"],
       "groupName": "@inquirer"
