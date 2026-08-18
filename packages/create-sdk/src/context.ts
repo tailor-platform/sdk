@@ -61,7 +61,8 @@ const validateTemplate = async (template: string) => {
   return undefined;
 };
 
-export const collectContext = async ({ name, template }: Opts): Promise<Context> => {
+export const collectContext = async (opts: Opts): Promise<Context> => {
+  let { name, template } = opts;
   if (name) {
     const err = validateName(name);
     if (err) {
