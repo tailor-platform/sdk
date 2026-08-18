@@ -4899,6 +4899,48 @@ describe("snapshot", () => {
       expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(true);
     });
 
+    test("reports a conflicting-hash detail (not a missing-hash one) when remote script expressions disagree", () => {
+      const snapshotFields = {
+        name: {
+          type: "string",
+          required: true,
+          hooks: { create: { expr: "_value.trim()" } },
+        },
+      };
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        tables: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true }, ...snapshotFields },
+          },
+        },
+      };
+
+      // Two independent buildTypeScripts calls embed two different hashes;
+      // mixing their typeHook and typeValidate outputs simulates a remote
+      // type whose script expressions disagree on the hash (e.g. from a
+      // partial out-of-band edit), rather than one with no hash at all.
+      const { typeHook } = buildTypeScripts(snapshotFields);
+      const { typeValidate } = buildTypeScripts(snapshotFields, { typeValidateExpr: "true" });
+
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          { id: { type: "uuid", required: true }, name: { type: "string", required: true } },
+          { typeHook, typeValidate },
+        ),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      const scriptDrift = drifts.find((d) => d.kind === "script_mismatch");
+      expect(scriptDrift?.details).toContain("has conflicting script hashes on remote");
+      expect(scriptDrift?.details).not.toContain("has no script hash on remote");
+    });
+
     test("no script drift when hashes match", () => {
       const snapshotFields = {
         name: {

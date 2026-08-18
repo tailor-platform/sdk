@@ -3182,7 +3182,18 @@ export function compareRemoteWithSnapshot(
   return [...structuralDrifts, ...scriptDrifts];
 }
 
-function extractRemoteScriptHash(remoteType: ProtoTailorDBType): string | undefined {
+/**
+ * Result of scanning a remote type's script expressions for an embedded
+ * source hash: a single agreed-upon hash, no hash found at all (the pattern
+ * left by a pre-v2 CLI deploy), or disagreeing hashes across expressions
+ * (a distinct anomaly, not the pre-v2 pattern).
+ */
+type RemoteScriptHashState =
+  | { kind: "hash"; hash: string }
+  | { kind: "absent" }
+  | { kind: "conflicting" };
+
+function extractRemoteScriptHashState(remoteType: ProtoTailorDBType): RemoteScriptHashState {
   const exprs = [
     remoteType.schema?.typeHook?.create?.expr,
     remoteType.schema?.typeHook?.update?.expr,
@@ -3191,15 +3202,13 @@ function extractRemoteScriptHash(remoteType: ProtoTailorDBType): string | undefi
   ];
   let found: string | undefined;
   for (const expr of exprs) {
-    if (expr) {
-      const hash = extractSourceScriptHash(expr);
-      if (hash) {
-        if (found && found !== hash) return undefined;
-        found = hash;
-      }
-    }
+    if (!expr) continue;
+    const hash = extractSourceScriptHash(expr);
+    if (!hash) continue;
+    if (found && found !== hash) return { kind: "conflicting" };
+    found = hash;
   }
-  return found;
+  return found ? { kind: "hash", hash: found } : { kind: "absent" };
 }
 
 function remoteHasScripts(remoteType: ProtoTailorDBType): boolean {
@@ -3235,15 +3244,16 @@ function compareScriptHashes(
     if (!remoteType) continue;
 
     if (localHash) {
-      const remoteHash = extractRemoteScriptHash(remoteType);
+      const remoteState = extractRemoteScriptHashState(remoteType);
+      const remoteHash = remoteState.kind === "hash" ? remoteState.hash : undefined;
       if (localHash !== remoteHash) {
-        drifts.push({
-          tableName,
-          kind: "script_mismatch",
-          details: remoteHash
+        const details =
+          remoteState.kind === "hash"
             ? `Table '${tableName}' scripts differ between remote and snapshot`
-            : `Table '${tableName}' ${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}`,
-        });
+            : remoteState.kind === "conflicting"
+              ? `Table '${tableName}' has conflicting script hashes on remote`
+              : `Table '${tableName}' ${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}`;
+        drifts.push({ tableName, kind: "script_mismatch", details });
       }
     } else if (remoteHasScripts(remoteType)) {
       drifts.push({
