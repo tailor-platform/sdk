@@ -178,9 +178,9 @@ automatically wire the resource into every consumer — check each of these:
 - `cli/commands/deploy/validate-plan.ts` — `ValidatePlanInput` is a `PlannedDeployment`
   alias, but `validatePlan` still needs `creates`/`updates` calls added for the
   new resource's proto schema.
-- `cli/commands/deploy/deploy.ts`'s `DEPLOY_MANAGED_RESOURCE_DEFINITIONS` — drives
-  dry-run display and owner-conflict detection; add an entry per resource label.
+- `cli/commands/deploy/managed-resources.ts`'s `DEPLOY_MANAGED_RESOURCE_DEFINITIONS` —
+  drives dry-run display and owner-conflict detection; add an entry per resource label.
 - `collectOwnerConflicts` / `collectUnmanagedResources` / `collectResourceOwners`
-  (`deploy.ts`) derive from `PlanResults` via `Object.values`, so no change is
-  needed there as long as the new plan result carries `conflicts`/`unmanaged`/
+  (`managed-resources.ts`) derive from `PlanResults` via `Object.values`, so no change
+  is needed there as long as the new plan result carries `conflicts`/`unmanaged`/
   `resourceOwners`.

@@ -323,13 +323,14 @@ Commands for managing workflows and executions.
 
 Commands for managing function registries and viewing function execution logs.
 
-| Command                                          | Description                                                     |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| [function](./cli/function.md#function)           | Manage functions                                                |
-| [function get](./cli/function.md#function-get)   | Get a function registry by name                                 |
-| [function list](./cli/function.md#function-list) | List function registries in a workspace                         |
-| [function logs](./cli/function.md#function-logs) | List or get function execution logs.                            |
-| [function run](./cli/function.md#function-run)   | Run a function on the Tailor Platform server without deploying. |
+| Command                                              | Description                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------- |
+| [function](./cli/function.md#function)               | Manage functions                                                |
+| [function get](./cli/function.md#function-get)       | Get a function registry by name                                 |
+| [function list](./cli/function.md#function-list)     | List function registries in a workspace                         |
+| [function logs](./cli/function.md#function-logs)     | List or get function execution logs.                            |
+| [function run](./cli/function.md#function-run)       | Run a function on the Tailor Platform server without deploying. |
+| [function script](./cli/function.md#function-script) | Scaffold a one-off script to run with `function run`.           |
 
 ### [Executor Commands](./cli/executor.md)
 

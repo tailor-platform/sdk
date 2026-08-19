@@ -40,7 +40,7 @@ interface BreakingChangeFieldInfo {
   renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
   /** Map of tableName -> Set of fieldNames a conversion script clears */
   clearedFields: Map<string, Set<string>>;
-  /** Map of new tableName -> TailorDBSnapshotType for renamed types */
+  /** Map of new tableName -> TailorDBSnapshotType for renamed tables */
   renamedTypes: Map<string, TailorDBSnapshotType>;
 }
 
@@ -124,7 +124,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         change.after,
       );
     } else if (change.kind === "table_renamed") {
-      // The new type is missing from the pre-migration snapshot; inject it so
+      // The new table is missing from the pre-migration snapshot; inject it so
       // the copy script can insert into it (the old type stays readable as-is).
       renamedTypes.set(change.tableName, change.after);
     }
@@ -242,7 +242,7 @@ function generateDbTypesFromSnapshot(
 }
 
 /**
- * Generate an empty db.ts file for migrations with no types
+ * Generate an empty db.ts file for migrations with no tables
  * @param {string} namespace - Namespace name
  * @returns {string} Empty db.ts file contents
  */
@@ -274,7 +274,7 @@ function generateEmptyDbTypes(namespace: string): string {
 
 /**
  * Generate table type definition from a snapshot type
- * @param {TailorDBSnapshotType} type - Snapshot type
+ * @param {TailorDBSnapshotType} type - Table snapshot
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
  * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type and utility type usage
  */
@@ -293,11 +293,11 @@ function generateTableType(
   // Add id field first
   fieldLines.push("    id: Generated<string>;");
 
-  // Get fields that are changing from optional to required for this type
+  // Get fields that are changing from optional to required for this table
   const optionalToRequiredFields =
     breakingChangeFields.optionalToRequired.get(type.name) || new Set();
 
-  // Get newly added required fields for this type
+  // Get newly added required fields for this table
   const addedRequiredFields = breakingChangeFields.addedRequiredFields.get(type.name) || new Map();
 
   // Get enum value changes for this type

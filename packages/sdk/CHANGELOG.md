@@ -1,5 +1,73 @@
 # @tailor-platform/sdk
 
+## 2.4.0
+
+### Minor Changes
+
+- [#2054](https://github.com/tailor-platform/sdk/pull/2054) [`6a753cb`](https://github.com/tailor-platform/sdk/commit/6a753cb750df779c91b29b0103bdd24343f18dbb) Thanks [@toiroakr](https://github.com/toiroakr)! - `defineAIGateway()`'s `authNamespace` is now optional, defaulting to the application's own Auth service (local or external) — the common case, since an AI Gateway usually authenticates against its own app's auth. To authenticate against a different application's Auth service, reference it via `auth: { name, external: true }` and let `authNamespace` default to it, the same way a local `defineAuth()` does. Once `tailor.d.ts` is generated, `authNamespace` is type-narrowed to your application's own auth namespace name; register additional names via `declare module "@tailor-platform/sdk" { interface AuthNamespaceNameRegistry { ... } }` only if you need to set `authNamespace` explicitly to a namespace your own `auth` doesn't reference.
+
+- [#2075](https://github.com/tailor-platform/sdk/pull/2075) [`bd0e397`](https://github.com/tailor-platform/sdk/commit/bd0e39720015248e6ebb2c31efca49f9238b7060) Thanks [@dqn](https://github.com/dqn)! - `tailor function test-run` is renamed to `tailor function run`. The old name keeps working as a deprecated alias until v3 and prints a deprecation warning when used; `tailor upgrade` offers the `v3/function-test-run-rename` codemod to rewrite `function test-run` invocations across package.json scripts, shell and Windows scripts, YAML, Markdown, and JavaScript/TypeScript sources.
+
+### Patch Changes
+
+- [#2071](https://github.com/tailor-platform/sdk/pull/2071) [`7ae89fe`](https://github.com/tailor-platform/sdk/commit/7ae89fefb9510b7fea217ccd0d05c79de9fb7d98) Thanks [@dqn](https://github.com/dqn)! - Fix `tailor deploy` never creating TailorDB types that appear in no pending migration diff and define no GraphQL permission — for example baseline tables when a migration history is replayed into a fresh workspace. Such types are now created before any migration script runs.
+
+- [#2050](https://github.com/tailor-platform/sdk/pull/2050) [`a124fed`](https://github.com/tailor-platform/sdk/commit/a124fede0d692c8dc4e60ac7d6da9acee9d02e52) Thanks [@toiroakr](https://github.com/toiroakr)! - Stop dumping the request payload in API error messages. Failed requests (including `tailor query` timeouts) previously printed the full request body, which could expose credentials such as machine user access tokens embedded in query arguments to terminal and CI logs. Error messages now carry only allowlisted identifiers (resource names, namespaces, and ids) so a failing resource can still be identified.
+
+- [#1970](https://github.com/tailor-platform/sdk/pull/1970) [`2b70c30`](https://github.com/tailor-platform/sdk/commit/2b70c30502e84bcf57ab2b237ec9f075cbc9e600) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#2036](https://github.com/tailor-platform/sdk/pull/2036) [`d8ec141`](https://github.com/tailor-platform/sdk/commit/d8ec141c16c284a7337f6b7723a686ecb3dcdcf5) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency esbuild@>=0.17.0 <0.28.1 to v0.28.2
+
+- [#2047](https://github.com/tailor-platform/sdk/pull/2047) [`228e394`](https://github.com/tailor-platform/sdk/commit/228e3944237cd6d17022e66792efff3826ee594d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.1
+
+- [#2065](https://github.com/tailor-platform/sdk/pull/2065) [`5a3a0e1`](https://github.com/tailor-platform/sdk/commit/5a3a0e1ce8bfadb769dc4540ef257e944f0c077e) Thanks [@toiroakr](https://github.com/toiroakr)! - Raise the minimum supported Node.js version to 22.18.0 (from 22.15.0).
+  
+  `tailor seed validate` crashed on Node 22.15.0–22.17.x with `Expected a string, an ArrayBuffer, or a TypedArray to be returned for the "source" from the "load" hook but got null`. This is a Node.js bug ([nodejs/node#58607](https://github.com/nodejs/node/issues/58607)): requiring a `node:`-scheme-only builtin (`node:sqlite`, used internally by the seed validator) while both a synchronous `resolve` and `load` hook are registered via `module.registerHooks()` crashes the loader on those versions. The SDK always registers both hooks, so any project on Node 22.15.0–22.17.x hit this. Node fixed it upstream in 22.18.0 ([nodejs/node#58612](https://github.com/nodejs/node/pull/58612)); this release raises `engines.node` to match, since Node 22.15.0–22.17.x never actually supported `tailor seed validate`.
+
+- [#2068](https://github.com/tailor-platform/sdk/pull/2068) [`80260b3`](https://github.com/tailor-platform/sdk/commit/80260b38787da3ed7d7e67ca4ae3116cc8cd07e3) Thanks [@dqn](https://github.com/dqn)! - The remaining CLI output and generated artifacts that named a `db.table()` definition a type now say table.
+  
+  - The deploy plan labels a TailorDB table change `(table)` instead of `(type)`. This also changes the machine-readable `deploy --dry-run --json` output: the `changes[].labels` value `"type"` becomes `"table"`. Update any CI that matches on the old label.
+  - The seed chunker's oversized-record error reads `A single record in table "Order" ...`.
+  - The duplicate plugin-generated table name error reads `Duplicate plugin-generated table name "..."`, and the header of each generated `.tailor/<plugin-id>/types/*.ts` file reads `Auto-generated table by plugin`. Both name the originating table (or `(namespace)`) under a neutral `source:` / `Source:` key.
+  - The seed plugin's generated `_User.schema.ts` comment reads `no TailorDB backing table`. The next `tailor generate` rewrites the file; existing files keep working as-is.
+
+- [#2069](https://github.com/tailor-platform/sdk/pull/2069) [`d07a120`](https://github.com/tailor-platform/sdk/commit/d07a120950c5bac0bd8b5d2e341ad80dd6694448) Thanks [@dqn](https://github.com/dqn)! - The remaining published docs that named a `db.table()` definition a type now say table: the migration guide's rebaseline description, the testing guide's executor trigger description, and the create-sdk `tailordb` template README's feature list (`field-level and table-level` validations).
+
+- [#2062](https://github.com/tailor-platform/sdk/pull/2062) [`153a780`](https://github.com/tailor-platform/sdk/commit/153a78038c65f4376f2f9f75eec8a7a37ea3f6dc) Thanks [@dqn](https://github.com/dqn)! - `tailor seed` now calls a `db.table()` definition a table instead of a type, in its help, progress, and errors — `Seeding 3 tables via Kysely batch insert`. The `fillSeedData` documentation and the `create-sdk` template hint follow.
+  
+  Messages that list the seed targets say entities rather than tables, because `_User` is an IdP entity rather than a TailorDB table and can appear in the same list.
+  
+  The positional is now named `entities`, so `--help` shows `[entities]` instead of `[types]`. Positionals are matched by argv order, so existing invocations are unaffected.
+
+- [#2063](https://github.com/tailor-platform/sdk/pull/2063) [`5d16dc9`](https://github.com/tailor-platform/sdk/commit/5d16dc918f77bd4c76d0d90811207ec15ac30f4e) Thanks [@dqn](https://github.com/dqn)! - The remaining docs and editor tooltips now describe a `db.table()` definition as a table instead of a type. The TailorDB docs say table-level (matching the sentences around them that already say table), the file-upload runtime API documents its `typeName` parameters as table names, and the create-sdk tailordb template's test titles follow suit.
+
+- [#2060](https://github.com/tailor-platform/sdk/pull/2060) [`c880f23`](https://github.com/tailor-platform/sdk/commit/c880f236be87d9cf2bed968fc15d9034e5200793) Thanks [@dqn](https://github.com/dqn)! - `deploy`, schema loading, and the config parser now call a `db.table()` definition a table instead of a type, matching the vocabulary the docs and `db.table()` already use. The deploy plan lists a `TailorDB tables` section and names a deleted table as `TailorDB table "Order"`, a table missing `.permission()` is reported as `TailorDB table "User" has no .permission() configured`, and relation errors read `Field "userID" on table "Employee"`.
+  
+  The built-in plugin descriptions say table for the same reason — `kyselyTypePlugin` now reads "Generates Kysely type definitions for TailorDB tables", keeping "type definitions" for the TypeScript output it writes.
+  
+  Messages about a field's data type, and the TypeScript types generated into `db.ts`, are unchanged.
+
+- [#2055](https://github.com/tailor-platform/sdk/pull/2055) [`303e209`](https://github.com/tailor-platform/sdk/commit/303e2098804c44f63cee2724b917b9158f327802) Thanks [@dqn](https://github.com/dqn)! - TailorDB migration output now calls a `db.table()` definition a table instead of a type, matching the vocabulary the docs already use. Schema drift details read `Table 'User' exists in snapshot but not in remote`, a removal warning reads `Table removed (all records in this table will be deleted during post-migration cleanup)`, and the `--rename` / `--drop` / `--expand-contract` help and errors describe their arguments as `"Table.field"` and `"OldTable:NewTable"`.
+  
+  Only the wording changed: those flags accept exactly the values they did before, and the removal warning recorded in `diff.json` is never read back, so migrations generated earlier keep their wording and stay valid.
+  
+  Messages about a field's data type are unchanged, as is the `DB types:` line naming the generated `db.ts`.
+
+- [#2061](https://github.com/tailor-platform/sdk/pull/2061) [`c2be0d3`](https://github.com/tailor-platform/sdk/commit/c2be0d3fe6422d0161943c858bbc560b234281a8) Thanks [@dqn](https://github.com/dqn)! - The config types now describe a `db.table()` definition as a table instead of a type, so editor tooltips match the vocabulary `db.table()` already uses. Hovering `db.table(...).features({ ... })` documents `gqlOperations` and `publishEvents` in terms of a table, `aggregation` and `bulkUpsert` gain the descriptions they were missing, and an executor's record trigger documents `typeName` as "TailorDB table name to watch for events".
+  
+  `tailordb query` reports an unresolvable name as `Could not find namespace for tables in query: …`.
+  
+  Field-level descriptions still say type where they mean a field's data type, and the key names themselves are unchanged.
+
+- [#2057](https://github.com/tailor-platform/sdk/pull/2057) [`6bee645`](https://github.com/tailor-platform/sdk/commit/6bee645ed513df1e18af4e1178a40b7c55b84166) Thanks [@dqn](https://github.com/dqn)! - `tailor tailordb truncate` now calls a `db.table()` definition a table instead of a type, in its help, prompts, and results. The positional argument is named `tables`, and `TruncateOptions.types` from `@tailor-platform/sdk/cli` is now `TruncateOptions.tables`:
+  
+  ```ts
+  await truncate({ types: ["User"] }); // before
+  await truncate({ tables: ["User"] }); // after
+  ```
+  
+  Passing table names positionally is unchanged, as in `tailor tailordb truncate User Post`. The argument also binds by name, so an invocation spelled `--types User` now has to read `--tables User`.
+
 ## 2.3.0
 
 ### Minor Changes

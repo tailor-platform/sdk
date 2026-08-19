@@ -2,6 +2,7 @@ import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { confirmationArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupCoordinate, setupTarget } from "./generate";
@@ -102,7 +103,8 @@ const branchCommand = defineAppCommand({
       alias: "n",
       description: "Name (defaults to the config 'name')",
     }),
-    branch: arg(z.string().min(1).optional(), {
+    target: arg(z.string().min(1).optional(), {
+      hiddenAlias: "branch",
       description: "Deploy trigger branch (defaults to the detected default branch)",
     }),
     environment: arg(z.string().min(1).optional(), {
@@ -119,11 +121,17 @@ const branchCommand = defineAppCommand({
       description: "Discard hand edits / take over unmanaged files and regenerate",
     }),
   }),
+  notes: "`--branch` is a deprecated alias of `--target` and will be removed in v3.",
   run: async (args) => {
+    if (usedDeprecatedBranchFlag(process.argv)) {
+      logger.warn(
+        "`tailor setup branch --branch` is deprecated and will be removed in v3. Use `--target` instead.",
+      );
+    }
     await setupTarget({
       kind: "branch",
       workspaceName: args.name,
-      branch: args.branch,
+      branch: args.target,
       environment: args.environment,
       erdPreview: args["erd-preview"],
       dir: args.dir,
@@ -252,6 +260,17 @@ const deleteCommand = defineAppCommand({
     await setupDelete({ files: args.files, yes: args.yes, outputDir: process.cwd() });
   },
 });
+
+/**
+ * Detect whether the deprecated `--branch` spelling of `--target` was
+ * used. politty resolves hidden aliases before dispatch, so the spelling is
+ * only observable from the raw argv.
+ * @param argv - Process argv tokens
+ * @returns true when a `--branch` token is present
+ */
+function usedDeprecatedBranchFlag(argv: readonly string[]): boolean {
+  return argv.some((token) => token === "--branch" || token.startsWith("--branch="));
+}
 
 export const setupCommand = defineCommand({
   name: "setup",

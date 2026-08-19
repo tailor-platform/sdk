@@ -38,12 +38,13 @@ Run `setup` once per target.
 ### Branch target (recommended for staging)
 
 The branch target fires on pull requests and pushes to the branch you specify
-(defaulting to the repository's default branch when `--branch` is omitted):
+(defaulting to the repository's default branch when `--target` is
+omitted):
 
 ```bash
 tailor setup branch --name my-app-stg
 # Equivalent to:
-tailor setup branch --name my-app-stg --branch main
+tailor setup branch --name my-app-stg --target main
 ```
 
 What it does:
@@ -120,12 +121,12 @@ What it does:
 
 ### Choosing `--branch` for the tag target
 
-`--branch` has two different roles depending on the target kind:
+The branch each target reads plays a different role, under a different flag:
 
-| Target | Role of `--branch`                                                                             |
-| ------ | ---------------------------------------------------------------------------------------------- |
-| Branch | The branch that triggers the workflow (push + PR base). Defaults to the repo's default branch. |
-| Tag    | The branch whose history the tag must be reachable from. Omit to disable the guard entirely.   |
+| Target | Flag       | Role                                                                                           |
+| ------ | ---------- | ---------------------------------------------------------------------------------------------- |
+| Branch | `--target` | The branch that triggers the workflow (push + PR base). Defaults to the repo's default branch. |
+| Tag    | `--branch` | The branch whose history the tag must be reachable from. Omit to disable the guard entirely.   |
 
 The workspace name (`--name`, or the config `name` when omitted) must
 be 3–63 characters of lowercase letters, numbers, and hyphens, and cannot start

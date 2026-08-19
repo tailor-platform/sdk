@@ -473,10 +473,11 @@ function createSnapshotFieldConfigFromOperatorConfig(
 
   // Recursive for nested fields
   if (fieldConfig.fields && Object.keys(fieldConfig.fields).length > 0) {
-    config.fields = {};
+    const fields = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [nestedName, nestedConfig] of Object.entries(fieldConfig.fields)) {
-      config.fields[nestedName] = createSnapshotFieldConfigFromOperatorConfig(nestedConfig);
+      fields[nestedName] = createSnapshotFieldConfigFromOperatorConfig(nestedConfig);
     }
+    config.fields = fields;
   }
 
   return normalizeSnapshotField(config);
@@ -531,13 +532,14 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   }
 
   if (type.indexes && Object.keys(type.indexes).length > 0) {
-    snapshotType.indexes = {};
+    const indexes = createSnapshotRecord<SnapshotIndexConfig>();
     for (const [indexName, indexConfig] of Object.entries(type.indexes)) {
-      snapshotType.indexes[indexName] = {
+      indexes[indexName] = {
         fields: indexConfig.fields,
         unique: indexConfig.unique,
       };
     }
+    snapshotType.indexes = indexes;
   }
 
   if (type.files && Object.keys(type.files).length > 0) {
@@ -553,9 +555,9 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   }
 
   if (Object.keys(type.forwardRelationships).length > 0) {
-    snapshotType.forwardRelationships = {};
+    const forwardRelationships = createSnapshotRecord<SnapshotRelationship>();
     for (const [relName, rel] of Object.entries(type.forwardRelationships)) {
-      snapshotType.forwardRelationships[relName] = {
+      forwardRelationships[relName] = {
         targetType: rel.targetType,
         targetField: rel.targetField,
         sourceField: rel.sourceField,
@@ -563,12 +565,13 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
         description: rel.description,
       };
     }
+    snapshotType.forwardRelationships = forwardRelationships;
   }
 
   if (Object.keys(type.backwardRelationships).length > 0) {
-    snapshotType.backwardRelationships = {};
+    const backwardRelationships = createSnapshotRecord<SnapshotRelationship>();
     for (const [relName, rel] of Object.entries(type.backwardRelationships)) {
-      snapshotType.backwardRelationships[relName] = {
+      backwardRelationships[relName] = {
         targetType: rel.targetType,
         targetField: rel.targetField,
         sourceField: rel.sourceField,
@@ -576,6 +579,7 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
         description: rel.description,
       };
     }
+    snapshotType.backwardRelationships = backwardRelationships;
   }
 
   if (type.permissions.record || type.permissions.gql) {
@@ -2462,6 +2466,11 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
   }
 
   if (remoteField.scale !== undefined) config.scale = remoteField.scale;
+  // Remote schemas do not expose field defaults, so optionalOnCreate is the
+  // only signal when no field-level create hook carries the same contract.
+  if (remoteField.optionalOnCreate && !config.hooks?.create) {
+    config.optionalOnCreate = true;
+  }
 
   const nestedFields = remoteField.fields;
   if (Object.keys(nestedFields).length > 0) {
@@ -3251,7 +3260,13 @@ function compareScriptHashes(
 }
 
 function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
-  const { hooks: _hooks, validate: _validate, default: _default, ...rest } = field;
+  const {
+    hooks: _hooks,
+    validate: _validate,
+    default: _default,
+    optionalOnCreate: _optionalOnCreate,
+    ...rest
+  } = field;
   if (rest.fields) {
     const nested = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [name, f] of Object.entries(rest.fields)) {
@@ -3262,7 +3277,15 @@ function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig 
   return rest;
 }
 
-function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
+/**
+ * Project a snapshot onto the shape comparable with remote-derived state:
+ * system fields, script-bearing props (hooks, validate, default), and
+ * type-level script expressions are stripped, since the platform stores them
+ * in a transformed or unrepresented form.
+ * @param {SchemaSnapshot} snapshot - Snapshot to project
+ * @returns {NormalizedSchemaSnapshot} Normalized snapshot without script-bearing props
+ */
+export function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
   const tables = createSnapshotRecord<TailorDBSnapshotType>();
 
   for (const [tableName, type] of Object.entries(snapshot.tables)) {

@@ -360,7 +360,7 @@ async function runWithConcurrency<T>(
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => loop()));
   if (firstError !== undefined) {
-    throw firstError;
+    throw firstError instanceof Error ? firstError : new Error(String(firstError));
   }
 }
 

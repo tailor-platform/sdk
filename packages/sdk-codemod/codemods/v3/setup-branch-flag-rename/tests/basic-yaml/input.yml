@@ -1,0 +1,11 @@
+name: regenerate
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tailor setup branch --name my-app-stg --branch main
+      - run: |
+          tailor setup branch \
+            --name my-app \
+            --branch main
+      - run: tailor setup tag --name my-app-prod --branch main

@@ -113,11 +113,11 @@ curl -s "http://localhost:16686/api/traces?service=tailor&limit=2" | jq '
 
 ## Architecture
 
-| File                                             | Role                                                       |
-| ------------------------------------------------ | ---------------------------------------------------------- |
-| `packages/sdk/src/cli/telemetry/config.ts`       | Parse `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable   |
-| `packages/sdk/src/cli/telemetry/index.ts`        | `initTelemetry()`, `shutdownTelemetry()`, `withSpan()`     |
-| `packages/sdk/src/cli/telemetry/interceptor.ts`  | Connect-RPC interceptor for automatic RPC tracing          |
-| `packages/sdk/src/cli/args.ts`                   | Telemetry lifecycle (init in handler, shutdown in finally) |
-| `packages/sdk/src/cli/client.ts`                 | Tracing interceptor registration                           |
-| `packages/sdk/src/cli/commands/deploy/deploy.ts` | `withSpan()` instrumentation of deploy phases              |
+| File                                            | Role                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------- |
+| `packages/sdk/src/cli/telemetry/config.ts`      | Parse `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable   |
+| `packages/sdk/src/cli/telemetry/index.ts`       | `initTelemetry()`, `shutdownTelemetry()`, `withSpan()`     |
+| `packages/sdk/src/cli/telemetry/interceptor.ts` | Connect-RPC interceptor for automatic RPC tracing          |
+| `packages/sdk/src/cli/args.ts`                  | Telemetry lifecycle (init in handler, shutdown in finally) |
+| `packages/sdk/src/cli/client.ts`                | Tracing interceptor registration                           |
+| `packages/sdk/src/cli/commands/deploy/`         | `withSpan()` instrumentation of deploy phases              |

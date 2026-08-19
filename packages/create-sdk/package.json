@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/create-sdk",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,7 @@
   "devDependencies": {
     "@types/node": "24.13.3",
     "eslint-plugin-zod": "4.9.1",
-    "oxlint": "1.76.0",
+    "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.22.14",
     "typescript": "6.0.3"

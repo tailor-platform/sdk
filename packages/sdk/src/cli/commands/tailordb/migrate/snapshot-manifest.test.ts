@@ -174,6 +174,26 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.__proto__?.type).toBe("string");
     });
 
+    test("records a nested field named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        fields: {
+          id: { type: "uuid", required: true },
+          profile: {
+            type: "nested",
+            required: false,
+            fields: Object.fromEntries([["__proto__", { type: "string", required: false }]]),
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const nestedFields = manifest.schema?.fields?.profile?.fields ?? {};
+
+      expect(Object.hasOwn(nestedFields, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(nestedFields)).toBe(Object.prototype);
+      expect(nestedFields["__proto__"]?.type).toBe("string");
+    });
+
     test("handles foreign key relationships", () => {
       const snapshotType = createTestSnapshotType("Post", {
         fields: {
@@ -217,6 +237,19 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.indexes?.name_status?.unique).toBe(false);
     });
 
+    test("records an index named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        indexes: Object.fromEntries([["__proto__", { fields: ["name"], unique: true }]]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const indexes = manifest.schema?.indexes ?? {};
+
+      expect(Object.hasOwn(indexes, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(indexes)).toBe(Object.prototype);
+      expect(indexes["__proto__"]?.fieldNames).toEqual(["name"]);
+    });
+
     test("handles file fields", () => {
       const snapshotType = createTestSnapshotType("Document", {
         files: {
@@ -229,6 +262,19 @@ describe("snapshot-manifest", () => {
 
       expect(manifest.schema?.files?.attachment?.description).toBe("Document attachment");
       expect(manifest.schema?.files?.thumbnail?.description).toBe("");
+    });
+
+    test("records a file named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("Document", {
+        files: Object.fromEntries([["__proto__", "Document attachment"]]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const files = manifest.schema?.files ?? {};
+
+      expect(Object.hasOwn(files, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(files)).toBe(Object.prototype);
+      expect(files["__proto__"]?.description).toBe("Document attachment");
     });
 
     test("handles forward relationships", () => {
@@ -250,6 +296,30 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.relationships?.author?.array).toBe(false);
     });
 
+    test("records a forward relationship named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("Post", {
+        forwardRelationships: Object.fromEntries([
+          [
+            "__proto__",
+            {
+              targetType: "User",
+              targetField: "authorId",
+              sourceField: "id",
+              isArray: false,
+              description: "Post author",
+            },
+          ],
+        ]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const relationships = manifest.schema?.relationships ?? {};
+
+      expect(Object.hasOwn(relationships, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(relationships)).toBe(Object.prototype);
+      expect(relationships["__proto__"]?.refType).toBe("User");
+    });
+
     test("handles backward relationships", () => {
       const snapshotType = createTestSnapshotType("User", {
         backwardRelationships: {
@@ -267,6 +337,30 @@ describe("snapshot-manifest", () => {
 
       expect(manifest.schema?.relationships?.posts?.refType).toBe("Post");
       expect(manifest.schema?.relationships?.posts?.array).toBe(true);
+    });
+
+    test("records a backward relationship named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        backwardRelationships: Object.fromEntries([
+          [
+            "__proto__",
+            {
+              targetType: "Post",
+              targetField: "authorId",
+              sourceField: "id",
+              isArray: true,
+              description: "User posts",
+            },
+          ],
+        ]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const relationships = manifest.schema?.relationships ?? {};
+
+      expect(Object.hasOwn(relationships, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(relationships)).toBe(Object.prototype);
+      expect(relationships["__proto__"]?.refType).toBe("Post");
     });
 
     test("handles record permissions", () => {
@@ -493,7 +587,7 @@ describe("snapshot-manifest", () => {
   });
 
   describe("generateAllTypeManifestsFromSnapshot", () => {
-    test("generates manifests for all types in snapshot", () => {
+    test("generates manifests for all tables in snapshot", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -560,7 +654,7 @@ describe("snapshot-manifest", () => {
       }
     });
 
-    test("applies namespace gqlOperations to all types", () => {
+    test("applies namespace gqlOperations to all tables", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),

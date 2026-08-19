@@ -158,7 +158,7 @@ describe("assertValidFieldRenames", () => {
 });
 
 describe("findRenameCandidates", () => {
-  test("pairs a removed field with compatible added fields in the same type", () => {
+  test("pairs a removed field with compatible added fields in the same table", () => {
     const diff = createMockMigrationDiff({
       changes: [
         {
@@ -190,7 +190,7 @@ describe("findRenameCandidates", () => {
     expect(candidates[0]!.added.map((a) => a.fieldName)).toEqual(["displayName"]);
   });
 
-  test("does not pair fields across types", () => {
+  test("does not pair fields across tables", () => {
     const diff = createMockMigrationDiff({
       changes: [
         {
@@ -342,7 +342,7 @@ describe("dropSpecApplies", () => {
 });
 
 describe("parseDropOption", () => {
-  test("parses Type.field", () => {
+  test("parses Table.field", () => {
     expect(parseDropOption("User.fullName")).toEqual({
       tableName: "User",
       fieldName: "fullName",
@@ -358,7 +358,7 @@ describe("parseDropOption", () => {
 });
 
 describe("parseRenameOption", () => {
-  test("parses Type.old:new", () => {
+  test("parses Table.old:new", () => {
     expect(parseRenameOption("User.fullName:displayName")).toEqual({
       tableName: "User",
       previousFieldName: "fullName",
@@ -501,7 +501,7 @@ describe("isTypeRenameCompatible", () => {
     );
   });
 
-  test("rejects types with serial or file fields", () => {
+  test("rejects tables with serial or file fields", () => {
     expect(
       isTypeRenameCompatible(
         snapshotType("User", {
@@ -607,7 +607,7 @@ describe("isBreakingForeignKeyRetarget", () => {
 });
 
 describe("findTypeRenameCandidates", () => {
-  test("pairs a removed type with compatible added types", () => {
+  test("pairs a removed table with compatible added tables", () => {
     const diff = createMockMigrationDiff({
       changes: [
         { kind: "table_removed", tableName: "User", before: snapshotType("User") },
@@ -646,7 +646,7 @@ describe("findTypeRenameCandidates", () => {
     expect(findTypeRenameCandidates(diff)).toHaveLength(0);
   });
 
-  test("lists multiple compatible added types for one removed type", () => {
+  test("lists multiple compatible added tables for one removed table", () => {
     const diff = createMockMigrationDiff({
       changes: [
         { kind: "table_removed", tableName: "User", before: snapshotType("User") },
@@ -691,7 +691,7 @@ describe("typeRenameSpecApplies", () => {
     ).toBe(false);
   });
 
-  test("does not match when the new type is missing", () => {
+  test("does not match when the new table is missing", () => {
     expect(
       typeRenameSpecApplies(spec, snapshot({ User: snapshotType("User") }), snapshot({})),
     ).toBe(false);
@@ -738,7 +738,7 @@ describe("assertValidTypeRenames", () => {
     ).toThrow('table "User" does not exist in the previous schema');
   });
 
-  test("rejects a rename whose new type is missing from the current schema", () => {
+  test("rejects a rename whose new table is missing from the current schema", () => {
     expect(() =>
       assertValidTypeRenames(normalized({ User: snapshotType("User") }), normalized({}), [
         { previousTableName: "User", tableName: "Person" },
@@ -782,7 +782,7 @@ describe("parseTypeRenameOption", () => {
 });
 
 describe("parseTypeDropOption", () => {
-  test("parses Type", () => {
+  test("parses Table", () => {
     expect(parseTypeDropOption("User")).toEqual({ tableName: "User" });
   });
 
@@ -799,7 +799,7 @@ describe("typeDropSpecApplies", () => {
     tables,
   });
 
-  test("matches a removed type", () => {
+  test("matches a removed table", () => {
     expect(
       typeDropSpecApplies(
         { tableName: "User" },
