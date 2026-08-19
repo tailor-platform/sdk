@@ -162,8 +162,4 @@ describe("codemod transforms", () => {
   test("v3/function-test-run-rename transforms correctly", async () => {
     await expect(runFixtureCases("v3/function-test-run-rename")).resolves.toBeUndefined();
   });
-
-  test("v3/setup-renovate-rename transforms correctly", async () => {
-    await expect(runFixtureCases("v3/setup-renovate-rename")).resolves.toBeUndefined();
-  });
 });

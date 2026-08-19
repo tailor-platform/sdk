@@ -1671,38 +1671,6 @@ export const allCodemods: CodemodPackage[] = [
       "unchanged unless it documents a command to type.",
     ].join("\n"),
   },
-  {
-    id: "v3/setup-renovate-rename",
-    name: "setup renovate → setup deps",
-    description:
-      "Rename `tailor setup renovate` invocations to `tailor setup deps`. `renovate` remains as a deprecated alias until it is removed in v3.",
-    since: "2.3.0",
-    until: "3.0.0",
-    scriptPath: "v3/setup-renovate-rename/scripts/transform.js",
-    filePatterns: [
-      "**/package.json",
-      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
-      "**/*.md",
-      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
-    ],
-    legacyPatterns: [/\bsetup[\s\\]{1,16}renovate(?![\w.-])/],
-    sourceStringLegacyPatterns: [/\bsetup[\s\\]{1,16}renovate(?![\w.-])/],
-    examples: [
-      {
-        lang: "sh",
-        before: "tailor setup renovate",
-        after: "tailor setup deps",
-      },
-    ],
-    prompt: [
-      "The `tailor setup renovate` subcommand is renamed to `tailor setup deps`;",
-      "the old name is removed in v3. Replace any remaining `setup renovate`",
-      "invocations the codemod did not rewrite (e.g. wrapped across lines or invoked",
-      "through a package runner such as `npx @tailor-platform/sdk`) with",
-      "`setup deps`. Leave prose that merely mentions the old subcommand name",
-      "unchanged unless it documents a command to type.",
-    ].join("\n"),
-  },
 ];
 
 /**

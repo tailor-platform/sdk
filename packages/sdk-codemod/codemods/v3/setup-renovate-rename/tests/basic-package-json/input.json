@@ -1,7 +1,0 @@
-{
-  "name": "my-app",
-  "scripts": {
-    "setup:deps": "tailor setup renovate",
-    "unrelated": "vitest run"
-  }
-}

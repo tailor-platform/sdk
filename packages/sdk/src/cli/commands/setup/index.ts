@@ -2,8 +2,6 @@ import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { confirmationArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { invokedViaAlias } from "#/cli/shared/command-alias";
-import { logger } from "#/cli/shared/logger";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupCoordinate, setupTarget } from "./generate";
@@ -228,20 +226,13 @@ const depsProviders: Record<
 
 const depsCommand = defineAppCommand({
   name: "deps",
-  aliases: ["renovate"],
   description: "Generate a dependency update config for Tailor dependency and workflow updates.",
   args: z.strictObject({
     provider: arg(z.enum(DEPS_PROVIDERS).default("renovate"), {
       description: "Dependency update provider to configure",
     }),
   }),
-  notes: "`renovate` is a deprecated alias of this command and will be removed in v3.",
   run: async (args) => {
-    if (invokedViaAlias({ parent: "setup", alias: "renovate", argv: process.argv })) {
-      logger.warn(
-        "`tailor setup renovate` is deprecated and will be removed in v3. Use `tailor setup deps` instead.",
-      );
-    }
     await depsProviders[args.provider]({ outputDir: process.cwd() });
   },
 });

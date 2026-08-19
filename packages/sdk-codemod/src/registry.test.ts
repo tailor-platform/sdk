@@ -35,31 +35,6 @@ describe("getApplicableCodemods", () => {
     );
   });
 
-  test("returns the setup deps rename only when crossing the v3 boundary", () => {
-    expect(getApplicableCodemods("2.3.0", "2.9.0").map((codemod) => codemod.id)).not.toContain(
-      "v3/setup-renovate-rename",
-    );
-    expect(getApplicableCodemods("2.3.0", "3.0.0").map((codemod) => codemod.id)).toContain(
-      "v3/setup-renovate-rename",
-    );
-    expect(getApplicableCodemods("2.2.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
-      "v3/setup-renovate-rename",
-    );
-  });
-
-  test("setup deps rename matches invocations but not renovate config references", () => {
-    const codemod = allCodemods.find((entry) => entry.id === "v3/setup-renovate-rename");
-    const patterns = codemod?.sourceStringLegacyPatterns as RegExp[];
-    const matches = (value: string) => patterns.some((pattern) => pattern.test(value));
-
-    expect(matches("tailor setup renovate")).toBe(true);
-    expect(matches("pnpm exec tailor setup renovate")).toBe(true);
-    expect(matches("tailor setup \\\n  renovate")).toBe(true);
-    expect(matches("tailor setup deps")).toBe(false);
-    expect(matches("tailor setup deps renovate.json")).toBe(false);
-    expect(matches("cat renovate.json")).toBe(false);
-  });
-
   test("bundles every registered transform script", () => {
     const tsdownConfig = fs.readFileSync(path.resolve(__dirname, "../tsdown.config.ts"), "utf-8");
     const missing = allCodemods

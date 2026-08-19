@@ -1,7 +1,0 @@
-name: "@tailor-platform/setup-renovate-rename"
-version: "1.0.0"
-description: "Rename `tailor setup renovate` invocations to `tailor setup deps`"
-engine: jssg
-language: text
-since: "2.3.0"
-until: "3.0.0"

@@ -16,16 +16,16 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                 | Aliases    | Description                                                                                      |
-| --------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
-| [`setup branch`](#setup-branch)         | -          | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
-| [`setup tag`](#setup-tag)               | -          | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
-| [`setup preview`](#setup-preview)       | -          | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
-| [`setup action`](#setup-action)         | -          | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
-| [`setup coordinate`](#setup-coordinate) | -          | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
-| [`setup deps`](#setup-deps)             | `renovate` | Generate a dependency update config for Tailor dependency and workflow updates.                  |
-| [`setup check`](#setup-check)           | -          | Audit generated workflows for drift against the current config/repo (read-only).                 |
-| [`setup delete`](#setup-delete)         | -          | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
+| Command                                 | Description                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [`setup branch`](#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
+| [`setup tag`](#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
+| [`setup preview`](#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
+| [`setup action`](#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
+| [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [`setup deps`](#setup-deps)             | Generate a dependency update config for Tailor dependency and workflow updates.                  |
+| [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
+| [`setup delete`](#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
 
 ### setup action
 
@@ -140,8 +140,6 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 Generate a dependency update config for Tailor dependency and workflow updates.
 
-**Aliases:** `renovate`
-
 **Usage**
 
 ```
@@ -155,10 +153,6 @@ tailor setup deps [options]
 | `--provider <PROVIDER>` | -     | Dependency update provider to configure | No       | `"renovate"` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-**Notes**
-
-`renovate` is a deprecated alias of this command and will be removed in v3.
 
 ### setup preview
 

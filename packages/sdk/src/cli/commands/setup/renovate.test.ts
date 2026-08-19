@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test } from "vitest";
-import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { RENOVATE_CONFIG_FILE, RENOVATE_PRESET, setupRenovate } from "./renovate";
 import { setupCommand } from "./index";
 
@@ -35,38 +34,19 @@ describe("setupRenovate", () => {
     );
   });
 
-  test("dispatches the deprecated renovate alias to the deps command with a warning", async () => {
-    using stderr = captureStderr();
-    const originalArgv = process.argv;
+  test("rejects the former renovate subcommand", async () => {
     const originalCwd = process.cwd();
-    process.argv = ["node", "tailor", "setup", "renovate"];
     process.chdir(testDir);
+    let result: Awaited<ReturnType<typeof runCommand>>;
     try {
-      await runCommand(setupCommand, ["renovate"]);
+      result = await runCommand(setupCommand, ["renovate"]);
     } finally {
-      process.argv = originalArgv;
       process.chdir(originalCwd);
     }
 
-    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
-    expect(stderr.output).toContain("`tailor setup renovate` is deprecated");
-  });
-
-  test("does not warn when the canonical deps command is invoked", async () => {
-    using stderr = captureStderr();
-    const originalArgv = process.argv;
-    const originalCwd = process.cwd();
-    process.argv = ["node", "tailor", "setup", "deps"];
-    process.chdir(testDir);
-    try {
-      await runCommand(setupCommand, ["deps"]);
-    } finally {
-      process.argv = originalArgv;
-      process.chdir(originalCwd);
-    }
-
-    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
-    expect(stderr.output).not.toContain("deprecated");
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain("Unknown subcommand: renovate");
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
   });
 
   test("generates the Renovate config when the provider is named explicitly", async () => {
