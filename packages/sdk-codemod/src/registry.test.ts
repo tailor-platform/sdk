@@ -35,6 +35,59 @@ describe("getApplicableCodemods", () => {
     );
   });
 
+  test("flags residual setup branch --branch only on tailor invocations", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v3/setup-branch-flag-rename");
+    const patterns = codemod?.legacyPatterns as RegExp[];
+
+    expect(codemod?.sourceStringLegacyPatterns).toEqual(patterns);
+    const matchesPattern = (value: string) => patterns.some((pattern) => pattern.test(value));
+    expect(matchesPattern("tailor setup branch --name my-app --branch main")).toBe(true);
+    expect(matchesPattern("tailor setup branch \\\n  --name my-app \\\n  --branch main")).toBe(
+      true,
+    );
+    expect(matchesPattern("tailor setup branch ^\r\n  --name my-app ^\r\n  --branch main")).toBe(
+      true,
+    );
+    expect(matchesPattern("tailor setup branch --name $(get-name) --branch main")).toBe(true);
+    expect(matchesPattern("npx @tailor-platform/sdk setup branch --name x --branch main")).toBe(
+      true,
+    );
+    expect(matchesPattern("npx @tailor-platform/sdk@latest setup branch --branch main")).toBe(true);
+    expect(matchesPattern("tailor-sdk setup branch --branch main")).toBe(true);
+    expect(matchesPattern("tailor setup branch --name my-app \\\n--branch main")).toBe(true);
+    expect(matchesPattern("tailor setup branch --name my-app --target main")).toBe(false);
+    expect(matchesPattern("tailor setup tag --name my-app --branch main")).toBe(false);
+    expect(matchesPattern("tailor setup branch --name x && tailor setup tag --branch main")).toBe(
+      false,
+    );
+    expect(
+      matchesPattern("tailor setup branch --environment 'prod--branch' --target release"),
+    ).toBe(false);
+    expect(
+      matchesPattern("tailor setup branch --environment 'notes about --branch here' --target x"),
+    ).toBe(false);
+    expect(matchesPattern("other-cli setup branch --branch main")).toBe(false);
+    expect(matchesPattern("custom-tailor setup branch --branch main")).toBe(false);
+    expect(
+      matchesPattern("tailor setup branch --target main # setup tag keeps --branch main"),
+    ).toBe(false);
+  });
+
+  test("returns the setup branch flag rename only when crossing the v3 boundary", () => {
+    expect(getApplicableCodemods("2.3.0", "2.9.0").map((codemod) => codemod.id)).not.toContain(
+      "v3/setup-branch-flag-rename",
+    );
+    expect(getApplicableCodemods("2.3.0", "3.0.0").map((codemod) => codemod.id)).toContain(
+      "v3/setup-branch-flag-rename",
+    );
+    expect(getApplicableCodemods("1.72.0", "3.0.0").map((codemod) => codemod.id)).toContain(
+      "v3/setup-branch-flag-rename",
+    );
+    expect(getApplicableCodemods("1.71.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
+      "v3/setup-branch-flag-rename",
+    );
+  });
+
   test("bundles every registered transform script", () => {
     const tsdownConfig = fs.readFileSync(path.resolve(__dirname, "../tsdown.config.ts"), "utf-8");
     const missing = allCodemods
