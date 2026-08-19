@@ -14,6 +14,10 @@ import type {
 } from "#/types/tailordb.generated";
 
 export type TailorDBFieldOutput = {
+  // Must stay an inline literal union (not an aliased import) — zinfer reads
+  // this annotation verbatim into src/types/*.generated.ts, which cannot
+  // import from configure. Keep in sync with TailorFieldType
+  // (#/configure/types/field.types) and tailorFieldTypeKeys (../field-types).
   type:
     | "uuid"
     | "string"
