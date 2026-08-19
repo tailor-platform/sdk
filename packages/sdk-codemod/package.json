@@ -18,8 +18,8 @@
   "type": "module",
   "scripts": {
     "build": "tsdown",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "prepublish": "pnpm run build",
@@ -42,6 +42,7 @@
     "@types/semver": "7.8.0",
     "eslint-plugin-zod": "4.9.1",
     "oxlint": "1.78.0",
+    "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
