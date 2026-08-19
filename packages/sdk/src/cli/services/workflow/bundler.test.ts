@@ -647,6 +647,39 @@ export default createWorkflow({ name: "workflow", mainJob });
 
       expect(result.usedJobNames).toEqual(["main-job"]);
     });
+
+    test("does not throw when the runtime workflow import is type-only", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import type { workflow } from "@tailor-platform/sdk/runtime";
+
+function callLocalWorkflow(workflow: { execJobFunction: (name: string) => string }) {
+  return workflow.execJobFunction("not-a-workflow-job");
+}
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => callLocalWorkflow({ execJobFunction: (name) => name }),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      const result = await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+        ["main-job"],
+        {},
+        context,
+        dir,
+      );
+
+      expect(result.usedJobNames).toEqual(["main-job"]);
+    });
   });
 
   describe("cross-file workflow default import", () => {

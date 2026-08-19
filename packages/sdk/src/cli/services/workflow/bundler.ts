@@ -86,7 +86,7 @@ const RUNTIME_WORKFLOW_MODULE_SPECIFIERS = new Set([
 function collectRuntimeWorkflowImportBindings(program: ASTNode): Set<string> {
   const bindings = new Set<string>();
   for (const statement of (program.body as ASTNode[] | undefined) ?? []) {
-    if (statement.type !== "ImportDeclaration") continue;
+    if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue;
     const source = statement.source as ASTNode | undefined;
     if (
       typeof source?.value !== "string" ||
@@ -95,7 +95,7 @@ function collectRuntimeWorkflowImportBindings(program: ASTNode): Set<string> {
       continue;
     }
     for (const specifier of (statement.specifiers as ASTNode[] | undefined) ?? []) {
-      if (specifier.type !== "ImportSpecifier") continue;
+      if (specifier.type !== "ImportSpecifier" || specifier.importKind === "type") continue;
       const imported = getModuleExportName(specifier.imported);
       const local = getModuleExportName(specifier.local);
       if (imported === "workflow" && local) bindings.add(local);
@@ -167,8 +167,8 @@ function buildDirectExecJobFunctionErrorMessage(
     return (
       `Workflow file ${sourceFile} calls execJobFunction("${call.targetName}", ...) directly. A ` +
       `direct call is never recognized as a dependency, so "${call.targetName}" would silently be ` +
-      `dropped from the bundle unless something else happens to reference it. Call ` +
-      `"${call.targetName}".start(...) from inside a job body instead.`
+      `dropped from the bundle unless something else happens to reference it. Call the ` +
+      `"${call.targetName}" job's .start(...) method from inside a job body instead.`
     );
   }
   return (
@@ -244,10 +244,11 @@ export function validateBundledDependencies(
       if (!usedJobNameSet.has(targetJobName)) {
         throw new WorkflowJobDetectionError(
           `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...) — usually the ` +
-            `result of a "${targetJobName}".start() rewrite — but "${targetJobName}" was not detected as a ` +
-            `dependency and is not included in the bundle. Call "${targetJobName}".start() from inside the ` +
-            `body of workflow job "${callerJobName}" (a nested function inside body works too), or make ` +
-            `sure the file containing the call is covered by the workflow service's "files" pattern.`,
+            `result of a rewritten "${targetJobName}" job .start() call — but "${targetJobName}" was not ` +
+            `detected as a dependency and is not included in the bundle. Call the "${targetJobName}" job's ` +
+            `.start() method from inside the body of workflow job "${callerJobName}" (a nested function ` +
+            `inside body works too), or make sure the file containing the call is covered by the workflow ` +
+            `service's "files" pattern.`,
         );
       }
     }
@@ -475,7 +476,8 @@ async function filterUsedJobs(
         return jobDependencies;
       } catch (error) {
         if (error instanceof WorkflowJobDetectionError) throw error;
-        // If we can't parse a file, assume no dependencies from it
+        // Some other unexpected error (e.g. a file read failure): treat the
+        // file as having no dependencies rather than failing the whole build.
         return [];
       }
     }),
