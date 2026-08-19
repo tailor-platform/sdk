@@ -160,7 +160,7 @@ describe("truncate command", () => {
   });
 
   describe("truncate with --namespace flag", () => {
-    test("truncates all types in specified namespace", async () => {
+    test("truncates all tables in specified namespace", async () => {
       const client = await getMockClient();
 
       await truncate({ namespace: "tailordb" });

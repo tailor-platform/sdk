@@ -46,7 +46,7 @@ describe("buildTypeScripts", () => {
     expect(updateExpr).not.toContain('"createdAt":');
   });
 
-  test("embeds the invoker normalization once per type instead of once per field hook", () => {
+  test("embeds the invoker normalization once per table instead of once per field hook", () => {
     const type = db.table("Widget", {
       a: db.string().hooks({ create: ({ input }) => input ?? "a" }),
       b: db.string().hooks({ create: ({ input }) => input ?? "b" }),
@@ -64,7 +64,7 @@ describe("buildTypeScripts", () => {
     expect(createExpr.match(/USER_TYPE_MACHINE_USER/g)).toHaveLength(1);
   });
 
-  test("delivers one normalized invoker to a field hook, a type-level hook, and type-level validate", () => {
+  test("delivers one normalized invoker to a field hook, a table-level hook, and table-level validate", () => {
     const type = db
       .table("Widget", {
         name: db
@@ -204,7 +204,7 @@ describe("buildTypeScripts", () => {
     expect(createExpr).not.toContain("new Date()");
   });
 
-  test("includes type-level validate with __issues function", () => {
+  test("includes table-level validate with __issues function", () => {
     const typeValidateExpr =
       '(({ newRecord }) => { if (newRecord.start > newRecord.end) __issues("start", "bad"); })({ newRecord: _newRecord, oldRecord: _oldRecord }, __issues)';
 
@@ -217,7 +217,7 @@ describe("buildTypeScripts", () => {
     expect(expr).toContain("return __errs");
   });
 
-  test("combines field validators and type-level validate in one script", () => {
+  test("combines field validators and table-level validate in one script", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       name: {
         type: "string",
@@ -271,7 +271,7 @@ describe("buildTypeScripts", () => {
     expect(expr).toContain('"items[" + __idx + "].name"');
   });
 
-  test("nested array forEach terminates with semicolon to prevent ASI with type-level validate", () => {
+  test("nested array forEach terminates with semicolon to prevent ASI with table-level validate", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       items: {
         type: "nested",
@@ -332,7 +332,7 @@ describe("buildTypeScripts", () => {
     expect(run({ address: { city: "" } })).toEqual({ "address.city": "required" });
   });
 
-  test("no typeValidate output when no field validators and no type-level validate", () => {
+  test("no typeValidate output when no field validators and no table-level validate", () => {
     expect(buildTypeScripts({})).toEqual({});
     expect(buildTypeScripts({}, undefined)).toEqual({});
   });
@@ -363,7 +363,7 @@ describe("buildTypeScripts", () => {
     expect(validateExpr).toContain('typeof _invoker !== "undefined" ? _invoker : undefined');
   });
 
-  test("type-level hook receives field-level results as input, not raw _input", () => {
+  test("table-level hook receives field-level results as input, not raw _input", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       status: { type: "string", default: "active" },
     };
@@ -379,15 +379,15 @@ describe("buildTypeScripts", () => {
     expect(expr).toContain("const __fl =");
     expect(expr).toContain('"status": _input["status"] ?? "active"');
 
-    // Type-level hook receives field-level result via IIFE that shadows _input
+    // Table-level hook receives field-level result via IIFE that shadows _input
     expect(expr).toContain("((_input) =>");
     expect(expr).toContain("Object.assign({}, _input, __fl)");
 
-    // Final result merges field-level and type-level
+    // Final result merges field-level and table-level
     expect(expr).toContain("Object.assign({}, __fl,");
   });
 
-  test("field-level + type-level hook evaluates correctly at runtime", () => {
+  test("field-level + table-level hook evaluates correctly at runtime", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       name: { type: "string", hooks: { create: { expr: "_value.trim()" } } },
     };
@@ -405,11 +405,11 @@ describe("buildTypeScripts", () => {
     const result = new Function("_input", "_oldRecord", `return ${expr}`)(_input, _oldRecord);
     // Field-level hook trims name
     expect(result.name).toBe("hello");
-    // Type-level hook sees trimmed input and uppercases it
+    // Table-level hook sees trimmed input and uppercases it
     expect(result.upper).toBe("HELLO");
   });
 
-  test("update type-level hook falls back to oldRecord via _oldRecord", () => {
+  test("update table-level hook falls back to oldRecord via _oldRecord", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       createdAt: {
         type: "datetime",

@@ -18,12 +18,12 @@ describe("FileUtilsPlugin", () => {
   const testDistPath = "/test/dist/files.ts";
 
   function createCtx(
-    namespaces: { namespace: string; types: Record<string, TailorDBType> }[],
+    namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
   ): TailorDBReadyContext<{ distPath: string }> {
     return {
       tailordb: namespaces.map((ns) => ({
         namespace: ns.namespace,
-        types: ns.types,
+        tables: ns.tables,
         sourceInfo: new Map(),
         pluginAttachments: new Map(),
       })),
@@ -164,7 +164,7 @@ describe("FileUtilsPlugin", () => {
       const ctx = createCtx([
         {
           namespace: "tailordb",
-          types: {
+          tables: {
             User: parseTailorDBType(toSchemaOutput(userType)),
             SalesOrder: parseTailorDBType(toSchemaOutput(salesOrderType)),
           },
@@ -191,7 +191,7 @@ describe("FileUtilsPlugin", () => {
       const ctx = createCtx([
         {
           namespace: "tailordb",
-          types: {
+          tables: {
             User: parseTailorDBType(toSchemaOutput(userType)),
           },
         },
@@ -223,11 +223,11 @@ describe("FileUtilsPlugin", () => {
       const ctx = createCtx([
         {
           namespace: "tailordb",
-          types: { User: parseTailorDBType(toSchemaOutput(userType)) },
+          tables: { User: parseTailorDBType(toSchemaOutput(userType)) },
         },
         {
           namespace: "someNamespace",
-          types: { Customer: parseTailorDBType(toSchemaOutput(customerType)) },
+          tables: { Customer: parseTailorDBType(toSchemaOutput(customerType)) },
         },
       ]);
 

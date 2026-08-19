@@ -309,7 +309,7 @@ async function runFreshErdExport(options: FreshErdExportOptions): Promise<ErdBui
       try {
         resolve(parseFreshErdExportResults(stdout));
       } catch (error) {
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
   });
@@ -394,7 +394,7 @@ async function createErdWatcher(options: WatchOptions): Promise<FSWatcher> {
       clearTimeout(debounceTimer);
     }
     debounceTimer = setTimeout(() => {
-      rebuild();
+      void rebuild();
     }, 150);
   };
 
@@ -411,7 +411,7 @@ async function createErdWatcher(options: WatchOptions): Promise<FSWatcher> {
 async function waitForShutdown(server: http.Server, watcher: FSWatcher): Promise<void> {
   return await new Promise<void>((resolve) => {
     const shutdown = () => {
-      watcher.close().finally(() => {
+      void watcher.close().finally(() => {
         server.close(() => {
           logger.info("ERD server stopped.");
           resolve();

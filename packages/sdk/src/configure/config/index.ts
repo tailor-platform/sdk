@@ -18,7 +18,7 @@ export function defineConfig<
 
 /**
  * Define plugins to be used with the Tailor SDK.
- * Plugins can generate additional types, resolvers, and executors
+ * Plugins can generate additional tables, resolvers, and executors
  * based on existing TailorDB tables.
  * @param configs - Plugin configurations
  * @returns Plugin configurations as given

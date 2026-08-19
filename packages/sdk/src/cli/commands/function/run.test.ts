@@ -10,6 +10,7 @@ import { executeScript } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { runFunctionCommand } from "./run";
+import { loadScriptSchemaSnapshot, verifyScriptSchemaSnapshot } from "./script-scaffold";
 import { functionCommand } from "./index";
 
 vi.mock("#/cli/shared/config-loader", () => ({
@@ -30,18 +31,45 @@ vi.mock("#/cli/shared/script-executor", () => ({
   executeScript: vi.fn(),
 }));
 
+vi.mock("./detect", () => ({
+  detectFunctionType: vi.fn().mockResolvedValue({ type: "plain", name: "main", hasInput: false }),
+}));
+
+vi.mock("./bundle", () => ({
+  bundleForRun: vi.fn().mockResolvedValue({
+    bundledCode: "export const main = async () => ({});",
+    scriptName: "main.js",
+  }),
+}));
+
+vi.mock("./script-scaffold", async (importActual) => {
+  const actual = await importActual<object>();
+  return {
+    ...actual,
+    loadScriptSchemaSnapshot: vi.fn().mockReturnValue(null),
+    verifyScriptSchemaSnapshot: vi.fn(),
+  };
+});
+
 describe("function run --json", () => {
   let scriptPath: string;
+  let tsScriptPath: string;
   let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
 
   aroundEach(async (runTest) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-run-json-test-"));
     scriptPath = path.join(tmpDir, "fn.js");
     fs.writeFileSync(scriptPath, "export default async function main() { return { ok: true }; }");
+    tsScriptPath = path.join(tmpDir, "fix.ts");
+    fs.writeFileSync(tsScriptPath, "export default async function main() { return { ok: true }; }");
 
+    vi.mocked(executeScript).mockClear();
+    vi.mocked(verifyScriptSchemaSnapshot).mockReset();
+    vi.mocked(loadScriptSchemaSnapshot).mockReset().mockReturnValue(null);
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
+        path: path.join(tmpDir, "tailor.config.ts"),
         auth: {
           name: "auth",
           machineUsers: {
@@ -157,6 +185,60 @@ describe("function run --json", () => {
 
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
     expect(stderr.output).toContain("`tailor function test-run` is deprecated");
+  });
+
+  test("verifies the schema snapshot of a scaffolded script before executing", async () => {
+    const sidecar = { snapshotPath: "/tmp/db.snapshot.json", snapshot: { namespace: "tailordb" } };
+    vi.mocked(loadScriptSchemaSnapshot).mockReturnValueOnce(sidecar as never);
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [tsScriptPath, "--machine-user", "admin"]);
+
+    expect(verifyScriptSchemaSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ sidecar, workspaceId: "12345678-1234-4abc-8def-123456789012" }),
+    );
+    expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
+  });
+
+  test("refuses to run when the schema snapshot check reports drift", async () => {
+    vi.mocked(loadScriptSchemaSnapshot).mockReturnValueOnce({
+      snapshotPath: "/tmp/db.snapshot.json",
+      snapshot: { namespace: "tailordb" },
+    } as never);
+    vi.mocked(verifyScriptSchemaSnapshot).mockRejectedValueOnce(new Error("Schema drift detected"));
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    const result = await runCommand(runFunctionCommand, [tsScriptPath, "--machine-user", "admin"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/Schema drift detected/);
+    expect(executeScript).not.toHaveBeenCalled();
+  });
+
+  test("skips the schema snapshot check with --allow-schema-drift, even when the sidecar cannot be loaded", async () => {
+    fs.writeFileSync(path.join(path.dirname(tsScriptPath), "db.snapshot.json"), "{broken");
+    vi.mocked(loadScriptSchemaSnapshot).mockImplementation(() => {
+      throw new Error("Failed to parse schema snapshot");
+    });
+    using stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [
+      tsScriptPath,
+      "--machine-user",
+      "admin",
+      "--allow-schema-drift",
+    ]);
+
+    expect(loadScriptSchemaSnapshot).not.toHaveBeenCalled();
+    expect(verifyScriptSchemaSnapshot).not.toHaveBeenCalled();
+    expect(stderr.output).toContain("Skipping the schema snapshot check");
+    expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
   });
 
   test("forwards the --machine-user flag to machine user resolution and uses the resolved name", async () => {

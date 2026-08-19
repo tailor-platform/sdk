@@ -25,15 +25,20 @@ const defaultGitRunner: GitRunner = (args, cwd) => {
  * fallback.
  * @param cwd - Repository directory to inspect
  * @param run - Git runner, injectable for testing
+ * @param branchFlag - Flag name to suggest in the remediation hint
  * @returns The default branch name (e.g. `main`)
  */
-export function detectDefaultBranch(cwd: string, run: GitRunner = defaultGitRunner): string {
+export function detectDefaultBranch(
+  cwd: string,
+  run: GitRunner = defaultGitRunner,
+  branchFlag = "--branch",
+): string {
   const ref = run(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd);
   const branch = ref?.startsWith("origin/") ? ref.slice("origin/".length) : ref;
   if (!branch) {
     throw new Error(
       "Could not detect the default branch from git. " +
-        "Pass --branch <name>, or run 'git remote set-head origin --auto' to record it.",
+        `Pass ${branchFlag} <name>, or run 'git remote set-head origin --auto' to record it.`,
     );
   }
   return branch;

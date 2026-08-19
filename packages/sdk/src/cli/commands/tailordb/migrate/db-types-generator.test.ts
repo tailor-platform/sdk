@@ -84,7 +84,7 @@ describe("db-types-generator", () => {
     return { filePath, content };
   }
 
-  test("generates empty db types when no types in snapshot", async () => {
+  test("generates empty db types when no tables in snapshot", async () => {
     const snapshot = createMockSnapshot({}, "tailordb");
 
     const { filePath, content } = await generateContent(snapshot);
@@ -262,8 +262,8 @@ describe("db-types-generator", () => {
     });
   });
 
-  describe("writeDbTypesFile with multiple types", () => {
-    test("generates types with multiple types", async () => {
+  describe("writeDbTypesFile with multiple tables", () => {
+    test("generates types for multiple tables", async () => {
       const snapshot = createMockSnapshot({
         User: { fields: { name: { type: "string", required: true } } },
         Order: { fields: { total: { type: "float", required: true } } },
@@ -400,7 +400,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
     });
 
-    test("injects the new table for a renamed type alongside the old one", async () => {
+    test("injects the new table for a rename alongside the old one", async () => {
       const snapshot = createMockSnapshot({
         User: {
           fields: {
@@ -439,7 +439,7 @@ describe("db-types-generator", () => {
       expect(personBlock).toContain("email: string | null;");
     });
 
-    test("injects a renamed type's table even when the previous snapshot is empty", async () => {
+    test("injects a renamed table even when the previous snapshot is empty", async () => {
       const snapshot = createMockSnapshot({}, "tailordb");
       const diff = createMockMigrationDiff({
         changes: [
