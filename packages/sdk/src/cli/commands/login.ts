@@ -20,6 +20,7 @@ import {
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
@@ -123,9 +124,21 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
   const client = initOAuth2Client(args.platformConfig);
   const state = randomState();
   const codeVerifier = await generateCodeVerifier();
+  // A fetch failure here rejects with TypeError, which the top-level handler
+  // classifies as an SDK bug and crash-reports.
+  const authorizeUri = await client.authorizationCode
+    .getAuthorizeUri({ redirectUri, state, codeVerifier })
+    .catch((error: unknown) => {
+      throw new Error(`Failed to prepare the login authorization URL: ${toError(error).message}`, {
+        cause: error,
+      });
+    });
 
   return new Promise<void>((resolve, reject) => {
-    const server = http.createServer(async (req, res) => {
+    const handleCallback = async (
+      req: http.IncomingMessage,
+      res: http.ServerResponse,
+    ): Promise<void> => {
       try {
         if (!req.url?.startsWith("/callback")) {
           throw new Error("Invalid callback URL");
@@ -175,12 +188,13 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       } catch (error) {
         res.writeHead(401);
         res.end("Authentication failed");
-        reject(error);
+        reject(toError(error));
       } finally {
         // Close the server after handling one request.
         server.close();
       }
-    });
+    };
+    const server = http.createServer((req, res) => void handleCallback(req, res));
 
     const timeout = setTimeout(
       () => {
@@ -198,20 +212,15 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       reject(error);
     });
 
-    server.listen(redirectPort, async () => {
-      const authorizeUri = await client.authorizationCode.getAuthorizeUri({
-        redirectUri,
-        state,
-        codeVerifier,
-      });
-
+    const openBrowser = async (): Promise<void> => {
       logger.info(`Opening browser for login:\n\n${authorizeUri}\n`);
       try {
         await open(authorizeUri);
       } catch {
         logger.warn("Failed to open browser automatically. Please open the URL above manually.");
       }
-    });
+    };
+    server.listen(redirectPort, () => void openBrowser());
   });
 };
 

@@ -139,6 +139,15 @@ export function isCLIError(error: unknown): error is CLIError {
   return error instanceof Error && error.name === "CLIError";
 }
 
+/**
+ * Convert a caught value into an Error, keeping Error instances as-is
+ * @param value - Caught value
+ * @returns The value itself when it is an Error, otherwise an Error of its string form
+ */
+export function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
+}
+
 const MISSING_NAMED_EXPORT_PATTERN = /does not provide an export named '(?!default')([^']+)'/;
 
 /**
