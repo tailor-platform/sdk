@@ -922,6 +922,45 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/remove-workflow-exec-job-function",
+    name: "workflow.execJobFunction (imported) removed — use job.start()",
+    description:
+      "`execJobFunction` on the `workflow` value imported from @tailor-platform/sdk/runtime(/workflow) is removed in v3. Calling it directly from a workflow job body to reach another job is not detected as a build-time dependency and has no working use; the target job's own `.start()` method is the only supported way to call it. This does not affect the ambient `tailor.workflow.execJobFunction` global — that's what `.start()` itself compiles down to at build time, and it remains fully supported.",
+    since: "1.0.0",
+    until: "3.0.0",
+    // No scriptPath: rewriting a call site requires resolving the job-name
+    // string to the WorkflowJob binding in scope, which is not mechanically
+    // decidable in general — this is a codemod-less ("manual") migration.
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: ["execJobFunction"],
+    examples: [
+      {
+        before:
+          'import { workflow } from "@tailor-platform/sdk/runtime";\n\nawait workflow.execJobFunction("worker", { id: 1 });',
+        after: 'import { worker } from "./jobs/worker";\n\nawait worker.start({ id: 1 });',
+      },
+    ],
+    prompt: [
+      "workflow.execJobFunction — the value imported from",
+      "@tailor-platform/sdk/runtime or @tailor-platform/sdk/runtime/workflow — is",
+      "removed in v3. Replace each call with the target job's own .start() method:",
+      "import the WorkflowJob the call names and call <job>.start(args, options)",
+      'instead of workflow.execJobFunction("<job-name>", args, options).',
+      "",
+      "This only removes the re-export from @tailor-platform/sdk/runtime. It does",
+      "not affect the ambient tailor.workflow.execJobFunction global — that's what",
+      ".start() itself compiles down to at build time, and it stays fully",
+      "supported. Do not touch call sites that already read",
+      "tailor.workflow.execJobFunction(...) directly; they are not part of this",
+      "migration.",
+      "",
+      "If the job name passed to execJobFunction is not a string literal (a truly",
+      "dynamic dispatch), there is currently no supported replacement — .start()",
+      "only targets a statically known job. Flag this case for a human instead of",
+      "guessing a rewrite.",
+    ].join("\n"),
+  },
+  {
     id: "v2/open-download-stream",
     name: "openDownloadStream → downloadStream",
     description:
