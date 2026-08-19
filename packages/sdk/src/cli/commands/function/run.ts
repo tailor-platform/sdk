@@ -19,7 +19,6 @@ import {
 } from "#/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { invokedViaAlias } from "#/cli/shared/command-alias";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
@@ -93,7 +92,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
     },
   ],
   run: async (args) => {
-    if (invokedViaAlias({ parent: "function", alias: "test-run", argv: process.argv })) {
+    if (invokedViaTestRunAlias(process.argv)) {
       logger.warn(
         "`tailor function test-run` is deprecated and will be removed in v3. Use `tailor function run` instead.",
       );
@@ -293,6 +292,17 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
     }
   },
 });
+
+/**
+ * Detect whether the command was invoked through the deprecated `test-run`
+ * alias. politty resolves aliases before dispatch, so the invoked name is only
+ * observable from the raw argv.
+ * @param argv - Process argv tokens
+ * @returns true when the `test-run` alias follows the `function` subcommand
+ */
+function invokedViaTestRunAlias(argv: readonly string[]): boolean {
+  return argv.some((token, i) => token === "function" && argv[i + 1] === "test-run");
+}
 
 /**
  * Resolve auth namespace from config.
