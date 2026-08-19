@@ -1,5 +1,19 @@
 # @tailor-platform/create-sdk
 
+## 2.4.0
+
+### Patch Changes
+
+- [#2069](https://github.com/tailor-platform/sdk/pull/2069) [`d07a120`](https://github.com/tailor-platform/sdk/commit/d07a120950c5bac0bd8b5d2e341ad80dd6694448) Thanks [@dqn](https://github.com/dqn)! - The remaining published docs that named a `db.table()` definition a type now say table: the migration guide's rebaseline description, the testing guide's executor trigger description, and the create-sdk `tailordb` template README's feature list (`field-level and table-level` validations).
+
+- [#2062](https://github.com/tailor-platform/sdk/pull/2062) [`153a780`](https://github.com/tailor-platform/sdk/commit/153a78038c65f4376f2f9f75eec8a7a37ea3f6dc) Thanks [@dqn](https://github.com/dqn)! - `tailor seed` now calls a `db.table()` definition a table instead of a type, in its help, progress, and errors — `Seeding 3 tables via Kysely batch insert`. The `fillSeedData` documentation and the `create-sdk` template hint follow.
+  
+  Messages that list the seed targets say entities rather than tables, because `_User` is an IdP entity rather than a TailorDB table and can appear in the same list.
+  
+  The positional is now named `entities`, so `--help` shows `[entities]` instead of `[types]`. Positionals are matched by argv order, so existing invocations are unaffected.
+
+- [#2063](https://github.com/tailor-platform/sdk/pull/2063) [`5d16dc9`](https://github.com/tailor-platform/sdk/commit/5d16dc918f77bd4c76d0d90811207ec15ac30f4e) Thanks [@dqn](https://github.com/dqn)! - The remaining docs and editor tooltips now describe a `db.table()` definition as a table instead of a type. The TailorDB docs say table-level (matching the sentences around them that already say table), the file-upload runtime API documents its `typeName` parameters as table names, and the create-sdk tailordb template's test titles follow suit.
+
 ## 2.3.0
 
 ### Patch Changes

@@ -76,7 +76,7 @@ function mockLocalNamespace(snapshot: SchemaSnapshot = makeSnapshot()): void {
   vi.mocked(loadTailorDBNamespaces).mockResolvedValue({
     config: {} as never,
     plugins: [],
-    namespaces: [{ namespace: snapshot.namespace, types, sourceInfo: new Map() }],
+    namespaces: [{ namespace: snapshot.namespace, tables: types, sourceInfo: new Map() }],
   } as never);
 }
 
@@ -205,6 +205,21 @@ describe("function script", () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/Scaffold --remote at a new path/);
+    expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
+  });
+
+  test("refuses to re-scaffold an existing kyselyTypePlugin script", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    mockConfig(fs.realpathSync(tmp.dir), { plugins: [kyselyPluginStub] });
+    fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(tmp.dir, "scripts/fix.ts"), "export default function main() {}\n");
+
+    const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toMatch(/nothing to refresh/);
+    expect(loadTailorDBNamespaces).not.toHaveBeenCalled();
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
   });
 

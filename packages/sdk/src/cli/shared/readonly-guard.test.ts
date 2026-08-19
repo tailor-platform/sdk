@@ -65,7 +65,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "function/list.ts",
   "function/logs.ts",
   "function/run.ts",
-  // Scaffolds local files; the platform is only read (deployed schema fetch).
+  // Scaffolds local files; only --remote reads the deployed schema.
   "function/script.ts",
   // Generate (local code generation)
   "generate/index.ts",

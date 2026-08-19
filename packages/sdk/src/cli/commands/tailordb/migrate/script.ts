@@ -316,7 +316,14 @@ async function script(options: ScriptOptions): Promise<void> {
   }
 }
 
-function resolveTargetNamespace(
+/**
+ * Resolve the namespace a single-namespace operation targets: the requested
+ * one when given, the only configured one otherwise.
+ * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
+ * @param {string} [requested] - Namespace requested via --namespace
+ * @returns {string} Target namespace
+ */
+export function resolveTargetNamespace(
   namespacesWithMigrations: NamespaceWithMigrations[],
   requested?: string,
 ): string {

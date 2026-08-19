@@ -132,12 +132,10 @@ export async function generateDiffFiles(
   }
 
   // Add description if provided
-  if (description) {
-    diff = { ...diff, description };
-  }
+  const diffWithDescription = description ? { ...diff, description } : diff;
 
   // Write diff file
-  await fs.writeFile(diffFilePath, JSON.stringify(diff, null, 2));
+  await fs.writeFile(diffFilePath, JSON.stringify(diffWithDescription, null, 2));
 
   const result: GenerateDiffResult = {
     diffFilePath,
@@ -145,18 +143,96 @@ export async function generateDiffFiles(
   };
 
   if (writeScript) {
-    const scriptContent = generateMigrationScript(diff, expandPlans);
+    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans);
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
     // Generate db.ts with types based on the PREVIOUS schema state
     // (the state before this migration runs)
     // Pass diff to generate ColumnType for optional->required fields
-    await writeDbTypesFile(previousSnapshot, migrationsDir, migrationNumber, diff, expandPlans);
+    await writeDbTypesFile(
+      previousSnapshot,
+      migrationsDir,
+      migrationNumber,
+      diffWithDescription,
+      expandPlans,
+    );
     result.dbTypesFilePath = dbTypesFilePath;
   }
 
   return result;
+}
+
+/** Inputs for {@link generateDataOnlyMigrationFiles}. */
+interface GenerateDataOnlyFilesOptions {
+  /** Empty diff marked as requiring a migration script. */
+  diff: MigrationDiff;
+  migrationsDir: string;
+  migrationNumber: number;
+  /** Schema the migration runs against, used for db.ts generation. */
+  snapshot: SchemaSnapshot;
+  description?: string;
+}
+
+/** Files written for a data-only migration. */
+interface GenerateDataOnlyFilesResult {
+  diffFilePath: string;
+  migrateFilePath: string;
+  dbTypesFilePath: string;
+  migrationNumber: number;
+}
+
+/**
+ * Generate the files for a data-only migration: an empty diff and a migration
+ * script skeleton typed against the unchanged schema.
+ * @param {GenerateDataOnlyFilesOptions} options - Diff, output location, and schema for db.ts
+ * @returns {Promise<GenerateDataOnlyFilesResult>} Generated file info
+ */
+export async function generateDataOnlyMigrationFiles(
+  options: GenerateDataOnlyFilesOptions,
+): Promise<GenerateDataOnlyFilesResult> {
+  const { migrationsDir, migrationNumber, snapshot, description } = options;
+  const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
+  await fs.mkdir(migrationDir, { recursive: true });
+
+  const diffFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  const migrateFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+  const dbTypesFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
+
+  await ensureFileNotExists(diffFilePath);
+  await ensureFileNotExists(migrateFilePath);
+  await ensureFileNotExists(dbTypesFilePath);
+
+  const diff = description ? { ...options.diff, description } : options.diff;
+  await fs.writeFile(diffFilePath, JSON.stringify(diff, null, 2));
+  await fs.writeFile(migrateFilePath, generateDataOnlyMigrationScript(diff.namespace));
+  await writeDbTypesFile(snapshot, migrationsDir, migrationNumber, diff);
+
+  return { diffFilePath, migrateFilePath, dbTypesFilePath, migrationNumber };
+}
+
+/**
+ * Generate the script skeleton for a data-only migration
+ * @param {string} namespace - TailorDB namespace the migration belongs to
+ * @returns {string} Migration script content
+ */
+export function generateDataOnlyMigrationScript(namespace: string): string {
+  return `/**
+ * Data-only migration script for ${namespace}
+ *
+ * This migration carries no schema change; it exists to run this script.
+ * Edit this file to implement the data transformation.
+ *
+ * The transaction is managed by the deploy command.
+ * If any operation fails, all changes will be rolled back.
+ */
+
+import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  // TODO: Implement the data transformation for this migration
+}
+`;
 }
 
 /**

@@ -420,7 +420,9 @@ async function matchContentInWorker(
         }
       });
     });
-    worker.on("error", (error) => finish(() => reject(error)));
+    worker.on("error", (error) =>
+      finish(() => reject(error instanceof Error ? error : new Error(String(error)))),
+    );
     worker.on("exit", (exitCode) => {
       if (exitCode !== 0) {
         finish(() => reject(new Error(`content worker exited with code ${exitCode}`)));

@@ -82,7 +82,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
       for (const ns of ctx.tailordb) {
-        for (const [typeName, type] of Object.entries(ns.types)) {
+        for (const [typeName, type] of Object.entries(ns.tables)) {
           const source = assertDefined(
             ns.sourceInfo.get(typeName),
             `source info missing for type: ${typeName}`,
@@ -117,7 +117,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
             `${linesDb.typeName}.schema.ts`,
           );
 
-          // Plugin-generated type: use getGeneratedType API
+          // Plugin-generated table: use getGeneratedTable API
           if (linesDb.pluginSource && linesDb.pluginSource.pluginImportPath) {
             // Build original type import path
             let originalImportPath: string | undefined;

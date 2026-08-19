@@ -626,3 +626,173 @@ describe("tailordb migration generate type rename preflight", () => {
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 });
+
+describe("tailordb migration generate --data-only", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    // A configured editor would be spawned after a migrate.ts is scaffolded
+    // and block the test run.
+    vi.stubEnv("EDITOR", undefined);
+    vi.stubEnv("VISUAL", undefined);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-data-only-test-"));
+    state.namespaces = [];
+    vi.mocked(loadConfig).mockImplementation(
+      async () =>
+        ({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: Object.fromEntries(
+              state.namespaces.map(({ namespace, migrationsDir }) => [
+                namespace,
+                { migration: { directory: migrationsDir } },
+              ]),
+            ),
+          },
+          plugins: [],
+        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    );
+    vi.mocked(canPrompt).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("creates a script-only migration when the schema is unchanged", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(true);
+    const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
+    expect(diff.changes).toEqual([]);
+    expect(diff.requiresMigrationScript).toBe(true);
+    const script = fs.readFileSync(path.join(entry.migrationsDir, "0001", "migrate.ts"), "utf8");
+    expect(script).toContain("export async function main(trx: Transaction)");
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.ts"))).toBe(true);
+    const replayed = reconstructSnapshotFromMigrations(entry.migrationsDir);
+    expect(replayed?.tables.User?.fields.name?.type).toBe("string");
+  });
+
+  test("records the --name description in the diff", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, [
+      "--data-only",
+      "--yes",
+      "--name",
+      "backfill user names",
+    ]);
+
+    expect(result.success).toBe(true);
+    const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
+    expect(diff.description).toBe("backfill user names");
+  });
+
+  test("fails when the namespace has pending schema changes", async () => {
+    const userWithoutName = parsedType("User");
+    delete userWithoutName.fields.name;
+    const entry = addNamespace(tmpDir, "tailordb", "User", userWithoutName);
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("schema changes");
+    expect(String(result.error)).toContain("--data-only");
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("fails when the namespace has no migration baseline", async () => {
+    const migrationsDir = path.join(tmpDir, "tailordb");
+    state.namespaces.push({
+      namespace: "tailordb",
+      migrationsDir,
+      localTypes: { User: parsedType("User") },
+    });
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("initial snapshot");
+    expect(fs.existsSync(path.join(migrationsDir, "0000"))).toBe(false);
+  });
+
+  test("rejects schema-change flags combined with --data-only", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    for (const flags of [
+      ["--init"],
+      ["--rename", "User.name:displayName"],
+      ["--drop", "User.name"],
+      ["--expand-contract", "User.name"],
+    ]) {
+      const result = await runCommand(generateCommand, ["--data-only", "--yes", ...flags]);
+
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("cannot be used together with --data-only");
+    }
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("requires --namespace when multiple namespaces are configured", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const second = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+
+    const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("--namespace");
+    expect(fs.existsSync(path.join(first.migrationsDir, "0001"))).toBe(false);
+    expect(fs.existsSync(path.join(second.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("targets only the namespace named by --namespace", async () => {
+    const untouched = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const targeted = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+
+    const result = await runCommand(generateCommand, [
+      "--data-only",
+      "--yes",
+      "--namespace",
+      "analyticsdb",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(targeted.migrationsDir, "0001", "migrate.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(untouched.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("ignores invalid migration files outside the target namespace", async () => {
+    const unrelated = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const targeted = addNamespace(tmpDir, "analyticsdb", "Account", parsedType("Account"));
+    fs.writeFileSync(path.join(unrelated.migrationsDir, "0000", "schema.json"), "{");
+
+    const result = await runCommand(generateCommand, [
+      "--data-only",
+      "--yes",
+      "--namespace",
+      "analyticsdb",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(targeted.migrationsDir, "0001", "migrate.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(unrelated.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("rejects --namespace without --data-only", async () => {
+    addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--yes", "--namespace", "tailordb"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain(
+      "--namespace can only be used together with --data-only",
+    );
+  });
+});

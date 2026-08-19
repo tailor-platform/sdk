@@ -46,5 +46,5 @@ async function install() {
 
 // Only run if this is the main module
 if (import.meta.url === new URL(import.meta.url).href) {
-  install();
+  await install();
 }

@@ -101,7 +101,7 @@ export interface ResolveLocalErdSchemaNamespacesOptions {
 }
 
 /**
- * Resolve TailorDB namespaces that need local type loading for ERD generation.
+ * Resolve TailorDB namespaces that need local table loading for ERD generation.
  * @param sites - Namespace → static website name mapping from the plugin config.
  * @param options - Namespace selection options.
  * @returns Namespace names to load, or undefined to load all owned namespaces.

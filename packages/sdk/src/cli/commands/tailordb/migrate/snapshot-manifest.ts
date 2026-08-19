@@ -125,36 +125,36 @@ export function generateTailorDBTypeManifestFromSnapshot(
   );
 
   // Build relationships
-  const relationships: Record<
+  const relationships = new Map<
     string,
     MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>
-  > = {};
+  >();
 
   if (snapshotType.forwardRelationships) {
     for (const [relationName, rel] of Object.entries(snapshotType.forwardRelationships)) {
-      relationships[relationName] = convertRelationshipToProto(rel, "forward");
+      relationships.set(relationName, convertRelationshipToProto(rel, "forward"));
     }
   }
 
   if (snapshotType.backwardRelationships) {
     for (const [relationName, rel] of Object.entries(snapshotType.backwardRelationships)) {
-      relationships[relationName] = convertRelationshipToProto(rel, "backward");
+      relationships.set(relationName, convertRelationshipToProto(rel, "backward"));
     }
   }
 
   // Build indexes
-  const indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>> = {};
+  const indexes = new Map<string, MessageInitShape<typeof TailorDBType_IndexSchema>>();
   if (snapshotType.indexes) {
     for (const [indexName, indexConfig] of Object.entries(snapshotType.indexes)) {
-      indexes[indexName] = convertIndexToProto(indexConfig);
+      indexes.set(indexName, convertIndexToProto(indexConfig));
     }
   }
 
   // Build files
-  const files: Record<string, MessageInitShape<typeof TailorDBType_FileConfigSchema>> = {};
+  const files = new Map<string, MessageInitShape<typeof TailorDBType_FileConfigSchema>>();
   if (snapshotType.files) {
     for (const [fileName, description] of Object.entries(snapshotType.files)) {
-      files[fileName] = { description: description || "" };
+      files.set(fileName, { description: description || "" });
     }
   }
 
@@ -181,12 +181,12 @@ export function generateTailorDBTypeManifestFromSnapshot(
     schema: {
       description: snapshotType.description || "",
       fields,
-      relationships,
+      relationships: Object.fromEntries(relationships),
       settings: defaultSettings,
       extends: false,
       directives: [],
-      indexes,
-      files,
+      indexes: Object.fromEntries(indexes),
+      files: Object.fromEntries(files),
       permission,
       ...(typeHook && { typeHook }),
       ...(typeValidate && { typeValidate }),
@@ -254,12 +254,12 @@ export function convertFieldConfigToProto(
 function processNestedFieldsFromSnapshot(
   fields: Record<string, SnapshotFieldConfig>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
-  const nestedFields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
+  const nestedFields = new Map<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>();
 
   for (const [fieldName, fieldConfig] of Object.entries(fields)) {
     if (fieldConfig.type === "nested" && fieldConfig.fields) {
       const deepNestedFields = processNestedFieldsFromSnapshot(fieldConfig.fields);
-      nestedFields[fieldName] = {
+      nestedFields.set(fieldName, {
         type: "nested",
         allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
         description: fieldConfig.description || "",
@@ -271,9 +271,9 @@ function processNestedFieldsFromSnapshot(
         vector: false,
         fields: deepNestedFields,
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
+      });
     } else {
-      nestedFields[fieldName] = {
+      nestedFields.set(fieldName, {
         type: fieldConfig.type,
         allowedValues:
           fieldConfig.type === "enum"
@@ -299,11 +299,11 @@ function processNestedFieldsFromSnapshot(
           },
         }),
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
+      });
     }
   }
 
-  return nestedFields;
+  return Object.fromEntries(nestedFields);
 }
 
 /**

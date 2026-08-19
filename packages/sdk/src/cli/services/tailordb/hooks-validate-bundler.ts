@@ -210,6 +210,9 @@ export function findUndefinedReferences(code: string): Set<string> {
       case "Identifier":
         references.add(node.name);
         return;
+
+      default:
+        break;
     }
 
     // Generic child walk for all other node types, skipping TS type-annotation fields

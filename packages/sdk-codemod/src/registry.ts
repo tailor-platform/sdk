@@ -114,6 +114,14 @@ const V2_NEXT_11 = "2.0.0-next.11";
  */
 export const V2_NEXT_PENDING = "pending";
 
+// Residual `--branch` on a Tailor `setup branch` invocation (the CLI binaries,
+// their Windows launcher forms, or the package name used by npx/dlx runners):
+// skip quoted spans, cross backslash/caret/backtick line continuations but not
+// command separators, and require a token boundary so quoted values containing
+// `--branch` don't match.
+const SETUP_BRANCH_RESIDUAL_FLAG =
+  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@\S{1,32})?)[\s\\^`]{1,16}setup[\s\\^`]{1,16}branch\b(?:'[^'\n]*'|"[^"\n]*"|[^\n;&|'"#]|[\\^`]\r?\n)*(?:[ \t]|[\\^`]\r?\n)--branch(?![\w-])/;
+
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
   {
@@ -1669,6 +1677,39 @@ export const allCodemods: CodemodPackage[] = [
       "through a package runner such as `npx @tailor-platform/sdk`) with",
       "`function run`. Leave prose that merely mentions the old subcommand name",
       "unchanged unless it documents a command to type.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/setup-branch-flag-rename",
+    name: "setup branch --branch → --target",
+    description:
+      "Rename the `--branch` option of `tailor setup branch` invocations to `--target`. `--branch` remains as a deprecated alias until it is removed in v3. The `--branch` option of `setup tag`, `setup preview`, and `setup coordinate` is unchanged.",
+    since: "1.72.0",
+    until: "3.0.0",
+    scriptPath: "v3/setup-branch-flag-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [SETUP_BRANCH_RESIDUAL_FLAG],
+    sourceStringLegacyPatterns: [SETUP_BRANCH_RESIDUAL_FLAG],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor setup branch --name my-app-stg --branch main",
+        after: "tailor setup branch --name my-app-stg --target main",
+      },
+    ],
+    prompt: [
+      "The `--branch` option of `tailor setup branch` is renamed to `--target`;",
+      "the old spelling is removed in v3. Replace any remaining `--branch` options of",
+      "`setup branch` invocations the codemod did not rewrite (e.g. wrapped across",
+      "lines or invoked through a package runner such as `npx @tailor-platform/sdk`)",
+      "with `--target`. Do not touch the `--branch` option of `setup tag`,",
+      "`setup preview`, or `setup coordinate`, which keeps its name, and leave prose",
+      "that merely mentions the option unchanged unless it documents a command to type.",
     ].join("\n"),
   },
 ];

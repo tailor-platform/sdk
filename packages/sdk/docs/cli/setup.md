@@ -63,13 +63,17 @@ tailor setup branch [options]
 | Option                        | Alias | Description                                                                    | Required | Default |
 | ----------------------------- | ----- | ------------------------------------------------------------------------------ | -------- | ------- |
 | `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                                           | No       | -       |
-| `--branch <BRANCH>`           | -     | Deploy trigger branch (defaults to the detected default branch)                | No       | -       |
+| `--target <TARGET>`           | -     | Deploy trigger branch (defaults to the detected default branch)                | No       | -       |
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)   | No       | -       |
 | `--erd-preview`               | -     | Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces | No       | `false` |
 | `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                            | No       | `"."`   |
 | `--force`                     | -     | Discard hand edits / take over unmanaged files and regenerate                  | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+`--branch` is a deprecated alias of `--target` and will be removed in v3.
 
 ### setup check
 

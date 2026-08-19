@@ -69,6 +69,7 @@ function parseExecutionResult(
   success: boolean;
   parsed: Record<string, unknown>;
   errors: string[];
+  outcomeUnknown: boolean;
 } {
   logExecutionLogs(result.logs, indent);
 
@@ -77,6 +78,7 @@ function parseExecutionResult(
       success: false,
       parsed: {},
       errors: [result.error ?? "Script execution failed"],
+      outcomeUnknown: true,
     };
   }
 
@@ -90,6 +92,7 @@ function parseExecutionResult(
       success: false,
       parsed: {},
       errors: [`Failed to parse result: ${message}`],
+      outcomeUnknown: true,
     };
   }
 
@@ -99,15 +102,27 @@ function parseExecutionResult(
       success: false,
       parsed,
       errors: errors.length > 0 ? errors : ["Script reported failure"],
+      outcomeUnknown: false,
     };
   }
 
-  return { success: true, parsed, errors: [] };
+  return { success: true, parsed, errors: [], outcomeUnknown: false };
 }
 
 interface SeedResult {
   success: boolean;
   processed: Record<string, number>;
+}
+
+function createChunkProgressLogger(total: number): (index: number, details: string) => void {
+  if (total > 1) {
+    logger.log(styles.dim(`    Split into ${total} chunks`));
+  }
+  return (index, details) => {
+    if (total > 1) {
+      logger.log(styles.dim(`    Chunk ${index + 1}/${total}: ${details}`));
+    }
+  };
 }
 
 async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
@@ -150,17 +165,11 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     logger.log(styles.dim(`  [${namespace}] No data to seed`));
     return { success: true, processed: processedTotals };
   }
-  if (chunks.length > 1) {
-    logger.log(styles.dim(`    Split into ${chunks.length} chunks`));
-  }
+  const logChunkProgress = createChunkProgressLogger(chunks.length);
 
   let success = true;
   for (const chunk of chunks) {
-    if (chunks.length > 1) {
-      logger.log(
-        styles.dim(`    Chunk ${chunk.index + 1}/${chunk.total}: ${chunk.order.join(", ")}`),
-      );
-    }
+    logChunkProgress(chunk.index, chunk.order.join(", "));
 
     const result = await executeScript({
       client: execution.operatorClient,
@@ -201,14 +210,14 @@ interface IdpScriptRun {
   execution: SeedExecutionContext;
   scriptCode: string;
   scriptName: string;
-  arg?: { users: SeedData[string]; upsert?: boolean };
+  arg?: { users: SeedData[string]; upsert?: boolean; offset?: number; total?: number };
   indent: string;
   reportSuccess: (parsed: Record<string, unknown>) => void;
 }
 
 async function runIdpScript(
   params: IdpScriptRun,
-): Promise<{ success: boolean; parsed: Record<string, unknown> }> {
+): Promise<{ success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean }> {
   const { execution, scriptCode, scriptName, arg, indent, reportSuccess } = params;
 
   const result = await executeScript({
@@ -223,21 +232,31 @@ async function runIdpScript(
     },
   });
 
-  const { success, parsed, errors } = parseExecutionResult(result, indent);
+  const { success, parsed, errors, outcomeUnknown } = parseExecutionResult(result, indent);
   reportSuccess(parsed);
   if (!success) {
     for (const error of errors) {
       logger.error(`${indent}${error}`, { mode: "plain" });
     }
   }
-  return { success, parsed };
+  return { success, parsed, outcomeUnknown };
+}
+
+// The generated seed script upserts IdP users one call at a time (seconds per
+// row), so each TestExecScript request must carry few enough rows to finish
+// within the operator API deadline. Byte-size chunking cannot capture this.
+const IDP_USER_CHUNK_SIZE = 25;
+
+function readCount(result: Record<string, unknown>, key: string): number {
+  const value = result[key];
+  return typeof value === "number" ? value : 0;
 }
 
 async function seedIdpUser(
   execution: SeedExecutionContext,
   scriptCode: string,
   upsert: boolean,
-): Promise<{ success: boolean; processed: number }> {
+): Promise<{ success: boolean; processed: number; transportError?: unknown }> {
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
   const rows = loadSeedData(execution.dataDir, ["_User"])._User ?? [];
@@ -247,31 +266,71 @@ async function seedIdpUser(
   }
   logger.log(styles.dim(`    Processing ${rows.length} _User records...`));
 
-  const { success, parsed } = await runIdpScript({
-    execution,
-    scriptCode,
-    scriptName: "seed-idp-user.ts",
-    arg: { users: rows, upsert },
-    indent: "    ",
-    reportSuccess: (result) => {
-      const created = typeof result.created === "number" ? result.created : 0;
-      const updated = typeof result.updated === "number" ? result.updated : 0;
-      const skipped = typeof result.skipped === "number" ? result.skipped : 0;
-      const processed = typeof result.processed === "number" ? result.processed : 0;
-      if (created === 0 && updated === 0 && skipped === 0) {
-        return;
-      }
-      const skippedSuffix = skipped > 0 ? `, ${skipped} skipped` : "";
-      const message = upsert
-        ? `${created} created, ${updated} updated${skippedSuffix}`
-        : `${processed} rows processed`;
-      logger.log(styles.success(`    ✓ _User: ${message}`));
-    },
-  });
-  return {
-    success,
-    processed: typeof parsed.processed === "number" ? parsed.processed : 0,
+  const chunks: SeedData[string][] = [];
+  for (let i = 0; i < rows.length; i += IDP_USER_CHUNK_SIZE) {
+    chunks.push(rows.slice(i, i + IDP_USER_CHUNK_SIZE));
+  }
+  const logChunkProgress = createChunkProgressLogger(chunks.length);
+
+  const reportChunkCounts = (result: Record<string, unknown>) => {
+    const created = readCount(result, "created");
+    const updated = readCount(result, "updated");
+    const skipped = readCount(result, "skipped");
+    const processed = readCount(result, "processed");
+    if (created === 0 && updated === 0 && skipped === 0) {
+      return;
+    }
+    const skippedSuffix = skipped > 0 ? `, ${skipped} skipped` : "";
+    const message = upsert
+      ? `${created} created, ${updated} updated${skippedSuffix}`
+      : `${processed} rows processed`;
+    logger.log(styles.success(`    ✓ _User: ${message}`));
   };
+
+  let success = true;
+  const totals = { processed: 0, created: 0, updated: 0 };
+  const warnInterruptedChunk = () => {
+    logger.warn(
+      `    _User: ${totals.processed}/${rows.length} rows confirmed processed before the failure ` +
+        `(${totals.created} created, ${totals.updated} updated). ` +
+        "The interrupted chunk may still have been applied server-side; " +
+        "re-run the same command narrowed to `_User` with `--upsert` to retry safely.",
+      { mode: "plain" },
+    );
+  };
+  for (const [index, chunk] of chunks.entries()) {
+    logChunkProgress(index, `${chunk.length} rows`);
+    let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
+    try {
+      run = await runIdpScript({
+        execution,
+        scriptCode,
+        scriptName: "seed-idp-user.ts",
+        arg: {
+          users: chunk,
+          upsert,
+          offset: index * IDP_USER_CHUNK_SIZE,
+          total: rows.length,
+        },
+        indent: "    ",
+        reportSuccess: reportChunkCounts,
+      });
+    } catch (error) {
+      warnInterruptedChunk();
+      return { success: false, processed: totals.processed, transportError: error };
+    }
+    if (run.outcomeUnknown) {
+      warnInterruptedChunk();
+      return { success: false, processed: totals.processed };
+    }
+    totals.processed += readCount(run.parsed, "processed");
+    totals.created += readCount(run.parsed, "created");
+    totals.updated += readCount(run.parsed, "updated");
+    if (!run.success) {
+      success = false;
+    }
+  }
+  return { success, processed: totals.processed };
 }
 
 async function truncateIdpUser(
@@ -448,6 +507,7 @@ export const seedApplyCommand = defineAppCommand({
 
     let allSuccess = true;
     const allProcessed: Record<string, number> = {};
+    let transportFailure: { error: unknown } | undefined;
 
     const namespacesToProcess = args.namespace
       ? [args.namespace]
@@ -491,11 +551,17 @@ export const seedApplyCommand = defineAppCommand({
       if (!seeded.success) {
         allSuccess = false;
       }
+      if ("transportError" in seeded) {
+        transportFailure = { error: seeded.transportError };
+      }
     }
 
     logger.newline();
     if (args.json) {
       logger.out({ success: allSuccess, processed: allProcessed });
+    }
+    if (transportFailure) {
+      throw transportFailure.error;
     }
     if (!allSuccess) {
       throw new Error("Seed data generation completed with errors");

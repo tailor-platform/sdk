@@ -18,22 +18,22 @@ const myPlugin: Plugin = {
 export default myPlugin; // Required: must be default export
 ```
 
-This is required so that other plugins and generation-time hooks can use plugin-generated TailorDB tables via `getGeneratedType()`.
+This is required so that other plugins and generation-time hooks can use plugin-generated TailorDB tables via `getGeneratedTable()`.
 
 ## Plugin Interface
 
 ```typescript
-interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
+interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
   readonly id: string;
   readonly description: string;
   readonly importPath?: string;
-  readonly typeConfigRequired?: boolean | ((pluginConfig?: PluginConfig) => boolean);
+  readonly tableConfigRequired?: boolean | ((pluginConfig?: PluginConfig) => boolean);
   readonly pluginConfig?: PluginConfig;
 
   // Definition-time hooks
-  onTypeLoaded?(
-    context: PluginProcessContext<TypeConfig, PluginConfig>,
-  ): TypePluginOutput | Promise<TypePluginOutput>;
+  onTableLoaded?(
+    context: PluginTableProcessContext<TableConfig, PluginConfig>,
+  ): TablePluginOutput | Promise<TablePluginOutput>;
   onNamespaceLoaded?(
     context: PluginNamespaceProcessContext<PluginConfig>,
   ): PluginOutput | Promise<PluginOutput>;
@@ -51,34 +51,34 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
 }
 ```
 
-| Property             | Required                         | Description                                                                                      |
-| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `id`                 | Yes                              | Unique plugin identifier (e.g., `"@my-company/soft-delete"`)                                     |
-| `description`        | Yes                              | Human-readable description                                                                       |
-| `importPath`         | When using definition-time hooks | Path resolvable from `tailor.config.ts` directory. Used for import statements in generated code. |
-| `typeConfigRequired` | No                               | Whether per-table config is required when attaching via `.plugin()`. Default: optional.          |
-| `pluginConfig`       | No                               | Plugin-level config passed via `definePlugins()`. Set via factory function.                      |
+| Property              | Required                         | Description                                                                                      |
+| --------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `id`                  | Yes                              | Unique plugin identifier (e.g., `"@my-company/soft-delete"`)                                     |
+| `description`         | Yes                              | Human-readable description                                                                       |
+| `importPath`          | When using definition-time hooks | Path resolvable from `tailor.config.ts` directory. Used for import statements in generated code. |
+| `tableConfigRequired` | No                               | Whether per-table config is required when attaching via `.plugin()`. Default: optional.          |
+| `pluginConfig`        | No                               | Plugin-level config passed via `definePlugins()`. Set via factory function.                      |
 
 ## Hook Reference
 
-### onTypeLoaded
+### onTableLoaded
 
 **Trigger**: Called once for each TailorDB table that has `.plugin({ pluginId: config })` attached.
 
-**Context** (`PluginProcessContext`):
+**Context** (`PluginTableProcessContext`):
 
 | Field          | Type              | Description                                |
 | -------------- | ----------------- | ------------------------------------------ |
-| `type`         | `TailorAnyDBType` | The TailorDB table being processed         |
-| `typeConfig`   | `TypeConfig`      | Per-table config from `.plugin()`          |
+| `table`        | `TailorAnyDBType` | The TailorDB table being processed         |
+| `tableConfig`  | `TableConfig`     | Per-table config from `.plugin()`          |
 | `pluginConfig` | `PluginConfig`    | Plugin-level config from `definePlugins()` |
 | `namespace`    | `string`          | Namespace of the TailorDB table            |
 
-**Returns** (`TypePluginOutput`):
+**Returns** (`TablePluginOutput`):
 
 | Field       | Type                                            | Description                                            |
 | ----------- | ----------------------------------------------- | ------------------------------------------------------ |
-| `types`     | `Record<string, TailorAnyDBType>`               | Additional TailorDB tables to generate (keyed by kind) |
+| `tables`    | `Record<string, TailorAnyDBType>`               | Additional TailorDB tables to generate (keyed by kind) |
 | `resolvers` | `PluginGeneratedResolver[]`                     | Additional resolvers to generate                       |
 | `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                       |
 | `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source table                      |
@@ -90,12 +90,12 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
 - Generate executors triggered by record events on the source table
 
 ```typescript
-onTypeLoaded(context) {
-  const { type, typeConfig, namespace } = context;
+onTableLoaded(context) {
+  const { table, tableConfig, namespace } = context;
   return {
-    types: { archive: db.table(`Deleted_${type.name}`, { ... }) },
+    tables: { archive: db.table(`Deleted_${table.name}`, { ... }) },
     extends: { fields: { deletedAt: db.datetime({ optional: true }) } },
-    executors: [{ name: `${type.name}-on-delete`, resolve: async () => await import("./on-delete"), context: { sourceType: type, namespace } }],
+    executors: [{ name: `${table.name}-on-delete`, resolve: async () => await import("./on-delete"), context: { sourceTable: table, namespace } }],
   };
 },
 ```
@@ -113,7 +113,7 @@ onTypeLoaded(context) {
 
 **Returns** (`PluginOutput`):
 
-Same as `TypePluginOutput` but without `extends` (namespace plugins cannot extend a source table).
+Same as `TablePluginOutput` but without `extends` (namespace plugins cannot extend a source table).
 
 **Use cases**:
 
@@ -122,7 +122,7 @@ Same as `TypePluginOutput` but without `extends` (namespace plugins cannot exten
 ```typescript
 onNamespaceLoaded(context) {
   return {
-    types: { auditLog: db.table("AuditLog", { action: db.string(), ... }) },
+    tables: { auditLog: db.table("AuditLog", { action: db.string(), ... }) },
   };
 },
 ```
@@ -146,7 +146,7 @@ onNamespaceLoaded(context) {
 | Field               | Type                                       | Description                           |
 | ------------------- | ------------------------------------------ | ------------------------------------- |
 | `namespace`         | `string`                                   | Namespace name                        |
-| `types`             | `Record<string, TailorDBType>`             | All finalized tables in the namespace |
+| `tables`            | `Record<string, TailorDBType>`             | All finalized tables in the namespace |
 | `sourceInfo`        | `ReadonlyMap<string, TypeSourceInfoEntry>` | Source file info for each table       |
 | `pluginAttachments` | `ReadonlyMap<string, PluginAttachment[]>`  | Plugin configs attached to each table |
 
@@ -165,11 +165,11 @@ onNamespaceLoaded(context) {
 
 ```typescript
 onTailorDBReady(ctx) {
-  const allTypes = ctx.tailordb.flatMap((ns) =>
-    Object.values(ns.types).map((t) => t.name),
+  const allTables = ctx.tailordb.flatMap((ns) =>
+    Object.values(ns.tables).map((table) => table.name),
   );
   return {
-    files: [{ path: `${ctx.baseDir}/types.ts`, content: `export const types = ${JSON.stringify(allTypes)};\n` }],
+    files: [{ path: `${ctx.baseDir}/tables.ts`, content: `export const tables = ${JSON.stringify(allTables)};\n` }],
   };
 },
 ```
@@ -233,7 +233,7 @@ All fields from `ResolverReadyContext`, plus:
 ```typescript
 onExecutorReady(ctx) {
   const summary = {
-    types: ctx.tailordb.flatMap((ns) => Object.keys(ns.types)),
+    tables: ctx.tailordb.flatMap((ns) => Object.keys(ns.tables)),
     resolvers: ctx.resolvers.flatMap((ns) => Object.keys(ns.resolvers)),
     executors: Object.keys(ctx.executors),
   };
@@ -262,8 +262,8 @@ All context and result types are exported from `@tailor-platform/sdk`:
 ```typescript
 import type {
   Plugin,
-  PluginProcessContext,
-  TypePluginOutput,
+  PluginTableProcessContext,
+  TablePluginOutput,
   PluginOutput,
   TailorDBReadyContext,
   ResolverReadyContext,
@@ -274,34 +274,34 @@ import type {
 } from "@tailor-platform/sdk";
 ```
 
-## getGeneratedType Helper
+## getGeneratedTable Helper
 
-The SDK provides an async `getGeneratedType()` helper function to retrieve plugin-generated TailorDB tables. This enables plugins and other tools to work with tables generated by plugins.
+The SDK provides an async `getGeneratedTable()` helper function to retrieve plugin-generated TailorDB tables. This enables plugins and other tools to work with tables generated by plugins.
 
 ```typescript
 import { join } from "node:path";
-import { getGeneratedType } from "@tailor-platform/sdk/plugin";
+import { getGeneratedTable } from "@tailor-platform/sdk/plugin";
 import { customer } from "./tailordb/customer";
 
 const configPath = join(import.meta.dirname, "./tailor.config.ts");
 
 // Table-attached plugin
-const DeletedCustomer = await getGeneratedType(
+const DeletedCustomer = await getGeneratedTable(
   configPath,
   "@example/soft-delete",
   customer,
   "archive",
 );
 
-// Namespace plugin (pass null as sourceType)
-const AuditLog = await getGeneratedType(configPath, "@example/audit-log", null, "auditLog");
+// Namespace plugin (pass null as sourceTable)
+const AuditLog = await getGeneratedTable(configPath, "@example/audit-log", null, "auditLog");
 ```
 
 **Parameters:**
 
 - `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
 - `pluginId`: The plugin's unique identifier (e.g., `"@example/soft-delete"`)
-- `sourceType`: The TailorDB table that the plugin is attached to (`null` for namespace plugins)
+- `sourceTable`: The TailorDB table that the plugin is attached to (`null` for namespace plugins)
 - `kind`: The generated table kind (e.g., `"archive"`, `"auditLog"`)
 
 **How it works:**
@@ -309,7 +309,7 @@ const AuditLog = await getGeneratedType(configPath, "@example/audit-log", null, 
 1. Loads and caches the config from the given path
 2. Finds the plugin by ID from `definePlugins()` exports
 3. Auto-resolves the namespace from config
-4. Calls the plugin's `onTypeLoaded()` or `onNamespaceLoaded()` method
+4. Calls the plugin's `onTableLoaded()` or `onNamespaceLoaded()` method
 5. Caches the result to avoid redundant processing
 6. Returns the generated table matching the specified kind
 
@@ -317,14 +317,14 @@ const AuditLog = await getGeneratedType(configPath, "@example/audit-log", null, 
 
 ### Definition-time Plugin (Soft Delete)
 
-A plugin that adds soft delete functionality via `onTypeLoaded`:
+A plugin that adds soft delete functionality via `onTableLoaded`:
 
 ```typescript
 // plugins/soft-delete/plugin.ts
 import { db } from "@tailor-platform/sdk";
-import type { Plugin, PluginProcessContext, TypePluginOutput } from "@tailor-platform/sdk";
+import type { Plugin, PluginTableProcessContext, TablePluginOutput } from "@tailor-platform/sdk";
 
-interface SoftDeleteConfig {
+interface SoftDeleteTableConfig {
   archiveReason?: boolean;
   retentionDays?: number;
 }
@@ -332,28 +332,28 @@ interface SoftDeleteConfig {
 interface SoftDeletePluginConfig {
   archiveTablePrefix?: string;
   defaultRetentionDays?: number;
-  requireTypeConfig?: boolean;
+  requireTableConfig?: boolean;
 }
 
 function processSoftDelete(
-  context: PluginProcessContext<SoftDeleteConfig, SoftDeletePluginConfig>,
-): TypePluginOutput {
-  const { type, typeConfig, pluginConfig, namespace } = context;
+  context: PluginTableProcessContext<SoftDeleteTableConfig, SoftDeletePluginConfig>,
+): TablePluginOutput {
+  const { table, tableConfig, pluginConfig, namespace } = context;
   const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted_";
 
   // Generate archive table
-  const archiveType = db
-    .table(`${prefix}${type.name}`, {
+  const archiveTable = db
+    .table(`${prefix}${table.name}`, {
       originalId: db.uuid().description("ID of the deleted record"),
       originalData: db.string().description("JSON snapshot of deleted record"),
       deletedAt: db.datetime().description("When the record was deleted"),
       deletedBy: db.uuid().description("User who deleted the record"),
-      ...(typeConfig.archiveReason && {
+      ...(tableConfig.archiveReason && {
         reason: db.string({ optional: true }).description("Reason for deletion"),
       }),
       ...db.fields.timestamps(),
     })
-    .description(`Archive for deleted ${type.name} records`);
+    .description(`Archive for deleted ${table.name} records`);
 
   // Extend source table with deletedAt field
   const extendFields = {
@@ -361,15 +361,15 @@ function processSoftDelete(
   };
 
   return {
-    types: { archive: archiveType },
+    tables: { archive: archiveTable },
     extends: { fields: extendFields },
     executors: [
       {
-        name: `${type.name.toLowerCase()}-on-delete`,
+        name: `${table.name.toLowerCase()}-on-delete`,
         resolve: async () => await import("./executors/on-delete"),
         context: {
-          sourceType: type,
-          archiveType,
+          sourceTable: table,
+          archiveTable,
           namespace,
         },
       },
@@ -379,14 +379,14 @@ function processSoftDelete(
 
 function createSoftDeletePlugin(
   pluginConfig?: SoftDeletePluginConfig,
-): Plugin<SoftDeleteConfig, SoftDeletePluginConfig> {
+): Plugin<SoftDeleteTableConfig, SoftDeletePluginConfig> {
   return {
     id: "@example/soft-delete",
     description: "Adds soft delete with archive functionality",
     importPath: "./plugins/soft-delete",
     pluginConfig,
-    typeConfigRequired: (config) => config?.requireTypeConfig === true,
-    onTypeLoaded: processSoftDelete,
+    tableConfigRequired: (config) => config?.requireTableConfig === true,
+    onTableLoaded: processSoftDelete,
   };
 }
 
@@ -403,24 +403,24 @@ import { withPluginContext } from "@tailor-platform/sdk/plugin";
 import { getDB } from "generated/tailordb";
 
 interface SoftDeleteContext {
-  sourceType: TailorAnyDBType;
-  archiveType: TailorAnyDBType;
+  sourceTable: TailorAnyDBType;
+  archiveTable: TailorAnyDBType;
   namespace: string;
 }
 
 export default withPluginContext((ctx: SoftDeleteContext) => {
-  const { sourceType, archiveType, namespace } = ctx;
+  const { sourceTable, archiveTable, namespace } = ctx;
 
   return createExecutor({
-    name: `${sourceType.name.toLowerCase()}-on-delete`,
-    description: `Archives deleted ${sourceType.name} records`,
-    trigger: recordDeletedTrigger({ type: sourceType }),
+    name: `${sourceTable.name.toLowerCase()}-on-delete`,
+    description: `Archives deleted ${sourceTable.name} records`,
+    trigger: recordDeletedTrigger({ type: sourceTable }),
     operation: {
       kind: "function",
       body: async ({ oldRecord, user }) => {
         const db = getDB(namespace as "tailordb");
         await db
-          .insertInto(archiveType.name)
+          .insertInto(archiveTable.name)
           .values({
             originalId: oldRecord.id,
             originalData: JSON.stringify(oldRecord),
@@ -461,28 +461,28 @@ export const customer = db
   });
 ```
 
-### Generation-only Plugin (Type List)
+### Generation-only Plugin (Table List)
 
 A plugin that only uses `onTailorDBReady` to generate output files:
 
 ```typescript
 import type { Plugin, GeneratorResult } from "@tailor-platform/sdk";
 
-const typeListPlugin: Plugin = {
-  id: "@example/type-list",
+const tableListPlugin: Plugin = {
+  id: "@example/table-list",
   description: "Generates a list of all TailorDB table names",
 
   onTailorDBReady(ctx): GeneratorResult {
-    const allTypes = ctx.tailordb.flatMap((ns) =>
-      Object.entries(ns.types).map(([_, type]) => ({
-        name: type.name,
-        fieldCount: Object.keys(type.fields).length,
+    const allTables = ctx.tailordb.flatMap((ns) =>
+      Object.values(ns.tables).map((table) => ({
+        name: table.name,
+        fieldCount: Object.keys(table.fields).length,
         namespace: ns.namespace,
       })),
     );
-    const content = `// Generated type list\nexport const types = ${JSON.stringify(allTypes, null, 2)} as const;\n`;
+    const content = `// Generated table list\nexport const tables = ${JSON.stringify(allTables, null, 2)} as const;\n`;
     return {
-      files: [{ path: `${ctx.baseDir}/types.ts`, content }],
+      files: [{ path: `${ctx.baseDir}/tables.ts`, content }],
     };
   },
 };
@@ -499,15 +499,17 @@ const plugin: Plugin = {
   importPath: "./plugins/hybrid",
 
   // Definition-time: Generate additional tables from attached source tables
-  onTypeLoaded(context) {
-    return { types: { derived: createDerivedType(context.type) } };
+  onTableLoaded(context) {
+    return { tables: { derived: createDerivedTable(context.table) } };
   },
 
   // Generation-time: Generate output files from all finalized tables
   onTailorDBReady(ctx) {
-    const allTypes = ctx.tailordb.flatMap((ns) => Object.values(ns.types).map((t) => t.name));
+    const allTables = ctx.tailordb.flatMap((ns) =>
+      Object.values(ns.tables).map((table) => table.name),
+    );
     return {
-      files: [{ path: `${ctx.baseDir}/output.ts`, content: generateCode(allTypes) }],
+      files: [{ path: `${ctx.baseDir}/output.ts`, content: generateCode(allTables) }],
     };
   },
 };
@@ -515,13 +517,13 @@ const plugin: Plugin = {
 
 ## Adding Type Safety
 
-### Plugin-level type safety (TypeConfig / PluginConfig)
+### Plugin-level type safety (TableConfig / PluginConfig)
 
-Use TypeScript type parameters on `Plugin<TypeConfig, PluginConfig>` to get type-safe config
-in `onTypeLoaded` and `onNamespaceLoaded` methods:
+Use TypeScript type parameters on `Plugin<TableConfig, PluginConfig>` to get type-safe config
+in `onTableLoaded` and `onNamespaceLoaded` methods:
 
 ```typescript
-interface MyTypeConfig {
+interface MyTableConfig {
   archiveReason?: boolean;
 }
 
@@ -529,11 +531,11 @@ interface MyPluginConfig {
   prefix?: string;
 }
 
-const plugin: Plugin<MyTypeConfig, MyPluginConfig> = {
+const plugin: Plugin<MyTableConfig, MyPluginConfig> = {
   id: "@example/my-plugin",
   // ...
-  onTypeLoaded(context) {
-    // context.typeConfig is MyTypeConfig
+  onTableLoaded(context) {
+    // context.tableConfig is MyTableConfig
     // context.pluginConfig is MyPluginConfig
   },
 };

@@ -289,7 +289,7 @@ export type ExcludeDefaultedDBFields<T extends Record<string, TailorAnyDBField>>
 };
 // oxlint-enable no-explicit-any
 
-// --- Type features ---
+// --- Table features ---
 
 export interface TypeFeatures {
   /** Custom plural form of the table name for GraphQL */

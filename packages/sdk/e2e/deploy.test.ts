@@ -123,9 +123,9 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
-   * Helper to list all TailorDB type names in a namespace
+   * Helper to list all TailorDB table names in a namespace
    * @param namespace - TailorDB namespace name
-   * @returns List of type names in the namespace
+   * @returns List of table names in the namespace
    */
   async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
     const types: string[] = [];
@@ -202,7 +202,7 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
-   * Helper to create TailorDB type file
+   * Helper to create TailorDB table file
    */
   function createTailorDBTypeFile(): void {
     const tailordbDir = path.join(tempDir, "tailordb");
@@ -227,7 +227,7 @@ export type user = typeof user;
   }
 
   /**
-   * Helper to create additional TailorDB type file
+   * Helper to create additional TailorDB table file
    */
   function createAdditionalTailorDBTypeFile(): void {
     const tailordbDir = path.join(tempDir, "extra-tailordb");
@@ -279,7 +279,7 @@ export default defineConfig({
     const services = await listTailorDBServiceNames();
     expect(services).toContain(sharedTailordbName);
 
-    // Verify: User type should exist in the namespace
+    // Verify: User table should exist in the namespace
     const types = await listTailorDBTypeNames(sharedTailordbName);
     expect(types).toContain("User");
   }, 120000);
@@ -320,7 +320,7 @@ export default defineConfig({
     expect(servicesAfterAdd).toContain(sharedTailordbName);
     expect(servicesAfterAdd).toContain(additionalTailordbName);
 
-    // Verify: each TailorDB namespace has its own type
+    // Verify: each TailorDB namespace has its own table
     const typesInShared = await listTailorDBTypeNames(sharedTailordbName);
     expect(typesInShared).toContain("User");
     const typesInAdditional = await listTailorDBTypeNames(additionalTailordbName);
@@ -548,7 +548,7 @@ export default defineConfig({
       }),
     );
 
-    // Update type file to add a new field (causing schema diff)
+    // Update table file to add a new field (causing schema diff)
     const tailordbDir = path.join(tempDir, "tailordb");
     fs.writeFileSync(
       path.join(tailordbDir, "user.ts"),
@@ -607,7 +607,7 @@ export default defineConfig({
       }),
     ).resolves.not.toThrow();
 
-    // Reset user type file to original state for cleanup
+    // Reset user table file to original state for cleanup
     fs.writeFileSync(
       path.join(tailordbDir, "user.ts"),
       `

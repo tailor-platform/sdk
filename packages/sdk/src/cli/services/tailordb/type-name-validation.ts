@@ -1,5 +1,5 @@
 import { fetchAll, isNotFoundError } from "#/cli/shared/client";
-import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
+import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import type { TypeSourceInfo, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 
 export type LocalTailorDBService = {
@@ -70,10 +70,10 @@ export function formatTailorDBTypeSourceInfo(
     return undefined;
   }
 
-  if (isPluginGeneratedType(sourceInfo)) {
+  if (isPluginGeneratedTable(sourceInfo)) {
     const parts = [`plugin ${sourceInfo.pluginId}`];
-    if (sourceInfo.generatedTypeKind) {
-      parts.push(`kind ${sourceInfo.generatedTypeKind}`);
+    if (sourceInfo.generatedTableKind) {
+      parts.push(`kind ${sourceInfo.generatedTableKind}`);
     }
     if (sourceInfo.originalFilePath) {
       parts.push(`source ${sourceInfo.originalFilePath}`);

@@ -25,7 +25,7 @@ export type TargetKind = "branch" | "tag" | "preview" | "action" | "coordinate";
 
 export type LockInputs = {
   branch: string | null;
-  /** True when `branch` was auto-detected (no explicit `--branch`). */
+  /** True when `branch` was auto-detected (no explicit branch flag). */
   branchAutoDetected?: boolean;
   tagPattern: string | null;
   environment: string;

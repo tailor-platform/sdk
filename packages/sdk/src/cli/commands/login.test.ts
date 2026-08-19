@@ -174,6 +174,18 @@ describe("login --profile", () => {
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
   });
 
+  test("fails login when the authorization URL cannot be prepared", async () => {
+    getAuthorizeUriMock.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await runCommand(loginCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(false);
+    const error = (result as { error?: Error }).error;
+    expect(error?.message).toContain("fetch failed");
+    // A native error type would be classified as an SDK bug and crash-reported.
+    expect(error).not.toBeInstanceOf(TypeError);
+  });
+
   test("quotes dynamic profile update command arguments", async () => {
     writePlatformConfig({
       version: 2,

@@ -13,6 +13,6 @@ export {
   type PluginRecordUpdatedArgs,
 } from "./with-context";
 
-export { getGeneratedType } from "./get-generated-type";
+export { getGeneratedTable } from "./get-generated-table";
 
 export type { PluginConfigRegistry } from "./types";
