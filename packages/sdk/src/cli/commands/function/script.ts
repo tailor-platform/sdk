@@ -293,7 +293,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
  */
 function resolveKyselyTypesPath(plugin: Plugin): string {
   const distPath = getKyselyTypePluginDistPath(plugin);
-  if (typeof distPath !== "string" || distPath.length === 0) {
+  if (distPath.length === 0) {
     throw new Error("kyselyTypePlugin is configured without a distPath; cannot locate getDB().");
   }
   return path.resolve(distPath);

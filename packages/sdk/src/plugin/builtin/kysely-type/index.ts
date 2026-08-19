@@ -10,13 +10,17 @@ type KyselyTypePluginOptions = {
   distPath: string;
 };
 
+const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
+
 /**
  * Get the file path `kyselyTypePlugin` writes its generated Kysely types to.
  * @param plugin - The plugin instance found by matching `id` against {@link KyselyGeneratorID}
- * @returns The configured output path, or `undefined` if the plugin has no `distPath` configured
+ * @returns The configured output path, or {@link DEFAULT_KYSELY_TYPES_DIST_PATH} if the plugin has no `distPath` configured
  */
-export function getKyselyTypePluginDistPath(plugin: Plugin): string | undefined {
-  return getPluginConfig<KyselyTypePluginOptions>(plugin)?.distPath;
+export function getKyselyTypePluginDistPath(plugin: Plugin): string {
+  return (
+    getPluginConfig<KyselyTypePluginOptions>(plugin)?.distPath ?? DEFAULT_KYSELY_TYPES_DIST_PATH
+  );
 }
 
 /**
