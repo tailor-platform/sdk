@@ -22,6 +22,12 @@ const conflictingHashDrift: SchemaDrift = {
   details: "Table 'Baz' has conflicting script hashes on remote",
 };
 
+const scriptNotOnRemoteDrift: SchemaDrift = {
+  tableName: "Qux",
+  kind: "script_mismatch",
+  details: "Table 'Qux' has scripts in snapshot but not on remote",
+};
+
 function hintWasLogged(infoSpy: ReturnType<typeof vi.spyOn>): boolean {
   return (infoSpy.mock.calls as unknown[][]).some(
     ([message]) => typeof message === "string" && message.includes("add the missing hashes"),
@@ -72,6 +78,12 @@ describe("logRemoteDriftGuidance", () => {
   test("omits the hint for a conflicting-hash drift, which is not the missing-hash pattern", () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     logRemoteDriftGuidance([{ hasDrift: true, drifts: [conflictingHashDrift] }]);
+    expect(hintWasLogged(infoSpy)).toBe(false);
+  });
+
+  test("omits the hint for a script-not-on-remote drift, which is not the missing-hash pattern", () => {
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+    logRemoteDriftGuidance([{ hasDrift: true, drifts: [scriptNotOnRemoteDrift] }]);
     expect(hintWasLogged(infoSpy)).toBe(false);
   });
 });

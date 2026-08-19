@@ -4941,6 +4941,40 @@ describe("snapshot", () => {
       expect(scriptDrift?.details).not.toContain("has no script hash on remote");
     });
 
+    test("reports a distinct detail (not the missing-hash one) when remote has no scripts at all", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        tables: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              name: {
+                type: "string",
+                required: true,
+                hooks: { create: { expr: "_value.trim()" } },
+              },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          name: { type: "string", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      const scriptDrift = drifts.find((d) => d.kind === "script_mismatch");
+      expect(scriptDrift?.details).toContain("has scripts in snapshot but not on remote");
+      expect(scriptDrift?.details).not.toContain("has no script hash on remote");
+    });
+
     test("no script drift when hashes match", () => {
       const snapshotFields = {
         name: {

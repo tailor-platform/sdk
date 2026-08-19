@@ -3252,7 +3252,9 @@ function compareScriptHashes(
             ? `Table '${tableName}' scripts differ between remote and snapshot`
             : remoteState.kind === "conflicting"
               ? `Table '${tableName}' has conflicting script hashes on remote`
-              : `Table '${tableName}' ${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}`;
+              : remoteHasScripts(remoteType)
+                ? `Table '${tableName}' ${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}`
+                : `Table '${tableName}' has scripts in snapshot but not on remote`;
         drifts.push({ tableName, kind: "script_mismatch", details });
       }
     } else if (remoteHasScripts(remoteType)) {
