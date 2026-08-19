@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
+import { tailorFieldTypeKeys } from "../field-types";
 import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "#/parser/service/tailordb/types";
 
@@ -40,19 +41,7 @@ export const GqlOperationsSchema = z
   )
   .transform((val) => normalizeGqlOperations(val));
 
-const TailorFieldTypeSchema = z.enum([
-  "uuid",
-  "string",
-  "boolean",
-  "integer",
-  "float",
-  "decimal",
-  "enum",
-  "date",
-  "datetime",
-  "time",
-  "nested",
-]);
+const TailorFieldTypeSchema = z.enum(tailorFieldTypeKeys);
 
 const AllowedValueSchema = z.strictObject({
   value: z.string(),
