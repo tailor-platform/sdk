@@ -873,6 +873,10 @@ export const allCodemods: CodemodPackage[] = [
       "- An invoker option passed via a variable or spread (not a literal object) —",
       "  the codemod only inspects literal object arguments; rename the invoker key",
       "  to authInvoker in the options object's own definition.",
+      "- A renamed triggerJobFunction call whose target is another workflow job —",
+      "  rewrite it further to that job's own .start() method (e.g. worker.start(args)).",
+      "  Calling execJobFunction directly is not detected as a build-time dependency",
+      "  and fails the build.",
     ].join("\n"),
   },
   {
@@ -911,6 +915,10 @@ export const allCodemods: CodemodPackage[] = [
       "  instead; the alias was the same mock function.",
       "- A file that already imports ExecJobFunctionOptions alongside the removed type —",
       "  rename the remaining references by hand and drop the duplicate specifier.",
+      "- A renamed call whose target is another workflow job — rewrite it further to",
+      "  that job's own .start() method (e.g. worker.start(args)). Calling",
+      "  execJobFunction directly is not detected as a build-time dependency and fails",
+      "  the build.",
     ].join("\n"),
   },
   {

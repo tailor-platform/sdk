@@ -18,11 +18,11 @@ import {
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
+import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
 import type { LogLevel } from "#/configure/config/types";
-import type { ASTNode } from "./ast-utils";
 
 function safeRealpath(p: string): string {
   const resolved = path.resolve(p);
@@ -76,6 +76,106 @@ function extractStaticStringValue(node: unknown): string | undefined {
     }
   }
   return undefined;
+}
+
+const RUNTIME_WORKFLOW_MODULE_SPECIFIERS = new Set([
+  "@tailor-platform/sdk/runtime",
+  "@tailor-platform/sdk/runtime/workflow",
+]);
+
+function collectRuntimeWorkflowImportBindings(program: ASTNode): Set<string> {
+  const bindings = new Set<string>();
+  for (const statement of (program.body as ASTNode[] | undefined) ?? []) {
+    if (statement.type !== "ImportDeclaration") continue;
+    const source = statement.source as ASTNode | undefined;
+    if (
+      typeof source?.value !== "string" ||
+      !RUNTIME_WORKFLOW_MODULE_SPECIFIERS.has(source.value)
+    ) {
+      continue;
+    }
+    for (const specifier of (statement.specifiers as ASTNode[] | undefined) ?? []) {
+      if (specifier.type !== "ImportSpecifier") continue;
+      const imported = getModuleExportName(specifier.imported);
+      const local = getModuleExportName(specifier.local);
+      if (imported === "workflow" && local) bindings.add(local);
+    }
+  }
+  return bindings;
+}
+
+function isDirectExecJobFunctionCallee(
+  node: unknown,
+  runtimeWorkflowBindings: ReadonlySet<string>,
+): boolean {
+  if (isExecJobFunctionCallee(node)) return true;
+  if (!node || typeof node !== "object") return false;
+  const callee = node as ASTNode;
+  if (callee.type !== "MemberExpression") return false;
+  const property = callee.property as ASTNode | undefined;
+  if (property?.type !== "Identifier" || property.name !== "execJobFunction") return false;
+  const object = callee.object as ASTNode | undefined;
+  return object?.type === "Identifier" && runtimeWorkflowBindings.has(object.name as string);
+}
+
+interface DirectExecJobFunctionCall {
+  targetName: string | undefined;
+}
+
+/**
+ * Find calls to `execJobFunction` written directly in workflow source, on
+ * either the ambient `tailor.workflow` global or a `workflow` value imported
+ * from `@tailor-platform/sdk/runtime`(`/workflow`) (aliases included). Such a
+ * call is never recognized as a dependency, so its target would silently be
+ * dropped from the bundle unless something else happens to reference it.
+ * @param program - Parsed workflow file AST
+ * @returns Every direct execJobFunction call found, with its static target
+ * name when the first argument is a string literal
+ */
+function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunctionCall[] {
+  const runtimeWorkflowBindings = collectRuntimeWorkflowImportBindings(program);
+  const calls: DirectExecJobFunctionCall[] = [];
+
+  function walk(node: ASTNode | null | undefined): void {
+    if (!node || typeof node !== "object") return;
+    if (
+      node.type === "CallExpression" &&
+      isDirectExecJobFunctionCallee(node.callee, runtimeWorkflowBindings)
+    ) {
+      const args = node.arguments as unknown[] | undefined;
+      calls.push({ targetName: extractStaticStringValue(args?.[0]) });
+    }
+    for (const key of Object.keys(node)) {
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode);
+      }
+    }
+  }
+
+  walk(program);
+  return calls;
+}
+
+function buildDirectExecJobFunctionErrorMessage(
+  sourceFile: string,
+  call: DirectExecJobFunctionCall,
+): string {
+  if (call.targetName !== undefined) {
+    return (
+      `Workflow file ${sourceFile} calls execJobFunction("${call.targetName}", ...) directly. A ` +
+      `direct call is never recognized as a dependency, so "${call.targetName}" would silently be ` +
+      `dropped from the bundle unless something else happens to reference it. Call ` +
+      `"${call.targetName}".start(...) from inside a job body instead.`
+    );
+  }
+  return (
+    `Workflow file ${sourceFile} calls execJobFunction(...) directly with a job name that isn't a ` +
+    `string literal, so the target can't be resolved at build time. Call the target job's own ` +
+    `.start(...) method from inside a job body instead of calling execJobFunction directly.`
+  );
 }
 
 /**
@@ -145,9 +245,9 @@ export function validateBundledDependencies(
         throw new WorkflowJobDetectionError(
           `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...) — usually the ` +
             `result of a "${targetJobName}".start() rewrite — but "${targetJobName}" was not detected as a ` +
-            `dependency and is not included in the bundle. Move the .start() call (or the direct ` +
-            `execJobFunction call) to a function defined inside the body of workflow job "${callerJobName}", ` +
-            `or make sure the file containing it is covered by the workflow service's "files" pattern.`,
+            `dependency and is not included in the bundle. Call "${targetJobName}".start() from inside the ` +
+            `body of workflow job "${callerJobName}" (a nested function inside body works too), or make ` +
+            `sure the file containing the call is covered by the workflow service's "files" pattern.`,
         );
       }
     }
@@ -308,6 +408,13 @@ async function filterUsedJobs(
         if (errors.length > 0) {
           throw new WorkflowJobDetectionError(
             `Failed to parse ${sourceFile}: ${errors.map((e) => e.message).join("; ")}`,
+          );
+        }
+
+        const [firstDirectExecCall] = findDirectExecJobFunctionCalls(program as unknown as ASTNode);
+        if (firstDirectExecCall) {
+          throw new WorkflowJobDetectionError(
+            buildDirectExecJobFunctionErrorMessage(sourceFile, firstDirectExecCall),
           );
         }
 

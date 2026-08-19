@@ -480,6 +480,173 @@ export default createWorkflow({ name: "workflow", mainJob });
         logSpy.mockRestore();
       }
     });
+
+    test("throws when a job body calls the ambient execJobFunction directly, even already inside the body", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const worker = createWorkflowJob({ name: "worker", body: async () => "done" });
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input: unknown) => await tailor.workflow.execJobFunction("worker", input),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      let error: unknown;
+      try {
+        await bundleWorkflowJobs(
+          [
+            { name: "worker", exportName: "worker", sourceFile: workflowFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toMatch(/worker.*\.start\(/);
+      expect((error as Error).message).not.toMatch(/move.*inside/i);
+    });
+
+    test("throws when a job body calls the imported workflow.execJobFunction directly (previously silent)", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { workflow } from "@tailor-platform/sdk/runtime";
+
+export const worker = createWorkflowJob({ name: "worker", body: async () => "done" });
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input: unknown) => await workflow.execJobFunction("worker", input),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [
+            { name: "worker", exportName: "worker", sourceFile: workflowFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/worker.*\.start\(/);
+    });
+
+    test("throws when a job body calls execJobFunction via an aliased runtime import", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { workflow as wf } from "@tailor-platform/sdk/runtime/workflow";
+
+export const worker = createWorkflowJob({ name: "worker", body: async () => "done" });
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input: unknown) => await wf.execJobFunction("worker", input),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [
+            { name: "worker", exportName: "worker", sourceFile: workflowFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/worker.*\.start\(/);
+    });
+
+    test("throws with a job-name-can't-be-resolved message when the execJobFunction target isn't a string literal", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input: { jobName: string }) =>
+    await tailor.workflow.execJobFunction(input.jobName, input),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/isn't a string literal/);
+    });
+
+    test("does not throw for a user-defined object with its own execJobFunction method", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+const myApi = { execJobFunction: (name: string) => name };
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => myApi.execJobFunction("not-a-workflow-job"),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [workflowFile] });
+
+      const result = await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile: workflowFile }],
+        ["main-job"],
+        {},
+        context,
+        dir,
+      );
+
+      expect(result.usedJobNames).toEqual(["main-job"]);
+    });
   });
 
   describe("cross-file workflow default import", () => {
