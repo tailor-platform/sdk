@@ -23,7 +23,13 @@ async function fetchOIDCDiscovery(
   providerUrl: string,
 ): Promise<{ authorization_endpoint: string }> {
   const url = providerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
-  const response = await fetch(url);
+  // A fetch failure rejects with TypeError, which the top-level handler
+  // classifies as an SDK bug and crash-reports.
+  const response = await fetch(url).catch((error: unknown) => {
+    throw new Error(`Failed to fetch OIDC discovery from ${url}: ${toError(error).message}`, {
+      cause: error,
+    });
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch OIDC discovery from ${url}: ${response.status}`);
   }

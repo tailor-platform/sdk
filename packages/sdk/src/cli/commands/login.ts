@@ -124,6 +124,15 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
   const client = initOAuth2Client(args.platformConfig);
   const state = randomState();
   const codeVerifier = await generateCodeVerifier();
+  // A fetch failure here rejects with TypeError, which the top-level handler
+  // classifies as an SDK bug and crash-reports.
+  const authorizeUri = await client.authorizationCode
+    .getAuthorizeUri({ redirectUri, state, codeVerifier })
+    .catch((error: unknown) => {
+      throw new Error(`Failed to prepare the login authorization URL: ${toError(error).message}`, {
+        cause: error,
+      });
+    });
 
   return new Promise<void>((resolve, reject) => {
     const handleCallback = async (
@@ -203,13 +212,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       reject(error);
     });
 
-    const openLoginUrl = async (): Promise<void> => {
-      const authorizeUri = await client.authorizationCode.getAuthorizeUri({
-        redirectUri,
-        state,
-        codeVerifier,
-      });
-
+    const openBrowser = async (): Promise<void> => {
       logger.info(`Opening browser for login:\n\n${authorizeUri}\n`);
       try {
         await open(authorizeUri);
@@ -217,16 +220,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         logger.warn("Failed to open browser automatically. Please open the URL above manually.");
       }
     };
-    server.listen(redirectPort, () => {
-      openLoginUrl().catch((error: unknown) => {
-        server.close();
-        reject(
-          new Error(`Failed to prepare the login authorization URL: ${toError(error).message}`, {
-            cause: error,
-          }),
-        );
-      });
-    });
+    server.listen(redirectPort, () => void openBrowser());
   });
 };
 

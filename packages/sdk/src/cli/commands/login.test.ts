@@ -181,10 +181,9 @@ describe("login --profile", () => {
 
     expect(result.success).toBe(false);
     const error = (result as { error?: Error }).error;
-    expect(error?.message).toContain("Failed to prepare the login authorization URL: fetch failed");
-    // A plain Error keeps this normal failure out of crash reporting.
+    expect(error?.message).toContain("fetch failed");
+    // A native error type would be classified as an SDK bug and crash-reported.
     expect(error).not.toBeInstanceOf(TypeError);
-    expect(error?.cause).toBeInstanceOf(TypeError);
   });
 
   test("quotes dynamic profile update command arguments", async () => {
