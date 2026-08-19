@@ -1611,6 +1611,15 @@ export const allCodemods: CodemodPackage[] = [
     notice: true,
   },
   {
+    id: "v2/tailordb-script-hash-migration-sync",
+    name: "First v2 deploy to a v1-deployed environment needs migration sync",
+    description:
+      "The pre-v2 CLI never wrote a script hash into deployed schemas, so the first `tailor deploy` against an environment last deployed with it reports `Remote schema drift detected` with every scripted type showing `has no script hash on remote`. Run `tailor tailordb migration sync <current migration number>` once for that environment to write the missing hashes, then `tailor deploy` as usual. Preview/PR workspaces don't hit this, since they're built with v2 from the start. No source change is required.",
+    since: "1.0.0",
+    until: "2.0.0",
+    notice: true,
+  },
+  {
     id: "v2/dts-env-value-types",
     name: "tailor.d.ts Env uses value types instead of literal values",
     description:

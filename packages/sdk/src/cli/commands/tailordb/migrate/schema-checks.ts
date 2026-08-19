@@ -26,6 +26,7 @@ import {
   createSnapshotType,
   createSnapshotFromRemoteTypes,
   getLatestMigrationNumber,
+  MISSING_REMOTE_SCRIPT_HASH_SUFFIX,
   type RemoteGqlPermission,
   type SchemaSnapshot,
   type SnapshotGqlOperations,
@@ -33,7 +34,7 @@ import {
   type TailorDBSnapshotType,
   type NormalizedSchemaSnapshot,
 } from "./snapshot";
-import { type RemoteSchemaVerificationResult } from "./types";
+import { type RemoteSchemaVerificationResult, type SchemaDrift } from "./types";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
@@ -362,9 +363,44 @@ export async function verifyRemoteSchema(
 }
 
 /**
- * Log common causes of remote schema drift and how to resolve them
+ * Minimal per-namespace drift shape needed to detect the v1-origin
+ * missing-script-hash pattern, shared by callers that hold either a full
+ * {@link RemoteSchemaVerificationResult} or a validation report's subset of it.
  */
-export function logRemoteDriftGuidance(): void {
+interface DriftGuidanceInput {
+  hasDrift: boolean;
+  drifts: readonly SchemaDrift[];
+}
+
+function isMissingRemoteScriptHashDrift(drift: SchemaDrift): boolean {
+  return (
+    drift.kind === "script_mismatch" && drift.details.endsWith(MISSING_REMOTE_SCRIPT_HASH_SUFFIX)
+  );
+}
+
+/**
+ * Detect the pattern left by a v1-deployed environment: the v1 CLI never wrote
+ * script hashes, so every drift reports a missing hash rather than an actual
+ * schema difference.
+ * @param {readonly DriftGuidanceInput[]} driftResults - Per-namespace verification results
+ * @returns {boolean} True when every reported drift is a missing-script-hash drift
+ */
+function isLikelyPreV2ScriptHashDrift(driftResults: readonly DriftGuidanceInput[]): boolean {
+  const withDrift = driftResults.filter((result) => result.hasDrift);
+  return (
+    withDrift.length > 0 &&
+    withDrift.every(
+      (result) => result.drifts.length > 0 && result.drifts.every(isMissingRemoteScriptHashDrift),
+    )
+  );
+}
+
+/**
+ * Log common causes of remote schema drift and how to resolve them
+ * @param {readonly DriftGuidanceInput[]} [driftResults] - Per-namespace verification results, used to add a targeted hint for the v1-origin missing-hash pattern
+ * @returns {void}
+ */
+export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInput[]): void {
   logger.info("This may indicate:");
   logger.info("  - Another developer applied different migrations", { mode: "plain" });
   logger.info("  - Manual schema changes were made directly", { mode: "plain" });
@@ -382,6 +418,12 @@ export function logRemoteDriftGuidance(): void {
     { mode: "plain" },
   );
   logger.info("  - If only bookkeeping is stale, run 'migration set <N>'.", { mode: "plain" });
+  if (driftResults && isLikelyPreV2ScriptHashDrift(driftResults)) {
+    logger.newline();
+    logger.info(
+      `Every listed drift is '${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}'. Run 'migration sync <N>' above to add the missing hashes.`,
+    );
+  }
 }
 
 /**

@@ -486,7 +486,12 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
     );
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
-    logRemoteDriftGuidance();
+    logRemoteDriftGuidance(
+      reports.map((r) => ({
+        hasDrift: r.remoteSchema?.hasDrift ?? false,
+        drifts: r.remoteSchema?.drifts ?? [],
+      })),
+    );
   }
   const missingAcknowledgments = reports.filter(
     (r) => r.warningAcknowledgments && !r.warningAcknowledgments.valid,
