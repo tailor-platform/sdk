@@ -78,28 +78,30 @@ recursion:
 Shape>> { return v.record(v.string(), ThisSchema); }`. When the recursive
   property is a required key, vinfer terminates the recursion in a named
   self-reference rather than `any`. See `TailorFieldSchema`
-  (`parser/service/field/schema.ts`). Two known vinfer limitations still show
-  up in the output and are not worth working around in the schema:
-  - It inlines one redundant copy of the shape before the self-reference
-    (`fields: { [x: string]: { ... fields: { [x: string]: TailorField } } }`
-    where zinfer emitted `fields: { [x: string]: TailorField }`), and that
-    inlined copy carries no `v.description` TSDoc.
-  - A recursive schema referenced from a schema in **another** output file is
-    inlined there and bottoms out at bare `any` (see `input` / `output` in
-    `types/resolver.generated.ts`), because vinfer does not import the type it
-    already generated into `types/field.generated.ts`.
+  (`parser/service/field/schema.ts`). As of `vinfer@0.1.3`, this no longer
+  inlines a redundant copy of the shape before the self-reference (it used to,
+  dropping `v.description` TSDoc in that copy), and a recursive schema reached
+  through a schema vinfer generates no type for — an unexported intermediate,
+  or one in another output file — is now referenced by name instead of
+  collapsing to bare `any` (see `input` / `output` in
+  `types/resolver.generated.ts`, which now import `TailorField` from
+  `./field.generated`).
+
 - **Degraded but usable — same getter pattern, on an optional property**:
-  vinfer resolves only one level deep, then falls back to `any` for the rest.
-  When annotating the return type for an optional recursive property, use
-  valibot's own `v.OptionalSchema<Wrapped, Default>` (or `v.NullableSchema<...>`
-  for a nullable one) rather than a generic `v.GenericSchema<T | undefined>`
-  union — vinfer reads the _schema wrapper type_ to decide whether to render
-  the generated key as `key?:` or `key:`, and a `v.GenericSchema<T | undefined>`
+  vinfer still resolves only one level deep here, then falls back to `any` for
+  the rest — this specific case is not fixed by 0.1.3. When annotating the
+  return type for an optional recursive property, use valibot's own
+  `v.OptionalSchema<Wrapped, Default>` (or `v.NullableSchema<...>` for a
+  nullable one) rather than a generic `v.GenericSchema<T | undefined>` union —
+  vinfer reads the _schema wrapper type_ to decide whether to render the
+  generated key as `key?:` or `key:`, and a `v.GenericSchema<T | undefined>`
   annotation does not read as "optional" to it, producing a `key:` (required)
   at that level while every other level of the same recursion renders `key?:`
   (optional) — a self-inconsistent type that then fails structural checks
   against itself one recursion step down. See `SCIMAttributeSchema`
-  (`parser/service/auth/schema.ts`, `subAttributes`) for the working form.
+  (`parser/service/auth/schema.ts`, `subAttributes`) for the working form —
+  its own `subAttributes` field still bottoms out at `any[] | null | undefined`
+  one level down.
 - **Do not** annotate the schema constant itself (`export const Foo:
 v.GenericSchema<T> = ...`) or a `v.lazy()` callback's return type — both
   collapse vinfer's generation into a broken self-alias (`type Foo = Foo`) or

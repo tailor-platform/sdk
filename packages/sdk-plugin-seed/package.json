@@ -28,7 +28,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@politty/valibot": "0.1.1",
+    "@politty/valibot": "0.1.2",
     "pathe": "2.0.3",
     "pkg-types": "2.3.1",
     "valibot": "1.4.2"

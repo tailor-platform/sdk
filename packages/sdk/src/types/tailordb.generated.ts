@@ -1878,48 +1878,74 @@ export type TailorDBTypeRawInput = {
           }
         | undefined;
       metadata: {
-        required?: boolean | undefined | undefined;
-        array?: boolean | undefined | undefined;
-        description?: string | undefined | undefined;
-        typeName?: string | undefined | undefined;
+        /** Whether the field is required */
+        required?: boolean | undefined;
+        /** Whether the field is an array */
+        array?: boolean | undefined;
+        /** Field description */
+        description?: string | undefined;
+        /** Type name for nested or enum fields */
+        typeName?: string | undefined;
+        /** Allowed values for enum fields */
         allowedValues?:
           | {
               value: string;
-              description?: string | undefined | undefined;
+              description?: string | undefined;
             }[]
           | undefined;
-        index?: boolean | undefined | undefined;
-        unique?: boolean | undefined | undefined;
-        vector?: boolean | undefined | undefined;
-        foreignKey?: boolean | undefined | undefined;
-        foreignKeyType?: string | undefined | undefined;
-        foreignKeyField?: string | undefined | undefined;
+        /** Whether the field is indexed for faster queries */
+        index?: boolean | undefined;
+        /** Whether the field value must be unique */
+        unique?: boolean | undefined;
+        /** Whether the field is a vector field for similarity search */
+        vector?: boolean | undefined;
+        /** Whether the field is a foreign key */
+        foreignKey?: boolean | undefined;
+        /** Target type name for foreign key relations */
+        foreignKeyType?: string | undefined;
+        /** Target field name for foreign key relations */
+        foreignKeyField?: string | undefined;
+        /** Lifecycle hooks for the field */
         hooks?:
           | {
+              /** Hook function called on record creation */
               create?: Function | undefined;
+              /** Hook function called on record update */
               update?: Function | undefined;
             }
           | undefined;
+        /** Validation functions for the field */
         validate?: Function[] | undefined;
+        /** Serial (auto-increment) configuration */
         serial?:
           | {
+              /** Starting value for the serial sequence */
               start: number;
-              maxValue?: number | undefined | undefined;
-              format?: string | undefined | undefined;
+              /** Maximum value for the serial sequence */
+              maxValue?: number | undefined;
+              /** Format string for serial value (string type only) */
+              format?: string | undefined;
             }
           | undefined;
-        scale?: number | undefined | undefined;
+        /** Decimal scale (number of digits after decimal point, 0-12) */
+        scale?: number | undefined;
+        /** Default value for the field on create */
         default?: unknown;
       };
       rawRelation?:
         | {
+            /** Relation cardinality type */
             type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
             toward: {
+              /** Target type name, or 'self' for self-relations */
               type: string;
-              as?: string | undefined | undefined;
-              key?: string | undefined | undefined;
+              /** Custom forward relation name */
+              as?: string | undefined;
+              /** Target field to join on (default: 'id') */
+              key?: string | undefined;
             };
-            backward?: string | undefined | undefined;
+            /** Backward relation name on the target type */
+            backward?: string | undefined;
           }
         | undefined;
     };
@@ -1961,48 +1987,74 @@ export type TailorDBTypeRaw = {
           }
         | undefined;
       metadata: {
-        required?: boolean | undefined | undefined;
-        array?: boolean | undefined | undefined;
-        description?: string | undefined | undefined;
-        typeName?: string | undefined | undefined;
+        /** Whether the field is required */
+        required?: boolean | undefined;
+        /** Whether the field is an array */
+        array?: boolean | undefined;
+        /** Field description */
+        description?: string | undefined;
+        /** Type name for nested or enum fields */
+        typeName?: string | undefined;
+        /** Allowed values for enum fields */
         allowedValues?:
           | {
               value: string;
-              description?: string | undefined | undefined;
+              description?: string | undefined;
             }[]
           | undefined;
-        index?: boolean | undefined | undefined;
-        unique?: boolean | undefined | undefined;
-        vector?: boolean | undefined | undefined;
-        foreignKey?: boolean | undefined | undefined;
-        foreignKeyType?: string | undefined | undefined;
-        foreignKeyField?: string | undefined | undefined;
+        /** Whether the field is indexed for faster queries */
+        index?: boolean | undefined;
+        /** Whether the field value must be unique */
+        unique?: boolean | undefined;
+        /** Whether the field is a vector field for similarity search */
+        vector?: boolean | undefined;
+        /** Whether the field is a foreign key */
+        foreignKey?: boolean | undefined;
+        /** Target type name for foreign key relations */
+        foreignKeyType?: string | undefined;
+        /** Target field name for foreign key relations */
+        foreignKeyField?: string | undefined;
+        /** Lifecycle hooks for the field */
         hooks?:
           | {
+              /** Hook function called on record creation */
               create?: Function | undefined;
+              /** Hook function called on record update */
               update?: Function | undefined;
             }
           | undefined;
+        /** Validation functions for the field */
         validate?: Function[] | undefined;
+        /** Serial (auto-increment) configuration */
         serial?:
           | {
+              /** Starting value for the serial sequence */
               start: number;
-              maxValue?: number | undefined | undefined;
-              format?: string | undefined | undefined;
+              /** Maximum value for the serial sequence */
+              maxValue?: number | undefined;
+              /** Format string for serial value (string type only) */
+              format?: string | undefined;
             }
           | undefined;
-        scale?: number | undefined | undefined;
+        /** Decimal scale (number of digits after decimal point, 0-12) */
+        scale?: number | undefined;
+        /** Default value for the field on create */
         default?: unknown;
       };
       rawRelation?:
         | {
+            /** Relation cardinality type */
             type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
             toward: {
+              /** Target type name, or 'self' for self-relations */
               type: string;
-              as?: string | undefined | undefined;
-              key?: string | undefined | undefined;
+              /** Custom forward relation name */
+              as?: string | undefined;
+              /** Target field to join on (default: 'id') */
+              key?: string | undefined;
             };
-            backward?: string | undefined | undefined;
+            /** Backward relation name on the target type */
+            backward?: string | undefined;
           }
         | undefined;
     };

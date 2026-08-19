@@ -19,7 +19,7 @@
     "test": "vitest"
   },
   "devDependencies": {
-    "@politty/valibot": "0.1.1",
+    "@politty/valibot": "0.1.2",
     "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
     "pathe": "2.0.3",

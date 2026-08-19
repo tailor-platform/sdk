@@ -35,7 +35,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@politty/valibot": "0.1.1",
+    "@politty/valibot": "0.1.2",
     "chokidar": "5.0.0",
     "mime-types": "3.0.2",
     "open": "11.0.0",
