@@ -49,6 +49,18 @@ describe("setupRenovate", () => {
     expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
   });
 
+  test("uses Renovate when the provider is omitted", async () => {
+    const originalCwd = process.cwd();
+    process.chdir(testDir);
+    try {
+      await runCommand(setupCommand, ["deps"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
+  });
+
   test("generates the Renovate config when the provider is named explicitly", async () => {
     const originalCwd = process.cwd();
     process.chdir(testDir);
