@@ -14,7 +14,10 @@ export const AIGatewaySchema = v.pipe(
     authNamespace: v.optional(
       v.pipe(
         v.string(),
-        v.regex(AUTH_NAMESPACE_PATTERN, "Must be 3-63 lowercase alphanumeric characters or hyphens"),
+        v.regex(
+          AUTH_NAMESPACE_PATTERN,
+          "Must be 3-63 lowercase alphanumeric characters or hyphens",
+        ),
         v.description(
           "Auth namespace used to resolve request tokens against the workspace's auth. Defaults to the application's own auth service when omitted; omitting it without an Auth service configured is rejected.",
         ),

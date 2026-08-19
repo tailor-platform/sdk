@@ -58,52 +58,6 @@ export const IdpUserTriggerSchema = v.strictObject({
   kind: v.pipe(v.literal("idpUser"), v.description("IdP user event trigger")),
   events: v.pipe(
     v.array(v.picklist(["idp.user.created", "idp.user.updated", "idp.user.deleted"])),
-    ),
-    v.minLength(1),
-    v.transform((arr) => [...new Set(arr)]),
-    v.description("TailorDB event types to trigger on"),
-  ),
-  typeName: v.pipe(v.string(), v.description("TailorDB type name to watch for events")),
-  condition: v.optional(
-    v.pipe(functionSchema, v.description("Condition function to filter events")),
-  ),
-});
-
-export const ResolverExecutedTriggerSchema = v.strictObject({
-  kind: v.literal("resolverExecuted"),
-  resolverName: v.pipe(v.string(), v.description("Name of the resolver to trigger on")),
-  condition: v.optional(
-    v.pipe(functionSchema, v.description("Condition function to filter events")),
-  ),
-});
-
-export const ScheduleTriggerSchema = v.strictObject({
-  kind: v.literal("schedule"),
-  cron: v.pipe(v.string(), v.description("CRON expression for the schedule")),
-  timezone: v.optional(
-    v.pipe(v.string(), v.description("Timezone for the CRON schedule (default: UTC)")),
-    "UTC",
-  ),
-});
-
-export const IncomingWebhookTriggerResponseSchema = v.strictObject({
-  body: v.optional(v.pipe(functionSchema, v.description("Function returning the response body"))),
-  statusCode: v.optional(
-    v.pipe(v.number(), v.integer(), v.description("HTTP status code for the response")),
-  ),
-});
-
-export const IncomingWebhookTriggerSchema = v.strictObject({
-  kind: v.literal("incomingWebhook"),
-  response: v.optional(
-    v.pipe(IncomingWebhookTriggerResponseSchema, v.description("Response configuration")),
-  ),
-});
-
-export const IdpUserTriggerSchema = v.strictObject({
-  kind: v.pipe(v.literal("idpUser"), v.description("IdP user event trigger")),
-  events: v.pipe(
-    v.array(v.picklist(["idp.user.created", "idp.user.updated", "idp.user.deleted"])),
     v.minLength(1),
     v.transform((arr) => [...new Set(arr)]),
     v.description("IdP user event types to trigger on"),
@@ -256,11 +210,18 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function jsonRecordSchema(): v.GenericSchema<Record<string, JsonValue>> {
-  // The cast is only needed because the guard widens the input type to
-  // `Record<string, unknown>`, which no longer matches `JsonValue`.
   return v.pipe(
     v.custom<Record<string, unknown>>(isPlainRecord, "Expected a plain object"),
-    v.record(v.string(), JsonValueSchema),
+    v.rawTransform(({ dataset, addIssue, NEVER }) => {
+      const result = v.safeParse(v.record(v.string(), JsonValueSchema), dataset.value);
+      if (!result.success) {
+        for (const issue of result.issues) {
+          addIssue({ message: issue.message, path: issue.path });
+        }
+        return NEVER;
+      }
+      return result.output;
+    }),
   ) as unknown as v.GenericSchema<Record<string, JsonValue>>;
 }
 

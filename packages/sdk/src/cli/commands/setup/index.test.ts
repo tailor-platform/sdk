@@ -1,4 +1,4 @@
-import { runCommand } from "politty";
+import { runCommand } from "@politty/valibot";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { setupTarget } from "./generate";

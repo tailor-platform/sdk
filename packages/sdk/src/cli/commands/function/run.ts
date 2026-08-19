@@ -63,7 +63,7 @@ export const runFunctionCommand = defineAppCommand({
       alias: "c",
       description: "Path to SDK config file",
     }),
-    "allow-schema-drift": arg(z.boolean().default(false), {
+    "allow-schema-drift": arg(v.optional(v.boolean(), false), {
       description: "Run a scaffolded script even when its schema snapshot no longer matches",
     }),
   }),

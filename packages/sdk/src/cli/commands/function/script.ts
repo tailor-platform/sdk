@@ -6,9 +6,9 @@
  */
 
 import * as fs from "node:fs";
+import { arg } from "@politty/valibot";
 import * as path from "pathe";
-import { arg } from "politty";
-import { z } from "zod";
+import * as v from "valibot";
 import { fetchRemoteSchemaSnapshot } from "#/cli/commands/tailordb/migrate/schema-checks";
 import {
   createSnapshotFromLocalTypes,
@@ -40,17 +40,17 @@ export const scriptCommand = defineAppCommand({
   name: "script",
   description: "Scaffold a one-off script to run with `function run`.",
   // strip unknown keys
-  args: z.object({
+  args: v.object({
     ...workspaceArgs,
     ...configArg,
-    file: arg(z.string(), {
+    file: arg(v.string(), {
       positional: true,
       description: "Path to create the script at (must end with .ts)",
     }),
-    namespace: arg(z.string().optional(), {
+    namespace: arg(v.optional(v.string()), {
       description: "Target TailorDB namespace (required when the config does not pin one)",
     }),
-    remote: arg(z.boolean().default(false), {
+    remote: arg(v.optional(v.boolean(), false), {
       description: "Generate script-scoped DB types from the deployed schema",
     }),
   }),

@@ -285,13 +285,12 @@ const MachineUserSchema = v.strictObject({
   attributes: v.optional(
     v.pipe(
       v.record(v.string(), v.nullish(ValueOperandSchema)),
-      v.transform(
-        (attributes): Record<string, ValueOperand> =>
-          Object.fromEntries(
-            Object.entries(attributes).filter(
-              (entry): entry is [string, ValueOperand] => entry[1] != null,
-            ),
+      v.transform((attributes): Record<string, ValueOperand> =>
+        Object.fromEntries(
+          Object.entries(attributes).filter(
+            (entry): entry is [string, ValueOperand] => entry[1] != null,
           ),
+        ),
       ),
     ),
   ),

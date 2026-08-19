@@ -146,8 +146,8 @@ importers:
         specifier: 1.7.0
         version: 1.7.0
       '@politty/valibot':
-        specifier: 0.1.1
-        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
+        specifier: 0.1.2
+        version: 0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       execa:
         specifier: 10.0.1
         version: 10.0.1
@@ -496,8 +496,8 @@ importers:
         specifier: 0.144.0
         version: 0.144.0
       '@politty/valibot':
-        specifier: 0.1.1
-        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
+        specifier: 0.1.2
+        version: 0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       '@secretlint/core':
         specifier: 13.0.4
         version: 13.0.4(supports-color@7.2.0)
@@ -644,8 +644,8 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
       vinfer:
-        specifier: 0.1.2
-        version: 0.1.2(typescript@6.0.3)(valibot@1.4.2(typescript@6.0.3))
+        specifier: 0.1.3
+        version: 0.1.3(typescript@6.0.3)(valibot@1.4.2(typescript@6.0.3))
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -656,8 +656,8 @@ importers:
         specifier: 0.45.1
         version: 0.45.1
       '@politty/valibot':
-        specifier: 0.1.1
-        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
+        specifier: 0.1.2
+        version: 0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -708,8 +708,8 @@ importers:
   packages/sdk-plugin-seed:
     dependencies:
       '@politty/valibot':
-        specifier: 0.1.1
-        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
+        specifier: 0.1.2
+        version: 0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       pathe:
         specifier: 2.0.3
         version: 2.0.3
@@ -748,8 +748,8 @@ importers:
   packages/sdk-plugin-tailordb-erd:
     dependencies:
       '@politty/valibot':
-        specifier: 0.1.1
-        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
+        specifier: 0.1.2
+        version: 0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -800,8 +800,8 @@ importers:
   packages/shared:
     devDependencies:
       '@politty/valibot':
-        specifier: 0.1.1
-        version: 0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
+        specifier: 0.1.2
+        version: 0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))
       oxlint:
         specifier: 1.78.0
         version: 1.78.0(oxlint-tsgolint@7.0.2001)
@@ -2221,8 +2221,8 @@ packages:
     resolution: {integrity: sha512-pOr5+q1fLYKwFN3LAJuGZEnfXDcQ73zqgDHMtGy+K+uIoUqyY+6MeDCWFwfu+4EFuq76I5EPFofoNAI+Bmmq4A==}
     engines: {node: '>=22.13'}
 
-  '@politty/valibot@0.1.1':
-    resolution: {integrity: sha512-vTRno29w/JHDOCSsqITTOsLmsUFnPqgFSJqITtVYBJmr4C/JLtgRiLf09B25+1vUC5XVn+NUeTOG86wya1fbHw==}
+  '@politty/valibot@0.1.2':
+    resolution: {integrity: sha512-0ixrFxbZN3OxNu1JH1uXngqA/7qSHPcseFDh4ideHy2Vg57KpaDB0uzC9BZPC9VvELBfVXglLyYj1XZCxWrb6Q==}
     engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
     hasBin: true
     peerDependencies:
@@ -4103,8 +4103,8 @@ packages:
     resolution: {integrity: sha512-zj/ob3UsvJGN0whEAKFp53REA5X66hvffVqoCtVQAakJKnKlH+/PcOfMoFwIG/o4rElqLv/ycAFlx8ZlXUorCg==}
     engines: {node: '>=18.12.0'}
 
-  vinfer@0.1.2:
-    resolution: {integrity: sha512-qdvLn+U78dSzn7QRcks9CpiwNLCmPvHf0YM0RHkS0taXqI2mO7PPt+jiOjhRFXo+jEqlJMpcuaH/VhhSKjliuA==}
+  vinfer@0.1.3:
+    resolution: {integrity: sha512-v3bYQTiWWiCc1426SghGOi5U13cZFMkcH6aPF6NuUbFy4z9q23TJLM0JUrpNpHqEt5Xd9IYUtgLkYacRoWa65Q==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
@@ -5235,7 +5235,7 @@ snapshots:
 
   '@pnpm/deps.graph-sequencer@1100.0.1': {}
 
-  '@politty/valibot@0.1.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))':
+  '@politty/valibot@0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(valibot@1.4.2(typescript@6.0.3))':
     dependencies:
       valibot: 1.4.2(typescript@6.0.3)
       yaml: 2.9.0
@@ -7006,7 +7006,7 @@ snapshots:
 
   verkit@0.3.2: {}
 
-  vinfer@0.1.2(typescript@6.0.3)(valibot@1.4.2(typescript@6.0.3)):
+  vinfer@0.1.3(typescript@6.0.3)(valibot@1.4.2(typescript@6.0.3)):
     dependencies:
       commander: 15.0.0
       glob: 13.0.6

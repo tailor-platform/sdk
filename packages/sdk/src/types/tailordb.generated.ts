@@ -1901,7 +1901,7 @@ export type TailorDBTypeRawInput = {
         vector?: boolean | undefined;
         /** Whether the field is a foreign key */
         foreignKey?: boolean | undefined;
-        /** Target type name for foreign key relations */
+        /** Target table name for foreign key relations */
         foreignKeyType?: string | undefined;
         /** Target field name for foreign key relations */
         foreignKeyField?: string | undefined;
@@ -1937,14 +1937,14 @@ export type TailorDBTypeRawInput = {
             /** Relation cardinality type */
             type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
             toward: {
-              /** Target type name, or 'self' for self-relations */
+              /** Target table name, or 'self' for self-relations */
               type: string;
               /** Custom forward relation name */
               as?: string | undefined;
               /** Target field to join on (default: 'id') */
               key?: string | undefined;
             };
-            /** Backward relation name on the target type */
+            /** Backward relation name on the target table */
             backward?: string | undefined;
           }
         | undefined;
@@ -2010,7 +2010,7 @@ export type TailorDBTypeRaw = {
         vector?: boolean | undefined;
         /** Whether the field is a foreign key */
         foreignKey?: boolean | undefined;
-        /** Target type name for foreign key relations */
+        /** Target table name for foreign key relations */
         foreignKeyType?: string | undefined;
         /** Target field name for foreign key relations */
         foreignKeyField?: string | undefined;
@@ -2046,14 +2046,14 @@ export type TailorDBTypeRaw = {
             /** Relation cardinality type */
             type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
             toward: {
-              /** Target type name, or 'self' for self-relations */
+              /** Target table name, or 'self' for self-relations */
               type: string;
               /** Custom forward relation name */
               as?: string | undefined;
               /** Target field to join on (default: 'id') */
               key?: string | undefined;
             };
-            /** Backward relation name on the target type */
+            /** Backward relation name on the target table */
             backward?: string | undefined;
           }
         | undefined;
