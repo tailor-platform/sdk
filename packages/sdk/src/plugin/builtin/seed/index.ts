@@ -44,6 +44,12 @@ export type SeedPluginOptions = {
   disableIdpUserSync?: DisableIdpUserSyncDirections;
 };
 
+declare module "@tailor-platform/sdk/plugin" {
+  interface PluginConfigRegistry {
+    "@tailor-platform/seed": SeedPluginOptions;
+  }
+}
+
 function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]): {
   emitUserToIdpFK: boolean;
   emitIdpToUserFK: boolean;

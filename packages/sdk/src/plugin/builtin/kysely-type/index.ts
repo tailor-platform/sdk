@@ -1,4 +1,3 @@
-import { getPluginConfig } from "#/plugin/get-plugin-config";
 import { processKyselyType, generateUnifiedKyselyTypes } from "./type-processor";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 import type { KyselyTypeMetadata, KyselyNamespaceMetadata } from "./types";
@@ -10,18 +9,18 @@ type KyselyTypePluginOptions = {
   distPath: string;
 };
 
-const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
-
-/**
- * Get the file path `kyselyTypePlugin` writes its generated Kysely types to.
- * @param plugin - The plugin instance found by matching `id` against {@link KyselyGeneratorID}
- * @returns The configured output path, or {@link DEFAULT_KYSELY_TYPES_DIST_PATH} if the plugin has no `distPath` configured
- */
-export function getKyselyTypePluginDistPath(plugin: Plugin): string {
-  return (
-    getPluginConfig<KyselyTypePluginOptions>(plugin)?.distPath ?? DEFAULT_KYSELY_TYPES_DIST_PATH
-  );
+// Register this plugin's config type under its own id, via the package's
+// real public specifier, so callers can resolve it type-safely from a
+// `Plugin[]` array (see plugin/get-plugin-config.ts's resolvePluginConfig)
+// without importing KyselyTypePluginOptions, which stays unexported.
+declare module "@tailor-platform/sdk/plugin" {
+  interface PluginConfigRegistry {
+    "@tailor-platform/kysely-type": KyselyTypePluginOptions;
+  }
 }
+
+/** Conventional output path used when `kyselyTypePlugin` has no `distPath` configured. */
+export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
 
 /**
  * Plugin that generates Kysely type definitions for TailorDB tables.

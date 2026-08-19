@@ -14,3 +14,5 @@ export {
 } from "./with-context";
 
 export { getGeneratedType } from "./get-generated-type";
+
+export type { PluginConfigRegistry } from "./types";
