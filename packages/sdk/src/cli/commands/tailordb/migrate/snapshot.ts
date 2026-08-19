@@ -2466,6 +2466,11 @@ function convertRemoteFieldToSnapshot(remoteField: RemoteFieldConfig): SnapshotF
   }
 
   if (remoteField.scale !== undefined) config.scale = remoteField.scale;
+  // Remote schemas do not expose field defaults, so optionalOnCreate is the
+  // only signal when no field-level create hook carries the same contract.
+  if (remoteField.optionalOnCreate && !config.hooks?.create) {
+    config.optionalOnCreate = true;
+  }
 
   const nestedFields = remoteField.fields;
   if (Object.keys(nestedFields).length > 0) {
@@ -3255,7 +3260,13 @@ function compareScriptHashes(
 }
 
 function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
-  const { hooks: _hooks, validate: _validate, default: _default, ...rest } = field;
+  const {
+    hooks: _hooks,
+    validate: _validate,
+    default: _default,
+    optionalOnCreate: _optionalOnCreate,
+    ...rest
+  } = field;
   if (rest.fields) {
     const nested = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [name, f] of Object.entries(rest.fields)) {
@@ -3266,7 +3277,15 @@ function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig 
   return rest;
 }
 
-function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
+/**
+ * Project a snapshot onto the shape comparable with remote-derived state:
+ * system fields, script-bearing props (hooks, validate, default), and
+ * type-level script expressions are stripped, since the platform stores them
+ * in a transformed or unrepresented form.
+ * @param {SchemaSnapshot} snapshot - Snapshot to project
+ * @returns {NormalizedSchemaSnapshot} Normalized snapshot without script-bearing props
+ */
+export function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
   const tables = createSnapshotRecord<TailorDBSnapshotType>();
 
   for (const [tableName, type] of Object.entries(snapshot.tables)) {

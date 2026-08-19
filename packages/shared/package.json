@@ -12,13 +12,15 @@
     "./logger": "./src/logger.ts"
   },
   "scripts": {
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix",
     "knip": "knip",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
   },
   "devDependencies": {
+    "oxlint": "1.78.0",
+    "oxlint-tsgolint": "7.0.2001",
     "pathe": "2.0.3",
     "politty": "0.11.6",
     "vitest": "4.1.10",

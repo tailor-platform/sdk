@@ -16,12 +16,13 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                           | Aliases    | Description                                                     |
-| --------------------------------- | ---------- | --------------------------------------------------------------- |
-| [`function get`](#function-get)   | -          | Get a function registry by name                                 |
-| [`function list`](#function-list) | -          | List function registries in a workspace                         |
-| [`function logs`](#function-logs) | -          | List or get function execution logs.                            |
-| [`function run`](#function-run)   | `test-run` | Run a function on the Tailor Platform server without deploying. |
+| Command                               | Aliases    | Description                                                     |
+| ------------------------------------- | ---------- | --------------------------------------------------------------- |
+| [`function get`](#function-get)       | -          | Get a function registry by name                                 |
+| [`function list`](#function-list)     | -          | List function registries in a workspace                         |
+| [`function logs`](#function-logs)     | -          | List or get function execution logs.                            |
+| [`function run`](#function-run)       | `test-run` | Run a function on the Tailor Platform server without deploying. |
+| [`function script`](#function-script) | -          | Scaffold a one-off script to run with `function run`.           |
 
 ### function get
 
@@ -151,6 +152,7 @@ tailor function run [options] <file>
 | `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                          | No       | -                    | -                                   |
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                        | No       | `"tailor.config.ts"` | -                                   |
+| `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                        | No       | `false`              | -                                   |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -179,8 +181,66 @@ $ tailor function run build/resolvers/add.js --arg '{"a":1,"b":2}'
 You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
 When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
 
+A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
+
 `test-run` is a deprecated alias of this command and will be removed in v3.
 
 > [!WARNING]
 > Workflow job `.start()` calls do not work in this mode.
 > Started jobs are not executed; only the target job's `body` function runs in isolation.
+
+### function script
+
+Scaffold a one-off script to run with `function run`.
+
+**Usage**
+
+```
+tailor function script [options] <file>
+```
+
+**Arguments**
+
+| Argument | Description                                      | Required |
+| -------- | ------------------------------------------------ | -------- |
+| `file`   | Path to create the script at (must end with .ts) | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                                           | Required | Default              | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                          | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                     | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | -     | Target TailorDB namespace (required when the config does not pin one) | No       | -                    | -                              |
+| `--remote`                      | -     | Generate script-scoped DB types from the deployed schema              | No       | `false`              | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Examples**
+
+**Scaffold a one-off script (single-namespace project)**
+
+```bash
+$ tailor function script scripts/fix-prices.ts
+```
+
+**Scaffold a script targeting a specific namespace**
+
+```bash
+$ tailor function script scripts/fix-prices.ts --namespace tailordb
+```
+
+**Scaffold from a deployed or external namespace**
+
+```bash
+$ tailor function script scripts/fix-prices.ts --namespace shared --remote
+```
+
+**Notes**
+
+The scaffolded script is a plain default-exported function; execute it with `tailor function run <file>`.
+
+By default, when the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
+
+Pass `--remote` to generate the script-scoped files from the deployed schema instead, even when `kyselyTypePlugin` is configured. This is required for an external namespace. Re-running the command refreshes `db.ts` and `db.snapshot.json` from the selected source and leaves the script itself untouched.
