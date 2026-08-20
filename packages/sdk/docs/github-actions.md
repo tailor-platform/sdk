@@ -366,7 +366,7 @@ Commit both workflow files and `.github/tailor.lock`.
 Run this command once from the repository root to add Renovate configuration:
 
 ```bash
-tailor setup renovate
+tailor setup deps
 ```
 
 It generates `renovate.json`, which extends Tailor's shared Renovate preset. The
@@ -388,7 +388,7 @@ cannot be edited without losing those comments, so the command leaves it
 unchanged and asks you to add the preset to its `extends` array yourself.
 
 `renovate.json` is yours to edit — it is not tracked in `.github/tailor.lock`.
-Add your own rules freely; re-running `tailor setup renovate` does not overwrite
+Add your own rules freely; re-running `tailor setup deps` does not overwrite
 them. To remove it, delete the file.
 
 Renovate updates the SDK dependency and action pins, but it does not regenerate

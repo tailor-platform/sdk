@@ -223,12 +223,25 @@ const previewCommand = defineAppCommand({
   },
 });
 
-const renovateCommand = defineAppCommand({
-  name: "renovate",
-  description: "Generate a Renovate config for Tailor dependency and workflow updates.",
-  args: z.strictObject({}),
-  run: async () => {
-    await setupRenovate({ outputDir: process.cwd() });
+const DEPS_PROVIDERS = ["renovate"] as const;
+
+const depsProviders: Record<
+  (typeof DEPS_PROVIDERS)[number],
+  (options: { outputDir: string }) => Promise<void>
+> = {
+  renovate: setupRenovate,
+};
+
+const depsCommand = defineAppCommand({
+  name: "deps",
+  description: "Generate a dependency update config for Tailor dependency and workflow updates.",
+  args: z.strictObject({
+    provider: arg(z.enum(DEPS_PROVIDERS).default("renovate"), {
+      description: "Dependency update provider to configure",
+    }),
+  }),
+  run: async (args) => {
+    await depsProviders[args.provider]({ outputDir: process.cwd() });
   },
 });
 
@@ -263,12 +276,15 @@ export const setupCommand = defineCommand({
   name: "setup",
   description: "Set up repository automation for your project. (beta)",
   subCommands: {
+    // TargetKind generators: tracked in .github/tailor.lock and drift-checked by `setup check`.
     branch: branchCommand,
     tag: tagCommand,
     preview: previewCommand,
     action: actionCommand,
     coordinate: coordinateCommand,
-    renovate: renovateCommand,
+    // Standalone generator: writes a user-owned file, not tracked in the lock.
+    deps: depsCommand,
+    // Cross-cutting operations over lock-tracked files.
     check: checkCommand,
     delete: deleteCommand,
   },

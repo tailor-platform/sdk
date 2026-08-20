@@ -9,10 +9,11 @@ import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
-import { arg } from "politty";
+import { arg, extractFields, toCamelCase } from "politty";
 import { z } from "zod";
 import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver/default-permission";
 import {
+  commonArgs,
   resolveMachineUserInputSource,
   type MachineUserInputSource,
   workspaceArgs,
@@ -294,14 +295,43 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
 });
 
 /**
+ * Global option tokens that consume the following argv token as their value.
+ * politty accepts both the kebab-case and camelCase spelling of every name.
+ */
+const valueTakingGlobalFlags: ReadonlySet<string> = new Set(
+  extractFields(z.strictObject(commonArgs))
+    .fields.filter((field) => field.type !== "boolean")
+    .flatMap((field) => [field.cliName, ...(field.alias ?? [])].flatMap(toFlagTokens)),
+);
+
+function toFlagTokens(name: string): string[] {
+  if (name.length === 1) return [`-${name}`];
+  return [`--${name}`, `--${toCamelCase(name)}`];
+}
+
+/**
  * Detect whether the command was invoked through the deprecated `test-run`
  * alias. politty resolves aliases before dispatch, so the invoked name is only
- * observable from the raw argv.
+ * observable from the raw argv. Global options may sit anywhere before the
+ * subcommand (`tailor function --json test-run`), so option tokens and any
+ * values they consume are skipped; an option value is never read as a command
+ * name.
  * @param argv - Process argv tokens
- * @returns true when the `test-run` alias follows the `function` subcommand
+ * @returns true when `test-run` was the subcommand name under `function`
  */
 function invokedViaTestRunAlias(argv: readonly string[]): boolean {
-  return argv.some((token, i) => token === "function" && argv[i + 1] === "test-run");
+  const names: string[] = [];
+  // argv[0] is the node binary and argv[1] the CLI entry point.
+  for (let i = 2; i < argv.length && names.length < 2; i++) {
+    const token = argv[i];
+    if (token === undefined || token === "--") break;
+    if (!token.startsWith("-")) {
+      names.push(token);
+      continue;
+    }
+    if (!token.includes("=") && valueTakingGlobalFlags.has(token)) i++;
+  }
+  return names[0] === "function" && names[1] === "test-run";
 }
 
 /**

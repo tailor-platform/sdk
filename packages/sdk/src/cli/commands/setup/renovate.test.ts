@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { runCommand } from "politty";
 import { aroundEach, describe, expect, test } from "vitest";
 import { RENOVATE_CONFIG_FILE, RENOVATE_PRESET, setupRenovate } from "./renovate";
+import { setupCommand } from "./index";
 
 describe("setupRenovate", () => {
   const testDir = path.join(
@@ -30,6 +32,62 @@ describe("setupRenovate", () => {
         2,
       )}\n`,
     );
+  });
+
+  test("rejects the former renovate subcommand", async () => {
+    const originalCwd = process.cwd();
+    process.chdir(testDir);
+    let result: Awaited<ReturnType<typeof runCommand>>;
+    try {
+      result = await runCommand(setupCommand, ["renovate"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain("Unknown subcommand: renovate");
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
+  });
+
+  test("uses Renovate when the provider is omitted", async () => {
+    const originalCwd = process.cwd();
+    process.chdir(testDir);
+    try {
+      await runCommand(setupCommand, ["deps"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
+  });
+
+  test("generates the Renovate config when the provider is named explicitly", async () => {
+    const originalCwd = process.cwd();
+    process.chdir(testDir);
+    try {
+      await runCommand(setupCommand, ["deps", "--provider", "renovate"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(true);
+  });
+
+  test("rejects a provider that is not supported yet", async () => {
+    const originalCwd = process.cwd();
+    process.chdir(testDir);
+    let result: Awaited<ReturnType<typeof runCommand>>;
+    try {
+      result = await runCommand(setupCommand, ["deps", "--provider", "dependabot"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain(
+      'provider: Invalid input: expected "renovate"',
+    );
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
   });
 
   test("does not write a lock file", async () => {

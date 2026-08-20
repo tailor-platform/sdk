@@ -23,7 +23,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`setup preview`](#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
 | [`setup action`](#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
 | [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
-| [`setup renovate`](#setup-renovate)     | Generate a Renovate config for Tailor dependency and workflow updates.                           |
+| [`setup deps`](#setup-deps)             | Generate a dependency update config for Tailor dependency and workflow updates.                  |
 | [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
 | [`setup delete`](#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
 
@@ -140,6 +140,24 @@ tailor setup delete [options] <files>
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+### setup deps
+
+Generate a dependency update config for Tailor dependency and workflow updates.
+
+**Usage**
+
+```
+tailor setup deps [options]
+```
+
+**Options**
+
+| Option                  | Alias | Description                             | Required | Default      |
+| ----------------------- | ----- | --------------------------------------- | -------- | ------------ |
+| `--provider <PROVIDER>` | -     | Dependency update provider to configure | No       | `"renovate"` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 ### setup preview
 
 Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).
@@ -161,18 +179,6 @@ tailor setup preview [options]
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the preview jobs (defaults to the workspace name)  | No       | -       |
 | `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                       | No       | `"."`   |
 | `--force`                     | -     | Discard hand edits / take over unmanaged files and regenerate             | No       | `false` |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-### setup renovate
-
-Generate a Renovate config for Tailor dependency and workflow updates.
-
-**Usage**
-
-```
-tailor setup renovate
-```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
