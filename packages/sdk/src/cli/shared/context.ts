@@ -428,7 +428,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
   // Check for unsupported future versions
   const version =
     rawConfig != null && typeof rawConfig === "object" && "version" in rawConfig
-      ? (rawConfig as { version: unknown }).version
+      ? rawConfig.version
       : undefined;
   if (typeof version === "number" && version > LATEST_CONFIG_VERSION) {
     const minSdk =

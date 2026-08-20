@@ -242,7 +242,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
         requiresMigrationScript: true,
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+    };
   }
 
   function createdTypeCalls(client: OperatorClient) {

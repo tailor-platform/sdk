@@ -96,9 +96,7 @@ function normalizePermission(
 export function normalizeGqlPermission(
   permission: NonNullable<RawPermissions["gql"]>,
 ): StandardTailorTypeGqlPermission {
-  return (permission as readonly GqlPermissionPolicy[]).map((policy) =>
-    normalizeGqlPolicy(policy),
-  ) as StandardTailorTypeGqlPermission;
+  return (permission as readonly GqlPermissionPolicy[]).map((policy) => normalizeGqlPolicy(policy));
 }
 
 function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionPolicy {

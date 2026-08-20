@@ -74,7 +74,7 @@ export const updateCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       email: args.email,
-      role: args.role as (typeof validRoles)[number],
+      role: args.role,
     });
 
     logger.success(`User "${args.email}" updated to role "${args.role}".`);

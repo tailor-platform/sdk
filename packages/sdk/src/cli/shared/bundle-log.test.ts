@@ -269,7 +269,7 @@ describe("createBundleLog", () => {
       path.join(dir, "tsconfig.json"),
       {
         checks: { circularDependency: true },
-      } as rolldown.InputOptions,
+      },
     );
 
     expect(result.output[0].code).toBeTruthy();

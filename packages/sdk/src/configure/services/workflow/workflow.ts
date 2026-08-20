@@ -97,7 +97,7 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
               ? await dispatchStartWorkflow(config.name, args, options)
               : await dispatchStartWorkflow(config.name, args);
           },
-    } as Workflow<Job>,
+    },
     "workflow",
   );
 }

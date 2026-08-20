@@ -12,15 +12,7 @@ import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
-import type {
-  BindingPattern,
-  ExportNamedDeclaration,
-  Function as OxcFunction,
-  ImportDeclaration,
-  Node,
-  ParamPattern,
-  VariableDeclaration,
-} from "@oxc-project/types";
+import type { BindingPattern, Node, ParamPattern } from "@oxc-project/types";
 
 type ScriptFunction = (...args: unknown[]) => unknown;
 
@@ -284,7 +276,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
 
   for (const stmt of program.body) {
     if (stmt.type === "ImportDeclaration") {
-      const importDecl = stmt as ImportDeclaration;
+      const importDecl = stmt;
       const text = source.slice(importDecl.start, importDecl.end);
       for (const spec of importDecl.specifiers) {
         bindings.set(spec.local.name, {
@@ -294,7 +286,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         });
       }
     } else if (stmt.type === "VariableDeclaration") {
-      const varDecl = stmt as VariableDeclaration;
+      const varDecl = stmt;
       const text = source.slice(varDecl.start, varDecl.end);
       for (const decl of varDecl.declarations) {
         if (decl.id.type === "Identifier") {
@@ -302,7 +294,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         }
       }
     } else if (stmt.type === "FunctionDeclaration") {
-      const funcDecl = stmt as OxcFunction;
+      const funcDecl = stmt;
       if (funcDecl.id) {
         const text = source.slice(funcDecl.start, funcDecl.end);
         bindings.set(funcDecl.id.name, {
@@ -312,12 +304,12 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         });
       }
     } else if (stmt.type === "ExportNamedDeclaration") {
-      const exportDecl = stmt as ExportNamedDeclaration;
+      const exportDecl = stmt;
       const innerDecl = exportDecl.declaration;
       if (!innerDecl) continue;
 
       if (innerDecl.type === "VariableDeclaration") {
-        const varDecl = innerDecl as VariableDeclaration;
+        const varDecl = innerDecl;
         // Slice only the inner declaration (without export keyword) so it is valid standalone
         const text = source.slice(varDecl.start, varDecl.end);
         for (const decl of varDecl.declarations) {
@@ -330,7 +322,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
           }
         }
       } else if (innerDecl.type === "FunctionDeclaration") {
-        const funcDecl = innerDecl as OxcFunction;
+        const funcDecl = innerDecl;
         if (funcDecl.id) {
           const text = source.slice(funcDecl.start, funcDecl.end);
           bindings.set(funcDecl.id.name, {

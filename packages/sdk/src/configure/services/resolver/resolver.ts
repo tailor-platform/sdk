@@ -109,10 +109,7 @@ export function createResolver<
   // TailorField has `type: string` (e.g., "uuid", "string"), while
   // Record<string, TailorField> either lacks `type` or has TailorField as value.
   const isTailorField = (obj: unknown): obj is TailorAnyField =>
-    typeof obj === "object" &&
-    obj !== null &&
-    "type" in obj &&
-    typeof (obj as { type: unknown }).type === "string";
+    typeof obj === "object" && obj !== null && "type" in obj && typeof obj.type === "string";
 
   const normalizedOutput = isTailorField(config.output) ? config.output : t.object(config.output);
 

@@ -168,7 +168,7 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   const configWithProvider = idpConfig as IdPOwnConfig & { provider?: unknown };
   if (typeof configWithProvider.provider !== "function") return idpConfig;
   const { provider: _provider, ...config } = configWithProvider;
-  return config as IdPOwnConfig;
+  return config;
 }
 
 function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {

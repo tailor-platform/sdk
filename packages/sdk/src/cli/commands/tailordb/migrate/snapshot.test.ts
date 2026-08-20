@@ -91,7 +91,7 @@ function createMockType(
         required: false,
         ...field.config,
       },
-    } as ParsedField;
+    };
   }
 
   return {

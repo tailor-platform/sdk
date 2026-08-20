@@ -98,7 +98,7 @@ function replaceProcedure<Procedure extends ProcedureFn>(
     return Reflect.apply(original, this, args) as ReturnType<Procedure>;
   };
   const mock = vi.fn(defaultImplementation) as unknown as Mock<Procedure>;
-  originalProcedures.set(mock as ProcedureFn, original);
+  originalProcedures.set(mock, original);
 
   const record = target as Record<string, unknown>;
   record[key] = mock;
@@ -251,6 +251,14 @@ export function mockWorkflow() {
     ): Promise<void> => {},
   );
 
+  const setWaitHandler: SetWaitHandler = (handler: unknown) => {
+    wait.mockImplementation(
+      typeof handler === "function"
+        ? (key, payload) => (handler as WaitHandlerFn)(key, payload)
+        : () => handler,
+    );
+  };
+
   // Preserve arity: recording `undefined` as the third element only when the
   // caller supplied it, mirroring `.execJobFunction(name, args, options)`.
   const jobFunctionShim = (...call: [string, unknown?, ExecJobFunctionOptions?]) => {
@@ -361,7 +369,7 @@ export function mockWorkflow() {
          */
         setResolvePayload(payload: WaitPayload<Payload>): void {
           resolveSpy.mockImplementation(async (_executionId, callback) => {
-            const result = await callback(platformSerialize(payload) as WaitPayload<Payload>);
+            const result = await callback(platformSerialize(payload));
             platformSerialize(result);
           });
         },
@@ -463,9 +471,9 @@ export function mockWorkflow() {
      */
     get startedJobs(): StartedJob[] {
       return execJobFunction.mock.calls.map(([jobName, args, options]) => ({
-        jobName: jobName as string,
+        jobName: jobName,
         args,
-        ...(options !== undefined && { options: options as ExecJobFunctionOptions }),
+        ...(options !== undefined && { options: options }),
       }));
     },
 
@@ -500,13 +508,7 @@ export function mockWorkflow() {
      * other value to return it for every call. Default: `null`.
      * @param handler - Static value or a function returning one
      */
-    setWaitHandler: ((handler: unknown) => {
-      wait.mockImplementation(
-        typeof handler === "function"
-          ? (key, payload) => (handler as WaitHandlerFn)(key, payload)
-          : () => handler,
-      );
-    }) as SetWaitHandler,
+    setWaitHandler,
 
     /**
      * Set the `env` passed to job bodies invoked via `createWorkflowJob().start()`.
@@ -533,7 +535,7 @@ export function mockWorkflow() {
      * @returns Wait call records
      */
     get waitCalls(): { key: string; payload: unknown }[] {
-      return wait.mock.calls.map(([key, payload]) => ({ key: key as string, payload }));
+      return wait.mock.calls.map(([key, payload]) => ({ key: key, payload }));
     },
 
     /**
@@ -542,8 +544,8 @@ export function mockWorkflow() {
      */
     get resolveCalls(): { executionId: string; key: string }[] {
       return resolve.mock.calls.map(([executionId, key]) => ({
-        executionId: executionId as string,
-        key: key as string,
+        executionId: executionId,
+        key: key,
       }));
     },
 

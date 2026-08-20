@@ -313,7 +313,7 @@ describe("createStandardSchema", () => {
     const type = db
       .table("Range", { start: db.int(), end: db.int() })
       .validate(({ newRecord }, issues) => {
-        if ((newRecord.start as number) > (newRecord.end as number)) {
+        if (newRecord.start > newRecord.end) {
           issues("start", "start must be <= end");
         }
       });

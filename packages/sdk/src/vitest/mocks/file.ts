@@ -147,10 +147,10 @@ export function mockFile(options: MockFileOptions = {}) {
     return function (this: unknown, ...args: Parameters<TailorDBFileAPI[Method]>) {
       calls.push({
         method,
-        namespace: args[0] as string,
-        typeName: args[1] as string,
-        fieldName: args[2] as string,
-        recordId: args[3] as string,
+        namespace: args[0],
+        typeName: args[1],
+        fieldName: args[2],
+        recordId: args[3],
       });
       return (
         operation as (

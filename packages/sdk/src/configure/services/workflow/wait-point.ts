@@ -141,7 +141,7 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
   const instance = brandValue(
     createBoundWaitPoint(invoker, () => key),
     "wait-point",
-  ) as InternalWaitPointInstance;
+  );
   attachWaitPointInvoker(instance, invoker);
 
   return {

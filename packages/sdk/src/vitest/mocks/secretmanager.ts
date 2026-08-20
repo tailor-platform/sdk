@@ -109,14 +109,14 @@ export function mockSecretmanager(options: MockSecretmanagerOptions = {}) {
       const entries: { order: number; call: SecretCall }[] = [
         ...getSecret.mock.calls.map((args, i) => ({
           order: getSecret.mock.invocationCallOrder[i] ?? 0,
-          call: { method: "getSecret" as const, vault: args[0] as string, name: args[1] as string },
+          call: { method: "getSecret" as const, vault: args[0], name: args[1] },
         })),
         ...getSecrets.mock.calls.map((args, i) => ({
           order: getSecrets.mock.invocationCallOrder[i] ?? 0,
           call: {
             method: "getSecrets" as const,
-            vault: args[0] as string,
-            names: args[1] as readonly string[],
+            vault: args[0],
+            names: args[1],
           },
         })),
       ];

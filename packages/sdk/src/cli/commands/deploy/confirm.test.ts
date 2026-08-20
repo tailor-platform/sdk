@@ -55,7 +55,7 @@ describe("confirmOwnerConflict", () => {
     await confirmOwnerConflict(conflicts, "my-app", false, "id-2");
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
-    const message = vi.mocked(prompt.confirm).mock.calls[0]![0]!.message;
+    const message = vi.mocked(prompt.confirm).mock.calls[0]![0].message;
     expect(message).toContain("Re-tag");
     expect(message).toContain("my-app");
     expect(message).not.toContain("name mismatch");
@@ -69,7 +69,7 @@ describe("confirmOwnerConflict", () => {
     ];
     await confirmOwnerConflict(conflicts, "my-app", false, undefined);
 
-    const message = vi.mocked(prompt.confirm).mock.calls[0]![0]!.message;
+    const message = vi.mocked(prompt.confirm).mock.calls[0]![0].message;
     expect(message).not.toContain("regenerated");
     expect(message).not.toContain("new id");
     expect(message).toContain("by name");
@@ -82,7 +82,7 @@ describe("confirmOwnerConflict", () => {
     await confirmOwnerConflict(conflicts, "new-app", false);
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
-    const message = vi.mocked(prompt.confirm).mock.calls[0]![0]!.message;
+    const message = vi.mocked(prompt.confirm).mock.calls[0]![0].message;
     expect(message).toContain("Update");
     expect(message).toContain("new-app");
     expect(message).not.toContain("Re-tag");
@@ -96,8 +96,8 @@ describe("confirmOwnerConflict", () => {
     await confirmOwnerConflict(conflicts, "my-app", false, "id-2");
 
     expect(prompt.confirm).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(prompt.confirm).mock.calls[0]![0]!.message).toContain("Re-tag");
-    expect(vi.mocked(prompt.confirm).mock.calls[1]![0]!.message).toContain("Update");
+    expect(vi.mocked(prompt.confirm).mock.calls[0]![0].message).toContain("Re-tag");
+    expect(vi.mocked(prompt.confirm).mock.calls[1]![0].message).toContain("Update");
   });
 
   // The reported action pins which branch ran: asserting only that nothing was
@@ -186,7 +186,7 @@ describe("confirmMigrationCheckpointRepairs", () => {
     );
 
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(prompt.confirm).mock.calls[0]![0]!.message).toContain(
+    expect(vi.mocked(prompt.confirm).mock.calls[0]![0].message).toContain(
       "Reset these migration checkpoints",
     );
     expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(

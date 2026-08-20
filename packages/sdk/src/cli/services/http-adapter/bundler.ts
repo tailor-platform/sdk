@@ -257,7 +257,7 @@ function rejectAsyncInBundle(code: string, adapterName: string, kind: "input" | 
     const node = stack.pop();
     if (!node || typeof node !== "object") continue;
     const n = node as Record<string, unknown>;
-    const type = typeof n.type === "string" ? (n.type as string) : "";
+    const type = typeof n.type === "string" ? n.type : "";
     if (type === "AwaitExpression") {
       asyncFound = true;
       break;

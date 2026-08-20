@@ -1785,7 +1785,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       name: "Sentinel",
       request: { namespaceName: "test-tailordb" },
       metaRequest: { trn: "trn:v1:workspace:test-workspace:tailordb:test-tailordb:type:Sentinel" },
-    } as never);
+    });
   }
 
   test("tracks migration state for a prototype-like namespace", async () => {

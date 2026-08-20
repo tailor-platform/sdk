@@ -48,6 +48,6 @@ export function isSdkBranded(
   return (
     kind === undefined ||
     stored === true ||
-    (Array.isArray(kind) ? kind.includes(stored as SdkBrandKind) : stored === kind)
+    (Array.isArray(kind) ? kind.includes(stored) : stored === kind)
   );
 }
