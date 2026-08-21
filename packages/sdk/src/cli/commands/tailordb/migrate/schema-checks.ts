@@ -61,8 +61,8 @@ export type TailorDBDeployInput = {
  */
 export function toTailorDBDeployInput(service: TailorDBService): TailorDBDeployInput {
   const types: Record<string, TailorDBSnapshotType> = {};
-  for (const [typeName, type] of Object.entries(service.types)) {
-    types[typeName] = createSnapshotType(type);
+  for (const [tableName, type] of Object.entries(service.types)) {
+    types[tableName] = createSnapshotType(type);
   }
   return {
     namespace: service.namespace,
@@ -194,13 +194,13 @@ function deployComparableSnapshot(
   remoteTypes: ReadonlyArray<ProtoTailorDBType>,
   gqlOperations: DeployGqlOperations,
 ): SchemaSnapshot {
-  const remoteTypesByName = new Map(remoteTypes.map((type) => [type.name, type]));
+  const remoteTablesByName = new Map(remoteTypes.map((type) => [type.name, type]));
   const configuredDisabled = configuredDisabledGqlOperations(gqlOperations);
   const tables: Record<string, TailorDBSnapshotType> = {};
 
-  for (const [typeName, type] of Object.entries(snapshot.tables)) {
+  for (const [tableName, type] of Object.entries(snapshot.tables)) {
     const settings: SnapshotSettings = { ...type.settings };
-    const remoteSettings = remoteTypesByName.get(typeName)?.schema?.settings;
+    const remoteSettings = remoteTablesByName.get(tableName)?.schema?.settings;
 
     if (type.settings?.publishEvents === undefined && remoteSettings?.publishRecordEvents) {
       settings.publishEvents = true;
@@ -221,7 +221,7 @@ function deployComparableSnapshot(
     } else {
       delete comparableType.settings;
     }
-    tables[typeName] = comparableType;
+    tables[tableName] = comparableType;
   }
 
   return { ...snapshot, tables };

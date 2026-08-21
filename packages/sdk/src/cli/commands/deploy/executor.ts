@@ -357,14 +357,14 @@ export function resolveSameRunNamespace(
 /**
  * Find the local TailorDB namespace that declares the given table.
  * @param application - Loaded application
- * @param typeName - TailorDB table name to look up
+ * @param tableName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
 export function findTailorDBNamespace(
   application: Readonly<Application>,
-  typeName: string,
+  tableName: string,
 ): string | undefined {
-  return application.tailorDBServices.find((service) => Object.hasOwn(service.types, typeName))
+  return application.tailorDBServices.find((service) => Object.hasOwn(service.types, tableName))
     ?.namespace;
 }
 
@@ -526,10 +526,10 @@ function protoExecutor(
           eventTypes: trigger.events,
           namespaceName: resolveTailorDBNamespace(
             application,
-            trigger.typeName,
+            trigger.tableName,
             context.tailorDBTypeNamespaces,
           ),
-          typeName: trigger.typeName,
+          typeName: trigger.tableName,
           ...(trigger.condition
             ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
             : {}),

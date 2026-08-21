@@ -8,7 +8,7 @@ export interface IdpUserMetadata {
   idpNamespace: string;
   schema: {
     usernameField: string;
-    userTypeName: string;
+    userTableName: string;
   };
 }
 
@@ -23,16 +23,16 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
     return undefined;
   }
 
-  const { typeName, usernameField } = auth.userProfile;
+  const { tableName, usernameField } = auth.userProfile;
 
   return {
     name: "_User",
-    dependencies: [typeName],
+    dependencies: [tableName],
     dataFile: "data/_User.jsonl",
     idpNamespace: auth.idProvider.namespace,
     schema: {
       usernameField,
-      userTypeName: typeName,
+      userTableName: tableName,
     },
   };
 }
@@ -162,7 +162,7 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
 
 type GenerateIdpUserSchemaFileOptions = {
   usernameField: string;
-  userTypeName: string;
+  userTableName: string;
   /**
    * When `true` (default), emit a foreign key from `_User.name` to the
    * userProfile table's username field so that seed validation rejects `_User`
@@ -179,12 +179,12 @@ type GenerateIdpUserSchemaFileOptions = {
  * that do not yet have a corresponding userProfile row).
  * @param options - Schema generation options
  * @param options.usernameField - Username field name
- * @param options.userTypeName - TailorDB user type name
+ * @param options.userTableName - TailorDB user table name
  * @param options.includeUserProfileFK - Whether to emit the `_User -> userProfile` foreign key (default `true`)
  * @returns Schema file contents
  */
 export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOptions): string {
-  const { usernameField, userTypeName, includeUserProfileFK = true } = options;
+  const { usernameField, userTableName, includeUserProfileFK = true } = options;
   const schemaBody = includeUserProfileFK
     ? ml`
       primaryKey: "name",
@@ -195,7 +195,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
         {
           column: "name",
           references: {
-            table: "${userTypeName}",
+            table: "${userTableName}",
             column: "${usernameField}",
           },
         },

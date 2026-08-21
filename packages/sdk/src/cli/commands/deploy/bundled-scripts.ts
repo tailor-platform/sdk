@@ -1,4 +1,3 @@
-import { resolverFunctionName } from "./function-registry";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
 function setBundledScript(
@@ -23,51 +22,10 @@ function addBundledScripts(
   }
 }
 
-function collectDuplicateBundleNames(
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
-  select: (target: BuiltDeploymentTarget) => ReadonlyMap<string, string>,
-): ReadonlySet<string> {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
-  for (const target of targets) {
-    for (const name of select(target).keys()) {
-      if (seen.has(name)) {
-        duplicates.add(name);
-      }
-      seen.add(name);
-    }
-  }
-  return duplicates;
-}
-
-function addResolverBundledScripts(
-  target: Map<string, string>,
-  source: BuiltDeploymentTarget,
-  duplicateNames: ReadonlySet<string>,
-): void {
-  const consumedNames = new Set<string>();
-  for (const service of source.application.resolverServices) {
-    for (const resolver of Object.values(service.resolvers)) {
-      const code = source.bundledScripts.resolvers.get(resolver.name);
-      if (code === undefined) {
-        continue;
-      }
-      const name = duplicateNames.has(resolver.name)
-        ? resolverFunctionName(service.namespace, resolver.name)
-        : resolver.name;
-      setBundledScript(target, name, code, "resolver");
-      consumedNames.add(resolver.name);
-    }
-  }
-  for (const [name, code] of source.bundledScripts.resolvers) {
-    if (!consumedNames.has(name)) {
-      setBundledScript(target, name, code, "resolver");
-    }
-  }
-}
-
 /**
  * Merge per-config bundled scripts into one build-only result.
+ * Resolver bundles are keyed by `namespace:resolverName`, so the same resolver
+ * name in different namespaces never collides across configs.
  * @param targets - Built deployment targets to merge
  * @returns Combined bundled scripts across all targets
  */
@@ -80,13 +38,9 @@ export function mergeBundledScripts(
     workflowJobs: new Map(),
     authHooks: new Map(),
   };
-  const duplicateResolverNames = collectDuplicateBundleNames(
-    targets,
-    (target) => target.bundledScripts.resolvers,
-  );
 
   for (const target of targets) {
-    addResolverBundledScripts(bundledScripts.resolvers, target, duplicateResolverNames);
+    addBundledScripts(bundledScripts.resolvers, target.bundledScripts.resolvers, "resolver");
     addBundledScripts(bundledScripts.executors, target.bundledScripts.executors, "executor");
     addBundledScripts(
       bundledScripts.workflowJobs,

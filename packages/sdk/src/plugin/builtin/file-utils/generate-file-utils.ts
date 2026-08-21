@@ -14,25 +14,25 @@ export function generateUnifiedFileUtils(
   }
 
   // Collect all tables with their namespace
-  const typeNamespaceMap = new Map<string, string>();
+  const tableNamespaceMap = new Map<string, string>();
   const typeFieldsMap = new Map<string, string[]>();
 
   for (const { namespace, types } of namespaceData) {
     for (const type of types) {
-      typeNamespaceMap.set(type.name, namespace);
+      tableNamespaceMap.set(type.name, namespace);
       typeFieldsMap.set(type.name, type.fileFields);
     }
   }
 
-  if (typeNamespaceMap.size === 0) {
+  if (tableNamespaceMap.size === 0) {
     return "";
   }
 
   // Generate interface fields
   const interfaceFields = Array.from(typeFieldsMap.entries())
-    .map(([typeName, fields]) => {
+    .map(([tableName, fields]) => {
       const fieldNamesUnion = fields.map((field) => `"${field}"`).join(" | ");
-      return `  ${typeName}: {\n    fields: ${fieldNamesUnion};\n  };`;
+      return `  ${tableName}: {\n    fields: ${fieldNamesUnion};\n  };`;
     })
     .join("\n");
 
@@ -55,8 +55,8 @@ export function generateUnifiedFileUtils(
     ` + "\n";
 
   // Generate namespaces object
-  const namespaceEntries = Array.from(typeNamespaceMap.entries())
-    .map(([typeName, namespace]) => `  ${typeName}: "${namespace}"`)
+  const namespaceEntries = Array.from(tableNamespaceMap.entries())
+    .map(([tableName, namespace]) => `  ${tableName}: "${namespace}"`)
     .join(",\n");
 
   const namespacesDefinition =

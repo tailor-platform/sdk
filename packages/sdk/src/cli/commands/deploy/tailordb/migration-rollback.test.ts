@@ -192,7 +192,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           },
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
         checkpointRepairs: [],
@@ -313,7 +313,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     } as any;
   }
 
-  function mkFieldTypeMigration(number: number, typeNames: string[]): PendingMigration {
+  function mkFieldTypeMigration(number: number, tableNames: string[]): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -325,7 +325,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         version: 1,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        changes: typeNames.map((tableName) => ({
+        changes: tableNames.map((tableName) => ({
           kind: "field_type_modified" as const,
           tableName,
           fieldName: "value",
@@ -333,7 +333,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           after: { type: "float" as const, required: false },
         })),
         hasBreakingChanges: true,
-        breakingChanges: typeNames.map((tableName) => ({
+        breakingChanges: tableNames.map((tableName) => ({
           tableName,
           fieldName: "value",
           reason: "Field type changed from integer to float",
@@ -377,9 +377,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     };
   }
 
-  function createFieldTypePlanResult(typeNames: string[]) {
+  function createFieldTypePlanResult(tableNames: string[]) {
     return buildPlanResult({
-      updates: typeNames.map((tableName) => ({
+      updates: tableNames.map((tableName) => ({
         name: tableName,
         request: {
           workspaceId: "test-workspace",
@@ -406,7 +406,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       );
   }
 
-  function deletedTypeNames(client: OperatorClient) {
+  function deletedTableNames(client: OperatorClient) {
     return vi.mocked(client.deleteTailorDBType).mock.calls.map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (c) => (c[0] as any)?.tailordbTypeName,
@@ -450,7 +450,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     // ...so the failed apply must roll it back: StockReservation did not exist at
     // the prior checkpoint, so it is dropped.
-    expect(deletedTypeNames(client)).toContain("StockReservation");
+    expect(deletedTableNames(client)).toContain("StockReservation");
 
     // The checkpoint must stay at the prior migration.
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
@@ -532,7 +532,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       "migration failed",
     );
 
-    const deletedNames = deletedTypeNames(client);
+    const deletedNames = deletedTableNames(client);
     expect(deletedNames).toContain("StockReservation");
     expect(deletedNames).toContain("LeakedType");
   });
@@ -725,7 +725,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(updatedTypeNames.filter((name) => name === "Existing")).toHaveLength(2);
     expect(updatedTypeNames).not.toContain("Audit");
     expect(updatedTypeNames).not.toContain("New1");
-    expect(deletedTypeNames(client)).toEqual(["New2"]);
+    expect(deletedTableNames(client)).toEqual(["New2"]);
 
     const restoredExisting = vi
       .mocked(client.updateTailorDBType)
@@ -736,13 +736,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   });
 
   test("restores every updated type when the post-phase fails partway through", async () => {
-    const typeNames = ["Alpha", "Beta"];
+    const tableNames = ["Alpha", "Beta"];
     const snapshots = (number: number) => ({
       version: 1 as const,
       namespace: "test-ns",
       createdAt: new Date().toISOString(),
       tables: Object.fromEntries(
-        typeNames.map((tableName) => [
+        tableNames.map((tableName) => [
           tableName,
           {
             name: tableName,
@@ -755,7 +755,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       ),
     });
     const client = createMockClient();
-    const planResult = createFieldTypePlanResult(typeNames);
+    const planResult = createFieldTypePlanResult(tableNames);
     let rejected = false;
     vi.mocked(client.updateTailorDBType).mockImplementation((request) => {
       const tableName = request.tailordbType?.name;
@@ -766,7 +766,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       }
       return Promise.resolve({}) as never;
     });
-    setPendingMigrations([mkFieldTypeMigration(1, typeNames)]);
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
 
     await withOverriddenSnapshot(
       (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
@@ -783,7 +783,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   });
 
   test("keeps the target schema when the failed checkpoint update reads back an older value", async () => {
-    const typeNames = ["GoodsReceipt"];
+    const tableNames = ["GoodsReceipt"];
     const snapshots = (number: number) => ({
       version: 1 as const,
       namespace: "test-ns",
@@ -799,8 +799,8 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       },
     });
     const client = createMockClient();
-    const planResult = createFieldTypePlanResult(typeNames);
-    setPendingMigrations([mkFieldTypeMigration(1, typeNames)]);
+    const planResult = createFieldTypePlanResult(tableNames);
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
     vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
       new Error("checkpoint update failed"),
     );
@@ -818,7 +818,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   });
 
   test("keeps the target schema when checkpoint read-back confirms a lost response", async () => {
-    const typeNames = ["GoodsReceipt"];
+    const tableNames = ["GoodsReceipt"];
     const snapshots = (number: number) => ({
       version: 1 as const,
       namespace: "test-ns",
@@ -834,8 +834,8 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       },
     });
     const client = createMockClient();
-    const planResult = createFieldTypePlanResult(typeNames);
-    setPendingMigrations([mkFieldTypeMigration(1, typeNames)]);
+    const planResult = createFieldTypePlanResult(tableNames);
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
     vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
       new Error("checkpoint response lost"),
     );
@@ -854,7 +854,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   });
 
   test("does not roll back when checkpoint read-back has advanced past this migration", async () => {
-    const typeNames = ["GoodsReceipt"];
+    const tableNames = ["GoodsReceipt"];
     const snapshots = (number: number) => ({
       version: 1 as const,
       namespace: "test-ns",
@@ -870,8 +870,8 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       },
     });
     const client = createMockClient();
-    const planResult = createFieldTypePlanResult(typeNames);
-    setPendingMigrations([mkFieldTypeMigration(1, typeNames)]);
+    const planResult = createFieldTypePlanResult(tableNames);
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
     vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
       new Error("checkpoint response lost"),
     );
@@ -955,7 +955,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     // The script never ran, the type the pre-phase tried to create is rolled
     // back, and the checkpoint is untouched.
     expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
-    expect(deletedTypeNames(client)).toContain("StockReservation");
+    expect(deletedTableNames(client)).toContain("StockReservation");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 

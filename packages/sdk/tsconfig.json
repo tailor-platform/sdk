@@ -7,7 +7,8 @@
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
     "paths": {
-      "@tailor-platform/sdk": ["./src/configure/index.ts"]
+      "@tailor-platform/sdk": ["./src/configure/index.ts"],
+      "@tailor-platform/sdk/plugin": ["./src/plugin/index.ts"]
     }
   },
   "include": [

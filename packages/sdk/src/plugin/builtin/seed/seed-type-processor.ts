@@ -65,7 +65,7 @@ export function buildSeedNamespaceConfigs(
     const selfRefTypes: string[] = [];
     const requiredFields: Record<string, string[]> = {};
 
-    for (const [typeName, type] of Object.entries(ns.tables)) {
+    for (const [tableName, type] of Object.entries(ns.tables)) {
       const typeInfo = processSeedTypeInfo(type, ns.namespace);
       types.push(typeInfo.name);
       dependencies[typeInfo.name] = typeInfo.dependencies;
@@ -74,8 +74,8 @@ export function buildSeedNamespaceConfigs(
       }
 
       const source = assertDefined(
-        ns.sourceInfo.get(typeName),
-        `source info missing for type: ${typeName}`,
+        ns.sourceInfo.get(tableName),
+        `source info missing for table: ${tableName}`,
       );
       const linesDb = processLinesDb(type, source);
       requiredFields[typeInfo.name] = Object.entries(type.fields)

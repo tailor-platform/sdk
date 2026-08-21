@@ -20,7 +20,7 @@ export interface SeedTypeInfo {
  * Metadata for lines-db schema generation
  */
 export interface LinesDbMetadata {
-  typeName: string;
+  tableName: string;
   exportName: string;
   importPath: string;
   optionalFields: string[];

@@ -6,14 +6,16 @@ import { createBundleLog } from "#/cli/shared/bundle-log";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
-import { PRINCIPAL_VAR, stringifyFunction } from "#/parser/service/tailordb/field";
+import { stringifyFunction } from "#/parser/service/tailordb/field";
+import { buildHookCallArgs } from "#/parser/service/tailordb/hook-args-object";
 import {
+  getPrecompiledScriptExpr,
   setPrecompiledScriptExpr,
-  type PrecompiledScriptKind,
 } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
+import type { ScriptExprKind } from "#/parser/service/tailordb/hook-args-object";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type { BindingPattern, Node, ParamPattern } from "@oxc-project/types";
 
@@ -21,7 +23,7 @@ type ScriptFunction = (...args: unknown[]) => unknown;
 
 type ScriptTarget = {
   fn: ScriptFunction;
-  kind: PrecompiledScriptKind;
+  kind: ScriptExprKind;
 };
 
 /** Binding found in the source file: either an import or a top-level declaration */
@@ -81,8 +83,12 @@ function isBindingPattern(param: ParamPattern): param is BindingPattern {
   return param.type !== "TSParameterProperty";
 }
 
-function toScriptFunction(value: unknown): ScriptFunction | undefined {
+function toScriptFunction(value: unknown, kind: ScriptExprKind): ScriptFunction | undefined {
   if (typeof value !== "function") return undefined;
+  // Already pinned (e.g. a built-in SDK hook, see `db.fields.timestamps()`) - bundling
+  // it again would derive a new expr from this build's `Function.prototype.toString()`
+  // output and overwrite the pin.
+  if (getPrecompiledScriptExpr(value as ScriptFunction, kind)) return undefined;
   return value as unknown as ScriptFunction;
 }
 
@@ -92,17 +98,17 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
   const collectFieldTargets = (field: TailorDBTypeSchemaOutput["fields"][string]) => {
     const metadata = field.metadata;
 
-    const createHook = toScriptFunction(metadata.hooks?.create);
+    const createHook = toScriptFunction(metadata.hooks?.create, "hooks.create");
     if (createHook) {
       targets.push({ fn: createHook, kind: "hooks.create" });
     }
-    const updateHook = toScriptFunction(metadata.hooks?.update);
+    const updateHook = toScriptFunction(metadata.hooks?.update, "hooks.update");
     if (updateHook) {
       targets.push({ fn: updateHook, kind: "hooks.update" });
     }
 
     for (const validateInput of metadata.validate ?? []) {
-      const validateFn = toScriptFunction(validateInput);
+      const validateFn = toScriptFunction(validateInput, "validate");
       if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
     }
 
@@ -119,14 +125,15 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
 
   if (type.metadata.typeHook) {
     for (const op of ["create", "update"] as const) {
-      const fn = toScriptFunction(type.metadata.typeHook[op]);
+      const kind = `typeHook.${op}` as const;
+      const fn = toScriptFunction(type.metadata.typeHook[op], kind);
       if (fn) {
-        targets.push({ fn, kind: `typeHook.${op}` });
+        targets.push({ fn, kind });
       }
     }
   }
 
-  const typeValidateFn = toScriptFunction(type.metadata.typeValidate);
+  const typeValidateFn = toScriptFunction(type.metadata.typeValidate, "typeValidate");
   if (typeValidateFn) {
     targets.push({ fn: typeValidateFn, kind: "typeValidate" });
   }
@@ -444,14 +451,14 @@ export function buildMinimalEntryFromResolved(
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
-  kind: PrecompiledScriptKind;
+  kind: ScriptExprKind;
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
-  typeName: string;
+  tableName: string;
   targetIndex: number;
   tsconfig: string | undefined;
 }): Promise<string> {
-  const { fn, kind, sourceFilePath, sourceBindings, typeName, targetIndex, tsconfig } = args;
+  const { fn, kind, sourceFilePath, sourceBindings, tableName, targetIndex, tsconfig } = args;
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
   if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
@@ -460,17 +467,7 @@ async function bundleScriptTarget(args: {
         "so issues reported after an await are silently lost. Remove the async keyword.",
     );
   }
-  const argsObject =
-    kind === "hooks.create"
-      ? `{ input: _value, invoker: ${PRINCIPAL_VAR}, now: _now }`
-      : kind === "hooks.update"
-        ? `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`
-        : kind === "validate"
-          ? `{ value: _value }`
-          : kind === "typeHook.create" || kind === "typeHook.update"
-            ? `{ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now }`
-            : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues`;
-  const inlineExpr = assertParsableExpression(`(${fnSource})(${argsObject})`, context);
+  const inlineExpr = assertParsableExpression(`(${fnSource})(${buildHookCallArgs(kind)})`, context);
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
@@ -496,7 +493,7 @@ async function bundleScriptTarget(args: {
     kind === "typeValidate",
   );
   const entry = createVirtualEntry(
-    `tailordb-script:${typeName}:${targetIndex}`,
+    `tailordb-script:${tableName}:${targetIndex}`,
     entryContent,
     "ts",
     sourceFilePath,
@@ -528,7 +525,10 @@ async function bundleScriptTarget(args: {
   bundleLog.assertAllResolved();
 
   const bundledCode = buildResult.output[0].code;
-  return assertParsableExpression(buildPrecompiledExpr(bundledCode, argsObject), context);
+  return assertParsableExpression(
+    buildPrecompiledExpr(bundledCode, buildHookCallArgs(kind)),
+    context,
+  );
 }
 
 /**
@@ -557,7 +557,7 @@ export async function precompileTailorDBTypeScripts(
         kind: target.kind,
         sourceFilePath,
         sourceBindings,
-        typeName: type.name,
+        tableName: type.name,
         targetIndex: index,
         tsconfig,
       }),

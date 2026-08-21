@@ -17,7 +17,7 @@ export function getAuthInput(application: Application): GeneratorAuthInput | und
     name: authConfig.name,
     userProfile: userProfile
       ? {
-          typeName: userProfile.type.name,
+          tableName: userProfile.type.name,
           namespace: userProfile.namespace,
           usernameField: userProfile.usernameField,
         }

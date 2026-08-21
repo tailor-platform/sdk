@@ -23,9 +23,9 @@ import {
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
-  getDeletedTypeNames,
+  getDeletedTableNames,
   migrationSnapshotCache,
-  processedTypes,
+  processedTables,
   rollbackSingleMigrationAfterFailure,
 } from "./migration-execution";
 import {
@@ -242,7 +242,7 @@ export async function applyTailorDB(
       // This ensures intermediate states are properly handled when scripts depend on them
 
       // Reset tracking state for this migration run
-      processedTypes.reset();
+      processedTables.reset();
       deletedResources.reset();
       migrationSnapshotCache.reset();
 
@@ -266,15 +266,15 @@ export async function applyTailorDB(
       const isOutsideMigrations = (namespaceName: string | undefined) =>
         namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
       const firstPendingByNamespace = new Map<string, PendingMigration>();
-      const pendingDeletedTypes = new Map<string, Set<string>>();
+      const pendingDeletedTables = new Map<string, Set<string>>();
       for (const migration of pendingMigrations) {
         const first = firstPendingByNamespace.get(migration.namespace);
         if (!first || migration.number < first.number) {
           firstPendingByNamespace.set(migration.namespace, migration);
         }
-        const deleted = pendingDeletedTypes.get(migration.namespace) ?? new Set<string>();
-        for (const typeName of getDeletedTypeNames(migration)) deleted.add(typeName);
-        pendingDeletedTypes.set(migration.namespace, deleted);
+        const deleted = pendingDeletedTables.get(migration.namespace) ?? new Set<string>();
+        for (const tableName of getDeletedTableNames(migration)) deleted.add(tableName);
+        pendingDeletedTables.set(migration.namespace, deleted);
       }
       const preMigrationTables = new Map<string, SchemaSnapshot["tables"]>();
       for (const [namespace, first] of firstPendingByNamespace) {
@@ -294,24 +294,24 @@ export async function applyTailorDB(
             await client.createTailorDBType(create.request);
             continue;
           }
-          const typeName = create.request.tailordbType?.name;
-          if (!namespaceName || !typeName) continue;
-          const priorType = preMigrationTables.get(namespaceName)?.[typeName];
-          if (!priorType) continue;
+          const tableName = create.request.tailordbType?.name;
+          if (!namespaceName || !tableName) continue;
+          const priorTable = preMigrationTables.get(namespaceName)?.[tableName];
+          if (!priorTable) continue;
           // A type some pending migration removes or renames away is created
           // only when its re-adding migration runs; materializing it early
           // would erase the removal boundary (the plan holds no delete entry
           // for a name its final state keeps).
-          if (pendingDeletedTypes.get(namespaceName)?.has(typeName)) continue;
+          if (pendingDeletedTables.get(namespaceName)?.has(tableName)) continue;
           const input = migrationContext.tailorDBInputs.find((i) => i.namespace === namespaceName);
           // Recorded so the pre-phase GQL-permission fallback does not create
           // the type a second time.
-          processedTypes.created.add(typeName);
+          processedTables.created.add(tableName);
           await client.createTailorDBType({
             workspaceId: create.request.workspaceId,
             namespaceName,
-            tailordbType: generateTailorDBTypeManifestFromSnapshot(priorType, {
-              subscribed: migrationContext.executorUsedTypes.has(typeName),
+            tailordbType: generateTailorDBTypeManifestFromSnapshot(priorTable, {
+              subscribed: migrationContext.executorUsedTables.has(tableName),
               namespaceGqlOperations: input?.config.gqlOperations,
             }),
           });
@@ -350,7 +350,7 @@ export async function applyTailorDB(
       }
 
       for (const migration of pendingMigrations) {
-        const attemptedTypes = new Set<string>();
+        const attemptedTables = new Set<string>();
         try {
           // Pre-migration phase: Create/update tables with breaking fields as optional
           await executeSingleMigrationPrePhase(
@@ -358,8 +358,8 @@ export async function applyTailorDB(
             changeSet,
             migration,
             migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTypes,
-            attemptedTypes,
+            migrationContext.executorUsedTables,
+            attemptedTables,
           );
 
           // Script execution (only if migrate.ts exists for this migration)
@@ -372,8 +372,8 @@ export async function applyTailorDB(
             migration,
             migrationContext.workspaceId,
             migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTypes,
-            attemptedTypes,
+            migrationContext.executorUsedTables,
+            attemptedTables,
           );
           throw error;
         }
@@ -384,8 +384,8 @@ export async function applyTailorDB(
             changeSet,
             migration,
             migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTypes,
-            attemptedTypes,
+            migrationContext.executorUsedTables,
+            attemptedTables,
           );
         } catch (error) {
           await rollbackSingleMigrationAfterFailure(
@@ -393,8 +393,8 @@ export async function applyTailorDB(
             migration,
             migrationContext.workspaceId,
             migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTypes,
-            attemptedTypes,
+            migrationContext.executorUsedTables,
+            attemptedTables,
           );
           throw error;
         }

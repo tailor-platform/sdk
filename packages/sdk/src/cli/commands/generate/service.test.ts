@@ -46,16 +46,16 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => {
   };
 });
 
-function loadedTailorDBService(namespace: string, typeNames: string[]): TailorDBService {
+function loadedTailorDBService(namespace: string, tableNames: string[]): TailorDBService {
   const types = Object.fromEntries(
-    typeNames.map((typeName) => [typeName, { name: typeName } as TailorDBType]),
+    tableNames.map((tableName) => [tableName, { name: tableName } as TailorDBType]),
   );
   const typeSourceInfo = Object.fromEntries(
-    typeNames.map((typeName) => [
-      typeName,
+    tableNames.map((tableName) => [
+      tableName,
       {
-        filePath: `${namespace}/${typeName}.ts`,
-        exportName: typeName,
+        filePath: `${namespace}/${tableName}.ts`,
+        exportName: tableName,
       },
     ]),
   );

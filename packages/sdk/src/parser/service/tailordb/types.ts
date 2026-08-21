@@ -175,3 +175,12 @@ export interface TailorDBType {
   typeHookExpr?: { create?: string; update?: string };
   typeValidateExpr?: string;
 }
+
+/**
+ * Property key `./hooks-validate-precompiled-expr.ts` uses to read a pinned
+ * script expression from a hook/validator function. Shared as a type so
+ * `configure/services/tailordb/schema.ts` can pin the SDK's own built-in
+ * hooks without a runtime import across the configure/parser boundary - a
+ * mismatched literal on either side fails to typecheck.
+ */
+export type PrecompiledScriptExprKey = "__precompiledScriptExpr";

@@ -358,7 +358,7 @@ function generateTriggerCode(trigger: PluginTriggerConfig): string {
       return `{
     kind: ${JSON.stringify(trigger.kind)},
     events: ${JSON.stringify(trigger.events)},
-    typeName: ${JSON.stringify(trigger.typeName)},
+    tableName: ${JSON.stringify(trigger.tableName)},
   }`;
 
     case "schedule":

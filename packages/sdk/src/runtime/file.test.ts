@@ -9,7 +9,7 @@ const args = ["ns", "Doc", "blob", "rec-1"] as const;
 const expectedCall = (method: string) => ({
   method,
   namespace: "ns",
-  typeName: "Doc",
+  tableName: "Doc",
   fieldName: "blob",
   recordId: "rec-1",
 });

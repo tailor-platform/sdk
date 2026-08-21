@@ -324,7 +324,7 @@ describe("tailordb migration sync", () => {
 
   test("includes plugin-generated executors in publishRecordEvents detection", async () => {
     state.pluginExecutorFiles = ["/tmp/plugin-executor.ts"];
-    state.pluginExecutors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
+    state.pluginExecutors = { onUser: { trigger: { kind: "tailordb", tableName: "User" } } };
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
@@ -335,7 +335,7 @@ describe("tailordb migration sync", () => {
   });
 
   test("enables publishRecordEvents for tables used by executor record triggers", async () => {
-    state.executors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
+    state.executors = { onUser: { trigger: { kind: "tailordb", tableName: "User" } } };
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 

@@ -1,9 +1,7 @@
 import { parseSync } from "oxc-parser";
 import { assertParsableExpression } from "#/utils/script-expr";
-import {
-  getPrecompiledScriptExpr,
-  type PrecompiledScriptKind,
-} from "./hooks-validate-precompiled-expr";
+import { buildHookCallArgs } from "./hook-args-object";
+import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,
@@ -11,18 +9,16 @@ import type {
 } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
+import type { ScriptExprKind } from "./hook-args-object";
 
 type FieldScriptContext = {
-  typeName: string;
+  tableName: string;
   fieldPath: readonly string[];
 };
 
 type ScriptFunction = (...args: never[]) => unknown;
 
-type ScriptContextKind = Extract<
-  PrecompiledScriptKind,
-  "hooks.create" | "hooks.update" | "validate"
->;
+type ScriptContextKind = Extract<ScriptExprKind, "hooks.create" | "hooks.update" | "validate">;
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -117,11 +113,6 @@ export const tailorPrincipalMap = makePrincipalExpr({
   },
 });
 
-// Identifier the table-level wrapper (buildTypeScripts in type-script.ts) binds
-// tailorPrincipalMap's result to, at most once per table, so per-hook exprs
-// below can reference it instead of re-embedding the full mapping on every hook.
-export const PRINCIPAL_VAR = "_principal";
-
 /**
  * Parse `wrapped` and return the first property of the top-level parenthesized
  * object expression, or `undefined` if it does not parse as one.
@@ -189,7 +180,7 @@ function formatScriptContext(kind: ScriptContextKind, context: FieldScriptContex
   if (!context) {
     return kind === "validate" ? kind : "hooks";
   }
-  return `${kind} for ${context.typeName}.${context.fieldPath.join(".")}`;
+  return `${kind} for ${context.tableName}.${context.fieldPath.join(".")}`;
 }
 
 /**
@@ -209,32 +200,21 @@ const convertToScriptExpr = (
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  const argsObject =
-    kind === "validate"
-      ? `{ value: _value }`
-      : kind === "hooks.create"
-        ? `{ input: _value, invoker: ${PRINCIPAL_VAR}, now: _now }`
-        : `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`;
   return assertParsableExpression(
-    `(${normalized})(${argsObject})`,
+    `(${normalized})(${buildHookCallArgs(kind)})`,
     formatScriptContext(kind, context),
   );
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
 export const convertTypeHookToExpr = (fn: Function, op: "create" | "update"): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(
-    fn as (...args: never[]) => unknown,
-    `typeHook.${op}`,
-  );
+  const kind = `typeHook.${op}` as const;
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown, kind);
   if (precompiledExpr) {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  return assertParsableExpression(
-    `(${normalized})({ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now })`,
-    "type-hook",
-  );
+  return assertParsableExpression(`(${normalized})(${buildHookCallArgs(kind)})`, "type-hook");
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
@@ -248,7 +228,7 @@ export const convertTypeValidateToExpr = (fn: Function): string => {
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues)`,
+    `(${normalized})(${buildHookCallArgs("typeValidate")})`,
     "type-validate",
   );
 };
@@ -271,14 +251,14 @@ export function parseFieldConfig(
 
   if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on table "${context.typeName}": ` +
+      `Field "${context.fieldPath.join(".")}" on table "${context.tableName}": ` +
         `.default() cannot be used on nested inner fields`,
     );
   }
 
   if (context && context.fieldPath.length > 1 && metadata.hooks) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on table "${context.typeName}": ` +
+      `Field "${context.fieldPath.join(".")}" on table "${context.tableName}": ` +
         `.hooks() cannot be used on nested inner fields`,
     );
   }

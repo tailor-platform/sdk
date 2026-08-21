@@ -146,8 +146,8 @@ describe("seed-bundler", () => {
 });
 
 describe("seed script upsert behavior", () => {
-  const loadMain = async (namespace: string, typeNames: string[]) => {
-    const { bundledCode } = await bundleSeedScript(namespace, typeNames);
+  const loadMain = async (namespace: string, tableNames: string[]) => {
+    const { bundledCode } = await bundleSeedScript(namespace, tableNames);
     const modulePath = path.join(
       process.env.TAILOR_BUILD_OUTPUT_DIR as string,
       `main-${namespace}.mjs`,

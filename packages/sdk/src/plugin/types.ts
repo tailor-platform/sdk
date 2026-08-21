@@ -42,7 +42,7 @@ export interface GeneratorResult {
 export interface GeneratorAuthInput {
   name: string;
   userProfile?: {
-    typeName: string;
+    tableName: string;
     namespace: string;
     usernameField: string;
   };
@@ -146,6 +146,14 @@ export interface PluginConfigs<Fields extends string = string> {
 }
 
 /**
+ * Registry mapping a plugin's `id` literal to its plugin-level config type.
+ * Extend via declaration merging, keyed by the `id` string, from the
+ * owning plugin's own module.
+ */
+// oxlint-disable-next-line no-empty-object-type
+export interface PluginConfigRegistry {}
+
+/**
  * Context passed to plugin's process method
  */
 export interface PluginTableProcessContext<TableConfig = unknown, PluginConfig = unknown> {
@@ -190,7 +198,7 @@ export interface PluginRecordTriggerConfig {
     | "tailordb.type_record.updated"
     | "tailordb.type_record.deleted"
   )[];
-  typeName: string;
+  tableName: string;
 }
 
 export interface PluginScheduleTriggerConfig {

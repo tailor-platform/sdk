@@ -166,14 +166,14 @@ async function assertMigrationsReproduceLocalTypes(
   if (pluginExecutorFiles.length > 0) {
     await executorService?.loadPluginExecutorFiles([...pluginExecutorFiles]);
   }
-  const executorUsedTypes = new Set<string>();
+  const executorUsedTables = new Set<string>();
   for (const executor of Object.values(executorService?.executors ?? {})) {
     if (executor.trigger.kind === "tailordb") {
-      executorUsedTypes.add(executor.trigger.typeName);
+      executorUsedTables.add(executor.trigger.tableName);
     }
   }
   const manifestOptions: GenerateAllManifestsOptions = {
-    executorUsedTypes,
+    executorUsedTables,
     namespaceGqlOperations: tailordbService.config.gqlOperations,
   };
 
@@ -359,17 +359,17 @@ async function sync(options: SyncOptions): Promise<void> {
   // Resolve all manifests before issuing any RPC: a missing manifest
   // indicates an internal inconsistency, and skipping or failing midway
   // would leave the remote schema partially synced.
-  const manifestFor = (typeName: string) => {
-    const manifest = manifests.get(typeName);
+  const manifestFor = (tableName: string) => {
+    const manifest = manifests.get(tableName);
     if (!manifest) {
       throw new Error(
-        `Internal error: no manifest generated for table "${typeName}". No changes were applied.`,
+        `Internal error: no manifest generated for table "${tableName}". No changes were applied.`,
       );
     }
     return manifest;
   };
-  const createManifests = creates.map((typeName) => manifestFor(typeName));
-  const updateManifests = updates.map((typeName) => manifestFor(typeName));
+  const createManifests = creates.map((tableName) => manifestFor(tableName));
+  const updateManifests = updates.map((tableName) => manifestFor(tableName));
 
   try {
     await Promise.all([
@@ -412,11 +412,11 @@ async function sync(options: SyncOptions): Promise<void> {
     ),
   );
   await Promise.all(
-    deletes.map((typeName) =>
+    deletes.map((tableName) =>
       client.deleteTailorDBType({
         workspaceId,
         namespaceName: target.namespace,
-        tailordbTypeName: typeName,
+        tailordbTypeName: tableName,
       }),
     ),
   );

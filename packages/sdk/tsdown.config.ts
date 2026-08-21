@@ -56,6 +56,7 @@ export default defineConfig([
     clean: true,
     dts: false,
     sourcemap: true,
+    minify: { mangle: { keepNames: true } },
     // peer dependencies: prevent bundling, resolve at runtime.
     // `@tailor-platform/sdk` (self-name) is kept external so subpath entries can reference
     // types like `ConnectionName`/`MachineUserName` from the main entry instead of inlining

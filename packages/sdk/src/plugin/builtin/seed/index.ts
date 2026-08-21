@@ -44,6 +44,12 @@ export type SeedPluginOptions = {
   disableIdpUserSync?: DisableIdpUserSyncDirections;
 };
 
+declare module "@tailor-platform/sdk/plugin" {
+  interface PluginConfigRegistry {
+    "@tailor-platform/seed": SeedPluginOptions;
+  }
+}
+
 function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]): {
   emitUserToIdpFK: boolean;
   emitIdpToUserFK: boolean;
@@ -76,18 +82,18 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
       for (const ns of ctx.tailordb) {
-        for (const [typeName, type] of Object.entries(ns.tables)) {
+        for (const [tableName, type] of Object.entries(ns.tables)) {
           const source = assertDefined(
-            ns.sourceInfo.get(typeName),
-            `source info missing for type: ${typeName}`,
+            ns.sourceInfo.get(tableName),
+            `source info missing for table: ${tableName}`,
           );
           const linesDb = processLinesDb(type, source);
 
-          // Add reverse FK from userProfile type to _User (opt-out via disableIdpUserSync.userToIdp: true)
+          // Add reverse FK from userProfile table to _User (opt-out via disableIdpUserSync.userToIdp: true)
           if (
             idpUserSyncFKs.emitUserToIdpFK &&
             idpUser &&
-            typeName === idpUser.schema.userTypeName
+            tableName === idpUser.schema.userTableName
           ) {
             linesDb.foreignKeys.push({
               column: idpUser.schema.usernameField,
@@ -100,7 +106,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
 
           // Generate empty JSONL data file
           files.push({
-            path: path.join(ctx.pluginConfig.distPath, "data", `${linesDb.typeName}.jsonl`),
+            path: path.join(ctx.pluginConfig.distPath, "data", `${linesDb.tableName}.jsonl`),
             content: "",
             skipIfExists: true,
           });
@@ -108,7 +114,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           const schemaOutputPath = path.join(
             ctx.pluginConfig.distPath,
             "data",
-            `${linesDb.typeName}.schema.ts`,
+            `${linesDb.tableName}.schema.ts`,
           );
 
           // Plugin-generated table: use getGeneratedTable API
@@ -168,7 +174,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           path: path.join(ctx.pluginConfig.distPath, "data", `${idpUser.name}.schema.ts`),
           content: generateIdpUserSchemaFile({
             usernameField: idpUser.schema.usernameField,
-            userTypeName: idpUser.schema.userTypeName,
+            userTableName: idpUser.schema.userTableName,
             includeUserProfileFK: idpUserSyncFKs.emitIdpToUserFK,
           }),
         });

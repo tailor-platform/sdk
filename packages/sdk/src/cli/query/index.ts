@@ -25,13 +25,13 @@ import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { parseBoolean } from "../shared/parse-boolean";
 import { executeScript } from "../shared/script-executor";
-import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
+import { resolveTableNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
 import { isGraphQLInputComplete } from "./graphql-repl";
 import { isSqlInputComplete } from "./sql-repl";
 import {
   extractColumnTemplate,
-  extractTypeNamesFromSql,
+  extractTableNamesFromSql,
   type ColumnSlot,
 } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
@@ -108,32 +108,32 @@ async function getNamespaceFromSqlQuery(
     return assertDefined(namespaces[0], "namespace missing");
   }
 
-  const typeNames = extractTypeNamesFromSql(query);
-  if (typeNames.length === 0) {
+  const tableNames = extractTableNamesFromSql(query);
+  if (tableNames.length === 0) {
     throw new Error(
       `Could not infer namespace from query. Detected namespaces: ${namespaces.join(", ")}.`,
     );
   }
 
-  const typeNamespaceMap = await resolveTypeNamespaces({
+  const tableNamespaceMap = await resolveTableNamespaces({
     workspaceId,
     namespaces,
-    typeNames,
+    tableNames,
     client,
   });
 
-  const notFoundTypes = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
-  if (notFoundTypes.length > 0) {
-    throw new Error(`Could not find namespace for tables in query: ${notFoundTypes.join(", ")}.`);
+  const notFoundTables = tableNames.filter((tableName) => !tableNamespaceMap.has(tableName));
+  if (notFoundTables.length > 0) {
+    throw new Error(`Could not find namespace for tables in query: ${notFoundTables.join(", ")}.`);
   }
 
-  const namespacesFromTypes = new Set(typeNamespaceMap.values());
-  if (namespacesFromTypes.size === 1) {
-    return assertDefined([...namespacesFromTypes][0], "namespace from types missing");
+  const namespacesFromTables = new Set(tableNamespaceMap.values());
+  if (namespacesFromTables.size === 1) {
+    return assertDefined([...namespacesFromTables][0], "namespace from types missing");
   }
 
   throw new Error(
-    `Query references tables from multiple namespaces: ${[...namespacesFromTypes].join(", ")}.`,
+    `Query references tables from multiple namespaces: ${[...namespacesFromTables].join(", ")}.`,
   );
 }
 
@@ -707,9 +707,9 @@ function buildExpectedColumnOrder(
     if (slot.type === "explicit") {
       order.push(slot.name);
     } else {
-      for (const typeName of slot.typeNames) {
+      for (const tableName of slot.tableNames) {
         order.push(...SYSTEM_FIELD_ORDER);
-        order.push(...(fieldOrder.get(typeName) ?? []));
+        order.push(...(fieldOrder.get(tableName) ?? []));
       }
     }
   }

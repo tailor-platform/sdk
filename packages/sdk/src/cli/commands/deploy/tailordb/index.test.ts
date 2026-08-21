@@ -256,12 +256,12 @@ describe("planTailorDB (service level)", () => {
       migrationTestBaselines: new Map([
         ["tailordb", { migrationNumber: 3, snapshot: baseline, historyId: null }],
       ]),
-      executorUsedTailorDBTypes: new Set(),
+      executorUsedTailorDBTables: new Set(),
     });
 
     expect(Object.keys(result.context.tailorDBInputs[0]!.types)).toEqual(["Legacy"]);
     expect(result.changeSet.type.creates[0]!.name).toBe("Legacy");
-    expect(result.context.executorUsedTypes).toEqual(new Set());
+    expect(result.context.executorUsedTables).toEqual(new Set());
 
     await applyTailorDB(client, result, "create-update");
 
@@ -478,7 +478,7 @@ describe("planTailorDB (service level)", () => {
         application,
         forRemoval: false,
         config: mockConfig,
-        executorUsedTailorDBTypes: new Set(["User"]),
+        executorUsedTailorDBTables: new Set(["User"]),
       };
 
       const result = await planTailorDB(ctx);
@@ -529,7 +529,7 @@ describe("planTailorDB (service level)", () => {
           application: createMockApplication([tailorDBService]),
           forRemoval: false,
           config: mockConfig,
-          executorUsedTailorDBTypes: subscribed ? new Set(["User"]) : new Set<string>(),
+          executorUsedTailorDBTables: subscribed ? new Set(["User"]) : new Set<string>(),
         });
       }
 
@@ -577,7 +577,7 @@ describe("planTailorDB (service level)", () => {
             application: createMockApplication([tailorDBService]),
             forRemoval: false,
             config: mockConfig,
-            executorUsedTailorDBTypes: new Set(["User"]),
+            executorUsedTailorDBTables: new Set(["User"]),
           }),
         ).rejects.toThrow('TailorDB table "User" has "publishEvents: false"');
 
@@ -2040,7 +2040,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userType },
       },
     ];
-    planResult.context.executorUsedTypes = new Set(["User"]);
+    planResult.context.executorUsedTables = new Set(["User"]);
     return planResult;
   }
 
@@ -2109,7 +2109,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userWithEmail },
       },
     ];
-    planResult.context.executorUsedTypes = new Set();
+    planResult.context.executorUsedTables = new Set();
     addSentinelTypeCreate(planResult);
     const client = schemaVerificationClient(unchangedRemoteSettings());
     await runValidation(client, planResult);
@@ -2436,7 +2436,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userWithEmail },
       },
     ];
-    planResult.context.executorUsedTypes = new Set();
+    planResult.context.executorUsedTables = new Set();
     planResult.context.checkpointRepairs = [
       {
         namespace: "test-tailordb",
@@ -2667,7 +2667,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userType },
       },
     ];
-    planResult.context.executorUsedTypes = new Set();
+    planResult.context.executorUsedTables = new Set();
 
     await expect(runValidation(client, planResult)).rejects.toThrow(
       "Remote schema verification failed",
@@ -2699,7 +2699,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userType },
       },
     ];
-    planResult.context.executorUsedTypes = new Set();
+    planResult.context.executorUsedTables = new Set();
 
     await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
@@ -2759,7 +2759,7 @@ describe("applyTailorDB table apply concurrency", () => {
         workspaceId: "test-workspace",
         application: { name: "test-app", tailorDBServices: [] } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: { path: "/nonexistent/tailor.config.ts", name: "test-app", db: {} },
         noSchemaCheck: true,
         namespacesWithMigrations: [],

@@ -790,6 +790,16 @@ describe("resolverExecutedTrigger", () => {
   });
 });
 
+describe("record trigger table name", () => {
+  test.each([
+    ["recordCreatedTrigger", recordCreatedTrigger],
+    ["recordUpdatedTrigger", recordUpdatedTrigger],
+    ["recordDeletedTrigger", recordDeletedTrigger],
+  ])("%s carries the table name", (_name, trigger) => {
+    expect(trigger({ type: createUserType() }).tableName).toBe("User");
+  });
+});
+
 describe("recordTrigger (multi-event)", () => {
   test("can specify multiple events", () => {
     const trigger = recordTrigger({
@@ -801,7 +811,7 @@ describe("recordTrigger (multi-event)", () => {
       "tailordb.type_record.created",
       "tailordb.type_record.updated",
     ]);
-    expect(trigger.typeName).toBe("User");
+    expect(trigger.tableName).toBe("User");
   });
 
   test("args are a union of selected events with kind discriminant", () => {

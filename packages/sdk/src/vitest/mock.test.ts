@@ -689,7 +689,7 @@ describe("mock", () => {
         {
           method: "upload",
           namespace: "ns",
-          typeName: "Doc",
+          tableName: "Doc",
           fieldName: "file",
           recordId: "r-1",
         },
@@ -703,7 +703,7 @@ describe("mock", () => {
         {
           method: "delete",
           namespace: "ns",
-          typeName: "Doc",
+          tableName: "Doc",
           fieldName: "file",
           recordId: "r-2",
         },
