@@ -25,6 +25,7 @@
     ".tailor",
     "example/tests/fixtures/",
     "example/seed/",
+    "packages/create-sdk/templates/*/src/seed/",
     "packages/tailor-proto/",
     "packages/sdk-codemod/codemods/**/tests/",
     "packages/sdk/docs/migration/v2.md",
