@@ -402,14 +402,6 @@ describe("planAuth", () => {
       createResult.changeSet.userProfileConfig.creates[0]?.request.userProfileProviderConfig;
     expect(desired).toBeDefined();
     const remote = create(UserProfileProviderConfigSchema, desired);
-    const config = remote.config?.config;
-    if (config?.case !== "tailordb") {
-      throw new Error("Expected TailorDB user profile config");
-    }
-    const remoteTailorDBConfig = config.value as typeof config.value & {
-      futureImplicitDefault?: boolean;
-    };
-    remoteTailorDBConfig.futureImplicitDefault = false;
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       userProfileConfig: { userProfileProviderConfig: remote },
