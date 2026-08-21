@@ -755,6 +755,9 @@ export async function runCodemods(
           existing.push(...findings);
         }
       }
+      if (lt.suspiciousPatterns.length === 0 && lt.sourceStringSuspiciousPatterns.length === 0) {
+        continue;
+      }
       const { residual, sourceString } = residualFor(snapshot);
       const matchesSource =
         lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null) ||
