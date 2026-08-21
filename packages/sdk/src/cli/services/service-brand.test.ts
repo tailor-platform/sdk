@@ -134,7 +134,7 @@ describe("service brand-based error categorization", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "User",
+          tableName: "User",
         },
         operation: { kind: "function", body: () => {} },
       },

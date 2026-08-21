@@ -46,7 +46,7 @@ function emptyInput(): ValidatePlanInput {
         workspaceId: "00000000-0000-0000-0000-000000000001",
         application: {} as ValidatePlanInput["tailorDB"]["context"]["application"],
         tailorDBInputs: [],
-        executorUsedTypes: new Set(),
+        executorUsedTables: new Set(),
         config: {} as ValidatePlanInput["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
         namespacesWithMigrations: [],

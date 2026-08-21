@@ -9,7 +9,7 @@ import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { resolveTypeNamespaces } from "#/cli/shared/tailordb-namespace";
+import { resolveTableNamespaces } from "#/cli/shared/tailordb-namespace";
 import { assertDefined } from "#/utils/assert";
 
 export interface TruncateOptions {
@@ -28,7 +28,7 @@ interface InternalTruncateOptions extends TruncateOptions {
 interface TruncateSingleTypeOptions {
   workspaceId: string;
   namespaceName: string;
-  typeName: string;
+  tableName: string;
 }
 
 async function truncateSingleType(
@@ -38,10 +38,10 @@ async function truncateSingleType(
   await client.truncateTailorDBType({
     workspaceId: options.workspaceId,
     namespaceName: options.namespaceName,
-    tailordbTypeName: options.typeName,
+    tailordbTypeName: options.tableName,
   });
 
-  logger.success(`Truncated table "${options.typeName}" in namespace "${options.namespaceName}"`);
+  logger.success(`Truncated table "${options.tableName}" in namespace "${options.namespaceName}"`);
 }
 
 async function truncateNamespace(
@@ -157,16 +157,16 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
 
   // Handle specific tables
   if (hasTables) {
-    const typeNames = assertDefined(options.tables, "tables option missing");
+    const tableNames = assertDefined(options.tables, "tables option missing");
 
     // Validate all tables exist and get their namespaces before confirmation
-    const typeNamespaceMap = await resolveTypeNamespaces({
+    const tableNamespaceMap = await resolveTableNamespaces({
       workspaceId,
       namespaces,
-      typeNames,
+      tableNames,
       client,
     });
-    const notFoundTables = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
+    const notFoundTables = tableNames.filter((tableName) => !tableNamespaceMap.has(tableName));
 
     if (notFoundTables.length > 0) {
       throw new Error(
@@ -175,7 +175,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
     }
 
     if (!options.yes) {
-      const tableList = typeNames.join(", ");
+      const tableList = tableNames.join(", ");
       const confirmation = await prompt.confirm({
         message: `This will truncate the following tables: ${tableList}. Continue?`,
         default: false,
@@ -186,8 +186,8 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
       }
     }
 
-    for (const typeName of typeNames) {
-      const namespace = typeNamespaceMap.get(typeName);
+    for (const tableName of tableNames) {
+      const namespace = tableNamespaceMap.get(tableName);
       if (!namespace) {
         continue;
       }
@@ -196,7 +196,7 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
         {
           workspaceId,
           namespaceName: namespace,
-          typeName,
+          tableName,
         },
         client,
       );

@@ -192,7 +192,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           },
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
         checkpointRepairs: [],
@@ -406,7 +406,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       );
   }
 
-  function deletedTypeNames(client: OperatorClient) {
+  function deletedTableNames(client: OperatorClient) {
     return vi.mocked(client.deleteTailorDBType).mock.calls.map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (c) => (c[0] as any)?.tailordbTypeName,
@@ -450,7 +450,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     // ...so the failed apply must roll it back: StockReservation did not exist at
     // the prior checkpoint, so it is dropped.
-    expect(deletedTypeNames(client)).toContain("StockReservation");
+    expect(deletedTableNames(client)).toContain("StockReservation");
 
     // The checkpoint must stay at the prior migration.
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
@@ -532,7 +532,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       "migration failed",
     );
 
-    const deletedNames = deletedTypeNames(client);
+    const deletedNames = deletedTableNames(client);
     expect(deletedNames).toContain("StockReservation");
     expect(deletedNames).toContain("LeakedType");
   });
@@ -725,7 +725,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(updatedTypeNames.filter((name) => name === "Existing")).toHaveLength(2);
     expect(updatedTypeNames).not.toContain("Audit");
     expect(updatedTypeNames).not.toContain("New1");
-    expect(deletedTypeNames(client)).toEqual(["New2"]);
+    expect(deletedTableNames(client)).toEqual(["New2"]);
 
     const restoredExisting = vi
       .mocked(client.updateTailorDBType)
@@ -955,7 +955,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     // The script never ran, the type the pre-phase tried to create is rolled
     // back, and the checkpoint is untouched.
     expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
-    expect(deletedTypeNames(client)).toContain("StockReservation");
+    expect(deletedTableNames(client)).toContain("StockReservation");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 

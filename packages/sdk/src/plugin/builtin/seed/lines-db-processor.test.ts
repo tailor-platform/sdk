@@ -6,7 +6,7 @@ import type { LinesDbMetadata } from "./types";
 describe("generateLinesDbSchemaFileWithPluginAPI", () => {
   test("generates a getGeneratedTable call for a namespace plugin table", () => {
     const metadata: LinesDbMetadata = {
-      typeName: "AuditLog",
+      tableName: "AuditLog",
       exportName: "AuditLog",
       importPath: "",
       optionalFields: ["id"],

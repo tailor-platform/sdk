@@ -204,7 +204,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
           },
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
         checkpointRepairs: [],

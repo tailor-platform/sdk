@@ -69,7 +69,7 @@ describe("migration test runtime", () => {
 
     expect(sortSeedTypesForSnapshot(snapshot)).toEqual({
       order: ["Customer", "Order"],
-      selfRefTypes: [],
+      selfRefTables: [],
     });
   });
 

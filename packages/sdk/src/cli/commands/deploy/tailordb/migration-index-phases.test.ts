@@ -177,7 +177,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
           authService: undefined,
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
         checkpointRepairs: [],

@@ -801,7 +801,7 @@ describe("recordTrigger (multi-event)", () => {
       "tailordb.type_record.created",
       "tailordb.type_record.updated",
     ]);
-    expect(trigger.typeName).toBe("User");
+    expect(trigger.tableName).toBe("User");
   });
 
   test("args are a union of selected events with kind discriminant", () => {

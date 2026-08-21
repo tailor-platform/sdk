@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
-import { resolveTypeNamespace, resolveTypeNamespaces } from "./tailordb-namespace";
+import { resolveTableNamespace, resolveTableNamespaces } from "./tailordb-namespace";
 
 const namesResult = (...names: string[]) => ({ tailordbTypes: names.map((name) => ({ name })) });
 
-describe("resolveTypeNamespaces", () => {
+describe("resolveTableNamespaces", () => {
   test("resolves multiple tables from different namespaces", async () => {
     const client = {
       listTailorDBTypes: vi
@@ -12,10 +12,10 @@ describe("resolveTypeNamespaces", () => {
         .mockResolvedValueOnce(namesResult("Event")),
     };
 
-    const result = await resolveTypeNamespaces({
+    const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
       namespaces: ["main", "analytics"],
-      typeNames: ["User", "Event"],
+      tableNames: ["User", "Event"],
       client,
     });
 
@@ -31,10 +31,10 @@ describe("resolveTypeNamespaces", () => {
         .mockResolvedValueOnce(namesResult("User")),
     };
 
-    const result = await resolveTypeNamespaces({
+    const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
       namespaces: ["main", "analytics"],
-      typeNames: ["User"],
+      tableNames: ["User"],
       client,
     });
 
@@ -44,10 +44,10 @@ describe("resolveTypeNamespaces", () => {
   test("stops querying when all tables are resolved", async () => {
     const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("User")) };
 
-    await resolveTypeNamespaces({
+    await resolveTableNamespaces({
       workspaceId: "workspace-id",
       namespaces: ["main", "analytics"],
-      typeNames: ["User"],
+      tableNames: ["User"],
       client,
     });
 
@@ -57,10 +57,10 @@ describe("resolveTypeNamespaces", () => {
   test("matches requested type names case-insensitively", async () => {
     const client = { listTailorDBTypes: vi.fn().mockResolvedValueOnce(namesResult("Project")) };
 
-    const result = await resolveTypeNamespaces({
+    const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
       namespaces: ["main"],
-      typeNames: ["project"],
+      tableNames: ["project"],
       client,
     });
 
@@ -68,14 +68,14 @@ describe("resolveTypeNamespaces", () => {
   });
 });
 
-describe("resolveTypeNamespace", () => {
+describe("resolveTableNamespace", () => {
   test("returns null when the type is not found", async () => {
     const client = { listTailorDBTypes: vi.fn().mockResolvedValue(namesResult("Order")) };
 
-    const result = await resolveTypeNamespace({
+    const result = await resolveTableNamespace({
       workspaceId: "workspace-id",
       namespaces: ["main"],
-      typeName: "User",
+      tableName: "User",
       client,
     });
 

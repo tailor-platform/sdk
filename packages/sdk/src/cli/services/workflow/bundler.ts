@@ -146,7 +146,7 @@ function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunction
       calls.push({ targetName: extractStaticStringValue(args?.[0]) });
     }
     for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
+      const child = node[key];
       if (Array.isArray(child)) {
         child.forEach((c: unknown) => walk(c as ASTNode | null));
       } else if (child && typeof child === "object") {
@@ -203,7 +203,7 @@ export function collectExecJobFunctionTargets(code: string): string[] {
       if (target !== undefined) targets.push(target);
     }
     for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
+      const child = node[key];
       if (Array.isArray(child)) {
         child.forEach((c: unknown) => walk(c as ASTNode | null));
       } else if (child && typeof child === "object") {

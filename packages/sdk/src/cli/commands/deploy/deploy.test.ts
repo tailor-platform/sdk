@@ -58,7 +58,7 @@ function emptyResults(): PlanResults {
         workspaceId: "ws",
         application: {} as PlanResults["tailorDB"]["context"]["application"],
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
         namespacesWithMigrations: [],

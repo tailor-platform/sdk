@@ -46,13 +46,13 @@ function recomputedResources(
   const resources: RecomputedResource[] = [];
 
   for (const service of application.tailorDBServices) {
-    for (const [typeName, type] of Object.entries(service.types)) {
+    for (const [tableName, type] of Object.entries(service.types)) {
       if (type.settings.publishEvents === undefined) {
         resources.push({
-          trn: tailorDBTypeTrn(workspaceId, service.namespace, typeName),
-          key: eventSourceKey.tailorDBType(service.namespace, typeName),
+          trn: tailorDBTypeTrn(workspaceId, service.namespace, tableName),
+          key: eventSourceKey.tailorDBType(service.namespace, tableName),
           scope: "resource",
-          label: eventSourceLabel.tailorDBType(typeName),
+          label: eventSourceLabel.tailorDBType(tableName),
         });
       }
     }

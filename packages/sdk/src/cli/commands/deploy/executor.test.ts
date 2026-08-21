@@ -460,7 +460,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "tailordb",
-          typeName: "User",
+          tableName: "User",
           events: ["tailordb.type_record.created"],
         },
         operation: {
@@ -665,7 +665,7 @@ describe("planExecutor", () => {
           trigger: {
             kind: "tailordb",
             events: ["tailordb.type_record.created"],
-            typeName: "User",
+            tableName: "User",
           },
           operation: { kind: "function", body: () => {} },
         } satisfies Executor,
@@ -741,7 +741,7 @@ describe("planExecutor", () => {
           trigger: {
             kind: "tailordb",
             events: ["tailordb.type_record.created", "tailordb.type_record.updated"],
-            typeName: "User",
+            tableName: "User",
           },
           operation: { kind: "function", body: () => {} },
         } satisfies Executor,
@@ -835,7 +835,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "User",
+          tableName: "User",
           condition: ({ newRecord }: { newRecord: { active: boolean } }) => newRecord.active,
         },
         operation: { kind: "function", body: () => {} },
@@ -887,7 +887,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "User",
+          tableName: "User",
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1057,7 +1057,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "Unknown",
+          tableName: "Unknown",
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1191,7 +1191,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created", "tailordb.type_record.updated"],
-          typeName: "User",
+          tableName: "User",
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1293,7 +1293,7 @@ describe("planExecutor", () => {
             "tailordb.type_record.updated",
             "tailordb.type_record.deleted",
           ],
-          typeName: "User",
+          tableName: "User",
           condition: ({ typeName }: { typeName: string }) => typeName === "User",
         },
         operation: { kind: "function", body: () => {} },
@@ -1324,7 +1324,7 @@ describe("planExecutor", () => {
           trigger: {
             kind: "tailordb",
             events: ["tailordb.type_record.created"],
-            typeName: "Unknown",
+            tableName: "Unknown",
           },
           operation: { kind: "function", body: () => {} },
         } satisfies Executor,

@@ -444,11 +444,11 @@ async function bundleScriptTarget(args: {
   kind: "hooks.create" | "hooks.update" | "validate" | "typeHook" | "typeValidate";
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
-  typeName: string;
+  tableName: string;
   targetIndex: number;
   tsconfig: string | undefined;
 }): Promise<string> {
-  const { fn, kind, sourceFilePath, sourceBindings, typeName, targetIndex, tsconfig } = args;
+  const { fn, kind, sourceFilePath, sourceBindings, tableName, targetIndex, tsconfig } = args;
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
   if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
@@ -493,7 +493,7 @@ async function bundleScriptTarget(args: {
     kind === "typeValidate",
   );
   const entry = createVirtualEntry(
-    `tailordb-script:${typeName}:${targetIndex}`,
+    `tailordb-script:${tableName}:${targetIndex}`,
     entryContent,
     "ts",
     sourceFilePath,
@@ -554,7 +554,7 @@ export async function precompileTailorDBTypeScripts(
         kind: target.kind,
         sourceFilePath,
         sourceBindings,
-        typeName: type.name,
+        tableName: type.name,
         targetIndex: index,
         tsconfig,
       }),

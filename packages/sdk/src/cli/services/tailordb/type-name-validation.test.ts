@@ -19,13 +19,13 @@ type ListTailorDBTypesResult = {
 function localService(namespace: string, typeNames: string[]) {
   return {
     namespace,
-    types: Object.fromEntries(typeNames.map((typeName) => [typeName, {}])),
+    types: Object.fromEntries(typeNames.map((tableName) => [tableName, {}])),
     typeSourceInfo: Object.fromEntries(
-      typeNames.map((typeName) => [
-        typeName,
+      typeNames.map((tableName) => [
+        tableName,
         {
-          filePath: `/app/${namespace}/${typeName}.ts`,
-          exportName: typeName.toLowerCase(),
+          filePath: `/app/${namespace}/${tableName}.ts`,
+          exportName: tableName.toLowerCase(),
         },
       ]),
     ),
@@ -75,8 +75,8 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
     });
 
     expect(result).toEqual([
-      { namespace: "shared", typeName: "User", kind: "external" },
-      { namespace: "shared", typeName: "Order", kind: "external" },
+      { namespace: "shared", tableName: "User", kind: "external" },
+      { namespace: "shared", tableName: "Order", kind: "external" },
     ]);
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(2);
   });
@@ -115,9 +115,9 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
     pending.get("shared-b:")?.(page(["Event"]));
 
     await expect(promise).resolves.toEqual([
-      { namespace: "shared-a", typeName: "User", kind: "external" },
-      { namespace: "shared-a", typeName: "Order", kind: "external" },
-      { namespace: "shared-b", typeName: "Event", kind: "external" },
+      { namespace: "shared-a", tableName: "User", kind: "external" },
+      { namespace: "shared-a", tableName: "Order", kind: "external" },
+      { namespace: "shared-b", tableName: "Event", kind: "external" },
     ]);
   });
 

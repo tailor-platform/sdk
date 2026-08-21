@@ -471,7 +471,7 @@ function convertOperandToProto(
  */
 export interface GenerateAllManifestsOptions extends GenerateManifestOptions {
   /** Set of table names that should have publishRecordEvents enabled */
-  executorUsedTypes?: ReadonlySet<string>;
+  executorUsedTables?: ReadonlySet<string>;
 }
 
 /**
@@ -485,14 +485,14 @@ export function generateAllTypeManifestsFromSnapshot(
   options: GenerateAllManifestsOptions = {},
 ): Map<string, MessageInitShape<typeof TailorDBTypeSchema>> {
   const manifests = new Map<string, MessageInitShape<typeof TailorDBTypeSchema>>();
-  const { executorUsedTypes, ...baseOptions } = options;
+  const { executorUsedTables, ...baseOptions } = options;
 
-  for (const [typeName, snapshotType] of Object.entries(snapshot.tables)) {
+  for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
     const typeOptions: GenerateManifestOptions = {
       ...baseOptions,
-      subscribed: executorUsedTypes?.has(typeName) ?? false,
+      subscribed: executorUsedTables?.has(tableName) ?? false,
     };
-    manifests.set(typeName, generateTailorDBTypeManifestFromSnapshot(snapshotType, typeOptions));
+    manifests.set(tableName, generateTailorDBTypeManifestFromSnapshot(snapshotType, typeOptions));
   }
 
   return manifests;
@@ -513,32 +513,32 @@ export interface SnapshotTypeComparison {
 /**
  * Compare snapshot tables with existing remote table names
  * @param {SchemaSnapshot} snapshot - Schema snapshot
- * @param {ReadonlySet<string>} existingTypeNames - Set of existing table names in remote
+ * @param {ReadonlySet<string>} existingTableNames - Set of existing table names in remote
  * @returns {SnapshotTypeComparison} Comparison result
  */
 export function compareSnapshotWithRemote(
   snapshot: SchemaSnapshot,
-  existingTypeNames: ReadonlySet<string>,
+  existingTableNames: ReadonlySet<string>,
 ): SnapshotTypeComparison {
-  const snapshotTypeNames = new Set(Object.keys(snapshot.tables));
+  const snapshotTableNames = new Set(Object.keys(snapshot.tables));
 
   const creates: string[] = [];
   const updates: string[] = [];
   const deletes: string[] = [];
 
   // Tables in snapshot
-  for (const typeName of snapshotTypeNames) {
-    if (existingTypeNames.has(typeName)) {
-      updates.push(typeName);
+  for (const tableName of snapshotTableNames) {
+    if (existingTableNames.has(tableName)) {
+      updates.push(tableName);
     } else {
-      creates.push(typeName);
+      creates.push(tableName);
     }
   }
 
   // Tables only in remote (to be deleted)
-  for (const typeName of existingTypeNames) {
-    if (!snapshotTypeNames.has(typeName)) {
-      deletes.push(typeName);
+  for (const tableName of existingTableNames) {
+    if (!snapshotTableNames.has(tableName)) {
+      deletes.push(tableName);
     }
   }
 

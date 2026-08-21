@@ -604,9 +604,9 @@ describe("snapshot-manifest", () => {
 
     test.each([
       {
-        name: "applies executorUsedTypes to enable publishRecordEvents",
+        name: "applies executorUsedTables to enable publishRecordEvents",
         types: { User: {}, Post: {} },
-        options: { executorUsedTypes: new Set(["User"]) },
+        options: { executorUsedTables: new Set(["User"]) },
         expected: { User: true, Post: false },
       },
       {
@@ -628,13 +628,13 @@ describe("snapshot-manifest", () => {
           Post: { settings: { publishEvents: false } },
           Comment: {},
         },
-        options: { executorUsedTypes: new Set(["Comment"]) },
+        options: { executorUsedTables: new Set(["Comment"]) },
         expected: { User: true, Post: false, Comment: true },
       },
       {
         name: "stays false when no manual setting and no executor subscribes",
         types: { User: {}, Post: {} },
-        options: { executorUsedTypes: new Set(["Other"]) },
+        options: { executorUsedTables: new Set(["Other"]) },
         expected: { User: false, Post: false },
       },
     ])("$name", ({ types, options, expected }) => {
@@ -682,7 +682,7 @@ describe("snapshot-manifest", () => {
 
       expect(() =>
         generateAllTypeManifestsFromSnapshot(snapshot, {
-          executorUsedTypes: new Set(["User"]),
+          executorUsedTables: new Set(["User"]),
         }),
       ).toThrow(
         'TailorDB table "User" has "publishEvents: false", but executors with record triggers subscribe to it.',

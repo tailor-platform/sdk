@@ -15,7 +15,7 @@ type FileResolver = (method: string, call: FileCall) => unknown;
 interface FileCall {
   method: string;
   namespace: string;
-  typeName: string;
+  tableName: string;
   fieldName: string;
   recordId: string;
 }
@@ -82,12 +82,12 @@ export function mockFile(options: MockFileOptions = {}) {
   function handle(
     method: FileMethod,
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
   ): unknown {
     if (queue.length > 0) return queue.shift();
-    const call: FileCall = { method, namespace, typeName, fieldName, recordId };
+    const call: FileCall = { method, namespace, tableName, fieldName, recordId };
     const resolved = resolver(method, call);
     if (resolved != null) return resolved;
     if (onUnhandled === "error") {
@@ -98,8 +98,8 @@ export function mockFile(options: MockFileOptions = {}) {
   }
 
   const upload = vi.fn<TailorDBFileAPI["upload"]>(async (...args) => {
-    const [namespace, typeName, fieldName, recordId] = args;
-    return handle("upload", namespace, typeName, fieldName, recordId) as FileUploadResponse;
+    const [namespace, tableName, fieldName, recordId] = args;
+    return handle("upload", namespace, tableName, fieldName, recordId) as FileUploadResponse;
   });
   const download = vi.fn<TailorDBFileAPI["download"]>(
     async (...args) => handle("download", ...args) as FileDownloadResponse,
@@ -126,8 +126,8 @@ export function mockFile(options: MockFileOptions = {}) {
     };
   });
   const uploadStream = vi.fn<TailorDBFileAPI["uploadStream"]>(async (...args) => {
-    const [namespace, typeName, fieldName, recordId] = args;
-    return handle("uploadStream", namespace, typeName, fieldName, recordId) as FileUploadResponse;
+    const [namespace, tableName, fieldName, recordId] = args;
+    return handle("uploadStream", namespace, tableName, fieldName, recordId) as FileUploadResponse;
   });
 
   const mocks: FileMocks = {
@@ -148,7 +148,7 @@ export function mockFile(options: MockFileOptions = {}) {
       calls.push({
         method,
         namespace: args[0],
-        typeName: args[1],
+        tableName: args[1],
         fieldName: args[2],
         recordId: args[3],
       });

@@ -213,7 +213,7 @@ describe("parseFieldConfig nested inner field restrictions", () => {
     };
 
     expect(() =>
-      parseFieldConfig(field as never, { typeName: "Test", fieldPath: ["items", "name"] }),
+      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "name"] }),
     ).toThrow(".hooks() cannot be used on nested inner fields");
   });
 
@@ -226,7 +226,7 @@ describe("parseFieldConfig nested inner field restrictions", () => {
     };
 
     expect(() =>
-      parseFieldConfig(field as never, { typeName: "Test", fieldPath: ["items", "status"] }),
+      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "status"] }),
     ).toThrow(".default() cannot be used on nested inner fields");
   });
 });

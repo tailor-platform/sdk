@@ -206,7 +206,7 @@ describe("migration flow: namespaces without pending migrations", () => {
           authService: undefined,
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
         checkpointRepairs: [],

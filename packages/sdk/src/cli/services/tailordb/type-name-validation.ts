@@ -12,7 +12,7 @@ type TailorDBTypeNameSourceKind = "local" | "external";
 
 export type TailorDBTypeNameSource = {
   readonly namespace: string;
-  readonly typeName: string;
+  readonly tableName: string;
   readonly kind: TailorDBTypeNameSourceKind;
   readonly detail?: string;
 };
@@ -98,12 +98,12 @@ export function collectLocalTailorDBTypeNameSources(
   const sources: TailorDBTypeNameSource[] = [];
 
   for (const service of args.tailorDBServices) {
-    for (const typeName of Object.keys(service.types)) {
+    for (const tableName of Object.keys(service.types)) {
       sources.push({
         namespace: service.namespace,
-        typeName,
+        tableName,
         kind: "local",
-        detail: formatTailorDBTypeSourceInfo(service.typeSourceInfo[typeName]),
+        detail: formatTailorDBTypeSourceInfo(service.typeSourceInfo[tableName]),
       });
     }
   }
@@ -142,7 +142,7 @@ export async function fetchExternalTailorDBTypeNameSources(
       for (const type of tailordbTypes) {
         sources.push({
           namespace,
-          typeName: type.name,
+          tableName: type.name,
           kind: "external",
         });
       }
@@ -159,25 +159,25 @@ export async function fetchExternalTailorDBTypeNameSources(
  * @param args - Validation inputs
  */
 export function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs): void {
-  const sourcesByTypeName = new Map<string, TailorDBTypeNameSource[]>();
+  const sourcesByTableName = new Map<string, TailorDBTypeNameSource[]>();
 
   for (const source of args.sources) {
-    const existing = sourcesByTypeName.get(source.typeName);
+    const existing = sourcesByTableName.get(source.tableName);
     if (existing) {
       existing.push(source);
     } else {
-      sourcesByTypeName.set(source.typeName, [source]);
+      sourcesByTableName.set(source.tableName, [source]);
     }
   }
 
   const errors: string[] = [];
-  for (const [typeName, sources] of sourcesByTypeName) {
+  for (const [tableName, sources] of sourcesByTableName) {
     if (sources.length <= 1) {
       continue;
     }
 
     const sourceList = sources.map(formatTailorDBTypeNameSource).join(", ");
-    errors.push(`Table "${typeName}" is defined more than once: ${sourceList}`);
+    errors.push(`Table "${tableName}" is defined more than once: ${sourceList}`);
   }
 
   if (errors.length > 0) {

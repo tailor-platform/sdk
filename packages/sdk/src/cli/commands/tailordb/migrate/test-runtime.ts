@@ -235,30 +235,30 @@ export async function waitForCloneApplicationData(
 /**
  * Load generated JSONL seed rows for the tables in a baseline snapshot.
  * @param dataDir - Directory containing `<Type>.jsonl` files
- * @param typeNames - Baseline type names to load
+ * @param tableNames - Baseline type names to load
  * @param snapshot - Baseline schema used to remove fields introduced by pending migrations
  * @returns Seed rows keyed by table name
  */
 export function loadSnapshotSeedData(
   dataDir: string,
-  typeNames: string[],
+  tableNames: string[],
   snapshot?: NormalizedSchemaSnapshot,
 ): SeedData {
   const data: SeedData = {};
-  for (const typeName of typeNames) {
-    const snapshotType = snapshot?.tables[typeName];
-    const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
+  for (const tableName of tableNames) {
+    const snapshotType = snapshot?.tables[tableName];
+    const jsonlPath = path.join(dataDir, `${tableName}.jsonl`);
     let content: string;
     try {
       content = fs.readFileSync(jsonlPath, "utf8").trim();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        data[typeName] = [];
+        data[tableName] = [];
         continue;
       }
       throw error;
     }
-    data[typeName] = content
+    data[tableName] = content
       ? content.split("\n").map((line, index) => {
           let value: unknown;
           try {
@@ -317,40 +317,40 @@ function isJsonObject(value: JsonValue): value is JsonObject {
  */
 export function sortSeedTypesForSnapshot(snapshot: NormalizedSchemaSnapshot): {
   order: string[];
-  selfRefTypes: string[];
+  selfRefTables: string[];
 } {
-  const typeNames = Object.keys(snapshot.tables);
-  const available = new Set(typeNames);
+  const tableNames = Object.keys(snapshot.tables);
+  const available = new Set(tableNames);
   const dependencies = new Map<string, string[]>();
-  const selfRefTypes: string[] = [];
-  for (const [typeName, type] of Object.entries(snapshot.tables)) {
+  const selfRefTables: string[] = [];
+  for (const [tableName, type] of Object.entries(snapshot.tables)) {
     const referenced = new Set<string>();
     for (const field of Object.values(type.fields)) {
       const target = field.foreignKeyType;
       if (!target) continue;
-      if (target === typeName) {
-        selfRefTypes.push(typeName);
+      if (target === tableName) {
+        selfRefTables.push(tableName);
       } else if (available.has(target)) {
         referenced.add(target);
       }
     }
-    dependencies.set(typeName, [...referenced]);
+    dependencies.set(tableName, [...referenced]);
   }
 
   const visited = new Set<string>();
   const order: string[] = [];
-  const visit = (typeName: string): void => {
-    if (visited.has(typeName)) return;
-    visited.add(typeName);
-    for (const dependency of dependencies.get(typeName) ?? []) {
+  const visit = (tableName: string): void => {
+    if (visited.has(tableName)) return;
+    visited.add(tableName);
+    for (const dependency of dependencies.get(tableName) ?? []) {
       visit(dependency);
     }
-    order.push(typeName);
+    order.push(tableName);
   };
-  for (const typeName of typeNames) {
-    visit(typeName);
+  for (const tableName of tableNames) {
+    visit(tableName);
   }
-  return { order, selfRefTypes };
+  return { order, selfRefTables };
 }
 
 function temporaryWorkspaceName(): string {
@@ -707,9 +707,9 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         }),
       );
       for (const [namespace, snapshot] of seedSnapshots) {
-        const { order, selfRefTypes } = sortSeedTypesForSnapshot(snapshot);
+        const { order, selfRefTables } = sortSeedTypesForSnapshot(snapshot);
         const data = loadSnapshotSeedData(dataDir, order, snapshot);
-        const typesWithData = order.filter((typeName) => (data[typeName]?.length ?? 0) > 0);
+        const typesWithData = order.filter((tableName) => (data[tableName]?.length ?? 0) > 0);
         if (typesWithData.length === 0) continue;
         const bundled = await bundleSeedScript(
           namespace,
@@ -732,7 +732,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
             workspaceId: targetWorkspaceId,
             name: `migration-test-seed-${namespace}.ts`,
             code: bundled.bundledCode,
-            arg: { data: chunk.data, order: chunk.order, selfRefTypes, upsert: false },
+            arg: { data: chunk.data, order: chunk.order, selfRefTables, upsert: false },
             invoker: {
               namespace: auth.authNamespace,
               machineUserName: auth.machineUserName,

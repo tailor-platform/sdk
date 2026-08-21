@@ -91,10 +91,10 @@ export async function planTailorDB(context: PlanContext) {
   const executors = forRemoval
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
-  const executorUsedTypes = new Set(context.executorUsedTailorDBTypes ?? []);
+  const executorUsedTables = new Set(context.executorUsedTailorDBTables ?? []);
   for (const executor of executors) {
     if (executor.trigger.kind === "tailordb") {
-      executorUsedTypes.add(executor.trigger.typeName);
+      executorUsedTables.add(executor.trigger.tableName);
     }
   }
 
@@ -156,7 +156,7 @@ export async function planTailorDB(context: PlanContext) {
       client,
       workspaceId,
       tailordbs,
-      executorUsedTypes,
+      executorUsedTables,
       deletedServices,
       undefined,
       forceApplyAll,
@@ -189,7 +189,7 @@ export async function planTailorDB(context: PlanContext) {
       workspaceId,
       application,
       tailorDBInputs: tailordbs,
-      executorUsedTypes,
+      executorUsedTables,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
       ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
@@ -350,7 +350,7 @@ async function planTypes(
   client: OperatorClient,
   workspaceId: string,
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTypes: ReadonlySet<string>,
+  executorUsedTables: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
   filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
   forceApplyAll = false,
@@ -401,7 +401,7 @@ async function planTypes(
     for (const [tableName, type] of Object.entries(types)) {
       assertNoPublishEventsConflict({
         explicit: type.settings?.publishEvents,
-        subscribed: executorUsedTypes.has(tableName),
+        subscribed: executorUsedTables.has(tableName),
         conflict: publishEventsConflict.tailorDBType(tableName),
       });
     }
@@ -418,7 +418,7 @@ async function planTypes(
 
     for (const [tableName, tailordbTypeSnapshot] of Object.entries(types)) {
       const tailordbType = generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
-        subscribed: executorUsedTypes.has(tableName),
+        subscribed: executorUsedTables.has(tableName),
         namespaceGqlOperations: tailordb.config.gqlOperations,
       });
       const existingType = existingTypesMap.get(tableName);

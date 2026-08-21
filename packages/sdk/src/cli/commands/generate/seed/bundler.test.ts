@@ -17,7 +17,7 @@ const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 type SeedInput = {
   data: Record<string, Record<string, unknown>[]>;
   order: string[];
-  selfRefTypes: string[];
+  selfRefTables: string[];
   upsert?: boolean;
 };
 
@@ -88,11 +88,11 @@ describe("seed-bundler", () => {
   });
 
   describe("bundleSeedScript", () => {
-    test("returns correct namespace and typesIncluded", async () => {
+    test("returns correct namespace and tablesIncluded", async () => {
       const result = await bundleSeedScript("tailordb", ["User", "Order"]);
 
       expect(result.namespace).toBe("tailordb");
-      expect(result.typesIncluded).toEqual(["User", "Order"]);
+      expect(result.tablesIncluded).toEqual(["User", "Order"]);
       expect(typeof result.bundledCode).toBe("string");
     });
 
@@ -101,7 +101,7 @@ describe("seed-bundler", () => {
       ["Kysely and TailordbDialect", "tailordb", ["User"], ["Kysely", "TailordbDialect"]],
       ["batch insert logic", "tailordb", ["User"], ["insertInto", "BATCH_SIZE"]],
       ["error handling", "tailordb", ["User"], ["errors", "success"]],
-      ["self-referencing FK handling", "tailordb", ["Category"], ["selfRefTypes", "one-by-one"]],
+      ["self-referencing FK handling", "tailordb", ["Category"], ["selfRefTables", "one-by-one"]],
     ] as const)("generates code with %s", async (_label, namespace, types, snippets) => {
       const result = await bundleSeedScript(namespace, [...types]);
 
@@ -185,7 +185,7 @@ describe("seed script upsert behavior", () => {
         ],
       },
       order: ["User"],
-      selfRefTypes: [],
+      selfRefTables: [],
       upsert: true,
     });
 
@@ -204,7 +204,7 @@ describe("seed script upsert behavior", () => {
     const result = await main({
       data: { User: [{ id: "u1", name: "Alice" }] },
       order: ["User"],
-      selfRefTypes: [],
+      selfRefTables: [],
       upsert: false,
     });
 
@@ -225,7 +225,7 @@ describe("seed script upsert behavior", () => {
     const result = await main({
       data: { User: records },
       order: ["User"],
-      selfRefTypes: [],
+      selfRefTables: [],
       upsert: false,
     });
 
@@ -244,7 +244,7 @@ describe("seed script upsert behavior", () => {
         User: [{ id: "u2", name: "Bob" }],
       },
       order: ["User"],
-      selfRefTypes: [],
+      selfRefTables: [],
       upsert: true,
     });
 
@@ -263,7 +263,7 @@ describe("seed script upsert behavior", () => {
     const result = await main({
       data: { User: [{ id: "u1" }] },
       order: ["User"],
-      selfRefTypes: [],
+      selfRefTables: [],
       upsert: true,
     });
 
@@ -285,7 +285,7 @@ describe("seed script upsert behavior", () => {
         ],
       },
       order: ["Category"],
-      selfRefTypes: ["Category"],
+      selfRefTables: ["Category"],
       upsert: true,
     });
 

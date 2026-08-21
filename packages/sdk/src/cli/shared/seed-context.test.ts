@@ -134,7 +134,7 @@ describe("loadSeedContext", () => {
         namespace: "main-db",
         types: ["User", "Order"],
         dependencies: { User: [], Order: ["User"] },
-        selfRefTypes: ["Order"],
+        selfRefTables: ["Order"],
         requiredFields: { User: [], Order: ["user", "parent"] },
       },
     ]);
