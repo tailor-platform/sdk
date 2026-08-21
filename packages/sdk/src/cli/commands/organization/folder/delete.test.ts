@@ -30,11 +30,15 @@ const FOLDER_ID = "22222222-2222-2222-2222-222222222222";
 const argv = ["--organization-id", ORGANIZATION_ID, "--folder-id", FOLDER_ID, "--yes"];
 
 function mockClient(overrides: Record<string, unknown>) {
-  vi.mocked(initOperatorClient).mockResolvedValue({
+  const client = {
     getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "docs" } }),
     deleteOrganizationFolder: vi.fn().mockResolvedValue({}),
     ...overrides,
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+  };
+  vi.mocked(initOperatorClient).mockResolvedValue(
+    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
+  );
+  return client;
 }
 
 describe("organization folder delete", () => {
@@ -44,43 +48,40 @@ describe("organization folder delete", () => {
   });
 
   test("deletes the folder after the existence check succeeds", async () => {
-    const deleteOrganizationFolder = vi.fn().mockResolvedValue({});
-    mockClient({ deleteOrganizationFolder });
+    const client = mockClient({});
 
     const result = await runCommand(deleteCommand, argv);
 
     expect(result.error).toBeUndefined();
-    expect(deleteOrganizationFolder).toHaveBeenCalledWith({
+    expect(client.deleteOrganizationFolder).toHaveBeenCalledWith({
       organizationId: ORGANIZATION_ID,
       folderId: FOLDER_ID,
     });
     expect(logger.success).toHaveBeenCalledWith('Folder "docs" deleted successfully.');
   });
 
-  test("reports not found when the folder lookup returns NotFound", async () => {
-    const deleteOrganizationFolder = vi.fn().mockResolvedValue({});
-    mockClient({
-      getOrganizationFolder: vi.fn().mockRejectedValue(new ConnectError("missing", Code.NotFound)),
-      deleteOrganizationFolder,
+  test("reports not found when the lookup succeeds without a folder", async () => {
+    const client = mockClient({
+      getOrganizationFolder: vi.fn().mockResolvedValue({}),
     });
 
     const result = await runCommand(deleteCommand, argv);
 
     expect(result.error?.message).toBe(`Folder "${FOLDER_ID}" not found.`);
-    expect(deleteOrganizationFolder).not.toHaveBeenCalled();
+    expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
   });
 
-  test("propagates lookup failures other than NotFound", async () => {
-    const failure = new ConnectError("backend unavailable", Code.Unavailable);
-    const deleteOrganizationFolder = vi.fn().mockResolvedValue({});
-    mockClient({
+  test.each([
+    ["NotFound (missing organization)", new ConnectError("org missing", Code.NotFound)],
+    ["Unavailable", new ConnectError("backend unavailable", Code.Unavailable)],
+  ])("propagates lookup failures: %s", async (_name, failure) => {
+    const client = mockClient({
       getOrganizationFolder: vi.fn().mockRejectedValue(failure),
-      deleteOrganizationFolder,
     });
 
     const result = await runCommand(deleteCommand, argv);
 
     expect(result.error).toBe(failure);
-    expect(deleteOrganizationFolder).not.toHaveBeenCalled();
+    expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
   });
 });
