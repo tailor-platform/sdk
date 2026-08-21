@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Simplify build-only resolver bundle merging by removing leftover logic written for the pre-namespaced bundle key format.
+Simplify how build-only resolver bundles are merged across config files. No observable behavior change.
