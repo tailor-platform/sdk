@@ -30,7 +30,7 @@ import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_
  * @param {PendingMigration} migration - Pending migration
  * @returns {Set<string>} Set of affected table names
  */
-function getAffectedTypeNames(migration: PendingMigration): Set<string> {
+function getAffectedTableNames(migration: PendingMigration): Set<string> {
   const tableNames = new Set<string>();
   for (const change of migration.diff.changes) {
     tableNames.add(change.tableName);
@@ -171,12 +171,12 @@ export async function executeSingleMigrationPrePhase(
   // breaking table-level index changes.
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const preMigrationIndexChanges = buildPreMigrationIndexChangesMap([migration]);
-  const affectedTypes = getAffectedTypeNames(migration);
+  const affectedTables = getAffectedTableNames(migration);
   const createdBeforeMigration = new Set(processedTables.created);
 
   for (const create of changeSet.type.creates) {
     const tableName = create.request.tailordbType?.name;
-    if (!tableName || !affectedTypes.has(tableName) || createdBeforeMigration.has(tableName)) {
+    if (!tableName || !affectedTables.has(tableName) || createdBeforeMigration.has(tableName)) {
       continue;
     }
     const typeChanges = preMigrationChanges.get(tableName);
@@ -207,7 +207,7 @@ export async function executeSingleMigrationPrePhase(
 
   for (const create of changeSet.type.creates) {
     const tableName = create.request.tailordbType?.name;
-    if (!tableName || !affectedTypes.has(tableName) || !createdBeforeMigration.has(tableName)) {
+    if (!tableName || !affectedTables.has(tableName) || !createdBeforeMigration.has(tableName)) {
       continue;
     }
     const typeChanges = preMigrationChanges.get(tableName);
@@ -240,7 +240,7 @@ export async function executeSingleMigrationPrePhase(
 
   for (const update of changeSet.type.updates) {
     const tableName = update.request.tailordbType?.name;
-    if (!tableName || !affectedTypes.has(tableName)) continue;
+    if (!tableName || !affectedTables.has(tableName)) continue;
     const typeChanges = preMigrationChanges.get(tableName);
     const snapshotType = buildSnapshotTypeManifest(
       migration,
@@ -373,7 +373,7 @@ export async function executeSingleMigrationPostPhase(
     ...preMigrationChanges.keys(),
     ...preMigrationIndexChanges.keys(),
   ]);
-  const affectedTypes = getAffectedTypeNames(migration);
+  const affectedTables = getAffectedTableNames(migration);
 
   // Tables - apply schema as of migration N (= snapshot[N]) with all breaking
   // changes enforced. The prePhase sent the same schema with breaking fields
@@ -383,7 +383,7 @@ export async function executeSingleMigrationPostPhase(
     // For newly created tables that had pre-migration adjustments in this migration, send update with snapshot[N] values
     for (const create of changeSet.type.creates) {
       const tableName = create.request.tailordbType?.name;
-      if (!tableName || !affectedTypes.has(tableName) || !adjustedTypes.has(tableName)) {
+      if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
       }
       const snapshotType = buildSnapshotTypeManifest(
@@ -404,7 +404,7 @@ export async function executeSingleMigrationPostPhase(
     // For updated tables affected by this migration, send update with snapshot[N] values
     for (const update of changeSet.type.updates) {
       const tableName = update.request.tailordbType?.name;
-      if (!tableName || !affectedTypes.has(tableName) || !adjustedTypes.has(tableName)) {
+      if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
       }
       const snapshotType = buildSnapshotTypeManifest(
