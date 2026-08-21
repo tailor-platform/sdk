@@ -7,7 +7,8 @@ export type PrecompiledScriptKind =
   | "hooks.create"
   | "hooks.update"
   | "validate"
-  | "typeHook"
+  | "typeHook.create"
+  | "typeHook.update"
   | "typeValidate";
 
 /**

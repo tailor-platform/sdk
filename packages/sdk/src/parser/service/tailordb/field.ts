@@ -222,8 +222,11 @@ const convertToScriptExpr = (
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
-export const convertTypeHookToExpr = (fn: Function): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown, "typeHook");
+export const convertTypeHookToExpr = (fn: Function, op: "create" | "update"): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(
+    fn as (...args: never[]) => unknown,
+    `typeHook.${op}`,
+  );
   if (precompiledExpr) {
     return precompiledExpr;
   }

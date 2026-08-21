@@ -121,7 +121,7 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
     for (const op of ["create", "update"] as const) {
       const fn = toScriptFunction(type.metadata.typeHook[op]);
       if (fn) {
-        targets.push({ fn, kind: "typeHook" });
+        targets.push({ fn, kind: `typeHook.${op}` });
       }
     }
   }
@@ -467,7 +467,7 @@ async function bundleScriptTarget(args: {
         ? `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`
         : kind === "validate"
           ? `{ value: _value }`
-          : kind === "typeHook"
+          : kind === "typeHook.create" || kind === "typeHook.update"
             ? `{ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now }`
             : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues`;
   const inlineExpr = assertParsableExpression(`(${fnSource})(${argsObject})`, context);

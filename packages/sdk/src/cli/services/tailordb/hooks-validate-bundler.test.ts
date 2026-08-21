@@ -117,6 +117,27 @@ describe("precompileTailorDBTypeScripts", () => {
     expect(getPrecompiledScriptExpr(sharedHook, "hooks.update")).toContain("_oldValue");
   });
 
+  test("keeps per-operation expressions when one function serves both type hooks", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-type-hook-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedTypeHook = ({ input }: { input: Record<string, unknown> }) => input;
+    const type = {
+      name: "SharedType",
+      fields: {},
+      metadata: { typeHook: { create: sharedTypeHook, update: sharedTypeHook } },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedTypeHook, "typeHook.create")).toBeDefined();
+    expect(getPrecompiledScriptExpr(sharedTypeHook, "typeHook.update")).toBeDefined();
+  });
+
   test("uses an in-memory entry for scripts with source dependencies", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-entry-"));
     const sourceFile = join(tempDir, "type.ts");
