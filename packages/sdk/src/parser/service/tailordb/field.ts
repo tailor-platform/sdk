@@ -7,9 +7,8 @@ import type {
   DBFieldMetadata,
   RawRelationConfig,
 } from "#/configure/services/tailordb/types";
-import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
+import type { OperatorFieldConfig, ScriptExprKind } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
-import type { ScriptExprKind } from "./hook-args-object";
 
 type FieldScriptContext = {
   tableName: string;

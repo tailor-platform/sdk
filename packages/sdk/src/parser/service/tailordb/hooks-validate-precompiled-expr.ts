@@ -1,11 +1,12 @@
-import type { ScriptExprKind } from "./hook-args-object";
-import type { PrecompiledScriptExprKey } from "./types";
+import type { PrecompiledScriptExprKey, PrecompiledScriptExprMap, ScriptExprKind } from "./types";
 
-const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey = "__precompiledScriptExpr";
+const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey =
+  "@tailor-platform/sdk/precompiled-script-expr";
+const PRECOMPILED_EXPR_SYMBOL = Symbol.for(PRECOMPILED_EXPR_KEY);
 
 type AnyFunction = (...args: never[]) => unknown;
 
-const precompiledExprs = new WeakMap<AnyFunction, Partial<Record<ScriptExprKind, string>>>();
+const precompiledExprs = new WeakMap<AnyFunction, PrecompiledScriptExprMap>();
 
 /**
  * Store a precompiled script expression for a function.
@@ -30,10 +31,14 @@ export function getPrecompiledScriptExpr(
   fn: AnyFunction,
   kind: ScriptExprKind,
 ): string | undefined {
-  const entry = precompiledExprs.get(fn);
-  if (entry) {
-    return entry[kind];
+  const pinnedExprs = Object.hasOwn(fn, PRECOMPILED_EXPR_SYMBOL)
+    ? (fn as unknown as Record<symbol, unknown>)[PRECOMPILED_EXPR_SYMBOL]
+    : undefined;
+  if (typeof pinnedExprs === "object" && pinnedExprs !== null && Object.hasOwn(pinnedExprs, kind)) {
+    const pinnedExpr = (pinnedExprs as Partial<Record<ScriptExprKind, unknown>>)[kind];
+    if (typeof pinnedExpr === "string") {
+      return pinnedExpr;
+    }
   }
-  const value = (fn as unknown as Record<PrecompiledScriptExprKey, unknown>)[PRECOMPILED_EXPR_KEY];
-  return typeof value === "string" ? value : undefined;
+  return precompiledExprs.get(fn)?.[kind];
 }

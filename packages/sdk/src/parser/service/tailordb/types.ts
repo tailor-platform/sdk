@@ -176,11 +176,21 @@ export interface TailorDBType {
   typeValidateExpr?: string;
 }
 
+export type ScriptExprKind =
+  | "hooks.create"
+  | "hooks.update"
+  | "validate"
+  | "typeHook.create"
+  | "typeHook.update"
+  | "typeValidate";
+
+export type PrecompiledScriptExprMap = Partial<Record<ScriptExprKind, string>>;
+
 /**
- * Property key `./hooks-validate-precompiled-expr.ts` uses to read a pinned
- * script expression from a hook/validator function. Shared as a type so
- * `configure/services/tailordb/schema.ts` can pin the SDK's own built-in
- * hooks without a runtime import across the configure/parser boundary - a
- * mismatched literal on either side fails to typecheck.
+ * Registry key `./hooks-validate-precompiled-expr.ts` passes to `Symbol.for()`
+ * to read a role-keyed script expression map from a hook/validator function.
+ * Shared as a type so `configure/services/tailordb/schema.ts` can pin the
+ * SDK's own built-in hooks without a runtime import across the configure/parser
+ * boundary; a mismatched literal on either side fails to typecheck.
  */
-export type PrecompiledScriptExprKey = "__precompiledScriptExpr";
+export type PrecompiledScriptExprKey = "@tailor-platform/sdk/precompiled-script-expr";

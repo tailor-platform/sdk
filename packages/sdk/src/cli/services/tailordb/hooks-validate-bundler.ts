@@ -15,7 +15,7 @@ import {
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
-import type { ScriptExprKind } from "#/parser/service/tailordb/hook-args-object";
+import type { ScriptExprKind } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type { BindingPattern, Node, ParamPattern } from "@oxc-project/types";
 
