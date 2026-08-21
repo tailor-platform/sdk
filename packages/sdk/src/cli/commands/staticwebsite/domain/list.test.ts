@@ -2,7 +2,7 @@ import { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { domainListCommand } from "./list";
 
@@ -37,7 +37,7 @@ describe("staticwebsite domain list", () => {
       },
     ]);
     using stdout = captureStdout();
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     const result = await runCommand(domainListCommand, ["my-site"]);
@@ -56,7 +56,7 @@ describe("staticwebsite domain list", () => {
   test("emits an empty array in JSON mode when no custom domains exist", async () => {
     mockCustomDomains([]);
     using stdout = captureStdout();
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _stderr = captureStderr();
     using _json = jsonMode();
 
     const result = await runCommand(domainListCommand, ["my-site"]);
@@ -69,7 +69,7 @@ describe("staticwebsite domain list", () => {
   test("prints no stdout output when empty outside JSON mode", async () => {
     mockCustomDomains([]);
     using stdout = captureStdout();
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _stderr = captureStderr();
 
     const result = await runCommand(domainListCommand, ["my-site"]);
 
