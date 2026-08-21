@@ -31,6 +31,7 @@ export function createResolverService(
 ): ResolverService {
   const resolvers: Record<string, Resolver> = {};
   const defaultPermission = parseResolverDefaultPermission({ namespace, config });
+  let loaded = false;
 
   const loadResolverForFile = async (resolverFile: string): Promise<Resolver | undefined> => {
     try {
@@ -64,7 +65,7 @@ export function createResolverService(
       return resolvers;
     },
     loadResolvers: async () => {
-      if (Object.keys(resolvers).length > 0) {
+      if (loaded) {
         return;
       }
       if (config.files.length === 0) {
@@ -80,6 +81,7 @@ export function createResolverService(
       await Promise.all(resolverFiles.map((resolverFile) => loadResolverForFile(resolverFile)));
       assertUniqueResolverNames(resolvers, namespace);
       warnUndeclaredPermissions({ namespace, defaultPermission, resolvers });
+      loaded = true;
     },
   };
 }

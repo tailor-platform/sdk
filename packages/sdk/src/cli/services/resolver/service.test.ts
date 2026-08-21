@@ -67,6 +67,21 @@ export default createResolver({
     );
   });
 
+  test("does not reload after a load that yielded no resolvers", async () => {
+    const file = writeResolver("not-a-resolver.ts", `export default { not: "a resolver" };\n`);
+    const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    const service = createResolverService("ns", { files: [file] }, process.cwd());
+    await service.loadResolvers();
+    await service.loadResolvers();
+
+    const foundLogs = log.mock.calls.filter(([message]) =>
+      String(message).includes("resolver files"),
+    );
+    log.mockRestore();
+    expect(foundLogs).toHaveLength(1);
+  });
+
   test("rejects an invalid defaultPermission, naming the namespace", () => {
     expect(() =>
       createResolverService(
