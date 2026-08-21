@@ -1,6 +1,9 @@
 import { parseSync } from "oxc-parser";
 import { assertParsableExpression } from "#/utils/script-expr";
-import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
+import {
+  getPrecompiledScriptExpr,
+  type PrecompiledScriptKind,
+} from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,
@@ -16,7 +19,10 @@ type FieldScriptContext = {
 
 type ScriptFunction = (...args: never[]) => unknown;
 
-type ScriptContextKind = "hooks.create" | "hooks.update" | "validate";
+type ScriptContextKind = Extract<
+  PrecompiledScriptKind,
+  "hooks.create" | "hooks.update" | "validate"
+>;
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -198,7 +204,7 @@ const convertToScriptExpr = (
   kind: ScriptContextKind,
   context: FieldScriptContext | undefined,
 ): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn);
+  const precompiledExpr = getPrecompiledScriptExpr(fn, kind);
   if (precompiledExpr) {
     return precompiledExpr;
   }
@@ -217,7 +223,7 @@ const convertToScriptExpr = (
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
 export const convertTypeHookToExpr = (fn: Function): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown, "typeHook");
   if (precompiledExpr) {
     return precompiledExpr;
   }
@@ -230,7 +236,10 @@ export const convertTypeHookToExpr = (fn: Function): string => {
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
 export const convertTypeValidateToExpr = (fn: Function): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  const precompiledExpr = getPrecompiledScriptExpr(
+    fn as (...args: never[]) => unknown,
+    "typeValidate",
+  );
   if (precompiledExpr) {
     return precompiledExpr;
   }

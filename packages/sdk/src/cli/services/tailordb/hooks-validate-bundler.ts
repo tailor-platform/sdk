@@ -7,7 +7,10 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { PRINCIPAL_VAR, stringifyFunction } from "#/parser/service/tailordb/field";
-import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
+import {
+  setPrecompiledScriptExpr,
+  type PrecompiledScriptKind,
+} from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
@@ -18,7 +21,7 @@ type ScriptFunction = (...args: unknown[]) => unknown;
 
 type ScriptTarget = {
   fn: ScriptFunction;
-  kind: "hooks.create" | "hooks.update" | "validate" | "typeHook" | "typeValidate";
+  kind: PrecompiledScriptKind;
 };
 
 /** Binding found in the source file: either an import or a top-level declaration */
@@ -441,7 +444,7 @@ export function buildMinimalEntryFromResolved(
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
-  kind: "hooks.create" | "hooks.update" | "validate" | "typeHook" | "typeValidate";
+  kind: PrecompiledScriptKind;
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
   typeName: string;
@@ -566,10 +569,8 @@ export async function precompileTailorDBTypeScripts(
   }
   for (const [index, result] of results.entries()) {
     if (result.status === "fulfilled") {
-      setPrecompiledScriptExpr(
-        assertDefined(targets[index], `bundle target at index ${index} missing`).fn,
-        result.value,
-      );
+      const target = assertDefined(targets[index], `bundle target at index ${index} missing`);
+      setPrecompiledScriptExpr(target.fn, target.kind, result.value);
     }
   }
 }

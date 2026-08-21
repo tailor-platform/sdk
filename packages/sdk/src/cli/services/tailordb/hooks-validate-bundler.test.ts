@@ -88,7 +88,33 @@ describe("precompileTailorDBTypeScripts", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
 
-    expect(getPrecompiledScriptExpr(createHook)).toBeDefined();
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toBeDefined();
+  });
+
+  test("keeps per-role expressions when one function serves multiple roles", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-fn-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedHook = ({ now }: { now: string }) => now;
+    const type = {
+      name: "SharedType",
+      fields: {
+        touchedAt: {
+          type: "datetime",
+          metadata: { hooks: { create: sharedHook, update: sharedHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).not.toContain("_oldValue");
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.update")).toContain("_oldValue");
   });
 
   test("uses an in-memory entry for scripts with source dependencies", async () => {
@@ -115,7 +141,7 @@ describe("precompileTailorDBTypeScripts", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
 
-    expect(getPrecompiledScriptExpr(createHook)).toContain("module.exports.main");
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toContain("module.exports.main");
   });
 });
 
