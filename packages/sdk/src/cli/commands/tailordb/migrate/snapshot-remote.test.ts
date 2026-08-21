@@ -7,7 +7,7 @@ import {
   type TailorDBType as ProtoTailorDBType,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
-import { describe, expect, test, aroundEach, aroundAll, vi } from "vitest";
+import { describe, expect, test, aroundAll, vi } from "vitest";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import {
   loadSnapshot,
@@ -28,7 +28,6 @@ const TEST_MIGRATIONS_BASE = path.join(
 
 describe("snapshot", () => {
   const namespace = "tailordb";
-  let testDir: string;
 
   aroundAll(async (runSuite) => {
     await runSuite();
@@ -37,15 +36,6 @@ describe("snapshot", () => {
     } catch {
       // Ignore cleanup errors
     }
-  });
-
-  aroundEach(async (runTest) => {
-    testDir = path.join(
-      TEST_MIGRATIONS_BASE,
-      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    fs.mkdirSync(testDir, { recursive: true });
-    await runTest();
   });
 
   // ==========================================================================
@@ -1130,6 +1120,10 @@ describe("snapshot", () => {
       // user-authored form). compareRemoteWithSnapshot normalizes the snapshot
       // at entry so it becomes equivalent to a remote that has materialized
       // the platform-default scale of 6.
+      const testDir = path.join(
+        TEST_MIGRATIONS_BASE,
+        `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      );
       const snapshotPath = path.join(testDir, "decimal-default", SCHEMA_FILE_NAME);
       fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
       fs.writeFileSync(
