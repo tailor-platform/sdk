@@ -1,6 +1,6 @@
 import { parseSync } from "oxc-parser";
+import { getPrecompiledScriptExpr } from "#/types/precompiled-script-expr";
 import { assertParsableExpression } from "#/utils/script-expr";
-import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,

@@ -162,7 +162,7 @@ type CreateHookFn<TValue, TReturn> = (args: {
   now: Date;
 }) => TReturn;
 
-type UpdateHookFn<TValue, TReturn> = (args: {
+export type UpdateHookFn<TValue, TReturn> = (args: {
   input: TValue;
   oldValue: TReturn;
   invoker: TailorPrincipal | null;

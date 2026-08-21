@@ -9,6 +9,7 @@ import {
   type FieldParseArgs,
   type FieldParseInternalArgs,
 } from "#/runtime/field-parse";
+import { setPrecompiledScriptExpr } from "#/types/precompiled-script-expr";
 import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
@@ -20,6 +21,7 @@ import type {
   TailorDBTypeMetadata,
   RawRelationConfig,
   RelationType,
+  UpdateHookFn,
 } from "#/configure/services/tailordb/types";
 import type {
   FieldOptions,
@@ -1285,6 +1287,21 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
   );
 }
 
+// `Function.prototype.toString()` of this hook is embedded verbatim into deployed
+// schemas and migration diffs (see parser/service/tailordb/field.ts). Its source text
+// depends on how the SDK itself was built (e.g. minification), so it is pinned via
+// `setPrecompiledScriptExpr` to a fixed expression instead. Keep this literal in sync
+// with the "timestamps() updatedAt hook pin matches its natural expr" test in
+// parser/service/tailordb/field.precompiled.test.ts.
+const timestampsUpdatedAtHook: UpdateHookFn<string | Date | null, string | Date> = ({
+  input,
+  now,
+}) => input ?? now;
+setPrecompiledScriptExpr(
+  timestampsUpdatedAtHook,
+  "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })",
+);
+
 /** TailorDB schema builder utilities for defining tables and fields. */
 export const db = {
   table: dbTable,
@@ -1315,7 +1332,7 @@ export const db = {
       createdAt: datetime().default("now").description("Record creation timestamp"),
       updatedAt: datetime()
         .default("now")
-        .hooks({ update: ({ input, now }) => input ?? now })
+        .hooks({ update: timestampsUpdatedAtHook })
         .description("Record update timestamp"),
     }),
   },

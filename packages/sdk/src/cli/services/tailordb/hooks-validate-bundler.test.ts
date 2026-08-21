@@ -2,7 +2,7 @@ import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
-import { getPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { getPrecompiledScriptExpr } from "#/types/precompiled-script-expr";
 import {
   findUndefinedReferences,
   collectSourceBindings,

@@ -7,7 +7,10 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { PRINCIPAL_VAR, stringifyFunction } from "#/parser/service/tailordb/field";
-import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
+import {
+  getPrecompiledScriptExpr,
+  setPrecompiledScriptExpr,
+} from "#/types/precompiled-script-expr";
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
@@ -80,6 +83,10 @@ function isBindingPattern(param: ParamPattern): param is BindingPattern {
 
 function toScriptFunction(value: unknown): ScriptFunction | undefined {
   if (typeof value !== "function") return undefined;
+  // Already pinned (e.g. a built-in SDK hook, see `db.fields.timestamps()`) - bundling
+  // it again would derive a new expr from this build's `Function.prototype.toString()`
+  // output and overwrite the pin.
+  if (getPrecompiledScriptExpr(value as ScriptFunction)) return undefined;
   return value as unknown as ScriptFunction;
 }
 
