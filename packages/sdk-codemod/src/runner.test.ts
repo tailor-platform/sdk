@@ -311,6 +311,58 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("remaps finding lines to the final file when a later transform shifts lines", async () => {
+      const prependLinesPath = path.join(os.tmpdir(), "transform-prepend-lines.ts");
+      await fs.promises.writeFile(
+        prependLinesPath,
+        `export default function transform(source) {
+          if (!source.includes("legacyKey:")) return null;
+          return "const inserted = 1;\\nconst inserted2 = 2;\\n" + source;
+        }`,
+        "utf-8",
+      );
+      try {
+        const { tmpDir: dir } = await createTestProject(
+          "model.ts",
+          'const config = { legacyKey: "user" };\n',
+        );
+        tmpDir = dir;
+
+        const result = await runCodemods(
+          [
+            {
+              codemod: makeCodemod("test/detect", detectLegacyKeyPath, ["**/*.ts"], undefined, {
+                prompt: "Review remaining legacyKey usages.",
+              }),
+              scriptPath: detectLegacyKeyPath,
+            },
+            {
+              codemod: makeCodemod("test/prepend", prependLinesPath, ["**/*.ts"]),
+              scriptPath: prependLinesPath,
+            },
+          ],
+          dir,
+          false,
+        );
+
+        expect(result.llmReviews).toEqual([
+          expect.objectContaining({
+            codemodId: "test/detect",
+            findings: [
+              {
+                file: "model.ts",
+                line: 3,
+                message: "Review legacyKey usage.",
+                excerpt: 'const config = { legacyKey: "user" };',
+              },
+            ],
+          }),
+        ]);
+      } finally {
+        await fs.promises.rm(prependLinesPath, { force: true });
+      }
+    });
+
     test("runs a codemod's detector on its own transform's output", async () => {
       const { tmpDir: dir } = await createTestProject(
         "model.ts",

@@ -108,11 +108,17 @@ export interface CodemodPackage {
 export interface LlmReviewFinding {
   /** File path relative to the transformed project root. */
   file: string;
-  /** One-based line number in the file content the detector received. */
+  /**
+   * One-based line number in the final post-transform file content.
+   * Detector-reported lines are remapped through later codemods' rewrites.
+   */
   line: number;
   /** Short reason this location needs review. */
   message: string;
-  /** Trimmed source line or nearby expression for local context. */
+  /**
+   * Trimmed source line or nearby expression for local context, as the
+   * detector saw it — possibly before later codemods' rewrites.
+   */
   excerpt: string;
 }
 
