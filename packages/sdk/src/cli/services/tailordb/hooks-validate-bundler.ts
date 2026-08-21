@@ -7,7 +7,7 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { stringifyFunction } from "#/parser/service/tailordb/field";
-import { buildHookArgsObject } from "#/parser/service/tailordb/hook-args-object";
+import { buildHookCallArgs } from "#/parser/service/tailordb/hook-args-object";
 import {
   getPrecompiledScriptExpr,
   setPrecompiledScriptExpr,
@@ -466,10 +466,7 @@ async function bundleScriptTarget(args: {
         "so issues reported after an await are silently lost. Remove the async keyword.",
     );
   }
-  const inlineExpr = assertParsableExpression(
-    `(${fnSource})(${buildHookArgsObject(kind)})`,
-    context,
-  );
+  const inlineExpr = assertParsableExpression(`(${fnSource})(${buildHookCallArgs(kind)})`, context);
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
@@ -528,7 +525,7 @@ async function bundleScriptTarget(args: {
 
   const bundledCode = buildResult.output[0].code;
   return assertParsableExpression(
-    buildPrecompiledExpr(bundledCode, buildHookArgsObject(kind)),
+    buildPrecompiledExpr(bundledCode, buildHookCallArgs(kind)),
     context,
   );
 }

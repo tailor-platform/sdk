@@ -15,14 +15,15 @@ export type ScriptExprKind =
   | "typeValidate";
 
 /**
- * Build the call-argument object literal a script expression is invoked with, keyed
- * by the kind of hook/validator it wraps. Shared by every caller that assembles a
- * `(${normalized})(${argsObject})` script expression - both `field.ts` and the CLI's
+ * Build the call-argument list a script expression is invoked with, keyed by the
+ * kind of hook/validator it wraps. Shared by every caller that assembles a
+ * `(${normalized})(${callArgs})` script expression - both `field.ts` and the CLI's
  * hook-precompilation bundler - so the two never drift apart.
  * @param kind - Kind of hook/validator the expression is for
- * @returns The literal source of the object (and, for `typeValidate`, extra argument) passed to the call
+ * @returns The literal source of the arguments (an object literal for every kind
+ *   except `typeValidate`, which also appends a trailing `__issues` argument)
  */
-export function buildHookArgsObject(kind: ScriptExprKind): string {
+export function buildHookCallArgs(kind: ScriptExprKind): string {
   switch (kind) {
     case "validate":
       return `{ value: _value }`;

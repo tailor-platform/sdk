@@ -1,6 +1,6 @@
 import { parseSync } from "oxc-parser";
 import { assertParsableExpression } from "#/utils/script-expr";
-import { buildHookArgsObject } from "./hook-args-object";
+import { buildHookCallArgs } from "./hook-args-object";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
@@ -200,7 +200,7 @@ const convertToScriptExpr = (
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})(${buildHookArgsObject(kind)})`,
+    `(${normalized})(${buildHookCallArgs(kind)})`,
     formatScriptContext(kind, context),
   );
 };
@@ -212,10 +212,7 @@ export const convertTypeHookToExpr = (fn: Function): string => {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  return assertParsableExpression(
-    `(${normalized})(${buildHookArgsObject("typeHook")})`,
-    "type-hook",
-  );
+  return assertParsableExpression(`(${normalized})(${buildHookCallArgs("typeHook")})`, "type-hook");
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
@@ -226,7 +223,7 @@ export const convertTypeValidateToExpr = (fn: Function): string => {
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})(${buildHookArgsObject("typeValidate")})`,
+    `(${normalized})(${buildHookCallArgs("typeValidate")})`,
     "type-validate",
   );
 };

@@ -11,7 +11,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSync } from "oxc-parser";
 import {
-  buildHookArgsObject,
+  buildHookCallArgs,
   type ScriptExprKind,
 } from "../src/parser/service/tailordb/hook-args-object.ts";
 import { assertParsableExpression } from "../src/utils/script-expr.ts";
@@ -81,7 +81,7 @@ function renderTarget(target: PinTarget): string {
     target.declarationName,
   );
   const expr = assertParsableExpression(
-    `(${fnSource})(${buildHookArgsObject(target.kind)})`,
+    `(${fnSource})(${buildHookCallArgs(target.kind)})`,
     `${target.declarationName} in ${target.sourceFile}`,
   );
   const content =
