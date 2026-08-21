@@ -655,23 +655,7 @@ async function protoIdPConfigForComparison(
 }
 
 function normalizeComparableAuthIdPConfig(idpConfig: MessageInitShape<typeof AuthIDPConfigSchema>) {
-  const config = idpConfig.config?.config;
-  return toComparableProtoJson(AuthIDPConfigSchema, {
-    name: idpConfig.name,
-    authType: idpConfig.authType,
-    config:
-      config?.case === "oidc"
-        ? {
-            config: {
-              case: "oidc" as const,
-              value: {
-                ...config.value,
-                issuerUrl: config.value.issuerUrl || "",
-              },
-            },
-          }
-        : idpConfig.config,
-  });
+  return toComparableProtoJson(AuthIDPConfigSchema, idpConfig);
 }
 
 function areAuthIdPConfigsEqual(
