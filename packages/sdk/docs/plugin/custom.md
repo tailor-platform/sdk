@@ -548,8 +548,8 @@ for the `PluginConfigs` interface. Plugin authors should ship this in their pack
 
 ```typescript
 // your-plugin/types.d.ts (shipped with your plugin package)
-export {}; // required: without a top-level import/export, this file
-// augments the module instead of replacing its other exports
+export {}; // required: a top-level import/export makes this file augment
+// the module below instead of replacing its other exports
 
 declare module "@tailor-platform/sdk" {
   interface PluginConfigs<Fields extends string> {
@@ -584,8 +584,8 @@ interface. Plugin authors should ship this in their package's type definitions:
 
 ```typescript
 // your-plugin/types.d.ts (shipped with your plugin package)
-export {}; // required: without a top-level import/export, this file
-// augments the module instead of replacing its other exports
+export {}; // required: a top-level import/export makes this file augment
+// the module below instead of replacing its other exports
 
 declare module "@tailor-platform/sdk/plugin" {
   interface PluginConfigRegistry {

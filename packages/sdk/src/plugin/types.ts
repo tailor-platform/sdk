@@ -146,9 +146,9 @@ export interface PluginConfigs<Fields extends string = string> {
 }
 
 /**
- * Registry mapping a builtin plugin's `id` literal to its plugin-level
- * config type. Extend via declaration merging, keyed by the `id` string,
- * from the owning plugin's own module.
+ * Registry mapping a plugin's `id` literal to its plugin-level config type.
+ * Extend via declaration merging, keyed by the `id` string, from the
+ * owning plugin's own module.
  */
 // oxlint-disable-next-line no-empty-object-type
 export interface PluginConfigRegistry {}
