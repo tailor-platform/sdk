@@ -63,14 +63,14 @@ function extractDeclarationInitializerSource(sourceFile: string, declarationName
  * @returns The formatted source text.
  */
 function formatWithOxfmt(content: string, outputFile: string): string {
-  return execFileSync(
-    resolve(sdkRoot, "node_modules/.bin/oxfmt"),
-    [`--stdin-filepath=${outputFile}`],
-    {
-      input: content,
-      encoding: "utf-8",
-    },
-  );
+  // `execFileSync` doesn't resolve PATHEXT itself, so a bare "pnpm" (rather than
+  // invoking node_modules/.bin/oxfmt directly, which has the same problem) would
+  // fail to find the `pnpm.cmd` shim on Windows.
+  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  return execFileSync(pnpmBin, ["exec", "oxfmt", `--stdin-filepath=${outputFile}`], {
+    input: content,
+    encoding: "utf-8",
+  });
 }
 
 function renderTarget(target: PinTarget): string {

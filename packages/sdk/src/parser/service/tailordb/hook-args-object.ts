@@ -34,5 +34,7 @@ export function buildHookArgsObject(kind: ScriptExprKind): string {
       return `{ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now }`;
     case "typeValidate":
       return `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues`;
+    default:
+      throw new Error(`Unknown script expr kind: ${kind satisfies never}`);
   }
 }
