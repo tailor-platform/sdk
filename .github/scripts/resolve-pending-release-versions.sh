@@ -12,13 +12,13 @@
 # up here. See .agents/rules/deprecation.md.
 #
 # Pushes the fixup straight to the release PR branch through the GitHub
-# Contents API (like ensure-github-releases.sh) rather than a local git
-# commit/push, since this token has no configured git identity or signing key.
+# Contents API rather than a local git commit/push, since this token has no
+# configured git identity or signing key.
 #
 # `gh pr checkout` moves the working tree onto the release PR branch, but the
-# steps after this one (notably ensure-github-releases.sh) assume HEAD is
-# still the commit that triggered the workflow. Restore it on every exit path
-# so an unpublished release-PR commit is never mistaken for that trigger.
+# workflow trigger's commit is HEAD going into this step. Restore it on every
+# exit path so a later step never mistakes the release-PR branch for that
+# trigger commit.
 set -euo pipefail
 
 original_ref="$(git rev-parse HEAD)"

@@ -26,12 +26,15 @@ All workflow components must follow these rules:
 - **Job name uniqueness**: Job names must be unique across the entire project (not just within one file)
 - **mainJob required**: Every workflow must specify a `mainJob`
 
-| Rule                                           | Description                                                                                          |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `createWorkflow` result must be default export | Workflow files must export the workflow as default                                                   |
-| All jobs must be named exports                 | Includes `mainJob` and any job started via `.start()` (even if referenced only within the same file) |
-| Job `name` values must be unique               | Job names must be unique across the entire project                                                   |
-| `mainJob` is required                          | Every workflow must specify a `mainJob`                                                              |
+| Rule                                                                     | Description                                                                                                                                                                                    |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createWorkflow` result must be default export                           | Workflow files must export the workflow as default                                                                                                                                             |
+| All jobs must be named exports                                           | Includes `mainJob` and any job started via `.start()` (even if referenced only within the same file)                                                                                           |
+| Job `name` values must be unique                                         | Job names must be unique across the entire project                                                                                                                                             |
+| `mainJob` is required                                                    | Every workflow must specify a `mainJob`                                                                                                                                                        |
+| `createWorkflowJob`'s `name`/`body` must be written directly in the call | Not as a reference to a variable or the result of another function — the build cannot see through that indirection and fails instead of silently leaving the job out                           |
+| `.start()` must be called from within the calling job's `body`           | A function defined inside `body` may call it too, but not a function defined outside `body` — the build cannot see through that indirection and fails instead of silently leaving the call out |
+| Call `<job>.start()`, not `execJobFunction` directly                     | Calling `tailor.workflow.execJobFunction(...)` (or the `workflow` value imported from `@tailor-platform/sdk/runtime`) directly is not detected as a dependency and fails the build             |
 
 ## Creating a Workflow Job
 
@@ -481,7 +484,7 @@ An exact-key policy applies to dispatches whose runtime key equals the policy ke
 
 ### Referencing a Policy from a Workflow
 
-Pass the runtime key through the `executionPolicyKey` option on `job.start()` or `tailor.workflow.execJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
+Pass the runtime key through the `executionPolicyKey` option on `job.start()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -506,8 +509,6 @@ export const mainJob = createWorkflowJob({
   },
 });
 ```
-
-The same `executionPolicyKey` option is available on `tailor.workflow.execJobFunction(name, args, options)` for jobs invoked by name.
 
 ## Starting a Workflow from a Resolver
 

@@ -1,6 +1,5 @@
 {
   "name": "tailor-dev-kit",
-  "version": "0.0.0",
   "private": true,
   "description": "Tailor Development Kit - Workspace Root",
   "keywords": [],
@@ -67,5 +66,5 @@
   "engines": {
     "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@11.20.0"
+  "packageManager": "pnpm@11.22.0"
 }

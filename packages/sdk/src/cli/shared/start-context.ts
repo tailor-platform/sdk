@@ -13,6 +13,7 @@ export interface StartTarget {
 }
 
 export interface StartModuleBindings {
+  sourceFile: string;
   localBindings: Map<string, StartTarget>;
   exports: Map<string, StartTarget>;
 }
@@ -31,7 +32,11 @@ export function normalizeFilePath(filePath: string): string {
   return path.resolve(filePath.replace(/[?#].*$/, "")).replace(/\.(ts|mts|cts|js|mjs|cjs)$/, "");
 }
 
-function createModuleBindings(program: ReturnType<typeof parseSync>["program"], source: string) {
+function createModuleBindings(
+  sourceFile: string,
+  program: ReturnType<typeof parseSync>["program"],
+  source: string,
+) {
   const localBindings = new Map<string, StartTarget>();
   const exports = new Map<string, StartTarget>();
 
@@ -79,7 +84,7 @@ function createModuleBindings(program: ReturnType<typeof parseSync>["program"], 
     }
   }
 
-  return { localBindings, exports } satisfies StartModuleBindings;
+  return { sourceFile, localBindings, exports } satisfies StartModuleBindings;
 }
 
 /**
@@ -100,8 +105,15 @@ export async function buildStartContext(
   for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
     try {
       const source = await fs.promises.readFile(file, "utf-8");
-      const { program } = parseSync("input.ts", source);
-      modules.set(normalizeFilePath(file), createModuleBindings(program, source));
+      const { program, errors } = parseSync(file, source);
+      if (errors.length > 0) {
+        logger.warn(
+          `Failed to parse workflow file ${file}: ${errors.map((e) => e.message).join("; ")}`,
+          { mode: "stream" },
+        );
+        continue;
+      }
+      modules.set(normalizeFilePath(file), createModuleBindings(file, program, source));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {

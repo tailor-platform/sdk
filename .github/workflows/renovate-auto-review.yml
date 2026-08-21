@@ -29,7 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Review dependencies with Claude
-        uses: anthropics/claude-code-action@459ad358ae43fea66bfefd0a1f8d840b4b9791fb # v1.0.194
+        uses: anthropics/claude-code-action@5ee796a55f92566ecd7e39d70dd613abcbea0d7c # v1.0.197
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: "renovate[bot]"
@@ -408,7 +408,7 @@ jobs:
 
       - name: Fix Recommended Actions heading with Claude
         if: always() && steps.validate-heading.outputs.needs_fix == 'true'
-        uses: anthropics/claude-code-action@459ad358ae43fea66bfefd0a1f8d840b4b9791fb # v1.0.194
+        uses: anthropics/claude-code-action@5ee796a55f92566ecd7e39d70dd613abcbea0d7c # v1.0.197
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: "renovate[bot]"
