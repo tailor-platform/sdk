@@ -193,4 +193,4 @@ export type PrecompiledScriptExprMap = Partial<Record<ScriptExprKind, string>>;
  * SDK's own built-in hooks without a runtime import across the configure/parser
  * boundary; a mismatched literal on either side fails to typecheck.
  */
-export type PrecompiledScriptExprKey = "@tailor-platform/sdk/precompiled-script-expr";
+export type PrecompiledScriptExprKey = "tailor-platform/sdk:precompiled-script-expr";

@@ -1,7 +1,7 @@
 import type { PrecompiledScriptExprKey, PrecompiledScriptExprMap, ScriptExprKind } from "./types";
 
 const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey =
-  "@tailor-platform/sdk/precompiled-script-expr";
+  "tailor-platform/sdk:precompiled-script-expr";
 const PRECOMPILED_EXPR_SYMBOL = Symbol.for(PRECOMPILED_EXPR_KEY);
 
 type AnyFunction = (...args: never[]) => unknown;

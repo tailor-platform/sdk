@@ -1300,7 +1300,7 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 type TimestampsUpdatedAtHookFn = UpdateHookFn<string | Date | null, string | Date>;
 const timestampsUpdatedAtHook: TimestampsUpdatedAtHookFn = ({ input, now }) => input ?? now;
 const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey =
-  "@tailor-platform/sdk/precompiled-script-expr";
+  "tailor-platform/sdk:precompiled-script-expr";
 const PRECOMPILED_EXPR_SYMBOL = Symbol.for(PRECOMPILED_EXPR_KEY);
 (timestampsUpdatedAtHook as unknown as Record<symbol, PrecompiledScriptExprMap>)[
   PRECOMPILED_EXPR_SYMBOL

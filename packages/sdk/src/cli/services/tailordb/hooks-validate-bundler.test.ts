@@ -148,7 +148,7 @@ describe("precompileTailorDBTypeScripts", () => {
       __precompiledScriptExpr: { "hooks.create": "USER_VALUE" },
     });
     const inheritedPin = {
-      [Symbol.for("@tailor-platform/sdk/precompiled-script-expr")]: {
+      [Symbol.for("tailor-platform/sdk:precompiled-script-expr")]: {
         "hooks.create": "INHERITED_VALUE",
       },
     };
