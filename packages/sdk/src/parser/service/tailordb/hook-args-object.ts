@@ -1,7 +1,3 @@
-// Zero-dependency so `scripts/generate-precompiled-hooks.ts` can import it directly
-// under plain Node (unlike the rest of this module tree, whose `#/`-aliased imports
-// only resolve under vitest/tsdown/tsc, not Node's own ESM loader).
-
 // Identifier the table-level wrapper (buildTypeScripts in type-script.ts) binds
 // tailorPrincipalMap's result to, at most once per table, so per-hook exprs
 // below can reference it instead of re-embedding the full mapping on every hook.

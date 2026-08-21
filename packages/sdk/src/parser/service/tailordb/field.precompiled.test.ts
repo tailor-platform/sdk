@@ -40,8 +40,8 @@ describe("parseFieldConfig precompiled expressions", () => {
   // of the built-in hook - which changes across SDK builds (e.g. minification) -
   // never leaks into deployed schemas or migration diffs. This asserts the pinned
   // literal still matches what the same source would naturally produce, so a
-  // future change to the args-object template above is caught here instead of
-  // silently diverging from the pin.
+  // future change to the call-args template in hook-args-object.ts is caught here
+  // instead of silently diverging from the pin.
   test("timestamps() updatedAt hook pin matches its natural expr", () => {
     const updatedAtHook: UpdateHookFn<string | Date | null, string | Date> = ({ input, now }) =>
       input ?? now;
