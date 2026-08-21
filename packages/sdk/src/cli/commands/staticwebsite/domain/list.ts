@@ -36,6 +36,9 @@ export const domainListCommand = defineAppCommand({
 
       if (customDomains.length === 0) {
         logger.info("No custom domains found.");
+        if (logger.jsonMode) {
+          logger.out([]);
+        }
         return;
       }
 
