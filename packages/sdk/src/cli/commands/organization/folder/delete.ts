@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
 import { confirmationArgs, folderArgs, organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
@@ -57,8 +58,11 @@ export const deleteCommand = defineAppCommand({
         folderId: args["folder-id"],
       });
       folderName = response.folder?.name;
-    } catch {
-      throw new Error(`Folder "${args["folder-id"]}" not found.`);
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        throw new Error(`Folder "${args["folder-id"]}" not found.`, { cause: error });
+      }
+      throw error;
     }
 
     // Confirm deletion if not forced
