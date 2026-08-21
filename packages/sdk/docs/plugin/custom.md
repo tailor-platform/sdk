@@ -548,6 +548,9 @@ for the `PluginConfigs` interface. Plugin authors should ship this in their pack
 
 ```typescript
 // your-plugin/types.d.ts (shipped with your plugin package)
+export {}; // required: a top-level import/export makes this file augment
+// the module below instead of replacing its other exports
+
 declare module "@tailor-platform/sdk" {
   interface PluginConfigs<Fields extends string> {
     "@example/soft-delete": {
@@ -561,6 +564,8 @@ declare module "@tailor-platform/sdk" {
 The `Fields` type parameter provides field names from the table being configured, enabling field-aware configurations:
 
 ```typescript
+export {};
+
 declare module "@tailor-platform/sdk" {
   interface PluginConfigs<Fields extends string> {
     "@example/i18n": {
@@ -569,3 +574,41 @@ declare module "@tailor-platform/sdk" {
   }
 }
 ```
+
+### Resolving plugin-level config from a `Plugin[]` array (declaration merging)
+
+`PluginConfig` is already available inside your own plugin's hooks via `context.pluginConfig`.
+If other code instead needs to look up your plugin's config from a `Plugin[]` array by `id` —
+without importing your plugin's config type — register it on the `PluginConfigRegistry`
+interface. Plugin authors should ship this in their package's type definitions:
+
+```typescript
+// your-plugin/types.d.ts (shipped with your plugin package)
+export {}; // required: a top-level import/export makes this file augment
+// the module below instead of replacing its other exports
+
+declare module "@tailor-platform/sdk/plugin" {
+  interface PluginConfigRegistry {
+    "@example/soft-delete": {
+      archiveTablePrefix?: string;
+    };
+  }
+}
+```
+
+This only registers the type; it does not provide a function to read it. Callers resolve a
+registered config from `Plugin[]` using the public `Plugin` and `PluginConfigRegistry` types:
+
+```typescript
+import type { Plugin } from "@tailor-platform/sdk";
+import type { PluginConfigRegistry } from "@tailor-platform/sdk/plugin";
+
+function resolvePluginConfig<Id extends keyof PluginConfigRegistry>(
+  plugins: readonly Plugin[],
+  id: Id,
+): PluginConfigRegistry[Id] | undefined {
+  return plugins.find((p) => p.id === id)?.pluginConfig as PluginConfigRegistry[Id] | undefined;
+}
+```
+
+An `id` that isn't registered fails to compile, instead of silently resolving to `unknown`.

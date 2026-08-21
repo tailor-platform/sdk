@@ -23,7 +23,11 @@ import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
-import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
+import {
+  KyselyGeneratorID,
+  DEFAULT_KYSELY_TYPES_DIST_PATH,
+} from "#/plugin/builtin/kysely-type/index";
+import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import {
   SCRIPT_DB_TYPES_FILE_NAME,
@@ -134,7 +138,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
             "It imports the project's generated Kysely types, so there is nothing to refresh.",
         );
       }
-      const generatedTypesPath = resolveKyselyTypesPath(assertDefined(kyselyPlugin, "plugin"));
+      const generatedTypesPath = resolveKyselyTypesPath(plugins);
       getDBImportPath = toImportSpecifier(path.relative(scriptDir, generatedTypesPath));
       if (!fs.existsSync(generatedTypesPath)) {
         logger.warn(
@@ -288,12 +292,13 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
  * Resolve the absolute path of the kysely-type plugin's generated types file.
  * The plugin's relative `distPath` resolves against the working directory,
  * matching where `tailor generate` writes it.
- * @param plugin - The configured kysely-type plugin instance
+ * @param plugins - The project's configured plugins
  * @returns Absolute path of the generated types file
  */
-function resolveKyselyTypesPath(plugin: Plugin): string {
-  const distPath = (plugin as { pluginConfig?: { distPath?: unknown } }).pluginConfig?.distPath;
-  if (typeof distPath !== "string" || distPath.length === 0) {
+function resolveKyselyTypesPath(plugins: readonly Plugin[]): string {
+  const distPath =
+    resolvePluginConfig(plugins, KyselyGeneratorID)?.distPath ?? DEFAULT_KYSELY_TYPES_DIST_PATH;
+  if (distPath.length === 0) {
     throw new Error("kyselyTypePlugin is configured without a distPath; cannot locate getDB().");
   }
   return path.resolve(distPath);
