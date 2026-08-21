@@ -10,7 +10,11 @@ import {
   formatMigrationNumber,
   type SchemaSnapshot,
 } from "./snapshot";
-import { writeDiffToDir, writeSchemaToDir } from "./test-helpers/snapshot-test";
+import {
+  cleanupTestMigrationsBase,
+  writeDiffToDir,
+  writeSchemaToDir,
+} from "./test-helpers/snapshot-test";
 import type { MigrationDiff } from "./diff-calculator";
 
 const TEST_MIGRATIONS_BASE = path.join(
@@ -25,11 +29,7 @@ describe("snapshot", () => {
 
   aroundAll(async (runSuite) => {
     await runSuite();
-    try {
-      fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
+    cleanupTestMigrationsBase(TEST_MIGRATIONS_BASE);
   });
 
   aroundEach(async (runTest) => {

@@ -12,6 +12,15 @@ import {
 import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
 import type { MigrationDiff } from "../diff-calculator";
 
+export function cleanupTestMigrationsBase(baseDir: string): void {
+  try {
+    fs.rmSync(baseDir, { recursive: true, force: true });
+    fs.rmdirSync(path.dirname(baseDir));
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
 // compareSnapshots takes normalized snapshots; tests build raw fixtures.
 export function compareRawSnapshots(
   previous: SchemaSnapshot,

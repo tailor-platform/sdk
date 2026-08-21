@@ -19,6 +19,7 @@ import {
   type RemoteGqlPermission,
   type SchemaSnapshot,
 } from "./snapshot";
+import { cleanupTestMigrationsBase } from "./test-helpers/snapshot-test";
 
 const TEST_MIGRATIONS_BASE = path.join(
   __dirname,
@@ -31,11 +32,7 @@ describe("snapshot", () => {
 
   aroundAll(async (runSuite) => {
     await runSuite();
-    try {
-      fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
+    cleanupTestMigrationsBase(TEST_MIGRATIONS_BASE);
   });
 
   // ==========================================================================
