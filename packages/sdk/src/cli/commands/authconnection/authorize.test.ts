@@ -50,7 +50,7 @@ aroundEach(async (runTest) => {
   });
   clientMocks.initOperatorClient.mockResolvedValue({
     listAuthConnections: listAuthConnectionsMock,
-  } as unknown as ClientModule.OperatorClient);
+  });
 
   try {
     await runTest();
