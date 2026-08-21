@@ -45,12 +45,12 @@ function mockLoadResult(result: FakeLoadResult): void {
   } as LoadedApplicationNamespaces);
 }
 
-function fakeService(namespace: string, typeNames: string[]) {
+function fakeService(namespace: string, tableNames: string[]) {
   return {
     namespace,
-    types: Object.fromEntries(typeNames.map((name) => [name, fakeType(name, {})])),
+    types: Object.fromEntries(tableNames.map((name) => [name, fakeType(name, {})])),
     typeSourceInfo: Object.fromEntries(
-      typeNames.map((name) => [name, { filePath: `${namespace}/${name}.ts`, exportName: name }]),
+      tableNames.map((name) => [name, { filePath: `${namespace}/${name}.ts`, exportName: name }]),
     ),
   };
 }

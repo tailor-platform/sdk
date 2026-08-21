@@ -124,21 +124,21 @@ describe("migration flow: creates of types predating the pending migrations", ()
     return { name, pluralForm: `${name.toLowerCase()}s`, fields };
   }
 
-  function typeCreate(typeName: string) {
+  function typeCreate(tableName: string) {
     return {
-      name: typeName,
+      name: tableName,
       request: {
         workspaceId: "test-workspace",
         namespaceName: "test-ns",
         tailordbType: {
-          name: typeName,
+          name: tableName,
           schema: {
             fields: { name: { type: "string", required: true } },
           },
         },
       },
       metaRequest: {
-        trn: `trn:v1:workspace:test-workspace:tailordb:test-ns:type:${typeName}`,
+        trn: `trn:v1:workspace:test-workspace:tailordb:test-ns:type:${tableName}`,
         labels: { "sdk-name": "test-app" },
       },
     };
@@ -175,12 +175,12 @@ describe("migration flow: creates of types predating the pending migrations", ()
           lines: () => [],
         },
         gqlPermission: {
-          creates: (options.gqlPermissionTypes ?? []).map((typeName) => ({
-            name: typeName,
+          creates: (options.gqlPermissionTypes ?? []).map((tableName) => ({
+            name: tableName,
             request: {
               workspaceId: "test-workspace",
               namespaceName: "test-ns",
-              typeName,
+              typeName: tableName,
               permission: {},
             },
           })),
@@ -253,11 +253,12 @@ describe("migration flow: creates of types predating the pending migrations", ()
     });
   }
 
-  function createOrderOf(client: OperatorClient, typeName: string) {
+  function createOrderOf(client: OperatorClient, tableName: string) {
     const index = vi
       .mocked(client.createTailorDBType)
       .mock.calls.findIndex(
-        (call) => (call[0] as { tailordbType?: { name?: string } }).tailordbType?.name === typeName,
+        (call) =>
+          (call[0] as { tailordbType?: { name?: string } }).tailordbType?.name === tableName,
       );
     return vi.mocked(client.createTailorDBType).mock.invocationCallOrder[index];
   }

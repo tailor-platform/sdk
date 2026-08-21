@@ -16,12 +16,12 @@ type ListTailorDBTypesResult = {
   nextPageToken?: string;
 };
 
-function localService(namespace: string, typeNames: string[]) {
+function localService(namespace: string, tableNames: string[]) {
   return {
     namespace,
-    types: Object.fromEntries(typeNames.map((tableName) => [tableName, {}])),
+    types: Object.fromEntries(tableNames.map((tableName) => [tableName, {}])),
     typeSourceInfo: Object.fromEntries(
-      typeNames.map((tableName) => [
+      tableNames.map((tableName) => [
         tableName,
         {
           filePath: `/app/${namespace}/${tableName}.ts`,
