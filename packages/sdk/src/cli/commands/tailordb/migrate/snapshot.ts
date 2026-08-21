@@ -33,6 +33,7 @@ export type {
 
 export * from "./snapshot-comparison";
 export * from "./snapshot-files";
+export * from "./snapshot-migrations";
 export * from "./snapshot-local";
 export {
   DEFAULT_DECIMAL_SCALE,
