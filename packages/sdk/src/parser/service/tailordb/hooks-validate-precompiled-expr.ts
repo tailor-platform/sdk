@@ -1,4 +1,6 @@
-const PRECOMPILED_EXPR_KEY = "__precompiledScriptExpr";
+import type { PrecompiledScriptExprKey } from "./types";
+
+const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey = "__precompiledScriptExpr";
 
 type AnyFunction = (...args: never[]) => unknown;
 

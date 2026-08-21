@@ -10,7 +10,7 @@ import { PRINCIPAL_VAR, stringifyFunction } from "#/parser/service/tailordb/fiel
 import {
   getPrecompiledScriptExpr,
   setPrecompiledScriptExpr,
-} from "#/types/precompiled-script-expr";
+} from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";

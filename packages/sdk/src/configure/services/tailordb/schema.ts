@@ -9,7 +9,6 @@ import {
   type FieldParseArgs,
   type FieldParseInternalArgs,
 } from "#/runtime/field-parse";
-import { setPrecompiledScriptExpr } from "#/types/precompiled-script-expr";
 import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
@@ -30,6 +29,7 @@ import type {
   TailorToTs,
   FieldValidateInput,
 } from "#/configure/types/field.types";
+import type { PrecompiledScriptExprKey } from "#/parser/service/tailordb/types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
 import type { InferredAttributes } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
@@ -1288,19 +1288,22 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 }
 
 // `Function.prototype.toString()` of this hook is embedded verbatim into deployed
-// schemas and migration diffs (see parser/service/tailordb/field.ts). Its source text
-// depends on how the SDK itself was built (e.g. minification), so it is pinned via
-// `setPrecompiledScriptExpr` to a fixed expression instead. Keep this literal in sync
-// with the "timestamps() updatedAt hook pin matches its natural expr" test in
-// parser/service/tailordb/field.precompiled.test.ts.
+// schemas and migration diffs (see parser/service/tailordb/hooks-validate-precompiled-expr.ts
+// and field.ts). Its source text depends on how the SDK itself was built (e.g.
+// minification), so a fixed expression is pinned onto it directly here - configure
+// cannot import parser's `setPrecompiledScriptExpr` runtime helper across the
+// module boundary, only the `PrecompiledScriptExprKey` type it's keyed by. Keep
+// this literal in sync with the "timestamps() updatedAt hook pin matches its
+// natural expr" test in parser/service/tailordb/field.precompiled.test.ts.
 const timestampsUpdatedAtHook: UpdateHookFn<string | Date | null, string | Date> = ({
   input,
   now,
 }) => input ?? now;
-setPrecompiledScriptExpr(
-  timestampsUpdatedAtHook,
-  "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })",
-);
+const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey = "__precompiledScriptExpr";
+(timestampsUpdatedAtHook as unknown as Record<PrecompiledScriptExprKey, string>)[
+  PRECOMPILED_EXPR_KEY
+] =
+  "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })";
 
 /** TailorDB schema builder utilities for defining tables and fields. */
 export const db = {
