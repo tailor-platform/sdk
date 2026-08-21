@@ -5,7 +5,7 @@
 // extracts the exact source text of each target declaration via oxc-parser and wraps
 // it with the same call-argument template `field.ts` uses for user-authored hooks, so
 // there is exactly one place that defines each hook's behavior.
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,11 +63,13 @@ function extractDeclarationInitializerSource(sourceFile: string, declarationName
  * @returns The formatted source text.
  */
 function formatWithOxfmt(content: string, outputFile: string): string {
-  // `execFileSync` doesn't resolve PATHEXT itself, so a bare "pnpm" (rather than
-  // invoking node_modules/.bin/oxfmt directly, which has the same problem) would
-  // fail to find the `pnpm.cmd` shim on Windows.
-  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  return execFileSync(pnpmBin, ["exec", "oxfmt", `--stdin-filepath=${outputFile}`], {
+  // Runs through the platform shell (`execSync`, not `execFileSync`) so pnpm's
+  // `.cmd` shim resolves on Windows - `execFileSync` can't launch a `.cmd` file
+  // directly (EINVAL) without `shell: true`, and passing `shell: true` alongside
+  // a separate `args` array is what Node's execFile* family deprecates instead.
+  // `outputFile` is always one of this file's own hardcoded TARGETS paths, never
+  // externally supplied, so building this literally is safe.
+  return execSync(`pnpm exec oxfmt --stdin-filepath=${JSON.stringify(outputFile)}`, {
     input: content,
     encoding: "utf-8",
   });
