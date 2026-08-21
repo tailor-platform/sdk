@@ -105,12 +105,12 @@ describe("migration flow: namespaces without pending migrations", () => {
     } as unknown as OperatorClient;
   }
 
-  function typeRequest(namespaceName: string, typeName: string) {
+  function typeRequest(namespaceName: string, tableName: string) {
     return {
       workspaceId: "test-workspace",
       namespaceName,
       tailordbType: {
-        name: typeName,
+        name: tableName,
         schema: {
           fields: { name: { type: "string", required: true } },
         },
@@ -206,7 +206,7 @@ describe("migration flow: namespaces without pending migrations", () => {
           authService: undefined,
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
         checkpointRepairs: [],

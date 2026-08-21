@@ -85,7 +85,7 @@ describe("processIdpUser", () => {
         clientName: "default",
       },
       userProfile: {
-        typeName: "User",
+        tableName: "User",
         namespace: "main-db",
         usernameField: "email",
       },
@@ -98,14 +98,14 @@ describe("processIdpUser", () => {
       idpNamespace: "my-idp",
       schema: {
         usernameField: "email",
-        userTypeName: "User",
+        userTableName: "User",
       },
     });
   });
 });
 
 describe("generateIdpUserSchemaFile", () => {
-  const options = { usernameField: "email", userTypeName: "User" };
+  const options = { usernameField: "email", userTableName: "User" };
 
   test("emits the userProfile foreign key by default", () => {
     const output = generateIdpUserSchemaFile(options);

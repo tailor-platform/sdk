@@ -54,8 +54,8 @@ describe("FileUtilsPlugin", () => {
         ["receipt", "form"],
       ],
       ["should return empty array when no files are present", "User", undefined, []],
-    ])("%s", async (_name, typeName, files, expectedFields) => {
-      let type = db.table(typeName, { name: db.string() });
+    ])("%s", async (_name, tableName, files, expectedFields) => {
+      let type = db.table(tableName, { name: db.string() });
       if (files) type = type.files(files);
 
       const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));

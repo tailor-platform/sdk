@@ -280,7 +280,7 @@ export function recordCreatedTrigger<T extends TailorDBType>(
   return {
     kind: "tailordb",
     events: ["tailordb.type_record.created"],
-    typeName: type.name,
+    tableName: type.name,
     condition,
     __args: {} as RecordCreatedArgs<T>,
   };
@@ -299,7 +299,7 @@ export function recordUpdatedTrigger<T extends TailorDBType>(
   return {
     kind: "tailordb",
     events: ["tailordb.type_record.updated"],
-    typeName: type.name,
+    tableName: type.name,
     condition,
     __args: {} as RecordUpdatedArgs<T>,
   };
@@ -318,7 +318,7 @@ export function recordDeletedTrigger<T extends TailorDBType>(
   return {
     kind: "tailordb",
     events: ["tailordb.type_record.deleted"],
-    typeName: type.name,
+    tableName: type.name,
     condition,
     __args: {} as RecordDeletedArgs<T>,
   };
@@ -345,7 +345,7 @@ export function recordTrigger<
   return {
     kind: "tailordb",
     events: events.map((k) => recordEventMap[k]),
-    typeName: type.name,
+    tableName: type.name,
     condition,
     __args: {} as RecordMultiArgs<T, K>,
   };

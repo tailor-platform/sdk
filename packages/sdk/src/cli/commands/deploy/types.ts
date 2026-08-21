@@ -30,7 +30,7 @@ export interface PlanContext {
    */
   idpUserTriggerTargets?: ReadonlySet<string>;
   /** Type names that have at least one executor with a TailorDB record trigger. */
-  executorUsedTailorDBTypes?: ReadonlySet<string>;
+  executorUsedTailorDBTables?: ReadonlySet<string>;
   /** Resolver names that have at least one executor with a resolverExecuted trigger. */
   executorUsedResolvers?: ReadonlySet<string>;
   /** Static website names planned by any config in the same deploy run. */

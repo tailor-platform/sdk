@@ -104,7 +104,7 @@ export interface TailorDBFileAPI {
   /**
    * Upload a file to TailorDB.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB table name
+   * @param tableName - TailorDB table name
    * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @param data - File contents
@@ -113,7 +113,7 @@ export interface TailorDBFileAPI {
    */
   upload(
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
     data: string | ArrayBuffer | Uint8Array | number[],
@@ -126,14 +126,14 @@ export interface TailorDBFileAPI {
    * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
    * exceeds 10MB — use {@link downloadStream} for large files.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB table name
+   * @param tableName - TailorDB table name
    * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Bytes and metadata for the file
    */
   download(
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
   ): Promise<FileDownloadResponse>;
@@ -144,14 +144,14 @@ export interface TailorDBFileAPI {
    * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
    * exceeds 10MB — use {@link downloadStream} for large files.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB table name
+   * @param tableName - TailorDB table name
    * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Base64-encoded contents and metadata for the file
    */
   downloadAsBase64(
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
   ): Promise<FileDownloadAsBase64Response>;
@@ -159,24 +159,24 @@ export interface TailorDBFileAPI {
   /**
    * Delete a file from TailorDB.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB table name
+   * @param tableName - TailorDB table name
    * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Resolves once the file has been deleted
    */
-  delete(namespace: string, typeName: string, fieldName: string, recordId: string): Promise<void>;
+  delete(namespace: string, tableName: string, fieldName: string, recordId: string): Promise<void>;
 
   /**
    * Get file metadata from TailorDB.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB table name
+   * @param tableName - TailorDB table name
    * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns Metadata for the stored file
    */
   getMetadata(
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
   ): Promise<FileMetadata>;
@@ -184,14 +184,14 @@ export interface TailorDBFileAPI {
   /**
    * Download a file as a ReadableStream.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB table name
+   * @param tableName - TailorDB table name
    * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @returns ReadableStream body and metadata for the file
    */
   downloadStream(
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
   ): Promise<FileDownloadStreamResponse>;
@@ -199,7 +199,7 @@ export interface TailorDBFileAPI {
   /**
    * Upload a file using a ReadableStream.
    * @param namespace - TailorDB namespace
-   * @param typeName - TailorDB table name
+   * @param tableName - TailorDB table name
    * @param fieldName - File field name on the table
    * @param recordId - Record ID owning the field
    * @param readableStream - ReadableStream providing the file data
@@ -208,7 +208,7 @@ export interface TailorDBFileAPI {
    */
   uploadStream(
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
     readableStream: ReadableStream<Uint8Array | ArrayBuffer>,

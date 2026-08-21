@@ -10,7 +10,7 @@ export type TailorDBTrigger = {
     | "tailordb.type_record.deleted"
   )[];
   /** TailorDB table name to watch for events */
-  typeName: string;
+  tableName: string;
   /** Condition function to filter events */
   condition?: Function | undefined;
 };

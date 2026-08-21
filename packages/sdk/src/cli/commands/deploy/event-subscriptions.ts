@@ -190,12 +190,12 @@ export function ownedSubscriptions(
  * @param subscriptions - Subscriptions owned by the target being planned
  * @returns Subscribed table names
  */
-export function subscribedTailorDBTypes(
+export function subscribedTailorDBTables(
   subscriptions: ReadonlyArray<EventSubscription>,
 ): ReadonlySet<string> {
   return new Set(
     subscriptions.flatMap((subscription) =>
-      subscription.trigger.kind === "tailordb" ? [subscription.trigger.typeName] : [],
+      subscription.trigger.kind === "tailordb" ? [subscription.trigger.tableName] : [],
     ),
   );
 }
@@ -427,10 +427,10 @@ function describeExternal(kind: string, names: ReadonlyArray<string>): string | 
 
 function declaresTailorDBType(
   target: BuiltDeploymentTarget,
-  typeName: string,
+  tableName: string,
 ): boolean | undefined {
   return (
-    target.application.tailorDBServices.some((service) => service.types[typeName]) || undefined
+    target.application.tailorDBServices.some((service) => service.types[tableName]) || undefined
   );
 }
 
@@ -460,9 +460,9 @@ function declaresWorkflow(
 // A resource that declares publishEvents keeps that value whatever the run covers,
 // so nothing about it needs recording. An explicit `false` with a subscriber is
 // rejected by assertNoPublishEventsConflict, which explains that case on its own.
-function pinsTailorDBType(target: BuiltDeploymentTarget, typeName: string): boolean {
+function pinsTailorDBType(target: BuiltDeploymentTarget, tableName: string): boolean {
   for (const service of target.application.tailorDBServices) {
-    const type = service.types[typeName];
+    const type = service.types[tableName];
     if (type) return type.settings.publishEvents !== undefined;
   }
   return false;
@@ -513,9 +513,9 @@ function pinsEveryJobOfWorkflow(target: BuiltDeploymentTarget, workflowName: str
 
 function tailorDBTypeNamespaceIn(
   target: BuiltDeploymentTarget,
-  typeName: string,
+  tableName: string,
 ): string | undefined {
-  return target.application.tailorDBServices.find((service) => service.types[typeName])?.namespace;
+  return target.application.tailorDBServices.find((service) => service.types[tableName])?.namespace;
 }
 
 // A namespaced resource is owned by whichever config declares it in the one
@@ -537,10 +537,10 @@ function narrowByVisibleNamespace(params: {
 function declaresTailorDBTypeIn(
   target: BuiltDeploymentTarget,
   namespace: string,
-  typeName: string,
+  tableName: string,
 ): boolean {
   return target.application.tailorDBServices.some(
-    (service) => service.namespace === namespace && Boolean(service.types[typeName]),
+    (service) => service.namespace === namespace && Boolean(service.types[tableName]),
   );
 }
 
@@ -572,21 +572,21 @@ function eventSourceLookup(
   switch (trigger.kind) {
     case "tailordb":
       return {
-        resource: publishEventsConflict.tailorDBType(trigger.typeName).resource,
+        resource: publishEventsConflict.tailorDBType(trigger.tableName).resource,
         trigger,
-        declaredBy: (target) => declaresTailorDBType(target, trigger.typeName),
-        pinned: (target) => pinsTailorDBType(target, trigger.typeName),
+        declaredBy: (target) => declaresTailorDBType(target, trigger.tableName),
+        pinned: (target) => pinsTailorDBType(target, trigger.tableName),
         keyIn: (owner) => {
-          const namespace = tailorDBTypeNamespaceIn(owner, trigger.typeName);
-          return namespace && eventSourceKey.tailorDBType(namespace, trigger.typeName);
+          const namespace = tailorDBTypeNamespaceIn(owner, trigger.tableName);
+          return namespace && eventSourceKey.tailorDBType(namespace, trigger.tableName);
         },
         narrowOwners: (candidates) =>
           narrowByVisibleNamespace({
             candidates,
             visible: visibility.tailorDBTypes,
-            resourceKey: trigger.typeName,
+            resourceKey: trigger.tableName,
             declaresIn: (target, namespace) =>
-              declaresTailorDBTypeIn(target, namespace, trigger.typeName),
+              declaresTailorDBTypeIn(target, namespace, trigger.tableName),
           }),
         externalHint: (target) =>
           describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),

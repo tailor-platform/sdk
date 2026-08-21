@@ -31,7 +31,7 @@ export function processLinesDb(type: TailorDBType, source: TypeSourceInfoEntry):
   const { optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
 
   return {
-    typeName: type.name,
+    tableName: type.name,
     exportName: source.exportName,
     importPath: source.filePath,
     optionalFields,
@@ -54,7 +54,7 @@ function processLinesDbForPluginTable(
   const { optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
 
   return {
-    typeName: type.name,
+    tableName: type.name,
     exportName: source.exportName,
     importPath: "",
     optionalFields,
@@ -215,11 +215,11 @@ export function generateLinesDbSchemaFileWithPluginAPI(
   metadata: LinesDbMetadata,
   params: PluginSchemaParams,
 ): string {
-  const { typeName, exportName, optionalFields, omitFields, foreignKeys, indexes, pluginSource } =
+  const { tableName, exportName, optionalFields, omitFields, foreignKeys, indexes, pluginSource } =
     metadata;
 
   if (!pluginSource) {
-    throw new Error(`pluginSource is required for plugin-generated type "${typeName}"`);
+    throw new Error(`pluginSource is required for plugin-generated table "${tableName}"`);
   }
 
   const { configImportPath, originalImportPath } = params;
@@ -261,7 +261,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
   // For namespace plugins, generatedTableKind is required
   if (!pluginSource.generatedTableKind) {
     throw new Error(
-      `Namespace plugin "${pluginSource.pluginId}" must provide generatedTableKind for table "${typeName}"`,
+      `Namespace plugin "${pluginSource.pluginId}" must provide generatedTableKind for table "${tableName}"`,
     );
   }
 

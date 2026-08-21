@@ -217,7 +217,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           authService: undefined,
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
         checkpointRepairs: [],

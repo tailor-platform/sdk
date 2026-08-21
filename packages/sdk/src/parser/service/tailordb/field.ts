@@ -10,7 +10,7 @@ import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 type FieldScriptContext = {
-  typeName: string;
+  tableName: string;
   fieldPath: readonly string[];
 };
 
@@ -183,7 +183,7 @@ function formatScriptContext(kind: ScriptContextKind, context: FieldScriptContex
   if (!context) {
     return kind === "validate" ? kind : "hooks";
   }
-  return `${kind} for ${context.typeName}.${context.fieldPath.join(".")}`;
+  return `${kind} for ${context.tableName}.${context.fieldPath.join(".")}`;
 }
 
 /**
@@ -259,14 +259,14 @@ export function parseFieldConfig(
 
   if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on table "${context.typeName}": ` +
+      `Field "${context.fieldPath.join(".")}" on table "${context.tableName}": ` +
         `.default() cannot be used on nested inner fields`,
     );
   }
 
   if (context && context.fieldPath.length > 1 && metadata.hooks) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on table "${context.typeName}": ` +
+      `Field "${context.fieldPath.join(".")}" on table "${context.tableName}": ` +
         `.hooks() cannot be used on nested inner fields`,
     );
   }

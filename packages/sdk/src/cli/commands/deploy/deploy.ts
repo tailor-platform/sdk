@@ -44,7 +44,7 @@ import {
   subscribedIdps,
   subscribedResolvers,
   subscribedResourceKeys,
-  subscribedTailorDBTypes,
+  subscribedTailorDBTables,
   subscribedWorkflows,
   type EventSubscription,
 } from "./event-subscriptions";
@@ -414,7 +414,7 @@ async function planDeploymentTarget(
       forceApplyAll,
       ...runInputs,
       idpUserTriggerTargets: subscribedIdps(owned),
-      executorUsedTailorDBTypes: subscribedTailorDBTypes(owned),
+      executorUsedTailorDBTables: subscribedTailorDBTables(owned),
       executorUsedResolvers: subscribedResolvers(owned),
       dependentApps: collectDependentApps(owned),
       tailorDBTypeNamespaces,

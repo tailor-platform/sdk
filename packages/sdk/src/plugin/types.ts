@@ -42,7 +42,7 @@ export interface GeneratorResult {
 export interface GeneratorAuthInput {
   name: string;
   userProfile?: {
-    typeName: string;
+    tableName: string;
     namespace: string;
     usernameField: string;
   };
@@ -198,7 +198,7 @@ export interface PluginRecordTriggerConfig {
     | "tailordb.type_record.updated"
     | "tailordb.type_record.deleted"
   )[];
-  typeName: string;
+  tableName: string;
 }
 
 export interface PluginScheduleTriggerConfig {

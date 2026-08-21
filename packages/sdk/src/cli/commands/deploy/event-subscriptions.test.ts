@@ -139,7 +139,7 @@ describe("collectEventSubscriptions", () => {
   test.each([
     {
       kind: "tailordb",
-      trigger: { kind: "tailordb", typeName: "Order" },
+      trigger: { kind: "tailordb", tableName: "Order" },
       owns: { types: ["Order"] },
     },
     {
@@ -173,7 +173,7 @@ describe("collectEventSubscriptions", () => {
   test.each([
     {
       kind: "TailorDB table",
-      trigger: { kind: "tailordb", typeName: "Order" },
+      trigger: { kind: "tailordb", tableName: "Order" },
       external: { externalTailorDBNamespaces: ["shared-db"] },
       expected:
         'declares external TailorDB namespace "shared-db", so add the config that owns it to --config',
@@ -211,7 +211,7 @@ describe("collectEventSubscriptions", () => {
       collectEventSubscriptions([
         target({
           configPath: "buyer/tailor.config.ts",
-          executors: { "sync-order": { kind: "tailordb", typeName: "Odrer" } },
+          executors: { "sync-order": { kind: "tailordb", tableName: "Odrer" } },
         }),
       ]),
     ).toThrow("declares nothing external that could hold it, so check the name");
@@ -262,7 +262,7 @@ describe("collectEventSubscriptions", () => {
   test.each([
     {
       kind: "tailordb",
-      trigger: { kind: "tailordb", typeName: "Order" },
+      trigger: { kind: "tailordb", tableName: "Order" },
       owns: { types: ["Order"] },
     },
     {
@@ -306,7 +306,7 @@ describe("collectEventSubscriptions", () => {
       configPath: "buyer/tailor.config.ts",
       appId: supplierId,
       types: ["Order"],
-      executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
     });
 
     const subscriptions = collectEventSubscriptions([only]);
@@ -325,7 +325,7 @@ describe("collectEventSubscriptions", () => {
       configPath: "buyer/tailor.config.ts",
       namespace: "buyer",
       types: ["Order"],
-      executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
     });
 
     for (const targets of [
@@ -344,7 +344,7 @@ describe("collectEventSubscriptions", () => {
       target({
         configPath: "shell/tailor.config.ts",
         externalTailorDBNamespaces: ["db-supplier", "db-vendor"],
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 
@@ -381,7 +381,7 @@ describe("collectDependentApps", () => {
         appId: buyerId,
         namespace: "buyer",
         externalTailorDBNamespaces: ["db"],
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 
@@ -396,7 +396,7 @@ describe("collectDependentApps", () => {
         configPath: "supplier/tailor.config.ts",
         appId: supplierId,
         types: ["Order"],
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 
@@ -408,7 +408,7 @@ describe("collectDependentApps", () => {
       owner,
       target({
         configPath: "buyer/tailor.config.ts",
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 
@@ -425,7 +425,7 @@ describe("assertRecordableDependencies id requirement", () => {
       configPath: "wrapper/tailor.config.ts",
       namespace: "wrapper",
       externalTailorDBNamespaces: ["db"],
-      executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
     }),
   ];
 
@@ -446,7 +446,7 @@ describe("assertRecordableDependencies id requirement", () => {
       target({
         configPath: "wrapper/tailor.config.ts",
         types: ["Order"],
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 
@@ -465,7 +465,7 @@ describe("collectDependentApps and a declared publishEvents", () => {
         appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82",
         namespace: "buyer",
         externalTailorDBNamespaces: ["db"],
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 
@@ -488,7 +488,7 @@ describe("collectEventSubscriptions and namespace visibility", () => {
       target({
         configPath: "shell/tailor.config.ts",
         externalTailorDBNamespaces: ["db-vendor"],
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 
@@ -502,7 +502,7 @@ describe("collectEventSubscriptions and namespace visibility", () => {
         ...peersSharingATypeName,
         target({
           configPath: "shell/tailor.config.ts",
-          executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+          executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
         }),
       ]),
     ).toThrow(/which no config in this deploy declares/);
@@ -633,7 +633,7 @@ describe("assertRecordableDependencies and an id that cannot form a label key", 
         configPath: "buyer/tailor.config.ts",
         appId: uppercase,
         types: ["Invoice"],
-        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        executors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
       }),
     ]);
 

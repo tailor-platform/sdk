@@ -15,9 +15,9 @@ export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
 >;
 
 export interface RelationProcessingContext {
-  typeName: string;
+  tableName: string;
   fieldName: string;
-  allTypeNames: Set<string>;
+  allTableNames: Set<string>;
 }
 
 export interface ProcessedRelationMetadata {
@@ -38,7 +38,7 @@ export interface RelationInfo {
 }
 
 function fieldRef(context: RelationProcessingContext): string {
-  return `Field "${context.fieldName}" on table "${context.typeName}"`;
+  return `Field "${context.fieldName}" on table "${context.tableName}"`;
 }
 
 /**
@@ -66,7 +66,7 @@ export function validateRelationConfig(
   }
 
   // Validate target table exists (for non-self relations)
-  if (rawRelation.toward.type !== "self" && !context.allTypeNames.has(rawRelation.toward.type)) {
+  if (rawRelation.toward.type !== "self" && !context.allTableNames.has(rawRelation.toward.type)) {
     throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.type}".`);
   }
 }
@@ -88,7 +88,7 @@ export function processRelationMetadata(
 
   // Resolve target table name (handle "self" reference)
   const targetTypeName =
-    rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
+    rawRelation.toward.type === "self" ? context.tableName : rawRelation.toward.type;
 
   // Index and unique are not supported on array fields
   const shouldSetIndex = !isArrayField;
@@ -125,7 +125,7 @@ export function buildRelationInfo(
 
   // Resolve target table name (handle "self" reference)
   const targetTypeName =
-    rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
+    rawRelation.toward.type === "self" ? context.tableName : rawRelation.toward.type;
 
   let forwardName = rawRelation.toward.as;
   if (!forwardName) {

@@ -67,34 +67,34 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
   const registerRawType = (
     rawTypesKey: string,
-    typeName: string,
+    tableName: string,
     type: TailorDBTypeSchemaOutput,
     sourceInfo: TypeSourceInfoEntry,
   ): void => {
-    const existingSourceInfo = Object.hasOwn(typeSourceInfo, typeName)
-      ? typeSourceInfo[typeName]
+    const existingSourceInfo = Object.hasOwn(typeSourceInfo, tableName)
+      ? typeSourceInfo[tableName]
       : undefined;
     if (existingSourceInfo) {
       const firstSource = formatTailorDBTypeSourceInfo(existingSourceInfo) ?? "unknown source";
       const secondSource = formatTailorDBTypeSourceInfo(sourceInfo) ?? "unknown source";
       throw new Error(
-        `Duplicate TailorDB table name "${typeName}" detected in TailorDB service "${namespace}". ` +
+        `Duplicate TailorDB table name "${tableName}" detected in TailorDB service "${namespace}". ` +
           `First: ${firstSource}. Second: ${secondSource}. ` +
           "TailorDB table names must be unique across all TailorDB files in a service.",
       );
     }
 
     assertDefined(rawTypes[rawTypesKey], `raw table entry missing for key: ${rawTypesKey}`)[
-      typeName
+      tableName
     ] = type;
-    typeSourceInfo[typeName] = sourceInfo;
+    typeSourceInfo[tableName] = sourceInfo;
   };
 
   const doParseTypes = (): void => {
     const allTypes = createRawTypesByName();
     for (const fileTypes of Object.values(rawTypes)) {
-      for (const [typeName, type] of Object.entries(fileTypes)) {
-        allTypes[typeName] = type;
+      for (const [tableName, type] of Object.entries(fileTypes)) {
+        allTypes[tableName] = type;
       }
     }
 
@@ -106,11 +106,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   // way to accidentally lock out access the rule was meant to grant.
   const warnOmittedPermit = (): void => {
     for (const fileTypes of Object.values(rawTypes)) {
-      for (const [typeName, type] of Object.entries(fileTypes)) {
+      for (const [tableName, type] of Object.entries(fileTypes)) {
         const locations = findOmittedPermitRules(type.metadata.permissions);
         if (locations.length > 0) {
           logger.warn(
-            `TailorDB table "${typeName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+            `TailorDB table "${tableName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
           );
         }
       }
@@ -125,7 +125,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   const validateRequiredPermissions = (): void => {
     const errors: string[] = [];
     for (const fileTypes of Object.values(rawTypes)) {
-      for (const [typeName, type] of Object.entries(fileTypes)) {
+      for (const [tableName, type] of Object.entries(fileTypes)) {
         const effectiveGqlOperations =
           type.metadata.settings?.gqlOperations ?? config.gqlOperations;
         const { missingPermission, missingGqlPermission } = findMissingPermissionConfig(
@@ -135,16 +135,16 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         if (!missingPermission && !missingGqlPermission) {
           continue;
         }
-        const source = formatTailorDBTypeSourceInfo(typeSourceInfo[typeName]);
+        const source = formatTailorDBTypeSourceInfo(typeSourceInfo[tableName]);
         const location = source ? ` (${source})` : "";
         if (missingPermission) {
           errors.push(
-            `TailorDB table "${typeName}"${location} has no .permission() configured. TailorDB denies all record operations for tables without permission; call .permission(...) to grant access explicitly.`,
+            `TailorDB table "${tableName}"${location} has no .permission() configured. TailorDB denies all record operations for tables without permission; call .permission(...) to grant access explicitly.`,
           );
         }
         if (missingGqlPermission) {
           errors.push(
-            `TailorDB table "${typeName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
+            `TailorDB table "${tableName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
           );
         }
       }

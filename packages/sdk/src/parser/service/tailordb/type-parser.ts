@@ -31,10 +31,10 @@ export function parseTypes(
   typeSourceInfo?: TypeSourceInfo,
 ): Record<string, TailorDBType> {
   const types = createRecord<TailorDBType>();
-  const allTypeNames = new Set(Object.keys(rawTypes));
+  const allTableNames = new Set(Object.keys(rawTypes));
 
-  for (const [typeName, type] of Object.entries(rawTypes)) {
-    types[typeName] = parseTailorDBType(type, allTypeNames, rawTypes, typeSourceInfo);
+  for (const [tableName, type] of Object.entries(rawTypes)) {
+    types[tableName] = parseTailorDBType(type, allTableNames, rawTypes, typeSourceInfo);
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -46,14 +46,14 @@ export function parseTypes(
 /**
  * Parse a TailorDBTypeSchemaOutput into a TailorDBType.
  * @param type - TailorDB table to parse
- * @param allTypeNames - Set of all TailorDB table names
+ * @param allTableNames - Set of all TailorDB table names
  * @param rawTypes - All raw TailorDB tables keyed by name
  * @param typeSourceInfo - Optional table source information
  * @returns Parsed TailorDB table
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
-  allTypeNames: Set<string>,
+  allTableNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
   typeSourceInfo?: TypeSourceInfo,
 ): TailorDBType {
@@ -69,9 +69,9 @@ function parseTailorDBType(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    const context = { typeName: type.name, fieldName, allTypeNames };
+    const context = { tableName: type.name, fieldName, allTableNames };
     let fieldConfig = parseFieldConfig(fieldDef, {
-      typeName: type.name,
+      tableName: type.name,
       fieldPath: [fieldName],
     });
     const rawRelation = fieldConfig.rawRelation;
@@ -207,18 +207,18 @@ function buildBackwardRelationships(
   > = Object.create(null);
 
   // Initialize tracking for all tables
-  for (const typeName of Object.keys(types)) {
-    backwardNameSources[typeName] = Object.create(null) as Record<
+  for (const tableName of Object.keys(types)) {
+    backwardNameSources[tableName] = Object.create(null) as Record<
       string,
       { sourceType: string; fieldName: string }[]
     >;
   }
 
   // Build backward relationships and track sources
-  for (const [typeName, type] of Object.entries(types)) {
+  for (const [tableName, type] of Object.entries(types)) {
     for (const [otherTypeName, otherType] of Object.entries(types)) {
       for (const [fieldName, field] of Object.entries(otherType.fields)) {
-        if (field.relation && field.relation.targetType === typeName) {
+        if (field.relation && field.relation.targetType === tableName) {
           let backwardName = field.relation.backwardName;
 
           if (!backwardName) {
@@ -229,14 +229,14 @@ function buildBackwardRelationships(
           }
 
           // Track the source of this backward name
-          const typeBackwardNames = backwardNameSources[typeName];
-          if (typeBackwardNames === undefined) {
-            throw new Error(`backward name sources not initialized for type: ${typeName}`);
+          const tableBackwardNames = backwardNameSources[tableName];
+          if (tableBackwardNames === undefined) {
+            throw new Error(`backward name sources not initialized for table: ${tableName}`);
           }
-          if (!typeBackwardNames[backwardName]) {
-            typeBackwardNames[backwardName] = [];
+          if (!tableBackwardNames[backwardName]) {
+            tableBackwardNames[backwardName] = [];
           }
-          const sources = typeBackwardNames[backwardName];
+          const sources = tableBackwardNames[backwardName];
           if (sources === undefined) {
             throw new Error(`backward name sources entry not initialized for: ${backwardName}`);
           }
@@ -371,7 +371,7 @@ function validatePluralFormUniqueness(
   }
 
   // Check 2: All query names must be unique across tables
-  const queryNameToSource = new Map<string, { typeName: string; kind: string }[]>();
+  const queryNameToSource = new Map<string, { tableName: string; kind: string }[]>();
 
   for (const parsedType of Object.values(types)) {
     const singularQuery = inflection.camelize(parsedType.name, true);
@@ -379,7 +379,7 @@ function validatePluralFormUniqueness(
 
     const singularSources = queryNameToSource.get(singularQuery) ?? [];
     singularSources.push({
-      typeName: parsedType.name,
+      tableName: parsedType.name,
       kind: "singular",
     });
     queryNameToSource.set(singularQuery, singularSources);
@@ -387,7 +387,7 @@ function validatePluralFormUniqueness(
     if (singularQuery !== pluralQuery) {
       const pluralSources = queryNameToSource.get(pluralQuery) ?? [];
       pluralSources.push({
-        typeName: parsedType.name,
+        tableName: parsedType.name,
         kind: "plural",
       });
       queryNameToSource.set(pluralQuery, pluralSources);
@@ -399,9 +399,9 @@ function validatePluralFormUniqueness(
   for (const [queryName, sources] of duplicates) {
     const sourceList = sources
       .map((s) => {
-        const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.typeName);
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.tableName);
         const location = formatTypeSourceLocation(sourceInfo);
-        return `"${s.typeName}"${location} (${s.kind})`;
+        return `"${s.tableName}"${location} (${s.kind})`;
       })
       .join(", ");
     errors.push(`GraphQL query field "${queryName}" conflicts between: ${sourceList}`);
@@ -417,10 +417,10 @@ function validatePluralFormUniqueness(
 
 function getTypeSourceInfo(
   typeSourceInfo: TypeSourceInfo | undefined,
-  typeName: string,
+  tableName: string,
 ): TypeSourceInfo[string] | undefined {
-  return typeSourceInfo && Object.hasOwn(typeSourceInfo, typeName)
-    ? typeSourceInfo[typeName]
+  return typeSourceInfo && Object.hasOwn(typeSourceInfo, tableName)
+    ? typeSourceInfo[tableName]
     : undefined;
 }
 

@@ -56,8 +56,8 @@ function collectApplicationTailorDBNamespaces(
 
 function* tailorDBTypeResources(application: Readonly<Application>): Iterable<VisibleResource> {
   for (const service of application.tailorDBServices) {
-    for (const typeName of Object.keys(service.types)) {
-      yield { visibilityKey: service.namespace, resourceKey: typeName };
+    for (const tableName of Object.keys(service.types)) {
+      yield { visibilityKey: service.namespace, resourceKey: tableName };
     }
   }
 }
