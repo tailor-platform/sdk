@@ -1,5 +1,6 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
@@ -1132,30 +1133,45 @@ describe("adjustApplicationForMigrationTest", () => {
 });
 
 describe("mergeBundledScripts", () => {
-  test("allows duplicate resolver and auth hook bundle names across configs", () => {
+  test("merges same-named resolvers and auth hooks from different namespaces across configs", () => {
     const bundledScripts = mergeBundledScripts([
       fakeTarget({
         resolverNamespaces: ["buyer"],
-        resolvers: { get: "buyer" },
+        resolvers: { [resolverBundleKey("buyer", "get")]: "buyer" },
         authNamespace: "buyer-auth",
         authHooks: { "auth-hook--buyer-auth--before-login": "buyer-auth" },
       }),
       fakeTarget({
         resolverNamespaces: ["supplier"],
-        resolvers: { get: "supplier" },
+        resolvers: { [resolverBundleKey("supplier", "get")]: "supplier" },
         authNamespace: "supplier-auth",
         authHooks: { "auth-hook--supplier-auth--before-login": "supplier-auth" },
       }),
     ]);
 
     expect([...bundledScripts.resolvers]).toEqual([
-      ["resolver--buyer--get", "buyer"],
-      ["resolver--supplier--get", "supplier"],
+      [resolverBundleKey("buyer", "get"), "buyer"],
+      [resolverBundleKey("supplier", "get"), "supplier"],
     ]);
     expect([...bundledScripts.authHooks]).toEqual([
       ["auth-hook--buyer-auth--before-login", "buyer-auth"],
       ["auth-hook--supplier-auth--before-login", "supplier-auth"],
     ]);
+  });
+
+  test("rejects the same resolver bundle key across configs", () => {
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({
+          resolverNamespaces: ["shared"],
+          resolvers: { [resolverBundleKey("shared", "get")]: "a" },
+        }),
+        fakeTarget({
+          resolverNamespaces: ["shared"],
+          resolvers: { [resolverBundleKey("shared", "get")]: "b" },
+        }),
+      ]),
+    ).toThrow(`Duplicate resolver bundle name "${resolverBundleKey("shared", "get")}"`);
   });
 
   test("rejects duplicate executor, workflow job, and auth hook bundle names across configs", () => {
