@@ -1,8 +1,8 @@
 ---
-"@tailor-platform/sdk": patch
+"@tailor-platform/sdk": minor
 ---
 
-Rename the remaining TailorDB identifiers that named a `db.table()` definition a type:
+**Breaking change (beta)**: Rename the remaining TailorDB identifiers that named a `db.table()` definition a type:
 
 - record trigger config `typeName` → `tableName`
 - `PluginRecordTriggerConfig.typeName` → `tableName`
