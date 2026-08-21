@@ -12,13 +12,13 @@ import {
   type AuthIDPConfig_ConfigSchema,
   TenantProviderConfig_TenantProviderType,
   UserProfileProviderConfig_UserProfileProviderType,
-  type AuthIDPConfigSchema,
+  AuthIDPConfigSchema,
   type AuthOAuth2ClientSchema,
   type AuthSCIMAttributeSchema,
   type AuthSCIMConfigSchema,
   type AuthSCIMResourceSchema,
-  type TenantProviderConfigSchema,
-  type UserProfileProviderConfigSchema,
+  TenantProviderConfigSchema,
+  UserProfileProviderConfigSchema,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { type AuthService } from "#/cli/services/auth/service";
 import {
@@ -30,7 +30,12 @@ import {
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
+import {
+  areNormalizedEqual,
+  normalizeProtoConfig,
+  normalizeStringArray,
+  toComparableProtoJson,
+} from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -634,7 +639,7 @@ async function protoIdPConfigForComparison(
   workspaceId: string,
   idpConfig: Readonly<IdProviderConfig>,
   desired: MessageInitShape<typeof AuthIDPConfigSchema>,
-) {
+): Promise<MessageInitShape<typeof AuthIDPConfigSchema> | undefined> {
   if (idpConfig.kind !== "BuiltInIdP") {
     return desired;
   }
@@ -642,43 +647,26 @@ async function protoIdPConfigForComparison(
   const config = await tryProtoBuiltinIdPConfig(client, workspaceId, idpConfig);
   return config
     ? {
-        ...desired,
+        name: desired.name,
+        authType: desired.authType,
         config,
       }
     : undefined;
 }
 
-function normalizeComparableAuthIdPConfig(idpConfig: {
-  name?: string;
-  authType?: AuthIDPConfig_AuthType;
-  config?: {
-    config?: {
-      case?: "oidc" | "saml" | "idToken";
-      value?: unknown;
-    };
-  };
-}) {
-  const configCase = idpConfig.config?.config?.case;
-  const oidcValue =
-    configCase === "oidc" &&
-    typeof idpConfig.config?.config?.value === "object" &&
-    idpConfig.config.config.value !== null
-      ? idpConfig.config.config.value
-      : undefined;
-  return normalizeProtoConfig({
+function normalizeComparableAuthIdPConfig(idpConfig: MessageInitShape<typeof AuthIDPConfigSchema>) {
+  const config = idpConfig.config?.config;
+  return toComparableProtoJson(AuthIDPConfigSchema, {
     name: idpConfig.name,
     authType: idpConfig.authType,
     config:
-      configCase === "oidc"
+      config?.case === "oidc"
         ? {
             config: {
               case: "oidc" as const,
               value: {
-                ...oidcValue,
-                issuerUrl:
-                  oidcValue && "issuerUrl" in oidcValue
-                    ? oidcValue.issuerUrl || undefined
-                    : undefined,
+                ...config.value,
+                issuerUrl: config.value.issuerUrl || "",
               },
             },
           }
@@ -687,26 +675,8 @@ function normalizeComparableAuthIdPConfig(idpConfig: {
 }
 
 function areAuthIdPConfigsEqual(
-  existing: {
-    name?: string;
-    authType?: AuthIDPConfig_AuthType;
-    config?: {
-      config?: {
-        case?: "oidc" | "saml" | "idToken";
-        value?: unknown;
-      };
-    };
-  },
-  desired: {
-    name?: string;
-    authType?: AuthIDPConfig_AuthType;
-    config?: {
-      config?: {
-        case?: "oidc" | "saml" | "idToken";
-        value?: unknown;
-      };
-    };
-  },
+  existing: MessageInitShape<typeof AuthIDPConfigSchema>,
+  desired: MessageInitShape<typeof AuthIDPConfigSchema>,
 ) {
   return areNormalizedEqual(
     normalizeComparableAuthIdPConfig(existing),
@@ -1203,43 +1173,31 @@ function protoMachineUserAttributeMap(
 }
 
 function normalizeComparableUserProfileConfig(
-  config:
-    | MessageInitShape<typeof UserProfileProviderConfigSchema>
-    | {
-        providerType?: UserProfileProviderConfig_UserProfileProviderType;
-        config?: {
-          config?: { case?: string; value?: Record<string, unknown> };
-        };
-      },
+  config: MessageInitShape<typeof UserProfileProviderConfigSchema>,
 ) {
   const comparableConfig = config.config?.config;
   const tailorDBConfig = comparableConfig?.case === "tailordb" ? comparableConfig.value : undefined;
 
-  return normalizeProtoConfig({
+  return toComparableProtoJson(UserProfileProviderConfigSchema, {
     providerType: config.providerType,
-    config: {
-      config: {
-        case: comparableConfig?.case,
-        value: tailorDBConfig
-          ? {
+    config: tailorDBConfig
+      ? {
+          config: {
+            case: "tailordb",
+            value: {
               ...tailorDBConfig,
-              tenantIdField: tailorDBConfig.tenantIdField || undefined,
-              attributesFields: normalizeStringArray(
-                tailorDBConfig.attributesFields as readonly string[] | undefined,
-              ),
-              attributeMap: normalizeProtoConfig(tailorDBConfig.attributeMap),
-            }
-          : comparableConfig?.value,
-      },
-    },
+              tenantIdField: tailorDBConfig.tenantIdField || "",
+              attributesFields: normalizeStringArray(tailorDBConfig.attributesFields),
+              attributeMap: normalizeProtoConfig(tailorDBConfig.attributeMap ?? {}),
+            },
+          },
+        }
+      : undefined,
   });
 }
 
 function areUserProfileConfigsEqual(
-  existing: {
-    providerType?: UserProfileProviderConfig_UserProfileProviderType;
-    config?: { config?: { case?: string; value?: Record<string, unknown> } };
-  },
+  existing: MessageInitShape<typeof UserProfileProviderConfigSchema>,
   desired: MessageInitShape<typeof UserProfileProviderConfigSchema>,
 ) {
   return areNormalizedEqual(
@@ -1249,29 +1207,13 @@ function areUserProfileConfigsEqual(
 }
 
 function normalizeComparableTenantProviderConfig(
-  config:
-    | MessageInitShape<typeof TenantProviderConfigSchema>
-    | undefined
-    | {
-        providerType?: TenantProviderConfig_TenantProviderType;
-        config?: {
-          config?: { case?: string; value?: Record<string, unknown> };
-        };
-      },
+  config: MessageInitShape<typeof TenantProviderConfigSchema> | undefined,
 ) {
-  return normalizeProtoConfig(config);
+  return toComparableProtoJson(TenantProviderConfigSchema, config ?? {});
 }
 
 function areTenantProviderConfigsEqual(
-  existing:
-    | MessageInitShape<typeof TenantProviderConfigSchema>
-    | undefined
-    | {
-        providerType?: TenantProviderConfig_TenantProviderType;
-        config?: {
-          config?: { case?: string; value?: Record<string, unknown> };
-        };
-      },
+  existing: MessageInitShape<typeof TenantProviderConfigSchema> | undefined,
   desired: MessageInitShape<typeof TenantProviderConfigSchema>,
 ) {
   return areNormalizedEqual(
