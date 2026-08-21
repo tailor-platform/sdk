@@ -1,6 +1,4 @@
-import * as fs from "node:fs";
-import * as path from "pathe";
-import { describe, expect, expectTypeOf, test, aroundEach, aroundAll } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   createSnapshotFromLocalTypes,
   normalizeSchemaSnapshot,
@@ -12,33 +10,8 @@ import { createMockType } from "./test-helpers/snapshot-test";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBDeployInput } from "./schema-checks";
 
-const TEST_MIGRATIONS_BASE = path.join(
-  __dirname,
-  "__test_migrations__",
-  path.basename(import.meta.filename),
-);
-
 describe("snapshot", () => {
   const namespace = "tailordb";
-  let testDir: string;
-
-  aroundAll(async (runSuite) => {
-    await runSuite();
-    try {
-      fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
-  });
-
-  aroundEach(async (runTest) => {
-    testDir = path.join(
-      TEST_MIGRATIONS_BASE,
-      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    fs.mkdirSync(testDir, { recursive: true });
-    await runTest();
-  });
 
   // ==========================================================================
   // createSnapshotFromLocalTypes
