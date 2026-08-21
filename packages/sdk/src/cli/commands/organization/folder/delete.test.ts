@@ -71,10 +71,21 @@ describe("organization folder delete", () => {
     expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
   });
 
-  test.each([
-    ["NotFound (missing organization)", new ConnectError("org missing", Code.NotFound)],
-    ["Unavailable", new ConnectError("backend unavailable", Code.Unavailable)],
-  ])("propagates lookup failures: %s", async (_name, failure) => {
+  test("reports not found when the lookup fails with NotFound", async () => {
+    const failure = new ConnectError("folder missing", Code.NotFound);
+    const client = mockClient({
+      getOrganizationFolder: vi.fn().mockRejectedValue(failure),
+    });
+
+    const result = await runCommand(deleteCommand, argv);
+
+    expect(result.error?.message).toBe(`Folder "${FOLDER_ID}" not found.`);
+    expect(result.error?.cause).toBe(failure);
+    expect(client.deleteOrganizationFolder).not.toHaveBeenCalled();
+  });
+
+  test("propagates lookup failures other than NotFound", async () => {
+    const failure = new ConnectError("backend unavailable", Code.Unavailable);
     const client = mockClient({
       getOrganizationFolder: vi.fn().mockRejectedValue(failure),
     });
