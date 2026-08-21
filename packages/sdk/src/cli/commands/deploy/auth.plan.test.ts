@@ -109,8 +109,13 @@ function createMockApplication(): Application {
   } as unknown as Application;
 }
 
-function createMockApplicationWithUserProfile(): Application {
+type MockUserProfileOptions = {
+  includeAttributes?: boolean;
+};
+
+function createMockApplicationWithUserProfile(options: MockUserProfileOptions = {}): Application {
   const application = createMockApplication();
+  const includeAttributes = options.includeAttributes ?? true;
   return {
     ...application,
     authService: {
@@ -119,8 +124,8 @@ function createMockApplicationWithUserProfile(): Application {
         namespace: "tailordb",
         type: { name: "User" },
         usernameField: "email",
-        attributeList: ["email"],
-        attributes: undefined,
+        attributeList: includeAttributes ? ["email"] : [],
+        attributes: includeAttributes ? { email: true } : undefined,
       },
     },
   } as unknown as Application;
@@ -396,12 +401,19 @@ describe("planAuth", () => {
   });
 
   test("marks a user profile unchanged when a remote nested proto has an implicit default", async () => {
-    const application = createMockApplicationWithUserProfile();
+    const application = createMockApplicationWithUserProfile({ includeAttributes: false });
     const createResult = await planAuth(createContext(createMockClient(), application));
     const desired =
       createResult.changeSet.userProfileConfig.creates[0]?.request.userProfileProviderConfig;
     expect(desired).toBeDefined();
     const remote = create(UserProfileProviderConfigSchema, desired);
+    const desiredConfig = desired?.config?.config;
+    const remoteConfig = remote.config?.config;
+    if (desiredConfig?.case !== "tailordb" || remoteConfig?.case !== "tailordb") {
+      throw new Error("Expected TailorDB user profile configs");
+    }
+    expect(desiredConfig.value.attributeMap).toBeUndefined();
+    expect(remoteConfig.value.attributeMap).toEqual({});
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       userProfileConfig: { userProfileProviderConfig: remote },
