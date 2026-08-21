@@ -625,6 +625,9 @@ function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number
  * Run multiple codemods on a project directory using in-memory chaining.
  * Each file is processed through all transforms whose filePatterns match it.
  * Later transforms see earlier transforms' output — even in dry-run mode.
+ * Review detection (reviewFindings and suspicious patterns) runs against each
+ * codemod's own position in the transform chain, so a later codemod's rewrite
+ * cannot hide an earlier codemod's findings.
  *
  * In dry-run mode, colorized diffs are printed to stderr.
  * @param codemods - Codemod packages to run (with resolved script paths)
@@ -680,13 +683,16 @@ export async function runCodemods(
     }
 
     let current = original;
+    const reviewSnapshots = new Map<string, string>();
     for (const lt of matchedTransforms) {
-      if (!lt.transform) continue;
-      const result = await lt.transform(current, absolute);
-      if (result != null) {
-        current = result;
-        appliedCodemodIds.add(lt.id);
+      if (lt.transform) {
+        const result = await lt.transform(current, absolute);
+        if (result != null) {
+          current = result;
+          appliedCodemodIds.add(lt.id);
+        }
       }
+      if (lt.prompt) reviewSnapshots.set(lt.id, current);
     }
 
     if (current !== original) {
@@ -698,8 +704,20 @@ export async function runCodemods(
       }
     }
 
-    const residualContent = contentForResidualMatching(relative, current);
-    const sourceStringContent = sourceStringContentForResidualMatching(relative, current);
+    const residualBySnapshot = new Map<string, { residual: string; sourceString: string | null }>();
+    const residualFor = (content: string): { residual: string; sourceString: string | null } => {
+      let entry = residualBySnapshot.get(content);
+      if (!entry) {
+        entry = {
+          residual: contentForResidualMatching(relative, content),
+          sourceString: sourceStringContentForResidualMatching(relative, content),
+        };
+        residualBySnapshot.set(content, entry);
+      }
+      return entry;
+    };
+
+    const { residual: residualContent, sourceString: sourceStringContent } = residualFor(current);
     const sourceTextContent = sourceTextContentForResidualMatching(relative, current);
     warnings.push(
       ...legacyPatternWarnings(
@@ -713,6 +731,7 @@ export async function runCodemods(
 
     for (const lt of matchedTransforms) {
       if (!lt.prompt) continue;
+      const snapshot = reviewSnapshots.get(lt.id) ?? current;
       const filesForReview = (): Set<string> => {
         let files = suspiciousByCodemod.get(lt.id);
         if (!files) {
@@ -722,7 +741,7 @@ export async function runCodemods(
         return files;
       };
       if (lt.reviewFindings) {
-        const findings = await lt.reviewFindings(current, absolute, relative);
+        const findings = await lt.reviewFindings(snapshot, absolute, relative);
         if (findings.length > 0) {
           const files = filesForReview();
           for (const finding of findings) {
@@ -736,11 +755,12 @@ export async function runCodemods(
           existing.push(...findings);
         }
       }
+      const { residual, sourceString } = residualFor(snapshot);
       const matchesSource =
-        lt.suspiciousPatterns.some((p) => matchResidualPattern(residualContent, p) !== null) ||
-        (sourceStringContent != null &&
+        lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null) ||
+        (sourceString != null &&
           lt.sourceStringSuspiciousPatterns.some(
-            (p) => matchResidualPattern(sourceStringContent, p) !== null,
+            (p) => matchResidualPattern(sourceString, p) !== null,
           ));
       if (matchesSource) {
         filesForReview().add(relative);

@@ -67,8 +67,10 @@ export interface CodemodPackage {
    */
   sourceTextLegacyPatterns?: CodemodPatternGroup[];
   /**
-   * Patterns that, when present in a file's post-transform content, mark it
-   * as a candidate for LLM-assisted review. Use this for migrations the
+   * Patterns that, when present in a file's content as of this codemod's
+   * position in the transform chain (after its own and earlier codemods'
+   * transforms, before later codemods'), mark it as a candidate for
+   * LLM-assisted review. Use this for migrations the
    * deterministic transform cannot safely complete on its own (e.g. a value
    * reached through a variable or a dynamic expression). An array group
    * matches only when every pattern in the group is present (AND). Unlike
@@ -106,7 +108,7 @@ export interface CodemodPackage {
 export interface LlmReviewFinding {
   /** File path relative to the transformed project root. */
   file: string;
-  /** One-based line number in the post-transform file content. */
+  /** One-based line number in the file content the detector received. */
   line: number;
   /** Short reason this location needs review. */
   message: string;
@@ -114,7 +116,11 @@ export interface LlmReviewFinding {
   excerpt: string;
 }
 
-/** Detector exported by a transform module for precise review locations. */
+/**
+ * Detector exported by a transform module for precise review locations.
+ * Receives the file content as of the codemod's position in the transform
+ * chain: its own and earlier codemods' transforms applied, later codemods' not.
+ */
 export type ReviewFindingsFn = (
   source: string,
   filePath: string,

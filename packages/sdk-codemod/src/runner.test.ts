@@ -180,6 +180,202 @@ describe("runCodemods", () => {
     });
   });
 
+  describe("review detection across chained transforms", () => {
+    const detectLegacyKeyPath = path.join(os.tmpdir(), "transform-detect-legacy-key.ts");
+    const detectNewKeyPath = path.join(os.tmpdir(), "transform-detect-new-key.ts");
+    const renameLegacyKeyPath = path.join(os.tmpdir(), "transform-rename-legacy-key.ts");
+    const selfFixLegacyKeyPath = path.join(os.tmpdir(), "transform-self-fix-legacy-key.ts");
+
+    function detectorScript(key: string): string {
+      return `export default function transform() {
+          return null;
+        }
+        export function reviewFindings(source, _filePath, relativePath) {
+          return source.split("\\n").flatMap((lineText, index) =>
+            lineText.includes("${key}:")
+              ? [{
+                  file: relativePath,
+                  line: index + 1,
+                  message: "Review ${key} usage.",
+                  excerpt: lineText.trim(),
+                }]
+              : [],
+          );
+        }`;
+    }
+
+    aroundEach(async (runTest) => {
+      await fs.promises.writeFile(detectLegacyKeyPath, detectorScript("legacyKey"), "utf-8");
+      await fs.promises.writeFile(detectNewKeyPath, detectorScript("newKey"), "utf-8");
+      await fs.promises.writeFile(
+        renameLegacyKeyPath,
+        `export default function transform(source) {
+          if (!source.includes("legacyKey:")) return null;
+          return source.replaceAll("legacyKey:", "newKey:");
+        }`,
+        "utf-8",
+      );
+      await fs.promises.writeFile(
+        selfFixLegacyKeyPath,
+        `export default function transform(source) {
+          if (!source.includes("legacyKey:")) return null;
+          return source.replaceAll("legacyKey:", "newKey:");
+        }
+        export function reviewFindings(source, _filePath, relativePath) {
+          return source.includes("legacyKey:")
+            ? [{ file: relativePath, line: 1, message: "Review legacyKey usage.", excerpt: "legacyKey" }]
+            : [];
+        }`,
+        "utf-8",
+      );
+      await runTest();
+      await fs.promises.rm(detectLegacyKeyPath, { force: true });
+      await fs.promises.rm(detectNewKeyPath, { force: true });
+      await fs.promises.rm(renameLegacyKeyPath, { force: true });
+      await fs.promises.rm(selfFixLegacyKeyPath, { force: true });
+    });
+
+    test("keeps an earlier detector's findings when a later transform rewrites the key", async () => {
+      const { tmpDir: dir } = await createTestProject(
+        "model.ts",
+        'const config = { legacyKey: "user" };\n',
+      );
+      tmpDir = dir;
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/detect", detectLegacyKeyPath, ["**/*.ts"], undefined, {
+              prompt: "Review remaining legacyKey usages.",
+            }),
+            scriptPath: detectLegacyKeyPath,
+          },
+          {
+            codemod: makeCodemod("test/rename", renameLegacyKeyPath, ["**/*.ts"]),
+            scriptPath: renameLegacyKeyPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      const onDisk = await fs.promises.readFile(path.join(dir, "model.ts"), "utf-8");
+      expect(onDisk).toBe('const config = { newKey: "user" };\n');
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/detect",
+          prompt: "Review remaining legacyKey usages.",
+          files: ["model.ts"],
+          findings: [
+            {
+              file: "model.ts",
+              line: 1,
+              message: "Review legacyKey usage.",
+              excerpt: 'const config = { legacyKey: "user" };',
+            },
+          ],
+        },
+      ]);
+    });
+
+    test("keeps an earlier suspicious-pattern match when a later transform rewrites the key", async () => {
+      const { tmpDir: dir } = await createTestProject(
+        "model.ts",
+        "const config = { legacyKey: value };\n",
+      );
+      tmpDir = dir;
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/suspicious", undefined, ["**/*.ts"], undefined, {
+              suspiciousPatterns: ["legacyKey"],
+              prompt: "Review remaining legacyKey usages.",
+            }),
+          },
+          {
+            codemod: makeCodemod("test/rename", renameLegacyKeyPath, ["**/*.ts"]),
+            scriptPath: renameLegacyKeyPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/suspicious",
+          prompt: "Review remaining legacyKey usages.",
+          files: ["model.ts"],
+        },
+      ]);
+    });
+
+    test("runs a codemod's detector on its own transform's output", async () => {
+      const { tmpDir: dir } = await createTestProject(
+        "model.ts",
+        'const config = { legacyKey: "user" };\n',
+      );
+      tmpDir = dir;
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/self-fix", selfFixLegacyKeyPath, ["**/*.ts"], undefined, {
+              prompt: "Review remaining legacyKey usages.",
+            }),
+            scriptPath: selfFixLegacyKeyPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.llmReviews).toEqual([]);
+    });
+
+    test("runs a later detector on earlier transforms' output", async () => {
+      const { tmpDir: dir } = await createTestProject(
+        "model.ts",
+        'const config = { legacyKey: "user" };\n',
+      );
+      tmpDir = dir;
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/rename", renameLegacyKeyPath, ["**/*.ts"]),
+            scriptPath: renameLegacyKeyPath,
+          },
+          {
+            codemod: makeCodemod("test/detect-new", detectNewKeyPath, ["**/*.ts"], undefined, {
+              prompt: "Review remaining newKey usages.",
+            }),
+            scriptPath: detectNewKeyPath,
+          },
+        ],
+        dir,
+        false,
+      );
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/detect-new",
+          prompt: "Review remaining newKey usages.",
+          files: ["model.ts"],
+          findings: [
+            {
+              file: "model.ts",
+              line: 1,
+              message: "Review newKey usage.",
+              excerpt: 'const config = { newKey: "user" };',
+            },
+          ],
+        },
+      ]);
+    });
+  });
+
   describe("filePatterns filtering", () => {
     const transformPath = path.join(os.tmpdir(), "transform-upper.ts");
     const throwingTransformPath = path.join(os.tmpdir(), "transform-throw.ts");
