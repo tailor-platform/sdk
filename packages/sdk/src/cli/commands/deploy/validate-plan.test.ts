@@ -1,5 +1,10 @@
-import { AuthConnection_Type } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { describe, expect, test } from "vitest";
+import {
+  AuthConnection_Type,
+  AuthOAuth2Client_ClientType,
+  AuthOAuth2Client_GrantType,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { validatePlan, type ValidatePlanInput } from "./validate-plan";
 
@@ -297,6 +302,26 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
+    name: "(o) OAuth2 client with clientType public and requireDpop passes",
+    mutate: (input) => {
+      input.auth.changeSet.oauth2Client.creates.push({
+        name: "default",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-auth",
+          oauth2Client: {
+            name: "default",
+            clientType: AuthOAuth2Client_ClientType.PUBLIC,
+            requireDpop: true,
+            grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+            redirectUris: ["https://example.com/callback"],
+          },
+        },
+      });
+    },
+    expected: undefined,
+  },
+  {
     name: "(n2) workflow execution policy with `:` in key passes",
     mutate: (input) => {
       input.workflowExecutionPolicy.changeSet.creates.push({
@@ -494,6 +519,26 @@ const invalidCases: Case<RegExp>[] = [
     expected: /validation error/,
   },
   {
+    name: "(o2) OAuth2 client with clientType browser and requireDpop is rejected",
+    mutate: (input) => {
+      input.auth.changeSet.oauth2Client.creates.push({
+        name: "default",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-auth",
+          oauth2Client: {
+            name: "default",
+            clientType: AuthOAuth2Client_ClientType.BROWSER,
+            requireDpop: true,
+            grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+            redirectUris: ["https://example.com/callback"],
+          },
+        },
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
     name: "(e) violations from multiple resources are aggregated into one error",
     mutate: (input) => {
       input.tailorDB.changeSet.type.creates.push({
@@ -532,5 +577,27 @@ describe("validatePlan", () => {
     const input = emptyInput();
     mutate(input);
     await expect(validatePlan(input)).rejects.toThrow(expected);
+  });
+
+  test("evaluates message-level CEL rules instead of warning that they could not run", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const input = emptyInput();
+    input.auth.changeSet.oauth2Client.creates.push({
+      name: "default",
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: "my-auth",
+        oauth2Client: {
+          name: "default",
+          clientType: AuthOAuth2Client_ClientType.PUBLIC,
+          requireDpop: true,
+          grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+          redirectUris: ["https://example.com/callback"],
+        },
+      },
+    });
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
