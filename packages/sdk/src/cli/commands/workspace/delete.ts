@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
 import { confirmationArgs } from "#/cli/shared/args";
@@ -71,8 +72,11 @@ export const deleteCommand = defineAppCommand({
       workspace = await client.getWorkspace({
         workspaceId,
       });
-    } catch {
-      throw new Error(`Workspace "${workspaceId}" not found.`);
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        throw new Error(`Workspace "${workspaceId}" not found.`, { cause: error });
+      }
+      throw error;
     }
 
     const workspaceResource = workspace.workspace;

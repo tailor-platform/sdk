@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
@@ -85,5 +86,26 @@ describe("workspace delete command", () => {
     await runCommand(deleteCommand, ["--workspace-id", workspaceId]);
 
     expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId });
+  });
+
+  test("reports not found when the workspace lookup returns NotFound", async () => {
+    const client = stubClient();
+    client.getWorkspace.mockRejectedValue(new ConnectError("missing", Code.NotFound));
+
+    const result = await runCommand(deleteCommand, ["--workspace-id", workspaceId]);
+
+    expect(result.error?.message).toBe(`Workspace "${workspaceId}" not found.`);
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("propagates lookup failures other than NotFound", async () => {
+    const client = stubClient();
+    const failure = new ConnectError("backend unavailable", Code.Unavailable);
+    client.getWorkspace.mockRejectedValue(failure);
+
+    const result = await runCommand(deleteCommand, ["--workspace-id", workspaceId]);
+
+    expect(result.error).toBe(failure);
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
   });
 });
