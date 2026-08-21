@@ -235,7 +235,7 @@ export async function waitForCloneApplicationData(
 /**
  * Load generated JSONL seed rows for the tables in a baseline snapshot.
  * @param dataDir - Directory containing `<Type>.jsonl` files
- * @param tableNames - Baseline type names to load
+ * @param tableNames - Baseline table names to load
  * @param snapshot - Baseline schema used to remove fields introduced by pending migrations
  * @returns Seed rows keyed by table name
  */

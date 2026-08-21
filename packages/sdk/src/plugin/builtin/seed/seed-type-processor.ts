@@ -75,7 +75,7 @@ export function buildSeedNamespaceConfigs(
 
       const source = assertDefined(
         ns.sourceInfo.get(tableName),
-        `source info missing for type: ${tableName}`,
+        `source info missing for table: ${tableName}`,
       );
       const linesDb = processLinesDb(type, source);
       requiredFields[typeInfo.name] = Object.entries(type.fields)

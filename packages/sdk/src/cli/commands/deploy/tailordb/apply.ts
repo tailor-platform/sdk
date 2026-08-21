@@ -350,7 +350,7 @@ export async function applyTailorDB(
       }
 
       for (const migration of pendingMigrations) {
-        const attemptedTypes = new Set<string>();
+        const attemptedTables = new Set<string>();
         try {
           // Pre-migration phase: Create/update tables with breaking fields as optional
           await executeSingleMigrationPrePhase(
@@ -359,7 +359,7 @@ export async function applyTailorDB(
             migration,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTables,
-            attemptedTypes,
+            attemptedTables,
           );
 
           // Script execution (only if migrate.ts exists for this migration)
@@ -373,7 +373,7 @@ export async function applyTailorDB(
             migrationContext.workspaceId,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTables,
-            attemptedTypes,
+            attemptedTables,
           );
           throw error;
         }
@@ -385,7 +385,7 @@ export async function applyTailorDB(
             migration,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTables,
-            attemptedTypes,
+            attemptedTables,
           );
         } catch (error) {
           await rollbackSingleMigrationAfterFailure(
@@ -394,7 +394,7 @@ export async function applyTailorDB(
             migrationContext.workspaceId,
             migrationContext.tailorDBInputs,
             migrationContext.executorUsedTables,
-            attemptedTypes,
+            attemptedTables,
           );
           throw error;
         }

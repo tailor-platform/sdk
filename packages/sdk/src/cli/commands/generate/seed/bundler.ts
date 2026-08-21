@@ -156,7 +156,7 @@ function generateSeedScriptContent(namespace: string): string {
  * 3. Reports progress via console.log
  * 4. Exports as main() for TestExecScript
  * @param namespace - TailorDB namespace
- * @param tableNames - List of type names to include in the seed
+ * @param tableNames - List of table names to include in the seed
  * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses
  * @returns Bundled seed script result
  */

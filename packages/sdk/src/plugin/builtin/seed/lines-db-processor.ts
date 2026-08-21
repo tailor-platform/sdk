@@ -219,7 +219,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     metadata;
 
   if (!pluginSource) {
-    throw new Error(`pluginSource is required for plugin-generated type "${tableName}"`);
+    throw new Error(`pluginSource is required for plugin-generated table "${tableName}"`);
   }
 
   const { configImportPath, originalImportPath } = params;

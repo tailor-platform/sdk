@@ -154,7 +154,7 @@ async function awaitAllSettledOrThrow(
  * @param {PendingMigration} migration - Single pending migration
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
  * @param executorUsedTables - Tables used by executors (drives publishRecordEvents default)
- * @param attemptedTypes - Tables whose schema this migration attempted to create or update
+ * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when pre-migration phase completes
  */
 export async function executeSingleMigrationPrePhase(
@@ -163,7 +163,7 @@ export async function executeSingleMigrationPrePhase(
   migration: PendingMigration,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
-  attemptedTypes: Set<string>,
+  attemptedTables: Set<string>,
 ): Promise<void> {
   // Build pre-migration changes maps for this single migration. Includes both
   // breaking changes (required-add, unique-add, enum value removal) and the
@@ -201,7 +201,7 @@ export async function executeSingleMigrationPrePhase(
     }
 
     processedTables.created.add(tableName);
-    attemptedTypes.add(tableName);
+    attemptedTables.add(tableName);
     await client.createTailorDBType(clonedRequest);
   }
 
@@ -230,7 +230,7 @@ export async function executeSingleMigrationPrePhase(
     }
 
     processedTables.updated.add(tableName);
-    attemptedTypes.add(tableName);
+    attemptedTables.add(tableName);
     await client.updateTailorDBType({
       workspaceId: create.request.workspaceId,
       namespaceName: create.request.namespaceName,
@@ -263,7 +263,7 @@ export async function executeSingleMigrationPrePhase(
     }
 
     processedTables.updated.add(tableName);
-    attemptedTypes.add(tableName);
+    attemptedTables.add(tableName);
     await client.updateTailorDBType(clonedRequest);
   }
 
@@ -293,7 +293,7 @@ export async function executeSingleMigrationPrePhase(
         const tableName = create.request.tailordbType?.name;
         if (tableName) {
           processedTables.created.add(tableName);
-          attemptedTypes.add(tableName);
+          attemptedTables.add(tableName);
         }
         await client.createTailorDBType(create.request);
       }
@@ -328,7 +328,7 @@ export async function rollbackSingleMigrationAfterFailure(
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
-  attemptedTypes: ReadonlySet<string>,
+  attemptedTables: ReadonlySet<string>,
 ): Promise<void> {
   try {
     await rollbackSingleMigrationPrePhase(
@@ -337,7 +337,7 @@ export async function rollbackSingleMigrationAfterFailure(
       workspaceId,
       tailorDBInputs,
       executorUsedTables,
-      attemptedTypes,
+      attemptedTables,
     );
   } catch (rollbackError) {
     logger.warn(
@@ -354,7 +354,7 @@ export async function rollbackSingleMigrationAfterFailure(
  * @param {PendingMigration} migration - Single pending migration
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
  * @param executorUsedTables - Tables used by executors (drives publishRecordEvents default)
- * @param attemptedTypes - Tables whose schema this migration attempted to create or update
+ * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when post-migration phase completes
  */
 export async function executeSingleMigrationPostPhase(
@@ -363,7 +363,7 @@ export async function executeSingleMigrationPostPhase(
   migration: PendingMigration,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
-  attemptedTypes: Set<string>,
+  attemptedTables: Set<string>,
 ): Promise<void> {
   // Re-use the pre-migration changes maps to know which tables were touched in
   // this migration (so we send the post-phase final-schema update for them).
@@ -393,7 +393,7 @@ export async function executeSingleMigrationPostPhase(
         executorUsedTables,
       );
       if (!snapshotType) continue;
-      attemptedTypes.add(tableName);
+      attemptedTables.add(tableName);
       await client.updateTailorDBType({
         workspaceId: create.request.workspaceId,
         namespaceName: create.request.namespaceName,
@@ -414,7 +414,7 @@ export async function executeSingleMigrationPostPhase(
         executorUsedTables,
       );
       if (!snapshotType) continue;
-      attemptedTypes.add(tableName);
+      attemptedTables.add(tableName);
       await client.updateTailorDBType({
         workspaceId: update.request.workspaceId,
         namespaceName: update.request.namespaceName,
@@ -466,7 +466,7 @@ export async function executeSingleMigrationPostPhaseDeletions(
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
  * @param executorUsedTables - Tables used by executors (drives publishRecordEvents default)
- * @param attemptedTypes - Tables whose schema this migration attempted to create or update
+ * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when rollback attempts complete
  */
 async function rollbackSingleMigrationPrePhase(
@@ -475,11 +475,11 @@ async function rollbackSingleMigrationPrePhase(
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
-  attemptedTypes: ReadonlySet<string>,
+  attemptedTables: ReadonlySet<string>,
 ): Promise<void> {
   // The baseline migration has no prior checkpoint to revert to.
   if (migration.number <= INITIAL_SCHEMA_NUMBER) return;
-  if (attemptedTypes.size === 0) return;
+  if (attemptedTables.size === 0) return;
 
   const priorSnapshot = reconstructSnapshotFromMigrations(
     migration.migrationsDir,
@@ -505,13 +505,13 @@ async function rollbackSingleMigrationPrePhase(
   // Restore pre-existing tables before deleting new ones, so no restored table
   // still references a new table (e.g. a foreign key retargeted at a renamed
   // table) at the moment that table is deleted.
-  const restoredTypes = [...attemptedTypes].flatMap((tableName) => {
+  const restoredTables = [...attemptedTables].flatMap((tableName) => {
     const priorTable = priorSnapshot.tables[tableName];
     return priorTable ? [{ tableName, priorTable }] : [];
   });
-  const newTypes = [...attemptedTypes].filter((tableName) => !priorSnapshot.tables[tableName]);
+  const newTables = [...attemptedTables].filter((tableName) => !priorSnapshot.tables[tableName]);
 
-  for (const { tableName, priorTable } of restoredTypes) {
+  for (const { tableName, priorTable } of restoredTables) {
     try {
       const manifest = generateTailorDBTypeManifestFromSnapshot(priorTable, {
         subscribed: executorUsedTables.has(priorTable.name),
@@ -530,7 +530,7 @@ async function rollbackSingleMigrationPrePhase(
     }
   }
 
-  for (const tableName of newTypes) {
+  for (const tableName of newTables) {
     try {
       // New table: its GQL permission must go first (table deletion does not
       // cascade). The permission may not exist, so the delete is best-effort.

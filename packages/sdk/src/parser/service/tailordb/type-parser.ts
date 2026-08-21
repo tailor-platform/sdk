@@ -231,7 +231,7 @@ function buildBackwardRelationships(
           // Track the source of this backward name
           const tableBackwardNames = backwardNameSources[tableName];
           if (tableBackwardNames === undefined) {
-            throw new Error(`backward name sources not initialized for type: ${tableName}`);
+            throw new Error(`backward name sources not initialized for table: ${tableName}`);
           }
           if (!tableBackwardNames[backwardName]) {
             tableBackwardNames[backwardName] = [];
