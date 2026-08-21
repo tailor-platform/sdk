@@ -67,7 +67,7 @@ describe("parseTypes", () => {
       const performanceReview = db.table("PerformanceReview", {
         employeeId: db.uuid().relation({
           type: "n-1",
-          toward: { type: employee },
+          toward: { table: employee },
           backward: "performanceReviews",
         }),
       });
@@ -97,11 +97,11 @@ describe("parseTypes", () => {
       const performanceReview = db.table("PerformanceReview", {
         targetEmployeeId: db.uuid().relation({
           type: "n-1",
-          toward: { type: employee, as: "targetEmployee" },
+          toward: { table: employee, as: "targetEmployee" },
         }),
         authorEmployeeId: db.uuid().relation({
           type: "n-1",
-          toward: { type: employee, as: "authorEmployee" },
+          toward: { table: employee, as: "authorEmployee" },
         }),
       });
 
@@ -125,12 +125,12 @@ describe("parseTypes", () => {
       const performanceReview = db.table("PerformanceReview", {
         targetEmployeeId: db.uuid().relation({
           type: "n-1",
-          toward: { type: employee, as: "targetEmployee" },
+          toward: { table: employee, as: "targetEmployee" },
           backward: "targetReviews",
         }),
         authorEmployeeId: db.uuid().relation({
           type: "n-1",
-          toward: { type: employee, as: "authorEmployee" },
+          toward: { table: employee, as: "authorEmployee" },
           backward: "authorReviews",
         }),
       });
@@ -162,11 +162,11 @@ describe("parseTypes", () => {
       const performanceReview = db.table("PerformanceReview", {
         targetEmployeeId: db.uuid().relation({
           type: "n-1",
-          toward: { type: employee, as: "targetEmployee" },
+          toward: { table: employee, as: "targetEmployee" },
         }),
         authorEmployeeId: db.uuid().relation({
           type: "n-1",
-          toward: { type: employee, as: "authorEmployee" },
+          toward: { table: employee, as: "authorEmployee" },
         }),
       });
 
@@ -195,7 +195,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         userId: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 
@@ -218,7 +218,7 @@ describe("parseTypes", () => {
       const profile = db.table("Profile", {
         userId: db.uuid().relation({
           type: "1-1",
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 
@@ -264,7 +264,7 @@ describe("parseTypes", () => {
         const post = db.table("Post", {
           userId: db.uuid().relation({
             type: "n-1",
-            toward: { type: user },
+            toward: { table: user },
           }),
         });
 
@@ -284,12 +284,12 @@ describe("parseTypes", () => {
       const inventoryExecutionLine = db.table("InventoryExecutionLine", {
         unitId: db.uuid().relation({
           type: "n-1",
-          toward: { type: unit },
+          toward: { table: unit },
           backward: "inventoryExecutionLines",
         }),
         primaryUnitId: db.uuid().relation({
           type: "n-1",
-          toward: { type: unit },
+          toward: { table: unit },
           backward: "primaryInventoryExecutionLines",
         }),
       });
@@ -324,7 +324,7 @@ describe("parseTypes", () => {
       const task = db.table("Task", {
         [fieldName]: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
           backward: "tasks",
         }),
       });
@@ -345,7 +345,7 @@ describe("parseTypes", () => {
       const profile = db.table("Profile", {
         userEmail: db.string().relation({
           type: "1-1",
-          toward: { type: user, key: "email" },
+          toward: { table: user, key: "email" },
         }),
       });
 
@@ -363,12 +363,12 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         authorId: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
           backward: "authoredPosts",
         }),
         authorID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
           backward: "reviewedAuthoredPosts",
         }),
       });
@@ -386,12 +386,12 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user, as: "author" },
+          toward: { table: user, as: "author" },
           backward: "authoredPosts",
         }),
         reviewerID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user, as: "reviewer" },
+          toward: { table: user, as: "reviewer" },
           backward: "reviewedPosts",
         }),
       });
@@ -422,7 +422,7 @@ describe("parseTypes", () => {
         author: db.string(),
         authorID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 
@@ -440,7 +440,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
         }),
         author: db.string(),
       });
@@ -460,7 +460,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user, as: "authorID" },
+          toward: { table: user, as: "authorID" },
         }),
       });
 
@@ -479,7 +479,7 @@ describe("parseTypes", () => {
         .table("Post", {
           authorID: db.uuid().relation({
             type: "n-1",
-            toward: { type: user, as: "avatar" },
+            toward: { table: user, as: "avatar" },
           }),
         })
         .files({
@@ -499,7 +499,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
           backward: "authoredPosts",
         }),
       });
@@ -507,7 +507,7 @@ describe("parseTypes", () => {
       const comment = db.table("Comment", {
         postID: db.uuid().relation({
           type: "n-1",
-          toward: { type: post, as: "post" },
+          toward: { table: post, as: "post" },
           backward: "author",
         }),
       });
@@ -525,12 +525,12 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         authorId: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
           backward: "authoredPosts",
         }),
         authorID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
           backward: "reviewedAuthoredPosts",
         }),
       });
@@ -551,7 +551,7 @@ describe("parseTypes", () => {
       const node = db.table("Node", {
         ID: db.uuid().relation({
           type: "n-1",
-          toward: { type: "self" },
+          toward: { table: "self" },
         }),
       });
 
@@ -567,7 +567,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         ID: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 
@@ -588,7 +588,7 @@ describe("parseTypes", () => {
         // @ts-ignore - intentionally missing 'type' to test runtime validation (tsgo/tsc compat)
         userId: db.uuid().relation({
           // @ts-ignore - ignore No overload matches this call error
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 
@@ -607,7 +607,7 @@ describe("parseTypes", () => {
           // @ts-ignore - intentionally invalid 'type' to test runtime validation (tsgo/tsc compat)
           type: "invalid-type",
           // @ts-ignore - ignore No overload matches this call error
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 
@@ -623,7 +623,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         userId: db.uuid().relation({
           type: "n-1",
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 
@@ -643,7 +643,7 @@ describe("parseTypes", () => {
         const post = db.table("Post", {
           userId: db.uuid().relation({
             type: relationType,
-            toward: { type: user },
+            toward: { table: user },
           }),
         });
 
@@ -663,7 +663,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         authorId: db.uuid().relation({
           type: "n-1",
-          toward: { type: user, as: "author" },
+          toward: { table: user, as: "author" },
           backward: "posts",
         }),
       });
@@ -685,7 +685,7 @@ describe("parseTypes", () => {
         (user: ReturnType<typeof db.table>) =>
           db.uuid().relation({
             type: "1-1",
-            toward: { type: user },
+            toward: { table: user },
           }),
       ],
       [
@@ -696,7 +696,7 @@ describe("parseTypes", () => {
             .unique()
             .relation({
               type: "1-1",
-              toward: { type: user },
+              toward: { table: user },
             }),
       ],
     ] as const)("should set unique=true for oneToOne relations (%s)", (_label, buildUserId) => {
@@ -722,7 +722,7 @@ describe("parseTypes", () => {
       });
       const relatedUserId = db.uuid().relation({
         type: "1-1",
-        toward: { type: user },
+        toward: { table: user },
       });
       // @ts-expect-error - Testing runtime behavior: 1-1 already implies unique, but we test the call order
       const userId = relatedUserId.unique();
@@ -748,7 +748,7 @@ describe("parseTypes", () => {
             .unique()
             .relation({
               type: "n-1",
-              toward: { type: user },
+              toward: { table: user },
             }),
       ],
       [
@@ -758,7 +758,7 @@ describe("parseTypes", () => {
             .uuid()
             .relation({
               type: "n-1",
-              toward: { type: user },
+              toward: { table: user },
             })
             .unique(),
       ],
@@ -787,7 +787,7 @@ describe("parseTypes", () => {
         name: db.string(),
         parentId: db.uuid().relation({
           type: "n-1",
-          toward: { type: "self" },
+          toward: { table: "self" },
           backward: "children",
         }),
       });
@@ -807,7 +807,7 @@ describe("parseTypes", () => {
       const post = db.table("Post", {
         userId: db.uuid().relation({
           type: "keyOnly",
-          toward: { type: user },
+          toward: { table: user },
         }),
       });
 

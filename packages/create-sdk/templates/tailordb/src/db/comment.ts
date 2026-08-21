@@ -10,11 +10,11 @@ export const comment = db
       .validate(({ value }) => (value.length < 1 ? "Comment must not be empty" : undefined)),
     taskId: db.uuid().relation({
       type: "n-1",
-      toward: { type: task },
+      toward: { table: task },
     }),
     authorId: db.uuid().relation({
       type: "n-1",
-      toward: { type: user },
+      toward: { table: user },
     }),
     metadata: db.object({
       source: db.string().description("Where the comment was posted from"),

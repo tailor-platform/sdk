@@ -5,7 +5,7 @@ export const notification = db
   .table("Notification", {
     userId: db.uuid().relation({
       type: "n-1",
-      toward: { type: user },
+      toward: { table: user },
     }),
     title: db.string(),
     body: db.string(),

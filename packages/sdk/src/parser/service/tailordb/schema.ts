@@ -105,7 +105,7 @@ const RelationTypeSchema = z.enum(relationTypesKeys);
 export const RawRelationConfigSchema = z.strictObject({
   type: RelationTypeSchema.describe("Relation cardinality type"),
   toward: z.strictObject({
-    type: z.string().describe("Target table name, or 'self' for self-relations"),
+    table: z.string().describe("Target table name, or 'self' for self-relations"),
     as: z.string().optional().describe("Custom forward relation name"),
     key: z.string().optional().describe("Target field to join on (default: 'id')"),
   }),

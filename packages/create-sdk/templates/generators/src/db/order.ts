@@ -6,11 +6,11 @@ export const order = db
   .table("Order", {
     productId: db.uuid().relation({
       type: "n-1",
-      toward: { type: product },
+      toward: { table: product },
     }),
     userId: db.uuid().relation({
       type: "n-1",
-      toward: { type: user },
+      toward: { table: user },
     }),
     quantity: db.int(),
     totalPrice: db.float(),

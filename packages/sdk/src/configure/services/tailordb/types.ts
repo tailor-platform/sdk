@@ -64,7 +64,7 @@ export type GqlOperationsConfig = GqlOperationsInput;
 export interface RawRelationConfig {
   type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
   toward: {
-    type: string;
+    table: string;
     as?: string;
     key?: string;
   };

@@ -595,30 +595,42 @@ export type TailorDBInstance<
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
-  toward: {
-    type: T;
-    as?: string;
-    key?: keyof T["fields"] & string;
-  };
+  toward:
+    | {
+        table: T;
+        as?: string;
+        key?: keyof T["fields"] & string;
+      }
+    | {
+        /**
+         * @deprecated since NEXT_RELEASE — use `table` instead. codemod: v3/relation-toward-table
+         */
+        type: T;
+        as?: string;
+        key?: keyof T["fields"] & string;
+      };
   backward?: string;
 }
 
 // Special config variant for self-referencing relations
 type RelationSelfConfig = {
   type: RelationType;
-  toward: {
-    type: "self";
-    as?: string;
-    key?: string;
-  };
+  toward:
+    | {
+        table: "self";
+        as?: string;
+        key?: string;
+      }
+    | {
+        /**
+         * @deprecated since NEXT_RELEASE — use `table` instead. codemod: v3/relation-toward-table
+         */
+        type: "self";
+        as?: string;
+        key?: string;
+      };
   backward?: string;
 };
-
-function isRelationSelfConfig(
-  config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
-): config is RelationSelfConfig {
-  return config.toward.type === "self";
-}
 
 type DBFieldDefined<T extends TailorFieldType, Opt extends FieldOptions> = {
   type: T;
@@ -767,11 +779,12 @@ function createTailorDBFieldRuntime<
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
       const cloned = field.clone();
-      const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
+      const towardTarget = "table" in config.toward ? config.toward.table : config.toward.type;
+      const targetTable = towardTarget === "self" ? "self" : towardTarget.name;
       cloned._setRawRelation({
         type: config.type,
         toward: {
-          type: targetType,
+          table: targetTable,
           as: config.toward.as,
           key: config.toward.key,
         },

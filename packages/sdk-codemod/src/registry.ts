@@ -1770,6 +1770,40 @@ export const allCodemods: CodemodPackage[] = [
       "that merely mentions the option unchanged unless it documents a command to type.",
     ].join("\n"),
   },
+  {
+    id: "v3/relation-toward-table",
+    name: "relation() toward.type → toward.table",
+    description:
+      'Rename the `.relation()` option `toward.type` to `toward.table`, matching the `db.type()` → `db.table()` rename. The relation\'s own `type` (its cardinality, e.g. `"n-1"`) is unchanged — only the target-table reference nested under `toward` moves.',
+    since: "1.0.0",
+    until: "3.0.0",
+    scriptPath: "v3/relation-toward-table/scripts/transform.js",
+    examples: [
+      {
+        before: [
+          "customerId: db.uuid().relation({",
+          '  type: "n-1",',
+          "  toward: { type: customer },",
+          "}),",
+        ].join("\n"),
+        after: [
+          "customerId: db.uuid().relation({",
+          '  type: "n-1",',
+          "  toward: { table: customer },",
+          "}),",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, `.relation()`'s `toward.type` option is renamed to",
+      "`toward.table` (it names a target table, not a TypeScript/GraphQL type).",
+      "Rename any remaining `toward.type` the codemod did not rewrite (e.g. a",
+      "`toward` object reached through a shared variable, spread, or computed",
+      "key) to `toward.table`. Do not touch the relation's own outer `type`",
+      'property, which is the relation\'s cardinality (e.g. "n-1", "1-1",',
+      '"keyOnly") and keeps its name.',
+    ].join("\n"),
+  },
 ];
 
 /**

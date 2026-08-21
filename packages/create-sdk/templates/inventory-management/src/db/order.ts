@@ -11,7 +11,7 @@ export const order = db
     contactId: db
       .uuid()
       .description("Contact associated with the order")
-      .relation({ type: "n-1", toward: { type: contact } }),
+      .relation({ type: "n-1", toward: { table: contact } }),
     ...db.fields.timestamps(),
   })
   .permission(permissionLoggedIn)

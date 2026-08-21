@@ -182,10 +182,12 @@ const user = db.table("User", {
   name: db.string(),
   roleId: db.uuid().relation({
     type: "n-1",
-    toward: { type: role },
+    toward: { table: role },
   }),
 });
 ```
+
+`toward.type` is a deprecated alias for `toward.table` and will be removed in v3; `tailor upgrade` offers a codemod to rewrite it.
 
 For one-to-one relations, use `type: "1-1"`:
 
@@ -193,7 +195,7 @@ For one-to-one relations, use `type: "1-1"`:
 const userProfile = db.table("UserProfile", {
   userId: db.uuid().relation({
     type: "1-1",
-    toward: { type: user },
+    toward: { table: user },
   }),
   bio: db.string(),
 });
@@ -205,7 +207,7 @@ For foreign key constraint without creating a relation, use `type: "keyOnly"`:
 const user = db.table("User", {
   roleId: db.uuid().relation({
     type: "keyOnly",
-    toward: { type: role },
+    toward: { table: role },
   }),
 });
 ```
@@ -220,7 +222,7 @@ const user = db.table("User", {
 const userProfile = db.table("UserProfile", {
   userEmail: db.string().relation({
     type: "1-1",
-    toward: { type: user, key: "email", as: "user" },
+    toward: { table: user, key: "email", as: "user" },
   }),
 });
 ```
@@ -234,7 +236,7 @@ Customize relation names using `toward.as` / `backward` options:
 const userProfile = db.table("UserProfile", {
   userId: db.uuid().relation({
     type: "1-1",
-    toward: { type: user, as: "base" },
+    toward: { table: user, as: "base" },
     backward: "profile",
   }),
 });
@@ -266,12 +268,12 @@ removed. This lets multiple fields point to the same target table with distinct 
 const post = db.table("Post", {
   authorID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user },
+    toward: { table: user },
     backward: "authoredPosts",
   }),
   reviewerID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user },
+    toward: { table: user },
     backward: "reviewedPosts",
   }),
 });

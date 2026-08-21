@@ -86,7 +86,7 @@ export type RawRelationConfig = {
   type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
   toward: {
     /** Target table name, or 'self' for self-relations */
-    type: string;
+    table: string;
     /** Custom forward relation name */
     as?: string | undefined;
     /** Target field to join on (default: 'id') */
@@ -1084,7 +1084,7 @@ export type TailorDBTypeRaw = {
         | {
             type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
             toward: {
-              type: string;
+              table: string;
               as?: string | undefined | undefined;
               key?: string | undefined | undefined;
             };
