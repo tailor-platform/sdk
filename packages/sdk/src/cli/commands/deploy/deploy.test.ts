@@ -1133,7 +1133,7 @@ describe("adjustApplicationForMigrationTest", () => {
 });
 
 describe("mergeBundledScripts", () => {
-  test("allows duplicate resolver and auth hook bundle names across configs", () => {
+  test("merges same-named resolvers and auth hooks from different namespaces across configs", () => {
     const bundledScripts = mergeBundledScripts([
       fakeTarget({
         resolverNamespaces: ["buyer"],
