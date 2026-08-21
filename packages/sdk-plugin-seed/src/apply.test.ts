@@ -58,7 +58,7 @@ beforeEach(() => {
         dependencies: { User: [] },
         namespace: "tailordb",
         requiredFields: { User: [] },
-        selfRefTables: [],
+        selfRefTypes: [],
         types: ["User"],
       },
     ],
@@ -518,7 +518,7 @@ describe("seedApplyCommand", () => {
     sdk.bundleSeedScript.mockResolvedValue({
       bundledCode: "code",
       namespace: "tailordb",
-      tablesIncluded: ["User"],
+      typesIncluded: ["User"],
     });
     sdk.chunkSeedData.mockReturnValue([{ data: { User: [{ id: "u1" }] }, order: ["User"] }]);
     sdk.executeScript.mockImplementation(({ name }: { name: string }) =>

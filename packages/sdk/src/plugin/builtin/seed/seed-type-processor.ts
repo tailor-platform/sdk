@@ -46,7 +46,7 @@ export interface SeedNamespaceConfig {
   /** Seed dependencies (referenced table names) per table. */
   dependencies: Record<string, string[]>;
   /** Tables with self-referencing fields, seeded in two passes. */
-  selfRefTables: string[];
+  selfRefTypes: string[];
   /** Field names a seed row must supply per table, enforced with `--upsert`. */
   requiredFields: Record<string, string[]>;
 }
@@ -62,7 +62,7 @@ export function buildSeedNamespaceConfigs(
   return tailordb.map((ns) => {
     const types: string[] = [];
     const dependencies: Record<string, string[]> = {};
-    const selfRefTables: string[] = [];
+    const selfRefTypes: string[] = [];
     const requiredFields: Record<string, string[]> = {};
 
     for (const [tableName, type] of Object.entries(ns.tables)) {
@@ -70,7 +70,7 @@ export function buildSeedNamespaceConfigs(
       types.push(typeInfo.name);
       dependencies[typeInfo.name] = typeInfo.dependencies;
       if (typeInfo.selfRefFields.length > 0) {
-        selfRefTables.push(typeInfo.name);
+        selfRefTypes.push(typeInfo.name);
       }
 
       const source = assertDefined(
@@ -92,7 +92,7 @@ export function buildSeedNamespaceConfigs(
       namespace: ns.namespace,
       types,
       dependencies,
-      selfRefTables,
+      selfRefTypes,
       requiredFields,
     };
   });

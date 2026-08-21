@@ -317,19 +317,19 @@ function isJsonObject(value: JsonValue): value is JsonObject {
  */
 export function sortSeedTypesForSnapshot(snapshot: NormalizedSchemaSnapshot): {
   order: string[];
-  selfRefTables: string[];
+  selfRefTypes: string[];
 } {
   const tableNames = Object.keys(snapshot.tables);
   const available = new Set(tableNames);
   const dependencies = new Map<string, string[]>();
-  const selfRefTables: string[] = [];
+  const selfRefTypes: string[] = [];
   for (const [tableName, type] of Object.entries(snapshot.tables)) {
     const referenced = new Set<string>();
     for (const field of Object.values(type.fields)) {
       const target = field.foreignKeyType;
       if (!target) continue;
       if (target === tableName) {
-        selfRefTables.push(tableName);
+        selfRefTypes.push(tableName);
       } else if (available.has(target)) {
         referenced.add(target);
       }
@@ -350,7 +350,7 @@ export function sortSeedTypesForSnapshot(snapshot: NormalizedSchemaSnapshot): {
   for (const tableName of tableNames) {
     visit(tableName);
   }
-  return { order, selfRefTables };
+  return { order, selfRefTypes };
 }
 
 function temporaryWorkspaceName(): string {
@@ -707,7 +707,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         }),
       );
       for (const [namespace, snapshot] of seedSnapshots) {
-        const { order, selfRefTables } = sortSeedTypesForSnapshot(snapshot);
+        const { order, selfRefTypes } = sortSeedTypesForSnapshot(snapshot);
         const data = loadSnapshotSeedData(dataDir, order, snapshot);
         const typesWithData = order.filter((tableName) => (data[tableName]?.length ?? 0) > 0);
         if (typesWithData.length === 0) continue;
@@ -732,7 +732,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
             workspaceId: targetWorkspaceId,
             name: `migration-test-seed-${namespace}.ts`,
             code: bundled.bundledCode,
-            arg: { data: chunk.data, order: chunk.order, selfRefTables, upsert: false },
+            arg: { data: chunk.data, order: chunk.order, selfRefTypes, upsert: false },
             invoker: {
               namespace: auth.authNamespace,
               machineUserName: auth.machineUserName,

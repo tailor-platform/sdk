@@ -18,7 +18,7 @@ import ml from "#/utils/multiline";
 export type SeedBundleResult = {
   namespace: string;
   bundledCode: string;
-  tablesIncluded: string[];
+  typesIncluded: string[];
 };
 
 const BATCH_SIZE = 100;
@@ -35,7 +35,7 @@ function generateSeedScriptContent(namespace: string): string {
     type SeedInput = {
       data: Record<string, Record<string, unknown>[]>;
       order: string[];
-      selfRefTables: string[];
+      selfRefTypes: string[];
       upsert?: boolean;
     };
 
@@ -70,7 +70,7 @@ function generateSeedScriptContent(namespace: string): string {
         }
 
         processed[tableName] = { inserted: 0, updated: 0, skipped: 0 };
-        const hasSelfRef = (input.selfRefTables || []).includes(tableName);
+        const hasSelfRef = (input.selfRefTypes || []).includes(tableName);
 
         try {
           let recordsToInsert = records;
@@ -221,6 +221,6 @@ export async function bundleSeedScript(
   return {
     namespace,
     bundledCode,
-    tablesIncluded: tableNames,
+    typesIncluded: tableNames,
   };
 }
