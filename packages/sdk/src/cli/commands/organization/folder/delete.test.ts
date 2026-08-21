@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { deleteCommand } from "./delete";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -53,24 +54,33 @@ describe("organization folder delete", () => {
       organizationId: ORGANIZATION_ID,
       folderId: FOLDER_ID,
     });
+    expect(logger.success).toHaveBeenCalledWith('Folder "docs" deleted successfully.');
   });
 
   test("reports not found when the folder lookup returns NotFound", async () => {
+    const deleteOrganizationFolder = vi.fn().mockResolvedValue({});
     mockClient({
       getOrganizationFolder: vi.fn().mockRejectedValue(new ConnectError("missing", Code.NotFound)),
+      deleteOrganizationFolder,
     });
 
     const result = await runCommand(deleteCommand, argv);
 
     expect(result.error?.message).toBe(`Folder "${FOLDER_ID}" not found.`);
+    expect(deleteOrganizationFolder).not.toHaveBeenCalled();
   });
 
   test("propagates lookup failures other than NotFound", async () => {
     const failure = new ConnectError("backend unavailable", Code.Unavailable);
-    mockClient({ getOrganizationFolder: vi.fn().mockRejectedValue(failure) });
+    const deleteOrganizationFolder = vi.fn().mockResolvedValue({});
+    mockClient({
+      getOrganizationFolder: vi.fn().mockRejectedValue(failure),
+      deleteOrganizationFolder,
+    });
 
     const result = await runCommand(deleteCommand, argv);
 
     expect(result.error).toBe(failure);
+    expect(deleteOrganizationFolder).not.toHaveBeenCalled();
   });
 });
