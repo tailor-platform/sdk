@@ -10,7 +10,6 @@ import {
   type FieldParseInternalArgs,
 } from "#/runtime/field-parse";
 import { brandValue } from "#/utils/brand";
-import { TIMESTAMPS_UPDATED_AT_HOOK_EXPR } from "./timestamps-updated-at-hook.generated";
 import type {
   FieldOptions,
   FieldOutput,
@@ -1289,17 +1288,19 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 // `Function.prototype.toString()` of this hook is embedded verbatim into deployed
 // schemas and migration diffs (see parser/service/tailordb/hooks-validate-precompiled-expr.ts
 // and field.ts). Its source text depends on how the SDK itself was built (e.g.
-// minification), so a fixed expression - generated from this declaration itself by
-// `pnpm generate` (see scripts/generate-precompiled-hooks.ts) rather than hand-typed -
-// is pinned onto it directly here. configure cannot import parser's
-// `setPrecompiledScriptExpr` runtime helper across the module boundary, only the
-// `PrecompiledScriptExprKey` type it's keyed by.
+// minification), so a fixed expression is pinned onto it directly here instead -
+// configure cannot import parser's `setPrecompiledScriptExpr` runtime helper across
+// the module boundary, only the `PrecompiledScriptExprKey` type it's keyed by. Keep
+// this literal in sync with the "timestamps() updatedAt hook resolves to the pinned
+// expr" test in parser/service/tailordb/field.precompiled.test.ts, which fails if it
+// ever drifts from what this hook's own source naturally produces.
 type TimestampsUpdatedAtHookFn = UpdateHookFn<string | Date | null, string | Date>;
 const timestampsUpdatedAtHook: TimestampsUpdatedAtHookFn = ({ input, now }) => input ?? now;
 const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey = "__precompiledScriptExpr";
 (timestampsUpdatedAtHook as unknown as Record<PrecompiledScriptExprKey, string>)[
   PRECOMPILED_EXPR_KEY
-] = TIMESTAMPS_UPDATED_AT_HOOK_EXPR;
+] =
+  "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })";
 
 /** TailorDB schema builder utilities for defining tables and fields. */
 export const db = {
