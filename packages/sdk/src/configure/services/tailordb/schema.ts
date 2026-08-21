@@ -17,7 +17,10 @@ import type {
   TailorToTs,
   FieldValidateInput,
 } from "#/configure/types/field.types";
-import type { PrecompiledScriptExprKey } from "#/parser/service/tailordb/types";
+import type {
+  PrecompiledScriptExprKey,
+  PrecompiledScriptExprMap,
+} from "#/parser/service/tailordb/types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
 import type { InferredAttributes } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
@@ -1290,17 +1293,21 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 // and field.ts). Its source text depends on how the SDK itself was built (e.g.
 // minification), so a fixed expression is pinned onto it directly here instead -
 // configure cannot import parser's `setPrecompiledScriptExpr` runtime helper across
-// the module boundary, only the `PrecompiledScriptExprKey` type it's keyed by. Keep
+// the module boundary, only the symbol registry key and map types. Keep
 // this literal in sync with the "timestamps() updatedAt hook resolves to the pinned
 // expr" test in parser/service/tailordb/field.precompiled.test.ts, which fails if it
 // ever drifts from what this hook's own source naturally produces.
 type TimestampsUpdatedAtHookFn = UpdateHookFn<string | Date | null, string | Date>;
 const timestampsUpdatedAtHook: TimestampsUpdatedAtHookFn = ({ input, now }) => input ?? now;
-const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey = "__precompiledScriptExpr";
-(timestampsUpdatedAtHook as unknown as Record<PrecompiledScriptExprKey, string>)[
-  PRECOMPILED_EXPR_KEY
-] =
-  "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })";
+const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey =
+  "tailor-platform/sdk:precompiled-script-expr";
+const PRECOMPILED_EXPR_SYMBOL = Symbol.for(PRECOMPILED_EXPR_KEY);
+(timestampsUpdatedAtHook as unknown as Record<symbol, PrecompiledScriptExprMap>)[
+  PRECOMPILED_EXPR_SYMBOL
+] = {
+  "hooks.update":
+    "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })",
+};
 
 /** TailorDB schema builder utilities for defining tables and fields. */
 export const db = {

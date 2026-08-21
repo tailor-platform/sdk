@@ -2,6 +2,7 @@ import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { db } from "#/configure/services/tailordb/schema";
 import { getPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import {
   findUndefinedReferences,
@@ -11,6 +12,7 @@ import {
   precompileTailorDBTypeScripts,
   type SourceBinding,
 } from "./hooks-validate-bundler";
+import type { UpdateHookFn } from "#/configure/services/tailordb/types";
 import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
 import type * as rolldown from "rolldown";
 
@@ -88,7 +90,122 @@ describe("precompileTailorDBTypeScripts", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
 
-    expect(getPrecompiledScriptExpr(createHook)).toBeDefined();
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toBeDefined();
+  });
+
+  test("keeps per-role expressions when one function serves multiple roles", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-fn-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedHook = ({ now }: { now: string }) => now;
+    const type = {
+      name: "SharedType",
+      fields: {
+        touchedAt: {
+          type: "datetime",
+          metadata: { hooks: { create: sharedHook, update: sharedHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).not.toContain("_oldValue");
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.update")).toContain("_oldValue");
+  });
+
+  test("keeps per-operation expressions when one function serves both type hooks", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-type-hook-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedTypeHook = ({ input }: { input: Record<string, unknown> }) => input;
+    const type = {
+      name: "SharedType",
+      fields: {},
+      metadata: { typeHook: { create: sharedTypeHook, update: sharedTypeHook } },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedTypeHook, "typeHook.create")).toBeDefined();
+    expect(getPrecompiledScriptExpr(sharedTypeHook, "typeHook.update")).toBeDefined();
+  });
+
+  test("ignores a user-owned precompiled-expression property", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-user-property-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedHook = Object.assign(({ now }: { now: string }) => now, {
+      __precompiledScriptExpr: { "hooks.create": "USER_VALUE" },
+    });
+    const inheritedPin = {
+      [Symbol.for("tailor-platform/sdk:precompiled-script-expr")]: {
+        "hooks.create": "INHERITED_VALUE",
+      },
+    };
+    Object.setPrototypeOf(inheritedPin, Object.getPrototypeOf(sharedHook));
+    Object.setPrototypeOf(sharedHook, inheritedPin);
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).toBeUndefined();
+    const type = {
+      name: "SharedType",
+      fields: {
+        touchedAt: {
+          type: "datetime",
+          metadata: { hooks: { create: sharedHook, update: sharedHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).not.toBe("USER_VALUE");
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).not.toContain("_oldValue");
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.update")).toContain("_oldValue");
+  });
+
+  test("applies a pinned built-in expression only to its role", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-pinned-role-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const pinnedHook = db.fields.timestamps().updatedAt.metadata.hooks?.update as
+      | UpdateHookFn<string | Date | null, string | Date>
+      | undefined;
+    expect(pinnedHook).toBeDefined();
+    const pinnedUpdateExpr = getPrecompiledScriptExpr(pinnedHook!, "hooks.update");
+    expect(pinnedUpdateExpr).toBeDefined();
+    const type = {
+      name: "SharedType",
+      fields: {
+        touchedAt: {
+          type: "datetime",
+          metadata: { hooks: { create: pinnedHook, update: pinnedHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(pinnedHook!, "hooks.create")).not.toContain("_oldValue");
+    expect(getPrecompiledScriptExpr(pinnedHook!, "hooks.update")).toBe(pinnedUpdateExpr);
   });
 
   test("uses an in-memory entry for scripts with source dependencies", async () => {
@@ -115,7 +232,7 @@ describe("precompileTailorDBTypeScripts", () => {
       rmSync(tempDir, { recursive: true, force: true });
     }
 
-    expect(getPrecompiledScriptExpr(createHook)).toContain("module.exports.main");
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toContain("module.exports.main");
   });
 });
 

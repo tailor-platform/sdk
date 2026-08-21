@@ -1,14 +1,9 @@
+import type { ScriptExprKind } from "./types";
+
 // Identifier the table-level wrapper (buildTypeScripts in type-script.ts) binds
 // tailorPrincipalMap's result to, at most once per table, so per-hook exprs
 // below can reference it instead of re-embedding the full mapping on every hook.
 export const PRINCIPAL_VAR = "_principal";
-
-export type ScriptExprKind =
-  | "hooks.create"
-  | "hooks.update"
-  | "validate"
-  | "typeHook"
-  | "typeValidate";
 
 /**
  * Build the call-argument list a script expression is invoked with, keyed by the
@@ -27,7 +22,8 @@ export function buildHookCallArgs(kind: ScriptExprKind): string {
       return `{ input: _value, invoker: ${PRINCIPAL_VAR}, now: _now }`;
     case "hooks.update":
       return `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`;
-    case "typeHook":
+    case "typeHook.create":
+    case "typeHook.update":
       return `{ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now }`;
     case "typeValidate":
       return `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues`;

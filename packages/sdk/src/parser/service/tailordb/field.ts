@@ -7,7 +7,7 @@ import type {
   DBFieldMetadata,
   RawRelationConfig,
 } from "#/configure/services/tailordb/types";
-import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
+import type { OperatorFieldConfig, ScriptExprKind } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 type FieldScriptContext = {
@@ -17,7 +17,7 @@ type FieldScriptContext = {
 
 type ScriptFunction = (...args: never[]) => unknown;
 
-type ScriptContextKind = "hooks.create" | "hooks.update" | "validate";
+type ScriptContextKind = Extract<ScriptExprKind, "hooks.create" | "hooks.update" | "validate">;
 
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -194,7 +194,7 @@ const convertToScriptExpr = (
   kind: ScriptContextKind,
   context: FieldScriptContext | undefined,
 ): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn);
+  const precompiledExpr = getPrecompiledScriptExpr(fn, kind);
   if (precompiledExpr) {
     return precompiledExpr;
   }
@@ -206,18 +206,22 @@ const convertToScriptExpr = (
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
-export const convertTypeHookToExpr = (fn: Function): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+export const convertTypeHookToExpr = (fn: Function, op: "create" | "update"): string => {
+  const kind = `typeHook.${op}` as const;
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown, kind);
   if (precompiledExpr) {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  return assertParsableExpression(`(${normalized})(${buildHookCallArgs("typeHook")})`, "type-hook");
+  return assertParsableExpression(`(${normalized})(${buildHookCallArgs(kind)})`, "type-hook");
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
 export const convertTypeValidateToExpr = (fn: Function): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  const precompiledExpr = getPrecompiledScriptExpr(
+    fn as (...args: never[]) => unknown,
+    "typeValidate",
+  );
   if (precompiledExpr) {
     return precompiledExpr;
   }

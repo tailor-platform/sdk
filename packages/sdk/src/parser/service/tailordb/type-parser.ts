@@ -174,10 +174,10 @@ function parseTailorDBType(
     ...(metadata.typeHook && {
       typeHookExpr: {
         ...(typeof metadata.typeHook.create === "function" && {
-          create: convertTypeHookToExpr(metadata.typeHook.create),
+          create: convertTypeHookToExpr(metadata.typeHook.create, "create"),
         }),
         ...(typeof metadata.typeHook.update === "function" && {
-          update: convertTypeHookToExpr(metadata.typeHook.update),
+          update: convertTypeHookToExpr(metadata.typeHook.update, "update"),
         }),
       },
     }),
