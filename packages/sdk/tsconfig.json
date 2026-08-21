@@ -6,6 +6,10 @@
     "noUncheckedIndexedAccess": true,
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
+    // Only `scripts/**` needs this: those files run directly under
+    // `node --experimental-strip-types`, which - unlike tsdown/vitest's own
+    // resolvers - requires explicit `.ts` extensions on relative imports.
+    "allowImportingTsExtensions": true,
     "paths": {
       "@tailor-platform/sdk": ["./src/configure/index.ts"]
     }

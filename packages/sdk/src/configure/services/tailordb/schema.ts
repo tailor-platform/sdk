@@ -10,18 +10,7 @@ import {
   type FieldParseInternalArgs,
 } from "#/runtime/field-parse";
 import { brandValue } from "#/utils/brand";
-import type {
-  TailorDBField as TailorDBFieldBase,
-  TailorDBType as TailorDBTypeBase,
-  DBFieldMetadata,
-  DefinedDBFieldMetadata,
-  SerialConfig,
-  IndexDef,
-  TailorDBTypeMetadata,
-  RawRelationConfig,
-  RelationType,
-  UpdateHookFn,
-} from "#/configure/services/tailordb/types";
+import { TIMESTAMPS_UPDATED_AT_HOOK_EXPR } from "./timestamps-updated-at-hook.generated";
 import type {
   FieldOptions,
   FieldOutput,
@@ -36,8 +25,18 @@ import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers"
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type {
+  TailorDBField as TailorDBFieldBase,
+  TailorDBType as TailorDBTypeBase,
+  DBFieldMetadata,
+  DefinedDBFieldMetadata,
+  SerialConfig,
+  IndexDef,
+  TailorDBTypeMetadata,
+  RawRelationConfig,
+  RelationType,
   Hook,
   TypeHook,
+  UpdateHookFn,
   ExcludeNestedDBFields,
   ExcludeHookedDBFields,
   ExcludeDefaultedDBFields,
@@ -1290,20 +1289,17 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 // `Function.prototype.toString()` of this hook is embedded verbatim into deployed
 // schemas and migration diffs (see parser/service/tailordb/hooks-validate-precompiled-expr.ts
 // and field.ts). Its source text depends on how the SDK itself was built (e.g.
-// minification), so a fixed expression is pinned onto it directly here - configure
-// cannot import parser's `setPrecompiledScriptExpr` runtime helper across the
-// module boundary, only the `PrecompiledScriptExprKey` type it's keyed by. Keep
-// this literal in sync with the "timestamps() updatedAt hook pin matches its
-// natural expr" test in parser/service/tailordb/field.precompiled.test.ts.
-const timestampsUpdatedAtHook: UpdateHookFn<string | Date | null, string | Date> = ({
-  input,
-  now,
-}) => input ?? now;
+// minification), so a fixed expression - generated from this declaration itself by
+// `pnpm generate` (see scripts/generate-precompiled-hooks.ts) rather than hand-typed -
+// is pinned onto it directly here. configure cannot import parser's
+// `setPrecompiledScriptExpr` runtime helper across the module boundary, only the
+// `PrecompiledScriptExprKey` type it's keyed by.
+type TimestampsUpdatedAtHookFn = UpdateHookFn<string | Date | null, string | Date>;
+const timestampsUpdatedAtHook: TimestampsUpdatedAtHookFn = ({ input, now }) => input ?? now;
 const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey = "__precompiledScriptExpr";
 (timestampsUpdatedAtHook as unknown as Record<PrecompiledScriptExprKey, string>)[
   PRECOMPILED_EXPR_KEY
-] =
-  "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })";
+] = TIMESTAMPS_UPDATED_AT_HOOK_EXPR;
 
 /** TailorDB schema builder utilities for defining tables and fields. */
 export const db = {

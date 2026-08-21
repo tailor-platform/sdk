@@ -34,6 +34,7 @@
     "check:jsdoc": "pnpm -r run check:public-api-jsdoc",
     "check:zod-isolation": "pnpm -r run check:zod-isolation",
     "check:import-cycles": "pnpm -r run check:import-cycles",
+    "check:precompiled-hooks": "pnpm -r run check:precompiled-hooks",
     "lint": "pnpm run build && pnpm -r run lint && pnpm run lint:vitest",
     "lint:fix": "pnpm run build && pnpm -r run lint:fix && pnpm run lint:vitest:fix",
     "lint:vitest": "oxlint --config oxlint.vitest.json .",

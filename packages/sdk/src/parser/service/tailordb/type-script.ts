@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { PRINCIPAL_VAR, tailorPrincipalMap } from "./field";
+import { tailorPrincipalMap } from "./field";
+import { PRINCIPAL_VAR } from "./hook-args-object";
 
 // Platform-injected record map for table-level hook/validate scripts.
 const INPUT = "_input";

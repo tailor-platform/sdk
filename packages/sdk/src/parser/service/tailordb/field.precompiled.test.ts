@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
+import { TIMESTAMPS_UPDATED_AT_HOOK_EXPR } from "#/configure/services/tailordb/timestamps-updated-at-hook.generated";
 import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseFieldConfig } from "./field";
 import { setPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
-import type { UpdateHookFn } from "#/configure/services/tailordb/types";
 
 describe("parseFieldConfig precompiled expressions", () => {
   test("uses precompiled hook expression when attached", () => {
@@ -35,26 +35,19 @@ describe("parseFieldConfig precompiled expressions", () => {
     expect(field.validate?.[0]?.script.expr).toBe("PRECOMPILED_VALIDATE_EXPR");
   });
 
-  // `db.fields.timestamps()`'s `updatedAt` hook pins this exact expr (see
+  // `db.fields.timestamps()`'s `updatedAt` hook pins its expr (see
   // configure/services/tailordb/schema.ts) so that `Function.prototype.toString()`
   // of the built-in hook - which changes across SDK builds (e.g. minification) -
-  // never leaks into deployed schemas or migration diffs. This asserts the pinned
-  // literal still matches what the same source would naturally produce, so a
-  // future change to the args-object template above is caught here instead of
-  // silently diverging from the pin.
-  test("timestamps() updatedAt hook pin matches its natural expr", () => {
-    const updatedAtHook: UpdateHookFn<string | Date | null, string | Date> = ({ input, now }) =>
-      input ?? now;
-
-    const type = db.table("User", {
-      updatedAt: db.datetime().hooks({ update: updatedAtHook }),
-    });
+  // never leaks into deployed schemas or migration diffs. The pinned value is
+  // generated from that hook's own source by `pnpm generate`
+  // (scripts/generate-precompiled-hooks.ts), not hand-typed, so this only needs to
+  // confirm the real field wires up to it.
+  test("timestamps() updatedAt hook resolves to the generated pin", () => {
+    const type = db.table("User", { ...db.fields.timestamps() });
 
     const schema = toSchemaOutputs({ User: type });
     const field = parseFieldConfig(schema.User!.fields.updatedAt!);
 
-    expect(field.hooks?.update?.expr).toBe(
-      "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })",
-    );
+    expect(field.hooks?.update?.expr).toBe(TIMESTAMPS_UPDATED_AT_HOOK_EXPR);
   });
 });

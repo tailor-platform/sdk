@@ -160,6 +160,7 @@
     "check:public-api-jsdoc": "node --experimental-strip-types scripts/check-public-api-jsdoc.ts",
     "check:zod-isolation": "node --experimental-strip-types scripts/check-zod-isolation.ts",
     "check:import-cycles": "node --experimental-strip-types scripts/check-import-cycles.ts",
+    "check:precompiled-hooks": "node --experimental-strip-types scripts/generate-precompiled-hooks.ts --check",
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo",
@@ -170,7 +171,7 @@
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
     "knip": "knip",
     "publint": "publint --strict",
-    "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\""
+    "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\" && node --experimental-strip-types scripts/generate-precompiled-hooks.ts --write"
   },
   "dependencies": {
     "@0no-co/graphql.web": "1.3.3",
