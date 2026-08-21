@@ -165,7 +165,7 @@ const LEGACY_CHANGE_KINDS = new Map<string, DiffChangeKind>([
  */
 function normalizeLegacyChangeKinds(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null || !("changes" in raw)) return raw;
-  const changes = (raw as { changes: unknown }).changes;
+  const changes = raw.changes;
   if (!Array.isArray(changes)) return raw;
 
   const normalized = changes.map((change) => {
@@ -616,7 +616,7 @@ function convertActionPermission(
   permission: StandardActionPermission<"record">,
 ): SnapshotActionPermission {
   return {
-    conditions: permission.conditions as SnapshotPermissionCondition[],
+    conditions: permission.conditions,
     permit: permission.permit,
     ...(permission.description && { description: permission.description }),
   };
@@ -3191,7 +3191,18 @@ export function compareRemoteWithSnapshot(
   return [...structuralDrifts, ...scriptDrifts];
 }
 
-function extractRemoteScriptHash(remoteType: ProtoTailorDBType): string | undefined {
+/**
+ * Result of scanning a remote type's script expressions for an embedded
+ * source hash: a single agreed-upon hash, no hash found at all (the pattern
+ * left by a pre-v2 CLI deploy), or disagreeing hashes across expressions
+ * (a distinct anomaly, not the pre-v2 pattern).
+ */
+type RemoteScriptHashState =
+  | { kind: "hash"; hash: string }
+  | { kind: "absent" }
+  | { kind: "conflicting" };
+
+function extractRemoteScriptHashState(remoteType: ProtoTailorDBType): RemoteScriptHashState {
   const exprs = [
     remoteType.schema?.typeHook?.create?.expr,
     remoteType.schema?.typeHook?.update?.expr,
@@ -3200,15 +3211,13 @@ function extractRemoteScriptHash(remoteType: ProtoTailorDBType): string | undefi
   ];
   let found: string | undefined;
   for (const expr of exprs) {
-    if (expr) {
-      const hash = extractSourceScriptHash(expr);
-      if (hash) {
-        if (found && found !== hash) return undefined;
-        found = hash;
-      }
-    }
+    if (!expr) continue;
+    const hash = extractSourceScriptHash(expr);
+    if (!hash) continue;
+    if (found && found !== hash) return { kind: "conflicting" };
+    found = hash;
   }
-  return found;
+  return found ? { kind: "hash", hash: found } : { kind: "absent" };
 }
 
 function remoteHasScripts(remoteType: ProtoTailorDBType): boolean {
@@ -3219,6 +3228,13 @@ function remoteHasScripts(remoteType: ProtoTailorDBType): boolean {
     remoteType.schema?.typeValidate?.update?.expr
   );
 }
+
+/**
+ * Detail suffix used when a script-carrying table has no script hash on the
+ * remote at all — the pattern left by an environment whose last deploy used
+ * the pre-v2 CLI, which never wrote script hashes.
+ */
+export const MISSING_REMOTE_SCRIPT_HASH_SUFFIX = "has no script hash on remote";
 
 function compareScriptHashes(
   remoteTypes: ProtoTailorDBType[],
@@ -3237,15 +3253,18 @@ function compareScriptHashes(
     if (!remoteType) continue;
 
     if (localHash) {
-      const remoteHash = extractRemoteScriptHash(remoteType);
+      const remoteState = extractRemoteScriptHashState(remoteType);
+      const remoteHash = remoteState.kind === "hash" ? remoteState.hash : undefined;
       if (localHash !== remoteHash) {
-        drifts.push({
-          tableName,
-          kind: "script_mismatch",
-          details: remoteHash
+        const details =
+          remoteState.kind === "hash"
             ? `Table '${tableName}' scripts differ between remote and snapshot`
-            : `Table '${tableName}' has no script hash on remote`,
-        });
+            : remoteState.kind === "conflicting"
+              ? `Table '${tableName}' has conflicting script hashes on remote`
+              : remoteHasScripts(remoteType)
+                ? `Table '${tableName}' ${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}`
+                : `Table '${tableName}' has scripts in snapshot but not on remote`;
+        drifts.push({ tableName, kind: "script_mismatch", details });
       }
     } else if (remoteHasScripts(remoteType)) {
       drifts.push({

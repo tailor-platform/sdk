@@ -37,7 +37,7 @@ function normalizeOperand(operand: RawPermissionOperand): IdPPermissionOperand {
     const mapped = operand.user === "id" ? "_id" : operand.user;
     return { user: mapped };
   }
-  return operand as IdPPermissionOperand;
+  return operand;
 }
 
 function normalizeConditions(

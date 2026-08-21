@@ -135,7 +135,7 @@ export async function validateAndDetectMigrations(
         logger.error("Remote schema drift detected:");
         logger.log(formatRemoteVerificationResults(remoteVerificationResults));
         logger.newline();
-        logRemoteDriftGuidance();
+        logRemoteDriftGuidance(remoteVerificationResults);
         logger.newline();
         logger.info("Use '--no-schema-check' to skip this check (not recommended).");
         throw new Error("Remote schema verification failed");

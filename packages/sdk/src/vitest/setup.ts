@@ -82,7 +82,7 @@ export function extractVaultStore(secrets: unknown): Record<string, Record<strin
     "vaults" in secrets &&
     typeof (secrets as { vaults?: unknown }).vaults === "object" &&
     (secrets as { vaults?: unknown }).vaults !== null
-      ? ((secrets as { vaults: Record<string, unknown> }).vaults as Record<string, unknown>)
+      ? (secrets as { vaults: Record<string, unknown> }).vaults
       : (secrets as Record<string, unknown>);
 
   const store: Record<string, Record<string, string>> = {};
@@ -179,10 +179,10 @@ export function restoreBlockedGlobals(
 
 beforeEach(() => {
   if (!isTailorRuntime()) return;
-  lifecycle.enter(globalThis as Record<string, unknown>, BLOCKED_GLOBALS);
+  lifecycle.enter(globalThis, BLOCKED_GLOBALS);
 });
 
 afterEach(() => {
   if (!isTailorRuntime()) return;
-  lifecycle.exit(globalThis as Record<string, unknown>);
+  lifecycle.exit(globalThis);
 });

@@ -78,7 +78,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
     if (type.metadata?.typeHook?.create) {
       const { id: _id, ...typeHookInput } = hooked;
       // oxlint-disable-next-line typescript/no-unsafe-function-type
-      const overrides = (type.metadata.typeHook.create as Function)({
+      const overrides = type.metadata.typeHook.create({
         input: typeHookInput,
         invoker: null,
         now,
@@ -106,12 +106,9 @@ function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unkno
   const { id: _id, ...newRecord } = hooked as Record<string, unknown>;
   const issues: StandardSchemaV1.Issue[] = [];
   // oxlint-disable-next-line typescript/no-unsafe-function-type
-  (typeValidate as Function)(
-    { newRecord, oldRecord: null, invoker: null },
-    (field: string, message: string) => {
-      issues.push({ message, path: [field] });
-    },
-  );
+  typeValidate({ newRecord, oldRecord: null, invoker: null }, (field: string, message: string) => {
+    issues.push({ message, path: [field] });
+  });
   return issues;
 }
 

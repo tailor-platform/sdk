@@ -132,12 +132,10 @@ export async function generateDiffFiles(
   }
 
   // Add description if provided
-  if (description) {
-    diff = { ...diff, description };
-  }
+  const diffWithDescription = description ? { ...diff, description } : diff;
 
   // Write diff file
-  await fs.writeFile(diffFilePath, JSON.stringify(diff, null, 2));
+  await fs.writeFile(diffFilePath, JSON.stringify(diffWithDescription, null, 2));
 
   const result: GenerateDiffResult = {
     diffFilePath,
@@ -145,14 +143,20 @@ export async function generateDiffFiles(
   };
 
   if (writeScript) {
-    const scriptContent = generateMigrationScript(diff, expandPlans);
+    const scriptContent = generateMigrationScript(diffWithDescription, expandPlans);
     await fs.writeFile(migrateFilePath, scriptContent);
     result.migrateFilePath = migrateFilePath;
 
     // Generate db.ts with types based on the PREVIOUS schema state
     // (the state before this migration runs)
     // Pass diff to generate ColumnType for optional->required fields
-    await writeDbTypesFile(previousSnapshot, migrationsDir, migrationNumber, diff, expandPlans);
+    await writeDbTypesFile(
+      previousSnapshot,
+      migrationsDir,
+      migrationNumber,
+      diffWithDescription,
+      expandPlans,
+    );
     result.dbTypesFilePath = dbTypesFilePath;
   }
 

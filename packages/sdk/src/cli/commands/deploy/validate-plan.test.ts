@@ -190,7 +190,7 @@ const validCases: Case<undefined>[] = [
           subgraphs: [{ serviceType: 1, serviceNamespace: "tailordb" }],
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -206,7 +206,7 @@ const validCases: Case<undefined>[] = [
           cors: ["my-frontend:url"],
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -217,7 +217,7 @@ const validCases: Case<undefined>[] = [
         name: "example.com",
         request: { workspaceId: WS_ID, staticWebsiteName: "my-site", domain: "example.com" },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -251,7 +251,7 @@ const validCases: Case<undefined>[] = [
       input.idp.changeSet.client.creates.push({
         name: "my-client",
         request: { workspaceId: WS_ID, namespaceName: "my-idp", client: { name: "my-client" } },
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -266,7 +266,7 @@ const validCases: Case<undefined>[] = [
           userAuthPolicy: { enableMfa: true, allowedReturnOrigins: ["my-frontend:url"] },
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -369,7 +369,7 @@ const invalidCases: Case<RegExp>[] = [
           cors: [],
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -408,7 +408,7 @@ const invalidCases: Case<RegExp>[] = [
         name: "INVALID_DOMAIN",
         request: { workspaceId: WS_ID, staticWebsiteName: "my-site", domain: "INVALID_DOMAIN" },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -418,7 +418,7 @@ const invalidCases: Case<RegExp>[] = [
       input.secretManager.vaultChangeSet.creates.push({
         name: "INVALID_VAULT",
         workspaceId: WS_ID,
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -431,7 +431,7 @@ const invalidCases: Case<RegExp>[] = [
         workspaceId: WS_ID,
         vaultName: "my-vault",
         value: "my-value",
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -475,7 +475,7 @@ const invalidCases: Case<RegExp>[] = [
       input.idp.changeSet.client.creates.push({
         name: clientName,
         request: { workspaceId: WS_ID, namespaceName: namespace, client: { name: clientName } },
-      } as never);
+      });
     },
     expected: /validation error/,
   },

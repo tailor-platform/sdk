@@ -94,7 +94,7 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
   GlobalThis.tailordb = {
     Client: MockTailordbClient,
-  } as typeof GlobalThis.tailordb;
+  };
 
   return { executedQueries, createdClients };
 }
@@ -149,7 +149,7 @@ export function setupInvokerMock(invoker: TailorPrincipal | null): void {
         type: invoker.type,
         workspaceId: invoker.workspaceId,
         attributes: invoker.attributeList as string[],
-        attributeMap: invoker.attributes as Record<string, unknown>,
+        attributeMap: invoker.attributes,
       }
     : null;
 

@@ -135,7 +135,7 @@ export const mainCommand = withCompletionCommand({
   },
 });
 
-runMain(mainCommand, {
+void runMain(mainCommand, {
   version: packageJson.version,
   // strip unknown keys
   globalArgs: z.object(commonArgs),

@@ -345,7 +345,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
         // Resolve against the user-provided Vite root when present (falling
         // back to cwd). Vitest projects with a non-cwd `root` would otherwise
         // resolve a relative options.config against the wrong directory.
-        const configRoot = (config.root as string | undefined) ?? process.cwd();
+        const configRoot = config.root ?? process.cwd();
         const configAbsPath = resolve(configRoot, options.config);
         process.env.__TAILOR_RUNTIME_CONFIG = configAbsPath;
       }

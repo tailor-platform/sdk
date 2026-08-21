@@ -477,11 +477,11 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "shared" },
-    } as never);
+    });
     previousOwner.tailorDB.changeSet.gqlPermission.deletes.push({
       name: "User",
       request: { namespaceName: "shared" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.tailorDB.changeSet.service.updates.push({ name: "shared" } as never);
@@ -513,7 +513,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "old" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.tailorDB.changeSet.type.updates.push({
@@ -535,11 +535,11 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "shared" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
-    nextOwner.tailorDB.changeSet.service.unchanged.push({ name: "shared" } as never);
-    nextOwner.tailorDB.changeSet.type.unchanged.push({ name: "User" } as never);
+    nextOwner.tailorDB.changeSet.service.unchanged.push({ name: "shared" });
+    nextOwner.tailorDB.changeSet.type.unchanged.push({ name: "User" });
 
     dropCrossDeploymentManagedDeletes([
       plannedDeployment("previous", previousOwner),
@@ -556,7 +556,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     const deletes = previousOwner.staticWebsite.changeSet.deletes;
 
     const nextOwner = emptyResults();
-    nextOwner.staticWebsite.changeSet.unchanged.push({ name: "shared-site" } as never);
+    nextOwner.staticWebsite.changeSet.unchanged.push({ name: "shared-site" });
 
     dropCrossDeploymentManagedDeletes([
       plannedDeployment("previous", previousOwner),
@@ -626,7 +626,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     const deletes = previousOwner.workflowExecutionPolicy.changeSet.deletes;
 
     const nextOwner = emptyResults();
-    nextOwner.workflowExecutionPolicy.changeSet.unchanged.push({ name: "premium" } as never);
+    nextOwner.workflowExecutionPolicy.changeSet.unchanged.push({ name: "premium" });
 
     dropCrossDeploymentManagedDeletes([
       plannedDeployment("previous", previousOwner),
@@ -642,7 +642,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.app.deletes.push({
       name: "shared-app",
       request: { workspaceId: "ws", applicationName: "shared-app" },
-    } as never);
+    });
     const appDeletes = previousOwner.app.deletes;
 
     const nextOwner = emptyResults();
@@ -662,7 +662,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.app.deletes.push({
       name: "shared-app",
       request: { workspaceId: "ws", applicationName: "shared-app" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.app.unchanged.push({ name: "shared-app" } as never);
@@ -680,7 +680,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.app.deletes.push({
       name: "old-app",
       request: { workspaceId: "ws", applicationName: "old-app" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.app.creates.push({ name: "different-app" } as never);
@@ -750,7 +750,7 @@ describe("confirmDeploymentPlans", () => {
     results.tailorDB.changeSet.type.deletes.push({
       name: "Order",
       request: {},
-    } as (typeof results.tailorDB.changeSet.type.deletes)[number]);
+    });
 
     await confirmDeploymentPlans({
       deployments: [plannedDeployment("my-app", results)],
@@ -1045,7 +1045,7 @@ describe("multi-config deployment orchestration", () => {
         await new Promise<void>((resolve) => {
           releases.push(resolve);
         });
-        return fakeTarget({ appName: params.configPath }) as never;
+        return fakeTarget({ appName: params.configPath });
       },
     });
 
@@ -1063,7 +1063,7 @@ describe("multi-config deployment orchestration", () => {
     const releases: Array<() => void> = [];
 
     const planPromise = planDeploymentTargets({
-      targets: targets as never,
+      targets: targets,
       runInputs: {} as never,
       client: {} as never,
       workspaceId: "workspace-id",

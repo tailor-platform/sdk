@@ -81,7 +81,7 @@ function snapshotRecordSchema<T>(valueSchema: z.ZodType<T>): z.ZodType<Record<st
         record[key] = result.data;
       }
       return record;
-    }) as z.ZodType<Record<string, T>>;
+    });
 }
 
 // ============================================================================
@@ -134,7 +134,7 @@ export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.loose
   scale: z.number().optional(),
   default: z.unknown().optional(),
   fields: z.lazy(() => snapshotRecordSchema(snapshotFieldConfigSchema)).optional(),
-}) as z.ZodType<SnapshotFieldConfig>;
+});
 
 export const snapshotIndexConfigSchema: z.ZodType<SnapshotIndexConfig> = z.looseObject({
   fields: z.array(z.string()),
@@ -160,7 +160,7 @@ const FIELD_REF_KEYS = ["user", "record", "newRecord", "oldRecord"] as const;
 // ref keys — such an object is ambiguous and signals a malformed condition.
 const snapshotPermissionOperandSchema = z.unknown().refine((v) => {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
-  const keys = Object.keys(v as Record<string, unknown>);
+  const keys = Object.keys(v);
   const refKeyCount = FIELD_REF_KEYS.filter((k) => keys.includes(k)).length;
   return refKeyCount < 2;
 }, "Ambiguous field-ref operand: contains more than one of user/record/newRecord/oldRecord") as unknown as z.ZodType<SnapshotPermissionOperand>;
@@ -170,13 +170,13 @@ const snapshotGqlPermissionOperandSchema = z
   .unknown()
   .refine((v) => {
     if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
-    const keys = Object.keys(v as Record<string, unknown>);
+    const keys = Object.keys(v);
     const refKeyCount = FIELD_REF_KEYS.filter((k) => keys.includes(k)).length;
     return refKeyCount < 2;
   }, "Ambiguous field-ref operand: contains more than one of user/record/newRecord/oldRecord")
   .refine((v) => {
     if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
-    const keys = Object.keys(v as Record<string, unknown>);
+    const keys = Object.keys(v);
     return !["record", "newRecord", "oldRecord"].some((k) => keys.includes(k));
   }, "GQL permissions only support { user } field references") as unknown as z.ZodType<SnapshotPermissionOperand>;
 

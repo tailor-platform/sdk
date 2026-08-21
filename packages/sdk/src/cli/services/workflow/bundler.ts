@@ -18,6 +18,7 @@ import {
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
+import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
@@ -37,6 +38,221 @@ interface JobInfo {
   name: string;
   exportName: string;
   sourceFile: string;
+}
+
+/**
+ * Thrown when a job's dependency graph cannot be statically determined, so the
+ * job or a call to it would otherwise be silently dropped from the bundle.
+ */
+class WorkflowJobDetectionError extends Error {}
+
+function isExecJobFunctionCallee(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const callee = node as ASTNode;
+  if (callee.type !== "MemberExpression") return false;
+  const property = callee.property as ASTNode | undefined;
+  if (property?.type !== "Identifier" || property.name !== "execJobFunction") return false;
+  const object = callee.object as ASTNode | undefined;
+  if (object?.type !== "MemberExpression") return false;
+  const workflowProperty = object.property as ASTNode | undefined;
+  if (workflowProperty?.type !== "Identifier" || workflowProperty.name !== "workflow") {
+    return false;
+  }
+  const root = object.object as ASTNode | undefined;
+  return root?.type === "Identifier" && root.name === "tailor";
+}
+
+function extractStaticStringValue(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const value = node as ASTNode;
+  if (value.type === "Literal" && typeof value.value === "string") {
+    return value.value;
+  }
+  if (value.type === "TemplateLiteral") {
+    const quasis = value.quasis as Array<{ value?: { cooked?: string } }> | undefined;
+    const expressions = value.expressions as unknown[] | undefined;
+    if (quasis?.length === 1 && (expressions?.length ?? 0) === 0) {
+      return quasis[0]?.value?.cooked;
+    }
+  }
+  return undefined;
+}
+
+const RUNTIME_WORKFLOW_MODULE_SPECIFIERS = new Set([
+  "@tailor-platform/sdk/runtime",
+  "@tailor-platform/sdk/runtime/workflow",
+]);
+
+function collectRuntimeWorkflowImportBindings(program: ASTNode): Set<string> {
+  const bindings = new Set<string>();
+  for (const statement of (program.body as ASTNode[] | undefined) ?? []) {
+    if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue;
+    const source = statement.source as ASTNode | undefined;
+    if (
+      typeof source?.value !== "string" ||
+      !RUNTIME_WORKFLOW_MODULE_SPECIFIERS.has(source.value)
+    ) {
+      continue;
+    }
+    for (const specifier of (statement.specifiers as ASTNode[] | undefined) ?? []) {
+      if (specifier.type !== "ImportSpecifier" || specifier.importKind === "type") continue;
+      const imported = getModuleExportName(specifier.imported);
+      const local = getModuleExportName(specifier.local);
+      if (imported === "workflow" && local) bindings.add(local);
+    }
+  }
+  return bindings;
+}
+
+function isDirectExecJobFunctionCallee(
+  node: unknown,
+  runtimeWorkflowBindings: ReadonlySet<string>,
+): boolean {
+  if (isExecJobFunctionCallee(node)) return true;
+  if (!node || typeof node !== "object") return false;
+  const callee = node as ASTNode;
+  if (callee.type !== "MemberExpression") return false;
+  const property = callee.property as ASTNode | undefined;
+  if (property?.type !== "Identifier" || property.name !== "execJobFunction") return false;
+  const object = callee.object as ASTNode | undefined;
+  return object?.type === "Identifier" && runtimeWorkflowBindings.has(object.name as string);
+}
+
+interface DirectExecJobFunctionCall {
+  targetName: string | undefined;
+}
+
+/**
+ * Find calls to `execJobFunction` written directly in workflow source, on
+ * either the ambient `tailor.workflow` global or a `workflow` value imported
+ * from `@tailor-platform/sdk/runtime`(`/workflow`) (aliases included). Such a
+ * call is never recognized as a dependency, so its target would silently be
+ * dropped from the bundle unless something else happens to reference it.
+ * @param program - Parsed workflow file AST
+ * @returns Every direct execJobFunction call found, with its static target
+ * name when the first argument is a string literal
+ */
+function findDirectExecJobFunctionCalls(program: ASTNode): DirectExecJobFunctionCall[] {
+  const runtimeWorkflowBindings = collectRuntimeWorkflowImportBindings(program);
+  const calls: DirectExecJobFunctionCall[] = [];
+
+  function walk(node: ASTNode | null | undefined): void {
+    if (!node || typeof node !== "object") return;
+    if (
+      node.type === "CallExpression" &&
+      isDirectExecJobFunctionCallee(node.callee, runtimeWorkflowBindings)
+    ) {
+      const args = node.arguments as unknown[] | undefined;
+      calls.push({ targetName: extractStaticStringValue(args?.[0]) });
+    }
+    for (const key of Object.keys(node)) {
+      const child = node[key];
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode);
+      }
+    }
+  }
+
+  walk(program);
+  return calls;
+}
+
+function buildDirectExecJobFunctionErrorMessage(
+  sourceFile: string,
+  call: DirectExecJobFunctionCall,
+): string {
+  if (call.targetName !== undefined) {
+    return (
+      `Workflow file ${sourceFile} calls execJobFunction("${call.targetName}", ...) directly. A ` +
+      `direct call is never recognized as a dependency, so "${call.targetName}" would silently be ` +
+      `dropped from the bundle unless something else happens to reference it. Call the ` +
+      `"${call.targetName}" job's .start(...) method from inside a job body instead.`
+    );
+  }
+  return (
+    `Workflow file ${sourceFile} calls execJobFunction(...) directly with a job name that isn't a ` +
+    `string literal, so the target can't be resolved at build time. Call the target job's own ` +
+    `.start(...) method from inside a job body instead of calling execJobFunction directly.`
+  );
+}
+
+/**
+ * Find the job names a bundled job's code calls `execJobFunction` on, by
+ * looking for `tailor.workflow.execJobFunction(<name>, ...)` calls with a
+ * static string name.
+ * @param code - Bundled job code
+ * @returns Target job names referenced with a statically known name
+ */
+export function collectExecJobFunctionTargets(code: string): string[] {
+  const { program, errors } = parseSync("input.js", code);
+  if (errors.length > 0) {
+    throw new WorkflowJobDetectionError(
+      `Failed to parse bundled job code while checking for missed dependencies: ` +
+        `${errors.map((e) => e.message).join("; ")}`,
+    );
+  }
+  const targets: string[] = [];
+
+  function walk(node: ASTNode | null | undefined): void {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "CallExpression" && isExecJobFunctionCallee(node.callee)) {
+      const args = node.arguments as unknown[] | undefined;
+      const target = extractStaticStringValue(args?.[0]);
+      if (target !== undefined) targets.push(target);
+    }
+    for (const key of Object.keys(node)) {
+      const child = node[key];
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode);
+      }
+    }
+  }
+
+  walk(program as unknown as ASTNode);
+  return targets;
+}
+
+/**
+ * Check every bundled job's code for execJobFunction targets that were not
+ * bundled, throwing a WorkflowJobDetectionError naming the caller job when
+ * one is found (or when the caller's own bundled code fails to parse).
+ * @param bundledCode - Bundled job code by job name
+ * @param usedJobNames - Job names that were actually bundled
+ */
+export function validateBundledDependencies(
+  bundledCode: Map<string, string>,
+  usedJobNames: readonly string[],
+): void {
+  const usedJobNameSet = new Set(usedJobNames);
+  for (const [callerJobName, code] of bundledCode) {
+    let targets: string[];
+    try {
+      targets = collectExecJobFunctionTargets(code);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new WorkflowJobDetectionError(
+        `Failed to check the bundled output of workflow job "${callerJobName}" for missed ` +
+          `dependencies: ${message}`,
+      );
+    }
+
+    for (const targetJobName of targets) {
+      if (!usedJobNameSet.has(targetJobName)) {
+        throw new WorkflowJobDetectionError(
+          `Workflow job "${callerJobName}" calls execJobFunction("${targetJobName}", ...) — usually the ` +
+            `result of a rewritten "${targetJobName}" job .start() call — but "${targetJobName}" was not ` +
+            `detected as a dependency and is not included in the bundle. Call the "${targetJobName}" job's ` +
+            `.start() method from inside the body of workflow job "${callerJobName}" (a nested function ` +
+            `inside body works too), or make sure the file containing the call is covered by the workflow ` +
+            `service's "files" pattern.`,
+        );
+      }
+    }
+  }
 }
 
 export interface BundleWorkflowJobsResult {
@@ -115,6 +331,17 @@ export async function bundleWorkflowJobs(
     bundledCode.set(name, code);
   }
 
+  // Backstop for dependency-graph gaps the source-level checks in
+  // filterUsedJobs cannot see (e.g. a factored-out .start() call inside a
+  // helper file outside `workflow.files`): the rewrite still resolves and
+  // produces a valid execJobFunction call, but the target was never bundled.
+  // Runs before the success log below so a failure here doesn't print a
+  // misleading "Bundled" message right before throwing.
+  validateBundledDependencies(
+    bundledCode,
+    usedJobs.map((job) => job.name),
+  );
+
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
 
   return {
@@ -158,16 +385,39 @@ async function filterUsedJobs(
     jobsBySourceFile.set(job.sourceFile, existing);
   }
 
+  // Files with no job of their own (e.g. a shared helper module factoring out
+  // .start() calls) still need scanning for stray start calls below; otherwise
+  // a call factored into such a file is never checked at all.
+  const filesToScan = new Map(jobsBySourceFile);
+  const knownRealpaths = new Set([...jobsBySourceFile.keys()].map(safeRealpath));
+  for (const binding of startContext.modules.values()) {
+    if (!knownRealpaths.has(safeRealpath(binding.sourceFile))) {
+      filesToScan.set(binding.sourceFile, []);
+    }
+  }
+
   // Detect start calls and build dependency graph
   // Maps job name -> set of job names it starts
   const dependencies = new Map<string, Set<string>>();
 
   // Process all source files in parallel
   const fileResults = await Promise.all(
-    Array.from(jobsBySourceFile.entries()).map(async ([sourceFile, jobs]) => {
+    Array.from(filesToScan.entries()).map(async ([sourceFile, jobs]) => {
       try {
         const source = await fs.promises.readFile(sourceFile, "utf-8");
-        const { program } = parseSync("input.ts", source);
+        const { program, errors } = parseSync(sourceFile, source);
+        if (errors.length > 0) {
+          throw new WorkflowJobDetectionError(
+            `Failed to parse ${sourceFile}: ${errors.map((e) => e.message).join("; ")}`,
+          );
+        }
+
+        const [firstDirectExecCall] = findDirectExecJobFunctionCalls(program as unknown as ASTNode);
+        if (firstDirectExecCall) {
+          throw new WorkflowJobDetectionError(
+            buildDirectExecJobFunctionErrorMessage(sourceFile, firstDirectExecCall),
+          );
+        }
 
         // Find all jobs in this file to get body ranges
         const detectedJobs = findAllJobs(program, source);
@@ -178,7 +428,14 @@ async function filterUsedJobs(
 
         for (const job of jobs) {
           const detectedJob = detectedJobs.find((d) => d.name === job.name);
-          if (!detectedJob) continue;
+          if (!detectedJob) {
+            throw new WorkflowJobDetectionError(
+              `Workflow job "${job.name}" (export "${job.exportName}" in ${sourceFile}) could not be ` +
+                `statically detected: createWorkflowJob's "name" must be a string literal and "body" ` +
+                `must be a function expression. Dynamic or computed values (e.g. body: someWrapper(fn)) ` +
+                `cannot be bundled and would be silently dropped.`,
+            );
+          }
 
           const jobDeps = new Set<string>();
 
@@ -198,9 +455,29 @@ async function filterUsedJobs(
           }
         }
 
+        for (const call of startCalls) {
+          if (call.kind !== "job") continue;
+          const isInsideAJobBody = detectedJobs.some(
+            (detectedJob) =>
+              call.callRange.start >= detectedJob.bodyValueRange.start &&
+              call.callRange.end <= detectedJob.bodyValueRange.end,
+          );
+          if (!isInsideAJobBody) {
+            throw new WorkflowJobDetectionError(
+              `Call to job "${call.targetName}".start() in ${sourceFile} is not inside any workflow ` +
+                `job's body: it was factored into a function defined outside the calling job's body. ` +
+                `Dependency detection only sees .start() calls lexically inside a job body, so this call ` +
+                `would silently drop "${call.targetName}" from the bundle. Move the call to a function ` +
+                `defined inside the calling job's body.`,
+            );
+          }
+        }
+
         return jobDependencies;
-      } catch {
-        // If we can't parse a file, assume no dependencies from it
+      } catch (error) {
+        if (error instanceof WorkflowJobDetectionError) throw error;
+        // Some other unexpected error (e.g. a file read failure): treat the
+        // file as having no dependencies rather than failing the whole build.
         return [];
       }
     }),

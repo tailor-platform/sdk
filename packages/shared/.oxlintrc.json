@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["../../oxlint.shared.json"],
   "plugins": ["typescript", "unicorn"],
   "categories": {
     "correctness": "error"
@@ -28,19 +29,7 @@
     "typescript/no-namespace": "error",
     "typescript/no-require-imports": "error",
     "typescript/no-unnecessary-type-constraint": "error",
-    "typescript/no-unsafe-function-type": "error",
-    "typescript/await-thenable": "error",
-    "typescript/no-floating-promises": "error",
-    "typescript/no-misused-promises": "error",
-    "typescript/only-throw-error": "error",
-    "typescript/prefer-promise-reject-errors": "error",
-    "typescript/switch-exhaustiveness-check": [
-      "error",
-      {
-        "considerDefaultExhaustiveForUnions": true
-      }
-    ],
-    "no-param-reassign": "error"
+    "typescript/no-unsafe-function-type": "error"
   },
   "overrides": [
     {

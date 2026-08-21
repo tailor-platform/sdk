@@ -1,7 +1,7 @@
 import { assertDefined } from "#/utils/assert";
 import { type ASTNode, isStringLiteral, findProperty } from "./ast-utils";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
-import type { Program, CallExpression, ObjectExpression } from "@oxc-project/types";
+import type { Program, CallExpression } from "@oxc-project/types";
 
 export interface WorkflowLocation {
   name: string;
@@ -28,10 +28,7 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
       const args = callExpr.arguments;
       const firstArg = args[0];
       if (args.length >= 1 && firstArg?.type === "ObjectExpression") {
-        const configObj = assertDefined(
-          firstArg,
-          "createWorkflow first argument missing",
-        ) as ObjectExpression;
+        const configObj = assertDefined(firstArg, "createWorkflow first argument missing");
         const nameProp = findProperty(configObj.properties, "name");
 
         if (nameProp && isStringLiteral(nameProp.value)) {
@@ -66,7 +63,7 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
 
     const newParents = [...parents, node];
     for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
+      const child = node[key];
       if (Array.isArray(child)) {
         child.forEach((c: unknown) => walk(c as ASTNode | null, newParents));
       } else if (child && typeof child === "object") {

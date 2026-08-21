@@ -465,7 +465,7 @@ describe("formatMappedError", () => {
     const traceMap = new TraceMap({
       version: 3,
       sources: ["resolvers/error-test.ts"],
-      sourcesContent: [null as unknown as string],
+      sourcesContent: [null],
       names: [],
       mappings: "",
     });

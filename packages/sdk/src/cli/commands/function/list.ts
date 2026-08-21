@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -35,7 +35,7 @@ async function loadOptions(options: ListFunctionRegistriesOptions) {
   return {
     client,
     workspaceId,
-    order: result.data.order as Order | undefined,
+    order: result.data.order,
     limit: result.data.limit,
   };
 }

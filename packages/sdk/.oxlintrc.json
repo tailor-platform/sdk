@@ -32,11 +32,26 @@
     "no-regex-spaces": "error",
     "no-unexpected-multiline": "error",
     "preserve-caught-error": "error",
-    "typescript/await-thenable": "off",
+    "typescript/await-thenable": "error",
     "typescript/no-array-delete": "off",
     "typescript/no-base-to-string": "off",
     "typescript/no-duplicate-type-constituents": "off",
-    "typescript/no-floating-promises": "off",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/only-throw-error": [
+      "error",
+      {
+        "allow": [{ "from": "file", "name": "PendingStart" }]
+      }
+    ],
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      {
+        "considerDefaultExhaustiveForUnions": true
+      }
+    ],
+    "no-param-reassign": "error",
     "typescript/no-for-in-array": "off",
     "typescript/no-implied-eval": "off",
     "typescript/no-meaningless-void-operator": "off",
@@ -49,6 +64,7 @@
     "typescript/restrict-template-expressions": "off",
     "typescript/unbound-method": "off",
     "typescript/no-unnecessary-condition": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
     "typescript/no-non-null-assertion": "error",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
@@ -349,6 +365,22 @@
               {
                 "group": ["**/schema", "./schema", "../schema"],
                 "message": "Pure type modules must not import schema modules even type-only — schema-derived types come from zinfer output (src/types/*.generated.ts)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/vitest/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "#/cli/**"],
+                "message": "Vitest module is loaded in user test environments and must not import from cli module."
               }
             ]
           }

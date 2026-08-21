@@ -22,9 +22,7 @@ type LoggerMethod = {
 export function silenceLogger(...methods: LoggerMethod[]): Disposable {
   // Avoid `DisposableStack` — not in Node 22 (V8 12.4), which the SDK supports
   // (`engines.node: >=22`). `Symbol.dispose` is available since Node 20.4.
-  const spies = methods.map((method) =>
-    vi.spyOn(logger, method).mockImplementation((() => {}) as never),
-  );
+  const spies = methods.map((method) => vi.spyOn(logger, method).mockImplementation(() => {}));
   return {
     [Symbol.dispose]() {
       for (const spy of spies) spy.mockRestore();

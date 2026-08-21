@@ -378,7 +378,7 @@ export function createGenerationManager(params: {
         // Get all executors (file-based and plugin-generated)
         const allExecutors = executorService?.executors ?? {};
         Object.entries(allExecutors).forEach(([key, executor]) => {
-          services.executor[key] = executor as Executor;
+          services.executor[key] = executor;
         });
       });
 

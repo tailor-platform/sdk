@@ -123,7 +123,7 @@ describe("WorkflowJob type inference", () => {
       });
       const parent = createWorkflowJob({
         name: "propagate-parent-invoker-without-get-builtin-module",
-        body: async () => await child.start(),
+        body: async () => child.start(),
       });
 
       await withRegisteredJobRuntime(async () => {
@@ -152,7 +152,7 @@ describe("WorkflowJob type inference", () => {
     });
     const parent = createWorkflowJob({
       name: "propagate-parent-invoker",
-      body: async () => await child.start(),
+      body: async () => child.start(),
     });
 
     await withRegisteredJobRuntime(async () => {
@@ -195,7 +195,7 @@ describe("WorkflowJob type inference", () => {
       name: "capture-concurrent-parent-invoker",
       body: async (input: { gate: "first" | "second" }) => {
         await gates[input.gate];
-        return await child.start();
+        return child.start();
       },
     });
 
@@ -611,5 +611,26 @@ describe("start without tailor.workflow", () => {
 
     // Must type-check with zero arguments, matching WorkflowJob.start.
     await expect(workflow.start()).rejects.toThrow(/tailor\.workflow is not available/);
+  });
+});
+
+describe("start stub in a platform bundle", () => {
+  test("throws an error naming the job", () => {
+    const previous = process.env.__TAILOR_PLATFORM_BUNDLE;
+    process.env.__TAILOR_PLATFORM_BUNDLE = "1";
+    try {
+      const job = createWorkflowJob({
+        name: "unrewritten-bundle-job",
+        body: () => ({ ok: true }),
+      });
+
+      expect(() => job.start()).toThrow(/unrewritten-bundle-job/);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.__TAILOR_PLATFORM_BUNDLE;
+      } else {
+        process.env.__TAILOR_PLATFORM_BUNDLE = previous;
+      }
+    }
   });
 });

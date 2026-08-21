@@ -76,7 +76,7 @@ const oauth2DesiredConfig: AuthConnectionConfig = {
   issuerUrl: "https://idp.example.com",
   clientId: "client-id",
   clientSecret: "client-secret",
-} as AuthConnectionConfig;
+};
 
 function oauth2Connection(name: string) {
   return {
@@ -256,7 +256,7 @@ describe("planAuthConnections", () => {
       ...oauth2DesiredConfig,
       clientSecret: "",
       providerUrl: "https://changed.example.com",
-    } as AuthConnectionConfig;
+    };
 
     const { changeSet } = await planAuthConnections(client, workspaceId, appName, undefined, [
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
@@ -427,7 +427,7 @@ describe("applyAuthConnections", () => {
       ...oauth2DesiredConfig,
       clientSecret: "",
       providerUrl: "https://changed.example.com",
-    } as AuthConnectionConfig;
+    };
 
     const result = await planAuthConnections(client, workspaceId, appName, undefined, [
       { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,

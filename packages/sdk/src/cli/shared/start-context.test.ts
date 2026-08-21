@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { transformStartCalls } from "#/cli/services/workflow/start-transformer";
+import { logger } from "./logger";
 import {
   buildStartContext,
   normalizeFilePath,
@@ -16,8 +17,8 @@ describe("serializeStartContext", () => {
     return { modules: new Map() };
   }
 
-  function bindings(localBindings: StartModuleBindings["localBindings"]) {
-    return { localBindings, exports: new Map(localBindings) };
+  function bindings(localBindings: StartModuleBindings["localBindings"]): StartModuleBindings {
+    return { sourceFile: "test.ts", localBindings, exports: new Map(localBindings) };
   }
 
   test("returns empty string for undefined", () => {
@@ -234,5 +235,30 @@ await step.start();
     const result = transform(`${firstSource}\nawait step.start();\n`, firstPath, context);
 
     expect(result).toContain(`execJobFunction(${JSON.stringify(jobName)}, undefined)`);
+  });
+});
+
+describe("buildStartContext parse error handling", () => {
+  let tempDir: string | undefined;
+
+  afterEach(() => {
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+    tempDir = undefined;
+  });
+
+  test("warns instead of silently binding a syntactically invalid workflow file", async () => {
+    tempDir = mkdtempSync(path.join(tmpdir(), "build-start-context-parse-error-"));
+    const brokenFile = path.join(tempDir, "broken.ts");
+    writeFileSync(brokenFile, "this is not valid syntax &&&\n");
+
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const context = await buildStartContext({ files: [brokenFile] });
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(brokenFile), expect.anything());
+      expect(context.modules.has(normalizeFilePath(brokenFile))).toBe(false);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

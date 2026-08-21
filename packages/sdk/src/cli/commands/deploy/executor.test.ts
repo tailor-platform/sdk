@@ -440,7 +440,7 @@ describe("planExecutor", () => {
         {
           name: "existing-executor",
           label: appName,
-          resource: desiredExecutor as Record<string, unknown>,
+          resource: desiredExecutor,
         },
       ]);
 
@@ -483,7 +483,7 @@ describe("planExecutor", () => {
         {
           name: "existing-executor",
           label: appName,
-          resource: desiredExecutor as Record<string, unknown>,
+          resource: desiredExecutor,
         },
       ]);
 

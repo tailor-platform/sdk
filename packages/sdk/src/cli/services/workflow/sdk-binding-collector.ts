@@ -3,14 +3,8 @@ import type {
   Program,
   ImportDeclaration,
   VariableDeclaration,
-  ImportSpecifier,
-  ImportDefaultSpecifier,
-  ImportNamespaceSpecifier,
-  ObjectPattern,
-  BindingProperty,
   CallExpression,
   StaticMemberExpression,
-  IdentifierReference,
 } from "@oxc-project/types";
 
 /**
@@ -37,7 +31,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
           // import { createWorkflowJob } from "@tailor-platform/sdk"
           // import { createWorkflowJob as create } from "@tailor-platform/sdk"
           if (specifier.type === "ImportSpecifier") {
-            const importSpec = specifier as ImportSpecifier;
+            const importSpec = specifier;
             const imported =
               importSpec.imported.type === "Identifier"
                 ? importSpec.imported.name
@@ -55,7 +49,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
             specifier.type === "ImportNamespaceSpecifier"
             // oxlint-enable typescript/no-unnecessary-condition
           ) {
-            const spec = specifier as ImportDefaultSpecifier | ImportNamespaceSpecifier;
+            const spec = specifier;
             // Store namespace/default with special prefix to track member access
             bindings.add(`__namespace__:${spec.local.name}`);
           }
@@ -84,10 +78,10 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
           // const { createWorkflowJob } = await import(...) / require(...)
           // const { createWorkflowJob: create } = await import(...) / require(...)
           else if (id.type === "ObjectPattern") {
-            const objPattern = id as unknown as ObjectPattern;
+            const objPattern = id;
             for (const prop of objPattern.properties) {
               if (prop.type === "Property") {
-                const bindingProp = prop as BindingProperty;
+                const bindingProp = prop;
                 const keyName =
                   bindingProp.key.type === "Identifier"
                     ? bindingProp.key.name
@@ -105,7 +99,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
     }
 
     for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
+      const child = node[key];
       if (Array.isArray(child)) {
         child.forEach((c: unknown) => walk(c as ASTNode | null));
       } else if (child && typeof child === "object") {
@@ -137,7 +131,7 @@ export function isSdkFunctionCall(
 
   // Direct call: createWorkflowJob(...) or create(...)
   if (callee.type === "Identifier") {
-    const identifier = callee as IdentifierReference;
+    const identifier = callee;
     return bindings.has(identifier.name);
   }
 
@@ -152,7 +146,7 @@ export function isSdkFunctionCall(
       const property = memberExpr.property;
       if (
         object.type === "Identifier" &&
-        bindings.has(`__namespace__:${(object as IdentifierReference).name}`) &&
+        bindings.has(`__namespace__:${object.name}`) &&
         property.name === functionName
       ) {
         return true;

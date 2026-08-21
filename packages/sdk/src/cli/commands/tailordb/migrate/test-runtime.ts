@@ -293,7 +293,7 @@ function projectSeedObject(
       if (!field) return implicitFields.has(fieldName) ? [[fieldName, fieldValue]] : [];
       return [[fieldName, projectSeedValue(fieldValue, field)]];
     }),
-  ) as JsonObject;
+  );
 }
 
 function projectSeedValue(value: JsonValue, field: SnapshotFieldConfig): JsonValue {

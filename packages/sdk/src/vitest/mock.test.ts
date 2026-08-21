@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createWorkflowJob } from "../configure/services/workflow/job";
 import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
@@ -811,7 +811,7 @@ describe("mock", () => {
       // Resolvers using early-return style (`if (...) return;`) implicitly
       // return undefined for unhandled methods. That should fall through to
       // the type-consistent default rather than leaking undefined.
-      iconv.setResolver(() => undefined as unknown as null);
+      iconv.setResolver(() => undefined);
       const result = (globalThis as any).tailor.iconv.convert("hi", "UTF-8", "Shift_JIS");
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result).toHaveLength(0);
@@ -930,7 +930,13 @@ describe("mock", () => {
 
     test("setWaitHandler with function receives key/payload", () => {
       using wf = mockWorkflow();
-      wf.setWaitHandler((key: string, payload: unknown) => ({ key, payload }));
+      // Unannotated params: the overload must supply the contextual types, or
+      // this fails typecheck with TS7006 under noImplicitAny.
+      wf.setWaitHandler((key, payload) => {
+        expectTypeOf(key).toEqualTypeOf<string>();
+        expectTypeOf(payload).toEqualTypeOf<unknown>();
+        return { key, payload };
+      });
       const result = (globalThis as any).tailor.workflow.wait("approval", { reason: "ok" });
       expect(result).toEqual({ key: "approval", payload: { reason: "ok" } });
     });

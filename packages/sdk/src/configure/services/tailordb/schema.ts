@@ -1282,7 +1282,7 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
       ...fieldDef,
     },
     { pluralForm, description },
-  ) as DBTable<F>;
+  );
 }
 
 /** TailorDB schema builder utilities for defining tables and fields. */

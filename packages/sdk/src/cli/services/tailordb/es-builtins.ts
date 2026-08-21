@@ -6,8 +6,7 @@ type GlobalsShape = {
 };
 
 const globalsMap: GlobalsShape =
-  (globals as unknown as { default?: GlobalsShape }).default ??
-  (globals as unknown as GlobalsShape);
+  (globals as unknown as { default?: GlobalsShape }).default ?? globals;
 
 /**
  * Runtime globals available in the PF execution environment.
