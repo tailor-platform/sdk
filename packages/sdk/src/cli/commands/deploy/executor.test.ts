@@ -461,6 +461,14 @@ describe("planExecutor", () => {
       const createResult = await planExecutor(buildPlanContext(application));
       const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
       const remoteExecutor = create(ExecutorExecutorSchema, desiredExecutor);
+      const targetConfig = remoteExecutor.targetConfig?.config;
+      if (targetConfig?.case !== "function") {
+        throw new Error("Expected function target config");
+      }
+      const remoteFunction = targetConfig.value as typeof targetConfig.value & {
+        futureImplicitDefault?: boolean;
+      };
+      remoteFunction.futureImplicitDefault = false;
 
       const client = createMockClient([
         {

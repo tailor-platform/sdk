@@ -120,7 +120,7 @@ function createMockApplicationWithUserProfile(): Application {
         type: { name: "User" },
         usernameField: "email",
         attributeList: ["email"],
-        attributes: { email: true },
+        attributes: undefined,
       },
     },
   } as unknown as Application;
