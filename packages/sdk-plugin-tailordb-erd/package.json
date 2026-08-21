@@ -29,6 +29,7 @@
     "build": "tsdown && politty generate-shim --entry ../dist/cli.js",
     "lint": "oxlint --type-aware .",
     "lint:fix": "oxlint --type-aware . --fix",
+    "knip": "knip",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "prepack": "pnpm run build",
