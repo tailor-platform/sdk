@@ -881,6 +881,10 @@ export const allCodemods: CodemodPackage[] = [
       "- An invoker option passed via a variable or spread (not a literal object) —",
       "  the codemod only inspects literal object arguments; rename the invoker key",
       "  to authInvoker in the options object's own definition.",
+      "- A renamed triggerJobFunction call whose target is another workflow job —",
+      "  rewrite it further to that job's own .start() method (e.g. worker.start(args)).",
+      "  Calling execJobFunction directly is not detected as a build-time dependency",
+      "  and fails the build.",
     ].join("\n"),
   },
   {
@@ -919,6 +923,51 @@ export const allCodemods: CodemodPackage[] = [
       "  instead; the alias was the same mock function.",
       "- A file that already imports ExecJobFunctionOptions alongside the removed type —",
       "  rename the remaining references by hand and drop the duplicate specifier.",
+      "- A renamed call whose target is another workflow job — rewrite it further to",
+      "  that job's own .start() method (e.g. worker.start(args)). Calling",
+      "  execJobFunction directly is not detected as a build-time dependency and fails",
+      "  the build.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/remove-workflow-exec-job-function",
+    name: "workflow.execJobFunction (imported) removed — use job.start()",
+    description:
+      "`execJobFunction` on the `workflow` value imported from @tailor-platform/sdk/runtime(/workflow) is removed in v3. Calling it directly from a workflow job body to reach another job is not detected as a build-time dependency and has no working use; the target job's own `.start()` method is the only supported way to call it. This does not affect the ambient `tailor.workflow.execJobFunction` global — that's what `.start()` itself compiles down to at build time, and it remains fully supported.",
+    since: "1.0.0",
+    until: "3.0.0",
+    // No scriptPath: rewriting a call site requires resolving the job-name
+    // string to the WorkflowJob binding in scope, which is not mechanically
+    // decidable in general — this is a codemod-less ("manual") migration.
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: ["execJobFunction"],
+    examples: [
+      {
+        before:
+          'import { workflow } from "@tailor-platform/sdk/runtime";\n\nawait workflow.execJobFunction("worker", { id: 1 });',
+        after: 'import { worker } from "./jobs/worker";\n\nawait worker.start({ id: 1 });',
+      },
+    ],
+    prompt: [
+      "workflow.execJobFunction — the value imported from",
+      "@tailor-platform/sdk/runtime or @tailor-platform/sdk/runtime/workflow — is",
+      "removed in v3. Replace each call with the target job's own .start() method:",
+      "import the WorkflowJob the call names and call <job>.start(args, options)",
+      'instead of workflow.execJobFunction("<job-name>", args, options).',
+      "",
+      "This only removes the re-export from @tailor-platform/sdk/runtime. It does",
+      "not affect the ambient tailor.workflow.execJobFunction global, which stays",
+      "fully supported and is what .start() itself compiles down to at build time.",
+      "This codemod does not rewrite ambient tailor.workflow.execJobFunction(...)",
+      "call sites, since removing the import re-export does not affect them — but",
+      "if such a call site sits inside workflow job source and calls another job",
+      "by name, a separate build-time check already rejects it; migrate that call",
+      "to the target job's own .start() method too.",
+      "",
+      "If the job name passed to execJobFunction is not a string literal (a truly",
+      "dynamic dispatch), there is currently no supported replacement — .start()",
+      "only targets a statically known job. Flag this case for a human instead of",
+      "guessing a rewrite.",
     ].join("\n"),
   },
   {

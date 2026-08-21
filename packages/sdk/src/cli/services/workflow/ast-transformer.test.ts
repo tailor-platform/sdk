@@ -46,10 +46,14 @@ function transformStartCalls(
   }
 
   const modules = new Map<string, StartModuleBindings>([
-    [normalizeFilePath(currentFilePath), { localBindings, exports: new Map(localBindings) }],
+    [
+      normalizeFilePath(currentFilePath),
+      { sourceFile: currentFilePath, localBindings, exports: new Map(localBindings) },
+    ],
   ]);
   for (const [file, workflowName] of workflowFileMap ?? []) {
     modules.set(normalizeFilePath(file), {
+      sourceFile: file,
       localBindings: new Map(),
       exports: new Map([["default", { kind: "workflow", name: workflowName }]]),
     });
@@ -1284,7 +1288,11 @@ describe("AST Transformer - createStartTransformPlugin", () => {
     const modules = new Map([
       [
         normalizeFilePath(path.resolve("test.ts")),
-        { localBindings: new Map(), exports: new Map() } satisfies StartModuleBindings,
+        {
+          sourceFile: path.resolve("test.ts"),
+          localBindings: new Map(),
+          exports: new Map(),
+        } satisfies StartModuleBindings,
       ],
     ]);
 

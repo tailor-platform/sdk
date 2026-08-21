@@ -46,6 +46,11 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
    * Start this job with the given input and return the job's output value.
    * Accepts an optional second argument to pass `executionPolicyKey` for
    * platform-side concurrency enforcement.
+   *
+   * Must be called from within another job's `body` (a function defined
+   * inside `body` may call it too) — not from a function defined outside
+   * `body`. The build cannot see through that indirection to find the call,
+   * and fails instead of silently dropping it.
    * @example
    * body: async (input) => {
    *   const a = jobA.start({ id: input.id });
@@ -84,9 +89,14 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * Input and output must be JsonValue-compatible (primitives, plain objects, arrays).
  * Functions and objects with a `toJSON` method are rejected at the type level;
  * class instances exposing methods are rejected via the property walk.
+ * `name` and `body` must be written directly in this call — as a string literal and an
+ * inline function expression, respectively — not as a reference to a variable or the
+ * result of another function call. The build cannot see through that indirection to find
+ * the job, and fails instead of silently leaving it out.
  * @param config - Job configuration with name and body function.
- * @param config.name - Unique job name across the project.
- * @param config.body - Function that processes the job input.
+ * @param config.name - Unique job name across the project. Must be a string literal.
+ * @param config.body - Function that processes the job input. Must be an inline function
+ * expression, not a reference to a separately-defined function.
  * @returns A WorkflowJob that can be started from other jobs.
  * @example
  * // Simple job with async body:
@@ -125,7 +135,7 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
   const start = process.env.__TAILOR_PLATFORM_BUNDLE
     ? () => {
         throw new Error(
-          "This workflow job's .start() is rewritten at build time and is unavailable in the bundle",
+          `.start() on workflow job "${config.name}" is rewritten at build time and is unavailable in the bundle`,
         );
       }
     : // Preserve arity: use `arguments.length` (regular function, not arrow) so
