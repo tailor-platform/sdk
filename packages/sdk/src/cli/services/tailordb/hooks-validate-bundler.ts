@@ -6,11 +6,16 @@ import { createBundleLog } from "#/cli/shared/bundle-log";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
-import { PRINCIPAL_VAR, stringifyFunction } from "#/parser/service/tailordb/field";
-import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { stringifyFunction } from "#/parser/service/tailordb/field";
+import { buildHookCallArgs } from "#/parser/service/tailordb/hook-args-object";
+import {
+  getPrecompiledScriptExpr,
+  setPrecompiledScriptExpr,
+} from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
+import type { ScriptExprKind } from "#/parser/service/tailordb/hook-args-object";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type { BindingPattern, Node, ParamPattern } from "@oxc-project/types";
 
@@ -18,7 +23,7 @@ type ScriptFunction = (...args: unknown[]) => unknown;
 
 type ScriptTarget = {
   fn: ScriptFunction;
-  kind: "hooks.create" | "hooks.update" | "validate" | "typeHook" | "typeValidate";
+  kind: ScriptExprKind;
 };
 
 /** Binding found in the source file: either an import or a top-level declaration */
@@ -80,6 +85,10 @@ function isBindingPattern(param: ParamPattern): param is BindingPattern {
 
 function toScriptFunction(value: unknown): ScriptFunction | undefined {
   if (typeof value !== "function") return undefined;
+  // Already pinned (e.g. a built-in SDK hook, see `db.fields.timestamps()`) - bundling
+  // it again would derive a new expr from this build's `Function.prototype.toString()`
+  // output and overwrite the pin.
+  if (getPrecompiledScriptExpr(value as ScriptFunction)) return undefined;
   return value as unknown as ScriptFunction;
 }
 
@@ -441,7 +450,7 @@ export function buildMinimalEntryFromResolved(
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
-  kind: "hooks.create" | "hooks.update" | "validate" | "typeHook" | "typeValidate";
+  kind: ScriptExprKind;
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
   tableName: string;
@@ -457,17 +466,7 @@ async function bundleScriptTarget(args: {
         "so issues reported after an await are silently lost. Remove the async keyword.",
     );
   }
-  const argsObject =
-    kind === "hooks.create"
-      ? `{ input: _value, invoker: ${PRINCIPAL_VAR}, now: _now }`
-      : kind === "hooks.update"
-        ? `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`
-        : kind === "validate"
-          ? `{ value: _value }`
-          : kind === "typeHook"
-            ? `{ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now }`
-            : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues`;
-  const inlineExpr = assertParsableExpression(`(${fnSource})(${argsObject})`, context);
+  const inlineExpr = assertParsableExpression(`(${fnSource})(${buildHookCallArgs(kind)})`, context);
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
@@ -525,7 +524,10 @@ async function bundleScriptTarget(args: {
   bundleLog.assertAllResolved();
 
   const bundledCode = buildResult.output[0].code;
-  return assertParsableExpression(buildPrecompiledExpr(bundledCode, argsObject), context);
+  return assertParsableExpression(
+    buildPrecompiledExpr(bundledCode, buildHookCallArgs(kind)),
+    context,
+  );
 }
 
 /**

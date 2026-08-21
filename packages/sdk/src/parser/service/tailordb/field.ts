@@ -1,5 +1,6 @@
 import { parseSync } from "oxc-parser";
 import { assertParsableExpression } from "#/utils/script-expr";
+import { buildHookCallArgs } from "./hook-args-object";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
@@ -111,11 +112,6 @@ export const tailorPrincipalMap = makePrincipalExpr({
   },
 });
 
-// Identifier the table-level wrapper (buildTypeScripts in type-script.ts) binds
-// tailorPrincipalMap's result to, at most once per table, so per-hook exprs
-// below can reference it instead of re-embedding the full mapping on every hook.
-export const PRINCIPAL_VAR = "_principal";
-
 /**
  * Parse `wrapped` and return the first property of the top-level parenthesized
  * object expression, or `undefined` if it does not parse as one.
@@ -203,14 +199,8 @@ const convertToScriptExpr = (
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  const argsObject =
-    kind === "validate"
-      ? `{ value: _value }`
-      : kind === "hooks.create"
-        ? `{ input: _value, invoker: ${PRINCIPAL_VAR}, now: _now }`
-        : `{ input: _value, oldValue: _oldValue, invoker: ${PRINCIPAL_VAR}, now: _now }`;
   return assertParsableExpression(
-    `(${normalized})(${argsObject})`,
+    `(${normalized})(${buildHookCallArgs(kind)})`,
     formatScriptContext(kind, context),
   );
 };
@@ -222,10 +212,7 @@ export const convertTypeHookToExpr = (fn: Function): string => {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  return assertParsableExpression(
-    `(${normalized})({ input: _input, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR}, now: _now })`,
-    "type-hook",
-  );
+  return assertParsableExpression(`(${normalized})(${buildHookCallArgs("typeHook")})`, "type-hook");
 };
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
@@ -236,7 +223,7 @@ export const convertTypeValidateToExpr = (fn: Function): string => {
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${PRINCIPAL_VAR} }, __issues)`,
+    `(${normalized})(${buildHookCallArgs("typeValidate")})`,
     "type-validate",
   );
 };

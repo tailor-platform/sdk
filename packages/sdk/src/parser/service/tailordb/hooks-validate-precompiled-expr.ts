@@ -1,4 +1,6 @@
-const PRECOMPILED_EXPR_KEY = "__precompiledScriptExpr";
+import type { PrecompiledScriptExprKey } from "./types";
+
+const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey = "__precompiledScriptExpr";
 
 type AnyFunction = (...args: never[]) => unknown;
 
@@ -8,7 +10,7 @@ type AnyFunction = (...args: never[]) => unknown;
  * @param expr - Precompiled script expression.
  */
 export function setPrecompiledScriptExpr(fn: AnyFunction, expr: string) {
-  (fn as unknown as Record<string, unknown>)[PRECOMPILED_EXPR_KEY] = expr;
+  (fn as unknown as Record<PrecompiledScriptExprKey, unknown>)[PRECOMPILED_EXPR_KEY] = expr;
 }
 
 /**
@@ -17,6 +19,6 @@ export function setPrecompiledScriptExpr(fn: AnyFunction, expr: string) {
  * @returns Precompiled script expression if attached.
  */
 export function getPrecompiledScriptExpr(fn: AnyFunction): string | undefined {
-  const value = (fn as unknown as Record<string, unknown>)[PRECOMPILED_EXPR_KEY];
+  const value = (fn as unknown as Record<PrecompiledScriptExprKey, unknown>)[PRECOMPILED_EXPR_KEY];
   return typeof value === "string" ? value : undefined;
 }
