@@ -420,6 +420,59 @@ describe("runCodemods", () => {
       }
     });
 
+    test("clamps a remapped finding line when a later transform deletes trailing lines", async () => {
+      const deleteKeyLinePath = path.join(os.tmpdir(), "transform-delete-key-line.ts");
+      await fs.promises.writeFile(
+        deleteKeyLinePath,
+        `export default function transform(source) {
+          if (!source.includes("legacyKey:")) return null;
+          return source
+            .split("\\n")
+            .filter((lineText) => !lineText.includes("legacyKey:"))
+            .join("\\n");
+        }`,
+        "utf-8",
+      );
+      try {
+        const { tmpDir: dir } = await createTestProject(
+          "model.ts",
+          'const a = 1;\nconst config = { legacyKey: "user" };\n',
+        );
+        tmpDir = dir;
+
+        const result = await runCodemods(
+          [
+            {
+              codemod: makeCodemod("test/detect", detectLegacyKeyPath, ["**/*.ts"], undefined, {
+                prompt: "Review remaining legacyKey usages.",
+              }),
+              scriptPath: detectLegacyKeyPath,
+            },
+            {
+              codemod: makeCodemod("test/delete-line", deleteKeyLinePath, ["**/*.ts"]),
+              scriptPath: deleteKeyLinePath,
+            },
+          ],
+          dir,
+          false,
+        );
+
+        expect(result.llmReviews).toEqual([
+          expect.objectContaining({
+            codemodId: "test/detect",
+            findings: [
+              expect.objectContaining({
+                file: "model.ts",
+                line: 1,
+              }),
+            ],
+          }),
+        ]);
+      } finally {
+        await fs.promises.rm(deleteKeyLinePath, { force: true });
+      }
+    });
+
     test("runs a codemod's detector on its own transform's output", async () => {
       const { tmpDir: dir } = await createTestProject(
         "model.ts",

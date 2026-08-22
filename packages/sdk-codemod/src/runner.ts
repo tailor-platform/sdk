@@ -614,7 +614,8 @@ function legacyPatternWarnings(
 
 function lineRemapper(before: string, after: string): (line: number) => number {
   const hunks = structuredPatch("", "", before, after, "", "", { context: 0 }).hunks;
-  return (line: number): number => {
+  const lastLine = Math.max(1, after.split("\n").length - (after.endsWith("\n") ? 1 : 0));
+  const map = (line: number): number => {
     let offset = 0;
     for (const hunk of hunks) {
       if (line < hunk.oldStart) break;
@@ -623,13 +624,14 @@ function lineRemapper(before: string, after: string): (line: number) => number {
         continue;
       }
       if (line < hunk.oldStart + hunk.oldLines) {
-        if (hunk.newLines === 0) return Math.max(1, hunk.newStart);
+        if (hunk.newLines === 0) return hunk.newStart;
         return Math.min(hunk.newStart + (line - hunk.oldStart), hunk.newStart + hunk.newLines - 1);
       }
       offset += hunk.newLines - hunk.oldLines;
     }
     return line + offset;
   };
+  return (line: number): number => Math.min(lastLine, Math.max(1, map(line)));
 }
 
 function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number {
