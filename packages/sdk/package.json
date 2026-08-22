@@ -165,7 +165,7 @@
     "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo",
     "perf:typecheck": "bash scripts/perf/exec.sh",
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
-    "prepublish": "pnpm run build",
+    "prepublishOnly": "pnpm run build",
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
     "knip": "knip",
