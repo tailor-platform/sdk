@@ -363,6 +363,63 @@ describe("runCodemods", () => {
       }
     });
 
+    test("keeps a finding's relative position inside a multi-line rewrite hunk", async () => {
+      const rewriteBlockPath = path.join(os.tmpdir(), "transform-rewrite-block.ts");
+      await fs.promises.writeFile(
+        rewriteBlockPath,
+        `export default function transform(source) {
+          if (!source.includes("legacyKey:")) return null;
+          return source.replaceAll('"x"', '"y"').replaceAll("legacyKey:", "newKey:");
+        }`,
+        "utf-8",
+      );
+      try {
+        const { tmpDir: dir } = await createTestProject(
+          "model.ts",
+          [
+            "const a = 1;",
+            'const pad1 = "x";',
+            'const config = { legacyKey: "user" };',
+            'const pad2 = "x";',
+            "const b = 2;",
+            "",
+          ].join("\n"),
+        );
+        tmpDir = dir;
+
+        const result = await runCodemods(
+          [
+            {
+              codemod: makeCodemod("test/detect", detectLegacyKeyPath, ["**/*.ts"], undefined, {
+                prompt: "Review remaining legacyKey usages.",
+              }),
+              scriptPath: detectLegacyKeyPath,
+            },
+            {
+              codemod: makeCodemod("test/rewrite-block", rewriteBlockPath, ["**/*.ts"]),
+              scriptPath: rewriteBlockPath,
+            },
+          ],
+          dir,
+          false,
+        );
+
+        expect(result.llmReviews).toEqual([
+          expect.objectContaining({
+            codemodId: "test/detect",
+            findings: [
+              expect.objectContaining({
+                file: "model.ts",
+                line: 3,
+              }),
+            ],
+          }),
+        ]);
+      } finally {
+        await fs.promises.rm(rewriteBlockPath, { force: true });
+      }
+    });
+
     test("runs a codemod's detector on its own transform's output", async () => {
       const { tmpDir: dir } = await createTestProject(
         "model.ts",

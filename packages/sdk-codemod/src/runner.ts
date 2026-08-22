@@ -612,22 +612,24 @@ function legacyPatternWarnings(
   });
 }
 
-/** Map a one-based line in `before` to its closest location in `after`. */
-function remapLine(before: string, after: string, line: number): number {
-  const patch = structuredPatch("", "", before, after, "", "", { context: 0 });
-  let offset = 0;
-  for (const hunk of patch.hunks) {
-    if (line < hunk.oldStart) break;
-    if (hunk.oldLines === 0) {
-      offset += hunk.newLines;
-      continue;
+function lineRemapper(before: string, after: string): (line: number) => number {
+  const hunks = structuredPatch("", "", before, after, "", "", { context: 0 }).hunks;
+  return (line: number): number => {
+    let offset = 0;
+    for (const hunk of hunks) {
+      if (line < hunk.oldStart) break;
+      if (hunk.oldLines === 0) {
+        offset += hunk.newLines;
+        continue;
+      }
+      if (line < hunk.oldStart + hunk.oldLines) {
+        if (hunk.newLines === 0) return Math.max(1, hunk.newStart);
+        return Math.min(hunk.newStart + (line - hunk.oldStart), hunk.newStart + hunk.newLines - 1);
+      }
+      offset += hunk.newLines - hunk.oldLines;
     }
-    if (line < hunk.oldStart + hunk.oldLines) {
-      return Math.max(1, hunk.newStart);
-    }
-    offset += hunk.newLines - hunk.oldLines;
-  }
-  return line + offset;
+    return line + offset;
+  };
 }
 
 function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number {
@@ -760,11 +762,9 @@ export async function runCodemods(
       };
       if (lt.reviewFindings) {
         let findings = await lt.reviewFindings(snapshot, absolute, relative);
-        if (snapshot !== current) {
-          findings = findings.map((finding) => ({
-            ...finding,
-            line: remapLine(snapshot, current, finding.line),
-          }));
+        if (snapshot !== current && findings.length > 0) {
+          const remap = lineRemapper(snapshot, current);
+          findings = findings.map((finding) => ({ ...finding, line: remap(finding.line) }));
         }
         if (findings.length > 0) {
           const files = filesForReview();
