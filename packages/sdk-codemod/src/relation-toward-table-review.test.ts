@@ -67,6 +67,22 @@ const relation = { type: "n-1", toward: { type: user } };
     expect(reviewFindings(source, "post.ts", "post.ts")).toEqual([]);
   });
 
+  test("flags a toward that already has both table and type instead of producing a duplicate key", () => {
+    const source = `
+const order = db.table("Order", {
+  customerId: db.uuid().relation({
+    type: "n-1",
+    toward: { table: preferred, type: legacy },
+  }),
+});
+`;
+
+    expect(transform(source, "order.ts")).toBeNull();
+    const findings = reviewFindings(source, "order.ts", "order.ts");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("duplicate key");
+  });
+
   test("does not touch the outer relation cardinality type", () => {
     const source = `
 const field = { type: "uuid", relation: null };

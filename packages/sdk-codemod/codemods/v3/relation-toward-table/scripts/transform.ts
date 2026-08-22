@@ -193,6 +193,9 @@ export default function transform(source: string, filePath = ""): string | null 
     const towardConfig = pairValue(toward);
     if (towardConfig?.kind() !== "object") continue;
     if (hasUnsafeTowardProperties(towardConfig)) continue;
+    // A `table` key already present alongside `type` means rewriting `type`
+    // to `table` would produce a duplicate key; leave it for manual review.
+    if (objectPair(towardConfig, NEW_KEY)) continue;
 
     const entry = findLegacyEntry(towardConfig);
     if (!entry) continue;
@@ -276,6 +279,16 @@ export function reviewFindings(
         file: relativePath,
         line: lineOf(towardConfig),
         message: "A computed/spread key on this toward object may hide type.",
+        excerpt: excerptOf(towardConfig),
+      });
+      continue;
+    }
+    if (objectPair(towardConfig, NEW_KEY) && findLegacyEntry(towardConfig)) {
+      findings.push({
+        file: relativePath,
+        line: lineOf(towardConfig),
+        message:
+          "This toward object has both table and type; remove the deprecated type by hand instead of automatically renaming it (would produce a duplicate key).",
         excerpt: excerptOf(towardConfig),
       });
     }

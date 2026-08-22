@@ -600,6 +600,7 @@ interface RelationConfig<S extends RelationType, T extends TailorDBType> {
         table: T;
         as?: string;
         key?: keyof T["fields"] & string;
+        type?: never;
       }
     | {
         /**
@@ -608,6 +609,7 @@ interface RelationConfig<S extends RelationType, T extends TailorDBType> {
         type: T;
         as?: string;
         key?: keyof T["fields"] & string;
+        table?: never;
       };
   backward?: string;
 }
@@ -620,6 +622,7 @@ type RelationSelfConfig = {
         table: "self";
         as?: string;
         key?: string;
+        type?: never;
       }
     | {
         /**
@@ -628,6 +631,7 @@ type RelationSelfConfig = {
         type: "self";
         as?: string;
         key?: string;
+        table?: never;
       };
   backward?: string;
 };
@@ -779,7 +783,15 @@ function createTailorDBFieldRuntime<
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
       const cloned = field.clone();
-      const towardTarget = "table" in config.toward ? config.toward.table : config.toward.type;
+      // The public type is a nested union (RelationConfig | RelationSelfConfig,
+      // each with a `{ table } | { type }` toward), which TS's "in" narrowing
+      // can't discriminate across cleanly. Re-view it as the flat two-branch
+      // shape it always is at runtime — the `table?: never` / `type?: never`
+      // markers above already forbid both keys from being set together.
+      const toward = config.toward as
+        | { table: TailorDBType | "self" }
+        | { type: TailorDBType | "self" };
+      const towardTarget = "table" in toward ? toward.table : toward.type;
       const targetTable = towardTarget === "self" ? "self" : towardTarget.name;
       cloned._setRawRelation({
         type: config.type,

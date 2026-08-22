@@ -715,7 +715,7 @@ export const allCodemods: CodemodPackage[] = [
         after: [
           "ownerId: db.uuid().relation({",
           '  type: "n-1",',
-          '  toward: { type: user, as: "user" },',
+          '  toward: { table: user, as: "user" },',
           "}),",
         ].join("\n"),
       },
@@ -1778,6 +1778,7 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "3.0.0",
     scriptPath: "v3/relation-toward-table/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     examples: [
       {
         before: [
