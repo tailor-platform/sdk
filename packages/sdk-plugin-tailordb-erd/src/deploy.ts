@@ -1,7 +1,7 @@
 import { assertWritable, deployStaticWebsite } from "@tailor-platform/sdk/cli";
-import { deploymentArgs } from "@tailor-platform/shared/args";
-import { defineAppCommand } from "@tailor-platform/shared/command";
-import { logger } from "@tailor-platform/shared/logger";
+import { deploymentArgs } from "@tailor-platform/sdk/cli";
+import { defineAppCommand } from "@tailor-platform/sdk/cli";
+import { logger } from "@tailor-platform/sdk/cli";
 import { arg } from "politty";
 import { z } from "zod";
 import { prepareErdBuilds } from "./export";

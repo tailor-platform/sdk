@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { isPluginGeneratedTable } from "@tailor-platform/sdk/cli";
-import { logger } from "@tailor-platform/shared/logger";
+import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import type {
   TailorDbErdColumn,

@@ -3,6 +3,19 @@ import { registerTsHook } from "./shared/register-ts-hook";
 
 await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
+// CLI foundation shared with plugins. Plugins resolve this package at runtime,
+// so logger state (--json / --verbose) set through these args reaches the SDK
+// code paths they call into.
+export { logger, styles, type LogMode, type LogOptions, type OutOptions } from "./shared/logger";
+export { defineAppCommand } from "./shared/command";
+export {
+  createCommonArgs,
+  workspaceArgs,
+  configArg,
+  deploymentArgs,
+  loadEnvFiles,
+  type CommonArgsType,
+} from "./shared/args";
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
 export type { BundledScripts } from "./commands/deploy/function-registry";

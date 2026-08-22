@@ -1,5 +1,5 @@
 import { initOperatorClient, loadAccessToken, loadWorkspaceId } from "@tailor-platform/sdk/cli";
-import { logger } from "@tailor-platform/shared/logger";
+import { logger } from "@tailor-platform/sdk/cli";
 import type { OperatorClient } from "@tailor-platform/sdk/cli";
 
 export interface ErdDeployContext {

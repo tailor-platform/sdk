@@ -35,7 +35,7 @@ import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
-import { commonArgs, isVerbose } from "./shared/args";
+import { commonArgs } from "./shared/args";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
 import { logger, styles } from "./shared/logger";
@@ -153,10 +153,10 @@ void runMain(mainCommand, {
   cleanup: async ({ error }) => {
     if (error) {
       if (logger.jsonMode) {
-        logger.log(serializeError(error, { includeStack: isVerbose() }));
+        logger.log(serializeError(error, { includeStack: logger.verbose }));
       } else if (isCLIError(error)) {
         logger.log(error.format());
-        if (isVerbose() && error.stack) {
+        if (logger.verbose && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }
       } else if (error instanceof Error) {
@@ -165,7 +165,7 @@ void runMain(mainCommand, {
         if (hint) {
           logger.log(`  ${styles.info("Suggestion:")} ${hint}`);
         }
-        if (isVerbose() && error.stack) {
+        if (logger.verbose && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }
       } else {

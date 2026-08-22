@@ -1,6 +1,6 @@
-import { configArg } from "@tailor-platform/shared/args";
-import { defineAppCommand } from "@tailor-platform/shared/command";
-import { logger } from "@tailor-platform/shared/logger";
+import { configArg } from "@tailor-platform/sdk/cli";
+import { defineAppCommand } from "@tailor-platform/sdk/cli";
+import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";

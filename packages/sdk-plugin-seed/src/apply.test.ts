@@ -1,4 +1,4 @@
-import { commonArgs } from "@tailor-platform/shared/args";
+import { createCommonArgs } from "@tailor-platform/sdk/cli";
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
@@ -32,12 +32,12 @@ const logger = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-vi.mock("@tailor-platform/sdk/cli", () => sdk);
-vi.mock("./jsonl", () => jsonl);
-vi.mock("@tailor-platform/shared/logger", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tailor-platform/shared/logger")>()),
+vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tailor-platform/sdk/cli")>()),
+  ...sdk,
   logger,
 }));
+vi.mock("./jsonl", () => jsonl);
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -93,7 +93,7 @@ afterEach(() => {
 function runApplyCommand(args: string[]) {
   return runCommand(seedApplyCommand, args, {
     // Strip unknown global arguments like the plugin entrypoint.
-    globalArgs: z.object(commonArgs({ verboseAlias: "v" })),
+    globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
   });
 }
 
