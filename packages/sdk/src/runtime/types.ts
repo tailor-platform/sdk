@@ -16,7 +16,7 @@ export type InferredAttributes = keyof Attributes extends never
   ? Record<string, string | string[] | boolean | boolean[] | undefined>
   : Attributes;
 
-export type InferredAttributeList = AttributeList["__tuple"] extends []
+type InferredAttributeList = AttributeList["__tuple"] extends []
   ? string[]
   : AttributeList["__tuple"];
 

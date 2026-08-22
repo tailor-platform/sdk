@@ -165,7 +165,7 @@ export function handleOptionalToRequiredError(error: unknown, messages: string[]
 /**
  * Type of schema drift detected between remote and local snapshot
  */
-export type SchemaDriftKind =
+type SchemaDriftKind =
   | "type_missing_remote"
   | "type_missing_local"
   | "type_settings_mismatch"

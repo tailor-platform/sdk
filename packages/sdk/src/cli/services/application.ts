@@ -53,7 +53,7 @@ import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
 
-export type SecretVault = {
+type SecretVault = {
   readonly vaultName: string;
   readonly secrets: ReadonlyArray<{ name: string; value: string | null | undefined }>;
 };

@@ -3,7 +3,7 @@ import { styles } from "./logger";
 /**
  * Options for creating a CLI error
  */
-export interface CLIErrorOptions {
+interface CLIErrorOptions {
   message: string;
   details?: string;
   suggestion?: string;

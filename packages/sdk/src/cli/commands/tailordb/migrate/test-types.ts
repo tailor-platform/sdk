@@ -3,7 +3,7 @@ import type {
   TailorDBMigrationTestSnapshots,
 } from "#/cli/commands/deploy/types";
 
-export type MigrationTestDataMode = "seed" | "clone";
+type MigrationTestDataMode = "seed" | "clone";
 
 export interface MigrationTestOptions {
   configPath?: string;
@@ -19,7 +19,7 @@ export interface MigrationTestOptions {
   json?: boolean;
 }
 
-export type MigrationTestBaseline = TailorDBMigrationTestBaseline;
+type MigrationTestBaseline = TailorDBMigrationTestBaseline;
 
 export interface PreparedMigrationTest {
   sourceWorkspaceId: string;

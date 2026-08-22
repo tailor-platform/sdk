@@ -22,7 +22,7 @@ const ErdPluginConfigSchema = z.object({
   sites: z.record(z.string(), z.string()),
 });
 
-export interface ErdSiteIssue {
+interface ErdSiteIssue {
   /** Namespace key of the offending `sites` entry. */
   namespace: string;
   /** Human-readable description of the mismatch. */

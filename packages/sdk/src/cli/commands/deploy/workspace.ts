@@ -38,7 +38,7 @@ export interface ResolveDeployWorkspaceOptions {
   workspaceCommandJson?: boolean;
 }
 
-export interface WorkspaceContextTarget {
+interface WorkspaceContextTarget {
   configPath: string;
   applicationId: string;
 }

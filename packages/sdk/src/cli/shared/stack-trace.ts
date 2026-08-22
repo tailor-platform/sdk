@@ -87,7 +87,7 @@ const INLINE_SOURCEMAP_REGEX =
   /\/\/[#@]\s*sourceMappingURL=data:application\/json[^,]*;base64,(.+)$/m;
 
 /** Original source position resolved from a sourcemap */
-export interface MappedSourcePosition {
+interface MappedSourcePosition {
   source: string;
   line: number;
   column: number;

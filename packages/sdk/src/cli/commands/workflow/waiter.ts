@@ -19,7 +19,7 @@ import {
 import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
-export const DEFAULT_WORKFLOW_WAIT_INTERVAL_MS = 3000;
+const DEFAULT_WORKFLOW_WAIT_INTERVAL_MS = 3000;
 
 export interface WorkflowWaitOptions {
   client: Awaited<ReturnType<typeof initOperatorClient>>;

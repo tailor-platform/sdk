@@ -37,7 +37,7 @@ export async function waitWorkflowExecution(
  * @param options - Workflow wait options
  * @returns Workflow wait result with optional job details
  */
-export async function addWorkflowLogsToWaitResult(
+async function addWorkflowLogsToWaitResult(
   result: WorkflowWaitResult,
   options: WaitWorkflowExecutionOptions,
 ): Promise<WorkflowWaitOutput> {

@@ -132,7 +132,7 @@ export type SnapshotFieldRefOperand =
  * defined in the Zod parser schema (RecordPermissionOperandSchema /
  * GqlPermissionOperandSchema in parser/service/tailordb/schema.ts).
  */
-export type SnapshotValueOperand = string | boolean | string[] | boolean[];
+type SnapshotValueOperand = string | boolean | string[] | boolean[];
 
 /**
  * Permission operand union. Either a field-ref object or a literal value.

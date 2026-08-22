@@ -23,7 +23,7 @@ export type TailorDBFieldOutput = {
 export type TypeSourceInfo = Record<string, TypeSourceInfoEntry>;
 
 // Source info types
-export interface UserDefinedTypeSource {
+interface UserDefinedTypeSource {
   filePath: string;
   exportName: string;
   pluginId?: never;
@@ -44,7 +44,7 @@ export interface PluginGeneratedTableSource {
 export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTableSource;
 
 // Operator field types
-export interface Script {
+interface Script {
   expr: string;
 }
 
@@ -96,7 +96,7 @@ type StandardRecordOperand<Update extends boolean = false> = Update extends true
   ? { oldRecord: string } | { newRecord: string }
   : { record: string };
 
-export type PermissionOperand<
+type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
   Update extends boolean = boolean,
 > = UserOperand | ValueOperand | (Level extends "record" ? StandardRecordOperand<Update> : never);

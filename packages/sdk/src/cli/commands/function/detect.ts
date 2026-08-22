@@ -16,7 +16,7 @@ import { assertDefined } from "#/utils/assert";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 
-export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
+type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 
 interface InputParseArgs {
   value: unknown;

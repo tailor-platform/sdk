@@ -216,7 +216,7 @@ export async function generateDataOnlyMigrationFiles(
  * @param {string} namespace - TailorDB namespace the migration belongs to
  * @returns {string} Migration script content
  */
-export function generateDataOnlyMigrationScript(namespace: string): string {
+function generateDataOnlyMigrationScript(namespace: string): string {
   return `/**
  * Data-only migration script for ${namespace}
  *

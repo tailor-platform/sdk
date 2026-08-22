@@ -88,29 +88,29 @@ function snapshotRecordSchema<T>(valueSchema: z.ZodType<T>): z.ZodType<Record<st
 // Snapshot Leaf Types
 // ============================================================================
 
-export const snapshotHookSchema: z.ZodType<SnapshotHook> = z.looseObject({
+const snapshotHookSchema: z.ZodType<SnapshotHook> = z.looseObject({
   expr: z.string(),
 });
 
-export const snapshotValidationSchema: z.ZodType<SnapshotValidation> = z.looseObject({
+const snapshotValidationSchema: z.ZodType<SnapshotValidation> = z.looseObject({
   script: z.looseObject({ expr: z.string() }).optional() as z.ZodType<{ expr: string }>,
   errorMessage: z.string(),
 });
 
-export const snapshotSerialSchema: z.ZodType<SnapshotSerial> = z.looseObject({
+const snapshotSerialSchema: z.ZodType<SnapshotSerial> = z.looseObject({
   start: z.number(),
   maxValue: z.number().optional(),
   format: z.string().optional(),
 });
 
-export const snapshotEnumValueSchema: z.ZodType<SnapshotEnumValue> = z.looseObject({
+const snapshotEnumValueSchema: z.ZodType<SnapshotEnumValue> = z.looseObject({
   value: z.string(),
   description: z.string().optional(),
 });
 
 // SnapshotFieldConfig is self-referential (fields?: Record<string, SnapshotFieldConfig>)
 // z.lazy handles the recursion; the outer cast closes the type cycle.
-export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.looseObject({
+const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.looseObject({
   type: z.string(),
   // `required` defaults to true to match the pre-validation `?? true` behaviour.
   required: z.boolean().default(true),
@@ -136,12 +136,12 @@ export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.loose
   fields: z.lazy(() => snapshotRecordSchema(snapshotFieldConfigSchema)).optional(),
 });
 
-export const snapshotIndexConfigSchema: z.ZodType<SnapshotIndexConfig> = z.looseObject({
+const snapshotIndexConfigSchema: z.ZodType<SnapshotIndexConfig> = z.looseObject({
   fields: z.array(z.string()),
   unique: z.boolean().optional(),
 });
 
-export const snapshotRelationshipSchema: z.ZodType<SnapshotRelationship> = z.looseObject({
+const snapshotRelationshipSchema: z.ZodType<SnapshotRelationship> = z.looseObject({
   targetType: z.string(),
   targetField: z.string(),
   sourceField: z.string(),
@@ -200,13 +200,13 @@ const snapshotGqlPermissionConditionSchema = z
   ])
   .rest(z.unknown()) as unknown as z.ZodType<SnapshotPermissionCondition>;
 
-export const snapshotActionPermissionSchema: z.ZodType<SnapshotActionPermission> = z.looseObject({
+const snapshotActionPermissionSchema: z.ZodType<SnapshotActionPermission> = z.looseObject({
   conditions: z.array(snapshotPermissionConditionSchema),
   description: z.string().optional(),
   permit: z.enum(["allow", "deny"]),
 });
 
-export const snapshotRecordPermissionSchema: z.ZodType<SnapshotRecordPermission> = z.looseObject({
+const snapshotRecordPermissionSchema: z.ZodType<SnapshotRecordPermission> = z.looseObject({
   create: z.array(snapshotActionPermissionSchema).default([]),
   read: z.array(snapshotActionPermissionSchema).default([]),
   update: z.array(snapshotActionPermissionSchema).default([]),
@@ -216,13 +216,12 @@ export const snapshotRecordPermissionSchema: z.ZodType<SnapshotRecordPermission>
 // Structure validated; vocabulary kept open for platform evolution
 const snapshotGqlActionSchema = z.string();
 
-export const snapshotGqlPermissionPolicySchema: z.ZodType<SnapshotGqlPermissionPolicy> =
-  z.looseObject({
-    conditions: z.array(snapshotGqlPermissionConditionSchema),
-    actions: z.array(snapshotGqlActionSchema),
-    permit: z.enum(["allow", "deny"]),
-    description: z.string().optional(),
-  }) as unknown as z.ZodType<SnapshotGqlPermissionPolicy>;
+const snapshotGqlPermissionPolicySchema: z.ZodType<SnapshotGqlPermissionPolicy> = z.looseObject({
+  conditions: z.array(snapshotGqlPermissionConditionSchema),
+  actions: z.array(snapshotGqlActionSchema),
+  permit: z.enum(["allow", "deny"]),
+  description: z.string().optional(),
+}) as unknown as z.ZodType<SnapshotGqlPermissionPolicy>;
 
 // SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[]
 const snapshotGqlPermissionSchema: z.ZodType<SnapshotGqlPermission> = z.array(
@@ -233,7 +232,7 @@ const snapshotGqlPermissionSchema: z.ZodType<SnapshotGqlPermission> = z.array(
 // TailorDBSnapshotType
 // ============================================================================
 
-export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.looseObject({
+const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.looseObject({
   name: z.string(),
   // `pluralForm` is typed as required but legacy snapshots may omit it;
   // loadSnapshot backfills it via inflection so we accept undefined here.
@@ -510,7 +509,7 @@ const typeScriptsModifiedChangeSchema = z.looseObject({
 
 type DiscriminableSchema = Parameters<typeof z.discriminatedUnion>[1][number];
 
-export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kind", [
+const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kind", [
   typeAddedChangeSchema as unknown as DiscriminableSchema,
   typeRemovedChangeSchema as unknown as DiscriminableSchema,
   typeRenamedChangeSchema as unknown as DiscriminableSchema,
@@ -534,7 +533,7 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
   typeScriptsModifiedChangeSchema as unknown as DiscriminableSchema,
 ]) as z.ZodType<DiffChange>;
 
-export const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseObject({
+const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseObject({
   tableName: z.string(),
   fieldName: z.string().optional(),
   reason: z.string(),
@@ -542,13 +541,13 @@ export const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseOb
   showThreeStepHint: z.boolean().optional(),
 });
 
-export const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObject({
+const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObject({
   tableName: z.string(),
   fieldName: z.string().optional(),
   reason: z.string(),
 });
 
-export const scriptSkippedInfoSchema: z.ZodType<ScriptSkippedInfo> = z.looseObject({
+const scriptSkippedInfoSchema: z.ZodType<ScriptSkippedInfo> = z.looseObject({
   reason: z.string().trim().min(1),
   acknowledgedAt: z.string(),
 });

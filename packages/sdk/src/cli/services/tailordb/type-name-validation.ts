@@ -2,7 +2,7 @@ import { fetchAll, isNotFoundError } from "#/cli/shared/client";
 import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import type { TypeSourceInfo, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 
-export type LocalTailorDBService = {
+type LocalTailorDBService = {
   readonly namespace: string;
   readonly types: Readonly<Record<string, unknown>>;
   readonly typeSourceInfo: Readonly<TypeSourceInfo>;
@@ -47,7 +47,7 @@ export interface FetchExternalTailorDBTypeNameSourcesArgs {
   externalTailorDBNamespaces: ReadonlyArray<string>;
 }
 
-export interface AssertUniqueTailorDBTypeNamesArgs {
+interface AssertUniqueTailorDBTypeNamesArgs {
   /** Table-name sources to validate. */
   sources: ReadonlyArray<TailorDBTypeNameSource>;
 }
@@ -92,7 +92,7 @@ export function formatTailorDBTypeSourceInfo(
  * @param args - Collection inputs
  * @returns Table-name sources for local services
  */
-export function collectLocalTailorDBTypeNameSources(
+function collectLocalTailorDBTypeNameSources(
   args: CollectLocalTailorDBTypeNameSourcesArgs,
 ): TailorDBTypeNameSource[] {
   const sources: TailorDBTypeNameSource[] = [];
@@ -158,7 +158,7 @@ export async function fetchExternalTailorDBTypeNameSources(
  * Assert that TailorDB table names are unique across all supplied sources.
  * @param args - Validation inputs
  */
-export function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs): void {
+function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs): void {
   const sourcesByTableName = new Map<string, TailorDBTypeNameSource[]>();
 
   for (const source of args.sources) {
