@@ -1,10 +1,13 @@
+import {
+  WAIT_POINT_KEY_GRAMMAR as KEY_GRAMMAR,
+  WAIT_POINT_KEY_MAX_LENGTH as MAX_KEY_LENGTH,
+  WAIT_POINT_KEY_REGEX as KEY_REGEX,
+  isWaitPointParamSegment,
+} from "#/utils/wait-point-key-grammar";
 import type { RegisteredWaitPoint } from "#/utils/wait-point-registry";
 
-const KEY_REGEX = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 const LITERAL_SEGMENT_REGEX = /^[a-z0-9]+$/;
 const PARAM_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const MAX_KEY_LENGTH = 63;
-const KEY_GRAMMAR = "[a-z0-9-] (3-63 characters; must start and end with [a-z0-9])";
 
 /**
  * Check one declared wait point key against the key rules.
@@ -18,9 +21,9 @@ const KEY_GRAMMAR = "[a-z0-9-] (3-63 characters; must start and end with [a-z0-9
 export function checkWaitPointKey(waitPoint: RegisteredWaitPoint): string | undefined {
   const { key, declaredBy } = waitPoint;
   const segments = key.split("-");
-  // A bare "$" names nothing, so it is not a param here either — otherwise a
-  // key carrying one would be answered with advice about typing its $params.
-  const paramSegments = segments.filter((segment) => segment.startsWith("$") && segment.length > 1);
+  // Excluding bare "$" matters here: otherwise a key carrying one would be
+  // answered with advice about typing its $params.
+  const paramSegments = segments.filter(isWaitPointParamSegment);
 
   if (paramSegments.length > 0 && declaredBy !== "define") {
     return declaredBy === "property"

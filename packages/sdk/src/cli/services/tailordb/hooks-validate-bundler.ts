@@ -13,8 +13,8 @@ import {
   setPrecompiledScriptExpr,
 } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
+import { ES_BUILTINS } from "#/utils/es-builtins";
 import { assertParsableExpression } from "#/utils/script-expr";
-import { ES_BUILTINS } from "./es-builtins";
 import type { ScriptExprKind } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type { BindingPattern, Node, ParamPattern } from "@oxc-project/types";
