@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { Spinner } from "./spinner";
+import { stripAnsi } from "./test-helpers/strip-ansi";
 
 type FakeStream = {
   isTTY: boolean;
@@ -20,9 +21,6 @@ function createFakeStream(opts: { isTTY: boolean; columns?: number }): FakeStrea
   };
   return stream;
 }
-
-// eslint-disable-next-line no-control-regex -- ANSI escapes include ESC (U+001B) by definition
-const stripAnsi = (s: string): string => s.replace(/\[[0-9;]*[a-zA-Z]/g, "");
 
 function createStartedSpinner(opts: {
   isTTY: boolean;
@@ -119,7 +117,6 @@ describe("Spinner", () => {
       });
       spinner.stop();
       // With columns falling back to 80, single short line clears with one CLEAR_LINE
-      // eslint-disable-next-line no-control-regex -- ANSI escapes include ESC (U+001B) by definition
       const cursorUpCount = (stream.output.match(/\[1A/g) ?? []).length;
       expect(cursorUpCount).toBe(0);
     });
