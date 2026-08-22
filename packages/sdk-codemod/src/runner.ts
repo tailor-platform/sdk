@@ -705,7 +705,7 @@ export async function runCodemods(
     }
 
     let current = original;
-    const reviewSnapshots = new Map<string, string>();
+    const reviewTargets: Array<{ lt: LoadedTransform; snapshot: string }> = [];
     for (const lt of matchedTransforms) {
       if (lt.transform) {
         const result = await lt.transform(current, absolute);
@@ -714,7 +714,7 @@ export async function runCodemods(
           appliedCodemodIds.add(lt.id);
         }
       }
-      if (lt.prompt) reviewSnapshots.set(lt.id, current);
+      if (lt.prompt) reviewTargets.push({ lt, snapshot: current });
     }
 
     if (current !== original) {
@@ -751,9 +751,7 @@ export async function runCodemods(
       ),
     );
 
-    for (const lt of matchedTransforms) {
-      if (!lt.prompt) continue;
-      const snapshot = reviewSnapshots.get(lt.id) ?? current;
+    for (const { lt, snapshot } of reviewTargets) {
       const filesForReview = (): Set<string> => {
         let files = suspiciousByCodemod.get(lt.id);
         if (!files) {
