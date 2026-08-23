@@ -1,4 +1,4 @@
-export type NormalizedPermit = "allow" | "deny";
+type NormalizedPermit = "allow" | "deny";
 
 export interface NormalizedActionPermission<Condition> {
   conditions: Condition[];
@@ -11,7 +11,7 @@ export interface NormalizedActionPermission<Condition> {
  * @param p - A raw permission rule
  * @returns Whether the rule is in object format
  */
-export function isObjectPermissionFormat(
+function isObjectPermissionFormat(
   p: unknown,
 ): p is { conditions: unknown; permit?: boolean; description?: string } {
   return typeof p === "object" && p !== null && "conditions" in p;
