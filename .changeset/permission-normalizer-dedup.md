@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Deduplicate the TailorDB and IdP permission normalizers into one shared implementation, so fixes to the permission shorthand handling apply to both.
+Internal refactoring: TailorDB and IdP permission definitions are now normalized by one shared implementation. Accepted permission formats and their behavior are unchanged.
