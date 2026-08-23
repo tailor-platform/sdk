@@ -11,9 +11,9 @@ import {
 import { type HttpAdapterConfig } from "#/types/http-adapter.generated";
 import { isSdkBranded } from "#/utils/brand";
 
-export type HttpAdapterServiceConfig = HttpAdapterServiceInput;
+type HttpAdapterServiceConfig = HttpAdapterServiceInput;
 
-export type LoadedHttpAdapter = {
+type LoadedHttpAdapter = {
   adapter: HttpAdapterConfig;
   sourceFile: string;
   methods: HttpMethodKey[];

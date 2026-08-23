@@ -63,7 +63,7 @@ export function isTypeOnlyImport(importStmt: SgNode): boolean {
   return importStmt.children().some((child) => child.kind() === "type");
 }
 
-export function namedImportsNode(importStmt: SgNode): SgNode | null {
+function namedImportsNode(importStmt: SgNode): SgNode | null {
   return importStmt.find({ rule: { kind: "named_imports" } }) ?? null;
 }
 

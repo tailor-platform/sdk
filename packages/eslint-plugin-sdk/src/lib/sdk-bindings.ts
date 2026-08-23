@@ -9,7 +9,7 @@ import {
 } from "./ast.js";
 import type { Rule, Scope, SourceCode } from "eslint";
 
-export const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
+const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
 const SDK_CLI_MODULE = "@tailor-platform/sdk/cli";
 
 interface ImportBinding {

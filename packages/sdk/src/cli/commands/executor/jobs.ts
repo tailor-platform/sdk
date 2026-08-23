@@ -86,7 +86,7 @@ export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
   attempts?: ExecutorJobAttemptInfo[];
 }
 
-export interface WorkflowJobLog {
+interface WorkflowJobLog {
   jobName: string;
   logs?: string;
   result?: string;

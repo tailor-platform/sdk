@@ -204,4 +204,4 @@ function createBundleCache(store: CacheStore): BundleCache {
 }
 
 export { computeBundlerContextHash, createBundleCache, withCache };
-export type { BundleCache, BundleCacheRestoreParams, BundleCacheSaveParams };
+export type { BundleCache };

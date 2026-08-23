@@ -35,7 +35,7 @@ function assetDirCandidates(): string[] {
  * Resolve the packaged ERD viewer asset directory.
  * @returns Absolute path to the viewer asset directory.
  */
-export function resolveViewerAssetsDir(): string {
+function resolveViewerAssetsDir(): string {
   for (const candidate of assetDirCandidates()) {
     if (fs.existsSync(path.join(candidate, "index.html"))) {
       return candidate;

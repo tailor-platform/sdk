@@ -66,7 +66,7 @@ export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFi
 
 type OptionalFieldOutput<T, O extends FieldOptions> = O["optional"] extends true ? T | null : T;
 
-export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
+type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
   {
     array: true;
   },
@@ -77,7 +77,7 @@ export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
 /**
  * Field validation function. Return an error message string to fail, or void/undefined to pass.
  */
-export type ValidateFn<O> = (args: { value: O }) => string | void;
+type ValidateFn<O> = (args: { value: O }) => string | void;
 
 /**
  * Input type for field validation

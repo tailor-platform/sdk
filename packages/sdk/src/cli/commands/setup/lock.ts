@@ -84,7 +84,7 @@ export function hashContent(content: string): string {
  * @param outputDir - Repository root where `.github` lives
  * @returns Absolute path to the lock file
  */
-export function lockPath(outputDir: string): string {
+function lockPath(outputDir: string): string {
   return path.join(outputDir, LOCK_FILENAME);
 }
 

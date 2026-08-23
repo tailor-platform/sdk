@@ -427,7 +427,7 @@ export interface MetadataLabelWrite {
 }
 
 /** A dependency-record reconciliation waiting on the resource's current labels. */
-export type PendingDependencyRecords = Omit<DependencyLabelParams, "existingLabels">;
+type PendingDependencyRecords = Omit<DependencyLabelParams, "existingLabels">;
 
 /**
  * Write metadata labels as a change against the resource's current labels.

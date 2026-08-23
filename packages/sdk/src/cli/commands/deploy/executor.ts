@@ -336,7 +336,7 @@ function areExecutorsEqual(
  * @param resourceLabel - Resource label used in error messages
  * @returns The owning namespace, or undefined when the name is unknown
  */
-export function resolveSameRunNamespace(
+function resolveSameRunNamespace(
   sameRunNamespaces: ReadonlyMap<string, string | undefined> | undefined,
   resourceName: string,
   resourceLabel: string,
@@ -360,7 +360,7 @@ export function resolveSameRunNamespace(
  * @param tableName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
-export function findTailorDBNamespace(
+function findTailorDBNamespace(
   application: Readonly<Application>,
   tableName: string,
 ): string | undefined {

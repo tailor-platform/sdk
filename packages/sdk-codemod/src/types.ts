@@ -1,7 +1,7 @@
 import type { RunnerMetadata } from "./runner-metadata";
 
 /** A before/after code pair shown in the generated migration doc. */
-export interface CodemodExample {
+interface CodemodExample {
   /** Code as written before the migration. */
   before: string;
   /** Code after the migration. */

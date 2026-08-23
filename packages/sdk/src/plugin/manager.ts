@@ -82,14 +82,14 @@ export interface ProcessAttachmentsForTableParams {
  * Progress event emitted while processing plugin attachments for a TailorDB table.
  * Plain data so the caller (typically the cli) can format and output it.
  */
-export type ProcessAttachmentEvent =
+type ProcessAttachmentEvent =
   | { kind: "extended"; tableName: string; fieldCount: number; pluginId: string }
   | { kind: "generated"; tableName: string; pluginId: string };
 
 /**
  * Generated table produced by a plugin during attachment processing.
  */
-export interface ProcessAttachmentsGeneratedTable {
+interface ProcessAttachmentsGeneratedTable {
   tableName: string;
   table: TailorDBTypeRaw;
   kind: string;

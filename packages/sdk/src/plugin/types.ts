@@ -21,7 +21,7 @@ import type { Resolver } from "#/types/resolver.generated";
 /**
  * A single generated file to write to disk.
  */
-export interface GeneratedFile {
+interface GeneratedFile {
   path: string;
   content: string;
   skipIfExists?: boolean;
@@ -132,6 +132,7 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
 }
 
+/** @lintignore kept exported for the zinfer-generated reference in src/types/plugin-config.generated.ts */
 export type TableConfigRequired<PluginConfig = unknown> =
   | boolean
   | ((pluginConfig: PluginConfig | undefined) => boolean);
@@ -181,7 +182,7 @@ export interface TailorDBTableForPlugin {
 
 export type PluginGeneratedTable = TailorDBTableForPlugin;
 
-export type PluginGeneratedTables = Record<string, PluginGeneratedTable>;
+type PluginGeneratedTables = Record<string, PluginGeneratedTable>;
 
 export interface PluginGeneratedResolver {
   name: string;
@@ -191,7 +192,7 @@ export interface PluginGeneratedResolver {
   body: string;
 }
 
-export interface PluginRecordTriggerConfig {
+interface PluginRecordTriggerConfig {
   kind: "tailordb";
   events: (
     | "tailordb.type_record.created"
@@ -201,13 +202,13 @@ export interface PluginRecordTriggerConfig {
   tableName: string;
 }
 
-export interface PluginScheduleTriggerConfig {
+interface PluginScheduleTriggerConfig {
   kind: "schedule";
   cron: string;
   timezone?: string;
 }
 
-export interface PluginIncomingWebhookTriggerConfig {
+interface PluginIncomingWebhookTriggerConfig {
   kind: "incomingWebhook";
 }
 
@@ -216,28 +217,28 @@ export type PluginTriggerConfig =
   | PluginScheduleTriggerConfig
   | PluginIncomingWebhookTriggerConfig;
 
-export type PluginInjectValue = string | number | boolean | null;
+type PluginInjectValue = string | number | boolean | null;
 export type PluginInjectMap = Record<string, PluginInjectValue>;
 
-export interface PluginFunctionOperationConfig {
+interface PluginFunctionOperationConfig {
   kind: "function";
   body: string;
   inject?: PluginInjectMap;
 }
 
-export interface PluginGraphQLOperationConfig {
+interface PluginGraphQLOperationConfig {
   kind: "graphql";
   query: string;
   appName?: string;
   variables?: string;
 }
 
-export interface PluginWebhookOperationConfig {
+interface PluginWebhookOperationConfig {
   kind: "webhook";
   url: string;
 }
 
-export interface PluginWorkflowOperationConfig {
+interface PluginWorkflowOperationConfig {
   kind: "workflow";
   workflowName: string;
 }
@@ -248,13 +249,7 @@ export type PluginOperationConfig =
   | PluginWebhookOperationConfig
   | PluginWorkflowOperationConfig;
 
-export type PluginExecutorContextValue =
-  | TailorAnyDBType
-  | string
-  | number
-  | boolean
-  | null
-  | undefined;
+type PluginExecutorContextValue = TailorAnyDBType | string | number | boolean | null | undefined;
 
 export interface PluginExecutorContextBase {
   sourceTable: TailorAnyDBType | null;
@@ -265,7 +260,7 @@ export type PluginExecutorContext = PluginExecutorContextBase & {
   [key: string]: PluginExecutorContextValue;
 };
 
-export interface PluginExecutorModule {
+interface PluginExecutorModule {
   default: unknown;
 }
 
@@ -286,7 +281,7 @@ export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorWithFile
   | PluginGeneratedExecutorLegacy;
 
-export interface PluginExtends {
+interface PluginExtends {
   fields?: Record<string, TailorAnyDBField>;
 }
 

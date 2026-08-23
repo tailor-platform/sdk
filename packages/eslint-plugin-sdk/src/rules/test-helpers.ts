@@ -23,7 +23,7 @@ afterEach(() => {
   }
 });
 
-export function lint(source: string, rule: string, filename = "fixture.ts") {
+function lint(source: string, rule: string, filename = "fixture.ts") {
   const dir = mkdtempSync(join(tmpdir(), "tailor-sdk-lint-"));
   tempDirs.push(dir);
   const file = join(dir, filename);
