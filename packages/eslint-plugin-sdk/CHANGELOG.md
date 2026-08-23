@@ -1,5 +1,11 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.2.3
+
+### Patch Changes
+
+- [#2138](https://github.com/tailor-platform/sdk/pull/2138) [`870c8cd`](https://github.com/tailor-platform/sdk/commit/870c8cdaa007adcbb8f565fe9b4d238d98c00e6d) Thanks [@dqn](https://github.com/dqn)! - Stop exporting internal declarations that were only used within their own module.
+
 ## 0.2.2
 
 ### Patch Changes

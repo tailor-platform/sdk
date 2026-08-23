@@ -1,5 +1,19 @@
 # @tailor-platform/sdk-codemod
 
+## 0.7.0
+
+### Minor Changes
+
+- [#2088](https://github.com/tailor-platform/sdk/pull/2088) [`c9f91d9`](https://github.com/tailor-platform/sdk/commit/c9f91d944e4b041250979ec4438c36cabf818e14) Thanks [@dqn](https://github.com/dqn)! - The `--branch` option of `tailor setup branch` is renamed to `--target`, so it no longer collides with the subcommand name. The old spelling keeps working as a deprecated alias until v3 and prints a deprecation warning when used; `tailor upgrade` offers the `v3/setup-branch-flag-rename` codemod to rewrite `setup branch --branch` invocations across package.json scripts, shell and Windows scripts, YAML, Markdown, and JavaScript/TypeScript sources. The `--branch` option of `setup tag`, `setup preview`, and `setup coordinate` is unchanged.
+
+### Patch Changes
+
+- [#2137](https://github.com/tailor-platform/sdk/pull/2137) [`d38497a`](https://github.com/tailor-platform/sdk/commit/d38497ac214f547483028e2622d53dbf1414ecb2) Thanks [@dqn](https://github.com/dqn)! - Keep LLM review detection working in multi-major upgrades: each codemod's review detector and suspicious patterns now inspect the file as of that codemod's position in the transform chain, so a later codemod's rewrite can no longer silently hide an earlier codemod's review findings.
+
+- [#2138](https://github.com/tailor-platform/sdk/pull/2138) [`870c8cd`](https://github.com/tailor-platform/sdk/commit/870c8cdaa007adcbb8f565fe9b4d238d98c00e6d) Thanks [@dqn](https://github.com/dqn)! - Stop exporting internal declarations that were only used within their own module.
+
+- [#2089](https://github.com/tailor-platform/sdk/pull/2089) [`90948e6`](https://github.com/tailor-platform/sdk/commit/90948e6f6e1f3624a9c30595b3ff3a46ffbbced0) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a targeted hint to the `Remote schema drift detected` error when every reported drift is a missing script hash — the pattern left by an environment last deployed with the pre-v2 CLI, which never wrote script hashes. The hint points at `migration sync <N>`, which is already listed as one of the general resolution options. The v2 migration guide (`docs/migration/v2.md`) now also documents that the first `tailor deploy` against such an environment needs a `migration sync` first.
+
 ## 0.6.0
 
 ### Minor Changes

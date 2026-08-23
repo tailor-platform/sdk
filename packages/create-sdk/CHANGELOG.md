@@ -1,5 +1,13 @@
 # @tailor-platform/create-sdk
 
+## 2.5.0
+
+### Patch Changes
+
+- [#2125](https://github.com/tailor-platform/sdk/pull/2125) [`17f449b`](https://github.com/tailor-platform/sdk/commit/17f449bac29a78d5a6084260a73a39c10b47e05e) Thanks [@dqn](https://github.com/dqn)! - Keep generated seed data excluded from Oxfmt in newly created projects.
+
+- [#2107](https://github.com/tailor-platform/sdk/pull/2107) [`ff35c1e`](https://github.com/tailor-platform/sdk/commit/ff35c1e0f3ac0ce0db0b7fc6d9fde4ff1dc854f6) Thanks [@dqn](https://github.com/dqn)! - Internal error-handling and prompt-flow cleanups surfaced by newly enabled async-correctness lint rules; no behavior change.
+
 ## 2.4.0
 
 ### Patch Changes
