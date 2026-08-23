@@ -1,8 +1,8 @@
 import { configArg } from "@tailor-platform/sdk/cli";
 import { defineAppCommand } from "@tailor-platform/sdk/cli";
 import { logger } from "@tailor-platform/sdk/cli";
+import { arg } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
 import { buildTailorDbErdSchema } from "./schema";

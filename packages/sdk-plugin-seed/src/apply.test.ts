@@ -1,5 +1,5 @@
 import { createCommonArgs } from "@tailor-platform/sdk/cli";
-import { runCommand } from "politty";
+import { runCommand } from "@tailor-platform/sdk/cli";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";

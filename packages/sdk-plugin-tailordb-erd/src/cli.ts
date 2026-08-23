@@ -3,9 +3,9 @@
 import { fileURLToPath } from "node:url";
 import { createCommonArgs } from "@tailor-platform/sdk/cli";
 import { logger } from "@tailor-platform/sdk/cli";
+import { defineCommand, runMain } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
-import { defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { erdDeployCommand } from "./deploy";
 import { erdDiffCommand } from "./diff-command";

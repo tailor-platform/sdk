@@ -13,9 +13,9 @@ import {
 import { deploymentArgs } from "@tailor-platform/sdk/cli";
 import { defineAppCommand } from "@tailor-platform/sdk/cli";
 import { logger, styles } from "@tailor-platform/sdk/cli";
+import { arg } from "@tailor-platform/sdk/cli";
 import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { selectEntities } from "./entities";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
