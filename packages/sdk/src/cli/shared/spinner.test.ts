@@ -117,6 +117,7 @@ describe("Spinner", () => {
       });
       spinner.stop();
       // With columns falling back to 80, single short line clears with one CLEAR_LINE
+      // eslint-disable-next-line no-control-regex -- ANSI escapes include ESC (U+001B) by definition
       const cursorUpCount = (stream.output.match(/\[1A/g) ?? []).length;
       expect(cursorUpCount).toBe(0);
     });
