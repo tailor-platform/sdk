@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Share the wait point key grammar and the platform runtime globals allowlist between their two previously duplicated definitions, so the deploy-time checks and the runtime/test emulation cannot drift apart.
+Internal refactoring: the wait point key rules and the platform runtime globals allowlist each moved to a single definition shared by validation and the test-runtime emulation. Accepted keys, error messages, and the emulated runtime surface are unchanged.
