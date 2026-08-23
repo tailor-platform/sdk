@@ -317,10 +317,11 @@ function generateTableType(
     // A conversion script clears its source field, and Kysely reads the third
     // ColumnType slot for updates.
     const clearable = clearedFieldsForType.has(fieldName);
-    fieldLines.push(
-      `    ${fieldName}: ${clearable ? generateClearableFieldType(fieldConfig) : result.type};`,
-    );
-    usedTimestamp = usedTimestamp || result.usedTimestamp;
+    const emitted = clearable ? generateClearableFieldType(fieldConfig) : result.type;
+    fieldLines.push(`    ${fieldName}: ${emitted};`);
+    // Derived from what was emitted: a clearable timestamp spells its slots out
+    // and so does not reference the Timestamp alias.
+    usedTimestamp = usedTimestamp || emitted.includes("Timestamp");
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
   }
 

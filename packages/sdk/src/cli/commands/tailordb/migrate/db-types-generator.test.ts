@@ -216,6 +216,34 @@ describe("db-types-generator", () => {
       );
       expect(content).not.toContain("Timestamp[]");
     });
+
+    test("omits the Timestamp alias when only a cleared timestamp field needs a date", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            eventDate: { type: "date", required: false },
+            label: { type: "string", required: false },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "eventDate",
+          tempFieldName: "eventDateTmp",
+          before: { type: "date", required: false },
+          after: { type: "string", required: false },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "eventDate: ColumnType<Date | null, Date | string | null, Date | string | null>;",
+      );
+      expect(content).not.toContain("type Timestamp =");
+    });
   });
 
   describe("writeDbTypesFile with enum fields", () => {
