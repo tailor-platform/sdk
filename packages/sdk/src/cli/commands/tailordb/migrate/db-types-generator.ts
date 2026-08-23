@@ -317,11 +317,9 @@ function generateTableType(
     // A conversion script clears its source field, and Kysely reads the third
     // ColumnType slot for updates.
     const clearable = clearedFieldsForType.has(fieldName);
-    const emitted = clearable ? generateClearableFieldType(fieldConfig) : result.type;
-    fieldLines.push(`    ${fieldName}: ${emitted};`);
-    // Derived from what was emitted: a clearable timestamp spells its slots out
-    // and so does not reference the Timestamp alias.
-    usedTimestamp = usedTimestamp || emitted.includes("Timestamp");
+    const emitted = clearable ? generateClearableFieldType(fieldConfig) : result;
+    fieldLines.push(`    ${fieldName}: ${emitted.type};`);
+    usedTimestamp = usedTimestamp || emitted.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
   }
 
@@ -391,17 +389,26 @@ function generateEnumChangeColumnType(
  * @param config - Field configuration in the pre-migration snapshot
  * @returns {string} Generated column type
  */
-function generateClearableFieldType(config: SnapshotFieldConfig): string {
+function generateClearableFieldType(config: SnapshotFieldConfig): {
+  type: string;
+  usedTimestamp: boolean;
+} {
   const { type } = mapToTsType(config.type);
   // A ColumnType cannot nest, so a timestamp contributes its own select and
   // write types to the slots rather than the Timestamp alias.
   if (type === "Timestamp") {
     const select = config.array ? "Date[]" : "Date";
     const write = config.array ? "(Date | string)[]" : "Date | string";
-    return `ColumnType<${select} | null, ${write} | null, ${write} | null>`;
+    return {
+      type: `ColumnType<${select} | null, ${write} | null, ${write} | null>`,
+      usedTimestamp: false,
+    };
   }
   const base = config.array ? `${type}[]` : type;
-  return `ColumnType<${base} | null, ${base} | null, ${base} | null>`;
+  return {
+    type: `ColumnType<${base} | null, ${base} | null, ${base} | null>`,
+    usedTimestamp: false,
+  };
 }
 
 function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {

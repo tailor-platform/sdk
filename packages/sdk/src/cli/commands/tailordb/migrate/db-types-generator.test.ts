@@ -244,6 +244,25 @@ describe("db-types-generator", () => {
       );
       expect(content).not.toContain("type Timestamp =");
     });
+
+    test("omits the Timestamp alias for an enum value named Timestamp", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            kind: {
+              type: "enum",
+              required: true,
+              allowedValues: [{ value: "Timestamp" }, { value: "Other" }],
+            },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot);
+
+      expect(content).toContain('kind: "Timestamp" | "Other";');
+      expect(content).not.toContain("type Timestamp =");
+    });
   });
 
   describe("writeDbTypesFile with enum fields", () => {
