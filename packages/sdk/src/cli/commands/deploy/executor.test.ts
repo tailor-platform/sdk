@@ -1,3 +1,5 @@
+import { create } from "@bufbuild/protobuf";
+import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
@@ -450,6 +452,35 @@ describe("planExecutor", () => {
 
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("existing executor is unchanged when a remote nested proto has an implicit default", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const application = createMockApplication([executor]);
+      const createResult = await planExecutor(buildPlanContext(application));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+      const remoteExecutor = create(ExecutorExecutorSchema, desiredExecutor);
+      const targetConfig = remoteExecutor.targetConfig?.config;
+      if (targetConfig?.case !== "function") {
+        throw new Error("Expected function target config");
+      }
+      const remoteFunction = targetConfig.value as typeof targetConfig.value & {
+        futureImplicitDefault?: boolean;
+      };
+      remoteFunction.futureImplicitDefault = false;
+
+      const client = createMockClient([
+        {
+          name: "existing-executor",
+          label: appName,
+          resource: remoteExecutor,
+        },
+      ]);
+
+      const result = await planExecutor(buildPlanContext(application, { client }));
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
