@@ -154,7 +154,7 @@ describe("db-types-generator", () => {
         expectedContains: ["externalId: string;", "referenceId: string | null;"],
       },
       {
-        testName: "generates types with date strings and datetime Timestamps",
+        testName: "generates Timestamps for date and datetime alike",
         tableName: "Event",
         fields: {
           eventDate: { type: "date", required: true },
@@ -163,7 +163,7 @@ describe("db-types-generator", () => {
         },
         expectedContains: [
           "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
-          "eventDate: string;",
+          "eventDate: Timestamp;",
           "startTime: Timestamp;",
           "endTime: Timestamp | null;",
         ],
@@ -370,7 +370,9 @@ describe("db-types-generator", () => {
       const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
       const content = fs.readFileSync(filePath, "utf-8");
 
-      expect(content).toContain("birthDate: ColumnType<string | null, string, string>;");
+      expect(content).toContain(
+        "birthDate: ColumnType<Date | null, Date | string, Date | string>;",
+      );
     });
 
     test("generates ColumnType for added required fields", async () => {

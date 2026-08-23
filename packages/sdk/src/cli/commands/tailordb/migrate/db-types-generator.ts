@@ -7,6 +7,7 @@
 
 import * as fs from "node:fs/promises";
 import { assertDefined } from "#/utils/assert";
+import { mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import {
   getMigrationFilePath,
   type SchemaSnapshot,
@@ -353,25 +354,8 @@ function mapToTsType(fieldType: string): {
   type: string;
   usedTimestamp: boolean;
 } {
-  switch (fieldType) {
-    case "uuid":
-    case "string":
-    case "decimal":
-      return { type: "string", usedTimestamp: false };
-    case "integer":
-    case "float":
-    case "number":
-      return { type: "number", usedTimestamp: false };
-    case "date":
-      return { type: "string", usedTimestamp: false };
-    case "datetime":
-      return { type: "Timestamp", usedTimestamp: true };
-    case "bool":
-    case "boolean":
-      return { type: "boolean", usedTimestamp: false };
-    default:
-      return { type: "string", usedTimestamp: false };
-  }
+  const type = mapFieldTypeToColumnType(fieldType);
+  return { type, usedTimestamp: type === "Timestamp" };
 }
 
 function formatEnumUnion(values: string[]): string {
@@ -414,14 +398,6 @@ function generateClearableFieldType(config: SnapshotFieldConfig): string {
 
 function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
   if (config.type !== "date" && config.type !== "datetime") return null;
-
-  if (config.type === "date") {
-    if (config.array) {
-      return "ColumnType<string[] | null, string[], string[]>";
-    }
-
-    return "ColumnType<string | null, string, string>";
-  }
 
   if (config.array) {
     return "ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>";
