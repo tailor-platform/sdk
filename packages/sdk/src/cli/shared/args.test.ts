@@ -270,4 +270,20 @@ describe("createCommonArgs effects", () => {
       logger.verbose = previousVerbose;
     }
   });
+
+  test("verboseAlias adds a short alias for --verbose", async () => {
+    const previousVerbose = logger.verbose;
+    try {
+      logger.verbose = false;
+      const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+      const result = await runCommand(command, ["-v"], {
+        // Strip unknown keys the same way the plugin entrypoints parse global args.
+        globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+      });
+      expect(result.exitCode).toBe(0);
+      expect(logger.verbose).toBe(true);
+    } finally {
+      logger.verbose = previousVerbose;
+    }
+  });
 });
