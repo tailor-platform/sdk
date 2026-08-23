@@ -392,6 +392,13 @@ function generateEnumChangeColumnType(
  */
 function generateClearableFieldType(config: SnapshotFieldConfig): string {
   const { type } = mapToTsType(config.type);
+  // A ColumnType cannot nest, so a timestamp contributes its own select and
+  // write types to the slots rather than the Timestamp alias.
+  if (type === "Timestamp") {
+    const select = config.array ? "Date[]" : "Date";
+    const write = config.array ? "(Date | string)[]" : "Date | string";
+    return `ColumnType<${select} | null, ${write} | null, ${write} | null>`;
+  }
   const base = config.array ? `${type}[]` : type;
   return `ColumnType<${base} | null, ${base} | null, ${base} | null>`;
 }
@@ -444,15 +451,6 @@ function generateFieldType(
     usedTimestamp = mapped.usedTimestamp;
   }
 
-  // Apply array modifier
-  let type = baseType;
-  if (config.array) {
-    const needsParens =
-      config.type === "enum" && config.allowedValues && config.allowedValues.length > 0;
-    type = needsParens ? `(${baseType})[]` : `${baseType}[]`;
-  }
-
-  // Handle nullable/required modifiers
   if (isOptionalToRequired) {
     const dateColumnType = generateOptionalToRequiredDateColumnType(config);
     if (dateColumnType) {
@@ -462,7 +460,28 @@ function generateFieldType(
         usedColumnType: true,
       };
     }
+  }
 
+  // Apply array modifier. Kysely only unwraps a ColumnType at the top level of a
+  // table property, so a timestamp array spells its slots out instead of nesting
+  // the Timestamp alias.
+  let type = baseType;
+  if (config.array) {
+    if (baseType === "Timestamp") {
+      const nullable = config.required ? "" : " | null";
+      return {
+        type: `ColumnType<Date[]${nullable}, (Date | string)[]${nullable}, (Date | string)[]${nullable}>`,
+        usedTimestamp: false,
+        usedColumnType: true,
+      };
+    }
+    const needsParens =
+      config.type === "enum" && config.allowedValues && config.allowedValues.length > 0;
+    type = needsParens ? `(${baseType})[]` : `${baseType}[]`;
+  }
+
+  // Handle nullable/required modifiers
+  if (isOptionalToRequired) {
     // For fields changing from optional to required:
     // SELECT returns T | null (existing data might be null)
     // INSERT/UPDATE requires T (must provide a value)

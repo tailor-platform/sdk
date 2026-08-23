@@ -195,6 +195,27 @@ describe("db-types-generator", () => {
       expect(content).toContain("tags: string[];");
       expect(content).toContain("scores: number[] | null;");
     });
+
+    test("keeps the ColumnType outermost for timestamp arrays", async () => {
+      const snapshot = createMockSnapshot({
+        Document: {
+          fields: {
+            holidays: { type: "date", required: true, array: true },
+            reminders: { type: "datetime", required: false, array: true },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot);
+
+      expect(content).toContain(
+        "holidays: ColumnType<Date[], (Date | string)[], (Date | string)[]>;",
+      );
+      expect(content).toContain(
+        "reminders: ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>;",
+      );
+      expect(content).not.toContain("Timestamp[]");
+    });
   });
 
   describe("writeDbTypesFile with enum fields", () => {
