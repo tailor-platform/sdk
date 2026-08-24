@@ -30,7 +30,7 @@ import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
-import { resourceTrn, writeMetadataLabels } from "../label";
+import { resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
@@ -258,7 +258,7 @@ export async function updateMigrationLabel(
 ): Promise<void> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
-  await writeMetadataLabels(client, {
+  await writeMetadataLabelsDirect(client, {
     trn,
     labels: {
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),

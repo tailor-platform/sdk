@@ -405,6 +405,20 @@ export declare type CloneApplicationDataRequest = Message<"tailor.v1.CloneApplic
    * @generated from field: string target_application_name = 4;
    */
   targetApplicationName: string;
+
+  /**
+   * Whether to also copy TailorDB file content. Defaults to false.
+   *
+   * @generated from field: optional bool copy_files = 5;
+   */
+  copyFiles?: boolean;
+
+  /**
+   * Whether to also copy IdP users, including their passwords. Defaults to false.
+   *
+   * @generated from field: optional bool copy_idp_users = 6;
+   */
+  copyIdpUsers?: boolean;
 };
 
 /**

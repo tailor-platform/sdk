@@ -164,6 +164,26 @@ export enum FunctionExecution_Status {
    * @generated from enum value: STATUS_RUNNING = 3;
    */
   RUNNING = 3,
+
+  /**
+   * @generated from enum value: STATUS_SUSPEND = 4;
+   */
+  SUSPEND = 4,
+
+  /**
+   * Cancel was requested for a RUNNING job execution; termination is not
+   * yet confirmed.
+   *
+   * @generated from enum value: STATUS_CANCELING = 5;
+   */
+  CANCELING = 5,
+
+  /**
+   * Terminal state: cancellation confirmed.
+   *
+   * @generated from enum value: STATUS_CANCELED = 6;
+   */
+  CANCELED = 6,
 }
 
 /**
