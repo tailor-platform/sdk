@@ -22,7 +22,10 @@ function isSingleConditionFormat(cond: readonly unknown[]): boolean {
 }
 
 function normalizeOperand(operand: unknown): unknown {
-  if (typeof operand === "object" && operand !== null && !Array.isArray(operand)) {
+  if (operand === null) {
+    throw new Error("Invalid permission operand: null");
+  }
+  if (typeof operand === "object" && !Array.isArray(operand)) {
     if ("user" in operand) {
       const user = operand.user;
       return { user: user === "id" ? "_id" : user };
