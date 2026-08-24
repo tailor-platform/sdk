@@ -48,18 +48,16 @@ export async function withBundleConcurrency<T, R>(
 
   await Promise.all(
     // flatMap skips sparse slots, so absent items never reach the worker.
-    items
-      .flatMap((item, index) => [{ index, item }])
-      .map(({ index, item }) =>
-        limit(async () => {
-          if (rejection) return;
-          try {
-            results[index] = await worker(item);
-          } catch (reason) {
-            rejection ??= { reason };
-          }
-        }),
-      ),
+    items.flatMap((item, index) => [
+      limit(async () => {
+        if (rejection) return;
+        try {
+          results[index] = await worker(item);
+        } catch (reason) {
+          rejection ??= { reason };
+        }
+      }),
+    ]),
   );
 
   if (rejection) {
