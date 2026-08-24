@@ -273,6 +273,20 @@ describe("setupRenovate", () => {
     );
   });
 
+  test("preserves escaped JSON5 identifiers when appending", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      "{\n  // Keep \\u0065xtends in this comment.\n  \\u0065xtends: ['config:recommended'],\n  foo\\u0062ar: ['\\\\u0065xtends'],\n}\n",
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n  // Keep \\u0065xtends in this comment.\n  \\u0065xtends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n  foo\\u0062ar: ['\\\\u0065xtends'],\n}\n",
+    );
+  });
+
   test("appends to the effective duplicate extends property in JSON5", async () => {
     const configPath = path.join(testDir, "renovate.json5");
     fs.writeFileSync(configPath, "{\n  extends: ['ignored'],\n  extends: ['active'],\n}\n");

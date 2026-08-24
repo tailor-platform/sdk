@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import {
   JsonArrayNode,
+  JsonParseError,
   JsonLexer,
   JsonObjectNode,
   JsonParser,
@@ -103,6 +104,8 @@ const INSIGNIFICANT_JSON5_TOKENS = new Set([
 ]);
 
 const UNSUPPORTED_JSON5_PROPERTY_NAMES = new Set([...reservedIdentifiers, "Infinity", "NaN"]);
+const JSON5_IDENTIFIER_CONTINUE_CHARACTER = /^[$_\u200C\u200D\p{ID_Continue}]$/u;
+const JSON5_IDENTIFIER_ESCAPE = /^\\u(?<code>[\dA-Fa-f]{4})/;
 
 function findNextSignificantToken(tokens: ReturnType<typeof JsonLexer.tokenize>, index: number) {
   let nextIndex = index + 1;
@@ -157,30 +160,110 @@ function hasDuplicateJsonProperties(node: JsonValueNode): boolean {
   return false;
 }
 
+function toStringIndex(source: string, codePointIndex: number): number {
+  let stringIndex = 0;
+  for (let index = 0; index < codePointIndex && stringIndex < source.length; index++) {
+    const codePoint = source.codePointAt(stringIndex);
+    if (codePoint === undefined) break;
+    stringIndex += codePoint > 0xffff ? 2 : 1;
+  }
+  return stringIndex;
+}
+
+function normalizeEscapedJson5Identifiers(
+  source: string,
+  reservedValues: ReadonlySet<string>,
+): {
+  source: string;
+  tokenReplacements: ReadonlyMap<string, string>;
+  valueReplacements: ReadonlyMap<string, string>;
+} {
+  let normalized = source;
+  const tokenReplacements = new Map<string, string>();
+  const valueReplacements = new Map<string, string>();
+  let identifierIndex = 0;
+
+  for (;;) {
+    try {
+      JsonLexer.tokenize(normalized);
+      return { source: normalized, tokenReplacements, valueReplacements };
+    } catch (error) {
+      if (!(error instanceof JsonParseError)) throw error;
+      const escapeIndex = toStringIndex(normalized, error.location.start.index);
+      if (!JSON5_IDENTIFIER_ESCAPE.test(normalized.slice(escapeIndex))) throw error;
+
+      let start = escapeIndex;
+      while (start > 0) {
+        const previous = Array.from(normalized.slice(0, start)).at(-1);
+        if (previous === undefined || !JSON5_IDENTIFIER_CONTINUE_CHARACTER.test(previous)) break;
+        start -= previous.length;
+      }
+
+      let end = escapeIndex;
+      while (end < normalized.length) {
+        const escape = JSON5_IDENTIFIER_ESCAPE.exec(normalized.slice(end));
+        if (escape !== null) {
+          end += escape[0].length;
+          continue;
+        }
+        const codePoint = normalized.codePointAt(end);
+        if (codePoint === undefined) break;
+        const character = String.fromCodePoint(codePoint);
+        if (!JSON5_IDENTIFIER_CONTINUE_CHARACTER.test(character)) break;
+        end += character.length;
+      }
+
+      const identifier = normalized.slice(start, end);
+      const decoded = identifier.replace(/\\u([\dA-Fa-f]{4})/g, (_, code: string) =>
+        String.fromCharCode(Number.parseInt(code, 16)),
+      );
+      let placeholder = `$tailor_identifier_${identifierIndex++}`;
+      while (
+        source.includes(placeholder) ||
+        tokenReplacements.has(placeholder) ||
+        reservedValues.has(placeholder)
+      ) {
+        placeholder += "_";
+      }
+      normalized = `${normalized.slice(0, start)}${placeholder}${normalized.slice(end)}`;
+      tokenReplacements.set(placeholder, identifier);
+      valueReplacements.set(placeholder, decoded);
+    }
+  }
+}
+
 function normalizeJson5(source: string): {
   source: string;
   tokenReplacements: ReadonlyMap<string, string>;
   valueReplacements: ReadonlyMap<string, string>;
 } {
-  const tokens = JsonLexer.tokenize(source);
-  const tokenReplacements = new Map<string, string>();
-  const valueReplacements = new Map<string, string>();
-  const placeholders = new Set<string>();
+  const initialIdentifiers = normalizeEscapedJson5Identifiers(source, new Set());
+  const initialTokens = JsonLexer.tokenize(initialIdentifiers.source);
   const decodedStringValues = new Set<string>();
   let stringIndex = 0;
 
-  for (const token of tokens) {
+  for (const token of initialTokens) {
     if (token.type !== JsonTokenType.STRING) continue;
     const value: unknown = JSON5.parse(token.value);
     if (typeof value === "string") decodedStringValues.add(value);
   }
+
+  const reservedValues = new Set([
+    ...decodedStringValues,
+    ...initialIdentifiers.valueReplacements.values(),
+  ]);
+  const identifiers = normalizeEscapedJson5Identifiers(source, reservedValues);
+  const tokens = JsonLexer.tokenize(identifiers.source);
+  const tokenReplacements = new Map(identifiers.tokenReplacements);
+  const valueReplacements = new Map(identifiers.valueReplacements);
+  const placeholders = new Set(tokenReplacements.keys());
 
   const createPlaceholder = (prefix: string): string => {
     let placeholder = prefix;
     while (
       source.includes(placeholder) ||
       placeholders.has(placeholder) ||
-      decodedStringValues.has(placeholder)
+      reservedValues.has(placeholder)
     ) {
       placeholder += "_";
     }
