@@ -231,11 +231,12 @@ describe("db-types-generator", () => {
       expect(content).not.toContain("Timestamp[]");
     });
 
-    test("omits the Timestamp alias when only a cleared timestamp field needs a date", async () => {
+    test("omits the Timestamp alias when only cleared timestamp fields need dates", async () => {
       const snapshot = createMockSnapshot({
         Event: {
           fields: {
             eventDate: { type: "date", required: false },
+            holidays: { type: "date", required: false, array: true },
             label: { type: "string", required: false },
           },
         },
@@ -250,11 +251,21 @@ describe("db-types-generator", () => {
           before: { type: "date", required: false },
           after: { type: "string", required: false },
         },
+        {
+          tableName: "Event",
+          fieldName: "holidays",
+          tempFieldName: "holidaysTmp",
+          before: { type: "date", required: false, array: true },
+          after: { type: "string", required: false, array: true },
+        },
       ]);
       const content = fs.readFileSync(filePath, "utf-8");
 
       expect(content).toContain(
         "eventDate: ColumnType<Date | null, Date | string | null, Date | string | null>;",
+      );
+      expect(content).toContain(
+        "holidays: ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>;",
       );
       expect(content).not.toContain("type Timestamp =");
     });
@@ -462,6 +473,7 @@ describe("db-types-generator", () => {
         User: {
           fields: {
             birthDate: { type: "date", required: true },
+            holidays: { type: "date", required: true, array: true },
           },
         },
       });
@@ -476,6 +488,13 @@ describe("db-types-generator", () => {
             before: { type: "date", required: false },
             after: { type: "date", required: true },
           },
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "holidays",
+            before: { type: "date", required: false, array: true },
+            after: { type: "date", required: true, array: true },
+          },
         ],
         hasBreakingChanges: true,
         requiresMigrationScript: true,
@@ -486,6 +505,9 @@ describe("db-types-generator", () => {
 
       expect(content).toContain(
         "birthDate: ColumnType<Date | null, Date | string, Date | string>;",
+      );
+      expect(content).toContain(
+        "holidays: ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>;",
       );
     });
 
