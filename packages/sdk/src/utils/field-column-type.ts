@@ -22,7 +22,6 @@ export function mapFieldTypeToColumnType(fieldType: string): FieldColumnType {
       return "string";
     case "integer":
     case "float":
-    case "number":
       return "number";
     case "date":
     case "datetime":

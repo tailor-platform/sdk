@@ -9,7 +9,7 @@ describe("mapFieldTypeToColumnType", () => {
     ["time", "string"],
     ["integer", "number"],
     ["float", "number"],
-    ["number", "number"],
+    ["number", "string"],
     ["date", "Timestamp"],
     ["datetime", "Timestamp"],
     ["bool", "boolean"],
