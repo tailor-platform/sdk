@@ -48,10 +48,11 @@ const GLOBAL_SUGGESTIONS: Record<string, string> = {
 };
 
 export function isForbiddenGlobal(name: string): boolean {
-  return name in GLOBAL_SUGGESTIONS;
+  return Object.hasOwn(GLOBAL_SUGGESTIONS, name);
 }
 
 export function getForbiddenGlobalMessage(name: string): string {
-  const suggestion = GLOBAL_SUGGESTIONS[name];
-  return `"${name}" is not available in the Tailor Platform runtime. ${suggestion}`;
+  const suggestion = Object.hasOwn(GLOBAL_SUGGESTIONS, name) ? GLOBAL_SUGGESTIONS[name] : undefined;
+  const base = `"${name}" is not available in the Tailor Platform runtime.`;
+  return suggestion ? `${base} ${suggestion}` : base;
 }

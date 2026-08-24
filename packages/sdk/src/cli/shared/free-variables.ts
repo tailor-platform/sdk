@@ -51,6 +51,35 @@ function isBindingPattern(param: ParamPattern): param is BindingPattern {
   return param.type !== "TSParameterProperty";
 }
 
+const EQUALITY_OPERATORS = new Set(["===", "!==", "==", "!="]);
+
+/**
+ * If `expr` is a `typeof x === "..."` / `typeof x !== "..."` comparison, return
+ * the guarded identifier's name. `typeof` never throws on an undeclared
+ * identifier, so code gated by this comparison (e.g. `typeof x === "object" &&
+ * x`, the cross-environment global-detection idiom used by es-toolkit, lodash,
+ * core-js, etc.) cannot actually reference `x` when it is undeclared. Loose
+ * equality (`==`/`!=`) is included because minifiers rewrite `===`/`!==`
+ * against a `typeof` result to the loose form (the result is always a string,
+ * so the two are equivalent there).
+ * @param expr - Candidate comparison AST node.
+ * @returns The guarded identifier's name, or undefined if `expr` doesn't match.
+ */
+function typeofGuardTarget(expr: Node): string | undefined {
+  if (expr.type !== "BinaryExpression") return undefined;
+  if (!EQUALITY_OPERATORS.has(expr.operator)) return undefined;
+  for (const side of [expr.left, expr.right]) {
+    if (
+      side.type === "UnaryExpression" &&
+      side.operator === "typeof" &&
+      side.argument.type === "Identifier"
+    ) {
+      return side.argument.name;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Parse a code string with oxc-parser and return identifiers that are referenced
  * but never bound anywhere in the snippet (free variables), excluding ES builtins.
@@ -58,7 +87,11 @@ function isBindingPattern(param: ParamPattern): param is BindingPattern {
  * @returns Set of undefined variable names.
  */
 export function findUndefinedReferences(code: string): Set<string> {
-  const { program } = parseSync("_.js", code);
+  const { program, errors } = parseSync("_.js", code);
+  if (errors.length > 0) {
+    const details = errors.map((error) => `  - ${error.message}`).join("\n");
+    throw new Error(`Failed to parse code for free-variable analysis.\nParse errors:\n${details}`);
+  }
   const references = new Set<string>();
   const bindings = new Set<string>();
 
@@ -109,6 +142,23 @@ export function findUndefinedReferences(code: string): Set<string> {
         walk(node.object);
         if (node.computed) walk(node.property);
         return;
+
+      case "UnaryExpression":
+        if (node.operator === "typeof" && node.argument.type === "Identifier") {
+          return;
+        }
+        walk(node.argument);
+        return;
+
+      case "LogicalExpression": {
+        const guardedName = node.operator === "&&" ? typeofGuardTarget(node.left) : undefined;
+        walk(node.left);
+        if (guardedName && node.right.type === "Identifier" && node.right.name === guardedName) {
+          return;
+        }
+        walk(node.right);
+        return;
+      }
 
       case "Property":
         if (node.computed) walk(node.key);

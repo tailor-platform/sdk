@@ -25,6 +25,13 @@ describe("isForbiddenGlobal", () => {
   test("does not flag unrelated identifiers", () => {
     expect(isForbiddenGlobal("myLocalHelper")).toBe(false);
   });
+
+  test("does not flag inherited Object.prototype properties", () => {
+    expect(isForbiddenGlobal("toString")).toBe(false);
+    expect(isForbiddenGlobal("constructor")).toBe(false);
+    expect(isForbiddenGlobal("hasOwnProperty")).toBe(false);
+    expect(isForbiddenGlobal("__proto__")).toBe(false);
+  });
 });
 
 describe("getForbiddenGlobalMessage", () => {
@@ -37,5 +44,11 @@ describe("getForbiddenGlobalMessage", () => {
   test("points to Web Standard alternatives", () => {
     expect(getForbiddenGlobalMessage("Buffer")).toContain("Uint8Array");
     expect(getForbiddenGlobalMessage("global")).toContain("globalThis");
+  });
+
+  test("returns a plain message for a name with no registered suggestion", () => {
+    expect(getForbiddenGlobalMessage("toString")).toBe(
+      '"toString" is not available in the Tailor Platform runtime.',
+    );
   });
 });

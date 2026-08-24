@@ -35,8 +35,32 @@ describe("findUndefinedReferences", () => {
       "async () => { await fetch(new URL('https://x')); return new TextEncoder(); }",
       [],
     ],
+    [
+      "does not flag a typeof check on an undeclared identifier",
+      "() => typeof process === 'undefined'",
+      [],
+    ],
+    [
+      "does not flag the cross-environment global-detection idiom (es-toolkit/lodash/core-js)",
+      "() => typeof globalThis === 'object' && globalThis || typeof window === 'object' && window || typeof self === 'object' && self || typeof global === 'object' && global",
+      [],
+    ],
+    [
+      "does not flag the same idiom after a minifier rewrites === to == against typeof",
+      "() => typeof globalThis == 'object' && globalThis || typeof window == 'object' && window || typeof self == 'object' && self || typeof global == 'object' && global",
+      [],
+    ],
+    [
+      "still flags a global referenced outside a typeof guard",
+      "() => typeof process === 'object' ? 1 : process.exit(1)",
+      ["process"],
+    ],
   ])("%s", (_name, code, expected) => {
     const vars = findUndefinedReferences(`const __fn = ${code};`);
     expect(vars).toEqual(new Set(expected));
+  });
+
+  test("throws on unparsable code instead of silently returning an incomplete result", () => {
+    expect(() => findUndefinedReferences("const __fn = ({ value }) =>;")).toThrow(/Parse errors/);
   });
 });
