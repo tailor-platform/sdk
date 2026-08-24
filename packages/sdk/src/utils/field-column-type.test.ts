@@ -9,8 +9,10 @@ describe("mapFieldTypeToColumnType", () => {
     ["time", "string"],
     ["integer", "number"],
     ["float", "number"],
+    ["number", "number"],
     ["date", "Timestamp"],
     ["datetime", "Timestamp"],
+    ["bool", "boolean"],
     ["boolean", "boolean"],
   ] as const)("maps %s to %s", (fieldType, expected) => {
     expect(mapFieldTypeToColumnType(fieldType)).toBe(expected);
