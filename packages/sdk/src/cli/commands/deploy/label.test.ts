@@ -211,7 +211,7 @@ describe("withMetadataWriteBatch", () => {
     hooks: {
       beforeGet?: (trn: string) => void;
       afterBulkWrite?: (bulkCall: number) => void;
-    } = {},
+    },
   ) {
     const client = createClient();
     let bulkCall = 0;
@@ -220,13 +220,13 @@ describe("withMetadataWriteBatch", () => {
       return { metadata: { labels: { ...labelsByTrn.get(trn) } } };
     });
     client.bulkSetMetadata.mockImplementation(
-      async ({
-        requests,
-      }: {
-        requests: Array<{ trn: string; labels: Record<string, string> }>;
-      }) => {
+      async ({ requests }: Parameters<MetadataLabelBulkClient["bulkSetMetadata"]>[0]) => {
+        if (!requests) throw new Error("BulkSetMetadata test request is missing requests");
         bulkCall += 1;
         for (const request of requests) {
+          if (!request.trn || !request.labels) {
+            throw new Error("BulkSetMetadata test entry is missing trn or labels");
+          }
           labelsByTrn.set(request.trn, { ...request.labels });
         }
         hooks.afterBulkWrite?.(bulkCall);
@@ -327,6 +327,27 @@ describe("withMetadataWriteBatch", () => {
     expect(client.getMetadata).toHaveBeenCalledTimes(204);
     expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
     expect(client.bulkSetMetadata.mock.calls[0]?.[0].requests).toHaveLength(3);
+  });
+
+  test("does not bulk-write candidates that become no-ops during reread", async () => {
+    const labelsByTrn = new Map<string, Record<string, string>>(
+      Array.from({ length: 101 }, (_, index) => {
+        const labels: Record<string, string> = index === 0 ? {} : { mine: "value" };
+        return [`trn:${String(index).padStart(3, "0")}`, labels] as const;
+      }),
+    );
+    const client = createStatefulClient(labelsByTrn, {
+      beforeGet(trn) {
+        if (trn === "trn:100") {
+          labelsByTrn.set("trn:000", { mine: "value" });
+        }
+      },
+    });
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 101));
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(102);
+    expect(client.bulkSetMetadata).not.toHaveBeenCalled();
   });
 
   test("packs changed TRNs across read waves", async () => {
