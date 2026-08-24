@@ -478,17 +478,15 @@ class MetadataWriteBatch {
       const labels = writes.reduce(applyMetadataLabelWrite, currentLabels);
       return areSameLabels(currentLabels, labels) ? undefined : { trn, labels };
     };
-    const candidates: Array<{
-      entry: (typeof queued)[number];
-      request: MessageInitShape<typeof SetMetadataRequestSchema>;
-    }> = [];
+    const candidates: (typeof queued)[number][] = [];
     let cursor = 0;
 
     while (cursor < queued.length || candidates.length > 0) {
-      let needsFreshnessBarrier = candidates.length > 0;
+      let freshRequests: MessageInitShape<typeof SetMetadataRequestSchema>[] | undefined =
+        candidates.length === 0 ? [] : undefined;
       while (cursor < queued.length && candidates.length < metadataWriteBatchSize) {
         // Fixed-width waves keep a nearly full batch from serializing a long no-op tail.
-        if (candidates.length > 0) needsFreshnessBarrier = true;
+        if (candidates.length > 0) freshRequests = undefined;
         const entries = queued.slice(cursor, cursor + metadataWriteBatchSize);
         cursor += entries.length;
         const changed = await Promise.all(
@@ -499,18 +497,18 @@ class MetadataWriteBatch {
         );
         for (const candidate of changed) {
           if (!candidate) continue;
-          candidates.push(candidate);
+          candidates.push(candidate.entry);
+          freshRequests?.push(candidate.request);
         }
       }
 
-      const batchCandidates = candidates.splice(0, metadataWriteBatchSize);
+      const batchEntries = candidates.splice(0, metadataWriteBatchSize);
       // Candidates spanning waves or carried past a bulk need one shared freshness barrier.
       const latestRequests =
-        needsFreshnessBarrier && batchCandidates.length > 0
-          ? (await Promise.all(batchCandidates.map(({ entry }) => readRequest(entry)))).filter(
-              (request) => request !== undefined,
-            )
-          : batchCandidates.map(({ request }) => request);
+        freshRequests ??
+        (await Promise.all(batchEntries.map((entry) => readRequest(entry)))).filter(
+          (request) => request !== undefined,
+        );
       if (latestRequests.length > 0) {
         await this.#client.bulkSetMetadata({ requests: latestRequests });
       }
