@@ -402,9 +402,9 @@ describe("setMetadata call sites", () => {
 
   function sourceFiles(dir: string): string[] {
     return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      // Service tests create and delete temporary sources under dot-directories
-      // while this runs; they are fixtures, not call sites.
-      if (entry.name.startsWith(".")) return [];
+      // Service tests create and delete temporary source trees while this runs;
+      // they are fixtures, not production call sites.
+      if (entry.name.startsWith(".") || entry.name.startsWith("__test_")) return [];
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) return sourceFiles(full);
       return entry.isFile() && full.endsWith(".ts") && !full.endsWith(".test.ts") ? [full] : [];
@@ -415,9 +415,9 @@ describe("setMetadata call sites", () => {
     try {
       // \s so a call the formatter wrapped across lines still counts.
       return /\.\s*setMetadata\s*\(/.test(fs.readFileSync(file, "utf-8"));
-    } catch {
-      // Raced with a test that removed its own fixture; nothing to check.
-      return false;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw error;
     }
   }
 
@@ -425,7 +425,11 @@ describe("setMetadata call sites", () => {
     // SetMetadata replaces the whole label map, so a call that does not re-read
     // first can delete labels written since this process last looked. Route new
     // writes through writeMetadataLabels instead of adding a call site here.
-    const offenders = sourceFiles(srcDir)
+    const files = sourceFiles(srcDir);
+    const relativeFiles = files.map((file) => path.relative(srcDir, file));
+    expect(relativeFiles).toContain("cli/commands/deploy/label.ts");
+
+    const offenders = files
       .filter(callsSetMetadata)
       .map((file) => path.relative(srcDir, file))
       .filter((file) => file !== "cli/commands/deploy/label.ts");
