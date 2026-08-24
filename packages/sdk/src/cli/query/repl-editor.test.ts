@@ -1,15 +1,7 @@
 import { describe, expect, test } from "vitest";
+import { stripAnsi } from "../shared/test-helpers/strip-ansi";
 import { highlightGraphqlLine, highlightSqlLine, replTransform } from "./repl-editor";
 import type { TransformEvent, TransformState } from "@toiroakr/read-multiline";
-
-// ANSI escape sequences start with U+001B (ESC), which is a control character
-// by definition. The regex literally exists to strip such characters.
-// eslint-disable-next-line no-control-regex
-const ANSI_ESCAPE = /\x1b\[[0-9;]*m/g;
-
-function stripAnsi(value: string): string {
-  return value.replace(ANSI_ESCAPE, "");
-}
 
 describe("highlightSqlLine", () => {
   test("wraps SQL keywords in ANSI colour", () => {
