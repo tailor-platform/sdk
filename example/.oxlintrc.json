@@ -36,7 +36,6 @@
     "typescript/no-redundant-type-constituents": "off",
     "import/no-named-as-default": "warn",
     "import/no-named-as-default-member": "warn",
-    "import/no-duplicates": "warn",
     "typescript/ban-ts-comment": "error",
     "typescript/no-empty-object-type": "error",
     "typescript/no-explicit-any": "error",
