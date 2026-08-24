@@ -24,6 +24,8 @@
     "no-regex-spaces": "error",
     "no-unexpected-multiline": "error",
     "preserve-caught-error": "error",
+    "import/default": "error",
+    "import/namespace": "error",
     "import/no-named-as-default": "warn",
     "import/no-named-as-default-member": "warn",
     "typescript/ban-ts-comment": "error",
