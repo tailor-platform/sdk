@@ -178,42 +178,44 @@ function normalizeEscapedJson5Identifiers(
   tokenReplacements: ReadonlyMap<string, string>;
   valueReplacements: ReadonlyMap<string, string>;
 } {
-  let normalized = source;
+  let remaining = source;
+  let normalized = "";
   const tokenReplacements = new Map<string, string>();
   const valueReplacements = new Map<string, string>();
   let identifierIndex = 0;
 
-  for (;;) {
+  while (remaining.length > 0) {
     try {
-      JsonLexer.tokenize(normalized);
-      return { source: normalized, tokenReplacements, valueReplacements };
+      JsonLexer.tokenize(remaining);
+      normalized += remaining;
+      break;
     } catch (error) {
       if (!(error instanceof JsonParseError)) throw error;
-      const escapeIndex = toStringIndex(normalized, error.location.start.index);
-      if (!JSON5_IDENTIFIER_ESCAPE.test(normalized.slice(escapeIndex))) throw error;
+      const escapeIndex = toStringIndex(remaining, error.location.start.index);
+      if (!JSON5_IDENTIFIER_ESCAPE.test(remaining.slice(escapeIndex))) throw error;
 
       let start = escapeIndex;
       while (start > 0) {
-        const previous = Array.from(normalized.slice(0, start)).at(-1);
+        const previous = Array.from(remaining.slice(0, start)).at(-1);
         if (previous === undefined || !JSON5_IDENTIFIER_CONTINUE_CHARACTER.test(previous)) break;
         start -= previous.length;
       }
 
       let end = escapeIndex;
-      while (end < normalized.length) {
-        const escape = JSON5_IDENTIFIER_ESCAPE.exec(normalized.slice(end));
+      while (end < remaining.length) {
+        const escape = JSON5_IDENTIFIER_ESCAPE.exec(remaining.slice(end));
         if (escape !== null) {
           end += escape[0].length;
           continue;
         }
-        const codePoint = normalized.codePointAt(end);
+        const codePoint = remaining.codePointAt(end);
         if (codePoint === undefined) break;
         const character = String.fromCodePoint(codePoint);
         if (!JSON5_IDENTIFIER_CONTINUE_CHARACTER.test(character)) break;
         end += character.length;
       }
 
-      const identifier = normalized.slice(start, end);
+      const identifier = remaining.slice(start, end);
       const decoded = identifier.replace(/\\u([\dA-Fa-f]{4})/g, (_, code: string) =>
         String.fromCharCode(Number.parseInt(code, 16)),
       );
@@ -225,11 +227,14 @@ function normalizeEscapedJson5Identifiers(
       ) {
         placeholder += "_";
       }
-      normalized = `${normalized.slice(0, start)}${placeholder}${normalized.slice(end)}`;
+      normalized += `${remaining.slice(0, start)}${placeholder}`;
+      remaining = remaining.slice(end);
       tokenReplacements.set(placeholder, identifier);
       valueReplacements.set(placeholder, decoded);
     }
   }
+
+  return { source: normalized, tokenReplacements, valueReplacements };
 }
 
 function normalizeJson5(source: string): {
