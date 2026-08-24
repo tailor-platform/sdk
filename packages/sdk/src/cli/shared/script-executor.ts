@@ -152,7 +152,12 @@ export async function executeScript<T extends Jsonifiable = Jsonifiable>(
       success: false,
       logs: result.logs,
       result: result.result || response.result,
-      error: result.result || response.result || "Script execution failed with unknown error",
+      error:
+        result.result ||
+        response.result ||
+        (result.status === FunctionExecution_Status.CANCELED
+          ? "Script execution was canceled"
+          : "Script execution failed with unknown error"),
     };
   }
 }

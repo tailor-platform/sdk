@@ -2,4 +2,5 @@
 "@tailor-platform/sdk": patch
 ---
 
-Reduce deploy latency by batching metadata updates and caching ownership metadata lookups.
+- Speed up deployments by reducing metadata API calls.
+- Stop CLI wait commands when a function execution is canceled and report the cancellation as a failure.

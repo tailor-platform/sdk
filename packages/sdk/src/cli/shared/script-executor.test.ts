@@ -292,6 +292,21 @@ describe("executeScript", () => {
     expect(result.error).toBe("Script execution failed with unknown error");
   });
 
+  test("returns a cancellation error when a canceled execution has no result", async () => {
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.CANCELED, "", ""));
+
+    const result = await executeScript({
+      client,
+      workspaceId: "workspace-1",
+      name: "canceled-script.js",
+      code: "code",
+      invoker: mockAuthInvoker,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Script execution was canceled");
+  });
+
   test("uses custom poll interval", async () => {
     const getFunctionExecution = vi
       .fn()
