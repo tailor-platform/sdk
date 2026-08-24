@@ -1184,6 +1184,16 @@ export const allCodemods: CodemodPackage[] = [
     notice: true,
   },
   {
+    id: "v2/tailordb-timestamps-required",
+    name: "`db.fields.timestamps()`: `updatedAt` becomes required",
+    description:
+      'The `updatedAt` field from `db.fields.timestamps()` changes from optional to required (non-null): it defaults to the current time and keeps refreshing automatically on every update, though a value you provide explicitly is still respected. Applying this change to a table that already has rows with `updatedAt: null` makes `deploy` fail with `field "updatedAt" cannot be updated from non-required to required when records with null values exist`. Backfill those rows first, e.g. `UPDATE <table> SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL` for each affected table — see [TailorDB migrations](../services/tailordb-migration.md#performance-and-large-tables) for splitting a large backfill across primary-key ranges if a single `UPDATE` times out.',
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_2,
+    notice: true,
+  },
+  {
     id: "v2/rename-bin",
     name: "tailor-sdk binary → tailor",
     description:
