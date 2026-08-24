@@ -1,5 +1,7 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { executeMigrationAsWorkflow, migrationWorkflowResourceName } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -31,6 +33,7 @@ interface MockClientOptions {
   statuses?: WorkflowExecution_Status[];
   logs?: string;
   failOn?: string;
+  failWith?: Error;
 }
 
 function createMockClient(options: MockClientOptions = {}) {
@@ -41,7 +44,7 @@ function createMockClient(options: MockClientOptions = {}) {
   const record = <T>(name: string, value: T) => {
     calls.push(name);
     if (options.failOn === name) {
-      return Promise.reject(new Error(`${name} failed`));
+      return Promise.reject(options.failWith ?? new Error(`${name} failed`));
     }
     return Promise.resolve(value);
   };
@@ -94,6 +97,10 @@ describe("migrationWorkflowResourceName", () => {
 });
 
 describe("executeMigrationAsWorkflow", () => {
+  beforeEach(() => {
+    vi.mocked(logger.warn).mockClear();
+  });
+
   test("registers, starts, and tears down the temporary resources", async () => {
     const { client, raw, calls } = createMockClient();
 
@@ -163,6 +170,19 @@ describe("executeMigrationAsWorkflow", () => {
     const result = await run(client);
 
     expect(result.success).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("Could not remove"));
+  });
+
+  test("stays quiet when a temporary resource is already gone", async () => {
+    const { client } = createMockClient({
+      failOn: "deleteWorkflow",
+      failWith: new ConnectError("not found", Code.NotFound),
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   test("does not attempt to delete a workflow that was never created", async () => {

@@ -14,6 +14,8 @@
 
 import * as crypto from "node:crypto";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
+import { isNotFoundError } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { buildMetaRequest, resourceTrn, writeMetadataLabels } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -55,8 +57,7 @@ export interface LongRunningMigrationResult {
  * @returns Resource name
  */
 export function migrationWorkflowResourceName(namespace: string, migrationNumber: number): string {
-  const paddedNumber = String(migrationNumber).padStart(4, "0");
-  return `tailordb-migration--${namespace}--${paddedNumber}`;
+  return `tailordb-migration--${namespace}--${formatMigrationNumber(migrationNumber)}`;
 }
 
 /**
@@ -103,7 +104,8 @@ async function uploadMigrationFunction(
  * Remove the temporary resources created for a long-running migration.
  *
  * Teardown is best effort: a failure here must not mask the migration's own
- * outcome, so each removal is attempted and reported as a warning on failure.
+ * outcome, so every removal is attempted and an unexpected failure is reported
+ * as a warning rather than raised.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param name - Shared resource name
@@ -133,6 +135,9 @@ async function teardown(
     try {
       await run();
     } catch (error) {
+      // An already-absent resource means teardown's goal is met; anything else
+      // leaves a resource behind and has to stay diagnosable.
+      if (isNotFoundError(error)) continue;
       logger.warn(
         `Could not remove the temporary migration ${label} '${name}': ` +
           `${error instanceof Error ? error.message : String(error)}. ` +

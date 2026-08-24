@@ -341,7 +341,11 @@ export async function executeMigrations(
 
     for (const migration of namespaceMigrations) {
       const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
-      const sp = spinner().start(`Executing migration ${migrationLabel}...`);
+      const sp = spinner().start(
+        migration.diff.longRunning
+          ? `Executing migration ${migrationLabel} as a workflow job (this can take a while)...`
+          : `Executing migration ${migrationLabel}...`,
+      );
 
       const result = await executeSingleMigration(options, migration);
 
