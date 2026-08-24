@@ -93,6 +93,8 @@ const INSIGNIFICANT_JSON5_TOKENS = new Set([
   JsonTokenType.BLOCK_COMMENT,
 ]);
 
+const UNSUPPORTED_JSON5_PROPERTY_NAMES = new Set([...reservedIdentifiers, "Infinity", "NaN"]);
+
 function normalizeReservedPropertyNames(source: string): {
   source: string;
   propertyNames: ReadonlyMap<string, string>;
@@ -102,7 +104,7 @@ function normalizeReservedPropertyNames(source: string): {
   const propertyNames = new Map<string, string>();
 
   const normalized = tokens.map((token, index) => {
-    if (!reservedIdentifiers.includes(token.value)) return token.value;
+    if (!UNSUPPORTED_JSON5_PROPERTY_NAMES.has(token.value)) return token.value;
     let nextIndex = index + 1;
     let nextToken = tokens[nextIndex];
     while (nextToken !== undefined && INSIGNIFICANT_JSON5_TOKENS.has(nextToken.type)) {
@@ -139,7 +141,7 @@ function readJson5Config(filePath: string): Json5Config | null {
   const entry = getPathEntry(filePath);
   if (entry === null || !entry.isFile()) return null;
   try {
-    // The parser rejects reserved words as unquoted keys, though JSON5 permits them.
+    // The parser rejects some valid unquoted JSON5 property names.
     const normalized = normalizeReservedPropertyNames(fs.readFileSync(filePath, "utf-8"));
     return {
       node: JsonParser.parse(normalized.source, JsonObjectNode),
