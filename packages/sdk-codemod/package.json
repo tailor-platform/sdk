@@ -23,7 +23,7 @@
     "knip": "knip",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "prepublish": "pnpm run build",
+    "prepublishOnly": "pnpm run build",
     "publint": "publint --strict"
   },
   "dependencies": {
