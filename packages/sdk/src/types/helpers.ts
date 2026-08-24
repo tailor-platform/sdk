@@ -22,14 +22,6 @@ export type DeepReadonly<T> = T extends Date | RegExp | Function
       ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
       : T;
 
-type LiteralToString<T> = T extends string ? string : T;
-type SpecificNumberToNumber<T> = T extends number ? number : T;
-type TrueFalseToBool<T> = T extends number ? number : T;
-type Widening<T> = TrueFalseToBool<SpecificNumberToNumber<LiteralToString<T>>>;
-export type DeepWidening<T> = T extends object
-  ? { [K in keyof T]: DeepWidening<T[K]> }
-  : Widening<T>;
-
 export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never;
 
 export type NullableToOptional<T> = {
