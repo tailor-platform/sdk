@@ -8,7 +8,8 @@ try {
   const { enableCompileCache } = await import("politty/compile-cache");
   enableCompileCache("tailor-seed");
 } catch {
-  // politty is not resolvable from here (e.g. a fully bundled CLI) —
-  // start without the compile cache rather than failing the CLI.
+  // politty/compile-cache is not resolvable from here (e.g. a fully
+  // bundled CLI) — start without the compile cache rather than failing
+  // the CLI.
 }
 await import("../dist/index.js");

@@ -73,8 +73,12 @@ describe("skills command", () => {
     const addCommand = await resolveCommand(expectDefined(skillSubCommands.add));
     const listCommand = await resolveCommand(expectDefined(skillSubCommands.list));
 
-    expect(expectDefined(addCommand.args).parse({})).not.toHaveProperty("verbose");
-    expect(expectDefined(listCommand.args).parse({})).not.toHaveProperty("json");
+    expect(
+      extractFields(expectDefined(addCommand.args)).fields.map((field) => field.name),
+    ).not.toContain("verbose");
+    expect(
+      extractFields(expectDefined(listCommand.args)).fields.map((field) => field.name),
+    ).not.toContain("json");
 
     const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
