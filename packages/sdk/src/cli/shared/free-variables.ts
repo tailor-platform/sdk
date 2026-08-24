@@ -51,33 +51,66 @@ function isBindingPattern(param: ParamPattern): param is BindingPattern {
   return param.type !== "TSParameterProperty";
 }
 
-const EQUALITY_OPERATORS = new Set(["===", "!==", "==", "!="]);
+const NEGATIVE_EQUALITY_OPERATORS = new Set(["!==", "!="]);
+const POSITIVE_EQUALITY_OPERATORS = new Set(["===", "=="]);
 
 /**
- * If `expr` is a `typeof x === "..."` / `typeof x !== "..."` comparison, return
- * the guarded identifier's name. `typeof` never throws on an undeclared
- * identifier, so code gated by this comparison (e.g. `typeof x === "object" &&
- * x`, the cross-environment global-detection idiom used by es-toolkit, lodash,
- * core-js, etc.) cannot actually reference `x` when it is undeclared. Loose
+ * Read the static string value of a string literal or a template literal with
+ * no interpolated expressions (e.g. `` `object` ``, which minifiers use in
+ * place of `"object"` — both are the same string at runtime).
+ * @param node - Candidate literal AST node.
+ * @returns The literal's string value, or undefined if `node` isn't one.
+ */
+function staticStringValue(node: Node): string | undefined {
+  if (node.type === "Literal" && typeof node.value === "string") return node.value;
+  if (
+    node.type === "TemplateLiteral" &&
+    node.expressions.length === 0 &&
+    node.quasis.length === 1
+  ) {
+    return node.quasis[0]?.value.cooked ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * If `expr` is a `typeof x === "..."` / `typeof x !== "..."` comparison that
+ * is only true while `x` is declared, return `x`'s name. `typeof` never
+ * throws on an undeclared identifier, so `typeof x !== "undefined" && x` (and
+ * `typeof x === "<anything but undefined>" && x`) cannot actually reference
+ * `x` when it is undeclared — this is the cross-environment global-detection
+ * idiom used by es-toolkit, lodash, core-js, etc. The opposite direction —
+ * `typeof x === "undefined" && x` or `typeof x !== "<anything but
+ * undefined>" && x` — is true precisely when `x` is NOT safely usable (or
+ * says nothing about it), so it must not be treated as a guard. Loose
  * equality (`==`/`!=`) is included because minifiers rewrite `===`/`!==`
- * against a `typeof` result to the loose form (the result is always a string,
- * so the two are equivalent there).
+ * against a `typeof` result to the loose form (the result is always a
+ * string, so the two are equivalent there).
  * @param expr - Candidate comparison AST node.
- * @returns The guarded identifier's name, or undefined if `expr` doesn't match.
+ * @returns The guarded identifier's name, or undefined if `expr` doesn't guard one.
  */
 function typeofGuardTarget(expr: Node): string | undefined {
   if (expr.type !== "BinaryExpression") return undefined;
-  if (!EQUALITY_OPERATORS.has(expr.operator)) return undefined;
-  for (const side of [expr.left, expr.right]) {
-    if (
-      side.type === "UnaryExpression" &&
-      side.operator === "typeof" &&
-      side.argument.type === "Identifier"
-    ) {
-      return side.argument.name;
-    }
-  }
-  return undefined;
+  const { left, right, operator } = expr;
+  const [typeofSide, literalSide] =
+    left.type === "UnaryExpression" &&
+    left.operator === "typeof" &&
+    left.argument.type === "Identifier"
+      ? [left, right]
+      : right.type === "UnaryExpression" &&
+          right.operator === "typeof" &&
+          right.argument.type === "Identifier"
+        ? [right, left]
+        : [undefined, undefined];
+  if (!typeofSide) return undefined;
+  const literalValue = staticStringValue(literalSide);
+  if (literalValue === undefined) return undefined;
+  const comparesToUndefined = literalValue === "undefined";
+  const isSafe =
+    (NEGATIVE_EQUALITY_OPERATORS.has(operator) && comparesToUndefined) ||
+    (POSITIVE_EQUALITY_OPERATORS.has(operator) && !comparesToUndefined);
+  if (!isSafe) return undefined;
+  return (typeofSide.argument as { name: string }).name;
 }
 
 /**

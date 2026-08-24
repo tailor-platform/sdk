@@ -51,6 +51,11 @@ describe("findUndefinedReferences", () => {
       [],
     ],
     [
+      "does not flag the same idiom after a minifier rewrites the string literal to a template literal",
+      "() => typeof globalThis==`object`&&globalThis||typeof window==`object`&&window||typeof self==`object`&&self||typeof global==`object`&&global",
+      [],
+    ],
+    [
       "still flags a global referenced outside a typeof guard",
       "() => typeof process === 'object' ? 1 : process.exit(1)",
       ["process"],
@@ -69,6 +74,21 @@ describe("findUndefinedReferences", () => {
       "still flags free variables inside a computed member access on a guarded chain",
       "() => typeof process !== 'undefined' && process.env[KEY]",
       ["KEY"],
+    ],
+    [
+      "still flags a reference guarded by the wrong-direction comparison (=== undefined)",
+      "() => typeof process === 'undefined' && process.env",
+      ["process"],
+    ],
+    [
+      "still flags a reference guarded by the wrong-direction comparison (!== a non-undefined type)",
+      "() => typeof process !== 'object' && process.env",
+      ["process"],
+    ],
+    [
+      "does not flag the positive form compared against a non-undefined type",
+      "() => typeof process === 'object' && process.env",
+      [],
     ],
   ])("%s", (_name, code, expected) => {
     const vars = findUndefinedReferences(`const __fn = ${code};`);
