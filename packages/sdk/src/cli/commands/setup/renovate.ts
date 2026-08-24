@@ -100,7 +100,6 @@ function normalizeReservedPropertyNames(source: string): {
   propertyNames: ReadonlyMap<string, string>;
 } {
   const tokens = JsonLexer.tokenize(source);
-  const tokenValues = new Set(tokens.map((token) => token.value));
   const propertyNames = new Map<string, string>();
 
   const normalized = tokens.map((token, index) => {
@@ -116,8 +115,7 @@ function normalizeReservedPropertyNames(source: string): {
     let placeholder = propertyNames.get(token.value);
     if (placeholder === undefined) {
       placeholder = `$tailor_${token.value}`;
-      while (tokenValues.has(placeholder)) placeholder += "_";
-      tokenValues.add(placeholder);
+      while (source.includes(placeholder)) placeholder += "_";
       propertyNames.set(token.value, placeholder);
     }
     return placeholder;

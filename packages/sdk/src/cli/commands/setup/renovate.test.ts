@@ -211,13 +211,13 @@ describe("setupRenovate", () => {
     const configPath = path.join(testDir, "renovate.json5");
     fs.writeFileSync(
       configPath,
-      "{\n\t// Keep this comment.\n\textends: ['config:recommended'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
+      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
     );
 
     await setupRenovate({ outputDir: testDir });
 
     expect(fs.readFileSync(configPath, "utf-8")).toBe(
-      "{\n\t// Keep this comment.\n\textends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
+      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
     );
   });
 
