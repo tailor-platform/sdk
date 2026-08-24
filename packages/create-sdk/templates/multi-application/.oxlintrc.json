@@ -20,7 +20,7 @@
     "tailor-sdk/no-unconditional-permit": "warn",
     "import/default": "off",
     "import/namespace": "off",
-    "import/no-duplicates": "error",
+    "import/no-duplicates": ["error", { "considerQueryString": true }],
     "no-case-declarations": "error",
     "no-empty": "error",
     "no-fallthrough": "error",

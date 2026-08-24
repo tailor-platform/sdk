@@ -88,7 +88,7 @@
     "jsdoc/require-yields": "warn",
     "import/no-named-as-default": "warn",
     "import/no-named-as-default-member": "warn",
-    "import/no-duplicates": "error",
+    "import/no-duplicates": ["error", { "considerQueryString": true }],
     "typescript/ban-ts-comment": [
       "error",
       {

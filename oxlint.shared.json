@@ -16,6 +16,6 @@
     "no-param-reassign": "error",
     "import/default": "off",
     "import/namespace": "off",
-    "import/no-duplicates": "error"
+    "import/no-duplicates": ["error", { "considerQueryString": true }]
   }
 }
