@@ -98,4 +98,18 @@ describe("findUndefinedReferences", () => {
   test("throws on unparsable code instead of silently returning an incomplete result", () => {
     expect(() => findUndefinedReferences("const __fn = ({ value }) =>;")).toThrow(/Parse errors/);
   });
+
+  test("treats an ESM import's local binding as bound, not a free variable", () => {
+    const vars = findUndefinedReferences(
+      'import { process } from "./local-shim";\nconst __fn = () => process.env.X;',
+    );
+    expect(vars).toEqual(new Set());
+  });
+
+  test("still flags an unrelated free variable alongside a bound import", () => {
+    const vars = findUndefinedReferences(
+      'import { helper } from "./local-shim";\nconst __fn = () => helper(OFFSET);',
+    );
+    expect(vars).toEqual(new Set(["OFFSET"]));
+  });
 });

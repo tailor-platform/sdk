@@ -164,6 +164,12 @@ export function findUndefinedReferences(code: string): Set<string> {
         walk(node.init);
         return;
 
+      case "ImportDeclaration":
+        for (const specifier of node.specifiers) {
+          bindings.add(specifier.local.name);
+        }
+        return;
+
       case "FunctionDeclaration":
       case "FunctionExpression":
         if (node.id) bindings.add(node.id.name);
