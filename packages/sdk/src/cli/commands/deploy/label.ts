@@ -1,4 +1,5 @@
 import { getOrNull } from "#/cli/shared/client";
+import { toError } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -445,18 +446,30 @@ interface MetadataWriteBatchClient extends MetadataLabelClient {
 class MetadataWriteBatch {
   readonly #client: MetadataLabelBulkClient;
   readonly #writesByTrn = new Map<string, MetadataLabelWrite[]>();
+  #flushPromise: Promise<void> | undefined;
 
   constructor(client: MetadataLabelBulkClient) {
     this.#client = client;
   }
 
-  enqueue(write: MetadataLabelWrite): void {
+  async enqueue(write: MetadataLabelWrite): Promise<void> {
+    if (this.#flushPromise) {
+      // The wrapper reports a flush failure; a late apply sibling must still attempt its write.
+      await this.#flushPromise.catch(() => undefined);
+      await writeMetadataLabelsDirect(this.#client, write);
+      return;
+    }
     const writes = this.#writesByTrn.get(write.trn) ?? [];
     writes.push(write);
     this.#writesByTrn.set(write.trn, writes);
   }
 
-  async flush(): Promise<void> {
+  flush(): Promise<void> {
+    this.#flushPromise ??= this.#flushQueued();
+    return this.#flushPromise;
+  }
+
+  async #flushQueued(): Promise<void> {
     const requests = (
       await Promise.all(
         [...this.#writesByTrn].map(async ([trn, writes]) => {
@@ -504,7 +517,7 @@ function applyMetadataLabelWrite(
 function metadataRecoveryError(applyError: unknown, flushError: unknown): AggregateError {
   return new AggregateError(
     [applyError, flushError],
-    "Resource apply failed and queued metadata could not be written",
+    `Resource apply failed: ${toError(applyError).message}\nQueued metadata recovery failed: ${toError(flushError).message}`,
     { cause: flushError },
   );
 }
@@ -559,7 +572,7 @@ export async function withMetadataWriteBatch<TClient extends MetadataLabelBulkCl
  * labels the SDK sets are unchanged on most deploys.
  * @param client - Operator client instance
  * @param write - TRN, labels to set, and label keys to delete
- * @returns Promise that resolves when the labels are written
+ * @returns Promise that resolves when the change is queued for a batch or written directly
  */
 export async function writeMetadataLabels(
   client: MetadataLabelClient,
@@ -568,7 +581,7 @@ export async function writeMetadataLabels(
   if (!hasMetadataLabelChange(write)) return;
   const batch = (client as MetadataWriteBatchClient)[metadataWriteBatch];
   if (batch) {
-    batch.enqueue(write);
+    await batch.enqueue(write);
     return;
   }
   await writeMetadataLabelsDirect(client, write);

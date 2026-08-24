@@ -278,6 +278,70 @@ describe("withMetadataWriteBatch", () => {
     });
   });
 
+  test("writes changes queued by an apply sibling after recovery flush starts", async () => {
+    const client = createClient();
+    let releaseBulkWrite!: () => void;
+    const allowBulkWrite = new Promise<void>((resolve) => {
+      releaseBulkWrite = resolve;
+    });
+    let signalBulkWriteStarted!: () => void;
+    const bulkWriteStarted = new Promise<void>((resolve) => {
+      signalBulkWriteStarted = resolve;
+    });
+    client.bulkSetMetadata.mockImplementationOnce(async () => {
+      signalBulkWriteStarted();
+      await allowBulkWrite;
+      return { results: [] };
+    });
+    let releaseLateWrite!: () => void;
+    const allowLateWrite = new Promise<void>((resolve) => {
+      releaseLateWrite = resolve;
+    });
+    let signalLateWriteStarted!: () => void;
+    const lateWriteStarted = new Promise<void>((resolve) => {
+      signalLateWriteStarted = resolve;
+    });
+    let lateWrite!: Promise<void>;
+
+    const result = withMetadataWriteBatch(client as never, async (batchClient) => {
+      await writeMetadataLabels(batchClient, {
+        trn: "trn:early",
+        labels: { mine: "early" },
+      });
+      lateWrite = (async () => {
+        await allowLateWrite;
+        signalLateWriteStarted();
+        await writeMetadataLabels(batchClient, {
+          trn: "trn:late",
+          labels: { mine: "late" },
+        });
+      })();
+      await Promise.all([Promise.reject(new Error("apply failed")), lateWrite]);
+    });
+    const rejection = (async () => {
+      await expect(result).rejects.toThrow("apply failed");
+    })();
+
+    await bulkWriteStarted;
+    releaseLateWrite();
+    await lateWriteStarted;
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    expect(client.setMetadata).not.toHaveBeenCalled();
+
+    releaseBulkWrite();
+    await rejection;
+    await lateWrite;
+
+    expect(client.bulkSetMetadata).toHaveBeenCalledWith({
+      requests: [{ trn: "trn:early", labels: { mine: "early" } }],
+    });
+    expect(client.setMetadata).toHaveBeenCalledWith({
+      trn: "trn:late",
+      labels: { mine: "late" },
+    });
+  });
+
   test("reports both errors when the recovery flush also fails", async () => {
     const client = createClient();
     const applyError = new Error("apply failed");
@@ -291,6 +355,8 @@ describe("withMetadataWriteBatch", () => {
       }),
     ).rejects.toMatchObject({
       name: "AggregateError",
+      message:
+        "Resource apply failed: apply failed\nQueued metadata recovery failed: bulk write failed",
       cause: flushError,
       errors: [applyError, flushError],
     });
