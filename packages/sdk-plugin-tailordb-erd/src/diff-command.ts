@@ -1,7 +1,5 @@
 import * as fs from "node:fs";
-import { defineAppCommand } from "@tailor-platform/sdk/cli";
-import { logger } from "@tailor-platform/sdk/cli";
-import { arg } from "@tailor-platform/sdk/cli";
+import { defineAppCommand, logger, arg } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
 import {

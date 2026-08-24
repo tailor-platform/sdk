@@ -1,8 +1,11 @@
-import { assertWritable, deployStaticWebsite } from "@tailor-platform/sdk/cli";
-import { deploymentArgs } from "@tailor-platform/sdk/cli";
-import { defineAppCommand } from "@tailor-platform/sdk/cli";
-import { logger } from "@tailor-platform/sdk/cli";
-import { arg } from "@tailor-platform/sdk/cli";
+import {
+  assertWritable,
+  deployStaticWebsite,
+  deploymentArgs,
+  defineAppCommand,
+  logger,
+  arg,
+} from "@tailor-platform/sdk/cli";
 import { z } from "zod";
 import { prepareErdBuilds } from "./export";
 import { initErdDeployContext } from "./utils";

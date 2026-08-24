@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
-import { serializeError } from "@tailor-platform/sdk/cli";
-import { createCommonArgs } from "@tailor-platform/sdk/cli";
-import { logger } from "@tailor-platform/sdk/cli";
-import { defineCommand, runMain } from "@tailor-platform/sdk/cli";
+import {
+  serializeError,
+  createCommonArgs,
+  logger,
+  defineCommand,
+  runMain,
+} from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";

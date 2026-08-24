@@ -9,11 +9,12 @@ import {
   loadWorkspaceId,
   show,
   truncate,
+  deploymentArgs,
+  defineAppCommand,
+  logger,
+  styles,
+  arg,
 } from "@tailor-platform/sdk/cli";
-import { deploymentArgs } from "@tailor-platform/sdk/cli";
-import { defineAppCommand } from "@tailor-platform/sdk/cli";
-import { logger, styles } from "@tailor-platform/sdk/cli";
-import { arg } from "@tailor-platform/sdk/cli";
 import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
 import { z } from "zod";

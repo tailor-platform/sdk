@@ -2,11 +2,14 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
 import * as http from "node:http";
-import { loadConfig, type LoadedConfig } from "@tailor-platform/sdk/cli";
-import { configArg } from "@tailor-platform/sdk/cli";
-import { defineAppCommand } from "@tailor-platform/sdk/cli";
-import { logger } from "@tailor-platform/sdk/cli";
-import { arg } from "@tailor-platform/sdk/cli";
+import {
+  loadConfig,
+  type LoadedConfig,
+  configArg,
+  defineAppCommand,
+  logger,
+  arg,
+} from "@tailor-platform/sdk/cli";
 import { watch, type FSWatcher } from "chokidar";
 import { lookup as lookupMime } from "mime-types";
 import open from "open";
