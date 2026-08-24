@@ -23,7 +23,7 @@
     "knip": "knip",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "prepublish": "pnpm run build",
+    "prepublishOnly": "pnpm run build",
     "publint": "publint --strict"
   },
   "dependencies": {
@@ -32,7 +32,7 @@
     "pathe": "2.0.3",
     "picomatch": "4.0.5",
     "pkg-types": "2.3.1",
-    "politty": "0.11.6",
+    "politty": "0.11.9",
     "semver": "7.8.5",
     "zod": "4.4.3"
   },

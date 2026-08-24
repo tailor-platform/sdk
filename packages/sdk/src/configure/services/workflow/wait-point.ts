@@ -1,4 +1,10 @@
 import { brandValue } from "#/utils/brand";
+import {
+  WAIT_POINT_KEY_GRAMMAR as KEY_GRAMMAR,
+  WAIT_POINT_KEY_MAX_LENGTH as MAX_KEY_LENGTH,
+  WAIT_POINT_KEY_REGEX as KEY_REGEX,
+  isWaitPointParamSegment,
+} from "#/utils/wait-point-key-grammar";
 import { registerWaitPoint } from "#/utils/wait-point-registry";
 import {
   attachWaitPointInvoker,
@@ -9,10 +15,7 @@ import {
 import type { JsonCompatible, Prettify, TypeLevelError } from "#/types/helpers";
 import type { WaitPointDeclaration } from "#/utils/wait-point-registry";
 
-const KEY_REGEX = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
 const PARAM_VALUE_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
-const MAX_KEY_LENGTH = 63;
-const KEY_GRAMMAR = "[a-z0-9-] (3-63 characters; must start and end with [a-z0-9])";
 
 /**
  * A single wait point instance with typed `.wait()` and `.resolve()` methods.
@@ -78,18 +81,18 @@ function parseKey(key: string): ParsedKey {
   const segments = key.split("-");
   return {
     segments,
-    // A bare "$" names nothing, and the type level excludes it, so counting it
-    // here would hand back a value shaped unlike the type describing it.
-    paramNames: segments.filter((s) => s.startsWith("$") && s.length > 1).map((s) => s.slice(1)),
+    // The type level also excludes bare "$", so counting it here would hand
+    // back a value shaped unlike the type describing it.
+    paramNames: segments.filter(isWaitPointParamSegment).map((s) => s.slice(1)),
   };
 }
 
 function composeKey(key: string, parsed: ParsedKey, params: Record<string, unknown>): string {
   const composed = parsed.segments
     .map((segment) => {
-      // A bare "$" is not a param on either side of this file, so leave it for
-      // the grammar check below rather than looking up a param with no name.
-      if (!segment.startsWith("$") || segment.length === 1) return segment;
+      // Leave a bare "$" for the grammar check below rather than looking up a
+      // param with no name.
+      if (!isWaitPointParamSegment(segment)) return segment;
       const name = segment.slice(1);
       const value = params[name];
       if (typeof value !== "string") {

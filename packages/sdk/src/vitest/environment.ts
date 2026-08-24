@@ -1,30 +1,19 @@
-import * as globals from "globals";
+import { ES_BUILTINS } from "#/utils/es-builtins";
 // Import from ./globals (NOT ./mock): this module runs in the Vitest environment
 // realm where `vi` is unavailable, and ./mock imports `vi`. ./globals is
 // dependency-free of vitest.
 import { RUNTIME_FLAG_KEY, cleanupPlatformGlobals, installPlatformGlobals } from "./globals";
 
-// Normalize the `globals` module shape across CJS/ESM interop so the
-// whitelist build doesn't crash if the default export is unavailable or
-// the keyed sets are missing. Mirrors src/cli/services/tailordb/es-builtins.ts.
-type GlobalsShape = {
-  builtin?: Record<string, boolean>;
-  "shared-node-browser"?: Record<string, boolean>;
-};
-const globalsMap: GlobalsShape =
-  (globals as unknown as { default?: GlobalsShape }).default ?? globals;
-
 // Globals allowed in the Tailor Platform runtime.
-// Mirrors ES_BUILTINS in src/cli/services/tailordb/es-builtins.ts so the
-// emulated runtime exposes exactly the same identifiers as the production
-// platform's free-variable allowlist (ECMAScript builtins + shared
-// Node/browser runtime globals like console, fetch, setTimeout).
+// ES_BUILTINS is the free-variable allowlist the deploy-time check uses, so
+// the emulated runtime exposes exactly the same identifiers as the production
+// platform (ECMAScript builtins + shared Node/browser runtime globals like
+// console, fetch, setTimeout).
 // Platform API mocks (tailor, tailordb, etc.) are not listed here — the base
 // surface is injected by installPlatformGlobals() after the whitelist cleanup,
 // and per-namespace mocks are layered on at `using xMock()` acquisition time.
 const ALLOWED_GLOBALS = new Set([
-  ...Object.keys(globalsMap.builtin ?? {}),
-  ...Object.keys(globalsMap["shared-node-browser"] ?? {}),
+  ...ES_BUILTINS,
 
   // The environment-active flag (set in installPlatformGlobals, used by
   // setup.ts to detect the tailor-runtime environment).
