@@ -44,6 +44,7 @@ describe("waitForExecution", () => {
   test.each([
     [FunctionExecution_Status.SUCCESS, "test logs", '{"success":true}'],
     [FunctionExecution_Status.FAILED, "error logs", "Error: something went wrong"],
+    [FunctionExecution_Status.CANCELED, "canceled logs", "Execution canceled"],
   ])("returns immediately when execution is %s", async (status, logs, result) => {
     const client = createMockClient({
       getFunctionExecution: vi.fn().mockResolvedValue(execution(status, logs, result)),
@@ -110,6 +111,34 @@ describe("waitForExecution", () => {
     const result = await resultPromise;
     expect(result.status).toBe(FunctionExecution_Status.SUCCESS);
     expect(result.logs).toBe("final logs");
+  });
+
+  test("polls through suspended and canceling states until cancellation completes", async () => {
+    const getFunctionExecution = vi
+      .fn()
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.SUSPEND, "", ""))
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.CANCELING, "", ""))
+      .mockResolvedValueOnce(
+        execution(FunctionExecution_Status.CANCELED, "canceled logs", "Execution canceled"),
+      );
+
+    const client = createMockClient({ getFunctionExecution });
+    const resultPromise = waitForExecution(client, "workspace-1", "exec-1", 100);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(getFunctionExecution).toHaveBeenCalledTimes(3);
+
+    await expect(resultPromise).resolves.toMatchObject({
+      status: FunctionExecution_Status.CANCELED,
+      logs: "canceled logs",
+      result: "Execution canceled",
+    });
   });
 
   test("uses default poll interval", async () => {

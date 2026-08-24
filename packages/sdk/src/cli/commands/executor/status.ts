@@ -146,7 +146,11 @@ export function colorizeFunctionExecutionStatus(status: string): string {
  * @returns True if status is terminal
  */
 export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Status): boolean {
-  return status === FunctionExecution_Status.SUCCESS || status === FunctionExecution_Status.FAILED;
+  return (
+    status === FunctionExecution_Status.SUCCESS ||
+    status === FunctionExecution_Status.FAILED ||
+    status === FunctionExecution_Status.CANCELED
+  );
 }
 
 // ============================================================================
