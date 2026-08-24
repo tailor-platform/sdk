@@ -168,8 +168,8 @@ describe("setupRenovate", () => {
   });
 
   test.each([
-    ["renovate.jsonc", '{\n  // comment\n  "extends": []\n}\n'],
-    ["renovate.json5", "{\n  extends: [],\n}\n"],
+    ["renovate.jsonc", "{ invalid"],
+    ["renovate.json5", "{ invalid"],
     [".renovaterc", '{\n  "extends": [],\n}\n'],
   ])("reports an unparseable config at %s instead of a generic message", async (file, content) => {
     const configPath = path.join(testDir, file);
@@ -181,6 +181,84 @@ describe("setupRenovate", () => {
 
     expect(fs.readFileSync(configPath, "utf-8")).toBe(content);
   });
+
+  test.each([
+    "renovate.jsonc",
+    "renovate.json5",
+    ".github/renovate.jsonc",
+    ".github/renovate.json5",
+    ".gitlab/renovate.jsonc",
+    ".gitlab/renovate.json5",
+    ".renovaterc.jsonc",
+    ".renovaterc.json5",
+  ])("appends the preset to %s while preserving comments and formatting", async (relativePath) => {
+    const configPath = path.join(testDir, relativePath);
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      '{\n  // Keep this comment.\n  "extends": [\n    "config:recommended",\n  ],\n  "labels": ["dependencies"],\n}\n',
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  // Keep this comment.\n  "extends": [\n    "config:recommended",\n    "github>tailor-inc/renovate-config",\n  ],\n  "labels": ["dependencies"],\n}\n',
+    );
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
+  });
+
+  test("preserves JSON5 property and string styles when appending", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      "{\n\t// Keep this comment.\n\textends: ['config:recommended'],\n\tpackageRules: [{ package: 'example' }],\n}\n",
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n\t// Keep this comment.\n\textends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n\tpackageRules: [{ package: 'example' }],\n}\n",
+    );
+  });
+
+  test("adds an extends property to JSON5 without disturbing existing content", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(configPath, "{\n  // Keep this comment.\n  labels: ['dependencies'],\n}\n");
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n  // Keep this comment.\n  labels: ['dependencies'],\n  'extends': ['github>tailor-inc/renovate-config'],\n}\n",
+    );
+  });
+
+  test.each(["renovate.jsonc", "renovate.json5"])(
+    "leaves %s unchanged when it already extends the preset",
+    async (relativePath) => {
+      const configPath = path.join(testDir, relativePath);
+      const extendsKey = relativePath.endsWith(".jsonc") ? '"extends"' : "extends";
+      const existing = `{\n  // Keep this comment.\n  ${extendsKey}: ["${RENOVATE_PRESET}"],\n}\n`;
+      fs.writeFileSync(configPath, existing);
+
+      await setupRenovate({ outputDir: testDir });
+
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+    },
+  );
+
+  test.each(["renovate.jsonc", "renovate.json5"])(
+    "refuses to append to %s when extends is not an array",
+    async (relativePath) => {
+      const configPath = path.join(testDir, relativePath);
+      const extendsKey = relativePath.endsWith(".jsonc") ? '"extends"' : "extends";
+      const existing = `{\n  // Keep this comment.\n  ${extendsKey}: "config:recommended",\n}\n`;
+      fs.writeFileSync(configPath, existing);
+
+      await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/non-array "extends"/);
+
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+    },
+  );
 
   test("treats a config already extending the preset as set up", async () => {
     const configPath = path.join(testDir, ".github/renovate.json");
