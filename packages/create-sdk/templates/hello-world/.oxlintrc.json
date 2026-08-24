@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript"],
+  "plugins": ["typescript", "import"],
   "jsPlugins": [
     {
       "name": "tailor-sdk",
@@ -18,6 +18,9 @@
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
     "tailor-sdk/no-execute-script-arg-stringify": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
+    "import/default": "off",
+    "import/namespace": "off",
+    "import/no-duplicates": "error",
     "no-case-declarations": "error",
     "no-empty": "error",
     "no-fallthrough": "error",
