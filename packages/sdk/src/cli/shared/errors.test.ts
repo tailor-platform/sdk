@@ -206,3 +206,17 @@ describe("errorToJson", () => {
     });
   });
 });
+
+describe("CLIError formatting", () => {
+  test("indents every line of a multi-line details string", () => {
+    const error = CLIError({
+      message: "Deploy failed.",
+      details: "first line\nsecond line",
+    });
+
+    const lines = error.format().split("\n");
+    const detailsLineIndex = lines.findIndex((line) => line.includes("Details:"));
+    expect(lines[detailsLineIndex]).toContain("first line");
+    expect(lines[detailsLineIndex + 1]).toMatch(/^\s{2}second line$/);
+  });
+});
