@@ -81,6 +81,33 @@ function typeofGuardTarget(expr: Node): string | undefined {
 }
 
 /**
+ * Check whether `node` is `guardedName` itself, or a member-expression chain
+ * rooted at it (`x.y`, `x.y[z]`), as in `typeof x !== "undefined" && x.y`.
+ * Computed property expressions along the chain are still walked for their
+ * own free variables (e.g. the `z` in `x.y[z]`) — only the guarded root
+ * identifier is treated as safe.
+ * @param node - Candidate right-hand side of a `typeof`-guarded `&&`.
+ * @param guardedName - The identifier name the `typeof` check guards.
+ * @param walk - The AST walker, used to visit computed property expressions.
+ * @returns Whether `node` is entirely covered by the guard.
+ */
+function walkGuardedChain(
+  node: Node,
+  guardedName: string,
+  walk: (n: Node | null | undefined) => void,
+): boolean {
+  if (node.type === "Identifier") {
+    return node.name === guardedName;
+  }
+  if (node.type === "MemberExpression") {
+    if (!walkGuardedChain(node.object, guardedName, walk)) return false;
+    if (node.computed) walk(node.property);
+    return true;
+  }
+  return false;
+}
+
+/**
  * Parse a code string with oxc-parser and return identifiers that are referenced
  * but never bound anywhere in the snippet (free variables), excluding ES builtins.
  * @param code - Valid JavaScript code to analyze.
@@ -153,7 +180,7 @@ export function findUndefinedReferences(code: string): Set<string> {
       case "LogicalExpression": {
         const guardedName = node.operator === "&&" ? typeofGuardTarget(node.left) : undefined;
         walk(node.left);
-        if (guardedName && node.right.type === "Identifier" && node.right.name === guardedName) {
+        if (guardedName && walkGuardedChain(node.right, guardedName, walk)) {
           return;
         }
         walk(node.right);

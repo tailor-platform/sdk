@@ -55,6 +55,21 @@ describe("findUndefinedReferences", () => {
       "() => typeof process === 'object' ? 1 : process.exit(1)",
       ["process"],
     ],
+    [
+      "does not flag a member-expression chain rooted at a typeof-guarded identifier",
+      "() => typeof process !== 'undefined' && process.env",
+      [],
+    ],
+    [
+      "does not flag a nested member-expression chain rooted at a typeof-guarded identifier",
+      "() => typeof global !== 'undefined' && global.Object.keys",
+      [],
+    ],
+    [
+      "still flags free variables inside a computed member access on a guarded chain",
+      "() => typeof process !== 'undefined' && process.env[KEY]",
+      ["KEY"],
+    ],
   ])("%s", (_name, code, expected) => {
     const vars = findUndefinedReferences(`const __fn = ${code};`);
     expect(vars).toEqual(new Set(expected));
