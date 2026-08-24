@@ -166,11 +166,24 @@ function normalizeJson5(source: string): {
   const tokenReplacements = new Map<string, string>();
   const valueReplacements = new Map<string, string>();
   const placeholders = new Set<string>();
+  const decodedStringValues = new Set<string>();
   let stringIndex = 0;
+
+  for (const token of tokens) {
+    if (token.type !== JsonTokenType.STRING) continue;
+    const value: unknown = JSON5.parse(token.value);
+    if (typeof value === "string") decodedStringValues.add(value);
+  }
 
   const createPlaceholder = (prefix: string): string => {
     let placeholder = prefix;
-    while (source.includes(placeholder) || placeholders.has(placeholder)) placeholder += "_";
+    while (
+      source.includes(placeholder) ||
+      placeholders.has(placeholder) ||
+      decodedStringValues.has(placeholder)
+    ) {
+      placeholder += "_";
+    }
     placeholders.add(placeholder);
     return placeholder;
   };

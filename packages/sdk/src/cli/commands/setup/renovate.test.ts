@@ -259,6 +259,20 @@ describe("setupRenovate", () => {
     );
   });
 
+  test("avoids decoded JSON5 placeholder collisions", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      '{\n  extends: ["config:recommended"],\n  "\\u0024tailor_property_extends": [],\n}\n',
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  extends: ["config:recommended", "github>tailor-inc/renovate-config"],\n  "\\u0024tailor_property_extends": [],\n}\n',
+    );
+  });
+
   test("appends to the effective duplicate extends property in JSON5", async () => {
     const configPath = path.join(testDir, "renovate.json5");
     fs.writeFileSync(configPath, "{\n  extends: ['ignored'],\n  extends: ['active'],\n}\n");
