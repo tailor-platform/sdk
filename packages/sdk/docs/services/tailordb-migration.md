@@ -757,6 +757,27 @@ The migration script runs in a single transaction. For tables with many rows:
 - Long-running transactions can hit platform timeouts and hold locks. For very large backfills, consider splitting the work across multiple migrations, each operating on a subset.
 - Add `LIMIT` and resumability (idempotent `where` clauses) so a re-run after a transient failure converges.
 
+### Migrations that take longer than a minute
+
+A migration script normally has to finish within the platform's 60-second
+execution limit; a script that exceeds it fails with `deadline_exceeded` and
+its logs are lost, leaving no record of how far it got.
+
+Mark such a migration to run as a workflow job instead:
+
+```bash
+tailor tailordb migration script 0005 --long-running
+```
+
+The migration then runs asynchronously and is not bound by that limit, while
+`tailor deploy` waits for it and reports its logs as usual. The flag also
+works on a migration whose `migrate.ts` already exists.
+
+The script still runs in a single transaction, so the guidance above about
+locks and transaction size continues to apply — prefer splitting a very large
+backfill across several migrations over holding one transaction open for a
+long time.
+
 ## Testing Migrations Locally
 
 ### Unit-testing migrate.ts

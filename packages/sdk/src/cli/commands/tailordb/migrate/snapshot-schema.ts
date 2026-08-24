@@ -568,4 +568,5 @@ export const migrationDiffSchema: z.ZodType<MigrationDiff> = z.looseObject({
   warnings: z.array(warningChangeInfoSchema).optional() as z.ZodType<WarningChangeInfo[]>,
   requiresMigrationScript: z.boolean(),
   scriptSkipped: scriptSkippedInfoSchema.optional(),
+  longRunning: z.boolean().optional(),
 });

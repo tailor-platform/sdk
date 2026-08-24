@@ -31,6 +31,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
 import { resourceTrn, writeMetadataLabels } from "../label";
+import { executeMigrationAsWorkflow } from "./migration-workflow";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
@@ -43,6 +44,8 @@ interface MigrationExecutionOptions {
   invoker: AuthInvoker;
   env: Record<string, string | number | boolean>;
   configDir: string;
+  appName: string;
+  appId: string | undefined;
 }
 
 /**
@@ -56,6 +59,10 @@ export interface MigrationContext {
   dbConfig: Record<string, TailorDBServiceConfig | undefined>;
   env: Record<string, string | number | boolean>;
   configDir: string;
+  /** Application name, used to label a long-running migration's temporary resources. */
+  appName: string;
+  /** Application id, used to label a long-running migration's temporary resources. */
+  appId: string | undefined;
 }
 
 interface ExecutionResult {
@@ -209,7 +216,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, invoker, env, configDir } = options;
+  const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
 
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
@@ -222,14 +229,26 @@ async function executeSingleMigration(
     configDir,
   );
 
-  // Execute the script using the shared script executor
-  const result = await executeScript({
-    client,
-    workspaceId,
-    name: migrationName,
-    code: bundleResult.bundledCode,
-    invoker,
-  });
+  // A long-running migration runs as a workflow job so its duration is not
+  // bound by the synchronous function-execution deadline.
+  const result = migration.diff.longRunning
+    ? await executeMigrationAsWorkflow({
+        client,
+        workspaceId,
+        code: bundleResult.bundledCode,
+        namespace: migration.namespace,
+        migrationNumber: migration.number,
+        invoker,
+        appName,
+        appId,
+      })
+    : await executeScript({
+        client,
+        workspaceId,
+        name: migrationName,
+        code: bundleResult.bundledCode,
+        invoker,
+      });
 
   return {
     namespace: migration.namespace,
@@ -314,6 +333,8 @@ export async function executeMigrations(
       invoker,
       env: context.env,
       configDir: context.configDir,
+      appName: context.appName,
+      appId: context.appId,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

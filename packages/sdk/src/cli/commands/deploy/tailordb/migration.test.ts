@@ -71,6 +71,10 @@ vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
 vi.mock("#/cli/shared/script-executor", () => ({
   executeScript: (...args: unknown[]) => executeScriptMock(...args),
 }));
+const executeMigrationAsWorkflowMock = vi.fn();
+vi.mock("./migration-workflow", () => ({
+  executeMigrationAsWorkflow: (...args: unknown[]) => executeMigrationAsWorkflowMock(...args),
+}));
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_service__");
 
@@ -671,12 +675,15 @@ describe("migration", () => {
         dbConfig: {},
         env: {},
         configDir: "/project",
+        appName: "test-app",
+        appId: "test-app-id",
       };
     }
 
     aroundEach(async (runTest) => {
       bundleMigrationScriptMock.mockReset();
       executeScriptMock.mockReset();
+      executeMigrationAsWorkflowMock.mockReset();
       bundleMigrationScriptMock.mockResolvedValue({
         bundledCode: "// bundled",
         warnings: [],
@@ -686,7 +693,61 @@ describe("migration", () => {
         logs: "",
         result: "",
       });
+      executeMigrationAsWorkflowMock.mockResolvedValue({
+        success: true,
+        logs: "",
+      });
       await runTest();
+    });
+
+    test("runs a longRunning migration as a workflow instead of a script execution", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ longRunning: true }),
+        }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(executeScriptMock).not.toHaveBeenCalled();
+      expect(executeMigrationAsWorkflowMock).toHaveBeenCalledTimes(1);
+      expect(executeMigrationAsWorkflowMock.mock.calls[0]![0]).toMatchObject({
+        namespace: "tailordb",
+        migrationNumber: 1,
+        code: "// bundled",
+        appName: "test-app",
+        appId: "test-app-id",
+      });
+    });
+
+    test("surfaces a failed workflow migration as a migration failure", async () => {
+      executeMigrationAsWorkflowMock.mockResolvedValue({
+        success: false,
+        logs: "boom",
+        error: "workflow failed",
+      });
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ longRunning: true }),
+        }),
+      ];
+
+      await expect(executeMigrations(createMockContext(), migrations)).rejects.toThrow(
+        "workflow failed",
+      );
+    });
+
+    test("keeps synchronous execution for migrations without longRunning", async () => {
+      const migrations = [createMockMigration({ number: 1, hasScript: true })];
+
+      await executeMigrations(createMockContext(), migrations);
+
+      expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();
+      expect(executeScriptMock).toHaveBeenCalledTimes(1);
     });
 
     test("skips migrations without a script file on disk", async () => {

@@ -87,6 +87,42 @@ describe("addMigrationScriptFiles", () => {
     expect(fs.existsSync(migrationFile(MIGRATE_TEST_FILE_NAME))).toBe(false);
   });
 
+  test("records longRunning in diff.json when creating the script", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      longRunning: true,
+    });
+
+    expect(result.longRunning).toBe(true);
+    expect(loadDiff(migrationFile(DIFF_FILE_NAME)).longRunning).toBe(true);
+  });
+
+  test("leaves longRunning unset by default", async () => {
+    setupMigration();
+
+    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
+
+    expect(loadDiff(migrationFile(DIFF_FILE_NAME)).longRunning).toBeUndefined();
+  });
+
+  test("turns longRunning on for a migration whose script already exists", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      longRunning: true,
+    });
+
+    expect(result.longRunning).toBe(true);
+    expect(result.migratePath).toBeUndefined();
+    expect(loadDiff(migrationFile(DIFF_FILE_NAME)).longRunning).toBe(true);
+  });
+
   test("creates migrate.test.ts alongside the script with withTest", async () => {
     setupMigration();
 
