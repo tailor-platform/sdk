@@ -7,7 +7,7 @@ export const userSetting = db
     language: db.enum(["jp", "en"]),
     userID: db.uuid().relation({
       type: "1-1",
-      toward: { type: user },
+      toward: { table: user },
       backward: "setting",
     }),
     ...db.fields.timestamps(),

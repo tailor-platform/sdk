@@ -6,7 +6,7 @@ export const category = db
     slug: db.string().unique(),
     parentCategoryId: db.uuid({ optional: true }).relation({
       type: "n-1",
-      toward: { type: "self" },
+      toward: { table: "self" },
       backward: "children",
     }),
   })

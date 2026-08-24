@@ -5,7 +5,7 @@ import {
   type UpdateExecutorExecutorRequestSchema,
 } from "@tailor-platform/tailor-proto/executor_pb";
 import {
-  type ExecutorExecutorSchema,
+  ExecutorExecutorSchema,
   type ExecutorTargetConfigSchema,
   ExecutorTargetType,
   type ExecutorTargetWebhookHeaderSchema,
@@ -22,7 +22,7 @@ import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
+import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "./compare";
 import { executorFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -284,7 +284,7 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
             },
           }
         : normalized.triggerConfig;
-  return {
+  const comparable = normalizeProtoConfig({
     name: normalized.name,
     description: normalized.description ?? "",
     disabled: normalized.disabled ?? false,
@@ -315,7 +315,8 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
               },
             }
           : normalized.targetConfig,
-  };
+  }) as MessageInitShape<typeof ExecutorExecutorSchema>;
+  return toComparableProtoJson(ExecutorExecutorSchema, comparable);
 }
 
 function areExecutorsEqual(
@@ -336,7 +337,7 @@ function areExecutorsEqual(
  * @param resourceLabel - Resource label used in error messages
  * @returns The owning namespace, or undefined when the name is unknown
  */
-export function resolveSameRunNamespace(
+function resolveSameRunNamespace(
   sameRunNamespaces: ReadonlyMap<string, string | undefined> | undefined,
   resourceName: string,
   resourceLabel: string,
@@ -360,7 +361,7 @@ export function resolveSameRunNamespace(
  * @param tableName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
-export function findTailorDBNamespace(
+function findTailorDBNamespace(
   application: Readonly<Application>,
   tableName: string,
 ): string | undefined {

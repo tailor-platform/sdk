@@ -18,7 +18,7 @@ export interface WorkflowExecutionStatusClassification {
  * @param status - Workflow execution status enum value
  * @returns True if status is success
  */
-export function isWorkflowExecutionSuccessStatus(status: WorkflowExecution_Status): boolean {
+function isWorkflowExecutionSuccessStatus(status: WorkflowExecution_Status): boolean {
   return status === WorkflowExecution_Status.SUCCESS;
 }
 
@@ -27,9 +27,7 @@ export function isWorkflowExecutionSuccessStatus(status: WorkflowExecution_Statu
  * @param status - Workflow job execution status enum value
  * @returns True if status represents a wait point
  */
-export function isWorkflowJobExecutionSuspendedStatus(
-  status: WorkflowJobExecution_Status,
-): boolean {
+function isWorkflowJobExecutionSuspendedStatus(status: WorkflowJobExecution_Status): boolean {
   return (
     status === WorkflowJobExecution_Status.SUSPEND || status === WorkflowJobExecution_Status.WAITING
   );
@@ -61,7 +59,7 @@ export function isWorkflowExecutionFailureStatus(status: WorkflowExecution_Statu
  * @param status - Workflow execution status enum value
  * @returns True if status is transient
  */
-export function isWorkflowExecutionTransientStatus(status: WorkflowExecution_Status): boolean {
+function isWorkflowExecutionTransientStatus(status: WorkflowExecution_Status): boolean {
   return (
     status === WorkflowExecution_Status.UNSPECIFIED ||
     status === WorkflowExecution_Status.PENDING ||
@@ -75,7 +73,7 @@ export function isWorkflowExecutionTransientStatus(status: WorkflowExecution_Sta
  * @param status - Workflow execution status enum value
  * @returns True if status is terminal
  */
-export function isWorkflowExecutionTerminalStatus(status: WorkflowExecution_Status): boolean {
+function isWorkflowExecutionTerminalStatus(status: WorkflowExecution_Status): boolean {
   return (
     isWorkflowExecutionSuccessStatus(status) ||
     isWorkflowExecutionFailureStatus(status) ||

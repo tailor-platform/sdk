@@ -163,7 +163,7 @@ describe("buildTailorDbErdSchema", () => {
           foreignKeyField: "id",
           rawRelation: {
             type: "n-1",
-            toward: { type: "Customer", as: "customer", key: "id" },
+            toward: { table: "Customer", as: "customer", key: "id" },
             backward: "orders",
           },
         },

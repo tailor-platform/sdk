@@ -18,7 +18,7 @@ export interface ShowOptions {
   configPath?: string;
 }
 
-export interface WorkspaceInfo {
+interface WorkspaceInfo {
   workspaceId: string;
   workspaceName: string;
   workspaceFolderName?: string;

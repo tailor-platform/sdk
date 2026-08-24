@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-fix(deps): update oxc
+chore(deps): lock file maintenance

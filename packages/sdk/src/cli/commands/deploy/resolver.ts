@@ -12,7 +12,7 @@ import {
   PipelineResolver_OperationType,
   type PipelineResolver_PipelineSchema,
   type PipelineResolver_TypeSchema,
-  type PipelineResolverSchema,
+  PipelineResolverSchema,
 } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
@@ -26,7 +26,7 @@ import {
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
+import { areNormalizedEqual, toComparableProtoJson } from "./compare";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -508,17 +508,7 @@ export function formatResolverChangeEntries(
 }
 
 function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
-  const normalized = normalizeProtoConfig(resolver);
-  return {
-    name: normalized.name,
-    description: normalized.description ?? "",
-    authorization: normalized.authorization ?? "",
-    operationType: normalized.operationType,
-    publishExecutionEvents: normalized.publishExecutionEvents ?? false,
-    inputs: normalizeComparableFields(normalized.inputs),
-    response: normalizeComparableField(normalized.response),
-    pipelines: normalizeComparablePipelines(normalized.pipelines),
-  };
+  return toComparableProtoJson(PipelineResolverSchema, resolver);
 }
 
 function areResolversEqual(
@@ -529,88 +519,6 @@ function areResolversEqual(
     normalizeComparableResolver(existing),
     normalizeComparableResolver(desired),
   );
-}
-
-function normalizeComparablePipelines(
-  pipelines: MessageInitShape<typeof PipelineResolverSchema>["pipelines"],
-): Array<{
-  name: string;
-  operationName: string;
-  description: string;
-  operationType: PipelineResolver_OperationType | undefined;
-  operationSourceRef: string;
-  operationHook: string;
-  postScript: string;
-  skipOperationOnError: boolean;
-  invoker:
-    | NonNullable<MessageInitShape<typeof PipelineResolverSchema>["pipelines"]>[number]["invoker"]
-    | undefined;
-}> {
-  return (pipelines ?? []).map((pipeline) => ({
-    name: pipeline.name ?? "",
-    operationName: pipeline.operationName ?? "",
-    description: pipeline.description ?? "",
-    operationType: pipeline.operationType,
-    operationSourceRef: pipeline.operationSourceRef ?? "",
-    operationHook: pipeline.operationHook?.expr ?? "",
-    postScript: pipeline.postScript ?? "",
-    skipOperationOnError: pipeline.skipOperationOnError ?? false,
-    invoker: pipeline.invoker ?? undefined,
-  }));
-}
-
-function normalizeComparableFields(
-  fields: MessageInitShape<typeof PipelineResolverSchema>["inputs"],
-): Array<ReturnType<typeof normalizeComparableField>> {
-  return (fields ?? []).map((field) => normalizeComparableField(field));
-}
-
-function normalizeComparableField(
-  field: MessageInitShape<typeof PipelineResolver_FieldSchema> | undefined,
-):
-  | {
-      name: string;
-      array: boolean;
-      required: boolean;
-      description: string;
-      type: ReturnType<typeof normalizeComparableType>;
-    }
-  | undefined {
-  if (!field) {
-    return undefined;
-  }
-  return {
-    name: field.name ?? "",
-    array: field.array ?? false,
-    required: field.required ?? true,
-    description: field.description ?? "",
-    type: normalizeComparableType(field.type),
-  };
-}
-
-function normalizeComparableType(
-  type: MessageInitShape<typeof PipelineResolver_TypeSchema> | undefined,
-):
-  | {
-      kind: string;
-      name: string;
-      required: boolean;
-      description: string;
-      allowedValues: unknown[];
-      fields: Array<ReturnType<typeof normalizeComparableField>>;
-    }
-  | undefined {
-  if (!type) {
-    return undefined;
-  }
-  return {
-    kind: type.kind ?? "",
-    name: type.name ?? "",
-    required: type.required ?? true,
-    description: type.description ?? "",
-    allowedValues: type.allowedValues ?? [],
-    fields: (type.fields ?? []).map((field) => normalizeComparableField(field)),
-  };
 }
 
 function processResolver(

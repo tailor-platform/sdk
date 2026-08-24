@@ -121,7 +121,7 @@ const resumeWorkflowExecution: PlatformWorkflowAPI["resumeWorkflowExecution"] = 
 /**
  * See {@link PlatformWorkflowAPI.execJobFunction}.
  *
- * @deprecated since NEXT_RELEASE — call the target job's own `.start()` method
+ * @deprecated since 2.5.0 — call the target job's own `.start()` method
  * instead. codemod: v3/remove-workflow-exec-job-function
  * @param args - Forwarded to {@link PlatformWorkflowAPI.execJobFunction}
  * @returns The job's return value

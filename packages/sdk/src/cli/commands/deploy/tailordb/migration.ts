@@ -37,7 +37,7 @@ import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 // Types
 // ============================================================================
 
-export interface MigrationExecutionOptions {
+interface MigrationExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
   invoker: AuthInvoker;

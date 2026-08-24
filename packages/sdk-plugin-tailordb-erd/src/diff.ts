@@ -10,17 +10,17 @@ import type {
 const SCHEMA_BLOCK_PATTERN =
   /<script type="application\/json" id="erd-schema">([\s\S]*?)<\/script>/;
 
-export type ErdDiffAction = "added" | "changed" | "removed";
-export type ErdDiffEntity = "column" | "index" | "relation" | "table";
+type ErdDiffAction = "added" | "changed" | "removed";
+type ErdDiffEntity = "column" | "index" | "relation" | "table";
 
-export interface ErdDiffChange {
+interface ErdDiffChange {
   action: ErdDiffAction;
   entity: ErdDiffEntity;
   path: string;
   detail: string;
 }
 
-export interface ErdDiffSummary {
+interface ErdDiffSummary {
   added: number;
   changed: number;
   removed: number;

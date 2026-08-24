@@ -2,14 +2,14 @@ import { ScalarType } from "@bufbuild/protobuf";
 import { nestedMessage } from "./proto-reflect";
 import type { DescEnum, DescField, DescMessage, DescMethodUnary } from "@bufbuild/protobuf";
 
-export interface InspectMessageJson {
+interface InspectMessageJson {
   typeName: string;
   fields: InspectFieldJson[];
   /** True when truncated to break a recursive type cycle. */
   recursive?: boolean;
 }
 
-export interface InspectFieldJson {
+interface InspectFieldJson {
   name: string;
   protoName: string;
   type: string;

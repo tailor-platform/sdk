@@ -214,7 +214,7 @@ async function uploadSingleFile(
  * Log skipped files after a deployment, including reasons for skipping.
  * @param skippedFiles - List of skipped file descriptions
  */
-export function logSkippedFiles(skippedFiles: string[]) {
+function logSkippedFiles(skippedFiles: string[]) {
   if (skippedFiles.length === 0) {
     return;
   }

@@ -25,7 +25,7 @@ export type EnvValue = string | number | boolean;
  * Booleans are excluded: `true` and `false` match no credential format and are
  * far too short for the randomness heuristic, so they are never flagged.
  */
-export type AllowedSecretEnvValue = {
+type AllowedSecretEnvValue = {
   value: Exclude<EnvValue, boolean>;
   /** Why this value is safe to deploy as plaintext even though it looks like a credential. */
   allowSecretReason: string;

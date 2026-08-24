@@ -61,13 +61,13 @@ export type BranchSetupOptions = CommonSetupOptions & {
   erdPreview: boolean;
 };
 
-export type TagSetupOptions = CommonSetupOptions & {
+type TagSetupOptions = CommonSetupOptions & {
   kind: "tag";
   tagPattern: string;
   branch?: string;
 };
 
-export type PreviewSetupOptions = CommonSetupOptions & {
+type PreviewSetupOptions = CommonSetupOptions & {
   kind: "preview";
   branch?: string;
   /** Workspace region for preview workspace creation (e.g. `us-west`). */
@@ -79,7 +79,7 @@ export type PreviewSetupOptions = CommonSetupOptions & {
   requirePreviewLabel?: boolean;
 };
 
-export type ActionSetupOptions = CommonSetupOptions & {
+type ActionSetupOptions = CommonSetupOptions & {
   kind: "action";
 };
 

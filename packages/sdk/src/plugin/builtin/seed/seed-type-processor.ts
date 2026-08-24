@@ -10,7 +10,7 @@ import type { SeedTypeInfo } from "./types";
  * @param namespace - Namespace of the table
  * @returns Seed table information
  */
-export function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInfo {
+function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInfo {
   // Extract dependencies from relations (including keyOnly which only sets foreignKeyType)
   const dependencies: Set<string> = new Set();
   const selfRefFields: string[] = [];

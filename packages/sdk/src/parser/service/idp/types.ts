@@ -5,7 +5,7 @@
 // can import it type-only without pulling any runtime dependency.
 import type { ValueOperand } from "#/configure/services/auth/types";
 
-export type StandardIdPPermissionOperator = "eq" | "ne" | "in" | "nin";
+type StandardIdPPermissionOperator = "eq" | "ne" | "in" | "nin";
 
 export type IdPUserField = "id" | "name" | "disabled";
 

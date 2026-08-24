@@ -59,12 +59,12 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   default?: boolean;
 }
 
-export type GqlOperationsConfig = GqlOperationsInput;
+type GqlOperationsConfig = GqlOperationsInput;
 
 export interface RawRelationConfig {
   type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
   toward: {
-    type: string;
+    table: string;
     as?: string;
     key?: string;
   };
@@ -328,7 +328,7 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
 
 export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "keyOnly";
 
-export type TailorDBExternalConfig = { external: true };
+type TailorDBExternalConfig = { external: true };
 
 export type TailorDBServiceInput = {
   [namespace: string]: TailorDBServiceConfigInput | TailorDBExternalConfig;

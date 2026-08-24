@@ -48,7 +48,7 @@ type DeleteFunction = {
   workspaceId: string;
 };
 
-export type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, DeleteFunction>;
+type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, DeleteFunction>;
 
 /**
  * Compute SHA-256 content hash for a script string.

@@ -16,7 +16,7 @@ const DRIFT_COUNT_MARKER = "TAILOR_SETUP_CHECK_DRIFT_COUNT";
  * Stable drift rule keys. These are part of the public contract: a future
  * `ignore` input on the workflow drift-check step suppresses findings by key.
  */
-export type DriftRule =
+type DriftRule =
   | "missing-file"
   | "hand-edit"
   | "template-version"

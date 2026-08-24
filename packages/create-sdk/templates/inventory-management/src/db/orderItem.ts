@@ -8,11 +8,11 @@ export const orderItem = db
     orderId: db
       .uuid()
       .description("ID of the order")
-      .relation({ type: "n-1", toward: { type: order } }),
+      .relation({ type: "n-1", toward: { table: order } }),
     productId: db
       .uuid()
       .description("ID of the product")
-      .relation({ type: "n-1", toward: { type: product } }),
+      .relation({ type: "n-1", toward: { table: product } }),
     quantity: db
       .int()
       .description("Quantity of the product")

@@ -9,7 +9,7 @@ export const product = db
     categoryId: db
       .uuid()
       .description("ID of the category the product belongs to")
-      .relation({ type: "n-1", toward: { type: category } }),
+      .relation({ type: "n-1", toward: { table: category } }),
     ...db.fields.timestamps(),
   })
   .permission(permissionManager)

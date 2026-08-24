@@ -9,7 +9,7 @@ import type { IdPInput } from "#/types/idp.generated";
 declare const idpDefinitionBrand: unique symbol;
 export type IdpDefinitionBrand = { readonly [idpDefinitionBrand]: true };
 
-export type DefinedIdp<Name extends string, Config, ClientNames extends string> = Config & {
+type DefinedIdp<Name extends string, Config, ClientNames extends string> = Config & {
   name: Name;
   provider(providerName: string, clientName: ClientNames): BuiltinIdP;
 } & IdpDefinitionBrand;

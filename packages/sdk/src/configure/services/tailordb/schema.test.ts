@@ -241,23 +241,36 @@ describe("TailorDBField RelationConfig option field tests", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
-        type: User,
+        table: User,
         key: "id",
       },
     });
 
     // Raw relation config is stored, processing happens in parser layer
-    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.table).toEqual("User");
     expect(userField.rawRelation!.toward.as).toBeUndefined();
     expect(userField.rawRelation!.toward.key).toEqual("id");
     expect(userField.rawRelation!.backward).toBeUndefined();
+  });
+
+  test("the deprecated toward.type spelling still resolves to the same table", () => {
+    const userField = db.uuid().relation({
+      type: "oneToOne",
+      toward: {
+        type: User,
+        key: "id",
+      },
+    });
+
+    expect(userField.rawRelation!.toward.table).toEqual("User");
+    expect(userField.rawRelation!.toward.key).toEqual("id");
   });
 
   test("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
     const managerField = db.uuid().relation({
       type: "oneToOne",
       toward: {
-        type: User,
+        table: User,
         as: "manager",
         key: "email",
       },
@@ -265,7 +278,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     });
 
     // Raw relation config is stored
-    expect(managerField.rawRelation!.toward.type).toEqual("User");
+    expect(managerField.rawRelation!.toward.table).toEqual("User");
     expect(managerField.rawRelation!.toward.as).toEqual("manager");
     expect(managerField.rawRelation!.toward.key).toEqual("email");
     expect(managerField.rawRelation!.backward).toEqual("subordinates");
@@ -275,13 +288,13 @@ describe("TailorDBField RelationConfig option field tests", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
-        type: User,
+        table: User,
         as: "owner",
       },
     });
 
     // Raw relation config is stored
-    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.table).toEqual("User");
     expect(userField.rawRelation!.toward.as).toEqual("owner");
     expect(userField.rawRelation!.toward.key).toBeUndefined();
     expect(userField.rawRelation!.backward).toBeUndefined();
@@ -291,13 +304,13 @@ describe("TailorDBField RelationConfig option field tests", () => {
     const customerField = db.uuid().relation({
       type: "oneToOne",
       toward: {
-        type: Customer,
+        table: Customer,
         key: "customerId",
       },
     });
 
     // Raw relation config is stored
-    expect(customerField.rawRelation!.toward.type).toEqual("Customer");
+    expect(customerField.rawRelation!.toward.table).toEqual("Customer");
     expect(customerField.rawRelation!.toward.as).toBeUndefined();
     expect(customerField.rawRelation!.toward.key).toEqual("customerId");
     expect(customerField.rawRelation!.backward).toBeUndefined();
@@ -315,7 +328,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
       toward: {
         // @ts-ignore Suppress tsgo error for tsc/tsgo compatibility.
         // tsgo (TypeScript v7) reports an error here, while tsc reports it elsewhere.
-        type: Customer,
+        table: Customer,
         key: "nonExisting",
       },
     });
@@ -325,13 +338,13 @@ describe("TailorDBField RelationConfig option field tests", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
-        type: User,
+        table: User,
       },
       backward: "relatedItems",
     });
 
     // Raw relation config is stored
-    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.table).toEqual("User");
     expect(userField.rawRelation!.toward.as).toBeUndefined();
     expect(userField.rawRelation!.toward.key).toBeUndefined();
     expect(userField.rawRelation!.backward).toEqual("relatedItems");
@@ -341,7 +354,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     const userField = db.uuid().relation({
       type: "manyToOne",
       toward: {
-        type: User,
+        table: User,
         as: "author",
         key: "email",
       },
@@ -349,7 +362,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     });
 
     // Raw relation config is stored
-    expect(userField.rawRelation!.toward.type).toEqual("User");
+    expect(userField.rawRelation!.toward.table).toEqual("User");
     expect(userField.rawRelation!.toward.as).toEqual("author");
     expect(userField.rawRelation!.toward.key).toEqual("email");
     expect(userField.rawRelation!.backward).toEqual("posts");
@@ -399,7 +412,7 @@ describe("TailorDBField type error message tests", () => {
     });
     const related = db.uuid().relation({
       type: "oneToOne",
-      toward: { type: _userType },
+      toward: { table: _userType },
     });
     expectTypeOf(related.relation).toEqualTypeOf<
       TypeLevelError<".relation() has already been set">
@@ -676,7 +689,7 @@ describe("TailorDBField relation modifier tests", () => {
       title: db.string(),
       authorId: db.uuid().relation({
         type: "oneToOne",
-        toward: { type: _userType, as: "author" },
+        toward: { table: _userType, as: "author" },
         backward: "author",
       }),
     });
@@ -694,12 +707,12 @@ describe("TailorDBField relation modifier tests", () => {
 
     const related = db.uuid().relation({
       type: "oneToOne",
-      toward: { type: _userType },
+      toward: { table: _userType },
     });
     // @ts-expect-error relation() cannot be called after relation() has already been called
     related.relation({
       type: "oneToOne",
-      toward: { type: _userType },
+      toward: { table: _userType },
     });
   });
 });
@@ -1059,54 +1072,62 @@ describe("TailorDBType type consistency tests", () => {
 });
 
 describe("TailorDBType self relation tests", () => {
-  test("when toward.type is self, rawRelation stores the config (processing happens in parser layer)", () => {
+  test("when toward.table is self, rawRelation stores the config (processing happens in parser layer)", () => {
     const TestType = db.table("TestType", {
       name: db.string(),
       parentID: db.uuid().relation({
         type: "n-1",
-        toward: { type: "self" },
+        toward: { table: "self" },
         backward: "children",
       }),
       dependId: db.uuid().relation({
         type: "1-1",
-        toward: { type: "self", as: "dependsOn" },
+        toward: { table: "self", as: "dependsOn" },
         backward: "dependedBy",
       }),
       keyID: db.uuid().relation({
         type: "keyOnly",
+        toward: { table: "self" },
+      }),
+      // The deprecated toward.type spelling still resolves the same way.
+      legacyParentID: db.uuid().relation({
+        type: "n-1",
         toward: { type: "self" },
       }),
     });
 
     // Raw relation config is stored (reference was removed, only rawRelation exists)
     const parentRaw = TestType.fields.parentID.rawRelation!;
-    expect(parentRaw.toward.type).toBe("self");
+    expect(parentRaw.toward.table).toBe("self");
     expect(parentRaw.type).toBe("n-1");
     expect(parentRaw.backward).toBe("children");
 
     const dependRaw = TestType.fields.dependId.rawRelation!;
-    expect(dependRaw.toward.type).toBe("self");
+    expect(dependRaw.toward.table).toBe("self");
     expect(dependRaw.toward.as).toBe("dependsOn");
     expect(dependRaw.type).toBe("1-1");
     expect(dependRaw.backward).toBe("dependedBy");
 
     const keyRaw = TestType.fields.keyID.rawRelation!;
-    expect(keyRaw.toward.type).toBe("self");
+    expect(keyRaw.toward.table).toBe("self");
     expect(keyRaw.type).toBe("keyOnly");
+
+    const legacyRaw = TestType.fields.legacyParentID.rawRelation!;
+    expect(legacyRaw.toward.table).toBe("self");
   });
 
   test("when backward is not specified, undefined is stored in rawRelation (inflection happens in parser layer)", () => {
     const A = db.table("Node", {
       // Many-to-one (non-unique): backward is plural (nodes)
-      parentID: db.uuid().relation({ type: "n-1", toward: { type: "self" } }),
+      parentID: db.uuid().relation({ type: "n-1", toward: { table: "self" } }),
       // One-to-one (unique): backward is singular (node)
-      pairId: db.uuid().relation({ type: "1-1", toward: { type: "self" } }),
+      pairId: db.uuid().relation({ type: "1-1", toward: { table: "self" } }),
     });
 
     // rawRelation stores the config, backward is undefined when not specified
-    expect(A.fields.parentID.rawRelation!.toward.type).toBe("self");
+    expect(A.fields.parentID.rawRelation!.toward.table).toBe("self");
     expect(A.fields.parentID.rawRelation!.backward).toBeUndefined();
-    expect(A.fields.pairId.rawRelation!.toward.type).toBe("self");
+    expect(A.fields.pairId.rawRelation!.toward.table).toBe("self");
     expect(A.fields.pairId.rawRelation!.backward).toBeUndefined();
   });
 });
@@ -1201,7 +1222,7 @@ describe("TailorDBType plural form tests", () => {
       name: db.string(),
       categoryId: db.uuid().relation({
         type: "oneToOne",
-        toward: { type: _categoryType },
+        toward: { table: _categoryType },
       }),
     });
 
@@ -1708,7 +1729,7 @@ describe("TailorDBField fluent API type preservation", () => {
     const _field = db
       .uuid()
       .description("User reference")
-      .relation({ type: "n-1", toward: { type: User } });
+      .relation({ type: "n-1", toward: { table: User } });
     expectTypeOf<output<typeof _field>>().toEqualTypeOf<string>();
   });
 });
@@ -2047,7 +2068,7 @@ describe("TailorDBField immutability", () => {
   test("field.relation() returns a new field without mutating the original", () => {
     const User = db.table("User", { name: db.string() });
     const original = db.uuid();
-    const withRelation = original.relation({ type: "n-1", toward: { type: User } });
+    const withRelation = original.relation({ type: "n-1", toward: { table: User } });
 
     expect(withRelation).not.toBe(original);
     expect(original.rawRelation).toBeUndefined();
@@ -2205,14 +2226,14 @@ describe("TailorDBField clone tests", () => {
     const User = db.table("User", { name: db.string() });
     const original = db.uuid().relation({
       type: "n-1",
-      toward: { type: User, as: "author" },
+      toward: { table: User, as: "author" },
       backward: "posts",
     });
     const cloned = original.clone();
 
     expect(cloned.rawRelation).toBeDefined();
     expect(cloned.rawRelation?.type).toBe("n-1");
-    expect(cloned.rawRelation?.toward.type).toBe("User");
+    expect(cloned.rawRelation?.toward.table).toBe("User");
     expect(cloned.rawRelation?.toward.as).toBe("author");
     expect(cloned.rawRelation?.backward).toBe("posts");
 

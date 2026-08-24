@@ -5,7 +5,7 @@ import ml from "#/utils/multiline";
 import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
 import type { AppConfig } from "#/configure/config/types";
 
-export interface AttributeTypeInfo {
+interface AttributeTypeInfo {
   type: string;
   optional?: boolean;
 }

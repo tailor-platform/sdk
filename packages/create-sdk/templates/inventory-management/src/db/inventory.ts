@@ -7,7 +7,7 @@ export const inventory = db
     productId: db
       .uuid()
       .description("ID of the product")
-      .relation({ type: "1-1", toward: { type: product } }),
+      .relation({ type: "1-1", toward: { table: product } }),
     quantity: db
       .int()
       .description("Quantity of the product in inventory")

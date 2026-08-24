@@ -298,7 +298,7 @@ export type BeforeLoginHook<MachineUserNames extends string> = {
   invoker: NoInfer<MachineUserNames>;
 };
 
-export type AuthHooks<MachineUserNames extends string> = {
+type AuthHooks<MachineUserNames extends string> = {
   beforeLogin?: BeforeLoginHook<MachineUserNames>;
 };
 

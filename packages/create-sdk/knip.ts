@@ -1,7 +1,6 @@
 import type { KnipConfig } from "knip";
 
 export default {
-  ignoreExportsUsedInFile: true,
   // Scaffold sources shipped to user projects; they have their own entry points.
   ignore: ["templates/**"],
   ignoreBinaries: ["knip", "publint"],

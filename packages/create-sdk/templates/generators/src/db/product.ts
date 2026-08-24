@@ -13,7 +13,7 @@ export const product = db
     ]),
     categoryId: db.uuid({ optional: true }).relation({
       type: "n-1",
-      toward: { type: category },
+      toward: { table: category },
     }),
     ...db.fields.timestamps(),
   })

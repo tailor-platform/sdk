@@ -15,7 +15,7 @@ export interface BundleLogOptions {
   tsconfig?: string;
 }
 
-export interface BundleLogRolldownOptions {
+interface BundleLogRolldownOptions {
   logLevel: "warn";
   onLog: NonNullable<rolldown.InputOptions["onLog"]>;
 }

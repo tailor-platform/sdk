@@ -1,5 +1,0 @@
----
-"@tailor-platform/sdk": patch
----
-
-Fail the build instead of silently dropping a workflow job. A `createWorkflowJob` whose `name`/`body` isn't a static literal (e.g. `body: someWrapper(fn)`), a job's `.start()` call factored into a helper function outside any job body (including a helper defined in another file, even one outside the workflow service's `files` pattern), or a job called by calling `execJobFunction` directly instead of `<job>.start()` (on the ambient `tailor.workflow` global or the `workflow` value imported from `@tailor-platform/sdk/runtime`) — previously passed typecheck/lint/apply but either threw at runtime ("...is rewritten at build time and is unavailable in the bundle") or silently dropped the target job from the bundle the first time it was invoked. All of these now fail the build with the offending job name and file. A workflow file with a syntax error now fails with a clear parse error instead of the same job-detection error. The runtime stub error also names the job so a leftover case is easier to diagnose.

@@ -25,7 +25,7 @@ export type RelatedFunctionRegistryChanges = {
   replaces: ReadonlyArray<HasName>;
 };
 
-export type RelatedFunctionRegistryNameSets = {
+type RelatedFunctionRegistryNameSets = {
   creates: Set<string>;
   updates: Set<string>;
   deletes: Set<string>;
@@ -37,7 +37,7 @@ export type RelatedFunctionRegistryNameSets = {
  * @param changes - Grouped function registry changes
  * @returns Mutable name sets keyed by action
  */
-export function createRelatedFunctionRegistryNameSets(
+function createRelatedFunctionRegistryNameSets(
   changes?: RelatedFunctionRegistryChanges,
 ): RelatedFunctionRegistryNameSets {
   return {
@@ -125,7 +125,7 @@ function parseFunctionRegistryName(name: string): { displayName: string; namespa
  * @param consumed - Function registry names already grouped with parent resources
  * @returns Display entries for ungrouped function registry changes
  */
-export function buildRemainingFunctionRegistryEntries(
+function buildRemainingFunctionRegistryEntries(
   names: RelatedFunctionRegistryNameSets,
   consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets(),
 ): GroupedDisplayEntry[] {

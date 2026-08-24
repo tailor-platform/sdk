@@ -4,7 +4,7 @@ import { user } from "./user";
 
 export const userLog = db
   .table("UserLog", {
-    userID: db.uuid().relation({ type: "n-1", toward: { type: user } }),
+    userID: db.uuid().relation({ type: "n-1", toward: { table: user } }),
     message: db.string(),
     ...db.fields.timestamps(),
   })
