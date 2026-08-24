@@ -1,5 +1,4 @@
-import { loadTailorDBNamespaces } from "@tailor-platform/sdk/cli";
-import { logger } from "@tailor-platform/shared/logger";
+import { loadTailorDBNamespaces, logger } from "@tailor-platform/sdk/cli";
 import { z } from "zod";
 import { TailorDBErdPluginID } from "./index";
 import type { LoadedConfig, Plugin, TailorDBNamespaceData } from "@tailor-platform/sdk/cli";

@@ -2,15 +2,18 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
 import * as http from "node:http";
-import { loadConfig, type LoadedConfig } from "@tailor-platform/sdk/cli";
-import { configArg } from "@tailor-platform/shared/args";
-import { defineAppCommand } from "@tailor-platform/shared/command";
-import { logger } from "@tailor-platform/shared/logger";
+import {
+  loadConfig,
+  type LoadedConfig,
+  configArg,
+  defineAppCommand,
+  logger,
+  arg,
+} from "@tailor-platform/sdk/cli";
 import { watch, type FSWatcher } from "chokidar";
 import { lookup as lookupMime } from "mime-types";
 import open from "open";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { prepareErdBuildsFromContext, type ErdBuildResult } from "./export";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";

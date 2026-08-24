@@ -1,8 +1,6 @@
 import * as fs from "node:fs";
-import { defineAppCommand } from "@tailor-platform/shared/command";
-import { logger } from "@tailor-platform/shared/logger";
+import { defineAppCommand, logger, arg } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import {
   buildErdDiffViewerSchema,

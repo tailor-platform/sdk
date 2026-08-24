@@ -9,13 +9,14 @@ import {
   loadWorkspaceId,
   show,
   truncate,
+  deploymentArgs,
+  defineAppCommand,
+  logger,
+  styles,
+  arg,
 } from "@tailor-platform/sdk/cli";
-import { deploymentArgs } from "@tailor-platform/shared/args";
 import { renderFor } from "@tailor-platform/shared/color";
-import { defineAppCommand } from "@tailor-platform/shared/command";
-import { logger, styles } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { selectEntities } from "./entities";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";

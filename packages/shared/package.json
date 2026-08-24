@@ -6,10 +6,7 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    "./args": "./src/args.ts",
-    "./color": "./src/color.ts",
-    "./command": "./src/command.ts",
-    "./logger": "./src/logger.ts"
+    "./color": "./src/color.ts"
   },
   "scripts": {
     "lint": "oxlint --type-aware .",
@@ -21,9 +18,6 @@
   "devDependencies": {
     "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
-    "pathe": "2.0.3",
-    "politty": "0.11.9",
-    "vitest": "4.1.10",
-    "zod": "4.4.3"
+    "vitest": "4.1.10"
   }
 }
