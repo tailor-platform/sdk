@@ -438,6 +438,7 @@ export interface MetadataLabelWrite {
 type PendingDependencyRecords = Omit<DependencyLabelParams, "existingLabels">;
 
 const metadataWriteBatch = Symbol("metadataWriteBatch");
+const metadataWriteBatchSize = 100;
 
 interface MetadataWriteBatchClient extends MetadataLabelClient {
   [metadataWriteBatch]?: MetadataWriteBatch;
@@ -470,21 +471,47 @@ class MetadataWriteBatch {
   }
 
   async #flushQueued(): Promise<void> {
-    const requests = (
-      await Promise.all(
-        [...this.#writesByTrn].map(async ([trn, writes]) => {
-          const current = await getOrNull(() => this.#client.getMetadata({ trn }));
-          const currentLabels = current?.metadata?.labels ?? {};
-          const labels = writes.reduce(applyMetadataLabelWrite, currentLabels);
-          return areSameLabels(currentLabels, labels) ? undefined : { trn, labels };
-        }),
-      )
-    )
-      .filter((request) => request !== undefined)
-      .toSorted((a, b) => (a.trn < b.trn ? -1 : a.trn > b.trn ? 1 : 0));
+    const queued = [...this.#writesByTrn].toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const readRequest = async ([trn, writes]: (typeof queued)[number]) => {
+      const current = await getOrNull(() => this.#client.getMetadata({ trn }));
+      const currentLabels = current?.metadata?.labels ?? {};
+      const labels = writes.reduce(applyMetadataLabelWrite, currentLabels);
+      return areSameLabels(currentLabels, labels) ? undefined : { trn, labels };
+    };
+    let cursor = 0;
 
-    for (let offset = 0; offset < requests.length; offset += 100) {
-      await this.#client.bulkSetMetadata({ requests: requests.slice(offset, offset + 100) });
+    while (cursor < queued.length) {
+      const requests: MessageInitShape<typeof SetMetadataRequestSchema>[] = [];
+      const requestEntries: (typeof queued)[number][] = [];
+      let readWaves = 0;
+      while (cursor < queued.length && requests.length < metadataWriteBatchSize) {
+        // Reading past this request's capacity would make the overflow stale while this bulk runs.
+        const entries = queued.slice(cursor, cursor + metadataWriteBatchSize - requests.length);
+        cursor += entries.length;
+        readWaves += 1;
+        const changed = await Promise.all(
+          entries.map(async (entry) => {
+            const request = await readRequest(entry);
+            return request ? { entry, request } : undefined;
+          }),
+        );
+        for (const candidate of changed) {
+          if (!candidate) continue;
+          requestEntries.push(candidate.entry);
+          requests.push(candidate.request);
+        }
+      }
+
+      // Changes collected before the final read wave need one shared freshness barrier.
+      const latestRequests =
+        readWaves > 1 && requestEntries.length > 0
+          ? (await Promise.all(requestEntries.map(readRequest))).filter(
+              (request) => request !== undefined,
+            )
+          : requests;
+      if (latestRequests.length > 0) {
+        await this.#client.bulkSetMetadata({ requests: latestRequests });
+      }
     }
   }
 }
@@ -559,8 +586,8 @@ export async function withMetadataWriteBatch<TClient extends MetadataLabelBulkCl
  *
  * `SetMetadata` replaces the whole label map, so a request built from labels
  * read earlier deletes anything written in between. This applies `labels` and
- * `remove` to labels read immediately before a direct write or a deploy batch
- * flush, which is why every label write in the SDK goes through this helper.
+ * `remove` to the latest labels this helper reads before writing, which is why
+ * every label write in the SDK goes through it.
  *
  * Concurrent writers are still not safe in the strict sense — that needs
  * server-side conditional writes — but a write can no longer be built from
