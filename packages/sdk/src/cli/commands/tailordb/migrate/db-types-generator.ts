@@ -353,6 +353,9 @@ function mapToTsType(fieldType: string): {
   type: string;
   usedTimestamp: boolean;
 } {
+  if (fieldType === "enum" || fieldType === "nested") {
+    return { type: "string", usedTimestamp: false };
+  }
   const type = mapFieldTypeToColumnType(fieldType);
   return { type, usedTimestamp: type === "Timestamp" };
 }

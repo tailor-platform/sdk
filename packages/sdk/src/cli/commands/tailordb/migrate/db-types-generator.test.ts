@@ -168,6 +168,20 @@ describe("db-types-generator", () => {
           "endTime: Timestamp | null;",
         ],
       },
+      {
+        testName: "generates string types for nested fields",
+        tableName: "Profile",
+        fields: {
+          details: {
+            type: "nested",
+            required: true,
+            fields: {
+              displayName: { type: "string", required: true },
+            },
+          },
+        },
+        expectedContains: ["details: string;"],
+      },
     ])("$testName", async ({ tableName, fields, expectedContains }) => {
       const snapshot = createMockSnapshot({ [tableName]: { fields } });
 
@@ -266,6 +280,38 @@ describe("db-types-generator", () => {
   });
 
   describe("writeDbTypesFile with enum fields", () => {
+    test("generates a clearable enum field for expand-contract", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            kind: {
+              type: "enum",
+              required: true,
+              allowedValues: [{ value: "MEETING" }, { value: "REMINDER" }],
+            },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "kind",
+          tempFieldName: "kindTmp",
+          before: {
+            type: "enum",
+            required: true,
+            allowedValues: [{ value: "MEETING" }, { value: "REMINDER" }],
+          },
+          after: { type: "integer", required: true },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain("kind: ColumnType<string | null, string | null, string | null>;");
+    });
+
     test("generates types with enum fields and allowed values", async () => {
       const snapshot = createMockSnapshot({
         User: {
