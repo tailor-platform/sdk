@@ -47,7 +47,7 @@ export async function withBundleConcurrency<T, R>(
   let rejection: { reason: unknown } | undefined;
 
   await Promise.all(
-    // flatMap skips sparse slots, so absent items never reach the worker.
+    // flatMap skips sparse slots and, unlike map, emits no slot for them either.
     items.flatMap((item, index) => [
       limit(async () => {
         if (rejection) return;
