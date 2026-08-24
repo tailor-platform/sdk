@@ -6,6 +6,7 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/ca
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
+import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -666,7 +667,9 @@ async function bundleSingleJob(
       } as rolldown.BuildOptions);
       bundleLog.assertAllResolved();
 
-      return result.output[0].code;
+      const bundledCode = result.output[0].code;
+      assertNoForbiddenRuntimeGlobals(bundledCode, `Workflow job "${job.name}"`);
+      return bundledCode;
     },
   });
 

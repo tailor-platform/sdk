@@ -32,3 +32,26 @@ export function getNodeBuiltinMessage(specifier: string): string {
 function normalizeNodeBuiltinSpecifier(specifier: string): string {
   return specifier.startsWith("node:") ? specifier.slice(5) : specifier;
 }
+
+// CommonJS/Node-only ambient globals that `@types/node` puts in the global scope
+// but that the Tailor Platform runtime never defines.
+const GLOBAL_SUGGESTIONS: Record<string, string> = {
+  process:
+    "Use `defineConfig({ env })` and the `env` argument passed into the body function instead.",
+  Buffer: "Use Uint8Array or ArrayBuffer instead.",
+  global: "Use globalThis instead.",
+  __dirname: "File system paths are not available in the Tailor Platform runtime.",
+  __filename: "File system paths are not available in the Tailor Platform runtime.",
+  require: "Use a static `import` instead.",
+  module: "CommonJS module semantics are not available in the Tailor Platform runtime.",
+  exports: "CommonJS module semantics are not available in the Tailor Platform runtime.",
+};
+
+export function isForbiddenGlobal(name: string): boolean {
+  return name in GLOBAL_SUGGESTIONS;
+}
+
+export function getForbiddenGlobalMessage(name: string): string {
+  const suggestion = GLOBAL_SUGGESTIONS[name];
+  return `"${name}" is not available in the Tailor Platform runtime. ${suggestion}`;
+}
