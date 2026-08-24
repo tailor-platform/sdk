@@ -66,8 +66,8 @@ export function validateRelationConfig(
   }
 
   // Validate target table exists (for non-self relations)
-  if (rawRelation.toward.type !== "self" && !context.allTableNames.has(rawRelation.toward.type)) {
-    throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.type}".`);
+  if (rawRelation.toward.table !== "self" && !context.allTableNames.has(rawRelation.toward.table)) {
+    throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.table}".`);
   }
 }
 
@@ -88,7 +88,7 @@ export function processRelationMetadata(
 
   // Resolve target table name (handle "self" reference)
   const targetTypeName =
-    rawRelation.toward.type === "self" ? context.tableName : rawRelation.toward.type;
+    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
 
   // Index and unique are not supported on array fields
   const shouldSetIndex = !isArrayField;
@@ -125,7 +125,7 @@ export function buildRelationInfo(
 
   // Resolve target table name (handle "self" reference)
   const targetTypeName =
-    rawRelation.toward.type === "self" ? context.tableName : rawRelation.toward.type;
+    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
 
   let forwardName = rawRelation.toward.as;
   if (!forwardName) {

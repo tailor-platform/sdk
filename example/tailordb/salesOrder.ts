@@ -7,11 +7,11 @@ export const salesOrder = db
   .table(["SalesOrder", "SalesOrderList"], {
     customerID: db.uuid().relation({
       type: "n-1",
-      toward: { type: customer },
+      toward: { table: customer },
     }),
     approvedByUserIDs: db.uuid({ optional: true, array: true }).relation({
       type: "keyOnly",
-      toward: { type: user },
+      toward: { table: user },
     }),
     totalPrice: db.int({ optional: true }),
     discount: db.float({ optional: true }),

@@ -598,30 +598,46 @@ export type TailorDBInstance<
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
-  toward: {
-    type: T;
-    as?: string;
-    key?: keyof T["fields"] & string;
-  };
+  toward:
+    | {
+        table: T;
+        as?: string;
+        key?: keyof T["fields"] & string;
+        type?: never;
+      }
+    | {
+        /**
+         * @deprecated since NEXT_RELEASE — use `table` instead. codemod: v3/relation-toward-table
+         */
+        type: T;
+        as?: string;
+        key?: keyof T["fields"] & string;
+        table?: never;
+      };
   backward?: string;
 }
 
 // Special config variant for self-referencing relations
 type RelationSelfConfig = {
   type: RelationType;
-  toward: {
-    type: "self";
-    as?: string;
-    key?: string;
-  };
+  toward:
+    | {
+        table: "self";
+        as?: string;
+        key?: string;
+        type?: never;
+      }
+    | {
+        /**
+         * @deprecated since NEXT_RELEASE — use `table` instead. codemod: v3/relation-toward-table
+         */
+        type: "self";
+        as?: string;
+        key?: string;
+        table?: never;
+      };
   backward?: string;
 };
-
-function isRelationSelfConfig(
-  config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
-): config is RelationSelfConfig {
-  return config.toward.type === "self";
-}
 
 type DBFieldDefined<T extends TailorFieldType, Opt extends FieldOptions> = {
   type: T;
@@ -770,11 +786,20 @@ function createTailorDBFieldRuntime<
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
       const cloned = field.clone();
-      const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
+      // The public type is a nested union (RelationConfig | RelationSelfConfig,
+      // each with a `{ table } | { type }` toward), which TS's "in" narrowing
+      // can't discriminate across cleanly. Re-view it as the flat two-branch
+      // shape it always is at runtime — the `table?: never` / `type?: never`
+      // markers above already forbid both keys from being set together.
+      const toward = config.toward as
+        | { table: TailorDBType | "self" }
+        | { type: TailorDBType | "self" };
+      const towardTarget = "table" in toward ? toward.table : toward.type;
+      const targetTable = towardTarget === "self" ? "self" : towardTarget.name;
       cloned._setRawRelation({
         type: config.type,
         toward: {
-          type: targetType,
+          table: targetTable,
           as: config.toward.as,
           key: config.toward.key,
         },

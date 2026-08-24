@@ -64,6 +64,8 @@ export default defineConfig([
         "codemods/v3/function-test-run-rename/scripts/transform.ts",
       "v3/setup-branch-flag-rename/scripts/transform":
         "codemods/v3/setup-branch-flag-rename/scripts/transform.ts",
+      "v3/relation-toward-table/scripts/transform":
+        "codemods/v3/relation-toward-table/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node22",

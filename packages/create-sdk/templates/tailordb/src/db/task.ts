@@ -23,11 +23,11 @@ export const task = db
     dueDate: db.datetime({ optional: true }),
     assigneeId: db.uuid({ optional: true }).relation({
       type: "n-1",
-      toward: { type: user },
+      toward: { table: user },
     }),
     categoryId: db.uuid({ optional: true }).relation({
       type: "n-1",
-      toward: { type: category },
+      toward: { table: category },
     }),
     isArchived: db
       .bool()

@@ -10,7 +10,7 @@ export const invoice = db
     }),
     salesOrderID: db.uuid().relation({
       type: "1-1",
-      toward: { type: salesOrder },
+      toward: { table: salesOrder },
     }),
     amount: db.int({ optional: true }),
     sequentialId: db.int().serial({
