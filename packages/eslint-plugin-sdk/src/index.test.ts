@@ -39,11 +39,12 @@ describe("plugin", () => {
     );
   });
 
-  test("keeps scaffolded Oxlint rules aligned with the recommended config", () => {
+  test("keeps scaffolded Oxlint configs aligned with required rules", () => {
     const templatesDir = resolve(packageDir, "../../create-sdk/templates");
     const templates = readdirSync(templatesDir, { withFileTypes: true }).filter((entry) =>
       entry.isDirectory(),
     );
+    expect(templates.map(({ name }) => name)).toContain("hello-world");
 
     for (const template of templates) {
       const config = JSON.parse(
@@ -52,7 +53,19 @@ describe("plugin", () => {
       const rules = Object.fromEntries(
         Object.entries(config.rules).filter(([name]) => name.startsWith("tailor-sdk/")),
       );
-      expect({ rules, template: template.name }).toMatchObject({
+      const importRules = Object.fromEntries(
+        Object.entries(config.rules).filter(([name]) => name.startsWith("import/")),
+      );
+      expect(
+        { importPlugin: config.plugins.includes("import"), importRules, rules },
+        `template: ${template.name}`,
+      ).toMatchObject({
+        importPlugin: true,
+        importRules: {
+          "import/default": "off",
+          "import/namespace": "off",
+          "import/no-duplicates": ["error", { considerQueryString: true }],
+        },
         rules: plugin.configs.recommended.rules,
       });
     }
