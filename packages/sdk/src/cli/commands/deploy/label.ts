@@ -478,17 +478,19 @@ class MetadataWriteBatch {
       const labels = writes.reduce(applyMetadataLabelWrite, currentLabels);
       return areSameLabels(currentLabels, labels) ? undefined : { trn, labels };
     };
+    const candidates: Array<{
+      entry: (typeof queued)[number];
+      request: MessageInitShape<typeof SetMetadataRequestSchema>;
+    }> = [];
     let cursor = 0;
 
-    while (cursor < queued.length) {
-      const requests: MessageInitShape<typeof SetMetadataRequestSchema>[] = [];
-      const requestEntries: (typeof queued)[number][] = [];
-      let readWaves = 0;
-      while (cursor < queued.length && requests.length < metadataWriteBatchSize) {
-        // Reading past this request's capacity would make the overflow stale while this bulk runs.
-        const entries = queued.slice(cursor, cursor + metadataWriteBatchSize - requests.length);
+    while (cursor < queued.length || candidates.length > 0) {
+      let needsFreshnessBarrier = candidates.length > 0;
+      while (cursor < queued.length && candidates.length < metadataWriteBatchSize) {
+        // Fixed-width waves keep a nearly full batch from serializing a long no-op tail.
+        if (candidates.length > 0) needsFreshnessBarrier = true;
+        const entries = queued.slice(cursor, cursor + metadataWriteBatchSize);
         cursor += entries.length;
-        readWaves += 1;
         const changed = await Promise.all(
           entries.map(async (entry) => {
             const request = await readRequest(entry);
@@ -497,18 +499,18 @@ class MetadataWriteBatch {
         );
         for (const candidate of changed) {
           if (!candidate) continue;
-          requestEntries.push(candidate.entry);
-          requests.push(candidate.request);
+          candidates.push(candidate);
         }
       }
 
-      // Changes collected before the final read wave need one shared freshness barrier.
+      const batchCandidates = candidates.splice(0, metadataWriteBatchSize);
+      // Candidates spanning waves or carried past a bulk need one shared freshness barrier.
       const latestRequests =
-        readWaves > 1 && requestEntries.length > 0
-          ? (await Promise.all(requestEntries.map(readRequest))).filter(
+        needsFreshnessBarrier && batchCandidates.length > 0
+          ? (await Promise.all(batchCandidates.map(({ entry }) => readRequest(entry)))).filter(
               (request) => request !== undefined,
             )
-          : requests;
+          : batchCandidates.map(({ request }) => request);
       if (latestRequests.length > 0) {
         await this.#client.bulkSetMetadata({ requests: latestRequests });
       }
