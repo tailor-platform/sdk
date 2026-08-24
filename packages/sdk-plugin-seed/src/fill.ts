@@ -1,9 +1,11 @@
-import { loadSeedContext } from "@tailor-platform/sdk/cli";
-import { configArg } from "@tailor-platform/shared/args";
-import { defineAppCommand } from "@tailor-platform/shared/command";
-import { logger } from "@tailor-platform/shared/logger";
+import {
+  loadSeedContext,
+  configArg,
+  defineAppCommand,
+  logger,
+  arg,
+} from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 
 export const seedFillCommand = defineAppCommand({

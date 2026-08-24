@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
-import { commonArgs } from "@tailor-platform/shared/args";
-import { logger } from "@tailor-platform/shared/logger";
+import { createCommonArgs, logger, defineCommand, runMain } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
-import { defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { erdDeployCommand } from "./deploy";
 import { erdDiffCommand } from "./diff-command";
@@ -39,7 +37,7 @@ const mainCommand = defineCommand({
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   // strip unknown keys
-  globalArgs: z.object(commonArgs()),
+  globalArgs: z.object(createCommonArgs()),
   displayErrors: false,
   // Render the SDK's CLIError format (details/suggestion) like the host CLI does.
   cleanup: ({ error }) => {
