@@ -561,6 +561,9 @@ importers:
       inflection:
         specifier: 3.0.2
         version: 3.0.2
+      json5:
+        specifier: 2.2.3
+        version: 2.2.3
       kysely:
         specifier: 0.29.5
         version: 0.29.5

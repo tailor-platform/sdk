@@ -5,8 +5,10 @@ import {
   JsonObjectNode,
   JsonParser,
   JsonTokenType,
+  type JsonValueNode,
   reservedIdentifiers,
 } from "@croct/json5-parser";
+import JSON5 from "json5";
 import * as path from "pathe";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { logger, styles } from "#/cli/shared/logger";
@@ -53,13 +55,20 @@ type ExistingConfig =
   /** Strict JSON, so the preset can be appended without losing comments. */
   | { kind: "appendable"; location: string; filePath: string; config: object }
   /** JSONC or JSON5 represented as a lossless syntax tree. */
-  | { kind: "appendable-json5"; location: string; filePath: string; config: Json5Config }
+  | {
+      kind: "appendable-lossless-json";
+      location: string;
+      filePath: string;
+      config: LosslessJsonConfig;
+    }
   /** Invalid config, or not a regular file; the `extends` array is unknown. */
-  | { kind: "unreadable"; location: string; format: "JSON" | "JSON5" };
+  | { kind: "unreadable"; location: string; format: "JSON" | "JSONC" | "JSON5" };
 
-type Json5Config = {
+type LosslessJsonConfig = {
   node: JsonObjectNode;
-  reservedPropertyNames: ReadonlyMap<string, string>;
+  parsed: object;
+  tokenReplacements: ReadonlyMap<string, string>;
+  valueReplacements: ReadonlyMap<string, string>;
 };
 
 function extendsPreset(config: object): boolean {
@@ -95,84 +104,180 @@ const INSIGNIFICANT_JSON5_TOKENS = new Set([
 
 const UNSUPPORTED_JSON5_PROPERTY_NAMES = new Set([...reservedIdentifiers, "Infinity", "NaN"]);
 
-function normalizeReservedPropertyNames(source: string): {
-  source: string;
-  propertyNames: ReadonlyMap<string, string>;
-} {
-  const tokens = JsonLexer.tokenize(source);
-  const propertyNames = new Map<string, string>();
-
-  const normalized = tokens.map((token, index) => {
-    if (!UNSUPPORTED_JSON5_PROPERTY_NAMES.has(token.value)) return token.value;
-    let nextIndex = index + 1;
-    let nextToken = tokens[nextIndex];
-    while (nextToken !== undefined && INSIGNIFICANT_JSON5_TOKENS.has(nextToken.type)) {
-      nextIndex++;
-      nextToken = tokens[nextIndex];
-    }
-    if (tokens[nextIndex]?.type !== JsonTokenType.COLON) return token.value;
-
-    let placeholder = propertyNames.get(token.value);
-    if (placeholder === undefined) {
-      placeholder = `$tailor_${token.value}`;
-      while (source.includes(placeholder)) placeholder += "_";
-      propertyNames.set(token.value, placeholder);
-    }
-    return placeholder;
-  });
-
-  return { source: normalized.join(""), propertyNames };
+function findNextSignificantToken(tokens: ReturnType<typeof JsonLexer.tokenize>, index: number) {
+  let nextIndex = index + 1;
+  let token = tokens[nextIndex];
+  while (token !== undefined && INSIGNIFICANT_JSON5_TOKENS.has(token.type)) {
+    nextIndex++;
+    token = tokens[nextIndex];
+  }
+  return token;
 }
 
-function restoreReservedPropertyNames(
+function toConfigObject(value: unknown): object {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) return value;
+  throw new Error("Expected a JSON object.");
+}
+
+function parseJsonc(source: string): object {
+  const tokens = JsonLexer.tokenize(source);
+  const json = tokens
+    .map((token, index) => {
+      if (token.type === JsonTokenType.LINE_COMMENT || token.type === JsonTokenType.BLOCK_COMMENT) {
+        return " ";
+      }
+      if (token.type === JsonTokenType.COMMA) {
+        const next = findNextSignificantToken(tokens, index);
+        if (
+          next?.type === JsonTokenType.BRACE_RIGHT ||
+          next?.type === JsonTokenType.BRACKET_RIGHT
+        ) {
+          return "";
+        }
+      }
+      return token.value;
+    })
+    .join("");
+  const parsed: unknown = JSON.parse(json);
+  return toConfigObject(parsed);
+}
+
+function hasDuplicateJsonProperties(node: JsonValueNode): boolean {
+  if (node instanceof JsonArrayNode) {
+    return node.elements.some(hasDuplicateJsonProperties);
+  }
+  if (!(node instanceof JsonObjectNode)) return false;
+
+  const names = new Set<string>();
+  for (const property of node.properties) {
+    const name = property.key.toJSON();
+    if (names.has(name) || hasDuplicateJsonProperties(property.value)) return true;
+    names.add(name);
+  }
+  return false;
+}
+
+function normalizeJson5(source: string): {
+  source: string;
+  tokenReplacements: ReadonlyMap<string, string>;
+  valueReplacements: ReadonlyMap<string, string>;
+} {
+  const tokens = JsonLexer.tokenize(source);
+  const tokenReplacements = new Map<string, string>();
+  const valueReplacements = new Map<string, string>();
+  const placeholders = new Set<string>();
+  let stringIndex = 0;
+
+  const createPlaceholder = (prefix: string): string => {
+    let placeholder = prefix;
+    while (source.includes(placeholder) || placeholders.has(placeholder)) placeholder += "_";
+    placeholders.add(placeholder);
+    return placeholder;
+  };
+
+  const normalized = tokens.map((token, index) => {
+    if (token.type === JsonTokenType.STRING) {
+      try {
+        JsonParser.parse(token.value);
+      } catch {
+        const value: unknown = JSON5.parse(token.value);
+        if (typeof value !== "string") throw new Error("Expected a JSON5 string.");
+        const placeholder = createPlaceholder(`$tailor_string_${stringIndex++}`);
+        const quote = token.value.startsWith("'") ? "'" : '"';
+        const normalizedToken = `${quote}${placeholder}${quote}`;
+        tokenReplacements.set(normalizedToken, token.value);
+        valueReplacements.set(placeholder, value);
+        return normalizedToken;
+      }
+    }
+    if (
+      UNSUPPORTED_JSON5_PROPERTY_NAMES.has(token.value) &&
+      findNextSignificantToken(tokens, index)?.type === JsonTokenType.COLON
+    ) {
+      const placeholder = createPlaceholder(`$tailor_property_${token.value}`);
+      tokenReplacements.set(placeholder, token.value);
+      valueReplacements.set(placeholder, token.value);
+      return placeholder;
+    }
+    return token.value;
+  });
+
+  return {
+    source: normalized.join(""),
+    tokenReplacements,
+    valueReplacements,
+  };
+}
+
+function restoreJson5Tokens(
   source: string,
-  propertyNames: ReadonlyMap<string, string>,
+  tokenReplacements: ReadonlyMap<string, string>,
 ): string {
-  if (propertyNames.size === 0) return source;
-  const originals = new Map([...propertyNames].map(([name, placeholder]) => [placeholder, name]));
+  if (tokenReplacements.size === 0) return source;
   return JsonLexer.tokenize(source)
-    .map((token) => originals.get(token.value) ?? token.value)
+    .map((token) => tokenReplacements.get(token.value) ?? token.value)
     .join("");
 }
 
-function readJson5Config(filePath: string): Json5Config | null {
+function readLosslessJsonConfig(
+  filePath: string,
+  format: "JSONC" | "JSON5",
+): LosslessJsonConfig | null {
   const entry = getPathEntry(filePath);
   if (entry === null || !entry.isFile()) return null;
   try {
-    // The parser rejects some valid unquoted JSON5 property names.
-    const normalized = normalizeReservedPropertyNames(fs.readFileSync(filePath, "utf-8"));
+    const source = fs.readFileSync(filePath, "utf-8");
+    const parsed: unknown = format === "JSONC" ? parseJsonc(source) : JSON5.parse(source);
+    const normalized =
+      format === "JSON5"
+        ? normalizeJson5(source)
+        : {
+            source,
+            tokenReplacements: new Map<string, string>(),
+            valueReplacements: new Map<string, string>(),
+          };
+    const node = JsonParser.parse(normalized.source, JsonObjectNode);
+    if (format === "JSONC" && hasDuplicateJsonProperties(node)) return null;
     return {
-      node: JsonParser.parse(normalized.source, JsonObjectNode),
-      reservedPropertyNames: normalized.propertyNames,
+      node,
+      parsed: toConfigObject(parsed),
+      tokenReplacements: normalized.tokenReplacements,
+      valueReplacements: normalized.valueReplacements,
     };
   } catch {
     return null;
   }
 }
 
-function classifyJson5Config(
+function classifyLosslessJsonConfig(
   location: string,
   filePath: string,
-  config: Json5Config | null,
+  format: "JSONC" | "JSON5",
+  config: LosslessJsonConfig | null,
 ): ExistingConfig {
-  if (config === null) return { kind: "unreadable", location, format: "JSON5" };
-  const extendsKey = config.reservedPropertyNames.get("extends") ?? "extends";
-  if (extendsPreset({ extends: config.node.toJSON()[extendsKey] })) {
-    return { kind: "extends-preset", location };
-  }
-  return { kind: "appendable-json5", location, filePath, config };
+  if (config === null) return { kind: "unreadable", location, format };
+  if (extendsPreset(config.parsed)) return { kind: "extends-preset", location };
+  return { kind: "appendable-lossless-json", location, filePath, config };
 }
 
-function isJson5Config(location: string): boolean {
-  return location.endsWith(".jsonc") || location.endsWith(".json5");
+function getLosslessJsonFormat(location: string): "JSONC" | "JSON5" | null {
+  if (location.endsWith(".jsonc")) return "JSONC";
+  if (location.endsWith(".json5")) return "JSON5";
+  return null;
 }
 
 function findExistingConfig(outputDir: string): ExistingConfig | null {
   for (const file of RENOVATE_CONFIG_FILES) {
     const filePath = path.join(outputDir, file);
     if (!pathEntryExists(filePath)) continue;
-    if (isJson5Config(file)) {
-      return classifyJson5Config(file, filePath, readJson5Config(filePath));
+    const format = getLosslessJsonFormat(file);
+    if (format !== null) {
+      return classifyLosslessJsonConfig(
+        file,
+        filePath,
+        format,
+        readLosslessJsonConfig(filePath, format),
+      );
     }
     return classifyConfig(file, filePath, readJsonConfig(filePath));
   }
@@ -226,9 +331,20 @@ function appendPreset(existing: Extract<ExistingConfig, { kind: "appendable" }>)
   );
 }
 
-function appendJson5Preset(existing: Extract<ExistingConfig, { kind: "appendable-json5" }>): void {
-  const extendsKey = existing.config.reservedPropertyNames.get("extends") ?? "extends";
-  const current = existing.config.node.toJSON()[extendsKey];
+function findRootProperty(config: LosslessJsonConfig, name: string) {
+  for (let index = config.node.properties.length - 1; index >= 0; index--) {
+    const property = config.node.properties[index];
+    if (property === undefined) continue;
+    const key = property.key.toJSON();
+    if ((config.valueReplacements.get(key) ?? key) === name) return property;
+  }
+  return undefined;
+}
+
+function appendLosslessJsonPreset(
+  existing: Extract<ExistingConfig, { kind: "appendable-lossless-json" }>,
+): void {
+  const current = "extends" in existing.config.parsed ? existing.config.parsed.extends : undefined;
   if (current !== undefined && !Array.isArray(current)) {
     throw new Error(
       `Renovate config at "${existing.location}" has a non-array "extends". No files were changed. ` +
@@ -239,14 +355,18 @@ function appendJson5Preset(existing: Extract<ExistingConfig, { kind: "appendable
   if (current === undefined) {
     existing.config.node.set("extends", [RENOVATE_PRESET]);
   } else {
-    existing.config.node.get(extendsKey, JsonArrayNode).push(RENOVATE_PRESET);
+    const property = findRootProperty(existing.config, "extends");
+    if (!(property?.value instanceof JsonArrayNode)) {
+      throw new Error(
+        `Could not locate the "extends" array in Renovate config at "${existing.location}". ` +
+          `No files were changed.`,
+      );
+    }
+    property.value.push(RENOVATE_PRESET);
   }
   fs.writeFileSync(
     existing.filePath,
-    restoreReservedPropertyNames(
-      existing.config.node.toString(),
-      existing.config.reservedPropertyNames,
-    ),
+    restoreJson5Tokens(existing.config.node.toString(), existing.config.tokenReplacements),
     "utf-8",
   );
 }
@@ -282,8 +402,8 @@ export async function setupRenovate(options: SetupRenovateOptions): Promise<void
           `Check its extends array for "${RENOVATE_PRESET}" manually.`,
       );
     }
-    if (existingConfig.kind === "appendable-json5") {
-      appendJson5Preset(existingConfig);
+    if (existingConfig.kind === "appendable-lossless-json") {
+      appendLosslessJsonPreset(existingConfig);
       logger.success(`Added the Tailor preset to ${styles.path(existingConfig.location)}`);
       return;
     }

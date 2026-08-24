@@ -182,6 +182,30 @@ describe("setupRenovate", () => {
     expect(fs.readFileSync(configPath, "utf-8")).toBe(content);
   });
 
+  test("rejects JSON5-only syntax in a JSONC config", async () => {
+    const configPath = path.join(testDir, "renovate.jsonc");
+    const existing = "{\n  extends: [],\n}\n";
+    fs.writeFileSync(configPath, existing);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+      /could not parse it as JSONC/,
+    );
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+  });
+
+  test("rejects duplicate keys in a JSONC config", async () => {
+    const configPath = path.join(testDir, "renovate.jsonc");
+    const existing = '{\n  "extends": [],\n  "extends": [],\n}\n';
+    fs.writeFileSync(configPath, existing);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+      /could not parse it as JSONC/,
+    );
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+  });
+
   test.each([
     "renovate.jsonc",
     "renovate.json5",
@@ -211,13 +235,38 @@ describe("setupRenovate", () => {
     const configPath = path.join(testDir, "renovate.json5");
     fs.writeFileSync(
       configPath,
-      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
+      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended'],\n\tlabels: ['\\x64eps'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
     );
 
     await setupRenovate({ outputDir: testDir });
 
     expect(fs.readFileSync(configPath, "utf-8")).toBe(
-      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
+      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n\tlabels: ['\\x64eps'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
+    );
+  });
+
+  test("updates a quoted root extends when a nested object uses unquoted extends", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      '{\n  "extends": ["config:recommended"],\n  packageRules: [{ extends: ["nested"] }],\n}\n',
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  "extends": ["config:recommended", "github>tailor-inc/renovate-config"],\n  packageRules: [{ extends: ["nested"] }],\n}\n',
+    );
+  });
+
+  test("appends to the effective duplicate extends property in JSON5", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(configPath, "{\n  extends: ['ignored'],\n  extends: ['active'],\n}\n");
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n  extends: ['ignored'],\n  extends: ['active', 'github>tailor-inc/renovate-config'],\n}\n",
     );
   });
 
