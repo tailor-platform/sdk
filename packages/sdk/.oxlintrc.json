@@ -231,10 +231,12 @@
                   "!#/utils/brand",
                   "!**/utils/wait-point-registry",
                   "!#/utils/wait-point-registry",
+                  "!**/utils/wait-point-key-grammar",
+                  "!#/utils/wait-point-key-grammar",
                   "!**/utils/test/**",
                   "!#/utils/test/**"
                 ],
-                "message": "Configure module can only import `brand`, `wait-point-registry` or `test/*` from utils module."
+                "message": "Configure module can only import `brand`, `wait-point-key-grammar`, `wait-point-registry` or `test/*` from utils module."
               },
               {
                 "group": ["zod"],
