@@ -439,6 +439,7 @@ type PendingDependencyRecords = Omit<DependencyLabelParams, "existingLabels">;
 
 const metadataWriteBatch = Symbol("metadataWriteBatch");
 const metadataWriteBatchSize = 100;
+const metadataReadWaveSize = 100;
 
 interface MetadataWriteBatchClient extends MetadataLabelClient {
   [metadataWriteBatch]?: MetadataWriteBatch;
@@ -487,7 +488,7 @@ class MetadataWriteBatch {
       while (cursor < queued.length && candidates.length < metadataWriteBatchSize) {
         // Fixed-width waves keep a nearly full batch from serializing a long no-op tail.
         if (candidates.length > 0) freshRequests = undefined;
-        const entries = queued.slice(cursor, cursor + metadataWriteBatchSize);
+        const entries = queued.slice(cursor, cursor + metadataReadWaveSize);
         cursor += entries.length;
         const changed = await Promise.all(
           entries.map(async (entry) => {
