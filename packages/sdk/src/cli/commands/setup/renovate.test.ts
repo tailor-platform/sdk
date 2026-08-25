@@ -168,8 +168,8 @@ describe("setupRenovate", () => {
   });
 
   test.each([
-    ["renovate.jsonc", '{\n  // comment\n  "extends": []\n}\n'],
-    ["renovate.json5", "{\n  extends: [],\n}\n"],
+    ["renovate.jsonc", "{ invalid"],
+    ["renovate.json5", "{ invalid"],
     [".renovaterc", '{\n  "extends": [],\n}\n'],
   ])("reports an unparseable config at %s instead of a generic message", async (file, content) => {
     const configPath = path.join(testDir, file);
@@ -181,6 +181,200 @@ describe("setupRenovate", () => {
 
     expect(fs.readFileSync(configPath, "utf-8")).toBe(content);
   });
+
+  test("rejects JSON5-only syntax in a JSONC config", async () => {
+    const configPath = path.join(testDir, "renovate.jsonc");
+    const existing = "{\n  extends: [],\n}\n";
+    fs.writeFileSync(configPath, existing);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+      /could not parse it as JSONC/,
+    );
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+  });
+
+  test("rejects duplicate keys in a JSONC config", async () => {
+    const configPath = path.join(testDir, "renovate.jsonc");
+    const existing = '{\n  "extends": [],\n  "extends": [],\n}\n';
+    fs.writeFileSync(configPath, existing);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+      /could not parse it as JSONC/,
+    );
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+  });
+
+  test.each([RENOVATE_CONFIG_FILE, ".renovaterc", ".renovaterc.json"])(
+    "rejects duplicate keys in %s",
+    async (file) => {
+      const configPath = path.join(testDir, file);
+      const existing = '{\n  "extends": [],\n  "extends": ["config:recommended"]\n}\n';
+      fs.writeFileSync(configPath, existing);
+
+      await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+        /could not parse it as JSON/,
+      );
+
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+    },
+  );
+
+  test("rejects duplicate keys nested in a JSON config", async () => {
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    const existing =
+      '{\n  "extends": [],\n  "packageRules": [{ "matchPackageNames": [], "matchPackageNames": [] }]\n}\n';
+    fs.writeFileSync(configPath, existing);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+      /could not parse it as JSON/,
+    );
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+  });
+
+  test("allows duplicate keys in a JSON5 config", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(configPath, '{\n  "extends": [],\n  "extends": ["config:recommended"],\n}\n');
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  "extends": [],\n  "extends": ["config:recommended", "github>tailor-inc/renovate-config"],\n}\n',
+    );
+  });
+
+  test.each([
+    "renovate.jsonc",
+    "renovate.json5",
+    ".github/renovate.jsonc",
+    ".github/renovate.json5",
+    ".gitlab/renovate.jsonc",
+    ".gitlab/renovate.json5",
+    ".renovaterc.jsonc",
+    ".renovaterc.json5",
+  ])("appends the preset to %s while preserving comments and formatting", async (relativePath) => {
+    const configPath = path.join(testDir, relativePath);
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      '{\n  // Keep this comment.\n  "extends": [\n    "config:recommended",\n  ],\n  "labels": ["dependencies"],\n}\n',
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  // Keep this comment.\n  "extends": [\n    "config:recommended",\n    "github>tailor-inc/renovate-config",\n  ],\n  "labels": ["dependencies"],\n}\n',
+    );
+    expect(fs.existsSync(path.join(testDir, RENOVATE_CONFIG_FILE))).toBe(false);
+  });
+
+  test("preserves JSON5 property and string styles when appending", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended'],\n\tlabels: ['\\x64eps'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n\t// Keep this comment.\n\t'$tailor_extends': true,\n\textends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n\tlabels: ['\\x64eps'],\n\tpackageRules: [{ package: 'example', NaN: true, Infinity: false }],\n}\n",
+    );
+  });
+
+  test("updates a quoted root extends when a nested object uses unquoted extends", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      '{\n  "extends": ["config:recommended"],\n  packageRules: [{ extends: ["nested"] }],\n}\n',
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  "extends": ["config:recommended", "github>tailor-inc/renovate-config"],\n  packageRules: [{ extends: ["nested"] }],\n}\n',
+    );
+  });
+
+  test("avoids decoded JSON5 placeholder collisions", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      '{\n  extends: ["config:recommended"],\n  "\\u0024tailor_property_extends": [],\n}\n',
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  extends: ["config:recommended", "github>tailor-inc/renovate-config"],\n  "\\u0024tailor_property_extends": [],\n}\n',
+    );
+  });
+
+  test("preserves escaped JSON5 identifiers when appending", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(
+      configPath,
+      "{\n  // Keep \\u0065xtends in this comment.\n  \\u0065xtends: ['config:recommended'],\n  foo\\u0062ar: ['\\\\u0065xtends'],\n}\n",
+    );
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n  // Keep \\u0065xtends in this comment.\n  \\u0065xtends: ['config:recommended', 'github>tailor-inc/renovate-config'],\n  foo\\u0062ar: ['\\\\u0065xtends'],\n}\n",
+    );
+  });
+
+  test("appends to the effective duplicate extends property in JSON5", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(configPath, "{\n  extends: ['ignored'],\n  extends: ['active'],\n}\n");
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n  extends: ['ignored'],\n  extends: ['active', 'github>tailor-inc/renovate-config'],\n}\n",
+    );
+  });
+
+  test("adds an extends property to JSON5 without disturbing existing content", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(configPath, "{\n  // Keep this comment.\n  labels: ['dependencies'],\n}\n");
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      "{\n  // Keep this comment.\n  labels: ['dependencies'],\n  'extends': ['github>tailor-inc/renovate-config'],\n}\n",
+    );
+  });
+
+  test.each(["renovate.jsonc", "renovate.json5"])(
+    "leaves %s unchanged when it already extends the preset",
+    async (relativePath) => {
+      const configPath = path.join(testDir, relativePath);
+      const extendsKey = relativePath.endsWith(".jsonc") ? '"extends"' : "extends";
+      const existing = `{\n  // Keep this comment.\n  ${extendsKey}: ["${RENOVATE_PRESET}"],\n}\n`;
+      fs.writeFileSync(configPath, existing);
+
+      await setupRenovate({ outputDir: testDir });
+
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+    },
+  );
+
+  test.each(["renovate.jsonc", "renovate.json5"])(
+    "refuses to append to %s when extends is not an array",
+    async (relativePath) => {
+      const configPath = path.join(testDir, relativePath);
+      const extendsKey = relativePath.endsWith(".jsonc") ? '"extends"' : "extends";
+      const existing = `{\n  // Keep this comment.\n  ${extendsKey}: "config:recommended",\n}\n`;
+      fs.writeFileSync(configPath, existing);
+
+      await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(/non-array "extends"/);
+
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+    },
+  );
 
   test("treats a config already extending the preset as set up", async () => {
     const configPath = path.join(testDir, ".github/renovate.json");
