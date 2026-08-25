@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { logger } from "#/cli/shared/logger";
 import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
 import { setupTarget, type BranchSetupOptions } from "./generate";
 import { LOCK_VERSION, type LockTarget, hashContent, writeLock } from "./lock";

@@ -9,10 +9,9 @@ import {
   type JsonValueNode,
   reservedIdentifiers,
 } from "@croct/json5-parser";
+import { logBetaWarning, logger, styles } from "@tailor-platform/sdk/cli";
 import JSON5 from "json5";
 import * as path from "pathe";
-import { logBetaWarning } from "#/cli/shared/beta";
-import { logger, styles } from "#/cli/shared/logger";
 
 export const RENOVATE_CONFIG_FILE = "renovate.json";
 export const RENOVATE_PRESET = "github>tailor-inc/renovate-config";

@@ -1,6 +1,6 @@
+import { logger } from "@tailor-platform/sdk/cli";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { logger } from "#/cli/shared/logger";
 import { setupTarget } from "./generate";
 import { setupCommand } from "./index";
 

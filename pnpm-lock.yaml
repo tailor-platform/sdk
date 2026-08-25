@@ -474,9 +474,6 @@ importers:
       '@connectrpc/connect-node':
         specifier: 2.1.2
         version: 2.1.2(@bufbuild/protobuf@2.14.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0))
-      '@croct/json5-parser':
-        specifier: 0.2.2
-        version: 0.2.2
       '@electric-sql/pglite':
         specifier: '>=0.2.0'
         version: 0.5.5
@@ -561,9 +558,6 @@ importers:
       inflection:
         specifier: 3.0.2
         version: 3.0.2
-      json5:
-        specifier: 2.2.3
-        version: 2.2.3
       kysely:
         specifier: 0.29.5
         version: 0.29.5
@@ -753,6 +747,55 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
+      eslint-plugin-zod:
+        specifier: 4.9.1
+        version: 4.9.1(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.78.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
+      oxlint:
+        specifier: 1.78.0
+        version: 1.78.0(oxlint-tsgolint@7.0.2001)
+      oxlint-tsgolint:
+        specifier: 7.0.2001
+        version: 7.0.2001
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.24.2)(publint@0.3.23)(tsx@4.23.12)(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/sdk-plugin-setup:
+    dependencies:
+      '@croct/json5-parser':
+        specifier: 0.2.2
+        version: 0.2.2
+      json5:
+        specifier: 2.2.3
+        version: 2.2.3
+      pathe:
+        specifier: 2.0.3
+        version: 2.0.3
+      pkg-types:
+        specifier: 2.3.1
+        version: 2.3.1
+      politty:
+        specifier: 0.11.9
+        version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../sdk
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      confbox:
+        specifier: 0.2.4
+        version: 0.2.4
       eslint-plugin-zod:
         specifier: 4.9.1
         version: 4.9.1(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.78.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)

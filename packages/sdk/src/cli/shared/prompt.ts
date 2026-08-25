@@ -28,6 +28,10 @@ function withGuard<Args extends unknown[], R>(
   };
 }
 
+/**
+ * Interactive prompts that fail with an actionable message instead of hanging
+ * when stdin is not a TTY (CI, piped input), and exit with 130 on Ctrl-C.
+ */
 export const prompt = {
   confirm: withGuard(
     confirm,

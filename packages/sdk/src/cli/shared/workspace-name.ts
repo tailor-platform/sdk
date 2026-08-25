@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 
+/**
+ * Validates a workspace name against the platform's naming rules: 3-63
+ * lowercase alphanumeric or hyphen characters, not starting or ending with a
+ * hyphen.
+ */
 export const workspaceNameSchema = z
   .string()
   .min(3, "Name must be at least 3 characters")

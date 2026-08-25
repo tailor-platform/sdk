@@ -1,12 +1,15 @@
 import * as fs from "node:fs";
+import {
+  ensureConfigId,
+  logBetaWarning,
+  extractOwnedNamespaces,
+  loadConfig,
+  logger,
+  styles,
+  workspaceNameSchema,
+  getNamespacesWithMigrations,
+} from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import { ensureConfigId } from "#/cli/commands/deploy/config-id-injector";
-import { logBetaWarning } from "#/cli/shared/beta";
-import { extractOwnedNamespaces } from "#/cli/shared/config";
-import { loadConfig } from "#/cli/shared/config-loader";
-import { logger, styles } from "#/cli/shared/logger";
-import { workspaceNameSchema } from "#/cli/shared/workspace-name";
-import { getNamespacesWithMigrations } from "../tailordb/migrate/config";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
