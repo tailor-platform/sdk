@@ -384,8 +384,9 @@ deprecated `package.json` configuration. When that configuration already extends
 the preset, the command reports that Renovate is set up and changes nothing.
 
 JSONC and JSON5 configurations are updated in place while preserving their
-comments and formatting. Invalid configurations are left unchanged and reported
-for manual inspection.
+comments and formatting. Configurations that Renovate itself cannot load — such
+as invalid syntax, or duplicate keys outside JSON5 — are left unchanged and
+reported for manual inspection.
 
 `renovate.json` is yours to edit — it is not tracked in `.github/tailor.lock`.
 Add your own rules freely; re-running `tailor setup deps` does not overwrite

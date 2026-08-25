@@ -81,22 +81,16 @@ function extendsPreset(config: object): boolean {
 function readJsonConfig(filePath: string): object | null {
   const entry = getPathEntry(filePath);
   if (entry === null || !entry.isFile()) return null;
-  let parsed: unknown;
-  let source: string;
   try {
-    source = fs.readFileSync(filePath, "utf-8");
-    parsed = JSON.parse(source);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
-  // Renovate rejects duplicate keys in every config format except JSON5.
-  try {
+    const source = fs.readFileSync(filePath, "utf-8");
+    const parsed: unknown = JSON.parse(source);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    // Renovate rejects duplicate keys in every config format except JSON5.
     if (hasDuplicateJsonProperties(JsonParser.parse(source, JsonObjectNode))) return null;
+    return parsed;
   } catch {
     return null;
   }
-  return parsed;
 }
 
 function classifyConfig(location: string, filePath: string, config: object | null): ExistingConfig {
