@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { NODE_ONLY_GLOBALS } from "#/utils/es-builtins";
 import { getForbiddenGlobalMessage, isForbiddenGlobal } from "./node-builtins";
 
 describe("isForbiddenGlobal", () => {
@@ -33,6 +34,12 @@ describe("isForbiddenGlobal", () => {
     expect(isForbiddenGlobal("constructor")).toBe(false);
     expect(isForbiddenGlobal("hasOwnProperty")).toBe(false);
     expect(isForbiddenGlobal("__proto__")).toBe(false);
+  });
+
+  test("flags every name in NODE_ONLY_GLOBALS, not just the ones with a curated suggestion", () => {
+    for (const name of NODE_ONLY_GLOBALS) {
+      expect(isForbiddenGlobal(name)).toBe(true);
+    }
   });
 });
 

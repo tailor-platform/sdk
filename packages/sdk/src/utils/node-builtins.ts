@@ -1,4 +1,5 @@
 import { isBuiltin } from "node:module";
+import { NODE_ONLY_GLOBALS } from "#/utils/es-builtins";
 
 const SUGGESTIONS: Record<string, string> = {
   crypto: "Use the Web Crypto API (globalThis.crypto) instead.",
@@ -33,8 +34,9 @@ function normalizeNodeBuiltinSpecifier(specifier: string): string {
   return specifier.startsWith("node:") ? specifier.slice(5) : specifier;
 }
 
-// CommonJS/Node-only ambient globals that `@types/node` puts in the global scope
-// but that the Tailor Platform runtime never defines.
+// Friendly suggestions for the most common members of NODE_ONLY_GLOBALS. A
+// name in NODE_ONLY_GLOBALS without an entry here still gets flagged, just
+// with the generic message below instead of a targeted one.
 const GLOBAL_SUGGESTIONS: Record<string, string> = {
   process:
     "Use `defineConfig({ env })` and the `env` argument passed into the body function instead.",
@@ -50,7 +52,7 @@ const GLOBAL_SUGGESTIONS: Record<string, string> = {
 };
 
 export function isForbiddenGlobal(name: string): boolean {
-  return Object.hasOwn(GLOBAL_SUGGESTIONS, name);
+  return NODE_ONLY_GLOBALS.has(name);
 }
 
 export function getForbiddenGlobalMessage(name: string): string {
