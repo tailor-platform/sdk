@@ -45,5 +45,8 @@ export function mapFieldTypeToColumnType(fieldType: string): FieldColumnType {
  * Kysely only unwraps a `ColumnType` at the top level of a table property, so an
  * array of one of these stays wrapped in `ArrayColumnType<...>` rather than taking
  * a `[]` suffix, which would nest the `ColumnType` out of Kysely's reach.
+ *
+ * Both type generators track alias usage per alias to decide which declarations to
+ * emit, so adding an entry here also means teaching them to report the new alias.
  */
 export const COLUMN_TYPE_ALIASES: ReadonlySet<string> = new Set<FieldColumnType>(["Timestamp"]);

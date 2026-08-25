@@ -24,7 +24,7 @@ describe("mapFieldTypeToColumnType", () => {
 });
 
 describe("COLUMN_TYPE_ALIASES", () => {
-  test("covers every column type whose alias expands to a ColumnType", () => {
+  test("holds the aliases both type generators report usage for", () => {
     expect([...COLUMN_TYPE_ALIASES]).toEqual(["Timestamp"]);
   });
 });
