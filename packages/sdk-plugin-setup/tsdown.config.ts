@@ -12,8 +12,7 @@ function yamlText() {
 }
 
 export default defineConfig({
-  entry: ["src/cli.ts", "src/index.ts"],
-  dts: true,
+  entry: ["src/cli.ts"],
   format: ["esm"],
   target: "node22",
   platform: "node",

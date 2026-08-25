@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test } from "vitest";
+import { setupCommand } from "./commands";
 import { RENOVATE_CONFIG_FILE, RENOVATE_PRESET, setupRenovate } from "./renovate";
-import { setupCommand } from "./index";
 
 describe("setupRenovate", () => {
   const testDir = path.join(

@@ -1,8 +1,8 @@
 import { logger } from "@tailor-platform/sdk/cli";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { setupCommand } from "./commands";
 import { setupTarget } from "./generate";
-import { setupCommand } from "./index";
 
 vi.mock("./generate", () => ({
   setupTarget: vi.fn(),

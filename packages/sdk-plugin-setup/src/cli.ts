@@ -5,7 +5,7 @@ import { createCommonArgs, defineCommand, logger, runMain } from "@tailor-platfo
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
-import { setupSubCommands } from "./index";
+import { setupSubCommands } from "./commands";
 
 function hasFormat(error: unknown): error is { format(): string } {
   return (

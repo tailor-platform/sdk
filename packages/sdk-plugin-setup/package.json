@@ -18,13 +18,6 @@
     "README.md"
   ],
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    }
-  },
   "scripts": {
     "build": "tsdown && politty generate-shim --entry ../dist/cli.js",
     "lint": "oxlint --type-aware .",
