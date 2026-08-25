@@ -13,14 +13,14 @@ export function canPrompt(): boolean {
  * @param unavailableMessage - Message used when interactive input is unavailable
  * @returns A wrapped function that throws in CI and exits on cancel
  */
-function withGuard<Args extends unknown[], R>(
-  fn: (...args: Args) => Promise<R>,
+function withGuard<Config, R>(
+  fn: (config: Config) => Promise<R>,
   unavailableMessage?: string,
-): (...args: Args) => Promise<R> {
-  return async (...args: Args): Promise<R> => {
+): (config: Config) => Promise<R> {
+  return async (config: Config): Promise<R> => {
     if (!canPrompt()) throw new CIPromptError(unavailableMessage);
     try {
-      return await fn(...args);
+      return await fn(config);
     } catch (error) {
       if (error instanceof ExitPromptError) process.exit(130);
       throw error;
@@ -28,16 +28,62 @@ function withGuard<Args extends unknown[], R>(
   };
 }
 
+/** Options accepted by {@link prompt.confirm}. */
+export interface ConfirmConfig {
+  message: string;
+  default?: boolean;
+}
+
+/** Options accepted by {@link prompt.text}. */
+export interface TextConfig {
+  message: string;
+  default?: string;
+  required?: boolean;
+  validate?: (value: string) => boolean | string | Promise<boolean | string>;
+}
+
+/** Options accepted by {@link prompt.password}. */
+export interface PasswordConfig {
+  message: string;
+  mask?: boolean | string;
+  validate?: (value: string) => boolean | string | Promise<boolean | string>;
+}
+
+/** A selectable entry of {@link SelectConfig.choices}. */
+export interface SelectChoice<Value> {
+  value: Value;
+  name?: string;
+  description?: string;
+  short?: string;
+  disabled?: boolean | string;
+}
+
+/** Options accepted by {@link prompt.select}. */
+export interface SelectConfig<Value> {
+  message: string;
+  choices: readonly SelectChoice<Value>[];
+  default?: NoInfer<Value>;
+  pageSize?: number;
+  loop?: boolean;
+}
+
 /**
  * Interactive prompts that fail with an actionable message instead of hanging
  * when stdin is not a TTY (CI, piped input), and exit with 130 on Ctrl-C.
+ *
+ * The config types are declared here rather than inferred from
+ * `@inquirer/prompts`: inference pulls `@inquirer/*` internals (`Context`,
+ * `Keybinding`, `PartialDeep`) into this public type, and those cannot be
+ * named portably from the published declarations (TS2883). They cover the
+ * options this CLI uses — widen them here when a call site needs more.
  */
 export const prompt = {
-  confirm: withGuard(
+  confirm: withGuard<ConfirmConfig, boolean>(
     confirm,
     "Interactive confirmations are not available in this environment. Use --yes to skip confirmation prompts, or provide the required options explicitly.",
   ),
-  text: withGuard(input),
-  password: withGuard(password),
-  select: withGuard(select),
+  text: withGuard<TextConfig, string>(input),
+  password: withGuard<PasswordConfig, string>(password),
+  select: <const Value>(config: SelectConfig<Value>): Promise<Value> =>
+    withGuard<SelectConfig<Value>, Value>(select)(config),
 };
