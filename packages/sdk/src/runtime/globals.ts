@@ -139,5 +139,3 @@ declare global {
     errors: TailorErrorItem[];
   }
 }
-
-export {};
