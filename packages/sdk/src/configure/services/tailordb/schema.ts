@@ -243,7 +243,10 @@ type PluginExtendedFields<
 > =
   IsAny<Fields> extends true
     ? Fields
-    : Fields & UnionToIntersection<PluginFieldExtensionsUnion<Fields, Config>>;
+    : // For `Config = {}`, PluginFieldExtensionsUnion is `never`, and
+      // UnionToIntersection<never> is `unknown` (not `never`), so this
+      // correctly reduces to `Fields` — see the "empty config" test.
+      Fields & UnionToIntersection<PluginFieldExtensionsUnion<Fields, Config>>;
 // Validates each key of the passed config object against PluginConfigs and
 // flags field-extension conflicts (see PluginFieldConflict above), keeping
 // type errors localized to the offending plugin id instead of requiring

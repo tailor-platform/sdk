@@ -74,4 +74,18 @@ describe(".plugin() field injection", () => {
       "test/status2": { values: ["A", "B"] },
     });
   });
+
+  test("an unregistered plugin id is a type error", () => {
+    const table = db.table("Order", { name: db.string() });
+    // @ts-expect-error "unregistered/plugin" has no PluginConfigs entry
+    table.plugin({ "unregistered/plugin": {} });
+  });
+
+  test("an empty config leaves Fields unchanged (UnionToIntersection<never> is unknown, not never)", () => {
+    const table = db.table("Order", { name: db.string() }).plugin({});
+    expectTypeOf<output<typeof table>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+    }>();
+  });
 });

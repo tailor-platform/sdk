@@ -66,12 +66,13 @@ describe("PluginManager", () => {
 
   test("preserves pluralForm and plugin attachments when extending tables", () => {
     const manager = new PluginManager();
-    const original = db
-      .table(["Person", "People"], {
-        name: db.string(),
-      })
-      // PluginConfigs is open; use cast to attach plugin config in tests.
-      .plugin({ "test-plugin": { enabled: true } } as never);
+    const original = db.table(["Person", "People"], {
+      name: db.string(),
+    });
+    // "test-plugin" has no PluginConfigs entry, which .plugin() now rejects at
+    // the type level; the runtime call is still valid for this test's purpose.
+    // @ts-expect-error "test-plugin" is not a registered plugin id
+    original.plugin({ "test-plugin": { enabled: true } });
 
     const extended = manager.extendTable({
       originalTable: original,
