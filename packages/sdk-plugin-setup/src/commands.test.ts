@@ -1,16 +1,22 @@
-import { logger } from "@tailor-platform/sdk/cli";
-import { runCommand } from "politty";
+import { defineCommand, logger, runCommand } from "@tailor-platform/sdk/cli";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { setupCommand } from "./commands";
+import { setupSubCommands } from "./commands";
 import { setupTarget } from "./generate";
 
 vi.mock("./generate", () => ({
   setupTarget: vi.fn(),
   setupCoordinate: vi.fn(),
 }));
+
 vi.mock("./check", () => ({ checkGitHub: vi.fn() }));
 vi.mock("./delete", () => ({ setupDelete: vi.fn() }));
 vi.mock("./renovate", () => ({ setupRenovate: vi.fn() }));
+
+const setupCommand = defineCommand({
+  name: "tailor-setup",
+  description: "Set up repository automation for your project. (beta)",
+  subCommands: setupSubCommands,
+});
 
 describe("setup branch trigger branch flag", () => {
   aroundEach(async (runTest) => {

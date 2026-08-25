@@ -1,5 +1,4 @@
-import { confirmationArgs, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
-import { arg, defineCommand } from "politty";
+import { arg, confirmationArgs, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
 import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
@@ -283,9 +282,3 @@ export const setupSubCommands = {
   check: checkCommand,
   delete: deleteCommand,
 };
-
-export const setupCommand = defineCommand({
-  name: "setup",
-  description: "Set up repository automation for your project. (beta)",
-  subCommands: setupSubCommands,
-});
