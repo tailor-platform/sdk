@@ -186,19 +186,21 @@ function generateDbTypesFromSnapshot(
 
   // Track which utility types are used
   const usedUtilityTypes = new Set<"Timestamp" | "Serial">();
+  let usedArrayColumnType = false;
 
   // Generate type definitions
   const typeDefinitions: string[] = [];
   for (const type of tables) {
     const result = generateTableType(type, breakingChangeFields);
     if (result.usedTimestamp) usedUtilityTypes.add("Timestamp");
+    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
     typeDefinitions.push(result.typeDef);
   }
 
   // Build imports
   // ColumnType is always needed for Generated and Timestamp utility types
   const imports: string[] = ["type ColumnType", "type Transaction as KyselyTransaction"];
-  if (typeDefinitions.some((typeDef) => typeDef.includes("ArrayColumnType<"))) {
+  if (usedArrayColumnType) {
     imports.push("type ArrayColumnType");
   }
 
@@ -280,7 +282,7 @@ function generateEmptyDbTypes(namespace: string): string {
  * Generate table type definition from a snapshot type
  * @param {TailorDBSnapshotType} type - Table snapshot
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
- * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type and utility type usage
+ * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean; usedArrayColumnType: boolean }} Generated type and utility type usage
  */
 function generateTableType(
   type: TailorDBSnapshotType,
@@ -289,10 +291,12 @@ function generateTableType(
   typeDef: string;
   usedTimestamp: boolean;
   usedColumnType: boolean;
+  usedArrayColumnType: boolean;
 } {
   const fieldLines: string[] = [];
   let usedTimestamp = false;
   let usedColumnType = false;
+  let usedArrayColumnType = false;
 
   // Add id field first
   fieldLines.push("    id: Generated<string>;");
@@ -324,6 +328,7 @@ function generateTableType(
     fieldLines.push(`    ${fieldName}: ${emitted.type};`);
     usedTimestamp = usedTimestamp || emitted.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
+    usedArrayColumnType = usedArrayColumnType || (!clearable && result.usedArrayColumnType);
   }
 
   // Add newly added required fields with ColumnType (same as optional→required)
@@ -334,6 +339,7 @@ function generateTableType(
     fieldLines.push(`    ${fieldName}: ${result.type};`);
     usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;
+    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
   }
 
   // Add rename target fields, which do not exist in the pre-migration snapshot.
@@ -345,11 +351,12 @@ function generateTableType(
     fieldLines.push(`    ${fieldName}: ${result.type};`);
     usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;
+    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
   }
 
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
 
-  return { typeDef, usedTimestamp, usedColumnType };
+  return { typeDef, usedTimestamp, usedColumnType, usedArrayColumnType };
 }
 
 function mapToTsType(fieldType: string): {
@@ -435,7 +442,7 @@ function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): 
  * @param {SnapshotFieldConfig} config - Field configuration
  * @param {boolean} isOptionalToRequired - Whether this field is changing from optional to required
  * @param {EnumValueChange} [enumValueChange] - Enum value change info if applicable
- * @returns {{ type: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type string and utility type usage
+ * @returns {{ type: string; usedTimestamp: boolean; usedColumnType: boolean; usedArrayColumnType: boolean }} Generated type string and utility type usage
  */
 function generateFieldType(
   config: SnapshotFieldConfig,
@@ -445,6 +452,7 @@ function generateFieldType(
   type: string;
   usedTimestamp: boolean;
   usedColumnType: boolean;
+  usedArrayColumnType: boolean;
 } {
   // Handle enum value changes specially
   if (enumValueChange) {
@@ -452,6 +460,7 @@ function generateFieldType(
       type: generateEnumChangeColumnType(enumValueChange, config),
       usedTimestamp: false,
       usedColumnType: true,
+      usedArrayColumnType: false,
     };
   }
 
@@ -475,28 +484,22 @@ function generateFieldType(
         type: dateColumnType,
         usedTimestamp: false,
         usedColumnType: true,
+        usedArrayColumnType: false,
       };
     }
   }
 
   // Apply array modifier. Kysely only unwraps a ColumnType at the top level of a
-  // table property, so a timestamp array spells its slots out instead of nesting
-  // the Timestamp alias. A nullable array cannot use ArrayColumnType, whose
-  // wrapper would leave null out of the insert and update slots.
+  // table property, so a timestamp array wraps the Timestamp alias in
+  // ArrayColumnType instead of nesting it.
   let type = baseType;
   if (config.array) {
     if (baseType === "Timestamp") {
-      if (config.required) {
-        return {
-          type: "ArrayColumnType<Timestamp>",
-          usedTimestamp: true,
-          usedColumnType: false,
-        };
-      }
       return {
-        type: "ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>",
-        usedTimestamp: false,
-        usedColumnType: true,
+        type: config.required ? "ArrayColumnType<Timestamp>" : "ArrayColumnType<Timestamp> | null",
+        usedTimestamp: true,
+        usedColumnType: false,
+        usedArrayColumnType: true,
       };
     }
     const needsParens =
@@ -513,6 +516,7 @@ function generateFieldType(
       type: `ColumnType<${type} | null, ${type}, ${type}>`,
       usedTimestamp,
       usedColumnType: true,
+      usedArrayColumnType: false,
     };
   }
 
@@ -520,7 +524,7 @@ function generateFieldType(
     type = `${type} | null`;
   }
 
-  return { type, usedTimestamp, usedColumnType: false };
+  return { type, usedTimestamp, usedColumnType: false, usedArrayColumnType: false };
 }
 
 /**

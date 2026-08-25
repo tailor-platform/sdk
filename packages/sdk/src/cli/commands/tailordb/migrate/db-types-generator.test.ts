@@ -223,9 +223,7 @@ describe("db-types-generator", () => {
       const { content } = await generateContent(snapshot);
 
       expect(content).toContain("holidays: ArrayColumnType<Timestamp>;");
-      expect(content).toContain(
-        "reminders: ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>;",
-      );
+      expect(content).toContain("reminders: ArrayColumnType<Timestamp> | null;");
       expect(content).toContain("type ArrayColumnType");
       expect(content).not.toContain("Timestamp[]");
     });
@@ -286,6 +284,25 @@ describe("db-types-generator", () => {
 
       expect(content).toContain('kind: "Timestamp" | "Other";');
       expect(content).not.toContain("type Timestamp =");
+    });
+
+    test("omits the ArrayColumnType import for an enum value naming it", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            kind: {
+              type: "enum",
+              required: true,
+              allowedValues: [{ value: "ArrayColumnType<Timestamp>" }, { value: "Other" }],
+            },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot);
+
+      expect(content).toContain('kind: "ArrayColumnType<Timestamp>" | "Other";');
+      expect(content).not.toContain("type ArrayColumnType");
     });
   });
 
