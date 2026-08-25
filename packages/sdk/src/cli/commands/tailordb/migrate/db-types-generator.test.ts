@@ -222,12 +222,11 @@ describe("db-types-generator", () => {
 
       const { content } = await generateContent(snapshot);
 
-      expect(content).toContain(
-        "holidays: ColumnType<Date[], (Date | string)[], (Date | string)[]>;",
-      );
+      expect(content).toContain("holidays: ArrayColumnType<Timestamp>;");
       expect(content).toContain(
         "reminders: ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>;",
       );
+      expect(content).toContain("type ArrayColumnType");
       expect(content).not.toContain("Timestamp[]");
     });
 

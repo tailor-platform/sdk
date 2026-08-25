@@ -198,6 +198,9 @@ function generateDbTypesFromSnapshot(
   // Build imports
   // ColumnType is always needed for Generated and Timestamp utility types
   const imports: string[] = ["type ColumnType", "type Transaction as KyselyTransaction"];
+  if (typeDefinitions.some((typeDef) => typeDef.includes("ArrayColumnType<"))) {
+    imports.push("type ArrayColumnType");
+  }
 
   // Build utility type declarations
   const utilityTypeDeclarations: string[] = [];
@@ -478,13 +481,20 @@ function generateFieldType(
 
   // Apply array modifier. Kysely only unwraps a ColumnType at the top level of a
   // table property, so a timestamp array spells its slots out instead of nesting
-  // the Timestamp alias.
+  // the Timestamp alias. A nullable array cannot use ArrayColumnType, whose
+  // wrapper would leave null out of the insert and update slots.
   let type = baseType;
   if (config.array) {
     if (baseType === "Timestamp") {
-      const nullable = config.required ? "" : " | null";
+      if (config.required) {
+        return {
+          type: "ArrayColumnType<Timestamp>",
+          usedTimestamp: true,
+          usedColumnType: false,
+        };
+      }
       return {
-        type: `ColumnType<Date[]${nullable}, (Date | string)[]${nullable}, (Date | string)[]${nullable}>`,
+        type: "ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>",
         usedTimestamp: false,
         usedColumnType: true,
       };
