@@ -7,6 +7,7 @@
 
 import * as fs from "node:fs/promises";
 import { assertDefined } from "#/utils/assert";
+import { mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import {
   getMigrationFilePath,
   type SchemaSnapshot,
@@ -185,18 +186,23 @@ function generateDbTypesFromSnapshot(
 
   // Track which utility types are used
   const usedUtilityTypes = new Set<"Timestamp" | "Serial">();
+  let usedArrayColumnType = false;
 
   // Generate type definitions
   const typeDefinitions: string[] = [];
   for (const type of tables) {
     const result = generateTableType(type, breakingChangeFields);
     if (result.usedTimestamp) usedUtilityTypes.add("Timestamp");
+    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
     typeDefinitions.push(result.typeDef);
   }
 
   // Build imports
   // ColumnType is always needed for Generated and Timestamp utility types
   const imports: string[] = ["type ColumnType", "type Transaction as KyselyTransaction"];
+  if (usedArrayColumnType) {
+    imports.push("type ArrayColumnType");
+  }
 
   // Build utility type declarations
   const utilityTypeDeclarations: string[] = [];
@@ -276,7 +282,7 @@ function generateEmptyDbTypes(namespace: string): string {
  * Generate table type definition from a snapshot type
  * @param {TailorDBSnapshotType} type - Table snapshot
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
- * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type and utility type usage
+ * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean; usedArrayColumnType: boolean }} Generated type and utility type usage
  */
 function generateTableType(
   type: TailorDBSnapshotType,
@@ -285,10 +291,12 @@ function generateTableType(
   typeDef: string;
   usedTimestamp: boolean;
   usedColumnType: boolean;
+  usedArrayColumnType: boolean;
 } {
   const fieldLines: string[] = [];
   let usedTimestamp = false;
   let usedColumnType = false;
+  let usedArrayColumnType = false;
 
   // Add id field first
   fieldLines.push("    id: Generated<string>;");
@@ -316,11 +324,11 @@ function generateTableType(
     // A conversion script clears its source field, and Kysely reads the third
     // ColumnType slot for updates.
     const clearable = clearedFieldsForType.has(fieldName);
-    fieldLines.push(
-      `    ${fieldName}: ${clearable ? generateClearableFieldType(fieldConfig) : result.type};`,
-    );
-    usedTimestamp = usedTimestamp || result.usedTimestamp;
+    const emitted = clearable ? generateClearableFieldType(fieldConfig) : result;
+    fieldLines.push(`    ${fieldName}: ${emitted.type};`);
+    usedTimestamp = usedTimestamp || emitted.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
+    usedArrayColumnType = usedArrayColumnType || (!clearable && result.usedArrayColumnType);
   }
 
   // Add newly added required fields with ColumnType (same as optional→required)
@@ -331,6 +339,7 @@ function generateTableType(
     fieldLines.push(`    ${fieldName}: ${result.type};`);
     usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;
+    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
   }
 
   // Add rename target fields, which do not exist in the pre-migration snapshot.
@@ -342,36 +351,23 @@ function generateTableType(
     fieldLines.push(`    ${fieldName}: ${result.type};`);
     usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;
+    usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
   }
 
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
 
-  return { typeDef, usedTimestamp, usedColumnType };
+  return { typeDef, usedTimestamp, usedColumnType, usedArrayColumnType };
 }
 
 function mapToTsType(fieldType: string): {
   type: string;
   usedTimestamp: boolean;
 } {
-  switch (fieldType) {
-    case "uuid":
-    case "string":
-    case "decimal":
-      return { type: "string", usedTimestamp: false };
-    case "integer":
-    case "float":
-    case "number":
-      return { type: "number", usedTimestamp: false };
-    case "date":
-      return { type: "string", usedTimestamp: false };
-    case "datetime":
-      return { type: "Timestamp", usedTimestamp: true };
-    case "bool":
-    case "boolean":
-      return { type: "boolean", usedTimestamp: false };
-    default:
-      return { type: "string", usedTimestamp: false };
+  if (fieldType === "enum" || fieldType === "nested") {
+    return { type: "string", usedTimestamp: false };
   }
+  const type = mapFieldTypeToColumnType(fieldType);
+  return { type, usedTimestamp: type === "Timestamp" };
 }
 
 function formatEnumUnion(values: string[]): string {
@@ -406,22 +402,30 @@ function generateEnumChangeColumnType(
  * @param config - Field configuration in the pre-migration snapshot
  * @returns {string} Generated column type
  */
-function generateClearableFieldType(config: SnapshotFieldConfig): string {
+function generateClearableFieldType(config: SnapshotFieldConfig): {
+  type: string;
+  usedTimestamp: boolean;
+} {
   const { type } = mapToTsType(config.type);
+  // A ColumnType cannot nest, so a timestamp contributes its own select and
+  // write types to the slots rather than the Timestamp alias.
+  if (type === "Timestamp") {
+    const select = config.array ? "Date[]" : "Date";
+    const write = config.array ? "(Date | string)[]" : "Date | string";
+    return {
+      type: `ColumnType<${select} | null, ${write} | null, ${write} | null>`,
+      usedTimestamp: false,
+    };
+  }
   const base = config.array ? `${type}[]` : type;
-  return `ColumnType<${base} | null, ${base} | null, ${base} | null>`;
+  return {
+    type: `ColumnType<${base} | null, ${base} | null, ${base} | null>`,
+    usedTimestamp: false,
+  };
 }
 
 function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
   if (config.type !== "date" && config.type !== "datetime") return null;
-
-  if (config.type === "date") {
-    if (config.array) {
-      return "ColumnType<string[] | null, string[], string[]>";
-    }
-
-    return "ColumnType<string | null, string, string>";
-  }
 
   if (config.array) {
     return "ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>";
@@ -435,7 +439,7 @@ function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): 
  * @param {SnapshotFieldConfig} config - Field configuration
  * @param {boolean} isOptionalToRequired - Whether this field is changing from optional to required
  * @param {EnumValueChange} [enumValueChange] - Enum value change info if applicable
- * @returns {{ type: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type string and utility type usage
+ * @returns {{ type: string; usedTimestamp: boolean; usedColumnType: boolean; usedArrayColumnType: boolean }} Generated type string and utility type usage
  */
 function generateFieldType(
   config: SnapshotFieldConfig,
@@ -445,6 +449,7 @@ function generateFieldType(
   type: string;
   usedTimestamp: boolean;
   usedColumnType: boolean;
+  usedArrayColumnType: boolean;
 } {
   // Handle enum value changes specially
   if (enumValueChange) {
@@ -452,6 +457,7 @@ function generateFieldType(
       type: generateEnumChangeColumnType(enumValueChange, config),
       usedTimestamp: false,
       usedColumnType: true,
+      usedArrayColumnType: false,
     };
   }
 
@@ -468,15 +474,6 @@ function generateFieldType(
     usedTimestamp = mapped.usedTimestamp;
   }
 
-  // Apply array modifier
-  let type = baseType;
-  if (config.array) {
-    const needsParens =
-      config.type === "enum" && config.allowedValues && config.allowedValues.length > 0;
-    type = needsParens ? `(${baseType})[]` : `${baseType}[]`;
-  }
-
-  // Handle nullable/required modifiers
   if (isOptionalToRequired) {
     const dateColumnType = generateOptionalToRequiredDateColumnType(config);
     if (dateColumnType) {
@@ -484,9 +481,31 @@ function generateFieldType(
         type: dateColumnType,
         usedTimestamp: false,
         usedColumnType: true,
+        usedArrayColumnType: false,
       };
     }
+  }
 
+  // Apply array modifier. Kysely only unwraps a ColumnType at the top level of a
+  // table property, so a timestamp array wraps the Timestamp alias in
+  // ArrayColumnType instead of nesting it.
+  let type = baseType;
+  if (config.array) {
+    if (baseType === "Timestamp") {
+      return {
+        type: config.required ? "ArrayColumnType<Timestamp>" : "ArrayColumnType<Timestamp> | null",
+        usedTimestamp: true,
+        usedColumnType: false,
+        usedArrayColumnType: true,
+      };
+    }
+    const needsParens =
+      config.type === "enum" && config.allowedValues && config.allowedValues.length > 0;
+    type = needsParens ? `(${baseType})[]` : `${baseType}[]`;
+  }
+
+  // Handle nullable/required modifiers
+  if (isOptionalToRequired) {
     // For fields changing from optional to required:
     // SELECT returns T | null (existing data might be null)
     // INSERT/UPDATE requires T (must provide a value)
@@ -494,6 +513,7 @@ function generateFieldType(
       type: `ColumnType<${type} | null, ${type}, ${type}>`,
       usedTimestamp,
       usedColumnType: true,
+      usedArrayColumnType: false,
     };
   }
 
@@ -501,7 +521,7 @@ function generateFieldType(
     type = `${type} | null`;
   }
 
-  return { type, usedTimestamp, usedColumnType: false };
+  return { type, usedTimestamp, usedColumnType: false, usedArrayColumnType: false };
 }
 
 /**

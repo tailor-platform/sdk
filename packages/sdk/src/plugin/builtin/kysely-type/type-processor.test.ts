@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { parseTypes } from "#/parser/service/tailordb/index";
 import { toSchemaOutput } from "#/utils/test/internal";
-import { processKyselyType } from "./type-processor";
+import { processKyselyFields, processKyselyType } from "./type-processor";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
@@ -27,6 +27,14 @@ describe("Kysely TypeProcessor", () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.name).toBe("User");
+    });
+
+    test("preserves the string fallback for legacy number fields", () => {
+      const result = processKyselyFields("Metric", {
+        value: { type: "number", required: true },
+      });
+
+      expect(result.typeDef).toContain("value: string;");
     });
 
     test.each([
