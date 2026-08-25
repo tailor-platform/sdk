@@ -457,8 +457,8 @@ importers:
   packages/sdk:
     dependencies:
       '@0no-co/graphql.web':
-        specifier: 1.3.3
-        version: 1.3.3(graphql@17.0.2)
+        specifier: 1.3.4
+        version: 1.3.4(graphql@17.0.2)
       '@badgateway/oauth2-client':
         specifier: 3.3.1
         version: 3.3.1
@@ -841,10 +841,10 @@ importers:
 
 packages:
 
-  '@0no-co/graphql.web@1.3.3':
-    resolution: {integrity: sha512-4gFGBdyaFmQ6n9euhp5JtIGS4ZeivwDr1tCPENUxTvy5wyv532yOtFCr9zzYAJh1s6uibgC+TRXUcay+mxzCoQ==}
+  '@0no-co/graphql.web@1.3.4':
+    resolution: {integrity: sha512-imSwulOeDQodRy/olQmVEo2PiY6ntjkZ9eiGdw6lMYylh/tay9b7MusyJBmEnkL8GiKRKr6ltr+D42mY5bd8Bg==}
     peerDependencies:
-      graphql: ^14.0.0 || ^15.0.0 || ^16.0.0
+      graphql: ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
     peerDependenciesMeta:
       graphql:
         optional: true
@@ -4313,7 +4313,7 @@ packages:
 
 snapshots:
 
-  '@0no-co/graphql.web@1.3.3(graphql@17.0.2)':
+  '@0no-co/graphql.web@1.3.4(graphql@17.0.2)':
     optionalDependencies:
       graphql: 17.0.2
 
@@ -5566,7 +5566,7 @@ snapshots:
 
   '@urql/core@6.0.3(graphql@17.0.2)':
     dependencies:
-      '@0no-co/graphql.web': 1.3.3(graphql@17.0.2)
+      '@0no-co/graphql.web': 1.3.4(graphql@17.0.2)
       wonka: 6.3.6
     transitivePeerDependencies:
       - graphql
