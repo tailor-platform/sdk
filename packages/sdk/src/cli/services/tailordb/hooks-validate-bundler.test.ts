@@ -2,10 +2,10 @@ import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { findUndefinedReferences } from "#/cli/shared/free-variables";
 import { db } from "#/configure/services/tailordb/schema";
 import { getPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import {
-  findUndefinedReferences,
   collectSourceBindings,
   resolveNeededBindings,
   buildMinimalEntryFromResolved,
@@ -233,41 +233,6 @@ describe("precompileTailorDBTypeScripts", () => {
     }
 
     expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toContain("module.exports.main");
-  });
-});
-
-describe("findUndefinedReferences", () => {
-  test.each<[name: string, fnSource: string, expected: string[]]>([
-    ["returns empty set for self-contained function", "({ value }) => value.length > 5", []],
-    ["detects a single free variable", "({ value }) => value.length < MAX_LENGTH", ["MAX_LENGTH"]],
-    [
-      "detects multiple free variables",
-      "({ data }) => formatAddress(data, PREFIX)",
-      ["formatAddress", "PREFIX"],
-    ],
-    [
-      "does not treat destructured parameters as free variables",
-      "({ value, data, user }) => value + data.name + user.id",
-      [],
-    ],
-    [
-      "does not treat local variables as free variables",
-      "({ value }) => { const x = 1; return value + x; }",
-      [],
-    ],
-    [
-      "detects free variables in function body with local variables",
-      "({ value }) => { const x = helper(value); return x + OFFSET; }",
-      ["helper", "OFFSET"],
-    ],
-    [
-      "handles regular function syntax",
-      "function({ data }) { return compute(data); }",
-      ["compute"],
-    ],
-  ])("%s", (_name, fnSource, expected) => {
-    const vars = extractFreeVariables(fnSource);
-    expect(vars).toEqual(new Set(expected));
   });
 });
 

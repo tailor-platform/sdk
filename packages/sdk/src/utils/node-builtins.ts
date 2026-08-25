@@ -1,4 +1,5 @@
 import { isBuiltin } from "node:module";
+import { NODE_ONLY_GLOBALS } from "#/utils/es-builtins";
 
 const SUGGESTIONS: Record<string, string> = {
   crypto: "Use the Web Crypto API (globalThis.crypto) instead.",
@@ -31,4 +32,31 @@ export function getNodeBuiltinMessage(specifier: string): string {
 
 function normalizeNodeBuiltinSpecifier(specifier: string): string {
   return specifier.startsWith("node:") ? specifier.slice(5) : specifier;
+}
+
+// Friendly suggestions for the most common members of NODE_ONLY_GLOBALS. A
+// name in NODE_ONLY_GLOBALS without an entry here still gets flagged, just
+// with the generic message below instead of a targeted one.
+const GLOBAL_SUGGESTIONS: Record<string, string> = {
+  process:
+    "Use `defineConfig({ env })` and the `env` argument passed into the body function instead.",
+  Buffer: "Use Uint8Array or ArrayBuffer instead.",
+  global: "Use globalThis instead.",
+  __dirname: "File system paths are not available in the Tailor Platform runtime.",
+  __filename: "File system paths are not available in the Tailor Platform runtime.",
+  require: "Use a static `import` instead.",
+  module: "CommonJS module semantics are not available in the Tailor Platform runtime.",
+  exports: "CommonJS module semantics are not available in the Tailor Platform runtime.",
+  setImmediate: "Use setTimeout instead.",
+  clearImmediate: "Use clearTimeout instead.",
+};
+
+export function isForbiddenGlobal(name: string): boolean {
+  return NODE_ONLY_GLOBALS.has(name);
+}
+
+export function getForbiddenGlobalMessage(name: string): string {
+  const suggestion = Object.hasOwn(GLOBAL_SUGGESTIONS, name) ? GLOBAL_SUGGESTIONS[name] : undefined;
+  const base = `"${name}" is not available in the Tailor Platform runtime.`;
+  return suggestion ? `${base} ${suggestion}` : base;
 }

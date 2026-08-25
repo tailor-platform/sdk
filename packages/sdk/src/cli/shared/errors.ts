@@ -92,7 +92,7 @@ function formatError(error: CLIError): string {
   ];
 
   if (error.details) {
-    parts.push(`\n  ${styles.dim("Details:")} ${error.details}`);
+    parts.push(`\n  ${styles.dim("Details:")} ${error.details.split("\n").join("\n  ")}`);
   }
 
   if (error.suggestion) {
