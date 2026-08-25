@@ -112,4 +112,35 @@ describe("findUndefinedReferences", () => {
     );
     expect(vars).toEqual(new Set(["OFFSET"]));
   });
+
+  test("does not treat a class method name as a reference", () => {
+    const vars = findUndefinedReferences(
+      "class Job { process(x) { return x + 1; } }\nnew Job().process(1);",
+    );
+    expect(vars).toEqual(new Set());
+  });
+
+  test("does not treat a class field name as a reference", () => {
+    const vars = findUndefinedReferences("class Job { process = 1; }\nnew Job().process;");
+    expect(vars).toEqual(new Set());
+  });
+
+  test("does not treat a class accessor name as a reference", () => {
+    const vars = findUndefinedReferences(
+      "class Job { get process() { return 1; } }\nnew Job().process;",
+    );
+    expect(vars).toEqual(new Set());
+  });
+
+  test("a parameter named after a forbidden global only shadows it within that function", () => {
+    const vars = findUndefinedReferences(
+      "function f(process) { return process.x; }\nprocess.env.FOO;",
+    );
+    expect(vars).toEqual(new Set(["process"]));
+  });
+
+  test("a parameter named after a forbidden global is not flagged within its own function", () => {
+    const vars = findUndefinedReferences("function f(process) { return process.x; }");
+    expect(vars).toEqual(new Set());
+  });
 });

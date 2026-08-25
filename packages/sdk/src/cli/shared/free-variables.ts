@@ -51,6 +51,28 @@ function isBindingPattern(param: ParamPattern): param is BindingPattern {
   return param.type !== "TSParameterProperty";
 }
 
+/**
+ * A function-scope boundary (function declaration/expression, arrow
+ * function, or the module root). Declarations resolve within the scope they
+ * are collected into; references are checked against this chain at the end,
+ * once every scope's bindings have been fully collected. Block-level
+ * scoping (`let`/`const`/`catch` shadowing within an `if`/`for`/`{}`) is not
+ * modeled — such bindings are attached to their nearest enclosing function
+ * scope, which is safe for detecting a forbidden global reachable from
+ * outside the block but does not detect one shadowed only within it.
+ */
+interface Scope {
+  bindings: Set<string>;
+  parent: Scope | null;
+}
+
+function isBoundInScope(scope: Scope, name: string): boolean {
+  for (let s: Scope | null = scope; s; s = s.parent) {
+    if (s.bindings.has(name)) return true;
+  }
+  return false;
+}
+
 const NEGATIVE_EQUALITY_OPERATORS = new Set(["!==", "!="]);
 const POSITIVE_EQUALITY_OPERATORS = new Set(["===", "=="]);
 
@@ -152,55 +174,75 @@ export function findUndefinedReferences(code: string): Set<string> {
     const details = errors.map((error) => `  - ${error.message}`).join("\n");
     throw new Error(`Failed to parse code for free-variable analysis.\nParse errors:\n${details}`);
   }
-  const references = new Set<string>();
-  const bindings = new Set<string>();
+  const references: { name: string; scope: Scope }[] = [];
+  const rootScope: Scope = { bindings: new Set(), parent: null };
+  let currentScope: Scope = rootScope;
 
   const walk = (node: Node | null | undefined): void => {
     if (!node) return;
 
     switch (node.type) {
       case "VariableDeclarator":
-        collectBindingsFromPattern(node.id, bindings);
+        collectBindingsFromPattern(node.id, currentScope.bindings);
         walk(node.init);
         return;
 
       case "ImportDeclaration":
         for (const specifier of node.specifiers) {
-          bindings.add(specifier.local.name);
+          currentScope.bindings.add(specifier.local.name);
         }
         return;
 
       case "FunctionDeclaration":
-      case "FunctionExpression":
-        if (node.id) bindings.add(node.id.name);
+      case "FunctionExpression": {
+        if (node.type === "FunctionDeclaration" && node.id) {
+          currentScope.bindings.add(node.id.name);
+        }
+        const functionScope: Scope = { bindings: new Set(), parent: currentScope };
+        if (node.type === "FunctionExpression" && node.id) {
+          functionScope.bindings.add(node.id.name);
+        }
         for (const param of node.params) {
           if (isBindingPattern(param)) {
-            collectBindingsFromPattern(param, bindings);
-            walk(param);
+            collectBindingsFromPattern(param, functionScope.bindings);
           }
         }
+        const outerScope = currentScope;
+        currentScope = functionScope;
+        for (const param of node.params) {
+          if (isBindingPattern(param)) walk(param);
+        }
         walk(node.body);
+        currentScope = outerScope;
         return;
+      }
 
-      case "ArrowFunctionExpression":
+      case "ArrowFunctionExpression": {
+        const functionScope: Scope = { bindings: new Set(), parent: currentScope };
         for (const param of node.params) {
           if (isBindingPattern(param)) {
-            collectBindingsFromPattern(param, bindings);
-            walk(param);
+            collectBindingsFromPattern(param, functionScope.bindings);
           }
         }
+        const outerScope = currentScope;
+        currentScope = functionScope;
+        for (const param of node.params) {
+          if (isBindingPattern(param)) walk(param);
+        }
         walk(node.body);
+        currentScope = outerScope;
         return;
+      }
 
       case "ClassDeclaration":
       case "ClassExpression":
-        if (node.id) bindings.add(node.id.name);
+        if (node.id) currentScope.bindings.add(node.id.name);
         walk(node.superClass);
         walk(node.body);
         return;
 
       case "CatchClause":
-        if (node.param) collectBindingsFromPattern(node.param, bindings);
+        if (node.param) collectBindingsFromPattern(node.param, currentScope.bindings);
         walk(node.body);
         return;
 
@@ -231,12 +273,23 @@ export function findUndefinedReferences(code: string): Set<string> {
         walk(node.value);
         return;
 
+      case "MethodDefinition":
+      case "TSAbstractMethodDefinition":
+      case "PropertyDefinition":
+      case "TSAbstractPropertyDefinition":
+      case "AccessorProperty":
+      case "TSAbstractAccessorProperty":
+        for (const decorator of node.decorators) walk(decorator.expression);
+        if (node.computed) walk(node.key);
+        walk(node.value);
+        return;
+
       case "LabeledStatement":
         walk(node.body);
         return;
 
       case "Identifier":
-        references.add(node.name);
+        references.push({ name: node.name, scope: currentScope });
         return;
 
       default:
@@ -257,11 +310,11 @@ export function findUndefinedReferences(code: string): Set<string> {
 
   walk(program);
 
-  // Free variables = references - bindings - builtins
+  // Free variables = references not bound in their own or any enclosing scope, minus builtins
   const freeVars = new Set<string>();
-  for (const ref of references) {
-    if (!bindings.has(ref) && !ES_BUILTINS.has(ref)) {
-      freeVars.add(ref);
+  for (const { name, scope } of references) {
+    if (!isBoundInScope(scope, name) && !ES_BUILTINS.has(name)) {
+      freeVars.add(name);
     }
   }
   return freeVars;
