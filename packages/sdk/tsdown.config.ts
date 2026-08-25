@@ -3,20 +3,9 @@ import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
-import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
 function copyToOutDir(outDir: string, source: string, dest: string): void {
   cpSync(path.resolve(source), path.join(outDir, dest));
-}
-
-function yamlText() {
-  return {
-    name: "yaml-text",
-    load(id: string) {
-      const result = loadYamlText(id);
-      return result ? { code: result } : undefined;
-    },
-  };
 }
 
 // Annotate as TsdownPluginOption[] to work around a tsgo TS2321 caused by
@@ -24,7 +13,6 @@ function yamlText() {
 // rc.17 from tsdown's pin, packages/sdk rc.18 from our direct dep). tsc
 // handles this fine; tsgo's recursive Plugin comparison gets stuck.
 const jsPlugins: TsdownPluginOption[] = [
-  yamlText(),
   Sonda({
     open: false,
     format: "json",

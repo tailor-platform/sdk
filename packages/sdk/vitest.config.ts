@@ -1,7 +1,6 @@
 import { globSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { defineConfig } from "vitest/config";
-import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
 type PackageExport = {
   import?: string;
@@ -92,7 +91,6 @@ const { isolated: isolatedUnitTests, shared: sharedUnitTests } = (globalCache.__
   classifyUnitTests());
 
 export default defineConfig({
-  plugins: [{ name: "yaml-text", load: loadYamlText }],
   resolve: {
     alias: [
       // Keep package self-imports on the source tree so V8 coverage does not
