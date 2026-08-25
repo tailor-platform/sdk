@@ -125,7 +125,9 @@ describe("normalizeIdPActionPermission", () => {
       });
       expect(result.conditions[0]![2]).toBe(true);
     });
+  });
 
+  describe("Operand guards", () => {
     test("passes through an array carrying a user property unchanged", () => {
       const operand = ["ADMIN", "MANAGER"];
       (operand as unknown as { user: string }).user = "role";
