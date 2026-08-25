@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/tag-guard@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           target-branch: "__BRANCH__"
   # __TAG_GUARD_JOB_END__
@@ -45,15 +45,15 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/setup@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/install@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/generate-check@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -63,19 +63,19 @@ jobs:
         # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/drift-check@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/migration-drift-check@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       # __MIGRATION_DRIFT_CHECK_END__
       - id: tailor-plan
-        uses: tailor-platform/actions/plan@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/plan@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -99,15 +99,15 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/setup@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/install@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/deploy@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -137,7 +137,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@33ae978702edd2de673419e84b66065e7a364dab # v2.3.0
+        uses: tailor-platform/actions/notify@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
         with:
           provider: slack
           status: ${{ job.status }}
