@@ -79,7 +79,7 @@ jobs:
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish to pkg.pr.new
-        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --no-compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/eslint-plugin-sdk" "packages/create-sdk" "packages/sdk-plugin-seed" "packages/sdk-plugin-tailordb-erd" # zizmor: ignore[use-trusted-publishing]
+        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --no-compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/eslint-plugin-sdk" "packages/create-sdk" "packages/sdk-plugin-seed" "packages/sdk-plugin-setup" "packages/sdk-plugin-tailordb-erd" # zizmor: ignore[use-trusted-publishing]
 
   init-smoke:
     needs: [publish]
