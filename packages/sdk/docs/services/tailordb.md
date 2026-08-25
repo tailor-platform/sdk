@@ -70,7 +70,7 @@ db.table("User", "User in the system", {
 | [`db.decimal()`](#decimal-fields) | Decimal  | string         |
 | `db.bool()`                       | Boolean  | boolean        |
 | `db.date()`                       | Date     | Date \| string |
-| `db.datetime()`                   | DateTime | string \| Date |
+| `db.datetime()`                   | DateTime | Date \| string |
 | `db.time()`                       | Time     | string         |
 | `db.uuid()`                       | UUID     | string         |
 | [`db.enum()`](#enum-fields)       | Enum     | string         |
