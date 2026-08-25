@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Share the set of `ColumnType`-shaped column aliases between the Kysely type plugin and the migration type generator, so both stay in agreement on which array types need `ArrayColumnType`. Generated types are unchanged.
+Keep the generated Kysely table types and migration types in agreement on which array columns need `ArrayColumnType`, so a future column type cannot pick up an array form that Kysely can read through in one and not the other.
