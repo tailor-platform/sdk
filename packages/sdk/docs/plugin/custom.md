@@ -585,7 +585,7 @@ a declaration merge for the `PluginFieldExtensions` interface, keyed by the same
 
 ```typescript
 // your-plugin/types.d.ts (shipped with your plugin package)
-export {};
+import type { TailorDBField } from "@tailor-platform/sdk";
 
 declare module "@tailor-platform/sdk" {
   interface PluginConfigs<Fields extends string> {
@@ -632,6 +632,8 @@ To keep the declared type and the runtime implementation in sync, give `Plugin`'
 type parameter the same shape and use it inside `onTableLoaded`:
 
 ```typescript
+import { db, type Plugin, type TailorDBField } from "@tailor-platform/sdk";
+
 const lifecyclePlugin: Plugin<
   LifecycleTableConfig,
   LifecyclePluginConfig,
