@@ -294,7 +294,7 @@ export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorWithFile
   | PluginGeneratedExecutorLegacy;
 
-interface PluginExtends<FieldExtension = Record<string, TailorAnyDBField>> {
+interface PluginExtends<FieldExtension extends Record<string, TailorAnyDBField>> {
   fields?: FieldExtension;
 }
 
@@ -305,7 +305,7 @@ export interface PluginOutput {
 }
 
 export interface TablePluginOutput<
-  FieldExtension = Record<string, TailorAnyDBField>,
+  FieldExtension extends Record<string, TailorAnyDBField> = Record<string, TailorAnyDBField>,
 > extends PluginOutput {
   extends?: PluginExtends<FieldExtension>;
 }
@@ -321,7 +321,7 @@ export type NamespacePluginOutput = PluginOutput;
 export interface Plugin<
   TableConfig = unknown,
   PluginConfig = unknown,
-  FieldExtension = Record<string, TailorAnyDBField>,
+  FieldExtension extends Record<string, TailorAnyDBField> = Record<string, TailorAnyDBField>,
 > {
   readonly id: string;
   readonly description: string;
