@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.2.4
+
+### Patch Changes
+
+- [#2135](https://github.com/tailor-platform/sdk/pull/2135) [`5b7b676`](https://github.com/tailor-platform/sdk/commit/5b7b676740350dfe35ae479aa73da1f67c4d4f2f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.9
+
+- [#2144](https://github.com/tailor-platform/sdk/pull/2144) [`92db44d`](https://github.com/tailor-platform/sdk/commit/92db44def9056206f3a66459d3af0446e0935738) Thanks [@dqn](https://github.com/dqn)! - Export the CLI foundation (`logger`, `styles`, `defineAppCommand`, `createCommonArgs`, the shared argument shapes, and the `arg`/`defineCommand`/`runCommand`/`runMain` command toolkit) from `@tailor-platform/sdk/cli`, and move the CLI plugins onto it. Plugins previously bundled their own copy of the logger, so `--json` and `--verbose` set by a plugin never reached the SDK code paths it calls; both flags now feed one logger state, and `--verbose` also enables `logger.debug` output.
+- Updated dependencies [[`1dc8b53`](https://github.com/tailor-platform/sdk/commit/1dc8b53ec9c34d51168f8508842c33f4c3cce64a), [`f576eb4`](https://github.com/tailor-platform/sdk/commit/f576eb414d119c014fc40671cff9472488abe506), [`189b993`](https://github.com/tailor-platform/sdk/commit/189b993d261a666a46ef2021b21a5f88248e4003), [`25814af`](https://github.com/tailor-platform/sdk/commit/25814af358d831d969b9f79eca9d34052dc023ad), [`6fba096`](https://github.com/tailor-platform/sdk/commit/6fba09676fc20e08e3325c26c0e72dc9ed4fd8f6), [`361afa5`](https://github.com/tailor-platform/sdk/commit/361afa5a319ba08c0d0104592dc3d3cc7ef72829), [`2504afc`](https://github.com/tailor-platform/sdk/commit/2504afc7182a69458a8b2afa2c4ac8f0a7abff33), [`5b7b676`](https://github.com/tailor-platform/sdk/commit/5b7b676740350dfe35ae479aa73da1f67c4d4f2f), [`1aca9f2`](https://github.com/tailor-platform/sdk/commit/1aca9f283b19f6ca392c8f53d725d7375e580dc4), [`92db44d`](https://github.com/tailor-platform/sdk/commit/92db44def9056206f3a66459d3af0446e0935738), [`310b098`](https://github.com/tailor-platform/sdk/commit/310b098985c5433714f95ee049550d3ac92cafe4)]:
+  - @tailor-platform/sdk@2.6.0
+
 ## 0.2.3
 
 ### Patch Changes

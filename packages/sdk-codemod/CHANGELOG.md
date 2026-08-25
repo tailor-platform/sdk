@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.0
+
+### Minor Changes
+
+- [#2136](https://github.com/tailor-platform/sdk/pull/2136) [`6fba096`](https://github.com/tailor-platform/sdk/commit/6fba09676fc20e08e3325c26c0e72dc9ed4fd8f6) Thanks [@toiroakr](https://github.com/toiroakr)! - `.relation()`'s `toward.type` option is renamed to `toward.table`, since it names a target table rather than a TypeScript/GraphQL type — matching the `db.type()` → `db.table()` rename. The old spelling keeps working as a deprecated alias until v3; `tailor upgrade` offers the `v3/relation-toward-table` codemod to rewrite `toward: { type: ... }` to `toward: { table: ... }` across TypeScript/JavaScript sources. The relation's own `type` (its cardinality, e.g. `"n-1"`) is unchanged.
+
+### Patch Changes
+
+- [#2135](https://github.com/tailor-platform/sdk/pull/2135) [`5b7b676`](https://github.com/tailor-platform/sdk/commit/5b7b676740350dfe35ae479aa73da1f67c4d4f2f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.9
+
 ## 0.7.0
 
 ### Minor Changes
