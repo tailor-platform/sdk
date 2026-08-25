@@ -42,6 +42,7 @@ export { defineConfig, definePlugins } from "#/configure/config/index";
 export type {
   Plugin,
   PluginConfigs,
+  PluginFieldExtensions,
   PluginOutput,
   TablePluginOutput,
   NamespacePluginOutput,

@@ -30,4 +30,15 @@ export const PluginConfigSchema = z
         "importPath is required when plugin has definition-time hooks (onTableLoaded/onNamespaceLoaded)",
     },
   )
-  .transform((plugin) => plugin as Plugin);
+  .transform(
+    (plugin) =>
+      plugin as Plugin<
+        unknown,
+        unknown,
+        // zinfer emits an unqualified, import-less reference for a named type
+        // import used here, so this stays an inline import() type query so the
+        // generated src/types/plugin-config.generated.ts resolves correctly.
+        // oxlint-disable-next-line consistent-type-imports
+        Record<string, import("#/configure/services/tailordb/types").TailorAnyDBField>
+      >,
+  );
