@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
-import { serializeError } from "@tailor-platform/sdk/cli";
-import { commonArgs } from "@tailor-platform/shared/args";
-import { logger } from "@tailor-platform/shared/logger";
+import {
+  serializeError,
+  createCommonArgs,
+  logger,
+  defineCommand,
+  runMain,
+} from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
-import { defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";
 import { seedFillCommand } from "./fill";
@@ -38,7 +41,7 @@ const mainCommand = defineCommand({
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   // -v matches the generated seed runner this plugin replaces; strip unknown keys
-  globalArgs: z.object(commonArgs({ verboseAlias: "v" })),
+  globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
   displayErrors: false,
   cleanup: ({ error }) => {
     if (!error) return;

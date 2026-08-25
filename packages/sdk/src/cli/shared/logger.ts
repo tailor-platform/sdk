@@ -94,6 +94,7 @@ export interface OutOptions {
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
 let _jsonMode = false;
+let _verbose = false;
 
 // Type icons for log output
 const TYPE_ICONS: Record<string, string> = {
@@ -167,12 +168,25 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   process.stderr.write(renderFor(process.stderr, output));
 }
 
+/**
+ * The CLI logger. Diagnostics go to stderr; `out()` writes primary output to
+ * stdout as a table, or as JSON when `jsonMode` is on. `--json` and
+ * `--verbose` feed the `jsonMode` / `verbose` state, which CLI plugins share
+ * with the SDK code paths they call.
+ */
 export const logger = {
   get jsonMode(): boolean {
     return _jsonMode;
   },
   set jsonMode(value: boolean) {
     _jsonMode = value;
+  },
+
+  get verbose(): boolean {
+    return _verbose;
+  },
+  set verbose(value: boolean) {
+    _verbose = value;
   },
 
   info(message: string, opts?: LogOptions): void {
@@ -200,7 +214,7 @@ export const logger = {
   },
 
   debug(message: string): void {
-    if (parseBoolean(process.env.DEBUG) === true) {
+    if (_verbose || parseBoolean(process.env.DEBUG) === true) {
       writeLog("log", styles.dim(message), { mode: "plain" });
     }
   },
