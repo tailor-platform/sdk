@@ -1295,7 +1295,15 @@ function createTailorDBType<
     pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
       const result = {} as Record<K, TailorAnyDBField>;
       for (const key of keys) {
-        const field = this.fields[key] as TailorAnyDBField;
+        const field = this.fields[key] as TailorAnyDBField | undefined;
+        if (!field) {
+          // A plugin-injected field is only added to `fields` after `tailor
+          // generate` runs — see the "Injecting fields into the attached
+          // table's type" section of the plugin docs.
+          throw new Error(
+            `pickFields(): field "${String(key)}" does not exist on this table yet. If it comes from a plugin's .plugin() call, it is only added to the table after \`tailor generate\` runs.`,
+          );
+        }
         if (options) {
           result[key] = field.clone(options);
         } else {

@@ -624,9 +624,10 @@ with an existing field, or with a field injected by another plugin attached in t
 `.plugin()` call, is a type error at the call site.
 
 This only affects the table's static type. The corresponding field exists on the table's
-generated schema only after `tailor generate` actually applies `extends.fields` — reading the
-field off the table object beforehand (for example inside `pickFields()` or `omitFields()`) does
-not see it.
+generated schema, and on the table object's own `fields`, only after `tailor generate` actually
+applies `extends.fields`. Before that, reading an injected field directly off the table
+(`table.fields.status`) returns `undefined`, and `pickFields(["status"])` throws — call these only
+with the table's originally declared fields, not ones a plugin injects.
 
 To keep the declared type and the runtime implementation in sync, give `Plugin`'s optional third
 type parameter the same shape and use it inside `onTableLoaded`:

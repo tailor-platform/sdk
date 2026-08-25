@@ -2214,6 +2214,16 @@ describe("TailorDBField clone tests", () => {
     expectTypeOf<output<(typeof picked)["profile"]>>().toEqualTypeOf<{ name: string }[] | null>();
   });
 
+  test("pickFields throws a clear error for a field that doesn't exist on the table yet", () => {
+    const table = db.table("Order", { name: db.string() });
+
+    expect(() =>
+      // Simulates a field a plugin injects into the table's static type via
+      // PluginFieldExtensions — it isn't in `fields` until `tailor generate` runs.
+      table.pickFields(["status" as never]),
+    ).toThrow('pickFields(): field "status" does not exist on this table yet.');
+  });
+
   test("clones unique modifier correctly", () => {
     const original = db.string().unique();
     const cloned = original.clone();
