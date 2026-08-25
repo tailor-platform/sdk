@@ -133,7 +133,7 @@ describe("db-types-generator", () => {
           price: { type: "float", required: true },
           discount: { type: "number", required: false },
         },
-        expectedContains: ["quantity: number;", "price: number;", "discount: number | null;"],
+        expectedContains: ["quantity: number;", "price: number;", "discount: string | null;"],
       },
       {
         testName: "generates types with boolean fields",

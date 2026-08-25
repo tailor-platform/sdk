@@ -363,9 +363,6 @@ function mapToTsType(fieldType: string): {
   type: string;
   usedTimestamp: boolean;
 } {
-  if (fieldType === "number") {
-    return { type: "number", usedTimestamp: false };
-  }
   if (fieldType === "enum" || fieldType === "nested") {
     return { type: "string", usedTimestamp: false };
   }
