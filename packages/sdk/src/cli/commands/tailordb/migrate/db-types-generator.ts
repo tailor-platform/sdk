@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs/promises";
 import { assertDefined } from "#/utils/assert";
-import { mapFieldTypeToColumnType } from "#/utils/field-column-type";
+import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import {
   getMigrationFilePath,
   type SchemaSnapshot,
@@ -487,14 +487,15 @@ function generateFieldType(
   }
 
   // Apply array modifier. Kysely only unwraps a ColumnType at the top level of a
-  // table property, so a timestamp array wraps the Timestamp alias in
+  // table property, so an array of a ColumnType-shaped alias wraps the alias in
   // ArrayColumnType instead of nesting it.
   let type = baseType;
   if (config.array) {
-    if (baseType === "Timestamp") {
+    if (COLUMN_TYPE_ALIASES.has(baseType)) {
+      const arrayType = `ArrayColumnType<${baseType}>`;
       return {
-        type: config.required ? "ArrayColumnType<Timestamp>" : "ArrayColumnType<Timestamp> | null",
-        usedTimestamp: true,
+        type: config.required ? arrayType : `${arrayType} | null`,
+        usedTimestamp,
         usedColumnType: false,
         usedArrayColumnType: true,
       };

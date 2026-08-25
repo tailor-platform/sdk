@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { mapFieldTypeToColumnType } from "./field-column-type";
+import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "./field-column-type";
 
 describe("mapFieldTypeToColumnType", () => {
   test.each([
@@ -20,5 +20,11 @@ describe("mapFieldTypeToColumnType", () => {
 
   test.each(["enum", "nested"])("rejects %s, which carries its own shape", (fieldType) => {
     expect(() => mapFieldTypeToColumnType(fieldType)).toThrow(/resolve it before mapping/);
+  });
+});
+
+describe("COLUMN_TYPE_ALIASES", () => {
+  test("covers every column type whose alias expands to a ColumnType", () => {
+    expect([...COLUMN_TYPE_ALIASES]).toEqual(["Timestamp"]);
   });
 });
