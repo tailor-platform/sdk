@@ -11,6 +11,8 @@ describe("isForbiddenGlobal", () => {
     expect(isForbiddenGlobal("require")).toBe(true);
     expect(isForbiddenGlobal("module")).toBe(true);
     expect(isForbiddenGlobal("exports")).toBe(true);
+    expect(isForbiddenGlobal("setImmediate")).toBe(true);
+    expect(isForbiddenGlobal("clearImmediate")).toBe(true);
   });
 
   test("does not flag Web Standard globals", () => {
@@ -44,6 +46,8 @@ describe("getForbiddenGlobalMessage", () => {
   test("points to Web Standard alternatives", () => {
     expect(getForbiddenGlobalMessage("Buffer")).toContain("Uint8Array");
     expect(getForbiddenGlobalMessage("global")).toContain("globalThis");
+    expect(getForbiddenGlobalMessage("setImmediate")).toContain("setTimeout");
+    expect(getForbiddenGlobalMessage("clearImmediate")).toContain("clearTimeout");
   });
 
   test("returns a plain message for a name with no registered suggestion", () => {

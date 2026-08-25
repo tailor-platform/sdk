@@ -45,6 +45,8 @@ const GLOBAL_SUGGESTIONS: Record<string, string> = {
   require: "Use a static `import` instead.",
   module: "CommonJS module semantics are not available in the Tailor Platform runtime.",
   exports: "CommonJS module semantics are not available in the Tailor Platform runtime.",
+  setImmediate: "Use setTimeout instead.",
+  clearImmediate: "Use clearTimeout instead.",
 };
 
 export function isForbiddenGlobal(name: string): boolean {
