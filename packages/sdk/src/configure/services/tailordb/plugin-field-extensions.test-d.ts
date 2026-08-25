@@ -11,6 +11,7 @@ declare module "@tailor-platform/sdk" {
     "test/status": { values: readonly string[] };
     "test/status2": { values: readonly string[] };
     "test/soft-delete": Record<string, never>;
+    "test/bad-shape": Record<string, never>;
   }
   interface PluginFieldExtensions<Fields extends string, Config> {
     "test/status": Config extends { values: infer V extends readonly string[] }
@@ -19,6 +20,9 @@ declare module "@tailor-platform/sdk" {
     "test/status2": Config extends { values: infer V extends readonly string[] }
       ? { status: TailorDBField<{ type: "enum"; array: false }, V[number]> }
       : never;
+    // Deliberately not a Record<string, TailorAnyDBField>, to test that
+    // .plugin() rejects a malformed PluginFieldExtensions entry.
+    "test/bad-shape": string;
   }
 }
 
@@ -87,5 +91,11 @@ describe(".plugin() field injection", () => {
       id: string;
       name: string;
     }>();
+  });
+
+  test("a malformed PluginFieldExtensions entry (not a field record) is a type error", () => {
+    const table = db.table("Order", { name: db.string() });
+    // @ts-expect-error "test/bad-shape"'s PluginFieldExtensions entry is `string`, not a field record
+    table.plugin({ "test/bad-shape": {} });
   });
 });

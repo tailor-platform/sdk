@@ -224,6 +224,23 @@ type PluginFieldExtensionsUnion<
   [Id in keyof Config & string]: PluginFieldExtensionFor<Fields, Id, Config[Id]>;
 }[keyof Config & string];
 type AllExtensionKeys<Ext> = Ext extends unknown ? keyof Ext : never;
+// True when plugin `Id` has a PluginFieldExtensions entry whose type does not
+// extend Record<string, TailorAnyDBField> — e.g. a plugin author registered
+// a non-record shape by mistake. Checked ahead of PluginFieldConflict, since
+// `keyof` on a non-record shape (e.g. `keyof string`) would otherwise produce
+// nonsense candidate keys for the collision check.
+type PluginFieldExtensionShapeError<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+  Id extends keyof Config & string,
+> = Id extends keyof PluginFieldExtensions<keyof Fields & string, Config[Id]>
+  ? PluginFieldExtensions<keyof Fields & string, Config[Id]>[Id] extends Record<
+      string,
+      TailorAnyDBField
+    >
+    ? false
+    : true
+  : false;
 // True when the fields plugin `Id` would inject collide with an existing
 // field, or with a field injected by another plugin id attached in the same
 // .plugin() call.
@@ -261,9 +278,11 @@ type PluginConfigGuard<
     ? unknown
     : {
         [K in keyof Config]: K extends keyof PluginConfigs<keyof Fields & string>
-          ? PluginFieldConflict<Fields, Config, K & string> extends true
-            ? TypeLevelError<"plugin field extension conflicts with an existing field or another plugin's field">
-            : PluginConfigs<keyof Fields & string>[K]
+          ? PluginFieldExtensionShapeError<Fields, Config, K & string> extends true
+            ? TypeLevelError<"PluginFieldExtensions entry must be a Record<string, TailorAnyDBField>">
+            : PluginFieldConflict<Fields, Config, K & string> extends true
+              ? TypeLevelError<"plugin field extension conflicts with an existing field or another plugin's field">
+              : PluginConfigs<keyof Fields & string>[K]
           : TypeLevelError<"unknown plugin id">;
       };
 type DBFieldDescriptionFn<
