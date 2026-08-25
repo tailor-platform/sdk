@@ -82,12 +82,21 @@ function readJsonConfig(filePath: string): object | null {
   const entry = getPathEntry(filePath);
   if (entry === null || !entry.isFile()) return null;
   let parsed: unknown;
+  let source: string;
   try {
-    parsed = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    source = fs.readFileSync(filePath, "utf-8");
+    parsed = JSON.parse(source);
   } catch {
     return null;
   }
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : null;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  // Renovate rejects duplicate keys in every config format except JSON5.
+  try {
+    if (hasDuplicateJsonProperties(JsonParser.parse(source, JsonObjectNode))) return null;
+  } catch {
+    return null;
+  }
+  return parsed;
 }
 
 function classifyConfig(location: string, filePath: string, config: object | null): ExistingConfig {

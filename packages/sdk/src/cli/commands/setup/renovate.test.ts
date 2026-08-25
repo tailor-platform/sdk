@@ -206,6 +206,45 @@ describe("setupRenovate", () => {
     expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
   });
 
+  test.each([RENOVATE_CONFIG_FILE, ".renovaterc", ".renovaterc.json"])(
+    "rejects duplicate keys in %s",
+    async (file) => {
+      const configPath = path.join(testDir, file);
+      const existing = '{\n  "extends": [],\n  "extends": ["config:recommended"]\n}\n';
+      fs.writeFileSync(configPath, existing);
+
+      await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+        /could not parse it as JSON/,
+      );
+
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+    },
+  );
+
+  test("rejects duplicate keys nested in a JSON config", async () => {
+    const configPath = path.join(testDir, RENOVATE_CONFIG_FILE);
+    const existing =
+      '{\n  "extends": [],\n  "packageRules": [{ "matchPackageNames": [], "matchPackageNames": [] }]\n}\n';
+    fs.writeFileSync(configPath, existing);
+
+    await expect(setupRenovate({ outputDir: testDir })).rejects.toThrow(
+      /could not parse it as JSON/,
+    );
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(existing);
+  });
+
+  test("allows duplicate keys in a JSON5 config", async () => {
+    const configPath = path.join(testDir, "renovate.json5");
+    fs.writeFileSync(configPath, '{\n  "extends": [],\n  "extends": ["config:recommended"],\n}\n');
+
+    await setupRenovate({ outputDir: testDir });
+
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(
+      '{\n  "extends": [],\n  "extends": ["config:recommended", "github>tailor-inc/renovate-config"],\n}\n',
+    );
+  });
+
   test.each([
     "renovate.jsonc",
     "renovate.json5",
