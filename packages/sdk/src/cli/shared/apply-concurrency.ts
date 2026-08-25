@@ -1,4 +1,5 @@
 import pLimit from "p-limit";
+import { parsePositiveInt } from "./parse-positive-int";
 
 /**
  * Default cap on concurrent operator RPCs when `TAILOR_APPLY_CONCURRENCY` is
@@ -22,14 +23,7 @@ const DEFAULT_APPLY_CONCURRENCY = 16;
  * @returns Concurrency cap (always >= 1)
  */
 export function resolveApplyConcurrency(): number {
-  const envValue = process.env.TAILOR_APPLY_CONCURRENCY;
-  if (envValue !== undefined) {
-    const trimmed = envValue.trim();
-    if (trimmed !== "" && /^[1-9]\d*$/.test(trimmed)) {
-      return Number.parseInt(trimmed, 10);
-    }
-  }
-  return DEFAULT_APPLY_CONCURRENCY;
+  return parsePositiveInt(process.env.TAILOR_APPLY_CONCURRENCY) ?? DEFAULT_APPLY_CONCURRENCY;
 }
 
 /**

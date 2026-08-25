@@ -1,4 +1,15 @@
 import * as fs from "node:fs";
+import {
+  JsonArrayNode,
+  JsonParseError,
+  JsonLexer,
+  JsonObjectNode,
+  JsonParser,
+  JsonTokenType,
+  type JsonValueNode,
+  reservedIdentifiers,
+} from "@croct/json5-parser";
+import JSON5 from "json5";
 import * as path from "pathe";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { logger, styles } from "#/cli/shared/logger";
@@ -44,8 +55,22 @@ type ExistingConfig =
   | { kind: "extends-preset"; location: string }
   /** Strict JSON, so the preset can be appended without losing comments. */
   | { kind: "appendable"; location: string; filePath: string; config: object }
-  /** Not strict JSON, or not a regular file; the `extends` array is unknown. */
-  | { kind: "unreadable"; location: string };
+  /** JSONC or JSON5 represented as a lossless syntax tree. */
+  | {
+      kind: "appendable-lossless-json";
+      location: string;
+      filePath: string;
+      config: LosslessJsonConfig;
+    }
+  /** Invalid config, or not a regular file; the `extends` array is unknown. */
+  | { kind: "unreadable"; location: string; format: "JSON" | "JSONC" | "JSON5" };
+
+type LosslessJsonConfig = {
+  node: JsonObjectNode;
+  parsed: object;
+  tokenReplacements: ReadonlyMap<string, string>;
+  valueReplacements: ReadonlyMap<string, string>;
+};
 
 function extendsPreset(config: object): boolean {
   if (!("extends" in config)) return false;
@@ -56,25 +81,308 @@ function extendsPreset(config: object): boolean {
 function readJsonConfig(filePath: string): object | null {
   const entry = getPathEntry(filePath);
   if (entry === null || !entry.isFile()) return null;
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const source = fs.readFileSync(filePath, "utf-8");
+    const parsed: unknown = JSON.parse(source);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    // Renovate rejects duplicate keys in every config format except JSON5.
+    if (hasDuplicateJsonProperties(JsonParser.parse(source, JsonObjectNode))) return null;
+    return parsed;
   } catch {
     return null;
   }
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : null;
 }
 
 function classifyConfig(location: string, filePath: string, config: object | null): ExistingConfig {
-  if (config === null) return { kind: "unreadable", location };
+  if (config === null) return { kind: "unreadable", location, format: "JSON" };
   if (extendsPreset(config)) return { kind: "extends-preset", location };
   return { kind: "appendable", location, filePath, config };
+}
+
+const INSIGNIFICANT_JSON5_TOKENS = new Set([
+  JsonTokenType.WHITESPACE,
+  JsonTokenType.NEWLINE,
+  JsonTokenType.LINE_COMMENT,
+  JsonTokenType.BLOCK_COMMENT,
+]);
+
+const UNSUPPORTED_JSON5_PROPERTY_NAMES = new Set([...reservedIdentifiers, "Infinity", "NaN"]);
+const JSON5_IDENTIFIER_CONTINUE_CHARACTER = /^[$_\u200C\u200D\p{ID_Continue}]$/u;
+const JSON5_IDENTIFIER_ESCAPE = /^\\u(?<code>[\dA-Fa-f]{4})/;
+
+function findNextSignificantToken(tokens: ReturnType<typeof JsonLexer.tokenize>, index: number) {
+  let nextIndex = index + 1;
+  let token = tokens[nextIndex];
+  while (token !== undefined && INSIGNIFICANT_JSON5_TOKENS.has(token.type)) {
+    nextIndex++;
+    token = tokens[nextIndex];
+  }
+  return token;
+}
+
+function toConfigObject(value: unknown): object {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) return value;
+  throw new Error("Expected a JSON object.");
+}
+
+function parseJsonc(source: string): object {
+  const tokens = JsonLexer.tokenize(source);
+  const json = tokens
+    .map((token, index) => {
+      if (token.type === JsonTokenType.LINE_COMMENT || token.type === JsonTokenType.BLOCK_COMMENT) {
+        return " ";
+      }
+      if (token.type === JsonTokenType.COMMA) {
+        const next = findNextSignificantToken(tokens, index);
+        if (
+          next?.type === JsonTokenType.BRACE_RIGHT ||
+          next?.type === JsonTokenType.BRACKET_RIGHT
+        ) {
+          return "";
+        }
+      }
+      return token.value;
+    })
+    .join("");
+  const parsed: unknown = JSON.parse(json);
+  return toConfigObject(parsed);
+}
+
+function hasDuplicateJsonProperties(node: JsonValueNode): boolean {
+  if (node instanceof JsonArrayNode) {
+    return node.elements.some(hasDuplicateJsonProperties);
+  }
+  if (!(node instanceof JsonObjectNode)) return false;
+
+  const names = new Set<string>();
+  for (const property of node.properties) {
+    const name = property.key.toJSON();
+    if (names.has(name) || hasDuplicateJsonProperties(property.value)) return true;
+    names.add(name);
+  }
+  return false;
+}
+
+function toStringIndex(source: string, codePointIndex: number): number {
+  let stringIndex = 0;
+  for (let index = 0; index < codePointIndex && stringIndex < source.length; index++) {
+    const codePoint = source.codePointAt(stringIndex);
+    if (codePoint === undefined) break;
+    stringIndex += codePoint > 0xffff ? 2 : 1;
+  }
+  return stringIndex;
+}
+
+function normalizeEscapedJson5Identifiers(
+  source: string,
+  reservedValues: ReadonlySet<string>,
+): {
+  source: string;
+  tokenReplacements: ReadonlyMap<string, string>;
+  valueReplacements: ReadonlyMap<string, string>;
+} {
+  let remaining = source;
+  let normalized = "";
+  const tokenReplacements = new Map<string, string>();
+  const valueReplacements = new Map<string, string>();
+  let identifierIndex = 0;
+
+  while (remaining.length > 0) {
+    try {
+      JsonLexer.tokenize(remaining);
+      normalized += remaining;
+      break;
+    } catch (error) {
+      if (!(error instanceof JsonParseError)) throw error;
+      const escapeIndex = toStringIndex(remaining, error.location.start.index);
+      if (!JSON5_IDENTIFIER_ESCAPE.test(remaining.slice(escapeIndex))) throw error;
+
+      let start = escapeIndex;
+      while (start > 0) {
+        const previous = Array.from(remaining.slice(0, start)).at(-1);
+        if (previous === undefined || !JSON5_IDENTIFIER_CONTINUE_CHARACTER.test(previous)) break;
+        start -= previous.length;
+      }
+
+      let end = escapeIndex;
+      while (end < remaining.length) {
+        const escape = JSON5_IDENTIFIER_ESCAPE.exec(remaining.slice(end));
+        if (escape !== null) {
+          end += escape[0].length;
+          continue;
+        }
+        const codePoint = remaining.codePointAt(end);
+        if (codePoint === undefined) break;
+        const character = String.fromCodePoint(codePoint);
+        if (!JSON5_IDENTIFIER_CONTINUE_CHARACTER.test(character)) break;
+        end += character.length;
+      }
+
+      const identifier = remaining.slice(start, end);
+      const decoded = identifier.replace(/\\u([\dA-Fa-f]{4})/g, (_, code: string) =>
+        String.fromCharCode(Number.parseInt(code, 16)),
+      );
+      let placeholder = `$tailor_identifier_${identifierIndex++}`;
+      while (
+        source.includes(placeholder) ||
+        tokenReplacements.has(placeholder) ||
+        reservedValues.has(placeholder)
+      ) {
+        placeholder += "_";
+      }
+      normalized += `${remaining.slice(0, start)}${placeholder}`;
+      remaining = remaining.slice(end);
+      tokenReplacements.set(placeholder, identifier);
+      valueReplacements.set(placeholder, decoded);
+    }
+  }
+
+  return { source: normalized, tokenReplacements, valueReplacements };
+}
+
+function normalizeJson5(source: string): {
+  source: string;
+  tokenReplacements: ReadonlyMap<string, string>;
+  valueReplacements: ReadonlyMap<string, string>;
+} {
+  const initialIdentifiers = normalizeEscapedJson5Identifiers(source, new Set());
+  const initialTokens = JsonLexer.tokenize(initialIdentifiers.source);
+  const decodedStringValues = new Set<string>();
+  let stringIndex = 0;
+
+  for (const token of initialTokens) {
+    if (token.type !== JsonTokenType.STRING) continue;
+    const value: unknown = JSON5.parse(token.value);
+    if (typeof value === "string") decodedStringValues.add(value);
+  }
+
+  const reservedValues = new Set([
+    ...decodedStringValues,
+    ...initialIdentifiers.valueReplacements.values(),
+  ]);
+  const identifiers = normalizeEscapedJson5Identifiers(source, reservedValues);
+  const tokens = JsonLexer.tokenize(identifiers.source);
+  const tokenReplacements = new Map(identifiers.tokenReplacements);
+  const valueReplacements = new Map(identifiers.valueReplacements);
+  const placeholders = new Set(tokenReplacements.keys());
+
+  const createPlaceholder = (prefix: string): string => {
+    let placeholder = prefix;
+    while (
+      source.includes(placeholder) ||
+      placeholders.has(placeholder) ||
+      reservedValues.has(placeholder)
+    ) {
+      placeholder += "_";
+    }
+    placeholders.add(placeholder);
+    return placeholder;
+  };
+
+  const normalized = tokens.map((token, index) => {
+    if (token.type === JsonTokenType.STRING) {
+      try {
+        JsonParser.parse(token.value);
+      } catch {
+        const value: unknown = JSON5.parse(token.value);
+        if (typeof value !== "string") throw new Error("Expected a JSON5 string.");
+        const placeholder = createPlaceholder(`$tailor_string_${stringIndex++}`);
+        const quote = token.value.startsWith("'") ? "'" : '"';
+        const normalizedToken = `${quote}${placeholder}${quote}`;
+        tokenReplacements.set(normalizedToken, token.value);
+        valueReplacements.set(placeholder, value);
+        return normalizedToken;
+      }
+    }
+    if (
+      UNSUPPORTED_JSON5_PROPERTY_NAMES.has(token.value) &&
+      findNextSignificantToken(tokens, index)?.type === JsonTokenType.COLON
+    ) {
+      const placeholder = createPlaceholder(`$tailor_property_${token.value}`);
+      tokenReplacements.set(placeholder, token.value);
+      valueReplacements.set(placeholder, token.value);
+      return placeholder;
+    }
+    return token.value;
+  });
+
+  return {
+    source: normalized.join(""),
+    tokenReplacements,
+    valueReplacements,
+  };
+}
+
+function restoreJson5Tokens(
+  source: string,
+  tokenReplacements: ReadonlyMap<string, string>,
+): string {
+  if (tokenReplacements.size === 0) return source;
+  return JsonLexer.tokenize(source)
+    .map((token) => tokenReplacements.get(token.value) ?? token.value)
+    .join("");
+}
+
+function readLosslessJsonConfig(
+  filePath: string,
+  format: "JSONC" | "JSON5",
+): LosslessJsonConfig | null {
+  const entry = getPathEntry(filePath);
+  if (entry === null || !entry.isFile()) return null;
+  try {
+    const source = fs.readFileSync(filePath, "utf-8");
+    const parsed: unknown = format === "JSONC" ? parseJsonc(source) : JSON5.parse(source);
+    const normalized =
+      format === "JSON5"
+        ? normalizeJson5(source)
+        : {
+            source,
+            tokenReplacements: new Map<string, string>(),
+            valueReplacements: new Map<string, string>(),
+          };
+    const node = JsonParser.parse(normalized.source, JsonObjectNode);
+    if (format === "JSONC" && hasDuplicateJsonProperties(node)) return null;
+    return {
+      node,
+      parsed: toConfigObject(parsed),
+      tokenReplacements: normalized.tokenReplacements,
+      valueReplacements: normalized.valueReplacements,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function classifyLosslessJsonConfig(
+  location: string,
+  filePath: string,
+  format: "JSONC" | "JSON5",
+  config: LosslessJsonConfig | null,
+): ExistingConfig {
+  if (config === null) return { kind: "unreadable", location, format };
+  if (extendsPreset(config.parsed)) return { kind: "extends-preset", location };
+  return { kind: "appendable-lossless-json", location, filePath, config };
+}
+
+function getLosslessJsonFormat(location: string): "JSONC" | "JSON5" | null {
+  if (location.endsWith(".jsonc")) return "JSONC";
+  if (location.endsWith(".json5")) return "JSON5";
+  return null;
 }
 
 function findExistingConfig(outputDir: string): ExistingConfig | null {
   for (const file of RENOVATE_CONFIG_FILES) {
     const filePath = path.join(outputDir, file);
     if (!pathEntryExists(filePath)) continue;
+    const format = getLosslessJsonFormat(file);
+    if (format !== null) {
+      return classifyLosslessJsonConfig(
+        file,
+        filePath,
+        format,
+        readLosslessJsonConfig(filePath, format),
+      );
+    }
     return classifyConfig(file, filePath, readJsonConfig(filePath));
   }
 
@@ -127,6 +435,46 @@ function appendPreset(existing: Extract<ExistingConfig, { kind: "appendable" }>)
   );
 }
 
+function findRootProperty(config: LosslessJsonConfig, name: string) {
+  for (let index = config.node.properties.length - 1; index >= 0; index--) {
+    const property = config.node.properties[index];
+    if (property === undefined) continue;
+    const key = property.key.toJSON();
+    if ((config.valueReplacements.get(key) ?? key) === name) return property;
+  }
+  return undefined;
+}
+
+function appendLosslessJsonPreset(
+  existing: Extract<ExistingConfig, { kind: "appendable-lossless-json" }>,
+): void {
+  const current = "extends" in existing.config.parsed ? existing.config.parsed.extends : undefined;
+  if (current !== undefined && !Array.isArray(current)) {
+    throw new Error(
+      `Renovate config at "${existing.location}" has a non-array "extends". No files were changed. ` +
+        `Add "${RENOVATE_PRESET}" to it manually.`,
+    );
+  }
+
+  if (current === undefined) {
+    existing.config.node.set("extends", [RENOVATE_PRESET]);
+  } else {
+    const property = findRootProperty(existing.config, "extends");
+    if (!(property?.value instanceof JsonArrayNode)) {
+      throw new Error(
+        `Could not locate the "extends" array in Renovate config at "${existing.location}". ` +
+          `No files were changed.`,
+      );
+    }
+    property.value.push(RENOVATE_PRESET);
+  }
+  fs.writeFileSync(
+    existing.filePath,
+    restoreJson5Tokens(existing.config.node.toString(), existing.config.tokenReplacements),
+    "utf-8",
+  );
+}
+
 function renderRenovateConfig(): string {
   return `${JSON.stringify(
     {
@@ -153,10 +501,15 @@ export async function setupRenovate(options: SetupRenovateOptions): Promise<void
     }
     if (existingConfig.kind === "unreadable") {
       throw new Error(
-        `Found a Renovate config at "${existingConfig.location}" but could not parse it as JSON. ` +
-          `Comment-containing JSON5/JSONC configs are not supported yet. No files were changed. ` +
+        `Found a Renovate config at "${existingConfig.location}" but could not parse it as ${existingConfig.format}. ` +
+          `No files were changed. ` +
           `Check its extends array for "${RENOVATE_PRESET}" manually.`,
       );
+    }
+    if (existingConfig.kind === "appendable-lossless-json") {
+      appendLosslessJsonPreset(existingConfig);
+      logger.success(`Added the Tailor preset to ${styles.path(existingConfig.location)}`);
+      return;
     }
     appendPreset(existingConfig);
     logger.success(`Added the Tailor preset to ${styles.path(existingConfig.location)}`);

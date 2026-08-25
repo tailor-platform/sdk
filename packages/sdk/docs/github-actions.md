@@ -383,9 +383,10 @@ standard root, `.github`, `.gitlab`, and `.renovaterc` locations, including the
 deprecated `package.json` configuration. When that configuration already extends
 the preset, the command reports that Renovate is set up and changes nothing.
 
-Configuration written in JSON5 or JSONC — with comments or trailing commas —
-cannot be edited without losing those comments, so the command leaves it
-unchanged and asks you to add the preset to its `extends` array yourself.
+JSONC and JSON5 configurations are updated in place while preserving their
+comments and formatting. Configurations that Renovate itself cannot load — such
+as invalid syntax, or duplicate keys outside JSON5 — are left unchanged and
+reported for manual inspection.
 
 `renovate.json` is yours to edit — it is not tracked in `.github/tailor.lock`.
 Add your own rules freely; re-running `tailor setup deps` does not overwrite

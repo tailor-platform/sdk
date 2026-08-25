@@ -1,5 +1,13 @@
 # @tailor-platform/create-sdk
 
+## 2.6.0
+
+### Patch Changes
+
+- [#2136](https://github.com/tailor-platform/sdk/pull/2136) [`6fba096`](https://github.com/tailor-platform/sdk/commit/6fba09676fc20e08e3325c26c0e72dc9ed4fd8f6) Thanks [@toiroakr](https://github.com/toiroakr)! - Update scaffolded project templates to use `.relation()`'s `toward.table` option instead of the deprecated `toward.type`.
+
+- [#2160](https://github.com/tailor-platform/sdk/pull/2160) [`3cbfdc9`](https://github.com/tailor-platform/sdk/commit/3cbfdc99db5012f84dde6ab8f26dce8565834e97) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate value imports in newly generated projects while preserving separate type imports and loader query semantics.
+
 ## 2.5.0
 
 ### Patch Changes

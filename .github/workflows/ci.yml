@@ -19,7 +19,7 @@ jobs:
     permissions:
       contents: read # checkout the repository
     outputs:
-      lint-failed: ${{ steps.lint.outcome == 'failure' || steps.lint_vitest.outcome == 'failure' }}
+      lint-failed: ${{ steps.lint.outcome == 'failure' || steps.lint_vitest.outcome == 'failure' || steps.lint_tooling.outcome == 'failure' }}
       format-failed: ${{ steps.format.outcome == 'failure' }}
 
     steps:
@@ -49,8 +49,13 @@ jobs:
         continue-on-error: true
         run: pnpm run lint:vitest
 
+      - name: Run tooling lint
+        id: lint_tooling
+        continue-on-error: true
+        run: pnpm run lint:tooling
+
       - name: Fail if lint failed
-        if: steps.lint.outcome == 'failure' || steps.lint_vitest.outcome == 'failure'
+        if: steps.lint.outcome == 'failure' || steps.lint_vitest.outcome == 'failure' || steps.lint_tooling.outcome == 'failure'
         run: exit 1
 
       # Ensure no executable files are committed

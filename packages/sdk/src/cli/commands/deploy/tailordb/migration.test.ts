@@ -16,6 +16,7 @@ import {
   MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_LABEL_KEY,
 } from "#/cli/commands/tailordb/migrate/types";
+import { withMetadataWriteBatch } from "../label";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
@@ -657,6 +658,24 @@ describe("migration", () => {
         trn: expectedTrn,
         labels: { [MIGRATION_LABEL_KEY]: "m0001" },
       });
+    });
+
+    test("commits migration checkpoints immediately inside a resource metadata batch", async () => {
+      const setMetadataMock = vi.fn();
+      const bulkSetMetadata = vi.fn();
+      const client = Object.assign(createMetadataClient({ labels: {} }, setMetadataMock), {
+        bulkSetMetadata,
+      });
+
+      await withMetadataWriteBatch(client as never, async (batchClient) => {
+        await updateMigrationLabel(batchClient, workspaceId, namespace, 2);
+        expect(setMetadataMock).toHaveBeenCalledWith({
+          trn: expectedTrn,
+          labels: { [MIGRATION_LABEL_KEY]: "m0002" },
+        });
+      });
+
+      expect(bulkSetMetadata).not.toHaveBeenCalled();
     });
   });
 

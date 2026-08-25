@@ -196,6 +196,29 @@ describe("normalizeActionPermission", () => {
       expect(result.conditions).toEqual([expectedCondition]);
     });
   });
+
+  describe("Operand guards", () => {
+    test("should pass through an array carrying a user property unchanged", () => {
+      const operand = ["admin", "manager"];
+      (operand as unknown as { user: string }).user = "roles";
+      const permission = {
+        conditions: [[{ user: "roles" }, "in", operand]],
+        permit: true,
+      } as Permission;
+      const result = normalizeActionPermission(permission);
+      expect(result.conditions[0]![2]).toBe(operand);
+    });
+
+    test("should reject a null operand", () => {
+      const permission = {
+        conditions: [[{ user: "role" }, "=", null]],
+        permit: true,
+      } as Permission;
+      expect(() => normalizeActionPermission(permission)).toThrow(
+        "Invalid permission operand: null",
+      );
+    });
+  });
 });
 
 describe("normalizeGqlPermission", () => {
