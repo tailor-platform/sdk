@@ -642,7 +642,7 @@ const lifecyclePlugin: Plugin<
   id: "@example/lifecycle",
   description: "Derives a status field from a transitions map",
   onTableLoaded(context) {
-    return { extends: { fields: { status: db.enum([...]) } } };
+    return { extends: { fields: { status: db.enum(["APPROVED", "REJECTED"]) } } };
   },
 };
 ```
