@@ -1,11 +1,14 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { applyDeploymentPlans, type PlannedDeployment } from "./apply-phases";
+import { writeMetadataLabels } from "./label";
 
 const mocks = vi.hoisted(() => {
   const calls: string[] = [];
+  const state: { onApplicationApply?: (client: unknown) => Promise<void> } = {};
   const marker = (value: unknown) => (value as { marker: string }).marker;
   return {
     calls,
+    state,
     applySecretManager: vi.fn(async (_client, result, phase) => {
       calls.push(`secret:${marker(result)}:${String(phase)}`);
     }),
@@ -33,8 +36,9 @@ const mocks = vi.hoisted(() => {
     applyPipeline: vi.fn(async (_client, result, phase) => {
       calls.push(`pipeline:${marker(result)}:${String(phase)}`);
     }),
-    applyApplication: vi.fn(async (_client, result, phase) => {
+    applyApplication: vi.fn(async (client, result, phase) => {
       calls.push(`application:${marker(result)}:${String(phase)}`);
+      if (phase === "create-update") await state.onApplicationApply?.(client);
     }),
     applyExecutor: vi.fn(async (_client, result, phase) => {
       calls.push(`executor:${marker(result)}:${String(phase)}`);
@@ -46,6 +50,10 @@ const mocks = vi.hoisted(() => {
       calls.push(`workflowExecutionPolicy:${marker(result)}:${String(phase)}`);
     }),
   };
+});
+
+afterEach(() => {
+  mocks.state.onApplicationApply = undefined;
 });
 
 vi.mock("./secret-manager", () => ({ applySecretManager: mocks.applySecretManager }));
@@ -167,5 +175,56 @@ describe("applyDeploymentPlans", () => {
 
     expect(mocks.calls).toEqual([]);
     expect(mocks.applySecretManager).not.toHaveBeenCalled();
+  });
+
+  test("flushes resource metadata once before dependent delete phases", async () => {
+    mocks.calls.length = 0;
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      bulkSetMetadata: vi.fn().mockImplementation(async () => {
+        mocks.calls.push("metadata:bulk");
+        return { results: [] };
+      }),
+    };
+    mocks.state.onApplicationApply = async (applyClient) => {
+      await writeMetadataLabels(applyClient as never, {
+        trn: "trn:v1:workspace:workspace-id:application:supplier",
+        labels: { "sdk-name": "supplier" },
+      });
+    };
+
+    await applyDeploymentPlans(client as never, "workspace-id", [deployment("supplier")]);
+
+    expect(client.setMetadata).not.toHaveBeenCalled();
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+    expect(mocks.calls.indexOf("metadata:bulk")).toBeGreaterThan(
+      mocks.calls.indexOf("workflow:supplier-workflow:create-update"),
+    );
+    expect(mocks.calls.indexOf("metadata:bulk")).toBeLessThan(
+      mocks.calls.indexOf("workflow:supplier-workflow:delete"),
+    );
+  });
+
+  test("does not start dependent delete phases after a bulk metadata failure", async () => {
+    mocks.calls.length = 0;
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      bulkSetMetadata: vi.fn().mockRejectedValue(new Error("bulk write failed")),
+    };
+    mocks.state.onApplicationApply = async (applyClient) => {
+      await writeMetadataLabels(applyClient as never, {
+        trn: "trn:v1:workspace:workspace-id:application:supplier",
+        labels: { "sdk-name": "supplier" },
+      });
+    };
+
+    await expect(
+      applyDeploymentPlans(client as never, "workspace-id", [deployment("supplier")]),
+    ).rejects.toThrow("bulk write failed");
+
+    expect(mocks.calls).toContain("workflow:supplier-workflow:create-update");
+    expect(mocks.calls).not.toContain("workflow:supplier-workflow:delete");
   });
 });

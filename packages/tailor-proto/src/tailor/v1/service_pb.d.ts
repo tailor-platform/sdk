@@ -20,7 +20,7 @@ import type { ListMeterAITokenUsagesRequestSchema, ListMeterAITokenUsagesRespons
 import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, CreateIdPServiceRequestSchema, CreateIdPServiceResponseSchema, DeleteIdPClientRequestSchema, DeleteIdPClientResponseSchema, DeleteIdPServiceRequestSchema, DeleteIdPServiceResponseSchema, GetIdPClientRequestSchema, GetIdPClientResponseSchema, GetIdPServiceRequestSchema, GetIdPServiceResponseSchema, ListIdPClientsRequestSchema, ListIdPClientsResponseSchema, ListIdPServicesRequestSchema, ListIdPServicesResponseSchema, UpdateIdPServiceRequestSchema, UpdateIdPServiceResponseSchema } from "./idp_pb";
 import type { AddCustomDomainRequestSchema, AddCustomDomainResponseSchema, CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetCustomDomainRequestSchema, GetCustomDomainResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListCustomDomainsRequestSchema, ListCustomDomainsResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, RemoveCustomDomainRequestSchema, RemoveCustomDomainResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
 import type { CreateWorkflowJobFunctionExecutionPolicyRequestSchema, CreateWorkflowJobFunctionExecutionPolicyResponseSchema, CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowJobFunctionExecutionPolicyRequestSchema, DeleteWorkflowJobFunctionExecutionPolicyResponseSchema, DeleteWorkflowJobFunctionRequestSchema, DeleteWorkflowJobFunctionResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionExecutionPolicyByKeyRequestSchema, GetWorkflowJobFunctionExecutionPolicyByKeyResponseSchema, GetWorkflowJobFunctionExecutionPolicyRequestSchema, GetWorkflowJobFunctionExecutionPolicyResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionExecutionPoliciesRequestSchema, ListWorkflowJobFunctionExecutionPoliciesResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, ResumeWorkflowExecutionRequestSchema, ResumeWorkflowExecutionResponseSchema, StartWorkflowRequestSchema, StartWorkflowResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionExecutionPolicyRequestSchema, UpdateWorkflowJobFunctionExecutionPolicyResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
-import type { GetMetadataRequestSchema, GetMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
+import type { BulkSetMetadataRequestSchema, BulkSetMetadataResponseSchema, GetMetadataRequestSchema, GetMetadataResponseSchema, ListMetadataRequestSchema, ListMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
 import type { CreateOTLPExporterRequestSchema, CreateOTLPExporterResponseSchema, CreateResourceAttributesConfigRequestSchema, CreateResourceAttributesConfigResponseSchema, DeleteOTLPExporterRequestSchema, DeleteOTLPExporterResponseSchema, DeleteResourceAttributesConfigRequestSchema, DeleteResourceAttributesConfigResponseSchema, GetOTLPExporterRequestSchema, GetOTLPExporterResponseSchema, GetResourceAttributesConfigRequestSchema, GetResourceAttributesConfigResponseSchema, ListOTLPExportersRequestSchema, ListOTLPExportersResponseSchema, TestOTLPExporterRequestSchema, TestOTLPExporterResponseSchema, UpdateOTLPExporterRequestSchema, UpdateOTLPExporterResponseSchema, UpdateResourceAttributesConfigRequestSchema, UpdateResourceAttributesConfigResponseSchema } from "./telemetryrouter_pb";
 
 /**
@@ -3103,7 +3103,9 @@ export declare const OperatorService: GenService<{
     output: typeof ListWorkflowsResponseSchema;
   },
   /**
-   * CreateWorkflowJobFunction creates a new workflow job function.
+   * CreateWorkflowJobFunction creates a workflow job function, or a new version
+   * of one that already exists. Callers that do not care whether the name is
+   * new can use this alone and skip UpdateWorkflowJobFunction.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
@@ -3118,7 +3120,9 @@ export declare const OperatorService: GenService<{
     output: typeof CreateWorkflowJobFunctionResponseSchema;
   },
   /**
-   * UpdateWorkflowJobFunction updates a workflow job function.
+   * UpdateWorkflowJobFunction adds a new version to an existing workflow job
+   * function. It differs from CreateWorkflowJobFunction only in requiring the
+   * name to exist.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
@@ -3179,7 +3183,9 @@ export declare const OperatorService: GenService<{
     output: typeof GetWorkflowJobFunctionByNameResponseSchema;
   },
   /**
-   * ListWorkflowJobFunctions returns workflow job functions in a given workspace.
+   * ListWorkflowJobFunctions returns workflow job functions in a given
+   * workspace, one entry per name: the latest version of each. Past versions
+   * are not enumerable through this RPC.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid
@@ -3407,6 +3413,39 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof GetMetadataRequestSchema;
     output: typeof GetMetadataResponseSchema;
+  },
+  /**
+   * BulkSetMetadata sets metadata labels for multiple resources in one
+   * workspace in a single request. The write is all-or-nothing: if any TRN
+   * fails validation or its resource cannot be found, no labels are changed.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid, a TRN format is incorrect, or the
+   *   requests reference more than one workspace
+   * - NotFound: a referenced resource does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.BulkSetMetadata
+   */
+  bulkSetMetadata: {
+    methodKind: "unary";
+    input: typeof BulkSetMetadataRequestSchema;
+    output: typeof BulkSetMetadataResponseSchema;
+  },
+  /**
+   * ListMetadata finds resources in a workspace whose labels match all of
+   * the given key-value pairs.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListMetadata
+   */
+  listMetadata: {
+    methodKind: "unary";
+    input: typeof ListMetadataRequestSchema;
+    output: typeof ListMetadataResponseSchema;
   },
   /**
    * CreateControlplaneMachineUser creates a Controlplane Machine User for organization or folder.

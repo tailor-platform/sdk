@@ -5,6 +5,7 @@ import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
 import { applyIdP, type planIdP } from "./idp";
+import { withMetadataWriteBatch } from "./label";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
@@ -65,40 +66,48 @@ export async function applyDeploymentPlans(
     await forEachDeployment((d) => preflightTailorDB(client, d.tailorDB));
   });
 
-  await withSpan("apply.createUpdateServices", async () => {
-    await forEachDeployment((d) =>
-      applySecretManager(client, d.secretManager, "create-update", d.application),
-    );
-    await forEachDeployment((d) =>
-      applyFunctionRegistry(client, workspaceId, d.functionRegistry, "create-update"),
-    );
-    await forEachDeployment((d) => applyStaticWebsite(client, d.staticWebsite, "create-update"));
-    await forEachDeployment((d) => applyAIGateway(client, d.aiGateway, "create-update"));
-    await forEachDeployment((d) => applyIdP(client, d.idp, "create-update"));
-    await forEachDeployment((d) => applyAuth(client, d.auth, "create-update-prerequisites"));
-    await forEachDeployment((d) => applyTailorDB(client, d.tailorDB, "create-update"));
-    await forEachDeployment((d) => applyAuth(client, d.auth, "create-update-dependents"));
-    await forEachDeployment((d) => applyPipeline(client, d.pipeline, "create-update"));
-  });
+  await withMetadataWriteBatch(client, async (applyClient) => {
+    await withSpan("apply.createUpdateServices", async () => {
+      await forEachDeployment((d) =>
+        applySecretManager(applyClient, d.secretManager, "create-update", d.application),
+      );
+      await forEachDeployment((d) =>
+        applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
+      );
+      await forEachDeployment((d) =>
+        applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
+      );
+      await forEachDeployment((d) => applyAIGateway(applyClient, d.aiGateway, "create-update"));
+      await forEachDeployment((d) => applyIdP(applyClient, d.idp, "create-update"));
+      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-prerequisites"));
+      await forEachDeployment((d) => applyTailorDB(applyClient, d.tailorDB, "create-update"));
+      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-dependents"));
+      await forEachDeployment((d) => applyPipeline(applyClient, d.pipeline, "create-update"));
+    });
 
-  await withSpan("apply.deleteSubgraphResources", async () => {
-    await forEachDeployment((d) => applyPipeline(client, d.pipeline, "delete-resources"));
-    await forEachDeployment((d) => applyAuth(client, d.auth, "delete-resources"));
-    await forEachDeployment((d) => applyIdP(client, d.idp, "delete-resources"));
-  });
+    await withSpan("apply.deleteSubgraphResources", async () => {
+      await forEachDeployment((d) => applyPipeline(applyClient, d.pipeline, "delete-resources"));
+      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "delete-resources"));
+      await forEachDeployment((d) => applyIdP(applyClient, d.idp, "delete-resources"));
+    });
 
-  await withSpan("apply.createUpdateApplication", async () => {
-    await forEachDeployment((d) => applyApplication(client, d.app, "create-update"));
-  });
+    await withSpan("apply.createUpdateApplication", async () => {
+      await forEachDeployment((d) => applyApplication(applyClient, d.app, "create-update"));
+    });
 
-  await withSpan("apply.createUpdateDependentServices", async () => {
-    await forEachDeployment((d) => applyExecutor(client, d.executor, "create-update"));
-    // Execution policies must exist before workflow job functions that reference
-    // them by key, otherwise the runtime rejects the dispatch as an unknown key.
-    await forEachDeployment((d) =>
-      applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "create-update"),
-    );
-    await forEachDeployment((d) => applyWorkflow(client, d.workflow, "create-update"));
+    await withSpan("apply.createUpdateDependentServices", async () => {
+      await forEachDeployment((d) => applyExecutor(applyClient, d.executor, "create-update"));
+      // Execution policies must exist before workflow job functions that reference
+      // them by key, otherwise the runtime rejects the dispatch as an unknown key.
+      await forEachDeployment((d) =>
+        applyWorkflowJobFunctionExecutionPolicy(
+          applyClient,
+          d.workflowExecutionPolicy,
+          "create-update",
+        ),
+      );
+      await forEachDeployment((d) => applyWorkflow(applyClient, d.workflow, "create-update"));
+    });
   });
 
   await withSpan("apply.deleteDependentServices", async () => {

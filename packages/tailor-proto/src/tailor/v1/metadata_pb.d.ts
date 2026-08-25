@@ -5,6 +5,7 @@
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Metadata } from "./metadata_resource_pb";
+import type { PageDirection } from "./resource_pb";
 
 /**
  * Describes the file tailor/v1/metadata.proto.
@@ -83,4 +84,160 @@ export declare type GetMetadataResponse = Message<"tailor.v1.GetMetadataResponse
  * Use `create(GetMetadataResponseSchema)` to create a new message.
  */
 export declare const GetMetadataResponseSchema: GenMessage<GetMetadataResponse>;
+
+/**
+ * BulkSetMetadataRequest sets metadata labels for multiple resources in a
+ * single workspace atomically. All requests must reference TRNs under the
+ * same workspace; the write is all-or-nothing.
+ *
+ * @generated from message tailor.v1.BulkSetMetadataRequest
+ */
+export declare type BulkSetMetadataRequest = Message<"tailor.v1.BulkSetMetadataRequest"> & {
+  /**
+   * @generated from field: repeated tailor.v1.SetMetadataRequest requests = 1;
+   */
+  requests: SetMetadataRequest[];
+};
+
+/**
+ * Describes the message tailor.v1.BulkSetMetadataRequest.
+ * Use `create(BulkSetMetadataRequestSchema)` to create a new message.
+ */
+export declare const BulkSetMetadataRequestSchema: GenMessage<BulkSetMetadataRequest>;
+
+/**
+ * BulkSetMetadataResponse returns the resulting labels for each requested TRN,
+ * in the same order as BulkSetMetadataRequest.requests.
+ *
+ * @generated from message tailor.v1.BulkSetMetadataResponse
+ */
+export declare type BulkSetMetadataResponse = Message<"tailor.v1.BulkSetMetadataResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.BulkSetMetadataResult results = 1;
+   */
+  results: BulkSetMetadataResult[];
+};
+
+/**
+ * Describes the message tailor.v1.BulkSetMetadataResponse.
+ * Use `create(BulkSetMetadataResponseSchema)` to create a new message.
+ */
+export declare const BulkSetMetadataResponseSchema: GenMessage<BulkSetMetadataResponse>;
+
+/**
+ * @generated from message tailor.v1.BulkSetMetadataResult
+ */
+export declare type BulkSetMetadataResult = Message<"tailor.v1.BulkSetMetadataResult"> & {
+  /**
+   * @generated from field: string trn = 1;
+   */
+  trn: string;
+
+  /**
+   * @generated from field: tailor.v1.Metadata metadata = 2;
+   */
+  metadata?: Metadata;
+};
+
+/**
+ * Describes the message tailor.v1.BulkSetMetadataResult.
+ * Use `create(BulkSetMetadataResultSchema)` to create a new message.
+ */
+export declare const BulkSetMetadataResultSchema: GenMessage<BulkSetMetadataResult>;
+
+/**
+ * ListMetadataRequest finds resources in a workspace whose labels match all
+ * of the given key-value pairs (AND semantics).
+ *
+ * @generated from message tailor.v1.ListMetadataRequest
+ */
+export declare type ListMetadataRequest = Message<"tailor.v1.ListMetadataRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: map<string, string> labels = 2;
+   */
+  labels: { [key: string]: string };
+
+  /**
+   * Opaque cursor from a previous response's next_page_token. Unlike other
+   * List* endpoints in this service, results here are ordered by TRN
+   * (lexicographic), not created_at, and page_token is not interchangeable
+   * with the pagination tokens used elsewhere.
+   *
+   * @generated from field: string page_token = 3;
+   */
+  pageToken: string;
+
+  /**
+   * @generated from field: uint32 page_size = 4;
+   */
+  pageSize: number;
+
+  /**
+   * Direction of the TRN-lexicographic ordering described above.
+   *
+   * @generated from field: tailor.v1.PageDirection page_direction = 5;
+   */
+  pageDirection: PageDirection;
+};
+
+/**
+ * Describes the message tailor.v1.ListMetadataRequest.
+ * Use `create(ListMetadataRequestSchema)` to create a new message.
+ */
+export declare const ListMetadataRequestSchema: GenMessage<ListMetadataRequest>;
+
+/**
+ * ListMetadataResponse returns TRNs (with their full label sets) matching
+ * the search criteria, ordered by TRN (lexicographic) per page_direction.
+ *
+ * @generated from message tailor.v1.ListMetadataResponse
+ */
+export declare type ListMetadataResponse = Message<"tailor.v1.ListMetadataResponse"> & {
+  /**
+   * @generated from field: repeated tailor.v1.ListMetadataResult results = 1;
+   */
+  results: ListMetadataResult[];
+
+  /**
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+
+  /**
+   * @generated from field: int64 total_count = 3;
+   */
+  totalCount: bigint;
+};
+
+/**
+ * Describes the message tailor.v1.ListMetadataResponse.
+ * Use `create(ListMetadataResponseSchema)` to create a new message.
+ */
+export declare const ListMetadataResponseSchema: GenMessage<ListMetadataResponse>;
+
+/**
+ * @generated from message tailor.v1.ListMetadataResult
+ */
+export declare type ListMetadataResult = Message<"tailor.v1.ListMetadataResult"> & {
+  /**
+   * @generated from field: string trn = 1;
+   */
+  trn: string;
+
+  /**
+   * @generated from field: tailor.v1.Metadata metadata = 2;
+   */
+  metadata?: Metadata;
+};
+
+/**
+ * Describes the message tailor.v1.ListMetadataResult.
+ * Use `create(ListMetadataResultSchema)` to create a new message.
+ */
+export declare const ListMetadataResultSchema: GenMessage<ListMetadataResult>;
 

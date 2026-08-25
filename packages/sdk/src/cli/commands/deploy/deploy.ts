@@ -66,6 +66,7 @@ import {
   computeRenamedAppDeletions,
   dropCrossDeploymentManagedDeletes,
 } from "./managed-resources";
+import { createMetadataLookupClient } from "./metadata-lookup";
 import { printDeploymentPlans } from "./plan-report";
 import { planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
@@ -704,11 +705,18 @@ async function deployInternal(
       ...target,
       application: adjustApplicationForMigrationTest(target.application, internalContext),
     }));
+    const metadataClient = await withSpan("plan.metadataLookup", () =>
+      createMetadataLookupClient({
+        client,
+        workspaceId,
+        applications: planTargets.map(({ application }) => application),
+      }),
+    );
     const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
     const deployments = await planDeploymentTargets({
       targets: planTargets,
       runInputs,
-      client,
+      client: metadataClient,
       workspaceId,
       noSchemaCheck: options?.noSchemaCheck,
       migrationTestBaselines: internalContext?.migrationTestBaselines,
@@ -724,7 +732,7 @@ async function deployInternal(
       await Promise.all(
         planTargets.map((target) =>
           fetchMissingDependentApps({
-            client,
+            client: metadataClient,
             workspaceId,
             application: target.application,
             runAppIds: runInputs.runAppIds ?? new Set<string>(),

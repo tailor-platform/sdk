@@ -8,6 +8,7 @@ import {
   resolverTrn,
   resourceTrn,
   tailorDBTypeTrn,
+  withMetadataWriteBatch,
   writeMetadataLabels,
 } from "./label";
 import type { MetadataLabelClient } from "./label";
@@ -195,14 +196,215 @@ describe("writeMetadataLabels", () => {
   });
 });
 
+describe("withMetadataWriteBatch", () => {
+  function createClient(labels: Record<string, string> = {}) {
+    return {
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels } }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      bulkSetMetadata: vi.fn().mockResolvedValue({ results: [] }),
+    };
+  }
+
+  test("folds queued changes for one TRN into one bulk request", async () => {
+    const client = createClient({ keep: "yes" });
+
+    await withMetadataWriteBatch(client as never, async (batchClient) => {
+      await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { first: "value" } });
+      await writeMetadataLabels(batchClient, {
+        trn: "trn:x",
+        labels: { second: "value" },
+        remove: ["keep"],
+      });
+    });
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    expect(client.setMetadata).not.toHaveBeenCalled();
+    expect(client.bulkSetMetadata).toHaveBeenCalledWith({
+      requests: [
+        {
+          trn: "trn:x",
+          labels: { first: "value", second: "value" },
+        },
+      ],
+    });
+  });
+
+  test("splits more than 100 changed TRNs into valid batches", async () => {
+    const client = createClient();
+
+    await withMetadataWriteBatch(client as never, async (batchClient) => {
+      await Promise.all(
+        Array.from({ length: 101 }, (_, index) =>
+          writeMetadataLabels(batchClient, {
+            trn: `trn:${String(index).padStart(3, "0")}`,
+            labels: { mine: "value" },
+          }),
+        ),
+      );
+    });
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(101);
+    expect(client.setMetadata).not.toHaveBeenCalled();
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(2);
+    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests.length)).toEqual([
+      100, 1,
+    ]);
+  });
+
+  test("does not bulk-write queued changes that already hold", async () => {
+    const client = createClient({ mine: "value" });
+
+    await withMetadataWriteBatch(client as never, async (batchClient) => {
+      await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
+    });
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    expect(client.bulkSetMetadata).not.toHaveBeenCalled();
+  });
+
+  test("flushes queued changes when the apply callback fails", async () => {
+    const client = createClient();
+
+    await expect(
+      withMetadataWriteBatch(client as never, async (batchClient) => {
+        await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
+        throw new Error("apply failed");
+      }),
+    ).rejects.toThrow("apply failed");
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    expect(client.bulkSetMetadata).toHaveBeenCalledWith({
+      requests: [{ trn: "trn:x", labels: { mine: "value" } }],
+    });
+  });
+
+  test("writes changes queued by an apply sibling after recovery flush starts", async () => {
+    const client = createClient();
+    let releaseBulkWrite!: () => void;
+    const allowBulkWrite = new Promise<void>((resolve) => {
+      releaseBulkWrite = resolve;
+    });
+    let signalBulkWriteStarted!: () => void;
+    const bulkWriteStarted = new Promise<void>((resolve) => {
+      signalBulkWriteStarted = resolve;
+    });
+    client.bulkSetMetadata.mockImplementationOnce(async () => {
+      signalBulkWriteStarted();
+      await allowBulkWrite;
+      return { results: [] };
+    });
+    let releaseLateWrite!: () => void;
+    const allowLateWrite = new Promise<void>((resolve) => {
+      releaseLateWrite = resolve;
+    });
+    let signalLateWriteStarted!: () => void;
+    const lateWriteStarted = new Promise<void>((resolve) => {
+      signalLateWriteStarted = resolve;
+    });
+    let lateWrite!: Promise<void>;
+
+    const result = withMetadataWriteBatch(client as never, async (batchClient) => {
+      await writeMetadataLabels(batchClient, {
+        trn: "trn:early",
+        labels: { mine: "early" },
+      });
+      lateWrite = (async () => {
+        await allowLateWrite;
+        signalLateWriteStarted();
+        await writeMetadataLabels(batchClient, {
+          trn: "trn:late",
+          labels: { mine: "late" },
+        });
+      })();
+      await Promise.all([Promise.reject(new Error("apply failed")), lateWrite]);
+    });
+    const rejection = (async () => {
+      await expect(result).rejects.toThrow("apply failed");
+    })();
+
+    await bulkWriteStarted;
+    releaseLateWrite();
+    await lateWriteStarted;
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(1);
+    expect(client.setMetadata).not.toHaveBeenCalled();
+
+    releaseBulkWrite();
+    await rejection;
+    await lateWrite;
+
+    expect(client.bulkSetMetadata).toHaveBeenCalledWith({
+      requests: [{ trn: "trn:early", labels: { mine: "early" } }],
+    });
+    expect(client.setMetadata).toHaveBeenCalledWith({
+      trn: "trn:late",
+      labels: { mine: "late" },
+    });
+  });
+
+  test("reports both errors when the recovery flush also fails", async () => {
+    const client = createClient();
+    const applyError = new Error("apply failed");
+    const flushError = new Error("bulk write failed");
+    client.bulkSetMetadata.mockRejectedValueOnce(flushError);
+
+    await expect(
+      withMetadataWriteBatch(client as never, async (batchClient) => {
+        await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
+        throw applyError;
+      }),
+    ).rejects.toMatchObject({
+      name: "AggregateError",
+      message:
+        "Resource apply failed: apply failed\nQueued metadata recovery failed: bulk write failed",
+      cause: flushError,
+      errors: [applyError, flushError],
+    });
+  });
+
+  test("does not issue a bulk write when a metadata read fails", async () => {
+    const client = createClient();
+    client.getMetadata.mockRejectedValueOnce(new Error("metadata read failed"));
+
+    await expect(
+      withMetadataWriteBatch(client as never, async (batchClient) => {
+        await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
+      }),
+    ).rejects.toThrow("metadata read failed");
+
+    expect(client.bulkSetMetadata).not.toHaveBeenCalled();
+  });
+
+  test("stops after the first failed bulk chunk", async () => {
+    const client = createClient();
+    client.bulkSetMetadata.mockRejectedValueOnce(new Error("bulk write failed"));
+
+    await expect(
+      withMetadataWriteBatch(client as never, async (batchClient) => {
+        await Promise.all(
+          Array.from({ length: 101 }, (_, index) =>
+            writeMetadataLabels(batchClient, {
+              trn: `trn:${String(index).padStart(3, "0")}`,
+              labels: { mine: "value" },
+            }),
+          ),
+        );
+      }),
+    ).rejects.toThrow("bulk write failed");
+
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+    expect(client.bulkSetMetadata.mock.calls[0]?.[0].requests).toHaveLength(100);
+  });
+});
+
 describe("setMetadata call sites", () => {
   const srcDir = path.resolve(__dirname, "../../..");
 
   function sourceFiles(dir: string): string[] {
     return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      // Service tests create and delete temporary sources under dot-directories
-      // while this runs; they are fixtures, not call sites.
-      if (entry.name.startsWith(".")) return [];
+      // Service tests create and delete temporary source trees while this runs;
+      // they are fixtures, not production call sites.
+      if (entry.name.startsWith(".") || entry.name.startsWith("__test_")) return [];
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) return sourceFiles(full);
       return entry.isFile() && full.endsWith(".ts") && !full.endsWith(".test.ts") ? [full] : [];
@@ -213,9 +415,9 @@ describe("setMetadata call sites", () => {
     try {
       // \s so a call the formatter wrapped across lines still counts.
       return /\.\s*setMetadata\s*\(/.test(fs.readFileSync(file, "utf-8"));
-    } catch {
-      // Raced with a test that removed its own fixture; nothing to check.
-      return false;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw error;
     }
   }
 
@@ -223,7 +425,11 @@ describe("setMetadata call sites", () => {
     // SetMetadata replaces the whole label map, so a call that does not re-read
     // first can delete labels written since this process last looked. Route new
     // writes through writeMetadataLabels instead of adding a call site here.
-    const offenders = sourceFiles(srcDir)
+    const files = sourceFiles(srcDir);
+    const relativeFiles = files.map((file) => path.relative(srcDir, file));
+    expect(relativeFiles).toContain("cli/commands/deploy/label.ts");
+
+    const offenders = files
       .filter(callsSetMetadata)
       .map((file) => path.relative(srcDir, file))
       .filter((file) => file !== "cli/commands/deploy/label.ts");
