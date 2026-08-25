@@ -24,7 +24,7 @@ describe("resolveBundleConcurrency", () => {
     expect(resolveBundleConcurrency()).toBe(7);
   });
 
-  test.each(["0", "-1", "abc", "1.5", ""])(
+  test.each(["0", "-1", "abc", "1.5", "", "1e3", "99999999999999999999"])(
     "falls back to default for invalid value %j",
     (value) => {
       vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", value);

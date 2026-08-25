@@ -1,5 +1,6 @@
 import * as os from "node:os";
 import pLimit from "p-limit";
+import { parsePositiveInt } from "./parse-positive-int";
 
 /**
  * Resolve the maximum number of bundle operations to run in parallel.
@@ -15,14 +16,7 @@ import pLimit from "p-limit";
  * @returns Concurrency cap (always >= 1)
  */
 export function resolveBundleConcurrency(): number {
-  const envValue = process.env.TAILOR_BUNDLE_CONCURRENCY;
-  if (envValue !== undefined) {
-    const trimmed = envValue.trim();
-    if (trimmed !== "" && /^[1-9]\d*$/.test(trimmed)) {
-      return Number.parseInt(trimmed, 10);
-    }
-  }
-  return Math.max(1, os.cpus().length);
+  return parsePositiveInt(process.env.TAILOR_BUNDLE_CONCURRENCY) ?? Math.max(1, os.cpus().length);
 }
 
 /**

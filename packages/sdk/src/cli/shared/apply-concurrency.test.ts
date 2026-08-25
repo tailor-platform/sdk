@@ -23,7 +23,7 @@ describe("resolveApplyConcurrency", () => {
   });
 
   test("ignores non-positive or non-numeric values", () => {
-    for (const value of ["0", "-3", "abc", "1.5", "", "  "]) {
+    for (const value of ["0", "-3", "abc", "1.5", "", "  ", "1e3", "99999999999999999999"]) {
       process.env.TAILOR_APPLY_CONCURRENCY = value;
       expect(resolveApplyConcurrency()).toBe(16);
     }
