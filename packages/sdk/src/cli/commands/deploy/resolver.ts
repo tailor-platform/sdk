@@ -22,6 +22,7 @@ import {
   assertNoPublishEventsConflict,
   publishEventsConflict,
   resolvePublishEvents,
+  subscribesToEvents,
 } from "#/cli/shared/publish-events";
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
@@ -382,8 +383,7 @@ async function planResolvers(
 
   const executorUsedResolvers = new Set(initialExecutorUsedResolvers);
   for (const executor of executors) {
-    // A disabled executor never runs, so it needs no events from the resolver.
-    if (executor.disabled) continue;
+    if (!subscribesToEvents(executor)) continue;
     if (executor.trigger.kind === "resolverExecuted") {
       executorUsedResolvers.add(executor.trigger.resolverName);
     }

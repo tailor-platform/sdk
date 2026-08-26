@@ -62,6 +62,19 @@ function publishEventsConflictError(conflict: PublishEventsConflict): string {
   );
 }
 
+/**
+ * Whether an executor's triggers count toward the resources it subscribes to.
+ *
+ * A disabled executor never runs, so it needs no events: counting one would keep
+ * publishing enabled on the resource its trigger names, and would reject an
+ * explicit `publishEvents: false` that nothing actually contradicts.
+ * @param executor - Executor declared by the subscribing config
+ * @returns Whether the executor's triggers subscribe to anything
+ */
+export function subscribesToEvents(executor: { disabled?: boolean | undefined }): boolean {
+  return !executor.disabled;
+}
+
 /** Inputs deciding whether a resource publishes events. */
 export type ResolvePublishEventsParams = {
   /** `publishEvents` declared on the resource, or undefined when unset. */

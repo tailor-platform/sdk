@@ -16,6 +16,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
+import { subscribesToEvents } from "#/cli/shared/publish-events";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { PluginManager } from "#/plugin/manager";
 import {
@@ -168,8 +169,7 @@ async function assertMigrationsReproduceLocalTypes(
   }
   const executorUsedTables = new Set<string>();
   for (const executor of Object.values(executorService?.executors ?? {})) {
-    // A disabled executor never runs, so it needs no events from the table.
-    if (executor.disabled) continue;
+    if (!subscribesToEvents(executor)) continue;
     if (executor.trigger.kind === "tailordb") {
       executorUsedTables.add(executor.trigger.tableName);
     }
