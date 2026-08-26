@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "1.0.0",
-    "@changesets/cli": "3.0.0",
+    "@changesets/cli": "3.0.1",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.3",
     "eslint-plugin-zod": "4.9.1",
