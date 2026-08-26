@@ -327,6 +327,38 @@ describe("migration flow: record events while migrations run", () => {
     expect(orderWrites.at(-1)?.[1]).toBe(true);
   });
 
+  test("restores the surviving table when a migration renames it", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({
+      creates: ["Invoice"],
+      subscribedTables: ["Invoice"],
+    });
+    snapshotState.tablesByVersion = {
+      0: { Bill: snapshotTable("Bill", { status: { type: "string", required: true } }) },
+      1: { Invoice: snapshotTable("Invoice", { status: { type: "string", required: true } }) },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        // The change names the table it becomes, so that is the one to restore;
+        // the old name is dropped and must not be written back.
+        { kind: "table_renamed", tableName: "Invoice", previousTableName: "Bill" },
+        {
+          kind: "field_added",
+          tableName: "Invoice",
+          fieldName: "status",
+          after: { type: "string", required: true },
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const writes = publishFlagWrites(client);
+    expect(writes.at(-1)).toEqual(["Invoice", true]);
+    expect(writes.map(([name]) => name)).not.toContain("Bill");
+  });
+
   test("leaves publishing off for a table nothing subscribes to", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult({ creates: ["Order"] });
