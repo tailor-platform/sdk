@@ -1,5 +1,33 @@
 # @tailor-platform/sdk
 
+## 2.6.0
+
+### Minor Changes
+
+- [#2136](https://github.com/tailor-platform/sdk/pull/2136) [`6fba096`](https://github.com/tailor-platform/sdk/commit/6fba09676fc20e08e3325c26c0e72dc9ed4fd8f6) Thanks [@toiroakr](https://github.com/toiroakr)! - `.relation()`'s `toward.type` option is renamed to `toward.table`, since it names a target table rather than a TypeScript/GraphQL type — matching the `db.type()` → `db.table()` rename. The old spelling keeps working as a deprecated alias until v3; `tailor upgrade` offers the `v3/relation-toward-table` codemod to rewrite `toward: { type: ... }` to `toward: { table: ... }` across TypeScript/JavaScript sources. The relation's own `type` (its cardinality, e.g. `"n-1"`) is unchanged.
+
+- [#2144](https://github.com/tailor-platform/sdk/pull/2144) [`92db44d`](https://github.com/tailor-platform/sdk/commit/92db44def9056206f3a66459d3af0446e0935738) Thanks [@dqn](https://github.com/dqn)! - Export the CLI foundation (`logger`, `styles`, `defineAppCommand`, `createCommonArgs`, the shared argument shapes, and the `arg`/`defineCommand`/`runCommand`/`runMain` command toolkit) from `@tailor-platform/sdk/cli`, and move the CLI plugins onto it. Plugins previously bundled their own copy of the logger, so `--json` and `--verbose` set by a plugin never reached the SDK code paths it calls; both flags now feed one logger state, and `--verbose` also enables `logger.debug` output.
+
+- [#2157](https://github.com/tailor-platform/sdk/pull/2157) [`310b098`](https://github.com/tailor-platform/sdk/commit/310b098985c5433714f95ee049550d3ac92cafe4) Thanks [@dqn](https://github.com/dqn)! - Support JSONC and JSON5 Renovate configs in tailor setup deps without changing their comments or formatting. Renovate configs that Renovate itself would reject for duplicate keys are now reported for manual inspection instead of being updated.
+
+### Patch Changes
+
+- [#2159](https://github.com/tailor-platform/sdk/pull/2159) [`1dc8b53`](https://github.com/tailor-platform/sdk/commit/1dc8b53ec9c34d51168f8508842c33f4c3cce64a) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: the bundle concurrency limiter now uses the `p-limit` dependency already used elsewhere in the CLI instead of a hand-rolled worker pool. The concurrency cap, input-order results, and failure handling are unchanged; the only observable difference is that the first bundle now starts a microtask later instead of synchronously.
+
+- [#2142](https://github.com/tailor-platform/sdk/pull/2142) [`f576eb4`](https://github.com/tailor-platform/sdk/commit/f576eb414d119c014fc40671cff9472488abe506) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: the wait point key rules and the platform runtime globals allowlist each moved to a single definition shared by validation and the test-runtime emulation. Accepted keys, error messages, and the emulated runtime surface are unchanged.
+
+- [#2161](https://github.com/tailor-platform/sdk/pull/2161) [`189b993`](https://github.com/tailor-platform/sdk/commit/189b993d261a666a46ef2021b21a5f88248e4003) Thanks [@dqn](https://github.com/dqn)! - `TAILOR_APPLY_CONCURRENCY` and `TAILOR_BUNDLE_CONCURRENCY` now fall back to their defaults when set above `Number.MAX_SAFE_INTEGER`. Such values were previously used as-is, which silently lifted the concurrency cap or applied a rounded number that did not match what was set. Values with leading zeros (`0007`) are now accepted.
+
+- [#2143](https://github.com/tailor-platform/sdk/pull/2143) [`25814af`](https://github.com/tailor-platform/sdk/commit/25814af358d831d969b9f79eca9d34052dc023ad) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: TailorDB and IdP permission definitions are now normalized by one shared implementation. Accepted permission formats and their behavior are unchanged.
+
+- [#2140](https://github.com/tailor-platform/sdk/pull/2140) [`361afa5`](https://github.com/tailor-platform/sdk/commit/361afa5a319ba08c0d0104592dc3d3cc7ef72829) Thanks [@dqn](https://github.com/dqn)! - Remove the unused internal `DeepWidening` type helper chain, including a `TrueFalseToBool` helper whose implementation never matched its name.
+
+- [#2123](https://github.com/tailor-platform/sdk/pull/2123) [`2504afc`](https://github.com/tailor-platform/sdk/commit/2504afc7182a69458a8b2afa2c4ac8f0a7abff33) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency get-tsconfig to v4.14.3
+
+- [#2135](https://github.com/tailor-platform/sdk/pull/2135) [`5b7b676`](https://github.com/tailor-platform/sdk/commit/5b7b676740350dfe35ae479aa73da1f67c4d4f2f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.9
+
+- [#2006](https://github.com/tailor-platform/sdk/pull/2006) [`1aca9f2`](https://github.com/tailor-platform/sdk/commit/1aca9f283b19f6ca392c8f53d725d7375e580dc4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
 ## 2.5.0
 
 ### Minor Changes

@@ -1,3 +1,4 @@
+import { mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import multiline from "#/utils/multiline";
 import {
   type KyselyFieldConfig,
@@ -86,37 +87,15 @@ function getBaseType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = { Timestamp: false, Serial: false };
 
-  let type: string;
-  switch (fieldType) {
-    case "uuid":
-    case "string":
-    case "decimal":
-      type = "string";
-      break;
-    case "integer":
-    case "float":
-      type = "number";
-      break;
-    case "date":
-    case "datetime":
-      usedUtilityTypes.Timestamp = true;
-      type = "Timestamp";
-      break;
-    case "bool":
-    case "boolean":
-      type = "boolean";
-      break;
-    case "enum":
-      type = getEnumType(fieldConfig);
-      break;
-    case "nested": {
-      const nestedResult = getNestedType(fieldConfig);
-      return nestedResult;
-    }
-    default:
-      type = "string";
-      break;
+  if (fieldType === "enum") {
+    return { type: getEnumType(fieldConfig), usedUtilityTypes };
   }
+  if (fieldType === "nested") {
+    return getNestedType(fieldConfig);
+  }
+
+  const type = mapFieldTypeToColumnType(fieldType);
+  usedUtilityTypes.Timestamp = type === "Timestamp";
 
   return { type, usedUtilityTypes };
 }

@@ -483,4 +483,57 @@ describe("bundleResolvers", () => {
       expect(buildTracker.maxActive).toBeLessThanOrEqual(2);
     });
   });
+
+  test("rejects a resolver that references process.env", async () => {
+    using tmp = tempCwd("sdk-bundler-forbidden-global-");
+    writeSdkDependency(tmp.dir);
+    const resolverDir = path.join(tmp.dir, "src/backend/nodeglobal/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "leaky.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "leaky",\n` +
+        `  permission: "allowAnonymous",\n` +
+        `  body: async () => (process.env.SOME_FLAG === "1" ? 1 : 0),\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    await expect(
+      bundleResolvers({
+        namespace: "nodeglobal",
+        config: { files: ["./src/backend/nodeglobal/resolver/*.ts"] },
+        baseDir: tmp.dir,
+      }),
+    ).rejects.toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
+  });
+
+  test("bundles a resolver that uses Web Standard globals", async () => {
+    using tmp = tempCwd("sdk-bundler-web-standard-");
+    writeSdkDependency(tmp.dir);
+    const resolverDir = path.join(tmp.dir, "src/backend/webstandard/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "fetcher.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "fetcher",\n` +
+        `  permission: "allowAnonymous",\n` +
+        `  body: async () => {\n` +
+        `    const res = await fetch(new URL("https://example.com"));\n` +
+        `    return res.status;\n` +
+        `  },\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    const result = await bundleResolvers({
+      namespace: "webstandard",
+      config: { files: ["./src/backend/webstandard/resolver/*.ts"] },
+      baseDir: tmp.dir,
+    });
+
+    expect(result.get("fetcher")).toBeDefined();
+  });
 });

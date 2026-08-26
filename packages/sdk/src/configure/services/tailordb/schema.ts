@@ -607,7 +607,7 @@ interface RelationConfig<S extends RelationType, T extends TailorDBType> {
       }
     | {
         /**
-         * @deprecated since NEXT_RELEASE — use `table` instead. codemod: v3/relation-toward-table
+         * @deprecated since 2.6.0 — use `table` instead. codemod: v3/relation-toward-table
          */
         type: T;
         as?: string;
@@ -629,7 +629,7 @@ type RelationSelfConfig = {
       }
     | {
         /**
-         * @deprecated since NEXT_RELEASE — use `table` instead. codemod: v3/relation-toward-table
+         * @deprecated since 2.6.0 — use `table` instead. codemod: v3/relation-toward-table
          */
         type: "self";
         as?: string;

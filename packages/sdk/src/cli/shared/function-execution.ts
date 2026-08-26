@@ -13,6 +13,12 @@ export function functionExecutionStatusToString(status: FunctionExecution_Status
       return "SUCCESS";
     case FunctionExecution_Status.FAILED:
       return "FAILED";
+    case FunctionExecution_Status.SUSPEND:
+      return "SUSPEND";
+    case FunctionExecution_Status.CANCELING:
+      return "CANCELING";
+    case FunctionExecution_Status.CANCELED:
+      return "CANCELED";
     default:
       return "UNSPECIFIED";
   }

@@ -1,7 +1,11 @@
 import { getOrNull } from "#/cli/shared/client";
+import { toError } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+import type {
+  BulkSetMetadataRequestSchema,
+  SetMetadataRequestSchema,
+} from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type WithLabel<T> = Partial<
   Record<
@@ -109,7 +113,7 @@ export const sdkAppIdLabelKey = "sdk-app-id";
 // in `tailor.config.ts` can stay a plain UUID.
 const appIdLabelPrefix = "app-";
 
-function toAppIdLabelValue(appId: string): string {
+export function sdkAppIdLabelValue(appId: string): string {
   return `${appIdLabelPrefix}${appId}`;
 }
 
@@ -145,7 +149,7 @@ export function isOwnedByApp(
   if (!labels) return false;
   const labelAppId = labels[sdkAppIdLabelKey];
   if (labelAppId) {
-    return appId !== undefined && labelAppId === toAppIdLabelValue(appId);
+    return appId !== undefined && labelAppId === sdkAppIdLabelValue(appId);
   }
   return labels[sdkNameLabelKey] === appName;
 }
@@ -357,7 +361,7 @@ export async function buildMetaRequest(
     labels: {
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
-      ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),
+      ...(appId ? { [sdkAppIdLabelKey]: sdkAppIdLabelValue(appId) } : {}),
     },
     remove: appId ? undefined : [sdkAppIdLabelKey],
   };
@@ -408,6 +412,10 @@ export interface MetadataLabelClient {
   setMetadata(request: MessageInitShape<typeof SetMetadataRequestSchema>): Promise<unknown>;
 }
 
+export interface MetadataLabelBulkClient extends MetadataLabelClient {
+  bulkSetMetadata(request: MessageInitShape<typeof BulkSetMetadataRequestSchema>): Promise<unknown>;
+}
+
 /** A metadata label write, expressed as a change rather than a whole map. */
 export interface MetadataLabelWrite {
   /** Target TRN. */
@@ -429,35 +437,97 @@ export interface MetadataLabelWrite {
 /** A dependency-record reconciliation waiting on the resource's current labels. */
 type PendingDependencyRecords = Omit<DependencyLabelParams, "existingLabels">;
 
-/**
- * Write metadata labels as a change against the resource's current labels.
- *
- * `SetMetadata` replaces the whole label map, so a request built from labels
- * read earlier deletes anything written in between. This re-reads immediately
- * before writing and applies `labels` and `remove` to what it finds, which is
- * why every label write in the SDK goes through here rather than calling
- * `client.setMetadata` directly.
- *
- * Concurrent writers are still not safe in the strict sense — that needs
- * server-side conditional writes — but a write can no longer be built from
- * state this process read at an unrelated point in time.
- *
- * A write that changes nothing does nothing — whether the caller requested no
- * change or the change turns out to already hold. Writing back what was just
- * read would still overwrite whatever landed in between, for no gain, and the
- * labels the SDK sets are unchanged on most deploys.
- * @param client - Operator client instance
- * @param write - TRN, labels to set, and label keys to delete
- * @returns Promise that resolves when the labels are written
- */
-export async function writeMetadataLabels(
-  client: MetadataLabelClient,
+const metadataWriteBatch = Symbol("metadataWriteBatch");
+const metadataWriteBatchSize = 100;
+const metadataReadWaveSize = 100;
+
+interface MetadataWriteBatchClient extends MetadataLabelClient {
+  [metadataWriteBatch]?: MetadataWriteBatch;
+}
+
+class MetadataWriteBatch {
+  readonly #client: MetadataLabelBulkClient;
+  readonly #writesByTrn = new Map<string, MetadataLabelWrite[]>();
+  #flushPromise: Promise<void> | undefined;
+
+  constructor(client: MetadataLabelBulkClient) {
+    this.#client = client;
+  }
+
+  async enqueue(write: MetadataLabelWrite): Promise<void> {
+    if (this.#flushPromise) {
+      // The wrapper reports a flush failure; a late apply sibling must still attempt its write.
+      await this.#flushPromise.catch(() => undefined);
+      await writeMetadataLabelsDirect(this.#client, write);
+      return;
+    }
+    const writes = this.#writesByTrn.get(write.trn) ?? [];
+    writes.push(write);
+    this.#writesByTrn.set(write.trn, writes);
+  }
+
+  flush(): Promise<void> {
+    this.#flushPromise ??= this.#flushQueued();
+    return this.#flushPromise;
+  }
+
+  async #flushQueued(): Promise<void> {
+    const queued = [...this.#writesByTrn].toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const readRequest = async ([trn, writes]: (typeof queued)[number]) => {
+      const current = await getOrNull(() => this.#client.getMetadata({ trn }));
+      const currentLabels = current?.metadata?.labels ?? {};
+      const labels = writes.reduce(applyMetadataLabelWrite, currentLabels);
+      return areSameLabels(currentLabels, labels) ? undefined : { trn, labels };
+    };
+    const candidates: (typeof queued)[number][] = [];
+    let cursor = 0;
+
+    while (cursor < queued.length || candidates.length > 0) {
+      let freshRequests: MessageInitShape<typeof SetMetadataRequestSchema>[] | undefined =
+        candidates.length === 0 ? [] : undefined;
+      while (cursor < queued.length && candidates.length < metadataWriteBatchSize) {
+        // Fixed-width waves keep a nearly full batch from serializing a long no-op tail.
+        if (candidates.length > 0) freshRequests = undefined;
+        const entries = queued.slice(cursor, cursor + metadataReadWaveSize);
+        cursor += entries.length;
+        const changed = await Promise.all(
+          entries.map(async (entry) => {
+            const request = await readRequest(entry);
+            return request ? { entry, request } : undefined;
+          }),
+        );
+        for (const candidate of changed) {
+          if (!candidate) continue;
+          candidates.push(candidate.entry);
+          freshRequests?.push(candidate.request);
+        }
+      }
+
+      const batchEntries = candidates.splice(0, metadataWriteBatchSize);
+      // Candidates spanning waves or carried past a bulk need one shared freshness barrier.
+      const latestRequests =
+        freshRequests ??
+        (await Promise.all(batchEntries.map((entry) => readRequest(entry)))).filter(
+          (request) => request !== undefined,
+        );
+      if (latestRequests.length > 0) {
+        await this.#client.bulkSetMetadata({ requests: latestRequests });
+      }
+    }
+  }
+}
+
+function hasMetadataLabelChange(write: MetadataLabelWrite): boolean {
+  return Boolean(
+    Object.keys(write.labels ?? {}).length || write.remove?.length || write.dependencies?.length,
+  );
+}
+
+function applyMetadataLabelWrite(
+  currentLabels: Record<string, string>,
   write: MetadataLabelWrite,
-): Promise<void> {
-  const { trn, labels, remove, dependencies } = write;
-  if (!Object.keys(labels ?? {}).length && !(remove ?? []).length && !dependencies?.length) return;
-  const current = await getOrNull(() => client.getMetadata({ trn }));
-  const currentLabels = current?.metadata?.labels ?? {};
+): Record<string, string> {
+  const { labels, remove, dependencies } = write;
   const resolved = (dependencies ?? []).map((pending) =>
     dependencyLabelWrite({ ...pending, existingLabels: currentLabels }),
   );
@@ -469,6 +539,98 @@ export async function writeMetadataLabels(
   for (const key of [...(remove ?? []), ...resolved.flatMap((records) => records.remove)]) {
     delete merged[key];
   }
+  return merged;
+}
+
+function metadataRecoveryError(applyError: unknown, flushError: unknown): AggregateError {
+  return new AggregateError(
+    [applyError, flushError],
+    `Resource apply failed: ${toError(applyError).message}\nQueued metadata recovery failed: ${toError(flushError).message}`,
+    { cause: flushError },
+  );
+}
+
+/**
+ * Collect metadata label changes and write the final maps in batches.
+ * @template TClient, T
+ * @param client - Operator client instance
+ * @param apply - Resource apply callback using the batch-aware client
+ * @returns The apply callback result
+ */
+export async function withMetadataWriteBatch<TClient extends MetadataLabelBulkClient, T>(
+  client: TClient,
+  apply: (client: TClient) => Promise<T>,
+): Promise<T> {
+  const batch = new MetadataWriteBatch(client);
+  const batchClient = new Proxy(client, {
+    get(target, property, receiver) {
+      return property === metadataWriteBatch ? batch : Reflect.get(target, property, receiver);
+    },
+  });
+  let result: T;
+  try {
+    result = await apply(batchClient);
+  } catch (applyError) {
+    try {
+      await batch.flush();
+    } catch (flushError) {
+      throw metadataRecoveryError(applyError, flushError);
+    }
+    throw applyError;
+  }
+  await batch.flush();
+  return result;
+}
+
+/**
+ * Write metadata labels as a change against the resource's current labels.
+ *
+ * `SetMetadata` replaces the whole label map, so a request built from labels
+ * read earlier deletes anything written in between. This applies `labels` and
+ * `remove` to the latest labels this helper reads before writing, which is why
+ * every label write in the SDK goes through it.
+ *
+ * Concurrent writers are still not safe in the strict sense — that needs
+ * server-side conditional writes — but a write can no longer be built from
+ * state this process read at an unrelated point in time.
+ *
+ * A write that changes nothing does nothing — whether the caller requested no
+ * change or the change turns out to already hold. Writing back what was just
+ * read would still overwrite whatever landed in between, for no gain, and the
+ * labels the SDK sets are unchanged on most deploys.
+ * @param client - Operator client instance
+ * @param write - TRN, labels to set, and label keys to delete
+ * @returns Promise that resolves when the change is queued for a batch or written directly
+ */
+export async function writeMetadataLabels(
+  client: MetadataLabelClient,
+  write: MetadataLabelWrite,
+): Promise<void> {
+  if (!hasMetadataLabelChange(write)) return;
+  const batch = (client as MetadataWriteBatchClient)[metadataWriteBatch];
+  if (batch) {
+    await batch.enqueue(write);
+    return;
+  }
+  await writeMetadataLabelsDirect(client, write);
+}
+
+/**
+ * Write one metadata change immediately, bypassing deploy resource batching.
+ * This is reserved for migration checkpoints whose callers continue only
+ * after the label is durable.
+ * @param client - Operator client instance
+ * @param write - TRN, labels to set, and label keys to delete
+ */
+export async function writeMetadataLabelsDirect(
+  client: MetadataLabelClient,
+  write: MetadataLabelWrite,
+): Promise<void> {
+  if (!hasMetadataLabelChange(write)) return;
+  const { trn } = write;
+  const current = await getOrNull(() => client.getMetadata({ trn }));
+  const currentLabels = current?.metadata?.labels ?? {};
+  const merged = applyMetadataLabelWrite(currentLabels, write);
   if (areSameLabels(currentLabels, merged)) return;
   await client.setMetadata({ trn, labels: merged });
 }

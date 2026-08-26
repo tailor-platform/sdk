@@ -625,6 +625,9 @@ export function getExecutorWaitFailureMessage(result: WatchExecutorJobResult): s
   if (result.functionStatus === "FAILED") {
     return `Function execution '${result.functionExecutionId}' failed.`;
   }
+  if (result.functionStatus === "CANCELED") {
+    return `Function execution '${result.functionExecutionId}' was canceled.`;
+  }
   return undefined;
 }
 

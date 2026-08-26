@@ -69,8 +69,8 @@ db.table("User", "User in the system", {
 | `db.float()`                      | Float    | number         |
 | [`db.decimal()`](#decimal-fields) | Decimal  | string         |
 | `db.bool()`                       | Boolean  | boolean        |
-| `db.date()`                       | Date     | string         |
-| `db.datetime()`                   | DateTime | string \| Date |
+| `db.date()`                       | Date     | Date \| string |
+| `db.datetime()`                   | DateTime | Date \| string |
 | `db.time()`                       | Time     | string         |
 | `db.uuid()`                       | UUID     | string         |
 | [`db.enum()`](#enum-fields)       | Enum     | string         |

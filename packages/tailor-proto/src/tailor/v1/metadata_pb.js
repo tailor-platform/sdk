@@ -5,12 +5,13 @@
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../buf/validate/validate_pb";
 import { file_tailor_v1_metadata_resource } from "./metadata_resource_pb";
+import { file_tailor_v1_resource } from "./resource_pb";
 
 /**
  * Describes the file tailor/v1/metadata.proto.
  */
 export const file_tailor_v1_metadata = /*@__PURE__*/
-  fileDesc("Chh0YWlsb3IvdjEvbWV0YWRhdGEucHJvdG8SCXRhaWxvci52MSLNAgoSU2V0TWV0YWRhdGFSZXF1ZXN0EocBCgN0cm4YASABKAlCerpId3J1MnNedHJuOnYxOndvcmtzcGFjZTpbMC05YS1mQS1GXXs4fS1bMC05YS1mQS1GXXs0fS1bMC05YS1mQS1GXXs0fS1bMC05YS1mQS1GXXs0fS1bMC05YS1mQS1GXXsxMn0oOlthLXpBLVowLTlfLjoqLV0rKT8kEn4KBmxhYmVscxgCIAMoCzIpLnRhaWxvci52MS5TZXRNZXRhZGF0YVJlcXVlc3QuTGFiZWxzRW50cnlCQ7pIQJoBPSIbchkyF15bYS16XVthLXowLTlfLV17MCw2Mn0kKh5yHDIaXiR8XlthLXpdW2EtejAtOV8tXXswLDYyfSQaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASI8ChNTZXRNZXRhZGF0YVJlc3BvbnNlEiUKCG1ldGFkYXRhGAEgASgLMhMudGFpbG9yLnYxLk1ldGFkYXRhIp4BChJHZXRNZXRhZGF0YVJlcXVlc3QShwEKA3RybhgBIAEoCUJ6ukh3cnUyc150cm46djE6d29ya3NwYWNlOlswLTlhLWZBLUZdezh9LVswLTlhLWZBLUZdezR9LVswLTlhLWZBLUZdezR9LVswLTlhLWZBLUZdezR9LVswLTlhLWZBLUZdezEyfSg6W2EtekEtWjAtOV8uOiotXSspPyQiPAoTR2V0TWV0YWRhdGFSZXNwb25zZRIlCghtZXRhZGF0YRgBIAEoCzITLnRhaWxvci52MS5NZXRhZGF0YWIGcHJvdG8z", [file_buf_validate_validate, file_tailor_v1_metadata_resource]);
+  fileDesc("Chh0YWlsb3IvdjEvbWV0YWRhdGEucHJvdG8SCXRhaWxvci52MSLQAgoSU2V0TWV0YWRhdGFSZXF1ZXN0EocBCgN0cm4YASABKAlCerpId3J1MnNedHJuOnYxOndvcmtzcGFjZTpbMC05YS1mQS1GXXs4fS1bMC05YS1mQS1GXXs0fS1bMC05YS1mQS1GXXs0fS1bMC05YS1mQS1GXXs0fS1bMC05YS1mQS1GXXsxMn0oOlthLXpBLVowLTlfLjoqLV0rKT8kEoABCgZsYWJlbHMYAiADKAsyKS50YWlsb3IudjEuU2V0TWV0YWRhdGFSZXF1ZXN0LkxhYmVsc0VudHJ5QkW6SEKaAT8QFCIbchkyF15bYS16XVthLXowLTlfLV17MCw2Mn0kKh5yHDIaXiR8XlthLXpdW2EtejAtOV8tXXswLDYyfSQaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASI8ChNTZXRNZXRhZGF0YVJlc3BvbnNlEiUKCG1ldGFkYXRhGAEgASgLMhMudGFpbG9yLnYxLk1ldGFkYXRhIp4BChJHZXRNZXRhZGF0YVJlcXVlc3QShwEKA3RybhgBIAEoCUJ6ukh3cnUyc150cm46djE6d29ya3NwYWNlOlswLTlhLWZBLUZdezh9LVswLTlhLWZBLUZdezR9LVswLTlhLWZBLUZdezR9LVswLTlhLWZBLUZdezR9LVswLTlhLWZBLUZdezEyfSg6W2EtekEtWjAtOV8uOiotXSspPyQiPAoTR2V0TWV0YWRhdGFSZXNwb25zZRIlCghtZXRhZGF0YRgBIAEoCzITLnRhaWxvci52MS5NZXRhZGF0YSJVChZCdWxrU2V0TWV0YWRhdGFSZXF1ZXN0EjsKCHJlcXVlc3RzGAEgAygLMh0udGFpbG9yLnYxLlNldE1ldGFkYXRhUmVxdWVzdEIKukgHkgEECAEQZCJMChdCdWxrU2V0TWV0YWRhdGFSZXNwb25zZRIxCgdyZXN1bHRzGAEgAygLMiAudGFpbG9yLnYxLkJ1bGtTZXRNZXRhZGF0YVJlc3VsdCJLChVCdWxrU2V0TWV0YWRhdGFSZXN1bHQSCwoDdHJuGAEgASgJEiUKCG1ldGFkYXRhGAIgASgLMhMudGFpbG9yLnYxLk1ldGFkYXRhIsMCChNMaXN0TWV0YWRhdGFSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESgwEKBmxhYmVscxgCIAMoCzIqLnRhaWxvci52MS5MaXN0TWV0YWRhdGFSZXF1ZXN0LkxhYmVsc0VudHJ5Qke6SESaAUEIARAUIhtyGTIXXlthLXpdW2EtejAtOV8tXXswLDYyfSQqHnIcMhpeJHxeW2Etel1bYS16MC05Xy1dezAsNjJ9JBISCgpwYWdlX3Rva2VuGAMgASgJEhEKCXBhZ2Vfc2l6ZRgEIAEoDRIwCg5wYWdlX2RpcmVjdGlvbhgFIAEoDjIYLnRhaWxvci52MS5QYWdlRGlyZWN0aW9uGi0KC0xhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEidAoUTGlzdE1ldGFkYXRhUmVzcG9uc2USLgoHcmVzdWx0cxgBIAMoCzIdLnRhaWxvci52MS5MaXN0TWV0YWRhdGFSZXN1bHQSFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJEhMKC3RvdGFsX2NvdW50GAMgASgDIkgKEkxpc3RNZXRhZGF0YVJlc3VsdBILCgN0cm4YASABKAkSJQoIbWV0YWRhdGEYAiABKAsyEy50YWlsb3IudjEuTWV0YWRhdGFiBnByb3RvMw", [file_buf_validate_validate, file_tailor_v1_metadata_resource, file_tailor_v1_resource]);
 
 /**
  * Describes the message tailor.v1.SetMetadataRequest.
@@ -39,4 +40,46 @@ export const GetMetadataRequestSchema = /*@__PURE__*/
  */
 export const GetMetadataResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_metadata, 3);
+
+/**
+ * Describes the message tailor.v1.BulkSetMetadataRequest.
+ * Use `create(BulkSetMetadataRequestSchema)` to create a new message.
+ */
+export const BulkSetMetadataRequestSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_metadata, 4);
+
+/**
+ * Describes the message tailor.v1.BulkSetMetadataResponse.
+ * Use `create(BulkSetMetadataResponseSchema)` to create a new message.
+ */
+export const BulkSetMetadataResponseSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_metadata, 5);
+
+/**
+ * Describes the message tailor.v1.BulkSetMetadataResult.
+ * Use `create(BulkSetMetadataResultSchema)` to create a new message.
+ */
+export const BulkSetMetadataResultSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_metadata, 6);
+
+/**
+ * Describes the message tailor.v1.ListMetadataRequest.
+ * Use `create(ListMetadataRequestSchema)` to create a new message.
+ */
+export const ListMetadataRequestSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_metadata, 7);
+
+/**
+ * Describes the message tailor.v1.ListMetadataResponse.
+ * Use `create(ListMetadataResponseSchema)` to create a new message.
+ */
+export const ListMetadataResponseSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_metadata, 8);
+
+/**
+ * Describes the message tailor.v1.ListMetadataResult.
+ * Use `create(ListMetadataResultSchema)` to create a new message.
+ */
+export const ListMetadataResultSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_metadata, 9);
 

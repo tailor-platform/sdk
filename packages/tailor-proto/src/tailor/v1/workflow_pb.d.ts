@@ -538,6 +538,9 @@ export declare type ListWorkflowJobFunctionsRequest = Message<"tailor.v1.ListWor
   workspaceId: string;
 
   /**
+   * Cursor over when each job function was created, which does not move while
+   * a job function is updated.
+   *
    * @generated from field: string page_token = 2;
    */
   pageToken: string;
@@ -564,6 +567,10 @@ export declare const ListWorkflowJobFunctionsRequestSchema: GenMessage<ListWorkf
  */
 export declare type ListWorkflowJobFunctionsResponse = Message<"tailor.v1.ListWorkflowJobFunctionsResponse"> & {
   /**
+   * One entry per job function name, the latest version of each, oldest job
+   * function first. Ordering is by when the job function was created, not by
+   * when the returned version was.
+   *
    * Returns the lightweight WorkflowJobFunctionSummary projection (no script /
    * script_ref) so workspace-wide listings do not have to materialise multi-MB
    * payloads. Field tags match WorkflowJobFunction, so the change is wire
@@ -581,6 +588,8 @@ export declare type ListWorkflowJobFunctionsResponse = Message<"tailor.v1.ListWo
   nextPageToken: string;
 
   /**
+   * Number of job functions, not of versions.
+   *
    * @generated from field: int64 total_count = 3;
    */
   totalCount: bigint;

@@ -69,7 +69,7 @@ export interface ExecutionWaitResult {
  * Wait for a function execution to complete
  *
  * Polls the getFunctionExecution API until the execution reaches a terminal state
- * (SUCCESS or FAILED).
+ * (SUCCESS, FAILED, or CANCELED).
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {string} executionId - Execution ID to wait for
@@ -98,7 +98,8 @@ export async function waitForExecution(
     // Check for terminal states
     if (
       execution.status === FunctionExecution_Status.SUCCESS ||
-      execution.status === FunctionExecution_Status.FAILED
+      execution.status === FunctionExecution_Status.FAILED ||
+      execution.status === FunctionExecution_Status.CANCELED
     ) {
       return {
         status: execution.status,
@@ -151,7 +152,12 @@ export async function executeScript<T extends Jsonifiable = Jsonifiable>(
       success: false,
       logs: result.logs,
       result: result.result || response.result,
-      error: result.result || response.result || "Script execution failed with unknown error",
+      error:
+        result.result ||
+        response.result ||
+        (result.status === FunctionExecution_Status.CANCELED
+          ? "Script execution was canceled"
+          : "Script execution failed with unknown error"),
     };
   }
 }

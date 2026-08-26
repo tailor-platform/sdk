@@ -21,10 +21,10 @@
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
     "@types/node": "24.13.3",
-    "oxfmt": "0.63.0",
-    "oxlint": "1.78.0",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.79.0",
     "oxlint-tsgolint": "7.0.2001",
     "typescript": "6.0.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   }
 }

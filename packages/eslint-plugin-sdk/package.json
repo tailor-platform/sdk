@@ -38,10 +38,10 @@
   "devDependencies": {
     "@types/node": "24.13.3",
     "eslint": "10.8.1",
-    "oxlint": "1.78.0",
+    "oxlint": "1.79.0",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "peerDependencies": {
     "eslint": ">=9.0.0"

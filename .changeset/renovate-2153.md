@@ -5,4 +5,4 @@
 "@tailor-platform/sdk-plugin-tailordb-erd": patch
 ---
 
-fix(deps): update dependency politty to v0.11.9
+fix(deps): update dependency @inquirer/prompts to v8.6.0
