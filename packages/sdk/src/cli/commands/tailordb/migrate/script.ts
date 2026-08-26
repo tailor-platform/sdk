@@ -126,17 +126,11 @@ export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): S
  * Record that a migration's script runs as a workflow job rather than a
  * synchronous script execution, lifting the function-execution deadline.
  * @param diffPath - Migration diff file to update
- * @param longRunning - Whether the script runs as a workflow job
  */
-function setMigrationLongRunning(diffPath: string, longRunning: boolean): void {
+function setMigrationLongRunning(diffPath: string): void {
   // Edit the raw JSON so keys unknown to this SDK version survive the rewrite.
   const raw = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
-  if (longRunning) {
-    raw.longRunning = true;
-  } else {
-    if (!Object.hasOwn(raw, "longRunning")) return;
-    delete raw.longRunning;
-  }
+  raw.longRunning = true;
   fs.writeFileSync(diffPath, JSON.stringify(raw, null, 2));
 }
 
@@ -178,7 +172,7 @@ export async function addMigrationScriptFiles(
   // Recorded before the early returns below so that re-running the command on
   // an existing migration can turn long-running execution on.
   if (longRunning) {
-    setMigrationLongRunning(diffPath, true);
+    setMigrationLongRunning(diffPath);
     result.longRunning = true;
   }
 
