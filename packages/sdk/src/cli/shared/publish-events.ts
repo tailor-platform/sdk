@@ -62,6 +62,12 @@ function publishEventsConflictError(conflict: PublishEventsConflict): string {
   );
 }
 
+/** The part of an executor that decides whether its triggers need events. */
+export type EventSubscribingExecutor = {
+  /** Whether the executor is disabled, i.e. deployed but never run. */
+  disabled?: boolean | undefined;
+};
+
 /**
  * Whether an executor's triggers count toward the resources it subscribes to.
  *
@@ -71,7 +77,7 @@ function publishEventsConflictError(conflict: PublishEventsConflict): string {
  * @param executor - Executor declared by the subscribing config
  * @returns Whether the executor's triggers subscribe to anything
  */
-export function subscribesToEvents(executor: { disabled?: boolean | undefined }): boolean {
+export function subscribesToEvents(executor: EventSubscribingExecutor): boolean {
   return !executor.disabled;
 }
 
