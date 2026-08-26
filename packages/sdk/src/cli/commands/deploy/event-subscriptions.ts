@@ -109,6 +109,12 @@ export function collectEventSubscriptions(
     const executors = subscriber.application.executorService?.executors ?? {};
     const visibility = collectSubscriberVisibility(subscriber, applications);
     for (const executor of Object.values(executors)) {
+      // A disabled executor never runs, so it needs no events. Counting one would
+      // keep publishing enabled on the resource it names, and would reject an
+      // explicit `publishEvents: false` that nothing actually contradicts.
+      if (executor.disabled) {
+        continue;
+      }
       const lookup = eventSourceLookup(executor, subscriber, visibility);
       if (!lookup) {
         continue;

@@ -218,6 +218,63 @@ describe("planPipeline (resolver service level)", () => {
       },
     );
 
+    test.each([
+      { disabled: true, expected: false, label: "a disabled executor does not subscribe" },
+      { disabled: false, expected: true, label: "an enabled executor subscribes" },
+    ])("$label", async ({ disabled, expected }) => {
+      const application = createMockApplication([createResolverServiceWith(undefined)], {
+        executorService: {
+          config: {},
+          executors: {},
+          loadExecutors: vi.fn().mockResolvedValue({
+            "/onResolved.ts": {
+              name: "on-resolved",
+              disabled,
+              trigger: { kind: "resolverExecuted", resolverName: "myResolver" },
+            },
+          }),
+        },
+      });
+
+      const result = await planPipeline({
+        client: createMockClient([]),
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        executorUsedResolvers: new Set<string>(),
+      });
+
+      expect(desiredPublishExecutionEvents(result)).toBe(expected);
+    });
+
+    test("a disabled executor does not reject an explicit opt-out", async () => {
+      const application = createMockApplication([createResolverServiceWith(false)], {
+        executorService: {
+          config: {},
+          executors: {},
+          loadExecutors: vi.fn().mockResolvedValue({
+            "/onResolved.ts": {
+              name: "on-resolved",
+              disabled: true,
+              trigger: { kind: "resolverExecuted", resolverName: "myResolver" },
+            },
+          }),
+        },
+      });
+
+      const result = await planPipeline({
+        client: createMockClient([]),
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        executorUsedResolvers: new Set<string>(),
+      });
+
+      expect(desiredPublishExecutionEvents(result)).toBe(false);
+    });
+
     test("throws when an opt-out is combined with a subscribing executor", async () => {
       await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
         'Resolver "myResolver" has "publishEvents: false", but executors with resolverExecuted triggers subscribe to it.',

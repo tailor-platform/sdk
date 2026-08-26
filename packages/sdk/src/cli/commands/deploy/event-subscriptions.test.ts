@@ -31,6 +31,8 @@ type TargetSpec = {
   externalResolverNamespaces?: string[];
   externalIdps?: string[];
   executors?: Record<string, Record<string, unknown>>;
+  /** Executors declared with `disabled: true`, keyed the same way as `executors`. */
+  disabledExecutors?: Record<string, Record<string, unknown>>;
 };
 
 type Target = Parameters<typeof collectEventSubscriptions>[0][number];
@@ -114,12 +116,16 @@ function target(spec: TargetSpec): Target {
         ...(spec.externalIdps ?? []).map((Name) => ({ Type: "idp", Name })),
       ],
       executorService: {
-        executors: Object.fromEntries(
-          Object.entries(spec.executors ?? {}).map(([name, trigger]) => [
+        executors: Object.fromEntries([
+          ...Object.entries(spec.executors ?? {}).map(([name, trigger]) => [
             `/${name}.ts`,
             { name, trigger },
           ]),
-        ),
+          ...Object.entries(spec.disabledExecutors ?? {}).map(([name, trigger]) => [
+            `/${name}.ts`,
+            { name, trigger, disabled: true },
+          ]),
+        ]),
       },
     },
     workflowBuildResult: {
@@ -678,5 +684,69 @@ describe("collectEventSubscriptions and a resolver name the subscriber also decl
 
   test("owns the subscription itself rather than the peer", () => {
     expect(subscriptions()[0]?.owner.config.path).toBe("buyer/tailor.config.ts");
+  });
+});
+
+describe("collectEventSubscriptions and a disabled executor", () => {
+  test.each([
+    {
+      kind: "tailordb",
+      trigger: { kind: "tailordb", tableName: "Order" },
+      owns: { types: ["Order"] },
+    },
+    {
+      kind: "resolverExecuted",
+      trigger: { kind: "resolverExecuted", resolverName: "processOrder" },
+      owns: { resolvers: ["processOrder"] },
+    },
+    {
+      kind: "idpUser",
+      trigger: { kind: "idpUser", idp: "shared-idp" },
+      owns: { idps: ["shared-idp"] },
+    },
+    {
+      kind: "workflowExecution",
+      trigger: { kind: "workflowExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+    },
+    {
+      kind: "workflowJobExecution",
+      trigger: { kind: "workflowJobExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+    },
+  ])("a disabled executor subscribes to nothing ($kind)", ({ trigger, owns }) => {
+    const subscriptions = collectEventSubscriptions([
+      target({
+        configPath: "buyer/tailor.config.ts",
+        ...owns,
+        disabledExecutors: { "sync-it": trigger },
+      }),
+    ]);
+    expect(subscriptions).toEqual([]);
+  });
+
+  test("an enabled executor still subscribes alongside a disabled one", () => {
+    const subscriptions = collectEventSubscriptions([
+      target({
+        configPath: "buyer/tailor.config.ts",
+        types: ["Order", "Invoice"],
+        executors: { "on-order": { kind: "tailordb", tableName: "Order" } },
+        disabledExecutors: { "on-invoice": { kind: "tailordb", tableName: "Invoice" } },
+      }),
+    ]);
+    expect(subscriptions.map((subscription) => subscription.executorName)).toEqual(["on-order"]);
+  });
+
+  test("a disabled executor does not demand the subscribed resource exist", () => {
+    expect(() =>
+      collectEventSubscriptions([
+        target({
+          configPath: "buyer/tailor.config.ts",
+          disabledExecutors: {
+            "sync-it": { kind: "tailordb", tableName: "Nonexistent" },
+          },
+        }),
+      ]),
+    ).not.toThrow();
   });
 });

@@ -93,6 +93,8 @@ export async function planTailorDB(context: PlanContext) {
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
   const executorUsedTables = new Set(context.executorUsedTailorDBTables ?? []);
   for (const executor of executors) {
+    // A disabled executor never runs, so it needs no events from the table.
+    if (executor.disabled) continue;
     if (executor.trigger.kind === "tailordb") {
       executorUsedTables.add(executor.trigger.tableName);
     }

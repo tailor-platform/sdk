@@ -487,6 +487,53 @@ describe("planTailorDB (service level)", () => {
       expect(createdType?.schema?.settings?.publishRecordEvents).toBe(true);
     });
 
+    test.each([
+      { disabled: true, expected: false, label: "a disabled executor does not subscribe" },
+      { disabled: false, expected: true, label: "an enabled executor subscribes" },
+    ])("$label", async ({ disabled, expected }) => {
+      const tailorDBService = createMockTailorDBService("shared-db");
+      const userType: TailorDBType = {
+        name: "User",
+        pluralForm: "Users",
+        description: "User table",
+        fields: { name: { name: "name", config: { type: "string" } } },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [userType.name]: userType },
+      });
+
+      const application = createMockApplication([tailorDBService]);
+      Object.defineProperty(application, "executorService", {
+        value: {
+          config: {},
+          executors: {},
+          loadExecutors: vi.fn().mockResolvedValue({
+            "/onUser.ts": {
+              name: "on-user",
+              disabled,
+              trigger: { kind: "tailordb", tableName: "User" },
+            },
+          }),
+        },
+      });
+
+      const result = await planTailorDB({
+        client: createMockClient([]),
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const createdType = result.changeSet.type.creates[0]!.request.tailordbType;
+      expect(createdType?.schema?.settings?.publishRecordEvents).toBe(expected);
+    });
+
     describe("publishEvents", () => {
       function createTypeWith(publishEvents: boolean | undefined): TailorDBType {
         return {

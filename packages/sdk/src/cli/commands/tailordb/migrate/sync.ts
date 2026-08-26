@@ -168,6 +168,8 @@ async function assertMigrationsReproduceLocalTypes(
   }
   const executorUsedTables = new Set<string>();
   for (const executor of Object.values(executorService?.executors ?? {})) {
+    // A disabled executor never runs, so it needs no events from the table.
+    if (executor.disabled) continue;
     if (executor.trigger.kind === "tailordb") {
       executorUsedTables.add(executor.trigger.tableName);
     }
