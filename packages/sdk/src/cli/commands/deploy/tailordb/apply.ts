@@ -128,6 +128,8 @@ function buildMigrationContextForScripts(
     dbConfig: dbConfigMap,
     env: migrationContext.config.env ?? {},
     configDir: path.dirname(migrationContext.config.path),
+    appName: migrationContext.application.name,
+    appId: migrationContext.application.id,
   };
 }
 

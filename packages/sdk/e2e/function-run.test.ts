@@ -116,6 +116,8 @@ async function runFunction(
 }
 
 describe.sequential("E2E: function run", () => {
+  // Setup creates a workspace and deploys the example config; both are slow
+  // enough that this needs the same budget as the other deploying suites.
   aroundAll(async (runSuite) => {
     // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
@@ -176,7 +178,7 @@ describe.sequential("E2E: function run", () => {
     });
 
     await runSuite();
-  }, 120000);
+  }, 300000);
 
   describe("resolver", () => {
     test("runs add resolver with input arguments", async () => {

@@ -1,7 +1,9 @@
 /**
  * Migration execution service for TailorDB migrations
  *
- * Handles detection and execution of pending migration scripts via TestExecScript API.
+ * Handles detection and execution of pending migration scripts. Every migration
+ * runs as a temporary workflow job so its duration is not bound by the
+ * synchronous function-execution deadline.
  */
 
 import * as fs from "node:fs";
@@ -28,9 +30,9 @@ import {
 } from "#/cli/commands/tailordb/migrate/types";
 import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
-import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
+import { executeMigrationAsWorkflow } from "./migration-workflow";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
@@ -43,6 +45,8 @@ interface MigrationExecutionOptions {
   invoker: AuthInvoker;
   env: Record<string, string | number | boolean>;
   configDir: string;
+  appName: string;
+  appId: string | undefined;
 }
 
 /**
@@ -56,6 +60,10 @@ export interface MigrationContext {
   dbConfig: Record<string, TailorDBServiceConfig | undefined>;
   env: Record<string, string | number | boolean>;
   configDir: string;
+  /** Application name, used to label a migration's temporary resources. */
+  appName: string;
+  /** Application id, used to label a migration's temporary resources. */
+  appId: string | undefined;
 }
 
 interface ExecutionResult {
@@ -209,9 +217,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, invoker, env, configDir } = options;
-
-  const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
+  const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
 
   // Bundle the migration script
   const bundleResult = await bundleMigrationScript(
@@ -222,13 +228,15 @@ async function executeSingleMigration(
     configDir,
   );
 
-  // Execute the script using the shared script executor
-  const result = await executeScript({
+  const result = await executeMigrationAsWorkflow({
     client,
     workspaceId,
-    name: migrationName,
     code: bundleResult.bundledCode,
+    namespace: migration.namespace,
+    migrationNumber: migration.number,
     invoker,
+    appName,
+    appId,
   });
 
   return {
@@ -314,13 +322,17 @@ export async function executeMigrations(
       invoker,
       env: context.env,
       configDir: context.configDir,
+      appName: context.appName,
+      appId: context.appId,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);
 
     for (const migration of namespaceMigrations) {
       const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
-      const sp = spinner().start(`Executing migration ${migrationLabel}...`);
+      const sp = spinner().start(
+        `Executing migration ${migrationLabel} (this can take a while)...`,
+      );
 
       const result = await executeSingleMigration(options, migration);
 

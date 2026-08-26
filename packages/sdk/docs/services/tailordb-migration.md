@@ -757,6 +757,18 @@ The migration script runs in a single transaction. For tables with many rows:
 - Long-running transactions can hit platform timeouts and hold locks. For very large backfills, consider splitting the work across multiple migrations, each operating on a subset.
 - Add `LIMIT` and resumability (idempotent `where` clauses) so a re-run after a transient failure converges.
 
+### Migrations that take longer than a minute
+
+Migration scripts run as workflow jobs, so they are not bound by the 60-second
+limit that applies to synchronous script execution. `tailor deploy` waits for
+the migration and reports its logs as usual. Execution time is still bounded —
+a workflow job has its own, far longer, execution-time limit.
+
+The script still runs in a single transaction, so the guidance above about
+locks and transaction size continues to apply — prefer splitting a very large
+backfill across several migrations over holding one transaction open for a
+long time.
+
 ## Testing Migrations Locally
 
 ### Unit-testing migrate.ts
