@@ -281,12 +281,9 @@ async function script(options: ScriptOptions): Promise<void> {
   const added = [result.migratePath && "migration script", result.testPath && "migration test"]
     .filter(Boolean)
     .join(" and ");
-  if (added) {
-    logger.success(
-      `Added ${added} for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
-    );
-  }
-  if (!added) return;
+  logger.success(
+    `Added ${added} for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
+  );
   if (result.migratePath) {
     logger.info(`  Migration script: ${result.migratePath}`);
     logger.info(`  DB types: ${result.dbTypesPath}`);
