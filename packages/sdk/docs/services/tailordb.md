@@ -520,6 +520,7 @@ db.table("User", {
 - When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
 - When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
 - An executor declared with `disabled: true` never runs, so it does not count as using the table
+- While a `deploy` applies pending migrations, publishing is switched off across the migrating namespace and switched back on once they finish — a migration script's own record writes would otherwise reach executors from the previous deploy, which expect the old shape. A migration that fails restores publishing before reporting the error
 
 **Use cases:**
 
