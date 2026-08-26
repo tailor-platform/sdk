@@ -84,11 +84,20 @@ async function main() {
 
   const dryRun = process.argv.includes("--dry-run");
   const localOrphans = process.argv.includes("--local-orphans");
-  const runId = process.argv.find((a) => a.startsWith("--run-id="))?.split("=")[1];
+  const runIdArg = process.argv.find((a) => a.startsWith("--run-id="));
+  const runId = runIdArg?.split("=")[1];
   const minAgeHoursArg = process.argv.find((a) => a.startsWith("--min-age-hours="))?.split("=")[1];
 
+  if (runIdArg && !runId) {
+    console.error("--run-id requires a non-empty value.");
+    process.exit(1);
+  }
   if (localOrphans && runId) {
     console.error("--local-orphans and --run-id are mutually exclusive.");
+    process.exit(1);
+  }
+  if (!localOrphans && minAgeHoursArg) {
+    console.error("--min-age-hours is only meaningful with --local-orphans.");
     process.exit(1);
   }
   let minAgeHours = 0;
