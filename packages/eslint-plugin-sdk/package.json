@@ -41,7 +41,7 @@
     "oxlint": "1.79.0",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "peerDependencies": {
     "eslint": ">=9.0.0"
