@@ -88,8 +88,8 @@ deploy
 └── apply.cleanup
 ```
 
-The migration spans repeat once per pending migration, so a namespace applying
-several migrations emits several of each.
+The pre/post migration spans repeat once per pending migration; the script span
+appears only for migrations that carry a `migrate.ts`.
 
 Individual RPC calls are also traced as `rpc.*` child spans (e.g., `rpc.CreateApplication`) via the Connect-RPC interceptor.
 

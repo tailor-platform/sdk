@@ -62,8 +62,6 @@ export async function applyDeploymentPlans(
     }
   };
 
-  // Every service applies the same way — once per deployment, under a span named
-  // after the step — so one service's timing is attributable on its own.
   const step = (
     name: string,
     apply: (deployment: PlannedDeployment) => Promise<unknown>,
