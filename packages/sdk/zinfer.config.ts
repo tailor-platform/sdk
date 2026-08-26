@@ -16,6 +16,7 @@ export default defineConfig({
     LogLevelSchema: "LogLevelEnum",
     TailorDBTypeSettingsSchema: "TailorDBTypeParsedSettings",
     TailorDBTypeSchema: "TailorDBTypeRaw",
+    TailorDBFieldSchema: "TailorDBFieldOutput",
     SCIMSchema: "SCIMConfig",
     GqlOperationsSchema: "GqlOperations",
     IdPGqlOperationsSchema: "IdPGqlOperations",

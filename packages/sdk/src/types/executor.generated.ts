@@ -209,14 +209,6 @@ export type WebhookOperation = {
 };
 export type WebhookOperationInput = WebhookOperation;
 
-export type JsonValueInput =
-  | string
-  | number
-  | boolean
-  | JsonValueInput[]
-  | { [key: string]: JsonValueInput }
-  | null;
-
 export type JsonValue =
   | string
   | number
@@ -224,6 +216,7 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue }
   | null;
+export type JsonValueInput = JsonValue;
 
 export type WorkflowInput = string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
 export type WorkflowInputInput = WorkflowInput;
@@ -243,6 +236,7 @@ export type WorkflowOperationInput =
       kind: "workflow";
       /** Name of the workflow to execute */
       workflowName?: string | undefined;
+      /** Arguments to pass to the workflow */
       args?: WorkflowOperationArgs;
       /** Invoker for the workflow execution */
       invoker?:
@@ -260,6 +254,7 @@ export type WorkflowOperationInput =
       workflowName: string;
       kind: "workflow";
       workflow?: undefined;
+      /** Arguments to pass to the workflow */
       args?: WorkflowOperationArgs;
       /** Invoker for the workflow execution */
       invoker?:
@@ -278,6 +273,7 @@ export type WorkflowOperation =
       /** Name of the workflow to execute */
       workflowName: string;
       kind: "workflow";
+      /** Arguments to pass to the workflow */
       args?: WorkflowOperationArgs;
       /** Invoker for the workflow execution */
       invoker?:
@@ -295,6 +291,7 @@ export type WorkflowOperation =
       workflowName: string;
       kind: "workflow";
       workflow?: undefined;
+      /** Arguments to pass to the workflow */
       args?: WorkflowOperationArgs;
       /** Invoker for the workflow execution */
       invoker?:

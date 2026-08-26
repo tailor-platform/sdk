@@ -112,7 +112,7 @@ export const RawRelationConfigSchema = z.strictObject({
   backward: z.string().optional().describe("Backward relation name on the target table"),
 });
 
-const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
+export const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
   // strip unknown keys
   z.object({
     type: TailorFieldTypeSchema,

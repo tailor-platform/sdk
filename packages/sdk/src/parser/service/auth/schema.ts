@@ -209,7 +209,7 @@ const UserProfileSchema = z.strictObject({
   attributeList: z.array(z.string()).optional(),
 });
 
-const ValueOperandSchema: z.ZodType<ValueOperand> = z.union([
+export const ValueOperandSchema: z.ZodType<ValueOperand> = z.union([
   z.string(),
   z.boolean(),
   z.array(z.string()),
@@ -263,40 +263,38 @@ const AuthConfigBaseSchema = z.strictObject({
   publishSessionEvents: z.boolean().optional().describe("Enable publishing session events"),
 });
 
-export const AuthConfigSchema = z
-  .xor(
-    [
-      AuthConfigBaseSchema.extend({
-        userProfile: UserProfileSchema.optional().describe("User profile configuration"),
-        machineUserAttributes: z.undefined().optional(),
-      }),
-      AuthConfigBaseSchema.extend({
-        userProfile: z.undefined().optional(),
-        machineUserAttributes: z
-          .record(z.string(), TailorFieldSchema)
-          .describe("Machine user attribute fields"),
-      }),
-    ],
-    {
-      error: (iss) => {
-        // zod may report error codes not covered by its type definitions
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (iss.code !== "invalid_union") return undefined;
-        // zod may report error codes not covered by its type definitions
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
-        if (iss.errors.length < 2) return undefined;
-        const isOnlyMutexViolation = iss.errors.every((variantErrors) =>
-          variantErrors.every(
-            (e) =>
-              e.path.length === 1 &&
-              (e.path[0] === "userProfile" || e.path[0] === "machineUserAttributes"),
-          ),
-        );
-        if (isOnlyMutexViolation) {
-          return "Specify either `userProfile` or `machineUserAttributes`, not both.";
-        }
-        return undefined;
-      },
+export const AuthConfigSchema = z.xor(
+  [
+    AuthConfigBaseSchema.extend({
+      userProfile: UserProfileSchema.optional().describe("User profile configuration"),
+      machineUserAttributes: z.undefined().optional(),
+    }),
+    AuthConfigBaseSchema.extend({
+      userProfile: z.undefined().optional(),
+      machineUserAttributes: z
+        .record(z.string(), TailorFieldSchema)
+        .describe("Machine user attribute fields"),
+    }),
+  ],
+  {
+    error: (iss) => {
+      // zod may report error codes not covered by its type definitions
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
+      if (iss.code !== "invalid_union") return undefined;
+      // zod may report error codes not covered by its type definitions
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
+      if (iss.errors.length < 2) return undefined;
+      const isOnlyMutexViolation = iss.errors.every((variantErrors) =>
+        variantErrors.every(
+          (e) =>
+            e.path.length === 1 &&
+            (e.path[0] === "userProfile" || e.path[0] === "machineUserAttributes"),
+        ),
+      );
+      if (isOnlyMutexViolation) {
+        return "Specify either `userProfile` or `machineUserAttributes`, not both.";
+      }
+      return undefined;
     },
-  )
-  .brand("AuthConfig");
+  },
+);

@@ -34,12 +34,10 @@ export type DBFieldMetadata = {
   /** Type name for nested or enum fields */
   typeName?: string | undefined;
   /** Allowed values for enum fields */
-  allowedValues?:
-    | {
-        value: string;
-        description?: string | undefined;
-      }[]
-    | undefined;
+  allowedValues?: {
+    value: string;
+    description?: string | undefined;
+  }[];
   /** Whether the field is indexed for faster queries */
   index?: boolean | undefined;
   /** Whether the field value must be unique */
@@ -96,6 +94,14 @@ export type RawRelationConfig = {
   backward?: string | undefined;
 };
 export type RawRelationConfigInput = RawRelationConfig;
+
+export type TailorDBFieldOutput = {
+  type: string;
+  fields?: Record<string, TailorDBFieldOutput>;
+  metadata: import("./tailordb.generated").DBFieldMetadata;
+  rawRelation?: import("./tailordb.generated").RawRelationConfig;
+};
+export type TailorDBFieldOutputInput = TailorDBFieldOutput;
 
 export type TailorDBTypeParsedSettingsInput = {
   /** Custom plural form of the table name for GraphQL */
@@ -1012,7 +1018,7 @@ export type RawPermissionsInput = RawPermissions;
 export type TailorDBTypeRawInput = {
   name: string;
   fields: {
-    [x: string]: unknown;
+    [x: string]: TailorDBFieldOutput;
   };
   metadata: {
     name: string;
@@ -1043,55 +1049,7 @@ export type TailorDBTypeRawInput = {
 export type TailorDBTypeRaw = {
   name: string;
   fields: {
-    [x: string]: {
-      type: string;
-      fields?: any | undefined;
-      metadata: {
-        required?: boolean | undefined | undefined;
-        array?: boolean | undefined | undefined;
-        description?: string | undefined | undefined;
-        typeName?: string | undefined | undefined;
-        allowedValues?:
-          | {
-              value: string;
-              description?: string | undefined | undefined;
-            }[]
-          | undefined;
-        index?: boolean | undefined | undefined;
-        unique?: boolean | undefined | undefined;
-        vector?: boolean | undefined | undefined;
-        foreignKey?: boolean | undefined | undefined;
-        foreignKeyType?: string | undefined | undefined;
-        foreignKeyField?: string | undefined | undefined;
-        hooks?:
-          | {
-              create?: Function | undefined;
-              update?: Function | undefined;
-            }
-          | undefined;
-        validate?: Function[] | undefined;
-        serial?:
-          | {
-              start: number;
-              maxValue?: number | undefined | undefined;
-              format?: string | undefined | undefined;
-            }
-          | undefined;
-        scale?: number | undefined | undefined;
-        default?: unknown;
-      };
-      rawRelation?:
-        | {
-            type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
-            toward: {
-              table: string;
-              as?: string | undefined | undefined;
-              key?: string | undefined | undefined;
-            };
-            backward?: string | undefined | undefined;
-          }
-        | undefined;
-    };
+    [x: string]: TailorDBFieldOutput;
   };
   metadata: {
     name: string;
@@ -1125,14 +1083,12 @@ export type TailorDBServiceConfigInput = {
   /** Glob patterns to exclude from table discovery */
   ignores?: string[] | undefined;
   /** Migration configuration */
-  migration?:
-    | {
-        /** Directory containing migration files */
-        directory: string;
-        /** Machine user name for migration execution */
-        machineUser?: string | undefined;
-      }
-    | undefined;
+  migration?: {
+    /** Directory containing migration files */
+    directory: string;
+    /** Machine user name for migration execution */
+    machineUser?: string | undefined;
+  };
   /** Default GraphQL operations for all tables in this service */
   gqlOperations?:
     | "query"
@@ -1155,14 +1111,12 @@ export type TailorDBServiceConfig = {
   /** Glob patterns to exclude from table discovery */
   ignores?: string[] | undefined;
   /** Migration configuration */
-  migration?:
-    | {
-        /** Directory containing migration files */
-        directory: string;
-        /** Machine user name for migration execution */
-        machineUser?: string | undefined;
-      }
-    | undefined;
+  migration?: {
+    /** Directory containing migration files */
+    directory: string;
+    /** Machine user name for migration execution */
+    machineUser?: string | undefined;
+  };
   /** Default GraphQL operations for all tables in this service */
   gqlOperations?: GqlOperations;
 };
