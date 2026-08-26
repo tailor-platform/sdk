@@ -55,21 +55,34 @@ deploy
 │   ├── plan.executor
 │   └── plan.workflow
 ├── confirm
+├── apply.preflight
 ├── apply.createUpdateServices
+│   ├── apply.secretManager.createUpdate
 │   ├── apply.functionRegistry.createUpdate
 │   ├── apply.staticWebsite.createUpdate
+│   ├── apply.aiGateway.createUpdate
 │   ├── apply.idp.createUpdate
-│   ├── apply.auth.createUpdate
+│   ├── apply.auth.createUpdatePrerequisites
 │   ├── apply.tailorDB.createUpdate
+│   │   ├── apply.tailorDB.migration.prePhase
+│   │   ├── apply.tailorDB.migration.script
+│   │   └── apply.tailorDB.migration.postPhase
+│   ├── apply.auth.createUpdateDependents
 │   └── apply.pipeline.createUpdate
 ├── apply.deleteSubgraphResources
 ├── apply.createUpdateApplication
 ├── apply.createUpdateDependentServices
+│   ├── apply.executor.createUpdate
+│   ├── apply.workflowExecutionPolicy.createUpdate
+│   └── apply.workflow.createUpdate
 ├── apply.deleteDependentServices
 ├── apply.deleteApplication
 ├── apply.deleteSubgraphServices
 └── apply.cleanup
 ```
+
+The migration spans repeat once per pending migration, so a namespace applying
+several migrations emits several of each.
 
 Individual RPC calls are also traced as `rpc.*` child spans (e.g., `rpc.CreateApplication`) via the Connect-RPC interceptor.
 
@@ -110,6 +123,29 @@ curl -s "http://localhost:16686/api/traces?service=tailor&limit=2" | jq '
   }]
 '
 ```
+
+### Measuring the schema/executor window
+
+A deploy applies TailorDB schema changes before it updates executors, so an
+executor registered by the previous deploy can fire against a table whose shape
+has already changed. The window opens when `apply.tailorDB.createUpdate` starts
+mutating schema and closes when `apply.executor.createUpdate` ends:
+
+```bash
+curl -s "http://localhost:16686/api/traces?service=tailor&limit=1" | jq '
+  [.data[0].spans[]
+   | select(.operationName
+            | test("^apply\\.(tailorDB\\.createUpdate|executor\\.createUpdate)$"))]
+  | {
+      window_ms: (((map(.startTime + .duration) | max) - (map(.startTime) | min)) / 1000),
+      spans: (sort_by(.startTime) | map({operationName, duration_ms: (.duration / 1000 | round)}))
+    }
+'
+```
+
+Migration scripts run user code against live data, so
+`apply.tailorDB.migration.script` usually dominates the window and is unbounded
+in principle — a large backfill widens it arbitrarily.
 
 ## Architecture
 

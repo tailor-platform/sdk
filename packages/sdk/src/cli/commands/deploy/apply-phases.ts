@@ -68,21 +68,37 @@ export async function applyDeploymentPlans(
 
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
-      await forEachDeployment((d) =>
-        applySecretManager(applyClient, d.secretManager, "create-update", d.application),
+      await withSpan("apply.secretManager.createUpdate", () =>
+        forEachDeployment((d) =>
+          applySecretManager(applyClient, d.secretManager, "create-update", d.application),
+        ),
       );
-      await forEachDeployment((d) =>
-        applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
+      await withSpan("apply.functionRegistry.createUpdate", () =>
+        forEachDeployment((d) =>
+          applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
+        ),
       );
-      await forEachDeployment((d) =>
-        applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
+      await withSpan("apply.staticWebsite.createUpdate", () =>
+        forEachDeployment((d) => applyStaticWebsite(applyClient, d.staticWebsite, "create-update")),
       );
-      await forEachDeployment((d) => applyAIGateway(applyClient, d.aiGateway, "create-update"));
-      await forEachDeployment((d) => applyIdP(applyClient, d.idp, "create-update"));
-      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-prerequisites"));
-      await forEachDeployment((d) => applyTailorDB(applyClient, d.tailorDB, "create-update"));
-      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-dependents"));
-      await forEachDeployment((d) => applyPipeline(applyClient, d.pipeline, "create-update"));
+      await withSpan("apply.aiGateway.createUpdate", () =>
+        forEachDeployment((d) => applyAIGateway(applyClient, d.aiGateway, "create-update")),
+      );
+      await withSpan("apply.idp.createUpdate", () =>
+        forEachDeployment((d) => applyIdP(applyClient, d.idp, "create-update")),
+      );
+      await withSpan("apply.auth.createUpdatePrerequisites", () =>
+        forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-prerequisites")),
+      );
+      await withSpan("apply.tailorDB.createUpdate", () =>
+        forEachDeployment((d) => applyTailorDB(applyClient, d.tailorDB, "create-update")),
+      );
+      await withSpan("apply.auth.createUpdateDependents", () =>
+        forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-dependents")),
+      );
+      await withSpan("apply.pipeline.createUpdate", () =>
+        forEachDeployment((d) => applyPipeline(applyClient, d.pipeline, "create-update")),
+      );
     });
 
     await withSpan("apply.deleteSubgraphResources", async () => {
@@ -96,17 +112,23 @@ export async function applyDeploymentPlans(
     });
 
     await withSpan("apply.createUpdateDependentServices", async () => {
-      await forEachDeployment((d) => applyExecutor(applyClient, d.executor, "create-update"));
+      await withSpan("apply.executor.createUpdate", () =>
+        forEachDeployment((d) => applyExecutor(applyClient, d.executor, "create-update")),
+      );
       // Execution policies must exist before workflow job functions that reference
       // them by key, otherwise the runtime rejects the dispatch as an unknown key.
-      await forEachDeployment((d) =>
-        applyWorkflowJobFunctionExecutionPolicy(
-          applyClient,
-          d.workflowExecutionPolicy,
-          "create-update",
+      await withSpan("apply.workflowExecutionPolicy.createUpdate", () =>
+        forEachDeployment((d) =>
+          applyWorkflowJobFunctionExecutionPolicy(
+            applyClient,
+            d.workflowExecutionPolicy,
+            "create-update",
+          ),
         ),
       );
-      await forEachDeployment((d) => applyWorkflow(applyClient, d.workflow, "create-update"));
+      await withSpan("apply.workflow.createUpdate", () =>
+        forEachDeployment((d) => applyWorkflow(applyClient, d.workflow, "create-update")),
+      );
     });
   });
 
