@@ -407,11 +407,12 @@ function generateClearableFieldType(config: SnapshotFieldConfig): {
   usedTimestamp: boolean;
 } {
   const { type } = mapToTsType(config.type);
-  // A ColumnType cannot nest, so a timestamp contributes its own select and
-  // write types to the slots rather than the Timestamp alias.
-  if (type === "Timestamp") {
-    const select = config.array ? "Date[]" : "Date";
-    const write = config.array ? "(Date | string)[]" : "Date | string";
+  // A ColumnType cannot nest, so an alias contributes its own select and write
+  // types to the slots rather than the alias itself.
+  const alias = COLUMN_TYPE_ALIASES.get(type);
+  if (alias) {
+    const select = config.array ? `${alias.select}[]` : alias.select;
+    const write = config.array ? `(${alias.write})[]` : alias.write;
     return {
       type: `ColumnType<${select} | null, ${write} | null, ${write} | null>`,
       usedTimestamp: false,
@@ -427,11 +428,14 @@ function generateClearableFieldType(config: SnapshotFieldConfig): {
 function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
   if (config.type !== "date" && config.type !== "datetime") return null;
 
-  if (config.array) {
-    return "ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>";
-  }
+  // The select slot has to stay nullable for existing rows, so the alias cannot
+  // fill the property on its own and its expansion spells out the slots instead.
+  const alias = COLUMN_TYPE_ALIASES.get(mapFieldTypeToColumnType(config.type));
+  if (!alias) return null;
+  const select = config.array ? `${alias.select}[]` : alias.select;
+  const write = config.array ? `(${alias.write})[]` : alias.write;
 
-  return "ColumnType<Date | null, Date | string, Date | string>";
+  return `ColumnType<${select} | null, ${write}, ${write}>`;
 }
 
 /**

@@ -25,6 +25,13 @@ describe("mapFieldTypeToColumnType", () => {
 
 describe("COLUMN_TYPE_ALIASES", () => {
   test("holds the aliases both type generators report usage for", () => {
-    expect([...COLUMN_TYPE_ALIASES]).toEqual(["Timestamp"]);
+    expect([...COLUMN_TYPE_ALIASES.keys()]).toEqual(["Timestamp"]);
+  });
+
+  test("expands Timestamp to the slots its alias declaration uses", () => {
+    expect(COLUMN_TYPE_ALIASES.get("Timestamp")).toEqual({
+      select: "Date",
+      write: "Date | string",
+    });
   });
 });
