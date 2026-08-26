@@ -94,3 +94,9 @@ audit did not complete, list workspaces and inspect the exact run namespace befo
 To sweep older unscoped leftovers, run the existing
 `packages/sdk/scripts/cleanup-e2e-workspaces.ts` with `--dry-run`, inspect every listed workspace, ask
 for explicit approval, and only then run it without `--dry-run`. Never automate an unscoped sweep.
+
+The one sanctioned scoped exception is `--local-orphans --min-age-hours=<N>`: it restricts the sweep
+to workspaces with no run id in their name (i.e. leftovers from a killed local run, which CI's own
+scheduled cleanup can never match, since it has no GitHub Actions run to check against), and only
+once they are at least that old. A `lefthook-local.yml` hook may call this scoped form unattended;
+the unscoped form above still always requires a human in the loop.
