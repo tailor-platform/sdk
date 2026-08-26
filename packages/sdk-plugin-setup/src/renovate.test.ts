@@ -1,9 +1,15 @@
 import * as fs from "node:fs";
+import { defineCommand, runCommand } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { aroundEach, describe, expect, test } from "vitest";
+import { setupSubCommands } from "./commands";
 import { RENOVATE_CONFIG_FILE, RENOVATE_PRESET, setupRenovate } from "./renovate";
-import { setupCommand } from "./index";
+
+const setupCommand = defineCommand({
+  name: "tailor-setup",
+  description: "Set up repository automation for your project. (beta)",
+  subCommands: setupSubCommands,
+});
 
 describe("setupRenovate", () => {
   const testDir = path.join(

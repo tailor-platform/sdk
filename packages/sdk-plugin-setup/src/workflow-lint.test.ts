@@ -13,7 +13,6 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
-import { tempDir } from "../../shared/test-helpers/temp-dir";
 import {
   renderBranchWorkflow,
   renderCoordinateWorkflow,
@@ -21,6 +20,7 @@ import {
   renderTagWorkflow,
   type PackageManager,
 } from "./templates";
+import { tempDir } from "./test-helpers/temp-dir";
 
 function isActionlintAvailable(): boolean {
   const result = spawnSync("actionlint", ["--version"], {

@@ -1,8 +1,5 @@
-import { arg, defineCommand } from "politty";
+import { arg, confirmationArgs, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
 import { z } from "zod";
-import { confirmationArgs } from "#/cli/shared/args";
-import { defineAppCommand } from "#/cli/shared/command";
-import { logger } from "#/cli/shared/logger";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
 import { setupCoordinate, setupTarget } from "./generate";
@@ -272,20 +269,16 @@ function usedDeprecatedBranchFlag(argv: readonly string[]): boolean {
   return argv.some((token) => token === "--branch" || token.startsWith("--branch="));
 }
 
-export const setupCommand = defineCommand({
-  name: "setup",
-  description: "Set up repository automation for your project. (beta)",
-  subCommands: {
-    // TargetKind generators: tracked in .github/tailor.lock and drift-checked by `setup check`.
-    branch: branchCommand,
-    tag: tagCommand,
-    preview: previewCommand,
-    action: actionCommand,
-    coordinate: coordinateCommand,
-    // Standalone generator: writes a user-owned file, not tracked in the lock.
-    deps: depsCommand,
-    // Cross-cutting operations over lock-tracked files.
-    check: checkCommand,
-    delete: deleteCommand,
-  },
-});
+export const setupSubCommands = {
+  // TargetKind generators: tracked in .github/tailor.lock and drift-checked by `setup check`.
+  branch: branchCommand,
+  tag: tagCommand,
+  preview: previewCommand,
+  action: actionCommand,
+  coordinate: coordinateCommand,
+  // Standalone generator: writes a user-owned file, not tracked in the lock.
+  deps: depsCommand,
+  // Cross-cutting operations over lock-tracked files.
+  check: checkCommand,
+  delete: deleteCommand,
+};

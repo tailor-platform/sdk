@@ -1,12 +1,13 @@
 import * as fs from "node:fs";
+import { prompt } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { prompt } from "#/cli/shared/prompt";
 import { setupDelete } from "./delete";
 import { type CoordinateSetupOptions, setupCoordinate, setupTarget } from "./generate";
 import { readLock } from "./lock";
 
-vi.mock("#/cli/shared/prompt", () => ({
+vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tailor-platform/sdk/cli")>()),
   prompt: {
     confirm: vi.fn(),
   },
@@ -201,7 +202,7 @@ describe("setupDelete", () => {
   test("warns when deleting an action still referenced by a coordinator, but still deletes it", async () => {
     await setupTarget(actionOpts("api"));
     await setupCoordinate(coordinateOpts());
-    const warnSpy = vi.spyOn((await import("#/cli/shared/logger")).logger, "warn");
+    const warnSpy = vi.spyOn((await import("@tailor-platform/sdk/cli")).logger, "warn");
 
     await setupDelete({
       files: [".github/actions/tailor-api/action.yml"],
@@ -223,7 +224,7 @@ describe("setupDelete", () => {
     await setupTarget(actionOpts("api", "apps/api"));
     await setupTarget(actionOpts("worker", "apps/worker"));
     await setupCoordinate(coordinateOpts({ actions: ["api,worker"] }));
-    const warnSpy = vi.spyOn((await import("#/cli/shared/logger")).logger, "warn");
+    const warnSpy = vi.spyOn((await import("@tailor-platform/sdk/cli")).logger, "warn");
 
     await setupDelete({
       files: [".github/actions/tailor-api/action.yml"],
@@ -253,7 +254,7 @@ describe("setupDelete", () => {
     async (_label, files) => {
       await setupTarget(actionOpts("api"));
       await setupCoordinate(coordinateOpts());
-      const warnSpy = vi.spyOn((await import("#/cli/shared/logger")).logger, "warn");
+      const warnSpy = vi.spyOn((await import("@tailor-platform/sdk/cli")).logger, "warn");
 
       await setupDelete({ files, yes: true, outputDir: testDir });
 

@@ -1,8 +1,6 @@
 import * as fs from "node:fs";
+import { logBetaWarning, logger, styles, prompt } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import { logBetaWarning } from "#/cli/shared/beta";
-import { logger, styles } from "#/cli/shared/logger";
-import { prompt } from "#/cli/shared/prompt";
 import { resolveWithinRoot } from "./check";
 import { LOCK_VERSION, readLock, writeLock, type LockTarget } from "./lock";
 

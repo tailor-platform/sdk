@@ -29,7 +29,7 @@ export function warnMissingAppId(appId: string | undefined): void {
       "  deploy asks before taking them over, and remove leaves them in place. Only resources\n" +
       "  carrying no id are matched by application name.\n" +
       "  Add an 'id' to the object passed to defineConfig() — a config that re-exports it from\n" +
-      "  another file cannot have one injected automatically. 'tailor setup' can add it for you.",
+      "  another file cannot have one injected automatically. 'tailor deploy' can add it for you.",
   );
 }
 
@@ -191,7 +191,7 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
     throw new Error(
       `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
         `(each run would be treated as a separate app and break resource ownership). ` +
-        `Run 'tailor setup' or 'tailor deploy' locally and commit the injected id.`,
+        `Run 'tailor deploy' locally and commit the injected id.`,
     );
   }
   // Keep CI and local behavior aligned: ensureConfigId() enforces the same

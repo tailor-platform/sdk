@@ -7,6 +7,18 @@ application, including deploy workflows and Renovate configuration.
 > workflow, and the `.github/tailor.lock` schema may change before general
 > availability.
 
+## Installation
+
+The `setup` commands are provided by the `@tailor-platform/sdk-plugin-setup` CLI
+plugin. Install it next to the SDK:
+
+```bash
+npm install -D @tailor-platform/sdk-plugin-setup
+```
+
+The Tailor CLI discovers the plugin automatically from `node_modules/.bin` (or
+your `PATH`). Run `tailor plugin list` to confirm it resolves.
+
 ## Quick start
 
 Run the command from the root of your SDK project (where `tailor.config.ts`
