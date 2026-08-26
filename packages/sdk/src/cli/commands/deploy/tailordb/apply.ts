@@ -24,6 +24,7 @@ import {
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
   restoreRecordEventPublishing,
+  suppressRecordEventPublishing,
   getDeletedTableNames,
   migrationSnapshotCache,
   processedTables,
@@ -350,125 +351,137 @@ export async function applyTailorDB(
         logger.newline();
       }
 
-      for (const migration of pendingMigrations) {
-        const attemptedTables = new Set<string>();
-        try {
-          // Pre-migration phase: Create/update tables with breaking fields as optional
-          await executeSingleMigrationPrePhase(
-            client,
-            changeSet,
-            migration,
-            migrationContext.tailorDBInputs,
-            attemptedTables,
-          );
-
-          // Script execution (only if migrate.ts exists for this migration)
-          if (migration.hasScript && migrationCtx) {
-            await executeMigrations(migrationCtx, [migration]);
-          }
-        } catch (error) {
-          await rollbackSingleMigrationAfterFailure(
-            client,
-            migration,
-            migrationContext.workspaceId,
-            migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTables,
-            attemptedTables,
-          );
-          throw error;
-        }
-
-        try {
-          await executeSingleMigrationPostPhase(
-            client,
-            changeSet,
-            migration,
-            migrationContext.tailorDBInputs,
-            attemptedTables,
-          );
-        } catch (error) {
-          await rollbackSingleMigrationAfterFailure(
-            client,
-            migration,
-            migrationContext.workspaceId,
-            migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTables,
-            attemptedTables,
-          );
-          throw error;
-        }
-
-        try {
-          await updateMigrationLabel(
-            client,
-            migrationContext.workspaceId,
-            migration.namespace,
-            migration.number,
-            migrationHistoryIds[migration.namespace] ?? undefined,
-          );
-        } catch (error) {
-          let remoteMigrationNumber: number | undefined;
-          try {
-            remoteMigrationNumber =
-              (
-                await fetchRemoteMigrationState(
-                  client,
-                  resourceTrn(migrationContext.workspaceId, "tailordb", migration.namespace),
-                )
-              ).number ?? undefined;
-          } catch (readbackError) {
-            logger.warn(
-              `Could not verify migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} after its update failed: ` +
-                `${readbackError instanceof Error ? readbackError.message : String(readbackError)}. ` +
-                "Leaving the post-migration schema unchanged to avoid rolling back a committed checkpoint.",
-            );
-            throw error;
-          }
-
-          if (remoteMigrationNumber !== undefined && remoteMigrationNumber > migration.number) {
-            throw new Error(
-              `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} advanced concurrently to ${formatMigrationNumber(remoteMigrationNumber)}. ` +
-                "Leaving the post-migration schema unchanged and aborting this deployment.",
-              { cause: error },
-            );
-          }
-
-          if (remoteMigrationNumber !== migration.number) {
-            logger.warn(
-              `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${
-                remoteMigrationNumber === undefined
-                  ? "<unset>"
-                  : formatMigrationNumber(remoteMigrationNumber)
-              }. ` +
-                "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. Repair the checkpoint before retrying.",
-            );
-            throw error;
-          }
-        }
-
-        try {
-          await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
-        } catch (error) {
-          logger.warn(
-            `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-              "Remove the leftover resources manually before the next deployment; remote schema verification will fail closed until then.",
-          );
-          throw error;
-        }
-      }
-
-      if (migrationsRequiringScripts.length > 0) {
-        logger.newline();
-        logger.success(`All data migrations completed successfully.`);
-      }
-
-      await restoreRecordEventPublishing(
+      // Publishing is restored in `finally`: a committed checkpoint drops its
+      // migration from the next run's pending set, so a namespace left
+      // suppressed by an aborted deploy would never be rewritten.
+      await suppressRecordEventPublishing(
         client,
         pendingMigrations,
         migrationContext.tailorDBInputs,
         migrationContext.executorUsedTables,
         migrationContext.workspaceId,
       );
+      try {
+        for (const migration of pendingMigrations) {
+          const attemptedTables = new Set<string>();
+          try {
+            // Pre-migration phase: Create/update tables with breaking fields as optional
+            await executeSingleMigrationPrePhase(
+              client,
+              changeSet,
+              migration,
+              migrationContext.tailorDBInputs,
+              attemptedTables,
+            );
+
+            // Script execution (only if migrate.ts exists for this migration)
+            if (migration.hasScript && migrationCtx) {
+              await executeMigrations(migrationCtx, [migration]);
+            }
+          } catch (error) {
+            await rollbackSingleMigrationAfterFailure(
+              client,
+              migration,
+              migrationContext.workspaceId,
+              migrationContext.tailorDBInputs,
+              migrationContext.executorUsedTables,
+              attemptedTables,
+            );
+            throw error;
+          }
+
+          try {
+            await executeSingleMigrationPostPhase(
+              client,
+              changeSet,
+              migration,
+              migrationContext.tailorDBInputs,
+              attemptedTables,
+            );
+          } catch (error) {
+            await rollbackSingleMigrationAfterFailure(
+              client,
+              migration,
+              migrationContext.workspaceId,
+              migrationContext.tailorDBInputs,
+              migrationContext.executorUsedTables,
+              attemptedTables,
+            );
+            throw error;
+          }
+
+          try {
+            await updateMigrationLabel(
+              client,
+              migrationContext.workspaceId,
+              migration.namespace,
+              migration.number,
+              migrationHistoryIds[migration.namespace] ?? undefined,
+            );
+          } catch (error) {
+            let remoteMigrationNumber: number | undefined;
+            try {
+              remoteMigrationNumber =
+                (
+                  await fetchRemoteMigrationState(
+                    client,
+                    resourceTrn(migrationContext.workspaceId, "tailordb", migration.namespace),
+                  )
+                ).number ?? undefined;
+            } catch (readbackError) {
+              logger.warn(
+                `Could not verify migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} after its update failed: ` +
+                  `${readbackError instanceof Error ? readbackError.message : String(readbackError)}. ` +
+                  "Leaving the post-migration schema unchanged to avoid rolling back a committed checkpoint.",
+              );
+              throw error;
+            }
+
+            if (remoteMigrationNumber !== undefined && remoteMigrationNumber > migration.number) {
+              throw new Error(
+                `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} advanced concurrently to ${formatMigrationNumber(remoteMigrationNumber)}. ` +
+                  "Leaving the post-migration schema unchanged and aborting this deployment.",
+                { cause: error },
+              );
+            }
+
+            if (remoteMigrationNumber !== migration.number) {
+              logger.warn(
+                `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${
+                  remoteMigrationNumber === undefined
+                    ? "<unset>"
+                    : formatMigrationNumber(remoteMigrationNumber)
+                }. ` +
+                  "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. Repair the checkpoint before retrying.",
+              );
+              throw error;
+            }
+          }
+
+          try {
+            await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
+          } catch (error) {
+            logger.warn(
+              `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
+                "Remove the leftover resources manually before the next deployment; remote schema verification will fail closed until then.",
+            );
+            throw error;
+          }
+        }
+
+        if (migrationsRequiringScripts.length > 0) {
+          logger.newline();
+          logger.success(`All data migrations completed successfully.`);
+        }
+      } finally {
+        await restoreRecordEventPublishing(
+          client,
+          pendingMigrations,
+          migrationContext.tailorDBInputs,
+          migrationContext.executorUsedTables,
+          migrationContext.workspaceId,
+        );
+      }
 
       // Step 4: Delete remaining GQL permissions that weren't deleted with their tables
       const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter((del) => {

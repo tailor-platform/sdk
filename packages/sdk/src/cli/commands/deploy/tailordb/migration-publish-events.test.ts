@@ -118,8 +118,9 @@ describe("migration flow: record events while migrations run", () => {
   function snapshotTable(
     name: string,
     fields: Record<string, { type: string; required: boolean }>,
+    settings?: { publishEvents?: boolean },
   ) {
-    return { name, pluralForm: `${name.toLowerCase()}s`, fields };
+    return { name, pluralForm: `${name.toLowerCase()}s`, fields, ...(settings && { settings }) };
   }
 
   function typeCreate(tableName: string) {
@@ -357,6 +358,82 @@ describe("migration flow: record events while migrations run", () => {
     const writes = publishFlagWrites(client);
     expect(writes.at(-1)).toEqual(["Invoice", true]);
     expect(writes.map(([name]) => name)).not.toContain("Bill");
+  });
+
+  test("silences a table that declares publishEvents, then restores it", async () => {
+    const client = createMockClient();
+    // No executor subscribes: `publishEvents: true` publishes on its own, so
+    // `subscribed: false` alone would not silence it.
+    const planResult = createMockPlanResult({ creates: ["Order"] });
+    const declaring = snapshotTable(
+      "Order",
+      { status: { type: "string", required: true } },
+      { publishEvents: true },
+    );
+    snapshotState.tablesByVersion = { 0: { Order: declaring }, 1: { Order: declaring } };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        { kind: "table_added", tableName: "Order" },
+        {
+          kind: "field_added",
+          tableName: "Order",
+          fieldName: "status",
+          after: { type: "string", required: true },
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const flags = publishFlagWrites(client).filter(([name]) => name === "Order");
+    // From the first silencing write until the restore, nothing publishes.
+    const silenced = flags.slice(flags.findIndex(([, flag]) => flag === false));
+    expect(silenced.length).toBeGreaterThan(1);
+    expect(silenced.slice(0, -1).map(([, flag]) => flag)).not.toContain(true);
+    expect(flags.at(-1)?.[1]).toBe(true);
+  });
+
+  test("silences the namespace for a migration that carries no schema diff", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [], subscribedTables: ["Order"] });
+    const table = snapshotTable("Order", { status: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
+    // A data-only migration carries an empty diff, so nothing names Order.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const flags = publishFlagWrites(client).filter(([name]) => name === "Order");
+    expect(flags.length).toBeGreaterThan(1);
+    expect(flags[0]?.[1]).toBe(false);
+    expect(flags.at(-1)?.[1]).toBe(true);
+  });
+
+  test("restores publishing when a migration fails partway", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: ["Order"], subscribedTables: ["Order"] });
+    const table = snapshotTable("Order", { status: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "Order" } as any], { hasScript: true }),
+    ]);
+    // The checkpoint update has no rollback: it fails with the schema applied,
+    // so only a `finally` can put publishing back.
+    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+      new Error("checkpoint update failed"),
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /checkpoint update failed/,
+    );
+
+    // A committed checkpoint drops its migration from the next run's pending
+    // set, so publishing has to come back on before the throw escapes.
+    const flags = publishFlagWrites(client).filter(([name]) => name === "Order");
+    expect(flags.at(-1)?.[1]).toBe(true);
   });
 
   test("leaves publishing off for a table nothing subscribes to", async () => {

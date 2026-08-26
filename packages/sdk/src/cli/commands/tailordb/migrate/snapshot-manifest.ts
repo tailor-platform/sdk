@@ -53,6 +53,13 @@ import type {
 export interface GenerateManifestOptions {
   /** Whether an executor taking part in the same run subscribes to its record events */
   subscribed?: boolean;
+  /**
+   * Force record event publishing off, overriding a declared `publishEvents`.
+   *
+   * A table that declares `publishEvents: true` publishes no matter who
+   * subscribes, so `subscribed` alone cannot silence it while migrations run.
+   */
+  suppressRecordEvents?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
     create?: boolean;
@@ -96,11 +103,14 @@ export function generateTailorDBTypeManifestFromSnapshot(
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
     pluralForm,
-    publishRecordEvents: resolvePublishEvents({
-      explicit: snapshotType.settings?.publishEvents,
-      subscribed: options.subscribed ?? false,
-      conflict: publishEventsConflict.tailorDBType(snapshotType.name),
-    }),
+    publishRecordEvents:
+      options.suppressRecordEvents === true
+        ? false
+        : resolvePublishEvents({
+            explicit: snapshotType.settings?.publishEvents,
+            subscribed: options.subscribed ?? false,
+            conflict: publishEventsConflict.tailorDBType(snapshotType.name),
+          }),
   };
 
   // Apply gqlOperations from snapshot settings or namespace default

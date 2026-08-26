@@ -11,10 +11,12 @@ import {
   formatMigrationNumber,
   INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
+  type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { logger } from "#/cli/shared/logger";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import type {
   FieldDiffChange,
   TableScriptsModifiedChange,
@@ -125,7 +127,8 @@ function buildSnapshotTypeManifest(
     // A migration script's own record writes would publish from a shape that is
     // mid-migration, to executors still registered from the previous deploy.
     // `restoreRecordEventPublishing` turns it back on once they have settled.
-    subscribed: false,
+    // Overrides a declared `publishEvents: true`, which `subscribed` cannot.
+    suppressRecordEvents: true,
     namespaceGqlOperations: input?.config.gqlOperations,
   });
 }
@@ -415,17 +418,130 @@ export async function executeSingleMigrationPostPhase(
 }
 
 /**
+ * Whether a table publishes record events once the migrations have settled.
+ * @param snapshotType - Table as of the snapshot being applied
+ * @param subscribed - Whether an enabled executor subscribes to it
+ * @returns Whether the table's manifest would enable publishing
+ */
+function publishesRecordEvents(snapshotType: TailorDBSnapshotType, subscribed: boolean): boolean {
+  return resolvePublishEvents({
+    explicit: snapshotType.settings?.publishEvents,
+    subscribed,
+    conflict: publishEventsConflict.tailorDBType(snapshotType.name),
+  });
+}
+
+/**
+ * Rewrite a migrating namespace's publishing tables, with publishing forced off
+ * or resolved normally, from the schema of the given snapshot.
+ *
+ * Writes the snapshot's schema rather than the config's, so this never enforces
+ * a change whose migration has not run — the same reason the per-migration
+ * phases build from a checkpoint.
+ * @param client - Operator client instance
+ * @param params - Namespace, snapshot, subscriber set, and direction
+ */
+async function rewritePublishingTables(
+  client: OperatorClient,
+  params: {
+    workspaceId: string;
+    namespaceName: string;
+    snapshot: SchemaSnapshot;
+    input: TailorDBDeployInput;
+    executorUsedTables: ReadonlySet<string>;
+    skip: ReadonlySet<string>;
+    suppress: boolean;
+  },
+): Promise<void> {
+  const { workspaceId, namespaceName, snapshot, input, executorUsedTables, skip, suppress } =
+    params;
+  for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
+    if (skip.has(tableName)) continue;
+    // Only a table that would publish is worth rewriting either way.
+    if (!publishesRecordEvents(snapshotType, executorUsedTables.has(tableName))) continue;
+    await client.updateTailorDBType({
+      workspaceId,
+      namespaceName,
+      tailordbType: generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+        ...(suppress
+          ? { suppressRecordEvents: true }
+          : { subscribed: executorUsedTables.has(tableName) }),
+        namespaceGqlOperations: input.config.gqlOperations,
+      }),
+    });
+  }
+}
+
+/**
+ * The first and last pending migration per namespace, in application order.
+ * @param migrations - Pending migrations in the run
+ * @returns First and last migration, keyed by namespace
+ */
+function migrationBounds(
+  migrations: ReadonlyArray<PendingMigration>,
+): Map<string, { first: PendingMigration; last: PendingMigration }> {
+  const bounds = new Map<string, { first: PendingMigration; last: PendingMigration }>();
+  for (const migration of migrations) {
+    const seen = bounds.get(migration.namespace);
+    if (!seen) {
+      bounds.set(migration.namespace, { first: migration, last: migration });
+      continue;
+    }
+    if (migration.number < seen.first.number) seen.first = migration;
+    if (migration.number > seen.last.number) seen.last = migration;
+  }
+  return bounds;
+}
+
+/**
+ * Turn record event publishing off across every migrating namespace.
+ *
+ * The per-migration phases only rewrite tables some pending diff names, so a
+ * data-only migration — an empty diff carrying only a script — would leave the
+ * whole namespace publishing while its script runs. Suppression therefore
+ * covers the namespace, from the schema in place before its first migration.
+ * @param client - Operator client instance
+ * @param migrations - Migrations about to be applied
+ * @param tailorDBInputs - TailorDB deploy inputs for the run
+ * @param executorUsedTables - Tables an enabled executor subscribes to
+ * @param workspaceId - Target workspace ID
+ */
+export async function suppressRecordEventPublishing(
+  client: OperatorClient,
+  migrations: ReadonlyArray<PendingMigration>,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTables: ReadonlySet<string>,
+  workspaceId: string,
+): Promise<void> {
+  for (const [namespaceName, { first }] of migrationBounds(migrations)) {
+    const input = tailorDBInputs.find((entry) => entry.namespace === namespaceName);
+    if (!input) continue;
+    await rewritePublishingTables(client, {
+      workspaceId,
+      namespaceName,
+      // The state before this namespace's first migration is what that
+      // migration's script runs against.
+      snapshot: migrationSnapshotCache.load(first),
+      input,
+      executorUsedTables,
+      skip: new Set(),
+      suppress: true,
+    });
+  }
+}
+
+/**
  * Turn record event publishing back on for the tables the migrations suppressed.
  *
- * The per-migration phases apply every table with publishing off, and the last
- * of those writes is the state the deploy would otherwise leave behind — so a
- * table that publishes would stay silent until some later deploy happened to
- * rewrite it. Runs once the migrations have settled, on the final schema rather
- * than a checkpoint, so it agrees with what the plan plans to apply.
+ * The per-migration phases write last, so their suppressed manifests are the
+ * state a deploy would otherwise leave behind: a table that publishes would stay
+ * silent until some later deploy happened to rewrite it. Runs on the schema as
+ * of each namespace's final migration, which schema verification has already
+ * checked reproduces the local definitions.
  *
- * A failure here leaves publishing off on a schema that is otherwise complete,
- * which is why it throws rather than warning: the deploy has to fail loudly
- * instead of reporting success over a table whose executors will not fire.
+ * Callers must run this even when the migration loop throws. Publishing left off
+ * after an aborted deploy survives the retry, because a committed checkpoint
+ * drops its migration from the pending set and the loop never runs again.
  * @param client - Operator client instance
  * @param migrations - Migrations applied in this run
  * @param tailorDBInputs - TailorDB deploy inputs for the run
@@ -439,35 +555,24 @@ export async function restoreRecordEventPublishing(
   executorUsedTables: ReadonlySet<string>,
   workspaceId: string,
 ): Promise<void> {
-  const byNamespace = new Map<string, Set<string>>();
-  for (const migration of migrations) {
-    const tables = byNamespace.get(migration.namespace) ?? new Set<string>();
-    for (const tableName of getAffectedTableNames(migration)) {
-      // A table the migrations dropped has nothing left to publish from.
-      if (getDeletedTableNames(migration).has(tableName)) {
-        tables.delete(tableName);
-        continue;
-      }
-      if (executorUsedTables.has(tableName)) tables.add(tableName);
-    }
-    byNamespace.set(migration.namespace, tables);
-  }
-
-  for (const [namespaceName, tableNames] of byNamespace) {
-    if (tableNames.size === 0) continue;
+  for (const [namespaceName, { last }] of migrationBounds(migrations)) {
     const input = tailorDBInputs.find((entry) => entry.namespace === namespaceName);
-    for (const tableName of tableNames) {
-      const finalType = input?.types[tableName];
-      if (!input || !finalType) continue;
-      await client.updateTailorDBType({
-        workspaceId,
-        namespaceName,
-        tailordbType: generateTailorDBTypeManifestFromSnapshot(finalType, {
-          subscribed: true,
-          namespaceGqlOperations: input.config.gqlOperations,
-        }),
-      });
-    }
+    if (!input) continue;
+    const dropped = new Set(
+      migrations
+        .filter((migration) => migration.namespace === namespaceName)
+        .flatMap((migration) => [...getDeletedTableNames(migration)]),
+    );
+    await rewritePublishingTables(client, {
+      workspaceId,
+      namespaceName,
+      snapshot: migrationSnapshotCache.load(last),
+      input,
+      executorUsedTables,
+      // A table the migrations dropped has nothing left to publish from.
+      skip: dropped,
+      suppress: false,
+    });
   }
 }
 
