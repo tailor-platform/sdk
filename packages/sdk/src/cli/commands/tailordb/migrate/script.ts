@@ -295,6 +295,12 @@ async function script(options: ScriptOptions): Promise<void> {
     longRunning: options.longRunning,
   });
 
+  if (result.longRunning) {
+    logger.success(
+      `Migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)} will run as a workflow job`,
+    );
+    logger.info("  The 60s script-execution deadline does not apply to this migration.");
+  }
   if (result.clearedScriptSkip) {
     logger.success(
       `Cleared the stale script skip record for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
@@ -314,12 +320,6 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.success(
       `Added ${added} for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
     );
-  }
-  if (result.longRunning) {
-    logger.success(
-      `Migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)} will run as a workflow job`,
-    );
-    logger.info("  The 60s script-execution deadline does not apply to this migration.");
   }
   if (!added) return;
   if (result.migratePath) {
