@@ -769,9 +769,10 @@ Mark such a migration to run as a workflow job instead:
 tailor tailordb migration script 0005 --long-running
 ```
 
-The migration then runs asynchronously and is not bound by that limit, while
-`tailor deploy` waits for it and reports its logs as usual. The flag also
-works on a migration whose `migrate.ts` already exists.
+The migration then runs asynchronously and is no longer bound by that limit,
+while `tailor deploy` waits for it and reports its logs as usual. The flag also
+works on a migration whose `migrate.ts` already exists. Execution time is still
+bounded — a workflow job has its own, far longer, execution-time limit.
 
 The script still runs in a single transaction, so the guidance above about
 locks and transaction size continues to apply — prefer splitting a very large
