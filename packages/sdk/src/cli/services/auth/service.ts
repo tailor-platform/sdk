@@ -5,10 +5,7 @@ import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { z } from "zod";
 
 /**
- * Auth config after `AuthConfigSchema.parse`. The Zod `.brand("AuthConfig")` makes
- * this type inhabitable only by parse output, so `createAuthService` can only be
- * called with a validated/transformed config (e.g. token lifetimes as Duration).
- * Passing a raw, unparsed config is a compile error.
+ * Auth config after `AuthConfigSchema.parse` (e.g. token lifetimes as Duration).
  */
 type ParsedAuthConfig = z.output<typeof AuthConfigSchema>;
 
