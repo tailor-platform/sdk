@@ -40,7 +40,6 @@ export interface ScriptOptions {
   noScript?: boolean;
   reason?: string;
   withTest?: boolean;
-  longRunning?: boolean;
 }
 
 export interface MarkScriptSkippedOptions {
@@ -53,7 +52,6 @@ export interface AddMigrationScriptFilesOptions {
   migrationsDir: string;
   migrationNumber: number;
   withTest?: boolean;
-  longRunning?: boolean;
 }
 
 export interface AddMigrationScriptFilesResult {
@@ -65,8 +63,6 @@ export interface AddMigrationScriptFilesResult {
   testPath?: string;
   /** True when a stale --no-script acknowledgment was cleared because migrate.ts already exists. */
   clearedScriptSkip?: boolean;
-  /** True when this migration was recorded to run as a workflow job. */
-  longRunning?: boolean;
 }
 
 /**
@@ -123,18 +119,6 @@ export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): S
 }
 
 /**
- * Record that a migration's script runs as a workflow job rather than a
- * synchronous script execution, lifting the function-execution deadline.
- * @param diffPath - Migration diff file to update
- */
-function setMigrationLongRunning(diffPath: string): void {
-  // Edit the raw JSON so keys unknown to this SDK version survive the rewrite.
-  const raw = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
-  raw.longRunning = true;
-  fs.writeFileSync(diffPath, JSON.stringify(raw, null, 2));
-}
-
-/**
  * Remove a script skip acknowledgment after a real migration script is created.
  * @param diffPath - Migration diff file to update
  */
@@ -156,7 +140,7 @@ export function clearMigrationScriptSkipped(diffPath: string): void {
 export async function addMigrationScriptFiles(
   options: AddMigrationScriptFilesOptions,
 ): Promise<AddMigrationScriptFilesResult> {
-  const { migrationsDir, migrationNumber, withTest = false, longRunning = false } = options;
+  const { migrationsDir, migrationNumber, withTest = false } = options;
   const label = formatMigrationNumber(migrationNumber);
 
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
@@ -169,23 +153,14 @@ export async function addMigrationScriptFiles(
   const migrateExists = fs.existsSync(migratePath);
   const result: AddMigrationScriptFilesResult = {};
 
-  // Recorded before the early returns below so that re-running the command on
-  // an existing migration can turn long-running execution on.
-  if (longRunning) {
-    setMigrationLongRunning(diffPath);
-    result.longRunning = true;
-  }
-
   if (migrateExists && diff.scriptSkipped) {
     // Deploy refuses to run while both a --no-script acknowledgment and
     // migrate.ts exist; clearing the stale record here is the remediation.
     clearMigrationScriptSkipped(diffPath);
     result.clearedScriptSkip = true;
     if (!withTest) return result;
-  } else if (migrateExists && !withTest && !longRunning) {
-    throw new Error(`Migration script already exists at ${migratePath}.`);
   } else if (migrateExists && !withTest) {
-    return result;
+    throw new Error(`Migration script already exists at ${migratePath}.`);
   }
 
   const testPath = getMigrationFilePath(migrationsDir, migrationNumber, "test");
@@ -265,9 +240,6 @@ async function script(options: ScriptOptions): Promise<void> {
     if (options.withTest) {
       throw new Error("--with-test cannot be used together with --no-script.");
     }
-    if (options.longRunning) {
-      throw new Error("--long-running cannot be used together with --no-script.");
-    }
     const reason = options.reason?.trim();
     if (!reason) {
       throw new Error("--reason is required with --no-script.");
@@ -292,15 +264,8 @@ async function script(options: ScriptOptions): Promise<void> {
     migrationsDir,
     migrationNumber,
     withTest: options.withTest,
-    longRunning: options.longRunning,
   });
 
-  if (result.longRunning) {
-    logger.success(
-      `Migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)} will run as a workflow job`,
-    );
-    logger.info("  The 60s script-execution deadline does not apply to this migration.");
-  }
   if (result.clearedScriptSkip) {
     logger.success(
       `Cleared the stale script skip record for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
@@ -406,10 +371,6 @@ export const scriptCommand = defineAppCommand({
       description:
         "Also add a migrate.test.ts unit-test scaffold; when migrate.ts already exists, only the test is added",
     }),
-    "long-running": arg(z.boolean().optional(), {
-      description:
-        "Run this migration's script as a workflow job instead of a synchronous script execution, lifting the 60s execution deadline for large data migrations",
-    }),
   }),
   run: async (args) => {
     await script({
@@ -419,7 +380,6 @@ export const scriptCommand = defineAppCommand({
       noScript: args["no-script"],
       reason: args.reason,
       withTest: args["with-test"],
-      longRunning: args["long-running"],
     });
   },
 });

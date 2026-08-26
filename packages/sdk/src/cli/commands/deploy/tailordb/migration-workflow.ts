@@ -1,10 +1,10 @@
 /**
- * Long-running migration execution via a temporary workflow
+ * Migration execution via a temporary workflow
  *
  * Synchronous script execution is bound by the platform's 60s function
- * deadline. A migration marked `longRunning` is instead registered as a
- * temporary workflow and started asynchronously, so only the polling loop
- * spans the migration's real duration.
+ * deadline. A migration is instead registered as a temporary workflow and
+ * started asynchronously, so only the polling loop spans the migration's real
+ * duration.
  *
  * The temporary function, job function, and workflow are removed once the
  * execution reaches a terminal state. Every resource is labeled with the app's
@@ -82,7 +82,7 @@ async function uploadMigrationFunction(
   const info = {
     workspaceId,
     name,
-    description: "Temporary function for a long-running TailorDB migration",
+    description: "Temporary function for a TailorDB migration",
     sizeBytes: BigInt(buffer.length),
     contentHash: crypto.createHash("sha256").update(code, "utf-8").digest("hex"),
   };
@@ -114,7 +114,7 @@ async function uploadMigrationFunction(
 }
 
 /**
- * Remove the temporary resources created for a long-running migration.
+ * Remove the temporary resources created for a migration.
  *
  * Teardown is best effort: a failure here must not mask the migration's own
  * outcome, so every removal is attempted and an unexpected failure is reported

@@ -3,7 +3,6 @@ import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { logger } from "#/cli/shared/logger";
 import {
   addMigrationScriptFiles,
   clearMigrationScriptSkipped,
@@ -86,42 +85,6 @@ describe("addMigrationScriptFiles", () => {
     expect(fs.existsSync(migrationFile(MIGRATE_FILE_NAME))).toBe(true);
     expect(fs.existsSync(migrationFile(DB_TYPES_FILE_NAME))).toBe(true);
     expect(fs.existsSync(migrationFile(MIGRATE_TEST_FILE_NAME))).toBe(false);
-  });
-
-  test("records longRunning in diff.json when creating the script", async () => {
-    setupMigration();
-
-    const result = await addMigrationScriptFiles({
-      migrationsDir: testDir,
-      migrationNumber: 1,
-      longRunning: true,
-    });
-
-    expect(result.longRunning).toBe(true);
-    expect(loadDiff(migrationFile(DIFF_FILE_NAME)).longRunning).toBe(true);
-  });
-
-  test("leaves longRunning unset by default", async () => {
-    setupMigration();
-
-    await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
-
-    expect(loadDiff(migrationFile(DIFF_FILE_NAME)).longRunning).toBeUndefined();
-  });
-
-  test("turns longRunning on for a migration whose script already exists", async () => {
-    setupMigration();
-    writeMigrateFile(testDir, 1);
-
-    const result = await addMigrationScriptFiles({
-      migrationsDir: testDir,
-      migrationNumber: 1,
-      longRunning: true,
-    });
-
-    expect(result.longRunning).toBe(true);
-    expect(result.migratePath).toBeUndefined();
-    expect(loadDiff(migrationFile(DIFF_FILE_NAME)).longRunning).toBe(true);
   });
 
   test("creates migrate.test.ts alongside the script with withTest", async () => {
@@ -421,30 +384,6 @@ describe("script command with an existing migrate.ts", () => {
     expect(result.success).toBe(true);
     expect(loadDiff(diffPath).scriptSkipped).toBeUndefined();
     expect(fs.readFileSync(migratePath, "utf-8")).toBe(migrateContent);
-  });
-
-  test("reports long-running execution even when it only clears a stale skip record", async () => {
-    const diffPath = writeDiffFile(
-      testDir,
-      1,
-      createMockMigrationDiff({
-        hasBreakingChanges: true,
-        requiresMigrationScript: true,
-        scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
-      }),
-    );
-    writeMigrateFile(testDir, 1);
-    const success = vi.spyOn(logger, "success").mockImplementation(() => {});
-
-    const result = await runCommand(scriptCommand, ["0001", "--long-running"]);
-
-    expect(result.success).toBe(true);
-    expect(loadDiff(diffPath).longRunning).toBe(true);
-    // This path returns before the "added files" reporting, so the flag has to
-    // be reported before it or the command looks like it ignored --long-running.
-    expect(success.mock.calls.map(([message]) => message).join("\n")).toMatch(
-      /will run as a workflow job/,
-    );
   });
 
   test("still rejects when no skip record exists", async () => {

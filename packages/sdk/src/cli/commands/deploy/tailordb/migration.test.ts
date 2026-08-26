@@ -62,15 +62,11 @@ vi.mock("#/cli/shared/spinner", () => ({
   }),
 }));
 
-// Mock bundler and script executor so executeMigrations can run without
-// touching the network or building real bundles.
+// Mock the bundler and the workflow executor so executeMigrations can run
+// without touching the network or building real bundles.
 const bundleMigrationScriptMock = vi.fn();
-const executeScriptMock = vi.fn();
 vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
   bundleMigrationScript: (...args: unknown[]) => bundleMigrationScriptMock(...args),
-}));
-vi.mock("#/cli/shared/script-executor", () => ({
-  executeScript: (...args: unknown[]) => executeScriptMock(...args),
 }));
 const executeMigrationAsWorkflowMock = vi.fn();
 vi.mock("./migration-workflow", () => ({
@@ -701,16 +697,10 @@ describe("migration", () => {
 
     aroundEach(async (runTest) => {
       bundleMigrationScriptMock.mockReset();
-      executeScriptMock.mockReset();
       executeMigrationAsWorkflowMock.mockReset();
       bundleMigrationScriptMock.mockResolvedValue({
         bundledCode: "// bundled",
         warnings: [],
-      });
-      executeScriptMock.mockResolvedValue({
-        success: true,
-        logs: "",
-        result: "",
       });
       executeMigrationAsWorkflowMock.mockResolvedValue({
         success: true,
@@ -719,18 +709,11 @@ describe("migration", () => {
       await runTest();
     });
 
-    test("runs a longRunning migration as a workflow instead of a script execution", async () => {
-      const migrations = [
-        createMockMigration({
-          number: 1,
-          hasScript: true,
-          diff: createMockMigrationDiff({ longRunning: true }),
-        }),
-      ];
+    test("runs a migration as a workflow rather than a synchronous script execution", async () => {
+      const migrations = [createMockMigration({ number: 1, hasScript: true })];
 
       await executeMigrations(createMockContext(), migrations);
 
-      expect(executeScriptMock).not.toHaveBeenCalled();
       expect(executeMigrationAsWorkflowMock).toHaveBeenCalledTimes(1);
       expect(executeMigrationAsWorkflowMock.mock.calls[0]![0]).toMatchObject({
         namespace: "tailordb",
@@ -747,26 +730,11 @@ describe("migration", () => {
         logs: "boom",
         error: "workflow failed",
       });
-      const migrations = [
-        createMockMigration({
-          number: 1,
-          hasScript: true,
-          diff: createMockMigrationDiff({ longRunning: true }),
-        }),
-      ];
+      const migrations = [createMockMigration({ number: 1, hasScript: true })];
 
       await expect(executeMigrations(createMockContext(), migrations)).rejects.toThrow(
         "workflow failed",
       );
-    });
-
-    test("keeps synchronous execution for migrations without longRunning", async () => {
-      const migrations = [createMockMigration({ number: 1, hasScript: true })];
-
-      await executeMigrations(createMockContext(), migrations);
-
-      expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();
-      expect(executeScriptMock).toHaveBeenCalledTimes(1);
     });
 
     test("skips migrations without a script file on disk", async () => {
@@ -778,7 +746,7 @@ describe("migration", () => {
       await executeMigrations(createMockContext(), migrations);
 
       expect(bundleMigrationScriptMock).not.toHaveBeenCalled();
-      expect(executeScriptMock).not.toHaveBeenCalled();
+      expect(executeMigrationAsWorkflowMock).not.toHaveBeenCalled();
     });
 
     test("executes warning-tier migrations whose script exists even when not required", async () => {
@@ -802,9 +770,9 @@ describe("migration", () => {
       await executeMigrations(createMockContext(), migrations);
 
       expect(bundleMigrationScriptMock).toHaveBeenCalledTimes(1);
-      expect(executeScriptMock).toHaveBeenCalledTimes(1);
-      expect(executeScriptMock.mock.calls[0]![0]).toMatchObject({
-        name: "migration-tailordb-0001.js",
+      expect(executeMigrationAsWorkflowMock).toHaveBeenCalledTimes(1);
+      expect(executeMigrationAsWorkflowMock.mock.calls[0]![0]).toMatchObject({
+        migrationNumber: 1,
       });
     });
 
@@ -832,11 +800,11 @@ describe("migration", () => {
 
       await executeMigrations(createMockContext(), migrations);
 
-      expect(executeScriptMock).toHaveBeenCalledTimes(2);
-      const executedNames = executeScriptMock.mock.calls.map(
-        (call) => (call[0] as { name: string }).name,
+      expect(executeMigrationAsWorkflowMock).toHaveBeenCalledTimes(2);
+      const executedNumbers = executeMigrationAsWorkflowMock.mock.calls.map(
+        (call) => (call[0] as { migrationNumber: number }).migrationNumber,
       );
-      expect(executedNames).toEqual(["migration-tailordb-0001.js", "migration-tailordb-0003.js"]);
+      expect(executedNumbers).toEqual([1, 3]);
     });
   });
 });

@@ -2,6 +2,6 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add `tailor tailordb migration script --long-running` for data migrations that exceed the 60-second script execution limit.
+Run TailorDB migration scripts as workflow jobs so they are no longer bound by the 60-second script execution limit.
 
-A migration marked this way runs as a workflow job rather than a synchronous script execution, so it is no longer bound by that limit. `tailor deploy` waits for it and reports its logs as before. Migrations without the flag keep running exactly as they do today.
+A data migration that previously failed with `deadline_exceeded` — losing its logs along with any record of how far it got — now runs to completion. `tailor deploy` waits for it and reports its logs as before. This applies to every migration; no flag or migration-file change is required.

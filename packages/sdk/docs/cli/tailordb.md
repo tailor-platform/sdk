@@ -177,14 +177,13 @@ tailor tailordb migration script [options] <number>
 
 **Options**
 
-| Option                    | Alias | Description                                                                                                                                           | Required | Default              | Env                  |
-| ------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                                                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                                                                     | No       | -                    | -                    |
-| `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason)                                                          | No       | -                    | -                    |
-| `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                                                                                      | No       | -                    | -                    |
-| `--with-test`             | -     | Also add a migrate.test.ts unit-test scaffold; when migrate.ts already exists, only the test is added                                                 | No       | -                    | -                    |
-| `--long-running`          | -     | Run this migration's script as a workflow job instead of a synchronous script execution, lifting the 60s execution deadline for large data migrations | No       | -                    | -                    |
+| Option                    | Alias | Description                                                                                           | Required | Default              | Env                  |
+| ------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                     | No       | -                    | -                    |
+| `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason)          | No       | -                    | -                    |
+| `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                                      | No       | -                    | -                    |
+| `--with-test`             | -     | Also add a migrate.test.ts unit-test scaffold; when migrate.ts already exists, only the test is added | No       | -                    | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

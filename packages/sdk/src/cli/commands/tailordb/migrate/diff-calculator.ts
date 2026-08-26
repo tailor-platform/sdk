@@ -311,11 +311,6 @@ export interface MigrationDiff {
   requiresMigrationScript: boolean;
   /** Explicit acknowledgment that this migration needs no script despite breaking changes or data-loss warnings */
   scriptSkipped?: ScriptSkippedInfo;
-  /**
-   * Run this migration's script as a workflow job instead of a synchronous
-   * script execution, lifting the 60s function-execution deadline.
-   */
-  longRunning?: boolean;
 }
 
 /**

@@ -1,7 +1,9 @@
 /**
  * Migration execution service for TailorDB migrations
  *
- * Handles detection and execution of pending migration scripts via TestExecScript API.
+ * Handles detection and execution of pending migration scripts. Every migration
+ * runs as a temporary workflow job so its duration is not bound by the
+ * synchronous function-execution deadline.
  */
 
 import * as fs from "node:fs";
@@ -28,7 +30,6 @@ import {
 } from "#/cli/commands/tailordb/migrate/types";
 import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
-import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
 import { executeMigrationAsWorkflow } from "./migration-workflow";
@@ -59,9 +60,9 @@ export interface MigrationContext {
   dbConfig: Record<string, TailorDBServiceConfig | undefined>;
   env: Record<string, string | number | boolean>;
   configDir: string;
-  /** Application name, used to label a long-running migration's temporary resources. */
+  /** Application name, used to label a migration's temporary resources. */
   appName: string;
-  /** Application id, used to label a long-running migration's temporary resources. */
+  /** Application id, used to label a migration's temporary resources. */
   appId: string | undefined;
 }
 
@@ -218,8 +219,6 @@ async function executeSingleMigration(
 ): Promise<ExecutionResult> {
   const { client, workspaceId, invoker, env, configDir, appName, appId } = options;
 
-  const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
-
   // Bundle the migration script
   const bundleResult = await bundleMigrationScript(
     migration.scriptPath,
@@ -229,26 +228,16 @@ async function executeSingleMigration(
     configDir,
   );
 
-  // A long-running migration runs as a workflow job so its duration is not
-  // bound by the synchronous function-execution deadline.
-  const result = migration.diff.longRunning
-    ? await executeMigrationAsWorkflow({
-        client,
-        workspaceId,
-        code: bundleResult.bundledCode,
-        namespace: migration.namespace,
-        migrationNumber: migration.number,
-        invoker,
-        appName,
-        appId,
-      })
-    : await executeScript({
-        client,
-        workspaceId,
-        name: migrationName,
-        code: bundleResult.bundledCode,
-        invoker,
-      });
+  const result = await executeMigrationAsWorkflow({
+    client,
+    workspaceId,
+    code: bundleResult.bundledCode,
+    namespace: migration.namespace,
+    migrationNumber: migration.number,
+    invoker,
+    appName,
+    appId,
+  });
 
   return {
     namespace: migration.namespace,
@@ -342,9 +331,7 @@ export async function executeMigrations(
     for (const migration of namespaceMigrations) {
       const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
       const sp = spinner().start(
-        migration.diff.longRunning
-          ? `Executing migration ${migrationLabel} as a workflow job (this can take a while)...`
-          : `Executing migration ${migrationLabel}...`,
+        `Executing migration ${migrationLabel} (this can take a while)...`,
       );
 
       const result = await executeSingleMigration(options, migration);
