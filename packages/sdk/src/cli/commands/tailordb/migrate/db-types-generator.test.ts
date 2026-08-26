@@ -339,6 +339,50 @@ describe("db-types-generator", () => {
       expect(content).toContain("kind: ColumnType<string | null, string | null, string | null>;");
     });
 
+    test("expands the Timestamp alias into the slots of a clearable datetime field", async () => {
+      const snapshot = createMockSnapshot({
+        Event: { fields: { startsAt: { type: "datetime", required: true } } },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "startsAt",
+          tempFieldName: "startsAtTmp",
+          before: { type: "datetime", required: true },
+          after: { type: "string", required: true },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "startsAt: ColumnType<Date | null, Date | string | null, Date | string | null>;",
+      );
+    });
+
+    test("expands the Timestamp alias into the slots of a clearable datetime array field", async () => {
+      const snapshot = createMockSnapshot({
+        Event: { fields: { startsAt: { type: "datetime", required: true, array: true } } },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "startsAt",
+          tempFieldName: "startsAtTmp",
+          before: { type: "datetime", required: true, array: true },
+          after: { type: "string", required: true, array: true },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "startsAt: ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>;",
+      );
+    });
+
     test("generates types with enum fields and allowed values", async () => {
       const snapshot = createMockSnapshot({
         User: {

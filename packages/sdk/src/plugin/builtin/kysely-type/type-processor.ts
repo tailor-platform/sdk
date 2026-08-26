@@ -1,4 +1,4 @@
-import { mapFieldTypeToColumnType } from "#/utils/field-column-type";
+import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import multiline from "#/utils/multiline";
 import {
   type KyselyFieldConfig,
@@ -112,12 +112,10 @@ function generateFieldType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const isArray = fieldConfig.array === true;
   const isNullable = fieldConfig.required !== true;
 
-  // Types that use ColumnType internally (Timestamp, ObjectColumnType) cannot be
-  // directly wrapped with [] for arrays, because Kysely only resolves ColumnType at
-  // the top-level table property. Use ArrayColumnType/ObjectArrayColumnType to keep
-  // the ColumnType at the top level with arrays inside.
-  const columnTypeBaseTypes = new Set(["Timestamp"]);
-  const isColumnTypeBase = columnTypeBaseTypes.has(baseTypeResult.type);
+  // A ColumnType-shaped alias and ObjectColumnType cannot be wrapped with [] for
+  // arrays, because Kysely only resolves ColumnType at the top-level table
+  // property. Use ArrayColumnType to keep the ColumnType at the top level.
+  const isColumnTypeBase = COLUMN_TYPE_ALIASES.has(baseTypeResult.type);
 
   let finalType = baseTypeResult.type;
   if (isArray) {

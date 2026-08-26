@@ -38,3 +38,28 @@ export function mapFieldTypeToColumnType(fieldType: string): FieldColumnType {
       return "string";
   }
 }
+
+/** The select and write types a `ColumnType`-shaped alias expands to. */
+export type ColumnTypeAliasExpansion = {
+  /** Type the alias reads back as. */
+  readonly select: string;
+  /** Type the alias accepts on insert and update. */
+  readonly write: string;
+};
+
+/**
+ * Column types whose alias expands to a `ColumnType`, mapped to that expansion.
+ *
+ * Kysely only unwraps a `ColumnType` at the top level of a table property, so an
+ * array of one of these stays wrapped in `ArrayColumnType<...>` rather than taking
+ * a `[]` suffix, which would nest the `ColumnType` out of Kysely's reach. Where a
+ * generator has to spell out the slots itself, it reads the expansion from here
+ * rather than inlining the alias, which would nest just the same.
+ *
+ * Both type generators track alias usage per alias to decide which declarations to
+ * emit, so adding an entry here also means teaching them to report the new alias.
+ */
+export const COLUMN_TYPE_ALIASES: ReadonlyMap<string, ColumnTypeAliasExpansion> = new Map<
+  FieldColumnType,
+  ColumnTypeAliasExpansion
+>([["Timestamp", { select: "Date", write: "Date | string" }]]);
