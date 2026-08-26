@@ -13,6 +13,8 @@ import {
 import { detectDefaultBranch } from "./git";
 import { hashContent, readLock, writeLock } from "./lock";
 import {
+  ACTIONS_SHA,
+  ACTIONS_VERSION,
   TEMPLATE_VERSION,
   detectPackageManager,
   renderActionWorkflow,
@@ -45,9 +47,6 @@ const tagBase: RenderTagParams = {
 type GeneratedWorkflow = {
   jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
 };
-
-const TAILOR_ACTIONS_SHA = "33ae978702edd2de673419e84b66065e7a364dab";
-const TAILOR_ACTIONS_VERSION = "v2.3.0";
 
 describe("detectPackageManager", () => {
   const testDir = path.join(
@@ -519,7 +518,10 @@ describe("renderTagWorkflow", () => {
 });
 
 describe("Tailor Platform action pins", () => {
-  test("pins every generated Tailor Platform action to v2.3.0", () => {
+  test("pins every generated Tailor Platform action to the release pin", () => {
+    expect(ACTIONS_SHA).toMatch(/^[0-9a-f]{40}$/);
+    expect(ACTIONS_VERSION).toMatch(/^v\d+\.\d+\.\d+$/);
+
     const contents = [
       renderBranchWorkflow({ ...branchBase, migrationDriftCheck: true }).content,
       renderTagWorkflow({ ...tagBase, branch: "main" }).content,
@@ -549,8 +551,8 @@ describe("Tailor Platform action pins", () => {
       expect(refs.length).toBeGreaterThan(0);
       for (const [, sha, version] of refs) {
         expect({ sha, version }).toEqual({
-          sha: TAILOR_ACTIONS_SHA,
-          version: TAILOR_ACTIONS_VERSION,
+          sha: ACTIONS_SHA,
+          version: ACTIONS_VERSION,
         });
       }
     }

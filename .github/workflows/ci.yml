@@ -98,43 +98,47 @@ jobs:
       - name: Generate code
         run: pnpm -r run generate
 
-      - name: Check type by tsgo
-        run: pnpm -r run typecheck:go
+      # These checks only read the generated tree, so they run concurrently.
+      # GitHub caps a job at 10 concurrent background steps; this group is at
+      # that cap, so adding another check here needs a second group.
+      - parallel:
+          - name: Check type by tsgo
+            run: pnpm -r run typecheck:go
 
-      - name: Check type
-        run: pnpm -r run typecheck
+          - name: Check type
+            run: pnpm -r run typecheck
 
-      - name: Check unused code (knip)
-        run: pnpm -r run knip
+          - name: Check unused code (knip)
+            run: pnpm -r run knip
 
-      - name: Check package exports (publint)
-        run: pnpm -r run publint
+          - name: Check package exports (publint)
+            run: pnpm -r run publint
 
-      # zod must not leak into user-facing entry points (operates on dist/,
-      # already built by install-deps).
-      - name: Check zod isolation
-        run: pnpm -r run check:zod-isolation
+          # zod must not leak into user-facing entry points (operates on dist/,
+          # already built by install-deps).
+          - name: Check zod isolation
+            run: pnpm -r run check:zod-isolation
 
-      - name: Check import cycles
-        run: pnpm -r run check:import-cycles
+          - name: Check import cycles
+            run: pnpm -r run check:import-cycles
 
-      # The checks below guard files that are generated from a source of truth.
-      # They were only reachable through `pnpm check` locally, so forgetting the
-      # matching `:update` command left CI green while the generated copy drifted.
-      - name: Check agent rules are up to date
-        run: pnpm run check:agent-rules
+          # The checks below guard files that are generated from a source of truth.
+          # They were only reachable through `pnpm check` locally, so forgetting the
+          # matching `:update` command left CI green while the generated copy drifted.
+          - name: Check agent rules are up to date
+            run: pnpm run check:agent-rules
 
-      - name: Check migration docs match the codemod registry
-        run: pnpm run check:codemod-docs
+          - name: Check migration docs match the codemod registry
+            run: pnpm run check:codemod-docs
 
-      - name: Check public API JSDoc
-        run: pnpm run check:jsdoc
+          - name: Check public API JSDoc
+            run: pnpm run check:jsdoc
 
-      # Also gates the release PR: once its version bump reaches a codemod's
-      # boundary, an API that was supposed to be removed there still carrying a
-      # `@deprecated` declaration fails here.
-      - name: Check deprecations
-        run: pnpm run check:deprecations
+          # Also gates the release PR: once its version bump reaches a codemod's
+          # boundary, an API that was supposed to be removed there still carrying a
+          # `@deprecated` declaration fails here.
+          - name: Check deprecations
+            run: pnpm run check:deprecations
 
   auto-fix-lint-format:
     name: Auto-fix lint/format (renovate)

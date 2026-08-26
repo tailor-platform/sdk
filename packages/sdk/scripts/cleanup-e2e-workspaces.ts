@@ -1,22 +1,45 @@
 /**
  * Cleanup script for e2e test workspaces
  *
- * Deletes all workspaces with names starting with "e2e-ws-", "template-e2e-", or "sdk-ci-"
+ * Deletes workspaces with names starting with "e2e-ws-", "template-e2e-", or "sdk-ci-".
  *
  * Usage:
- *   npx tsx scripts/cleanup-e2e-workspaces.ts           # Delete all e2e workspaces
- *   npx tsx scripts/cleanup-e2e-workspaces.ts --dry-run # List without deleting
+ *   npx tsx scripts/cleanup-e2e-workspaces.ts                     # Delete all e2e workspaces
+ *   npx tsx scripts/cleanup-e2e-workspaces.ts --dry-run            # List without deleting
+ *   npx tsx scripts/cleanup-e2e-workspaces.ts --run-id=<id>        # Only workspaces from one CI run
+ *   npx tsx scripts/cleanup-e2e-workspaces.ts --local-orphans \
+ *     --min-age-hours=24                                          # See "Local orphans" below
+ *
+ * Local orphans:
+ *   Every e2e test suite reads TAILOR_PLATFORM_ORGANIZATION_ID from the environment and passes it
+ *   as organizationId to createWorkspace, so organizationId is set the same way locally and in CI —
+ *   it does not distinguish the two. What does is the workspace name: each suite embeds
+ *   resolveE2ERunId() (GITHUB_RUN_ID, empty locally) in the name, so only CI-run workspaces carry a
+ *   numeric run id. A local test run's teardown runs on normal exit but not when the process is
+ *   killed or crashes, so a killed local run leaves a run-id-less workspace behind that CI's own
+ *   run-id-scoped cleanup can never match (it has no run to look up). This authenticates as
+ *   loadAccessToken()'s fallback identity (the local `tailor login` session, i.e. whoever is running
+ *   the script) — the same identity the orphan workspace was created under — so it can actually
+ *   delete it, unlike a CI machine user that generally cannot. `--local-orphans` restricts the sweep
+ *   to workspaces with no run id in their name; `--min-age-hours` (required with it, and must be
+ *   greater than 0) additionally requires the workspace to be at least that old, so an in-progress
+ *   local run is never touched.
  */
 
+import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { assertDefined } from "../src/utils/assert";
 
 const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
+// Mirrors the run-id regex in .github/workflows/cleanup-e2e-workspaces.yml: the numeric segment
+// right after the prefix. "sdk-ci-migration-" must precede "sdk-ci-" so the longer prefix wins.
+const RUN_ID_PATTERN = /^(?:e2e-ws-|template-e2e-|sdk-ci-migration-|sdk-ci-)(\d+)/;
 
 interface Workspace {
   id?: string;
   name?: string;
+  createTime?: Timestamp;
 }
 
 /**
@@ -47,14 +70,57 @@ async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> 
   return allWorkspaces;
 }
 
+const KNOWN_FLAGS = new Set(["--dry-run", "--local-orphans"]);
+const KNOWN_VALUE_PREFIXES = ["--run-id=", "--min-age-hours="];
+
 async function main() {
+  for (const arg of process.argv.slice(2)) {
+    if (KNOWN_FLAGS.has(arg) || KNOWN_VALUE_PREFIXES.some((prefix) => arg.startsWith(prefix))) {
+      continue;
+    }
+    console.error(`Unrecognized argument: "${arg}".`);
+    process.exit(1);
+  }
+
   const dryRun = process.argv.includes("--dry-run");
+  const localOrphans = process.argv.includes("--local-orphans");
+  const runIdArg = process.argv.find((a) => a.startsWith("--run-id="));
+  const runId = runIdArg?.split("=")[1];
+  const minAgeHoursArg = process.argv.find((a) => a.startsWith("--min-age-hours="))?.split("=")[1];
+
+  if (runIdArg && !runId) {
+    console.error("--run-id requires a non-empty value.");
+    process.exit(1);
+  }
+  if (localOrphans && runId) {
+    console.error("--local-orphans and --run-id are mutually exclusive.");
+    process.exit(1);
+  }
+  if (!localOrphans && minAgeHoursArg) {
+    console.error("--min-age-hours is only meaningful with --local-orphans.");
+    process.exit(1);
+  }
+  let minAgeHours = 0;
+  if (localOrphans) {
+    if (!minAgeHoursArg) {
+      console.error("--local-orphans requires --min-age-hours=<N>.");
+      process.exit(1);
+    }
+    minAgeHours = Number(minAgeHoursArg);
+    if (!Number.isFinite(minAgeHours) || minAgeHours <= 0) {
+      console.error(`--min-age-hours must be a positive number, got "${minAgeHoursArg}".`);
+      process.exit(1);
+    }
+  }
 
   if (dryRun) {
     console.log("🔍 DRY RUN MODE - No workspaces will be deleted\n");
   }
 
-  // Initialize client (machine-user login, never a local profile)
+  // loadAccessToken() falls back to the local `tailor login` session when neither a profile nor
+  // machine-user credentials are set in the environment. In CI that's always a machine user; run
+  // locally (as --local-orphans is meant to be), it's the developer/agent's own session — the same
+  // identity local orphan workspaces were created under, which is why this can delete them.
   delete process.env.TAILOR_PLATFORM_PROFILE;
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
@@ -65,10 +131,16 @@ async function main() {
   console.log(`Total workspaces found: ${workspaces.length}\n`);
 
   // Filter e2e workspaces
-  const runId = process.argv.find((a) => a.startsWith("--run-id="))?.split("=")[1];
   const e2eWorkspaces = workspaces.filter((ws) => {
     const matchesPrefix = E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix));
     if (!matchesPrefix) return false;
+    if (localOrphans) {
+      if (ws.name && RUN_ID_PATTERN.test(ws.name)) return false;
+      const createdAt = ws.createTime ? timestampDate(ws.createTime) : undefined;
+      if (!createdAt) return false;
+      const ageHours = (Date.now() - createdAt.getTime()) / 3_600_000;
+      return ageHours >= minAgeHours;
+    }
     // When --run-id is specified (CI), only delete workspaces from this run to avoid cross-run conflicts
     if (runId) {
       return ws.name?.includes(runId);

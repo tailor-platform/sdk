@@ -39,18 +39,19 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Typecheck templates
-        run: >-
-          pnpm -r
-          --filter "./packages/create-sdk/templates/*"
-          run typecheck
+      - parallel:
+          - name: Typecheck templates
+            run: >-
+              pnpm -r
+              --filter "./packages/create-sdk/templates/*"
+              run typecheck
 
-      - name: Run template unit tests
-        run: >-
-          pnpm -r
-          --filter "./packages/create-sdk/templates/tailordb"
-          --filter "./packages/create-sdk/templates/resolver"
-          --filter "./packages/create-sdk/templates/workflow"
-          --filter "./packages/create-sdk/templates/executor"
-          --filter "./packages/create-sdk/templates/generators"
-          run test:unit
+          - name: Run template unit tests
+            run: >-
+              pnpm -r
+              --filter "./packages/create-sdk/templates/tailordb"
+              --filter "./packages/create-sdk/templates/resolver"
+              --filter "./packages/create-sdk/templates/workflow"
+              --filter "./packages/create-sdk/templates/executor"
+              --filter "./packages/create-sdk/templates/generators"
+              run test:unit
