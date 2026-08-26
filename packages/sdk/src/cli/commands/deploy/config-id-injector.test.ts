@@ -1,8 +1,13 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { ensureConfigId } from "./config-id-injector";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { ensureConfigId, warnMissingAppId } from "./config-id-injector";
+
+vi.mock("#/cli/shared/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), log: vi.fn() },
+  styles: { dim: (s: string) => s },
+}));
 
 const THROW_CASES = [
   {
@@ -62,11 +67,9 @@ export default defineConfig(config);
 describe("ensureConfigId", () => {
   let tempDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "config-id-injector-"));
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.promises.rm(tempDir, { recursive: true, force: true });
   });
 
@@ -199,5 +202,32 @@ export default defineConfig({
     const nameLineIndex = lines.findIndex((line) => line.includes("name:"));
     expect(idLineIndex).toBeGreaterThan(-1);
     expect(nameLineIndex).toBeGreaterThan(idLineIndex);
+  });
+});
+
+describe("warnMissingAppId", () => {
+  async function warnCalls(id: string | undefined): Promise<string[]> {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.log).mockClear();
+    warnMissingAppId(id);
+    return [...vi.mocked(logger.warn).mock.calls, ...vi.mocked(logger.log).mock.calls].map((call) =>
+      String(call[0]),
+    );
+  }
+
+  test("warns when the config resolved without an id", async () => {
+    // A config that re-exports defineConfig() from another file gets no id
+    // injected, and used to reach the platform without saying so.
+    const said = (await warnCalls(undefined)).join("\n");
+    expect(said).toContain("without an 'id'");
+    // Name-based ownership covers only the resources carrying no id; the ones
+    // that carry one read as another application's, which is the opposite.
+    expect(said).toContain("another application's");
+    expect(said).toContain("carrying no id");
+  });
+
+  test("stays quiet when the config resolved with an id", async () => {
+    expect(await warnCalls("3f2ac91d-0000-4000-8000-000000000000")).toEqual([]);
   });
 });

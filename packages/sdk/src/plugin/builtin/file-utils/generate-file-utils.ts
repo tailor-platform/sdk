@@ -13,37 +13,37 @@ export function generateUnifiedFileUtils(
     return "";
   }
 
-  // Collect all types with their namespace
-  const typeNamespaceMap = new Map<string, string>();
+  // Collect all tables with their namespace
+  const tableNamespaceMap = new Map<string, string>();
   const typeFieldsMap = new Map<string, string[]>();
 
   for (const { namespace, types } of namespaceData) {
     for (const type of types) {
-      typeNamespaceMap.set(type.name, namespace);
+      tableNamespaceMap.set(type.name, namespace);
       typeFieldsMap.set(type.name, type.fileFields);
     }
   }
 
-  if (typeNamespaceMap.size === 0) {
+  if (tableNamespaceMap.size === 0) {
     return "";
   }
 
   // Generate interface fields
   const interfaceFields = Array.from(typeFieldsMap.entries())
-    .map(([typeName, fields]) => {
+    .map(([tableName, fields]) => {
       const fieldNamesUnion = fields.map((field) => `"${field}"`).join(" | ");
-      return `  ${typeName}: {\n    fields: ${fieldNamesUnion};\n  };`;
+      return `  ${tableName}: {\n    fields: ${fieldNamesUnion};\n  };`;
     })
     .join("\n");
 
   const importStatement =
     multiline /* ts */ `
-      import * as file from "@tailor-platform/sdk/runtime/file";
+      import { file } from "@tailor-platform/sdk/runtime/file";
       import type {
         FileUploadOptions,
         FileUploadResponse,
         FileMetadata,
-        FileStreamIterator,
+        FileDownloadStreamResponse,
       } from "@tailor-platform/sdk/runtime/file";
     ` + "\n";
 
@@ -55,8 +55,8 @@ export function generateUnifiedFileUtils(
     ` + "\n";
 
   // Generate namespaces object
-  const namespaceEntries = Array.from(typeNamespaceMap.entries())
-    .map(([typeName, namespace]) => `  ${typeName}: "${namespace}"`)
+  const namespaceEntries = Array.from(tableNamespaceMap.entries())
+    .map(([tableName, namespace]) => `  ${tableName}: "${namespace}"`)
     .join(",\n");
 
   const namespacesDefinition =
@@ -116,15 +116,15 @@ export function generateUnifiedFileUtils(
       }
     ` + "\n";
 
-  // Generate openFileDownloadStream helper function
-  const openDownloadStreamFunction =
+  // Generate downloadFileStream helper function
+  const downloadStreamFunction =
     multiline /* ts */ `
-      export async function openFileDownloadStream<T extends keyof TypeWithFiles>(
+      export async function downloadFileStream<T extends keyof TypeWithFiles>(
         type: T,
         field: TypeWithFiles[T]["fields"],
         recordId: string,
-      ): Promise<FileStreamIterator> {
-        return await file.openDownloadStream(namespaces[type], type, field, recordId);
+      ): Promise<FileDownloadStreamResponse> {
+        return await file.downloadStream(namespaces[type], type, field, recordId);
       }
     ` + "\n";
 
@@ -136,6 +136,6 @@ export function generateUnifiedFileUtils(
     uploadFunction,
     deleteFunction,
     getMetadataFunction,
-    openDownloadStreamFunction,
+    downloadStreamFunction,
   ].join("\n");
 }

@@ -2,13 +2,13 @@
  * E2E tests for TailorDB migrations
  *
  * These tests verify the complete migration workflow:
- * - Initial migration generation from type definitions
+ * - Initial migration generation from table definitions
  * - Schema changes and diff detection
  * - Breaking change detection
  * - Apply with migrations
  *
  * Prerequisites:
- * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  *
  * Running Tests:
@@ -21,7 +21,7 @@
  * - Optional Field Addition (Non-breaking): Adding optional fields
  * - Required Field Addition (Breaking): Adding required fields
  * - Stability and Verification: No changes detection
- * - Type Addition (Non-breaking): Adding new types
+ * - Table Addition (Non-breaking): Adding new tables
  * - Field Removal (Non-breaking): Removing fields
  * - Final Schema Reconstruction: Complete migration chain verification (skipped)
  *
@@ -29,12 +29,12 @@
  * Running individual tests in isolation may fail.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, aroundAll } from "vitest";
 import { resourceTrn } from "../src/cli/commands/deploy/label";
 import {
   getMigrationFiles,
@@ -43,6 +43,7 @@ import {
   INITIAL_SCHEMA_NUMBER,
   getMigrationFilePath,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
+import { MIGRATION_REVIEW_REQUIRED_MARKER } from "../src/cli/commands/tailordb/migrate/template-generator";
 import {
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
@@ -79,7 +80,7 @@ const tailordbName = `testdb-${testRunId}`;
  */
 function runGenerateCli(configPath: string, cwd: string): void {
   const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 
   try {
     execSync(`node ${cliPath} tailordb migration generate --config ${configPath} --yes`, {
@@ -103,17 +104,17 @@ function runGenerateCli(configPath: string, cwd: string): void {
 }
 
 /**
- * Run the apply CLI command via subprocess
+ * Run the deploy CLI command via subprocess
  * @param {string} configPath - Path to the config file
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
  */
-function runApplyCli(configPath: string, workspaceId: string, cwd: string): void {
+function runDeployCli(configPath: string, workspaceId: string, cwd: string): void {
   const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 
   try {
-    execSync(`node ${cliPath} apply --config ${configPath} --workspace-id ${workspaceId} --yes`, {
+    execSync(`node ${cliPath} deploy --config ${configPath} --workspace-id ${workspaceId} --yes`, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"], // stdin ignored, stdout/stderr piped
       env: {
@@ -121,37 +122,83 @@ function runApplyCli(configPath: string, workspaceId: string, cwd: string): void
         NODE_OPTIONS: "--experimental-vm-modules",
       },
       encoding: "utf-8",
-      timeout: 120000, // 120 second timeout for apply operations
+      timeout: 120000, // 120 second timeout for deploy operations
     });
     // Success - output captured but not logged to keep test output clean
   } catch (error: unknown) {
     // Log error details for debugging
     if (error && typeof error === "object" && "stderr" in error) {
-      console.error("Apply CLI error:", (error as { stderr?: Buffer }).stderr?.toString());
+      console.error("Deploy CLI error:", (error as { stderr?: Buffer }).stderr?.toString());
     }
     throw error;
   }
 }
 
 /**
- * Run the apply CLI command, returning the result instead of throwing so callers
+ * Run pending migrations against a designated E2E target workspace.
+ * @param configPath - Path to the fixture config
+ * @param sourceWorkspaceId - Workspace whose migration checkpoint is the baseline
+ * @param targetWorkspaceId - Empty throwaway workspace retained for assertions
+ * @param assertionPath - Post-migration assertion script
+ * @param cwd - Fixture working directory
+ */
+function runMigrationTestCli(
+  configPath: string,
+  sourceWorkspaceId: string,
+  targetWorkspaceId: string,
+  assertionPath: string,
+  cwd: string,
+): void {
+  const sdkRoot = path.resolve(__dirname, "..");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
+  execFileSync(
+    "node",
+    [
+      cliPath,
+      "tailordb",
+      "migration",
+      "test",
+      "--config",
+      configPath,
+      "--workspace-id",
+      sourceWorkspaceId,
+      "--target-workspace-id",
+      targetWorkspaceId,
+      "--data",
+      "seed",
+      "--assert",
+      assertionPath,
+      "--yes",
+    ],
+    {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
+      encoding: "utf-8",
+      timeout: 240000,
+    },
+  );
+}
+
+/**
+ * Run the deploy CLI command, returning the result instead of throwing so callers
  * can assert on an expected failure.
  * @param {string} configPath - Path to the config file
  * @param {string} workspaceId - Workspace ID
  * @param {string} cwd - Working directory
- * @returns {{ ok: boolean; output: string }} Whether apply succeeded and its combined output
+ * @returns {{ ok: boolean; output: string }} Whether deploy succeeded and its combined output
  */
-function tryApplyCli(
+function tryDeployCli(
   configPath: string,
   workspaceId: string,
   cwd: string,
 ): { ok: boolean; output: string } {
   const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 
   try {
     const out = execSync(
-      `node ${cliPath} apply --config ${configPath} --workspace-id ${workspaceId} --yes`,
+      `node ${cliPath} deploy --config ${configPath} --workspace-id ${workspaceId} --yes`,
       {
         cwd,
         stdio: ["ignore", "pipe", "pipe"],
@@ -201,6 +248,35 @@ describe.sequential("E2E: TailorDB Migrations", () => {
 
     // Create migrations directory (empty)
     fs.mkdirSync(migrationsDir, { recursive: true });
+
+    const seedDataDir = path.join(tempDir, "seed", "data");
+    fs.mkdirSync(seedDataDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(seedDataDir, "User.jsonl"),
+      `${JSON.stringify({
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "Migration Test User",
+        email: "migration-test@example.com",
+        role: "ADMIN",
+      })}\n`,
+    );
+
+    fs.writeFileSync(
+      path.join(tempDir, "assert-migration.ts"),
+      `import type { Kysely } from "kysely";
+
+export async function main(db: Kysely<any>): Promise<void> {
+  const user = await db
+    .selectFrom("User")
+    .select(["name", "email"])
+    .where("id", "=", "11111111-1111-4111-8111-111111111111")
+    .executeTakeFirst();
+  if (user?.name !== "Migration Test User" || user.email !== "migration-test@example.com") {
+    throw new Error("Seeded migration fixture was not preserved");
+  }
+}
+`,
+    );
   }
 
   /**
@@ -220,8 +296,8 @@ describe.sequential("E2E: TailorDB Migrations", () => {
   }
 
   /**
-   * Update type file with new content
-   * @param {string} content - New content for the type file
+   * Update table file with new content
+   * @param {string} content - New content for the table file
    */
   function updateTypeFile(content: string): void {
     const typePath = path.join(tempDir, "tailordb", "user.ts");
@@ -255,7 +331,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     fs.writeFileSync(migratePath, content);
   }
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
@@ -314,6 +390,8 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       path.join(monorepoNodeModules, "@tailor-platform", "function-kysely-tailordb"),
       path.join(tailorPlatformDir, "function-kysely-tailordb"),
     );
+
+    await runSuite();
   }, 120000);
 
   /**
@@ -336,9 +414,9 @@ describe.sequential("E2E: TailorDB Migrations", () => {
   }
 
   /**
-   * Helper to list all TailorDB type names in a namespace
+   * Helper to list all TailorDB table names in a namespace
    * @param namespace - TailorDB namespace name
-   * @returns List of type names in the namespace
+   * @returns List of table names in the namespace
    */
   async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
     const types: string[] = [];
@@ -360,16 +438,16 @@ describe.sequential("E2E: TailorDB Migrations", () => {
   }
 
   /**
-   * Helper to get field names for a TailorDB type
+   * Helper to get field names for a TailorDB table
    * @param namespace - TailorDB namespace name
-   * @param typeName - Type name
+   * @param tableName - Table name
    * @returns List of field names
    */
-  async function getTailorDBTypeFields(namespace: string, typeName: string): Promise<string[]> {
+  async function getTailorDBTypeFields(namespace: string, tableName: string): Promise<string[]> {
     const resp = await client.getTailorDBType({
       workspaceId,
       namespaceName: namespace,
-      tailordbTypeName: typeName,
+      tailordbTypeName: tableName,
     });
     return Object.keys(resp.tailordbType?.schema?.fields ?? {});
   }
@@ -400,7 +478,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     /**
      * Scenario 1: Initial migration generation
      *
-     * Creates initial type definition and generates 0000/schema.json
+     * Creates initial table definition and generates 0000/schema.json
      */
     test("generates initial schema migration", async () => {
       // Create config with migrations enabled
@@ -418,9 +496,9 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       // Verify snapshot content
       const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
       expect(snapshot).not.toBeNull();
-      expect(snapshot!.types.User).toBeDefined();
-      expect(snapshot!.types.User!.fields.name).toBeDefined();
-      expect(snapshot!.types.User!.fields.email).toBeDefined();
+      expect(snapshot!.tables.User).toBeDefined();
+      expect(snapshot!.tables.User!.fields.name).toBeDefined();
+      expect(snapshot!.tables.User!.fields.email).toBeDefined();
     }, 60000);
 
     /**
@@ -429,13 +507,13 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     test("applies initial migration to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
       // Verify: TailorDB service should exist
       const services = await listTailorDBServiceNames();
       expect(services).toContain(tailordbName);
 
-      // Verify: User type should exist with expected fields
+      // Verify: User table should exist with expected fields
       const types = await listTailorDBTypeNames(tailordbName);
       expect(types).toContain("User");
 
@@ -450,10 +528,10 @@ describe.sequential("E2E: TailorDB Migrations", () => {
      * Scenario 2: Non-breaking change (adding optional field)
      */
     test("detects non-breaking change when adding optional field", async () => {
-      // Update type to add optional field
+      // Update table to add optional field
       updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
@@ -482,15 +560,49 @@ export type user = typeof user;
       expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
     }, 60000);
 
+    test("rehearses the pending migration in a designated workspace", async () => {
+      const configPath = createConfig();
+      const sourceWorkspace = (await client.getWorkspace({ workspaceId })).workspace!;
+      const targetResponse = await client.createWorkspace({
+        workspaceName: `${testWorkspaceName}-migration-target`,
+        workspaceRegion: sourceWorkspace.region,
+        deleteProtection: false,
+        organizationId: sourceWorkspace.organizationId,
+        folderId: sourceWorkspace.folderId,
+      });
+      const targetWorkspaceId = targetResponse.workspace!.id;
+      trackWorkspace(targetWorkspaceId);
+
+      runMigrationTestCli(
+        configPath,
+        workspaceId,
+        targetWorkspaceId,
+        path.join(tempDir, "assert-migration.ts"),
+        tempDir,
+      );
+
+      const targetType = await client.getTailorDBType({
+        workspaceId: targetWorkspaceId,
+        namespaceName: tailordbName,
+        tailordbTypeName: "User",
+      });
+      expect(Object.keys(targetType.tailordbType?.schema?.fields ?? {})).toContain("phone");
+
+      const { metadata } = await client.getMetadata({
+        trn: resourceTrn(targetWorkspaceId, "tailordb", tailordbName),
+      });
+      expect(parseMigrationLabelNumber(metadata?.labels[MIGRATION_LABEL_KEY] ?? "")).toBe(1);
+    }, 240000);
+
     /**
      * Scenario 2b: Apply non-breaking change
      */
     test("applies non-breaking migration to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: phone field should be added to User type
+      // Verify: phone field should be added to User table
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).toContain("phone");
     }, 120000);
@@ -501,10 +613,10 @@ export type user = typeof user;
      * Scenario 3: Breaking change (adding required field)
      */
     test("detects breaking change when adding required field", async () => {
-      // Update type to add required field (breaking change)
+      // Update table to add required field (breaking change)
       updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
@@ -552,9 +664,9 @@ export type user = typeof user;
 
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: requiredField should be added to User type
+      // Verify: requiredField should be added to User table
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).toContain("requiredField");
     }, 120000);
@@ -582,12 +694,12 @@ export type user = typeof user;
 
   describe("Type Addition (Non-breaking)", () => {
     /**
-     * Scenario 6: Type addition (non-breaking)
+     * Scenario 6: Table addition (non-breaking)
      *
-     * Adds a new Post type to the schema
+     * Adds a new Post table to the schema
      */
-    test("detects type addition as non-breaking change", async () => {
-      // Copy Post type fixture
+    test("detects table addition as non-breaking change", async () => {
+      // Copy Post table fixture
       const srcPost = path.join(FIXTURE_DIR, "tailordb", "post.ts");
       const destPost = path.join(tempDir, "tailordb", "post.ts");
       fs.copyFileSync(srcPost, destPost);
@@ -607,18 +719,20 @@ export type user = typeof user;
       const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
       const diff = loadDiff(diffPath);
       expect(diff.hasBreakingChanges).toBe(false);
-      expect(diff.changes.some((c) => c.kind === "type_added" && c.typeName === "Post")).toBe(true);
+      expect(diff.changes.some((c) => c.kind === "table_added" && c.tableName === "Post")).toBe(
+        true,
+      );
     }, 60000);
 
     /**
-     * Scenario 6b: Apply type addition
+     * Scenario 6b: Apply table addition
      */
-    test("applies type addition to workspace", async () => {
+    test("applies table addition to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: Post type should be added
+      // Verify: Post table should be added
       const types = await listTailorDBTypeNames(tailordbName);
       expect(types).toContain("Post");
     }, 120000);
@@ -628,13 +742,13 @@ export type user = typeof user;
     /**
      * Scenario 7: Field removal (non-breaking change)
      *
-     * Removes requiredField from User type
+     * Removes requiredField from User table
      */
     test("detects field removal as non-breaking change", async () => {
-      // Update User type to remove requiredField
+      // Update User table to remove requiredField
       updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
@@ -670,9 +784,9 @@ export type user = typeof user;
     test("applies field removal to workspace", async () => {
       const configPath = createConfig();
 
-      runApplyCli(configPath, workspaceId, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: requiredField should be removed from User type
+      // Verify: requiredField should be removed from User table
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).not.toContain("requiredField");
     }, 120000);
@@ -686,7 +800,7 @@ export type user = typeof user;
     test("generates the breaking migration whose script will fail", async () => {
       updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
@@ -725,9 +839,9 @@ export type user = typeof user;
       expect(checkpointBefore).toBe(4);
 
       const configPath = createConfig();
-      const result = tryApplyCli(configPath, workspaceId, tempDir);
+      const result = tryDeployCli(configPath, workspaceId, tempDir);
 
-      // The apply must fail for the injected reason, not an unrelated error.
+      // The deploy must fail for the injected reason, not an unrelated error.
       expect(result.ok).toBe(false);
       expect(result.output).toContain("simulated migration failure for rollback e2e");
 
@@ -755,14 +869,263 @@ export type user = typeof user;
       );
 
       const configPath = createConfig();
-      // No drift error: the failed apply left a consistent baseline at checkpoint 4.
-      runApplyCli(configPath, workspaceId, tempDir);
+      // No drift error: the failed deploy left a consistent baseline at checkpoint 4.
+      runDeployCli(configPath, workspaceId, tempDir);
 
       const fields = await getTailorDBTypeFields(tailordbName, "User");
       expect(fields).toContain("loyaltyTier");
 
       const checkpointAfter = await getMigrationCheckpoint(tailordbName);
       expect(checkpointAfter).toBe(5);
+    }, 120000);
+  });
+
+  describe("In-place Field Type Changes", () => {
+    const firstRowId = "10000000-0000-4000-8000-000000000001";
+    const secondRowId = "10000000-0000-4000-8000-000000000002";
+
+    test("seeds representative values under the source field types", async () => {
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+  sourceUuid: db.uuid(),
+  sourceEnum: db.enum(["ACTIVE", "INACTIVE"]),
+  sourceDecimal: db.decimal(),
+  sourceInteger: db.int(),
+  indexedUuid: db.uuid().index(),
+  indexedEnum: db.enum(["ACTIVE", "INACTIVE"]).index(),
+  indexedDecimal: db.decimal().index(),
+  indexedInteger: db.int().index(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type user = typeof user;
+`);
+
+      const configPath = createConfig();
+      runGenerateCli(configPath, tempDir);
+
+      const files = getMigrationFiles(migrationsDir);
+      expect(files.length).toBe(7);
+      expect(files[6]!.number).toBe(6);
+
+      overwriteMigrationScript(
+        6,
+        `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  await trx
+    .insertInto("User")
+    .values([
+      {
+        id: "${firstRowId}",
+        name: "First",
+        email: "first@example.com",
+        loyaltyTier: "bronze",
+        sourceUuid: "20000000-0000-4000-8000-000000000001",
+        sourceEnum: "ACTIVE",
+        sourceDecimal: "12.34",
+        sourceInteger: 42,
+        indexedUuid: "30000000-0000-4000-8000-000000000001",
+        indexedEnum: "ACTIVE",
+        indexedDecimal: "34.56",
+        indexedInteger: 84,
+      },
+      {
+        id: "${secondRowId}",
+        name: "Second",
+        email: "second@example.com",
+        loyaltyTier: "silver",
+        sourceUuid: "20000000-0000-4000-8000-000000000002",
+        sourceEnum: "INACTIVE",
+        sourceDecimal: "56.78",
+        sourceInteger: -7,
+        indexedUuid: "30000000-0000-4000-8000-000000000002",
+        indexedEnum: "INACTIVE",
+        indexedDecimal: "78.90",
+        indexedInteger: -14,
+      },
+    ])
+    .execute();
+}
+`,
+      );
+
+      runDeployCli(configPath, workspaceId, tempDir);
+      expect(await getMigrationCheckpoint(tailordbName)).toBe(6);
+    }, 120000);
+
+    test("generates one phased migration for verified type pairs", async () => {
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+  sourceUuid: db.string(),
+  sourceEnum: db.string(),
+  sourceDecimal: db.string(),
+  sourceInteger: db.float(),
+  indexedUuid: db.string().index(),
+  indexedEnum: db.string().index(),
+  indexedDecimal: db.string().index(),
+  indexedInteger: db.float().index(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type user = typeof user;
+`);
+
+      const configPath = createConfig();
+      runGenerateCli(configPath, tempDir);
+
+      const files = getMigrationFiles(migrationsDir);
+      expect(files.length).toBe(8);
+      expect(files[7]!.number).toBe(7);
+
+      const diff = loadDiff(getMigrationFilePath(migrationsDir, 7, "diff"));
+      expect(diff.changes).toHaveLength(8);
+      expect(diff.changes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceUuid" }),
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceEnum" }),
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceDecimal" }),
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceInteger" }),
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedUuid" }),
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedEnum" }),
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedDecimal" }),
+          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedInteger" }),
+        ]),
+      );
+      expect(diff.breakingChanges.every((change) => !change.unsupported)).toBe(true);
+
+      const migratePath = getMigrationFilePath(migrationsDir, 7, "migrate");
+      const generatedScript = fs.readFileSync(migratePath, "utf-8");
+      const reviewedScript = generatedScript
+        .replaceAll(
+          `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.\n`,
+          "",
+        )
+        .replaceAll("const normalizedValue: never", "const normalizedValue");
+      const defaultNormalization = `        const sourceValue = row.sourceUuid;
+        if (sourceValue === null) continue;
+        const normalizedValue = sourceValue;`;
+      const exercisedNormalization = `        const sourceValue = row.sourceUuid;
+        if (sourceValue === null) continue;
+        const normalizedValue =
+          sourceValue === "20000000-0000-4000-8000-000000000001"
+            ? "20000000-0000-4000-8000-000000000011"
+            : sourceValue;`;
+      const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
+      expect(editedScript).not.toBe(reviewedScript);
+      expect(editedScript).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+      fs.writeFileSync(migratePath, editedScript);
+
+      runDeployCli(configPath, workspaceId, tempDir);
+      expect(await getMigrationCheckpoint(tailordbName)).toBe(7);
+    }, 120000);
+
+    test("reads, updates, and deletes source rows after the type changes", async () => {
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+  sourceUuid: db.string(),
+  sourceEnum: db.string(),
+  sourceDecimal: db.string(),
+  sourceInteger: db.float(),
+  indexedUuid: db.string().index(),
+  indexedEnum: db.string().index(),
+  indexedDecimal: db.string().index(),
+  indexedInteger: db.float().index(),
+  verificationMarker: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type user = typeof user;
+`);
+
+      const configPath = createConfig();
+      runGenerateCli(configPath, tempDir);
+
+      const files = getMigrationFiles(migrationsDir);
+      expect(files.length).toBe(9);
+      expect(files[8]!.number).toBe(8);
+
+      overwriteMigrationScript(
+        8,
+        `import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
+  if (rows.length !== 2) {
+    throw new Error(\`Expected two rows after type changes, received \${rows.length}\`);
+  }
+  for (const row of rows) {
+    if (
+      typeof row.sourceUuid !== "string" ||
+      typeof row.sourceEnum !== "string" ||
+      typeof row.sourceDecimal !== "string" ||
+      typeof row.sourceInteger !== "number" ||
+      typeof row.indexedUuid !== "string" ||
+      typeof row.indexedEnum !== "string" ||
+      typeof row.indexedDecimal !== "string" ||
+      typeof row.indexedInteger !== "number"
+    ) {
+      throw new Error("Type-changed row did not decode through its target field types");
+    }
+  }
+  const normalized = rows.find((row) => row.id === "${firstRowId}");
+  if (normalized?.sourceUuid !== "20000000-0000-4000-8000-000000000011") {
+    throw new Error("Generated field-type normalization update did not persist");
+  }
+
+  await trx
+    .updateTable("User")
+    .set({
+      sourceUuid: "not-a-uuid",
+      sourceEnum: "NOT_ENUM",
+      sourceDecimal: "not-a-decimal",
+      sourceInteger: 42.5,
+      indexedUuid: "not-an-indexed-uuid",
+      indexedEnum: "NOT_INDEXED_ENUM",
+      indexedDecimal: "not-an-indexed-decimal",
+      indexedInteger: 84.5,
+      verificationMarker: "verified",
+    })
+    .where("id", "=", "${firstRowId}")
+    .execute();
+  await trx.deleteFrom("User").where("id", "=", "${secondRowId}").execute();
+
+  const remaining = await trx.selectFrom("User").selectAll().execute();
+  if (
+    remaining.length !== 1 ||
+    remaining[0]?.id !== "${firstRowId}" ||
+    remaining[0]?.sourceUuid !== "not-a-uuid" ||
+    remaining[0]?.sourceEnum !== "NOT_ENUM" ||
+    remaining[0]?.sourceDecimal !== "not-a-decimal" ||
+    remaining[0]?.sourceInteger !== 42.5 ||
+    remaining[0]?.indexedUuid !== "not-an-indexed-uuid" ||
+    remaining[0]?.indexedEnum !== "NOT_INDEXED_ENUM" ||
+    remaining[0]?.indexedDecimal !== "not-an-indexed-decimal" ||
+    remaining[0]?.indexedInteger !== 84.5
+  ) {
+    throw new Error("Target-type update or delete verification failed");
+  }
+}
+`,
+      );
+
+      runDeployCli(configPath, workspaceId, tempDir);
+      expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
     }, 120000);
   });
 });

@@ -3,10 +3,12 @@
 export type WorkflowJob = {
   /** Job name (must be unique across the project) */
   name: string;
-  /** Trigger function that initiates the job */
-  trigger: Function;
+  /** Start function that initiates the job */
+  start: Function;
   /** Job implementation function */
   body: Function;
+  /** Enable publishing job execution events for this job */
+  publishEvents?: boolean | undefined;
 };
 export type WorkflowJobInput = WorkflowJob;
 
@@ -35,7 +37,7 @@ export type ExecutionPolicyName = string;
 export type ExecutionPolicyNameInput = ExecutionPolicyName;
 
 /**
- * Execution policy key passed to startJobFunction's (or its frozen alias triggerJobFunction's) executionPolicyKey option
+ * Execution policy key passed to execJobFunction's executionPolicyKey option
  */
 export type ExecutionPolicyKey = string;
 export type ExecutionPolicyKeyInput = ExecutionPolicyKey;
@@ -43,7 +45,7 @@ export type ExecutionPolicyKeyInput = ExecutionPolicyKey;
 export type WorkflowJobFunctionExecutionPolicy = {
   /** Workspace-unique execution policy name embedded in the resource TRN */
   name: ExecutionPolicyName;
-  /** Execution policy key passed to startJobFunction's (or its frozen alias triggerJobFunction's) executionPolicyKey option */
+  /** Execution policy key passed to execJobFunction's executionPolicyKey option */
   key: ExecutionPolicyKey;
   /** Optional per-key concurrency cap for job function dispatches matching this policy */
   concurrencyPolicy?: ConcurrencyPolicy;
@@ -59,5 +61,7 @@ export type Workflow = {
   retryPolicy?: RetryPolicy;
   /** Concurrency policy for the workflow */
   concurrencyPolicy?: ConcurrencyPolicy;
+  /** Enable publishing workflow execution events for this workflow */
+  publishEvents?: boolean | undefined;
 };
 export type WorkflowInput = Workflow;

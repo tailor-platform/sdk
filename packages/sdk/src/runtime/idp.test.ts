@@ -4,17 +4,14 @@
  * Verifies that {@link idp.Client} forwards each method to the platform's
  * `tailor.idp.Client` and records calls with method, args, and namespace.
  */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import * as idp from "#/runtime/idp";
-import { cleanupMocks, mockIdp, injectMocks } from "#/vitest/mock";
+import { aroundEach, describe, expect, test } from "vitest";
+import { idp } from "#/runtime/idp";
+import { mockIdp, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/idp", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("Client.user forwards args and namespace", async () => {

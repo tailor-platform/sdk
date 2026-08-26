@@ -5,7 +5,7 @@ import {
   type UpdateExecutorExecutorRequestSchema,
 } from "@tailor-platform/tailor-proto/executor_pb";
 import {
-  type ExecutorExecutorSchema,
+  ExecutorExecutorSchema,
   type ExecutorTargetConfigSchema,
   ExecutorTargetType,
   type ExecutorTargetWebhookHeaderSchema,
@@ -13,20 +13,30 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import {
+  getApplicationAuthNamespace,
+  requireApplicationAuthNamespace,
+} from "#/cli/shared/auth-namespace";
 import { type OperatorClient } from "#/cli/shared/client";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
-import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
+import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "./compare";
 import { executorFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import { normalizeInvoker } from "./invoker";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -36,7 +46,6 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply executor-related changes for the given phase.
@@ -56,11 +65,11 @@ export async function applyExecutor(
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         await client.createExecutorExecutor(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         await client.updateExecutorExecutor(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {
@@ -73,13 +82,13 @@ export async function applyExecutor(
 type CreateExecutor = {
   name: string;
   request: MessageInitShape<typeof CreateExecutorExecutorRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateExecutor = {
   name: string;
   request: MessageInitShape<typeof UpdateExecutorExecutorRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteExecutor = {
@@ -275,7 +284,7 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
             },
           }
         : normalized.triggerConfig;
-  return {
+  const comparable = normalizeProtoConfig({
     name: normalized.name,
     description: normalized.description ?? "",
     disabled: normalized.disabled ?? false,
@@ -306,7 +315,8 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
               },
             }
           : normalized.targetConfig,
-  };
+  }) as MessageInitShape<typeof ExecutorExecutorSchema>;
+  return toComparableProtoJson(ExecutorExecutorSchema, comparable);
 }
 
 function areExecutorsEqual(
@@ -327,7 +337,7 @@ function areExecutorsEqual(
  * @param resourceLabel - Resource label used in error messages
  * @returns The owning namespace, or undefined when the name is unknown
  */
-export function resolveSameRunNamespace(
+function resolveSameRunNamespace(
   sameRunNamespaces: ReadonlyMap<string, string | undefined> | undefined,
   resourceName: string,
   resourceLabel: string,
@@ -346,16 +356,16 @@ export function resolveSameRunNamespace(
 }
 
 /**
- * Find the local TailorDB namespace that declares the given type.
+ * Find the local TailorDB namespace that declares the given table.
  * @param application - Loaded application
- * @param typeName - TailorDB type name to look up
+ * @param tableName - TailorDB table name to look up
  * @returns The declaring namespace, or undefined when no local service has it
  */
-export function findTailorDBNamespace(
+function findTailorDBNamespace(
   application: Readonly<Application>,
-  typeName: string,
+  tableName: string,
 ): string | undefined {
-  return application.tailorDBServices.find((service) => Object.hasOwn(service.types, typeName))
+  return application.tailorDBServices.find((service) => Object.hasOwn(service.types, tableName))
     ?.namespace;
 }
 
@@ -406,7 +416,7 @@ function resolveTailorDBNamespace(
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
   return resolveNamespace({
-    resourceLabel: "TailorDB type",
+    resourceLabel: "TailorDB table",
     resourceName: typeName,
     localNamespaces: application.tailorDBServices.map((service) => service.namespace),
     findLocalNamespace: () => findTailorDBNamespace(application, typeName),
@@ -477,14 +487,6 @@ function resolveIdpNamespace(
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
 
-function resolveAuthNamespace(application: Readonly<Application>): string {
-  const authNamespace = application.authService?.config.name ?? application.config.auth?.name;
-  if (!authNamespace) {
-    throw new Error("No Auth service configured");
-  }
-  return authNamespace;
-}
-
 function protoExecutor(
   context: PlanContext,
   executor: Executor,
@@ -525,10 +527,10 @@ function protoExecutor(
           eventTypes: trigger.events,
           namespaceName: resolveTailorDBNamespace(
             application,
-            trigger.typeName,
+            trigger.tableName,
             context.tailorDBTypeNamespaces,
           ),
-          typeName: trigger.typeName,
+          typeName: trigger.tableName,
           ...(trigger.condition
             ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
             : {}),
@@ -598,7 +600,21 @@ function protoExecutor(
         case: "auth",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveAuthNamespace(application),
+          namespaceName: requireApplicationAuthNamespace(application),
+        },
+      });
+      break;
+    case "workflowExecution":
+    case "workflowJobExecution":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = typedEventTrigger({
+        case: "workflow",
+        value: {
+          eventTypes: trigger.events,
+          workflowName: trigger.workflowName,
+          ...(trigger.condition
+            ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
+            : {}),
         },
       });
       break;
@@ -610,7 +626,7 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  const authNamespace = application.authService?.config.name;
+  const authNamespace = getApplicationAuthNamespace(application);
   const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {
@@ -666,7 +682,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };
@@ -689,7 +705,7 @@ function protoExecutor(
             variables: {
               expr: argsExpr,
             },
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };
@@ -702,12 +718,13 @@ function protoExecutor(
           case: "workflow",
           value: {
             workflowName: target.workflowName,
-            variables: target.args
-              ? typeof target.args === "function"
-                ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
-                : { expr: JSON.stringify(target.args) }
-              : undefined,
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            variables:
+              target.args !== undefined
+                ? typeof target.args === "function"
+                  ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
+                  : { expr: JSON.stringify(target.args) }
+                : undefined,
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };

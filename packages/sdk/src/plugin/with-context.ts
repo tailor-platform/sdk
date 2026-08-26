@@ -1,10 +1,10 @@
 /**
  * Plugin executor context support for defining plugin executors in separate files.
  * This module provides utilities for creating type-safe plugin executors that receive
- * context (like type references and namespace) at runtime.
+ * context (like table references and namespace) at runtime.
  */
 
-import type { TailorActor, TailorEnv } from "#/runtime/types";
+import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
 
 /**
  * Plugin executor factory function type.
@@ -28,9 +28,9 @@ export interface PluginFunctionArgs {
   appNamespace: string;
   /** Environment variables */
   env: TailorEnv;
-  /** Actor (user) who triggered the event, null for system events */
-  actor: TailorActor | null;
-  /** Name of the TailorDB type */
+  /** Principal that triggered the event, null for system events */
+  actor: TailorPrincipal | null;
+  /** Name of the TailorDB table */
   typeName: string;
   /** TailorDB connections by namespace */
   tailordb: Record<string, unknown>;
@@ -88,15 +88,15 @@ export type PluginRecord = { id: string } & Record<string, unknown>;
  * import { getDB } from "@tailor-platform/function-kysely-tailordb";
  *
  * interface MyContext {
- *   sourceType: TailorAnyDBType;
+ *   sourceTable: TailorAnyDBType;
  *   historyType: TailorAnyDBType;
  *   namespace: string;
  * }
  *
  * export default withPluginContext<MyContext>((ctx) =>
  *   createExecutor({
- *     name: `${ctx.sourceType.name.toLowerCase()}-on-create`,
- *     trigger: recordCreatedTrigger({ type: ctx.sourceType }),
+ *     name: `${ctx.sourceTable.name.toLowerCase()}-on-create`,
+ *     trigger: recordCreatedTrigger({ type: ctx.sourceTable }),
  *     operation: {
  *       kind: "function",
  *       body: async (args) => {

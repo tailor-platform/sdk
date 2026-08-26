@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
 import { confirmationArgs, folderArgs, organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
@@ -8,6 +9,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
+// strip unknown keys
 const deleteFolderOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
@@ -38,29 +40,33 @@ export async function deleteFolder(options: DeleteFolderOptions): Promise<void> 
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a folder from an organization.",
-  args: z
-    .object({
-      ...organizationArgs,
-      ...folderArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    ...folderArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable();
     const accessToken = await loadAccessToken();
     const client = await initOperatorClient(accessToken);
 
     // Check if folder exists and get its name
-    let folderName: string | undefined;
+    let response: Awaited<ReturnType<typeof client.getOrganizationFolder>>;
     try {
-      const response = await client.getOrganizationFolder({
+      response = await client.getOrganizationFolder({
         organizationId: args["organization-id"],
         folderId: args["folder-id"],
       });
-      folderName = response.folder?.name;
-    } catch {
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        throw new Error(`Folder "${args["folder-id"]}" not found.`, { cause: error });
+      }
+      throw error;
+    }
+    if (!response.folder) {
       throw new Error(`Folder "${args["folder-id"]}" not found.`);
     }
+    const folderName = response.folder.name;
 
     // Confirm deletion if not forced
     if (!args.yes) {

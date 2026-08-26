@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
 import { confirmationArgs } from "#/cli/shared/args";
@@ -10,6 +11,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
 
+// strip unknown keys
 const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
 });
@@ -50,15 +52,13 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Tailor Platform workspace.",
-  args: z
-    .object({
-      "workspace-id": arg(z.string(), {
-        alias: "w",
-        description: "Workspace ID",
-      }),
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    "workspace-id": arg(z.string(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable();
     // Load and validate options
@@ -72,8 +72,11 @@ export const deleteCommand = defineAppCommand({
       workspace = await client.getWorkspace({
         workspaceId,
       });
-    } catch {
-      throw new Error(`Workspace "${workspaceId}" not found.`);
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        throw new Error(`Workspace "${workspaceId}" not found.`, { cause: error });
+      }
+      throw error;
     }
 
     const workspaceResource = workspace.workspace;

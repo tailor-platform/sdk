@@ -1,6 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi, type Mock } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -19,10 +19,14 @@ vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
+type GetAIGateway = (args: { workspaceId: string; aigatewayName: string }) => Promise<{
+  aigateway: { name: string; url: string };
+}>;
+
 describe("show", () => {
   let getWorkspaceMock: ReturnType<typeof vi.fn>;
   let getApplicationMock: ReturnType<typeof vi.fn>;
-  let getAIGatewayMock: ReturnType<typeof vi.fn>;
+  let getAIGatewayMock: Mock<GetAIGateway>;
 
   const application = {
     name: "my-app",
@@ -36,7 +40,7 @@ describe("show", () => {
     updateTime: timestampFromDate(new Date("2026-02-01T00:00:00Z")),
   };
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
@@ -51,16 +55,17 @@ describe("show", () => {
       workspace: { name: "my-workspace", region: "us" },
     });
     getApplicationMock = vi.fn().mockResolvedValue({ application });
-    getAIGatewayMock = vi.fn();
+    getAIGatewayMock = vi.fn<GetAIGateway>();
     vi.mocked(initOperatorClient).mockResolvedValue({
       getWorkspace: getWorkspaceMock,
       getApplication: getApplicationMock,
       getAIGateway: getAIGatewayMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    await runTest();
   });
 
   test("includes the URL of every configured AI Gateway", async () => {
-    getAIGatewayMock.mockImplementation(({ aigatewayName }: { aigatewayName: string }) =>
+    getAIGatewayMock.mockImplementation(({ aigatewayName }) =>
       Promise.resolve({
         aigateway: { name: aigatewayName, url: `https://${aigatewayName}.example.com` },
       }),
@@ -84,7 +89,7 @@ describe("show", () => {
   });
 
   test("omits AI Gateways that have not been deployed yet", async () => {
-    getAIGatewayMock.mockImplementation(({ aigatewayName }: { aigatewayName: string }) => {
+    getAIGatewayMock.mockImplementation(({ aigatewayName }) => {
       if (aigatewayName === "gateway-a") {
         return Promise.resolve({
           aigateway: { name: "gateway-a", url: "https://gateway-a.example.com" },

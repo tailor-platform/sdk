@@ -1,5 +1,6 @@
 import * as os from "node:os";
 import pLimit from "p-limit";
+import { parsePositiveInt } from "./parse-positive-int";
 
 /**
  * Resolve the maximum number of bundle operations to run in parallel.
@@ -15,27 +16,46 @@ import pLimit from "p-limit";
  * @returns Concurrency cap (always >= 1)
  */
 export function resolveBundleConcurrency(): number {
-  const envValue = process.env.TAILOR_BUNDLE_CONCURRENCY;
-  if (envValue !== undefined) {
-    const trimmed = envValue.trim();
-    if (trimmed !== "" && /^[1-9]\d*$/.test(trimmed)) {
-      return Number.parseInt(trimmed, 10);
-    }
-  }
-  return Math.max(1, os.cpus().length);
+  return parsePositiveInt(process.env.TAILOR_BUNDLE_CONCURRENCY) ?? Math.max(1, os.cpus().length);
 }
 
 /**
  * Run an async worker over each item with the bundle-concurrency cap applied.
  * Results are returned in the same order as the input items.
+ *
+ * On the first rejection no further queued work starts, but already-running
+ * workers are awaited before that first rejection is rethrown, so a failing
+ * bundle cannot leave sibling builds writing output after the caller
+ * has moved on.
  * @param items - Items to process
  * @param worker - Async worker function
  * @returns Worker results in input order
  */
-export function withBundleConcurrency<T, R>(
+export async function withBundleConcurrency<T, R>(
   items: T[],
   worker: (item: T) => Promise<R>,
 ): Promise<R[]> {
+  const results: R[] = [];
+  results.length = items.length;
   const limit = pLimit(resolveBundleConcurrency());
-  return Promise.all(items.map((item) => limit(() => worker(item))));
+  let rejection: { reason: unknown } | undefined;
+
+  await Promise.all(
+    // flatMap skips sparse slots and, unlike map, emits no slot for them either.
+    items.flatMap((item, index) => [
+      limit(async () => {
+        if (rejection) return;
+        try {
+          results[index] = await worker(item);
+        } catch (reason) {
+          rejection ??= { reason };
+        }
+      }),
+    ]),
+  );
+
+  if (rejection) {
+    throw rejection.reason;
+  }
+  return results;
 }

@@ -1,8 +1,8 @@
 import { fetchAll, isNotFoundError } from "#/cli/shared/client";
-import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
+import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import type { TypeSourceInfo, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 
-export type LocalTailorDBService = {
+type LocalTailorDBService = {
   readonly namespace: string;
   readonly types: Readonly<Record<string, unknown>>;
   readonly typeSourceInfo: Readonly<TypeSourceInfo>;
@@ -12,7 +12,7 @@ type TailorDBTypeNameSourceKind = "local" | "external";
 
 export type TailorDBTypeNameSource = {
   readonly namespace: string;
-  readonly typeName: string;
+  readonly tableName: string;
   readonly kind: TailorDBTypeNameSourceKind;
   readonly detail?: string;
 };
@@ -47,8 +47,8 @@ export interface FetchExternalTailorDBTypeNameSourcesArgs {
   externalTailorDBNamespaces: ReadonlyArray<string>;
 }
 
-export interface AssertUniqueTailorDBTypeNamesArgs {
-  /** Type-name sources to validate. */
+interface AssertUniqueTailorDBTypeNamesArgs {
+  /** Table-name sources to validate. */
   sources: ReadonlyArray<TailorDBTypeNameSource>;
 }
 
@@ -59,8 +59,8 @@ export interface AssertUniqueTailorDBTypeNamesWithExternalArgs
 }
 
 /**
- * Format a TailorDB type source for validation errors.
- * @param sourceInfo - Source information captured when loading the type
+ * Format a TailorDB table source for validation errors.
+ * @param sourceInfo - Source information captured when loading the table
  * @returns Human-readable source detail
  */
 export function formatTailorDBTypeSourceInfo(
@@ -70,10 +70,10 @@ export function formatTailorDBTypeSourceInfo(
     return undefined;
   }
 
-  if (isPluginGeneratedType(sourceInfo)) {
+  if (isPluginGeneratedTable(sourceInfo)) {
     const parts = [`plugin ${sourceInfo.pluginId}`];
-    if (sourceInfo.generatedTypeKind) {
-      parts.push(`kind ${sourceInfo.generatedTypeKind}`);
+    if (sourceInfo.generatedTableKind) {
+      parts.push(`kind ${sourceInfo.generatedTableKind}`);
     }
     if (sourceInfo.originalFilePath) {
       parts.push(`source ${sourceInfo.originalFilePath}`);
@@ -88,22 +88,22 @@ export function formatTailorDBTypeSourceInfo(
 }
 
 /**
- * Collect TailorDB type-name sources from loaded local services.
+ * Collect TailorDB table-name sources from loaded local services.
  * @param args - Collection inputs
- * @returns Type-name sources for local services
+ * @returns Table-name sources for local services
  */
-export function collectLocalTailorDBTypeNameSources(
+function collectLocalTailorDBTypeNameSources(
   args: CollectLocalTailorDBTypeNameSourcesArgs,
 ): TailorDBTypeNameSource[] {
   const sources: TailorDBTypeNameSource[] = [];
 
   for (const service of args.tailorDBServices) {
-    for (const typeName of Object.keys(service.types)) {
+    for (const tableName of Object.keys(service.types)) {
       sources.push({
         namespace: service.namespace,
-        typeName,
+        tableName,
         kind: "local",
-        detail: formatTailorDBTypeSourceInfo(service.typeSourceInfo[typeName]),
+        detail: formatTailorDBTypeSourceInfo(service.typeSourceInfo[tableName]),
       });
     }
   }
@@ -112,9 +112,9 @@ export function collectLocalTailorDBTypeNameSources(
 }
 
 /**
- * Fetch TailorDB type-name sources for external namespaces.
+ * Fetch TailorDB table-name sources for external namespaces.
  * @param args - Fetch inputs
- * @returns Type-name sources for external services
+ * @returns Table-name sources for external services
  */
 export async function fetchExternalTailorDBTypeNameSources(
   args: FetchExternalTailorDBTypeNameSourcesArgs,
@@ -142,7 +142,7 @@ export async function fetchExternalTailorDBTypeNameSources(
       for (const type of tailordbTypes) {
         sources.push({
           namespace,
-          typeName: type.name,
+          tableName: type.name,
           kind: "external",
         });
       }
@@ -155,42 +155,42 @@ export async function fetchExternalTailorDBTypeNameSources(
 }
 
 /**
- * Assert that TailorDB type names are unique across all supplied sources.
+ * Assert that TailorDB table names are unique across all supplied sources.
  * @param args - Validation inputs
  */
-export function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs): void {
-  const sourcesByTypeName = new Map<string, TailorDBTypeNameSource[]>();
+function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs): void {
+  const sourcesByTableName = new Map<string, TailorDBTypeNameSource[]>();
 
   for (const source of args.sources) {
-    const existing = sourcesByTypeName.get(source.typeName);
+    const existing = sourcesByTableName.get(source.tableName);
     if (existing) {
       existing.push(source);
     } else {
-      sourcesByTypeName.set(source.typeName, [source]);
+      sourcesByTableName.set(source.tableName, [source]);
     }
   }
 
   const errors: string[] = [];
-  for (const [typeName, sources] of sourcesByTypeName) {
+  for (const [tableName, sources] of sourcesByTableName) {
     if (sources.length <= 1) {
       continue;
     }
 
     const sourceList = sources.map(formatTailorDBTypeNameSource).join(", ");
-    errors.push(`Type "${typeName}" is defined more than once: ${sourceList}`);
+    errors.push(`Table "${tableName}" is defined more than once: ${sourceList}`);
   }
 
   if (errors.length > 0) {
     throw new Error(
-      "Duplicate TailorDB type names detected.\n" +
+      "Duplicate TailorDB table names detected.\n" +
         `${errors.map((error) => `  - ${error}`).join("\n")}\n` +
-        "TailorDB type names must be unique across all TailorDB namespaces in an application.",
+        "TailorDB table names must be unique across all TailorDB namespaces in an application.",
     );
   }
 }
 
 /**
- * Assert local TailorDB type names are unique.
+ * Assert local TailorDB table names are unique.
  * @param args - Validation inputs
  */
 export function assertUniqueLocalTailorDBTypeNames(
@@ -202,7 +202,7 @@ export function assertUniqueLocalTailorDBTypeNames(
 }
 
 /**
- * Assert TailorDB type names are unique across local and external namespaces.
+ * Assert TailorDB table names are unique across local and external namespaces.
  * @param args - Validation inputs
  */
 export async function assertUniqueTailorDBTypeNamesWithExternal(

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import {
   db,
@@ -14,7 +14,8 @@ import type { Plugin } from "#/plugin/types";
 describe("createTailorDBService.loadTypes", () => {
   let tmpDir: string | undefined;
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;
@@ -37,7 +38,7 @@ describe("createTailorDBService.loadTypes", () => {
       "user.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -46,7 +47,7 @@ export const user = db.type("User", {
       "account.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const account = db.type("User", {
+export const account = db.table("User", {
   email: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -55,11 +56,12 @@ export const account = db.type("User", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [userFile, accountFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
     await expect(service.loadTypes()).rejects.toThrow(
-      /Duplicate TailorDB type name "User" detected in TailorDB service "main"/,
+      /Duplicate TailorDB table name "User" detected in TailorDB service "main"/,
     );
   });
 
@@ -68,7 +70,7 @@ export const account = db.type("User", {
       "object-prototype.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const objectPrototype = db.type("toString", {
+export const objectPrototype = db.table("toString", {
   value: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -77,6 +79,7 @@ export const objectPrototype = db.type("toString", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -89,7 +92,7 @@ export const objectPrototype = db.type("toString", {
       "proto.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const proto = db.type("__proto__", {
+export const proto = db.table("__proto__", {
   value: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -98,6 +101,7 @@ export const proto = db.type("__proto__", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -111,7 +115,7 @@ export const proto = db.type("__proto__", {
       "overlapping-glob.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -120,6 +124,7 @@ export const user = db.type("User", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [userFile, userFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -133,9 +138,9 @@ export const user = db.type("User", {
       description: "namespace generator",
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
-        types: {
+        tables: {
           auditLog: db
-            .type("AuditLog", {
+            .table("AuditLog", {
               message: db.string(),
             })
             .permission(unsafeAllowAllTypePermission)
@@ -148,6 +153,7 @@ export const user = db.type("User", {
       namespace: "main",
       config: { files: [] },
       pluginManager,
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -163,8 +169,8 @@ export const user = db.type("User", {
       description: "namespace generator",
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
-        types: {
-          auditLog: db.type("AuditLogNoPermission", {
+        tables: {
+          auditLog: db.table("AuditLogNoPermission", {
             message: db.string(),
           }),
         },
@@ -175,12 +181,13 @@ export const user = db.type("User", {
       namespace: "main",
       config: { files: [] },
       pluginManager,
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
     await service.loadTypes();
     await expect(service.processNamespacePlugins()).rejects.toThrow(
-      /TailorDB type "AuditLogNoPermission".* has no \.permission\(\) configured/,
+      /TailorDB table "AuditLogNoPermission".* has no \.permission\(\) configured/,
     );
   });
 
@@ -189,7 +196,7 @@ export const user = db.type("User", {
       "no-permission.ts",
       `
 import { db, unsafeAllowAllGqlPermission } from "@tailor-platform/sdk";
-export const noPermission = db.type("NoPermission", {
+export const noPermission = db.table("NoPermission", {
   name: db.string(),
 }).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -198,12 +205,13 @@ export const noPermission = db.type("NoPermission", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");
     await expect(service.loadTypes()).rejects.toThrow(
       new RegExp(
-        `TailorDB type "NoPermission" \\(${typeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} export noPermission\\) has no \\.permission\\(\\) configured`,
+        `TailorDB table "NoPermission" \\(${typeFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} export noPermission\\) has no \\.permission\\(\\) configured`,
       ),
     );
   });
@@ -213,7 +221,7 @@ export const noPermission = db.type("NoPermission", {
       "no-gql-permission.ts",
       `
 import { db, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const noGqlPermission = db.type("NoGqlPermission", {
+export const noGqlPermission = db.table("NoGqlPermission", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission);
 `,
@@ -222,11 +230,12 @@ export const noGqlPermission = db.type("NoGqlPermission", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");
     await expect(service.loadTypes()).rejects.toThrow(
-      /TailorDB type "NoGqlPermission".* has no \.gqlPermission\(\) configured/,
+      /TailorDB table "NoGqlPermission".* has no \.gqlPermission\(\) configured/,
     );
   });
 
@@ -235,7 +244,7 @@ export const noGqlPermission = db.type("NoGqlPermission", {
       "gql-disabled.ts",
       `
 import { db, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const gqlDisabled = db.type("GqlDisabled", {
+export const gqlDisabled = db.table("GqlDisabled", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission).features({
   gqlOperations: { create: false, update: false, delete: false, read: false },
@@ -246,6 +255,7 @@ export const gqlDisabled = db.type("GqlDisabled", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");
@@ -258,7 +268,7 @@ export const gqlDisabled = db.type("GqlDisabled", {
       "namespace-gql-disabled.ts",
       `
 import { db, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const namespaceGqlDisabled = db.type("NamespaceGqlDisabled", {
+export const namespaceGqlDisabled = db.table("NamespaceGqlDisabled", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission);
 `,
@@ -270,6 +280,7 @@ export const namespaceGqlDisabled = db.type("NamespaceGqlDisabled", {
         files: [typeFile],
         gqlOperations: { create: false, update: false, delete: false, read: false },
       },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");

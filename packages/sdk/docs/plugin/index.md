@@ -2,15 +2,15 @@
 
 > **Beta Feature**: The plugin system is currently in beta. APIs may change in future releases.
 
-Plugins extend TailorDB types by automatically generating additional types, executors, and output files based on your type definitions.
+Plugins extend TailorDB tables by automatically generating additional tables, executors, and output files based on your table definitions.
 
 ## Overview
 
-When you run `tailor-sdk generate`, the SDK:
+When you run `tailor generate`, the SDK:
 
-1. Loads all TailorDB types with plugin attachments
-2. Passes each type to the attached plugins
-3. Generates additional types and executors based on plugin output
+1. Loads all TailorDB tables with plugin attachments
+2. Passes each table to the attached plugins
+3. Generates additional tables and executors based on plugin output
 4. Writes all generated files to the appropriate locations
 
 This enables plugins to create derived functionality based on your application's schema.
@@ -35,15 +35,15 @@ export default defineConfig({
 
 **Important**: The `plugins` export must be a named export (not default).
 
-### Attaching Plugins to Types
+### Attaching Plugins to Tables
 
-Use the `.plugin()` method to attach plugins to specific types:
+Use the `.plugin()` method to attach plugins to specific tables:
 
 ```typescript
 import { db } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
   })
@@ -54,11 +54,11 @@ export const user = db
 
 ### Plugin Configuration
 
-Some plugins accept per-type configuration:
+Some plugins accept per-table configuration:
 
 ```typescript
 export const customer = db
-  .type("Customer", {
+  .table("Customer", {
     name: db.string(),
     // ...
   })
@@ -70,10 +70,10 @@ export const customer = db
   });
 ```
 
-### Per-type Config Requirement
+### Per-table Config Requirement
 
-Per-type config is optional by default. Plugin authors can change this with
-`typeConfigRequired` (boolean or function). When a function is used, it receives
+Per-table config is optional by default. Plugin authors can change this with
+`tableConfigRequired` (boolean or function). When a function is used, it receives
 the plugin-level config from `definePlugins()`.
 
 ### Global Plugin Configuration
@@ -97,31 +97,31 @@ export const plugins = definePlugins(
 
 Plugins can generate:
 
-- **Types**: Additional TailorDB types (e.g., `CustomerHistory`, `Deleted_Customer`)
+- **Tables**: Additional TailorDB tables (e.g., `CustomerHistory`, `Deleted_Customer`)
 - **Executors**: Event handlers triggered by record changes
-- **Field Extensions**: Additional fields added to the source type
+- **Field Extensions**: Additional fields added to the source table
 - **Output Files**: TypeScript code and other files via generation-time hooks
 
-Generated files are placed under `.tailor-sdk/<plugin-id>/` (the plugin ID is sanitized,
+Generated files are placed under `.tailor/<plugin-id>/` (the plugin ID is sanitized,
 e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 
-- `.tailor-sdk/example-soft-delete/types`
-- `.tailor-sdk/example-soft-delete/executors`
+- `.tailor/example-soft-delete/types`
+- `.tailor/example-soft-delete/executors`
 
 ## Plugin Lifecycle
 
-Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific point in the `tailor-sdk generate` pipeline:
+Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific point in the `tailor generate` pipeline:
 
 ```
-tailor-sdk generate
+tailor generate
 │
-├─ Load TailorDB types
-│   ├─ onTypeLoaded        ← per type with .plugin() attached
+├─ Load TailorDB tables
+│   ├─ onTableLoaded       ← per table with .plugin() attached
 │   └─ onNamespaceLoaded   ← once per namespace (namespace plugins)
 │
 ├─ Resolve Auth
 │
-├─ onTailorDBReady           ← all types finalized
+├─ onTailorDBReady           ← all tables finalized
 │
 ├─ Load Resolvers
 │
@@ -134,22 +134,22 @@ tailor-sdk generate
 
 ### Definition-time hooks
 
-| Hook                | Trigger                             | Can do                                                          |
-| ------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| `onTypeLoaded`      | Each type with `.plugin()` attached | Generate types, resolvers, executors; extend source type fields |
-| `onNamespaceLoaded` | Once per namespace                  | Generate types, resolvers, executors                            |
+| Hook                | Trigger                              | Can do                                                            |
+| ------------------- | ------------------------------------ | ----------------------------------------------------------------- |
+| `onTableLoaded`     | Each table with `.plugin()` attached | Generate tables, resolvers, executors; extend source table fields |
+| `onNamespaceLoaded` | Once per namespace                   | Generate tables, resolvers, executors                             |
 
-These hooks produce TailorDB types, resolvers, and executors that become part of the application. Requires `importPath` on the plugin.
+These hooks produce TailorDB tables, resolvers, and executors that become part of the application. Requires `importPath` on the plugin.
 
 ### Generation-time hooks
 
-| Hook              | Available data                             | Can do             |
-| ----------------- | ------------------------------------------ | ------------------ |
-| `onTailorDBReady` | TailorDB types, Auth                       | Write output files |
-| `onResolverReady` | TailorDB types, Resolvers, Auth            | Write output files |
-| `onExecutorReady` | TailorDB types, Resolvers, Executors, Auth | Write output files |
+| Hook              | Available data                              | Can do             |
+| ----------------- | ------------------------------------------- | ------------------ |
+| `onTailorDBReady` | TailorDB tables, Auth                       | Write output files |
+| `onResolverReady` | TailorDB tables, Resolvers, Auth            | Write output files |
+| `onExecutorReady` | TailorDB tables, Resolvers, Executors, Auth | Write output files |
 
-These hooks receive all finalized data and produce output files (TypeScript code, etc.). They replace the previous standalone `defineGenerators()` approach. No `importPath` required.
+These hooks receive all finalized data and produce output files (TypeScript code, etc.). No `importPath` required.
 
 A plugin can implement hooks from either or both phases.
 

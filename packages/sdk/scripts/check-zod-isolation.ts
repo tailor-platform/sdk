@@ -1,4 +1,3 @@
-#!/usr/bin/env -S pnpm exec tsx
 // Verify zod stays isolated to the CLI entry point.
 //
 // zinfer exists so that user-facing entry points never depend on zod:

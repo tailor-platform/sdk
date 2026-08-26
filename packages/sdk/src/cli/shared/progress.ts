@@ -31,10 +31,15 @@ export function createProgress(label: string, total: number) {
  * @returns Result of the original promise if it completes in time
  */
 export async function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
-  return await Promise.race([
-    p,
-    setTimeout(ms).then(() => {
-      throw new Error(message);
-    }),
-  ]);
+  const timeoutController = new AbortController();
+  try {
+    return await Promise.race([
+      p,
+      setTimeout(ms, undefined, { signal: timeoutController.signal }).then(() => {
+        throw new Error(message);
+      }),
+    ]);
+  } finally {
+    timeoutController.abort();
+  }
 }

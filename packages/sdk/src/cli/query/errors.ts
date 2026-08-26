@@ -27,7 +27,7 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
     return CLIError({
       code: "not_found",
       message: `Machine user '${args.machineUser ?? "unknown"}' was not found.`,
-      suggestion: "Run `tailor-sdk machineuser list` and use an existing name.",
+      suggestion: "Run `tailor machineuser list` and use an existing name.",
     });
   }
 
@@ -41,7 +41,7 @@ export function mapQueryExecutionError(args: MapQueryExecutionErrorArgs): Error 
       code: "invalid_namespace",
       message: `Failed to load TailorDB schema for namespace '${args.namespace}'.`,
       suggestion:
-        "Ensure the query references TailorDB types from a single namespace and re-apply if needed.",
+        "Ensure the query references TailorDB tables from a single namespace and re-apply if needed.",
     });
   }
 

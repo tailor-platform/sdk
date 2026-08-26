@@ -3,8 +3,9 @@ import {
   ExecutorJobStatus,
   ExecutorTargetType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
@@ -53,7 +54,7 @@ function mockOperatorClient(overrides: OperatorClientMockOverrides = {}) {
 describe("watchExecutorJob", () => {
   let getExecutorJobMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -67,11 +68,12 @@ describe("watchExecutorJob", () => {
       });
 
     mockOperatorClient({ getExecutorJob: getExecutorJobMock });
+    await runTest();
   });
 
   test("retries retryable job polling failures", async () => {
     const result = await watchExecutorJob({
-      executorName: "my-executor",
+      executor: { name: "my-executor" },
       jobId: "job-1",
       interval: 1,
       timeout: 100,
@@ -97,7 +99,7 @@ describe("watchExecutorJob", () => {
     });
 
     const result = await watchExecutorJob({
-      executorName: "my-executor",
+      executor: { name: "my-executor" },
       jobId: "job-1",
       interval: 1,
       timeout: 5,
@@ -147,7 +149,7 @@ describe("watchExecutorJob", () => {
     });
 
     const result = await watchExecutorJob({
-      executorName: "my-executor",
+      executor: { name: "my-executor" },
       jobId: "job-1",
       interval: 1,
       timeout: 100,
@@ -167,6 +169,52 @@ describe("watchExecutorJob", () => {
     });
     expect(getExecutorWaitFailureMessage(result)).toBe(
       "Workflow execution 'workflow-execution-1' failed.",
+    );
+  });
+
+  test("reports a canceled downstream function as a failure", async () => {
+    mockOperatorClient({
+      targetType: ExecutorTargetType.FUNCTION,
+      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+        attempts: [
+          {
+            id: "attempt-1",
+            jobId: "job-1",
+            status: ExecutorJobStatus.SUCCESS,
+            operationReference: "function-execution-1",
+          },
+        ],
+        nextPageToken: "",
+      }),
+      getFunctionExecution: vi.fn().mockResolvedValue({
+        execution: {
+          status: FunctionExecution_Status.CANCELED,
+          logs: "canceled logs",
+          result: "Execution canceled",
+        },
+      }),
+    });
+
+    const result = await watchExecutorJob({
+      executor: { name: "my-executor" },
+      jobId: "job-1",
+      interval: 1,
+      timeout: 100,
+      showProgress: false,
+    });
+
+    expect(result).toMatchObject({
+      targetType: "FUNCTION",
+      functionExecutionId: "function-execution-1",
+      functionStatus: "CANCELED",
+      timedOut: false,
+      job: {
+        id: "job-1",
+        status: "SUCCESS",
+      },
+    });
+    expect(getExecutorWaitFailureMessage(result)).toBe(
+      "Function execution 'function-execution-1' was canceled.",
     );
   });
 });

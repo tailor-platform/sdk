@@ -47,10 +47,10 @@ import type {
   User as IdpUser,
   UserQuery as IdpUserQuery,
 } from "./idp";
+import type { LogAttributeValue, LogAttributes } from "./logger";
 import type {
-  AuthInvoker as WorkflowAuthInvoker,
+  Invoker as WorkflowInvoker,
   StartWorkflowOptions as WorkflowStartWorkflowOptions,
-  TriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
 } from "./workflow";
 
 type TailorIdpClientConfig = IdpClientConfig;
@@ -63,9 +63,10 @@ type TailorIdpUnenrollMfaInput = IdpUnenrollMfaInput;
 type TailorIdpUpdateUserInput = IdpUpdateUserInput;
 type TailorIdpUser = IdpUser;
 type TailorIdpUserQuery = IdpUserQuery;
-type TailorWorkflowAuthInvoker = WorkflowAuthInvoker;
-type TailorWorkflowTriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+type TailorWorkflowInvoker = WorkflowInvoker;
 type TailorWorkflowStartWorkflowOptions = WorkflowStartWorkflowOptions;
+type TailorLoggerLogAttributeValue = LogAttributeValue;
+type TailorLoggerLogAttributes = LogAttributes;
 
 declare global {
   namespace tailordb {
@@ -76,40 +77,6 @@ declare global {
 
   // eslint-disable-next-line no-var
   var tailordb: TailordbRuntime;
-
-  /**
-   * @deprecated Use the lowercase `tailordb.*` namespace instead (e.g.
-   *   `tailordb.QueryResult`, `tailordb.CommandType`,
-   *   `typeof tailordb.Client`). This capital-cased namespace is retained
-   *   only for backwards compatibility with `@tailor-platform/function-types`
-   *   and will be removed in v2. Run
-   *   `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace`
-   *   to migrate.
-   */
-  namespace Tailordb {
-    /**
-     * @deprecated Use `tailordb.Client` (lowercase) instead.
-     *   Will be removed in v2.
-     */
-    class Client {
-      constructor(config: { namespace: string });
-      connect(): Promise<void>;
-      end(): Promise<void>;
-      queryObject<O>(sql: string, args?: readonly unknown[]): Promise<TailordbQueryResult<O>>;
-    }
-
-    /**
-     * @deprecated Use `tailordb.QueryResult<T>` (lowercase) instead.
-     *   Will be removed in v2.
-     */
-    type QueryResult<T> = TailordbQueryResult<T>;
-
-    /**
-     * @deprecated Use `tailordb.CommandType` (lowercase) instead.
-     *   Will be removed in v2.
-     */
-    type CommandType = TailordbCommandType;
-  }
 
   namespace tailor {
     namespace iconv {
@@ -130,14 +97,17 @@ declare global {
     }
 
     namespace workflow {
-      type AuthInvoker = TailorWorkflowAuthInvoker;
+      type Invoker = TailorWorkflowInvoker;
       type StartWorkflowOptions = TailorWorkflowStartWorkflowOptions;
-      /** @deprecated Use `StartWorkflowOptions` instead. */
-      type TriggerWorkflowOptions = TailorWorkflowTriggerWorkflowOptions;
     }
 
     namespace context {
       type Invoker = ContextInvoker;
+    }
+
+    namespace logger {
+      type LogAttributeValue = TailorLoggerLogAttributeValue;
+      type LogAttributes = TailorLoggerLogAttributes;
     }
   }
 
@@ -168,14 +138,4 @@ declare global {
     name: "TailorErrors";
     errors: TailorErrorItem[];
   }
-
-  /**
-   * Single-message error raised by the Tailor Platform Function runtime.
-   */
-  class TailorErrorMessage extends Error {
-    constructor(message: string);
-    name: "TailorErrorMessage";
-  }
 }
-
-export {};

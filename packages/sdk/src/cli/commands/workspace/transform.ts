@@ -35,7 +35,7 @@ export const workspaceInfo = (workspace: Workspace, folderName?: string): Worksp
   return folderName ? { ...info, folderName } : info;
 };
 
-export const workspaceDetails = (workspace: Workspace, folderName?: string): WorkspaceDetails => {
+const workspaceDetails = (workspace: Workspace, folderName?: string): WorkspaceDetails => {
   return {
     ...workspaceInfo(workspace, folderName),
     deleteProtection: workspace.deleteProtection,
@@ -69,7 +69,7 @@ export async function resolveWorkspaceFolderName(
   }
 }
 
-export function createWorkspaceFolderNameResolver(client: OperatorClient) {
+function createWorkspaceFolderNameResolver(client: OperatorClient) {
   const cache = new Map<string, Promise<string | undefined>>();
 
   return (workspace: Workspace): Promise<string | undefined> => {

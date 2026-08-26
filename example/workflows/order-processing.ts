@@ -6,12 +6,12 @@ import { sendNotification } from "./jobs/send-notification";
 
 export const processOrder = createWorkflowJob({
   name: "process-order",
-  body: async (input: { orderId: string; customerId: string }, { env }) => {
+  body: (input: { orderId: string; customerId: string }, { env }) => {
     // Log env for demonstration
     console.log("Environment:", env);
 
-    // Fetch customer information using trigger
-    const customer = await fetchCustomer.trigger({
+    // Fetch customer information using start
+    const customer = fetchCustomer.start({
       customerId: input.customerId,
     });
 
@@ -19,8 +19,8 @@ export const processOrder = createWorkflowJob({
       throw new Error(`Customer ${input.customerId} not found`);
     }
 
-    // Send notification to customer using trigger
-    const notification = await sendNotification.trigger({
+    // Send notification to customer using start
+    const notification = sendNotification.start({
       message: `Your order ${input.orderId} is being processed`,
       recipient: customer.email,
     });

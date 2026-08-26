@@ -5,17 +5,14 @@
  * via `mockIconv().calls`) and that the return-type narrowing (`UTF-8` →
  * `string`, otherwise `Uint8Array`) holds at the type level.
  */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import * as iconv from "#/runtime/iconv";
-import { cleanupMocks, mockIconv, injectMocks } from "#/vitest/mock";
+import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
+import { iconv } from "#/runtime/iconv";
+import { mockIconv, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/iconv", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("convert forwards args and returns string for UTF-8 target", () => {

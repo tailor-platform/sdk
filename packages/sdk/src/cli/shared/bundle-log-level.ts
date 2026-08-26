@@ -31,20 +31,44 @@ const WARN_LEVEL_CONSOLE_METHODS = ["console.warn"] as const;
 // and is never dropped by the log-level treeshaking.
 const ERROR_LEVEL_CONSOLE_METHODS = ["console.error"] as const;
 
+// `@tailor-platform/sdk/runtime`'s `logger` wrapper calls
+// `(globalThis as {...}).tailor.logger.*` (see runtime/logger.ts); the `as`
+// cast is erased by the time treeshaking runs, so the callee this matches
+// against is the `globalThis.tailor.logger.*` member chain, not `tailor.logger.*`.
+const DEBUG_LEVEL_LOGGER_METHODS = ["globalThis.tailor.logger.debug"] as const;
+
+const INFO_LEVEL_LOGGER_METHODS = ["globalThis.tailor.logger.info"] as const;
+
+const WARN_LEVEL_LOGGER_METHODS = ["globalThis.tailor.logger.warn"] as const;
+
+const ERROR_LEVEL_LOGGER_METHODS = ["globalThis.tailor.logger.error"] as const;
+
 const MANUAL_PURE_FUNCTIONS_BY_LOG_LEVEL: Record<LogLevel, readonly string[]> = {
   DEBUG: [],
-  INFO: DEBUG_LEVEL_CONSOLE_METHODS,
-  WARN: [...DEBUG_LEVEL_CONSOLE_METHODS, ...INFO_LEVEL_CONSOLE_METHODS],
+  INFO: [...DEBUG_LEVEL_CONSOLE_METHODS, ...DEBUG_LEVEL_LOGGER_METHODS],
+  WARN: [
+    ...DEBUG_LEVEL_CONSOLE_METHODS,
+    ...INFO_LEVEL_CONSOLE_METHODS,
+    ...DEBUG_LEVEL_LOGGER_METHODS,
+    ...INFO_LEVEL_LOGGER_METHODS,
+  ],
   ERROR: [
     ...DEBUG_LEVEL_CONSOLE_METHODS,
     ...INFO_LEVEL_CONSOLE_METHODS,
     ...WARN_LEVEL_CONSOLE_METHODS,
+    ...DEBUG_LEVEL_LOGGER_METHODS,
+    ...INFO_LEVEL_LOGGER_METHODS,
+    ...WARN_LEVEL_LOGGER_METHODS,
   ],
   SILENT: [
     ...DEBUG_LEVEL_CONSOLE_METHODS,
     ...INFO_LEVEL_CONSOLE_METHODS,
     ...WARN_LEVEL_CONSOLE_METHODS,
     ...ERROR_LEVEL_CONSOLE_METHODS,
+    ...DEBUG_LEVEL_LOGGER_METHODS,
+    ...INFO_LEVEL_LOGGER_METHODS,
+    ...WARN_LEVEL_LOGGER_METHODS,
+    ...ERROR_LEVEL_LOGGER_METHODS,
   ],
 };
 

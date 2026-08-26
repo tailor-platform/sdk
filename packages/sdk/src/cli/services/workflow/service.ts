@@ -1,7 +1,7 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { WorkflowJobSchema, WorkflowSchema } from "#/parser/service/workflow/index";
 import { isSdkBranded } from "#/utils/brand";
 import type { WorkflowServiceConfig } from "#/configure/config/types";
@@ -11,6 +11,21 @@ export interface CollectedJob {
   name: string;
   exportName: string;
   sourceFile: string;
+  /** Explicit `publishEvents` from `createWorkflowJob`, when the job set one. */
+  publishEvents?: boolean;
+}
+
+function stripRuntimeStart(workflow: unknown): unknown {
+  if (
+    !isSdkBranded(workflow, "workflow") ||
+    workflow === null ||
+    typeof workflow !== "object" ||
+    !("start" in workflow)
+  ) {
+    return workflow;
+  }
+  const { start: _start, ...rest } = workflow as Record<string, unknown>;
+  return rest;
 }
 
 interface WorkflowLoadResult {
@@ -36,6 +51,8 @@ export type WorkflowService = {
 export interface CreateWorkflowServiceParams {
   /** The workflow service configuration */
   config: WorkflowServiceConfig;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -44,7 +61,7 @@ export interface CreateWorkflowServiceParams {
  * @returns A new WorkflowService instance
  */
 export function createWorkflowService(params: CreateWorkflowServiceParams): WorkflowService {
-  const { config } = params;
+  const { config, baseDir } = params;
   let workflows: Record<string, Workflow> = {};
   let workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   let jobs: CollectedJob[] = [];
@@ -69,7 +86,7 @@ export function createWorkflowService(params: CreateWorkflowServiceParams): Work
       if (loaded) {
         return;
       }
-      const result = await loadAndCollectJobs(config);
+      const result = await loadAndCollectJobs(config, baseDir);
       workflows = result.workflows;
       workflowSources = result.workflowSources;
       jobs = result.jobs;
@@ -96,9 +113,13 @@ export function createWorkflowService(params: CreateWorkflowServiceParams): Work
  * Load workflow files and collect all jobs in a single pass.
  * Dependencies are detected at bundle time via AST analysis.
  * @param config - Workflow service configuration
+ * @param baseDir - Directory the config's file patterns are resolved against
  * @returns Loaded workflows and collected jobs
  */
-async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<WorkflowLoadResult> {
+async function loadAndCollectJobs(
+  config: WorkflowServiceConfig,
+  baseDir: string,
+): Promise<WorkflowLoadResult> {
   const workflows: Record<string, Workflow> = {};
   const workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   const collectedJobs: CollectedJob[] = [];
@@ -112,11 +133,11 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
     };
   }
 
-  const workflowFiles = loadFilesWithIgnores(config);
+  const workflowFiles = loadFilesWithIgnores(config, baseDir);
   const fileCount = workflowFiles.length;
 
   // Maps for collecting data
-  const allJobsMap = new Map<string, { name: string; exportName: string; sourceFile: string }>();
+  const allJobsMap = new Map<string, CollectedJob>();
 
   // Load all files in parallel and collect jobs and workflows
   const loadResults = await Promise.all(
@@ -161,23 +182,19 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
  * @returns Extracted jobs and workflow
  */
 async function loadFileContent(filePath: string): Promise<{
-  jobs: Array<{ name: string; exportName: string; sourceFile: string }>;
+  jobs: CollectedJob[];
   workflow: Workflow | null;
 }> {
-  const jobs: Array<{
-    name: string;
-    exportName: string;
-    sourceFile: string;
-  }> = [];
+  const jobs: CollectedJob[] = [];
   let workflow: Workflow | null = null;
 
   try {
-    const module = await import(pathToFileURL(filePath).href);
+    const module = await importUserModule(filePath);
 
     for (const [exportName, exportValue] of Object.entries(module)) {
       // Check if it's a workflow (default export)
       if (exportName === "default") {
-        const workflowResult = WorkflowSchema.safeParse(exportValue);
+        const workflowResult = WorkflowSchema.safeParse(stripRuntimeStart(exportValue));
         if (workflowResult.success) {
           workflow = workflowResult.data;
         } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
@@ -192,6 +209,9 @@ async function loadFileContent(filePath: string): Promise<{
           name: jobResult.data.name,
           exportName,
           sourceFile: filePath,
+          ...(jobResult.data.publishEvents !== undefined
+            ? { publishEvents: jobResult.data.publishEvents }
+            : {}),
         });
       } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
         throw jobResult.error;

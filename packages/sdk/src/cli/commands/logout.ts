@@ -16,15 +16,13 @@ import { logger } from "#/cli/shared/logger";
 export const logoutCommand = defineAppCommand({
   name: "logout",
   description: "Logout from Tailor Platform.",
-  args: z
-    .object({
-      profile: arg(z.string().optional(), {
-        alias: "p",
-        description: "Workspace profile whose platform settings should be used for logout.",
-        env: "TAILOR_PLATFORM_PROFILE",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    profile: arg(z.string().optional(), {
+      alias: "p",
+      description: "Workspace profile whose platform settings should be used for logout.",
+      env: "TAILOR_PLATFORM_PROFILE",
+    }),
+  }),
   run: async (args) => {
     const profile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
     const pfConfig = await readPlatformConfig();

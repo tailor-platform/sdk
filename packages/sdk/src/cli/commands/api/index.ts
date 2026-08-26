@@ -182,7 +182,7 @@ const fieldArg = z.string().transform((val, ctx): ParsedField => {
 export const apiCommand = defineAppCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
-  notes: `Use \`tailor-sdk api list\` to enumerate invocable methods and \`tailor-sdk api inspect <endpoint>\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
+  notes: `Use \`tailor api list\` to enumerate invocable methods and \`tailor api inspect <endpoint>\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
 
 The request body is inferred from the target endpoint's request schema, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
 
@@ -216,36 +216,34 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
     list: listCommand,
     inspect: inspectCommand,
   },
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...configArg,
-      body: arg(z.string().default("{}"), {
-        alias: "b",
-        description: "Request body as JSON.",
-      }),
-      field: arg(fieldArg.array().optional(), {
-        alias: "f",
-        description:
-          "Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body.",
-        completion: {
-          custom: {
-            expand: {
-              dependsOn: ["endpoint"],
-              enumerate: ({ endpoint }) =>
-                enumerateAllFieldCompletions(extractMethodName(endpoint ?? "")),
-            },
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...configArg,
+    body: arg(z.string().default("{}"), {
+      alias: "b",
+      description: "Request body as JSON.",
+    }),
+    field: arg(fieldArg.array().optional(), {
+      alias: "f",
+      description:
+        "Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body.",
+      completion: {
+        custom: {
+          expand: {
+            dependsOn: ["endpoint"],
+            enumerate: ({ endpoint }) =>
+              enumerateAllFieldCompletions(extractMethodName(endpoint ?? "")),
           },
         },
-      }),
-      endpoint: arg(z.string(), {
-        positional: true,
-        description:
-          "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
-        completion: { custom: { choices: listMethodChoices() } },
-      }),
-    })
-    .strict(),
+      },
+    }),
+    endpoint: arg(z.string(), {
+      positional: true,
+      description:
+        "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
+      completion: { custom: { choices: listMethodChoices() } },
+    }),
+  }),
   run: async (args) => {
     // Direct API calls can target any OperatorService method, including
     // Create/Update/Delete. Block all of them under a readonly profile rather

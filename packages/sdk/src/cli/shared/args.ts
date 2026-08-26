@@ -176,43 +176,60 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 // Argument Definitions
 // ============================================================================
 
+interface CommonArgsOptions {
+  /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
+  verboseAlias?: string;
+}
+
 /**
- * Common arguments for all CLI commands
+ * Build the common arguments for all CLI commands. CLI plugins call this so
+ * their forwarded global flags parse identically to the host Tailor CLI and
+ * feed the same logger state.
  *
  * NOTE: --env-file and --env-file-if-exists collide with Node.js flags due to a bug
  * (https://github.com/nodejs/node/issues/54232). Node.js parses these even after the
  * script path, causing warnings (twice due to tsx loader).
+ * @param options - Per-plugin adjustments to the shared arguments
+ * @returns Argument shape suitable for spreading into a command schema
  */
-export const commonArgs = {
-  "env-file": arg(z.string().optional(), {
-    alias: "e",
-    description: "Path to the environment file (error if not found)",
-    completion: { type: "file", matcher: [".env.*", ".env"] },
-  }),
-  "env-file-if-exists": arg(z.string().optional(), {
-    description: "Path to the environment file (ignored if not found)",
-    completion: { type: "file", matcher: [".env.*", ".env"] },
-    effect: (_value, { args }) => {
-      loadEnvFiles(
-        args["env-file"] as string | undefined,
-        args["env-file-if-exists"] as string | undefined,
-      );
-    },
-  }),
-  verbose: arg(z.boolean().default(false), {
-    description: "Enable verbose logging",
-    effect: (value) => {
-      verboseMode = value;
-    },
-  }),
-  json: arg(z.boolean().default(false), {
-    alias: "j",
-    description: "Output as JSON",
-    effect: (value) => {
-      logger.jsonMode = value;
-    },
-  }),
-} satisfies ArgsShape;
+export function createCommonArgs(options: CommonArgsOptions = {}) {
+  return {
+    "env-file": arg(z.string().optional(), {
+      alias: "e",
+      description: "Path to the environment file (error if not found)",
+      completion: { type: "file", matcher: [".env.*", ".env"] },
+    }),
+    "env-file-if-exists": arg(z.string().optional(), {
+      description: "Path to the environment file (ignored if not found)",
+      completion: { type: "file", matcher: [".env.*", ".env"] },
+      effect: (_value, { args }) => {
+        loadEnvFiles(
+          args["env-file"] as string | undefined,
+          args["env-file-if-exists"] as string | undefined,
+        );
+      },
+    }),
+    verbose: arg(z.boolean().default(false), {
+      ...(options.verboseAlias === undefined ? {} : { alias: options.verboseAlias }),
+      description: "Enable verbose logging",
+      effect: (value) => {
+        logger.verbose = value;
+      },
+    }),
+    json: arg(z.boolean().default(false), {
+      alias: "j",
+      description: "Output as JSON",
+      effect: (value) => {
+        logger.jsonMode = value;
+      },
+    }),
+  } satisfies ArgsShape;
+}
+
+/**
+ * Common arguments for all CLI commands
+ */
+export const commonArgs = createCommonArgs();
 
 /**
  * Arguments for commands that require workspace context
@@ -233,13 +250,32 @@ export const workspaceArgs = {
 } satisfies ArgsShape;
 
 /**
+ * Default config file path used when --config is not passed
+ */
+export const DEFAULT_CONFIG_PATH = "tailor.config.ts";
+
+/**
+ * Format the --config argument for remediation command hints so they target
+ * the same config the current run used. The `--config=<value>` form keeps a
+ * leading-hyphen path bound as the option value.
+ * @param {string} [configPath] - Config path the current run used, if any
+ * @returns {string | undefined} `--config=<path>` argument, or undefined when the default config is in use
+ */
+export function formatConfigArg(configPath?: string): string | undefined {
+  if (!configPath) return undefined;
+  const relativeConfigPath = path.relative(process.cwd(), configPath);
+  if (relativeConfigPath === DEFAULT_CONFIG_PATH) return undefined;
+  return `--config=${relativeConfigPath}`;
+}
+
+/**
  * Shared config arg for commands that accept a config file path
  */
 export const configArg = {
-  config: arg(z.string().default("tailor.config.ts"), {
+  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
     alias: "c",
-    description: "Path to SDK config file",
-    env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+    description: "Path to Tailor config file",
+    env: "TAILOR_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;
@@ -248,7 +284,7 @@ export const configArg = {
  * Shared config arg for commands that accept one or more comma-separated config file paths
  */
 export const multiConfigArg = {
-  config: arg(z.string().default("tailor.config.ts"), {
+  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
     alias: "c",
     description:
       "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",
@@ -335,15 +371,3 @@ export const folderArgs = {
 } satisfies ArgsShape;
 
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
-
-// Tracks verbose mode for use in global error handler (cleanup)
-let verboseMode = false;
-
-/**
- * Returns whether verbose mode is enabled.
- * Used by the global cleanup handler which doesn't have access to parsed args.
- * @returns Whether verbose mode is enabled
- */
-export function isVerbose(): boolean {
-  return verboseMode;
-}

@@ -1,4 +1,4 @@
-import { pathToFileURL } from "node:url";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import type { Resolver } from "#/types/resolver.generated";
 
@@ -8,7 +8,7 @@ import type { Resolver } from "#/types/resolver.generated";
  * @returns Parsed resolver or null if invalid
  */
 export async function loadResolver(resolverFilePath: string): Promise<Resolver | null> {
-  const resolverModule = await import(pathToFileURL(resolverFilePath).href);
+  const resolverModule = await importUserModule(resolverFilePath);
   const resolver = resolverModule.default;
 
   const parseResult = ResolverSchema.safeParse(resolver);

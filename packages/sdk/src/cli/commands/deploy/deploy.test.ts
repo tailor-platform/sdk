@@ -1,25 +1,30 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { mergeBundledScripts } from "./bundled-scripts";
 import { createChangeSet } from "./change-set";
 import {
-  assertUniqueGlobalResourceNames,
-  buildDeploymentTargets,
+  adjustApplicationForMigrationTest,
   confirmDeploymentPlans,
-  computeRenamedAppDeletions,
   collectExternalAuthIdpConfigNames,
+  planDeploymentTargets,
+  shouldForceApplyAll,
+} from "./deploy";
+import { buildDeploymentTargets, parseDeployConfigPaths } from "./deployment-target";
+import {
+  assertUniqueGlobalResourceNames,
+  computeRenamedAppDeletions,
+  dropCrossDeploymentManagedDeletes,
+} from "./managed-resources";
+import { printDeploymentPlans, printPlanResults, summarizePlanResults } from "./plan-report";
+import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
-  dropCrossDeploymentManagedDeletes,
-  mergeBundledScripts,
-  parseDeployConfigPaths,
-  planDeploymentTargets,
-  printDeploymentPlans,
-  printPlanResults,
-  summarizePlanResults,
-} from "./deploy";
+} from "./visible-resources";
 import type { PlannedDeployment } from "./apply-phases";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
@@ -46,7 +51,7 @@ function emptyResults(): PlanResults {
     tailorDB: {
       changeSet: {
         service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB types"),
+        type: createChangeSet("TailorDB tables"),
         gqlPermission: createChangeSet("TailorDB gqlPermissions"),
       },
       ...emptyOwnership(),
@@ -54,9 +59,12 @@ function emptyResults(): PlanResults {
         workspaceId: "ws",
         application: {} as PlanResults["tailorDB"]["context"]["application"],
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
+        namespacesWithMigrations: [],
+        migrationFileState: {},
+        checkpointRepairs: [],
       },
     },
     staticWebsite: {
@@ -102,7 +110,10 @@ function emptyResults(): PlanResults {
       },
       ...emptyOwnership(),
     },
-    app: createChangeSet("Applications"),
+    app: Object.assign(
+      createChangeSet("Applications"),
+      emptyOwnership(),
+    ) as unknown as PlanResults["app"],
     executor: {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),
@@ -111,6 +122,7 @@ function emptyResults(): PlanResults {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set<string>(),
       jobFunctionDeletes: [],
+      jobFunctionPublishEvents: new Map<string, boolean>(),
       ...emptyOwnership(),
       appName: "my-app",
       appId: undefined,
@@ -143,6 +155,88 @@ function plannedDeployment(name: string, results: PlanResults): PlannedDeploymen
     ...results,
   } as unknown as PlannedDeployment;
 }
+
+describe("shouldForceApplyAll", () => {
+  type Client = Parameters<typeof shouldForceApplyAll>[0];
+  type App = Parameters<typeof shouldForceApplyAll>[2];
+
+  function minimalApplication(): App {
+    return {
+      name: "test-app",
+      id: "test-app-id",
+      subgraphs: [],
+      staticWebsiteServices: [],
+      aiGatewayServices: [],
+      resolverServices: [],
+      idpServices: [],
+      authService: undefined,
+      executorService: undefined,
+      workflowService: undefined,
+      tailorDBServices: [],
+      secrets: [],
+    } as unknown as App;
+  }
+
+  test("fetches candidate metadata concurrently", async () => {
+    const probe = createConcurrencyProbe();
+    const getMetadata = vi.fn().mockImplementation(async () => {
+      await probe.run();
+      return { metadata: { labels: {} } };
+    });
+    const client = { getMetadata } as unknown as Client;
+
+    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
+      { name: "fn-a" },
+      { name: "fn-b" },
+      { name: "fn-c" },
+    ]);
+
+    expect(result).toBe(false);
+    expect(getMetadata).toHaveBeenCalledTimes(3);
+    expect(probe.maxInFlight()).toBeGreaterThan(1);
+  });
+
+  test("returns true when an owned resource has a different sdk-version", async () => {
+    const getMetadata = vi.fn().mockResolvedValue({
+      metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+    });
+    const client = { getMetadata } as unknown as Client;
+
+    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
+      { name: "fn-a" },
+    ]);
+
+    expect(result).toBe(true);
+  });
+
+  test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
+    const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      if (trn.endsWith(":fn-a")) {
+        return Promise.resolve({
+          metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+        });
+      }
+      return Promise.reject(new Error("unavailable"));
+    });
+    const client = { getMetadata } as unknown as Client;
+
+    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
+      { name: "fn-a" },
+      { name: "fn-b" },
+    ]);
+
+    expect(result).toBe(true);
+  });
+
+  test("propagates a fetch failure when no mismatch was detected", async () => {
+    const getMetadata = vi.fn().mockRejectedValue(new Error("unavailable"));
+    const client = { getMetadata } as unknown as Client;
+
+    await expect(
+      shouldForceApplyAll(client, "test-workspace", minimalApplication(), [{ name: "fn-a" }]),
+    ).rejects.toThrow("unavailable");
+  });
+});
 
 describe("summarizePlanResults", () => {
   test("counts display entries and service actions", () => {
@@ -303,7 +397,7 @@ describe("parseDeployConfigPaths", () => {
 });
 
 describe("visible same-run namespaces", () => {
-  test("ignores TailorDB types in namespaces not visible to the current app", () => {
+  test("ignores TailorDB tables in namespaces not visible to the current app", () => {
     const current = {
       tailorDBServices: [],
       externalTailorDBNamespaces: ["shared"],
@@ -384,11 +478,11 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "shared" },
-    } as never);
+    });
     previousOwner.tailorDB.changeSet.gqlPermission.deletes.push({
       name: "User",
       request: { namespaceName: "shared" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.tailorDB.changeSet.service.updates.push({ name: "shared" } as never);
@@ -420,7 +514,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "old" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.tailorDB.changeSet.type.updates.push({
@@ -442,11 +536,11 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.tailorDB.changeSet.type.deletes.push({
       name: "User",
       request: { namespaceName: "shared" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
-    nextOwner.tailorDB.changeSet.service.unchanged.push({ name: "shared" } as never);
-    nextOwner.tailorDB.changeSet.type.unchanged.push({ name: "User" } as never);
+    nextOwner.tailorDB.changeSet.service.unchanged.push({ name: "shared" });
+    nextOwner.tailorDB.changeSet.type.unchanged.push({ name: "User" });
 
     dropCrossDeploymentManagedDeletes([
       plannedDeployment("previous", previousOwner),
@@ -463,7 +557,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     const deletes = previousOwner.staticWebsite.changeSet.deletes;
 
     const nextOwner = emptyResults();
-    nextOwner.staticWebsite.changeSet.unchanged.push({ name: "shared-site" } as never);
+    nextOwner.staticWebsite.changeSet.unchanged.push({ name: "shared-site" });
 
     dropCrossDeploymentManagedDeletes([
       plannedDeployment("previous", previousOwner),
@@ -533,7 +627,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     const deletes = previousOwner.workflowExecutionPolicy.changeSet.deletes;
 
     const nextOwner = emptyResults();
-    nextOwner.workflowExecutionPolicy.changeSet.unchanged.push({ name: "premium" } as never);
+    nextOwner.workflowExecutionPolicy.changeSet.unchanged.push({ name: "premium" });
 
     dropCrossDeploymentManagedDeletes([
       plannedDeployment("previous", previousOwner),
@@ -549,7 +643,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.app.deletes.push({
       name: "shared-app",
       request: { workspaceId: "ws", applicationName: "shared-app" },
-    } as never);
+    });
     const appDeletes = previousOwner.app.deletes;
 
     const nextOwner = emptyResults();
@@ -569,7 +663,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.app.deletes.push({
       name: "shared-app",
       request: { workspaceId: "ws", applicationName: "shared-app" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.app.unchanged.push({ name: "shared-app" } as never);
@@ -587,7 +681,7 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     previousOwner.app.deletes.push({
       name: "old-app",
       request: { workspaceId: "ws", applicationName: "old-app" },
-    } as never);
+    });
 
     const nextOwner = emptyResults();
     nextOwner.app.creates.push({ name: "different-app" } as never);
@@ -649,18 +743,38 @@ describe("confirmDeploymentPlans", () => {
       "old-app",
     ]);
   });
+
+  test("names a deleted TailorDB table a table", async () => {
+    using _logger = silenceLogger("warn", "success", "newline");
+    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    const results = emptyResults();
+    results.tailorDB.changeSet.type.deletes.push({
+      name: "Order",
+      request: {},
+    });
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-app", results)],
+      yes: true,
+    });
+
+    const plain = logSpy.mock.calls
+      .flat()
+      .join("\n")
+      .replace(/\[[0-9;]*m/g, "");
+    expect(plain).toContain('TailorDB table "Order"');
+    logSpy.mockRestore();
+  });
 });
 
 describe("printPlanResults", () => {
   let outSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
     logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-  });
-
-  afterEach(() => {
+    await runTest();
     outSpy.mockRestore();
     logSpy.mockRestore();
   });
@@ -743,6 +857,57 @@ describe("printPlanResults", () => {
       name: "User",
       currentOwner: "other-app",
     });
+  });
+
+  test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
+
+    const summary = printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { update: number };
+      changes: Array<{
+        action: string;
+        name: string;
+        labels: string[];
+        namespace?: string;
+      }>;
+    };
+    expect(summary.update).toBe(1);
+    expect(payload.summary.update).toBe(1);
+    expect(payload.changes).toContainEqual({
+      action: "update",
+      name: "migration checkpoint 0005 → 0000",
+      labels: ["migrationCheckpoint"],
+      namespace: "tailordb",
+    });
+  });
+
+  test("includes migration checkpoint repairs in human dry-run output", () => {
+    const results = emptyResults();
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
+
+    printPlanResults(results, { dryRun: true });
+
+    expect(String(outSpy.mock.calls[0]?.[0])).toContain("migration checkpoint 0005 → 0000");
   });
 
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
@@ -881,7 +1046,7 @@ describe("multi-config deployment orchestration", () => {
         await new Promise<void>((resolve) => {
           releases.push(resolve);
         });
-        return fakeTarget({ appName: params.configPath }) as never;
+        return fakeTarget({ appName: params.configPath });
       },
     });
 
@@ -899,7 +1064,7 @@ describe("multi-config deployment orchestration", () => {
     const releases: Array<() => void> = [];
 
     const planPromise = planDeploymentTargets({
-      targets: targets as never,
+      targets: targets,
       runInputs: {} as never,
       client: {} as never,
       workspaceId: "workspace-id",
@@ -920,31 +1085,93 @@ describe("multi-config deployment orchestration", () => {
   });
 });
 
+describe("adjustApplicationForMigrationTest", () => {
+  type AdjustedApplication = ReturnType<typeof adjustApplicationForMigrationTest>;
+
+  function migrationTestApplication(): AdjustedApplication {
+    const application = {
+      name: "app",
+      executorService: { executors: {} },
+      authService: { config: { name: "auth-a" }, userProfile: { namespace: "tailordb" } },
+      staticWebsiteServices: [{ name: "site", customDomains: ["example.com"] }],
+      get applications() {
+        return [application];
+      },
+    } as unknown as AdjustedApplication;
+    return application;
+  }
+
+  test("returns the application unchanged outside migration test deploys", () => {
+    const application = migrationTestApplication();
+
+    expect(adjustApplicationForMigrationTest(application, undefined)).toBe(application);
+    expect(adjustApplicationForMigrationTest(application, {})).toBe(application);
+  });
+
+  test("strips executors, user profiles, and custom domains for a baseline deploy", () => {
+    const adjusted = adjustApplicationForMigrationTest(migrationTestApplication(), {
+      migrationTestBaselines: new Map(),
+      migrationTestSnapshots: new Map(),
+    });
+
+    expect(adjusted.executorService).toBeUndefined();
+    expect(adjusted.authService?.userProfile).toBeUndefined();
+    expect(adjusted.authService?.config.name).toBe("auth-a");
+    expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
+    expect(adjusted.applications).toEqual([adjusted]);
+  });
+
+  test("keeps executors and user profiles for the final migration deploy", () => {
+    const adjusted = adjustApplicationForMigrationTest(migrationTestApplication(), {
+      migrationTestSnapshots: new Map(),
+    });
+
+    expect(adjusted.executorService).toBeDefined();
+    expect(adjusted.authService?.userProfile).toBeDefined();
+    expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
+  });
+});
+
 describe("mergeBundledScripts", () => {
-  test("allows duplicate resolver and auth hook bundle names across configs", () => {
+  test("merges same-named resolvers and auth hooks from different namespaces across configs", () => {
     const bundledScripts = mergeBundledScripts([
       fakeTarget({
         resolverNamespaces: ["buyer"],
-        resolvers: { get: "buyer" },
+        resolvers: { [resolverBundleKey("buyer", "get")]: "buyer" },
         authNamespace: "buyer-auth",
         authHooks: { "auth-hook--buyer-auth--before-login": "buyer-auth" },
       }),
       fakeTarget({
         resolverNamespaces: ["supplier"],
-        resolvers: { get: "supplier" },
+        resolvers: { [resolverBundleKey("supplier", "get")]: "supplier" },
         authNamespace: "supplier-auth",
         authHooks: { "auth-hook--supplier-auth--before-login": "supplier-auth" },
       }),
     ]);
 
     expect([...bundledScripts.resolvers]).toEqual([
-      ["resolver--buyer--get", "buyer"],
-      ["resolver--supplier--get", "supplier"],
+      [resolverBundleKey("buyer", "get"), "buyer"],
+      [resolverBundleKey("supplier", "get"), "supplier"],
     ]);
     expect([...bundledScripts.authHooks]).toEqual([
       ["auth-hook--buyer-auth--before-login", "buyer-auth"],
       ["auth-hook--supplier-auth--before-login", "supplier-auth"],
     ]);
+  });
+
+  test("rejects the same resolver bundle key across configs", () => {
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({
+          resolverNamespaces: ["shared"],
+          resolvers: { [resolverBundleKey("shared", "get")]: "a" },
+        }),
+        fakeTarget({
+          resolverNamespaces: ["shared"],
+          resolvers: { [resolverBundleKey("shared", "get")]: "b" },
+        }),
+      ]),
+    ).toThrow(`Duplicate resolver bundle name "${resolverBundleKey("shared", "get")}"`);
   });
 
   test("rejects duplicate executor, workflow job, and auth hook bundle names across configs", () => {

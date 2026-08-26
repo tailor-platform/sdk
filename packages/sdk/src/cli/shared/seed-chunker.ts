@@ -6,11 +6,12 @@
  */
 
 import { assertDefined } from "#/utils/assert";
+import type { JsonObject } from "type-fest";
 
 /**
- * Seed data keyed by type name, with an array of records per type.
+ * Seed data keyed by table name, with an array of records per table.
  */
-export type SeedData = Record<string, Record<string, unknown>[]>;
+export type SeedData = Record<string, JsonObject[]>;
 
 /**
  * A single chunk of seed data with metadata for ordered execution.
@@ -48,10 +49,10 @@ const METADATA_OVERHEAD = 1024;
  * Algorithm:
  * 1. Calculate the available budget for the arg field (maxMessageSize - codeByteSize - overhead)
  * 2. If all data fits in one message, return a single chunk
- * 3. Otherwise, iterate through types in dependency order:
- *    - If a type fits in the current chunk, add it
- *    - If adding a type would exceed the budget, finalize the current chunk and start a new one
- *    - If a single type exceeds the budget, split its records across multiple chunks
+ * 3. Otherwise, iterate through tables in dependency order:
+ *    - If a table fits in the current chunk, add it
+ *    - If adding a table would exceed the budget, finalize the current chunk and start a new one
+ *    - If a single table exceeds the budget, split its records across multiple chunks
  *    - If a single record exceeds the budget, throw an error
  * @param options - Chunking options
  * @returns Array of seed chunks
@@ -67,7 +68,7 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
     );
   }
 
-  // Filter to types that have data
+  // Filter to tables that have data
   const typesWithData = order.filter((type) => (data[type]?.length ?? 0) > 0);
 
   if (typesWithData.length === 0) {
@@ -114,12 +115,12 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
       currentOrder = [];
     }
 
-    let recordBatch: Record<string, unknown>[] = [];
+    let recordBatch: JsonObject[] = [];
     for (const record of typeRecords) {
       if (byteSize(JSON.stringify({ data: { [type]: [record] }, order: [type] })) > argBudget) {
         const singleRecordSize = byteSize(JSON.stringify(record));
         throw new Error(
-          `A single record in type "${type}" (${singleRecordSize} bytes) exceeds the message size budget ` +
+          `A single record in table "${type}" (${singleRecordSize} bytes) exceeds the message size budget ` +
             `(${argBudget} bytes). Consider increasing maxMessageSize or reducing the record size.`,
         );
       }

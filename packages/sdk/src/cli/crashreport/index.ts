@@ -35,7 +35,7 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
             `  ${filePath}`,
             "",
             "To submit this report:",
-            `  tailor-sdk crashreport send --file "${filePath}"`,
+            `  tailor crashreport send --file "${filePath}"`,
           ].join("\n"),
         );
       }

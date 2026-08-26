@@ -4,14 +4,14 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { invoice } from "../../../../../tailordb/invoice";
 
 const schemaType = t.object({
-  ...invoice.pickFields(["id","createdAt"], { optional: true }),
-  ...invoice.omitFields(["id","createdAt","invoiceNumber","sequentialId"]),
+  ...invoice.pickFields(["id"], { optional: true }),
+  ...invoice.omitFields(["id","invoiceNumber","sequentialId"]),
 });
 
-const hook = createTailorDBHook(invoice);
+export const hook = createTailorDBHook(invoice);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, invoice),
   {
     foreignKeys: [
       {"column":"salesOrderID","references":{"table":"SalesOrder","column":"id"}},

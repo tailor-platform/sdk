@@ -13,13 +13,11 @@ import { nameArgs } from "./args";
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Secret Manager vault.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...nameArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...nameArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({

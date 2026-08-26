@@ -1,6 +1,6 @@
 import * as inflection from "inflection";
-import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
-import { parseFieldConfig } from "./field";
+import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
+import { convertTypeHookToExpr, convertTypeValidateToExpr, parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
   validateRelationConfig,
@@ -18,12 +18,12 @@ import type {
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 /**
- * Parse multiple TailorDB types, build relationships, and validate uniqueness.
- * This is the main entry point for parsing TailorDB types.
- * @param rawTypes - Raw TailorDB types keyed by name
+ * Parse multiple TailorDB tables, build relationships, and validate uniqueness.
+ * This is the main entry point for parsing TailorDB tables.
+ * @param rawTypes - Raw TailorDB tables keyed by name
  * @param namespace - TailorDB namespace name
- * @param typeSourceInfo - Optional type source information
- * @returns Parsed types
+ * @param typeSourceInfo - Optional table source information
+ * @returns Parsed tables
  */
 export function parseTypes(
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
@@ -31,10 +31,10 @@ export function parseTypes(
   typeSourceInfo?: TypeSourceInfo,
 ): Record<string, TailorDBType> {
   const types = createRecord<TailorDBType>();
-  const allTypeNames = new Set(Object.keys(rawTypes));
+  const allTableNames = new Set(Object.keys(rawTypes));
 
-  for (const [typeName, type] of Object.entries(rawTypes)) {
-    types[typeName] = parseTailorDBType(type, allTypeNames, rawTypes, typeSourceInfo);
+  for (const [tableName, type] of Object.entries(rawTypes)) {
+    types[tableName] = parseTailorDBType(type, allTableNames, rawTypes, typeSourceInfo);
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -45,15 +45,15 @@ export function parseTypes(
 
 /**
  * Parse a TailorDBTypeSchemaOutput into a TailorDBType.
- * @param type - TailorDB type to parse
- * @param allTypeNames - Set of all TailorDB type names
- * @param rawTypes - All raw TailorDB types keyed by name
- * @param typeSourceInfo - Optional type source information
- * @returns Parsed TailorDB type
+ * @param type - TailorDB table to parse
+ * @param allTableNames - Set of all TailorDB table names
+ * @param rawTypes - All raw TailorDB tables keyed by name
+ * @param typeSourceInfo - Optional table source information
+ * @returns Parsed TailorDB table
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
-  allTypeNames: Set<string>,
+  allTableNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
   typeSourceInfo?: TypeSourceInfo,
 ): TailorDBType {
@@ -69,9 +69,9 @@ function parseTailorDBType(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    const context = { typeName: type.name, fieldName, allTypeNames };
+    const context = { tableName: type.name, fieldName, allTableNames };
     let fieldConfig = parseFieldConfig(fieldDef, {
-      typeName: type.name,
+      tableName: type.name,
       fieldPath: [fieldName],
     });
     const rawRelation = fieldConfig.rawRelation;
@@ -84,7 +84,7 @@ function parseTailorDBType(
       const isNToOne = ["n-1", "manyToOne", "N-1"].includes(rawRelation.type);
       if (isNToOne && fieldConfig.unique) {
         throw new Error(
-          `Field "${fieldName}" on type "${type.name}": cannot set unique on n-1 (manyToOne) relation. ` +
+          `Field "${fieldName}" on table "${type.name}": cannot set unique on n-1 (manyToOne) relation. ` +
             `Use 1-1 (oneToOne) relation instead, or remove the unique constraint.`,
         );
       }
@@ -96,12 +96,12 @@ function parseTailorDBType(
     // Validate that index/unique are not set on array fields
     if (fieldConfig.array && fieldConfig.index) {
       throw new Error(
-        `Field "${fieldName}" on type "${type.name}": index cannot be set on array fields`,
+        `Field "${fieldName}" on table "${type.name}": index cannot be set on array fields`,
       );
     }
     if (fieldConfig.array && fieldConfig.unique) {
       throw new Error(
-        `Field "${fieldName}" on type "${type.name}": unique cannot be set on array fields`,
+        `Field "${fieldName}" on table "${type.name}": unique cannot be set on array fields`,
       );
     }
 
@@ -115,7 +115,7 @@ function parseTailorDBType(
 
       if (forwardName.length === 0) {
         throw new Error(
-          `Forward relation name for field "${fieldName}" on type "${type.name}"${typeLocation} cannot be empty. ` +
+          `Forward relation name for field "${fieldName}" on table "${type.name}"${typeLocation} cannot be empty. ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a non-empty name.`,
         );
       }
@@ -123,7 +123,7 @@ function parseTailorDBType(
       const existingForward = forwardRelationships[forwardName];
       if (existingForward) {
         throw new Error(
-          `Forward relation name "${forwardName}" on type "${type.name}"${typeLocation} is duplicated ` +
+          `Forward relation name "${forwardName}" on table "${type.name}"${typeLocation} is duplicated ` +
             `between fields "${existingForward.targetField}" and "${fieldName}". ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a unique name.`,
         );
@@ -131,16 +131,16 @@ function parseTailorDBType(
       if (Object.hasOwn(type.fields, forwardName)) {
         const message =
           forwardName === fieldName
-            ? `Forward relation name "${forwardName}" on type "${type.name}"${typeLocation} is the same as its own relation field "${fieldName}". ` +
+            ? `Forward relation name "${forwardName}" on table "${type.name}"${typeLocation} is the same as its own relation field "${fieldName}". ` +
               `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`
-            : `Forward relation name "${forwardName}" from field "${fieldName}" on type "${type.name}"${typeLocation} ` +
+            : `Forward relation name "${forwardName}" from field "${fieldName}" on table "${type.name}"${typeLocation} ` +
               `conflicts with existing field "${forwardName}". ` +
               `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`;
         throw new Error(message);
       }
       if (Object.hasOwn(metadata.files, forwardName)) {
         throw new Error(
-          `Forward relation name "${forwardName}" from field "${fieldName}" on type "${type.name}"${typeLocation} ` +
+          `Forward relation name "${forwardName}" from field "${fieldName}" on table "${type.name}"${typeLocation} ` +
             `conflicts with files field "${forwardName}". ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`,
         );
@@ -171,15 +171,28 @@ function parseTailorDBType(
     permissions: parsePermissions(metadata.permissions),
     indexes: metadata.indexes,
     files: metadata.files,
+    ...(metadata.typeHook && {
+      typeHookExpr: {
+        ...(typeof metadata.typeHook.create === "function" && {
+          create: convertTypeHookToExpr(metadata.typeHook.create, "create"),
+        }),
+        ...(typeof metadata.typeHook.update === "function" && {
+          update: convertTypeHookToExpr(metadata.typeHook.update, "update"),
+        }),
+      },
+    }),
+    ...(typeof metadata.typeValidate === "function" && {
+      typeValidateExpr: convertTypeValidateToExpr(metadata.typeValidate),
+    }),
   };
 }
 
 /**
- * Build backward relationships between parsed types.
- * Also validates that backward relation names are unique within each type.
- * @param types - Parsed types
+ * Build backward relationships between parsed tables.
+ * Also validates that backward relation names are unique within each table.
+ * @param types - Parsed tables
  * @param namespace - TailorDB namespace name
- * @param typeSourceInfo - Optional type source information
+ * @param typeSourceInfo - Optional table source information
  */
 function buildBackwardRelationships(
   types: Record<string, TailorDBType>,
@@ -193,19 +206,19 @@ function buildBackwardRelationships(
     Record<string, { sourceType: string; fieldName: string }[]>
   > = Object.create(null);
 
-  // Initialize tracking for all types
-  for (const typeName of Object.keys(types)) {
-    backwardNameSources[typeName] = Object.create(null) as Record<
+  // Initialize tracking for all tables
+  for (const tableName of Object.keys(types)) {
+    backwardNameSources[tableName] = Object.create(null) as Record<
       string,
       { sourceType: string; fieldName: string }[]
     >;
   }
 
   // Build backward relationships and track sources
-  for (const [typeName, type] of Object.entries(types)) {
+  for (const [tableName, type] of Object.entries(types)) {
     for (const [otherTypeName, otherType] of Object.entries(types)) {
       for (const [fieldName, field] of Object.entries(otherType.fields)) {
-        if (field.relation && field.relation.targetType === typeName) {
+        if (field.relation && field.relation.targetType === tableName) {
           let backwardName = field.relation.backwardName;
 
           if (!backwardName) {
@@ -216,14 +229,14 @@ function buildBackwardRelationships(
           }
 
           // Track the source of this backward name
-          const typeBackwardNames = backwardNameSources[typeName];
-          if (typeBackwardNames === undefined) {
-            throw new Error(`backward name sources not initialized for type: ${typeName}`);
+          const tableBackwardNames = backwardNameSources[tableName];
+          if (tableBackwardNames === undefined) {
+            throw new Error(`backward name sources not initialized for table: ${tableName}`);
           }
-          if (!typeBackwardNames[backwardName]) {
-            typeBackwardNames[backwardName] = [];
+          if (!tableBackwardNames[backwardName]) {
+            tableBackwardNames[backwardName] = [];
           }
-          const sources = typeBackwardNames[backwardName];
+          const sources = tableBackwardNames[backwardName];
           if (sources === undefined) {
             throw new Error(`backward name sources entry not initialized for: ${backwardName}`);
           }
@@ -267,7 +280,7 @@ function buildBackwardRelationships(
           })
           .join(", ");
         errors.push(
-          `Backward relation name "${backwardName}" on type "${targetTypeName}" is duplicated from: ${sourceList}. ` +
+          `Backward relation name "${backwardName}" on table "${targetTypeName}" is duplicated from: ${sourceList}. ` +
             `Use the "backward" option in .relation() to specify unique names.`,
         );
       }
@@ -282,7 +295,7 @@ function buildBackwardRelationships(
         const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
-            `conflicts with existing field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
+            `conflicts with existing field "${backwardName}" on table "${targetTypeName}"${targetLocation}. ` +
             `Use the "backward" option in .relation() to specify a different name.`,
         );
       }
@@ -297,7 +310,7 @@ function buildBackwardRelationships(
         const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
-            `conflicts with files field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
+            `conflicts with files field "${backwardName}" on table "${targetTypeName}"${targetLocation}. ` +
             `Use the "backward" option in .relation() to specify a different name.`,
         );
       }
@@ -310,7 +323,7 @@ function buildBackwardRelationships(
         const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
         const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
-          `Relation name "${backwardName}" on type "${targetTypeName}"${targetLocation} is used by both ` +
+          `Relation name "${backwardName}" on table "${targetTypeName}"${targetLocation} is used by both ` +
             `a forward relationship and a backward relationship from ${source.sourceType}.${source.fieldName}${sourceLocation}. ` +
             `Use the "as" option in .relation({ toward: { as: ... } }) or the "backward" option in .relation() to specify unique names.`,
         );
@@ -329,11 +342,11 @@ function buildBackwardRelationships(
 /**
  * Validate GraphQL query field name uniqueness.
  * Checks for:
- * 1. Each type's singular query name != plural query name
- * 2. No duplicate query names across all types
- * @param types - Parsed types
+ * 1. Each table's singular query name != plural query name
+ * 2. No duplicate query names across all tables
+ * @param types - Parsed tables
  * @param namespace - TailorDB namespace name
- * @param typeSourceInfo - Optional type source information
+ * @param typeSourceInfo - Optional table source information
  */
 function validatePluralFormUniqueness(
   types: Record<string, TailorDBType>,
@@ -342,7 +355,7 @@ function validatePluralFormUniqueness(
 ): void {
   const errors: string[] = [];
 
-  // Check 1: Each type's singular and plural query names must be different
+  // Check 1: Each table's singular and plural query names must be different
   for (const [, parsedType] of Object.entries(types)) {
     const singularQuery = inflection.camelize(parsedType.name, true);
     const pluralQuery = inflection.camelize(parsedType.pluralForm, true);
@@ -351,14 +364,14 @@ function validatePluralFormUniqueness(
       const sourceInfo = getTypeSourceInfo(typeSourceInfo, parsedType.name);
       const location = formatTypeSourceLocation(sourceInfo);
       errors.push(
-        `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
-          `Use db.type(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
+        `Table "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
+          `Use db.table(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
       );
     }
   }
 
-  // Check 2: All query names must be unique across types
-  const queryNameToSource = new Map<string, { typeName: string; kind: string }[]>();
+  // Check 2: All query names must be unique across tables
+  const queryNameToSource = new Map<string, { tableName: string; kind: string }[]>();
 
   for (const parsedType of Object.values(types)) {
     const singularQuery = inflection.camelize(parsedType.name, true);
@@ -366,7 +379,7 @@ function validatePluralFormUniqueness(
 
     const singularSources = queryNameToSource.get(singularQuery) ?? [];
     singularSources.push({
-      typeName: parsedType.name,
+      tableName: parsedType.name,
       kind: "singular",
     });
     queryNameToSource.set(singularQuery, singularSources);
@@ -374,7 +387,7 @@ function validatePluralFormUniqueness(
     if (singularQuery !== pluralQuery) {
       const pluralSources = queryNameToSource.get(pluralQuery) ?? [];
       pluralSources.push({
-        typeName: parsedType.name,
+        tableName: parsedType.name,
         kind: "plural",
       });
       queryNameToSource.set(pluralQuery, pluralSources);
@@ -386,9 +399,9 @@ function validatePluralFormUniqueness(
   for (const [queryName, sources] of duplicates) {
     const sourceList = sources
       .map((s) => {
-        const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.typeName);
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.tableName);
         const location = formatTypeSourceLocation(sourceInfo);
-        return `"${s.typeName}"${location} (${s.kind})`;
+        return `"${s.tableName}"${location} (${s.kind})`;
       })
       .join(", ");
     errors.push(`GraphQL query field "${queryName}" conflicts between: ${sourceList}`);
@@ -404,10 +417,10 @@ function validatePluralFormUniqueness(
 
 function getTypeSourceInfo(
   typeSourceInfo: TypeSourceInfo | undefined,
-  typeName: string,
+  tableName: string,
 ): TypeSourceInfo[string] | undefined {
-  return typeSourceInfo && Object.hasOwn(typeSourceInfo, typeName)
-    ? typeSourceInfo[typeName]
+  return typeSourceInfo && Object.hasOwn(typeSourceInfo, tableName)
+    ? typeSourceInfo[tableName]
     : undefined;
 }
 
@@ -415,7 +428,7 @@ function formatTypeSourceLocation(sourceInfo: TypeSourceInfo[string] | undefined
   if (!sourceInfo) {
     return "";
   }
-  return isPluginGeneratedType(sourceInfo)
+  return isPluginGeneratedTable(sourceInfo)
     ? ` (plugin: ${sourceInfo.pluginId})`
     : ` (${sourceInfo.filePath})`;
 }

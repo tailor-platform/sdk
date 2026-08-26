@@ -22,7 +22,8 @@ import type { Plugin } from "vitest/config";
  *
  * 3. **Platform API mocks** (environment) — All platform APIs are auto-injected with
  *    control objects: `mockTailordb`, `mockWorkflow`, `mockSecretmanager`,
- *    `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`. Each
+ *    `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`,
+ *    `mockLogger`. Each
  *    provides response configuration, call recording, and reset.
  *
  * 4. **Environment resolution** — Rewrites `environment: "tailor-runtime"` to the
@@ -32,8 +33,8 @@ import type { Plugin } from "vitest/config";
  *
  * - **`process`** and **`require`** are NOT removed or blocked. Vitest's internal
  *   runner depends on them. On the real Tailor Platform runtime, they do not exist.
- * - **Dynamic `import()`** of bundled files (via `createImportMain()`) bypasses
- *   the transform hook since those files are loaded through Node.js native loader.
+ * - **Dynamic `import()`** of bundled files bypasses the transform hook since
+ *   those files are loaded through Node.js native loader.
  * ## Options
  *
  * - **`config`** — Path to `tailor.config.ts`. Loads `defineSecretManager()` values
@@ -68,11 +69,13 @@ export {
   mockFile,
   mockIconv,
   mockAigateway,
+  mockLogger,
   type MockAigatewayOptions,
   type MockAuthconnectionOptions,
   type MockFileOptions,
   type MockIconvOptions,
   type MockIdpOptions,
+  type MockLoggerOptions,
   type MockSecretmanagerOptions,
   type MockTailordbOptions,
   type QueryBehavior,
@@ -80,4 +83,6 @@ export {
   type QueryMatcher,
 } from "./mock";
 
+export { runWorkflowLocally, type RunWorkflowLocallyOptions } from "./workflow-local";
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";
+export { createKyselyPGlite, type PGliteClient } from "./pglite-kysely";

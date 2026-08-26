@@ -103,4 +103,3 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
 }
 
 export { createCacheManager };
-export type { CacheManager, CacheManagerOptions };

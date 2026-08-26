@@ -1,4 +1,3 @@
-#!/usr/bin/env -S pnpm exec tsx
 // Verify every public API export has JSDoc.
 //
 // "Public API" is derived from package.json#exports — each `types` entry

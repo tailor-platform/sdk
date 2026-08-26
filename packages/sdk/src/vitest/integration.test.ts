@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const integrationDir = resolve(currentDir, "integration");
@@ -81,15 +81,12 @@ function runVitest(jsonOutputPath: string): VitestJsonReport {
 }
 
 describe("tailor-runtime integration", () => {
-  let tmpDir: string;
   let jsonOutputPath: string;
 
-  beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "tailor-runtime-integration-"));
+  aroundEach(async (runTest) => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "tailor-runtime-integration-"));
     jsonOutputPath = join(tmpDir, "report.json");
-  });
-
-  afterEach(() => {
+    await runTest();
     rmSync(tmpDir, { recursive: true, force: true });
   });
 

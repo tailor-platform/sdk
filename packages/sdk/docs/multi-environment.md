@@ -11,16 +11,16 @@ Deployment commands resolve the target workspace from, in priority order, the `-
 For one-off commands, pass the workspace explicitly:
 
 ```bash
-tailor-sdk deploy -w <staging-workspace-id>
+tailor deploy -w <staging-workspace-id>
 ```
 
 For environments you switch between regularly, create a named profile per environment with the [profile commands](./cli/workspace.md#profile-create) and select it with `--profile` (`-p`) or `TAILOR_PLATFORM_PROFILE`:
 
 ```bash
-tailor-sdk profile create staging -u you@example.com -w <staging-workspace-id>
-tailor-sdk profile create production -u you@example.com -w <production-workspace-id> --permission read
+tailor profile create staging -u you@example.com -w <staging-workspace-id>
+tailor profile create production -u you@example.com -w <production-workspace-id> --permission read
 
-tailor-sdk deploy -p staging
+tailor deploy -p staging
 ```
 
 Profiles are created with `write` permission by default. The production profile above opts into `--permission read`, which blocks write commands such as `deploy` while the profile is active — a guard against deploying to production by accident. To deploy to production deliberately, pass the workspace explicitly with `-w` without selecting the profile — the guard applies only while a profile is selected via `-p` or `TAILOR_PLATFORM_PROFILE` — or use a separate profile created with `write` permission.
@@ -32,8 +32,8 @@ export TAILOR_PLATFORM_URL=<platform-api-url>
 export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=<oauth2-client-id>
 export TAILOR_PLATFORM_CONSOLE_URL=<console-url>
 
-tailor-sdk login
-tailor-sdk profile create development \
+tailor login
+tailor profile create development \
   -u you@example.com \
   -w <development-workspace-id> \
   --platform-url "$TAILOR_PLATFORM_URL" \
@@ -41,11 +41,11 @@ tailor-sdk profile create development \
   --console-url "$TAILOR_PLATFORM_CONSOLE_URL"
 
 unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL
-tailor-sdk deploy -p development
-tailor-sdk open -p development
+tailor deploy -p development
+tailor open -p development
 ```
 
-After the profile exists, run `tailor-sdk login -p development` to refresh the login for that Platform without re-exporting the connection variables.
+After the profile exists, run `tailor login -p development` to refresh the login for that Platform without re-exporting the connection variables.
 
 ## Varying config values per environment
 
@@ -54,17 +54,17 @@ After the profile exists, run `tailor-sdk login -p development` to refresh the l
 ```ini
 # .env.production
 APP_ENV=production
-LOG_LEVEL=WARN
+TAILOR_APP_LOG_LEVEL=WARN
 ```
 
 ```bash
-tailor-sdk deploy -w <production-workspace-id> --env-file .env.production
+tailor deploy -w <production-workspace-id> --env-file .env.production
 ```
 
 ```typescript
 export default defineConfig({
   name: "my-app",
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 

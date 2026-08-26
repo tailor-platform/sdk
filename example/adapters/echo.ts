@@ -8,10 +8,10 @@ export default createHttpAdapter({
   pathPattern: "/echo",
   input: {
     get: () => ({
-      query: `query { getResult: showUserInfo { user { role } } }`,
+      query: `query { getResult: showUserInfo { caller { role } } }`,
     }),
     post: () => ({
-      query: `query { postResult: showUserInfo { user { role } } }`,
+      query: `query { postResult: showUserInfo { caller { role } } }`,
     }),
   },
   output: (resp) => {

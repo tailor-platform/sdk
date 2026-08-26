@@ -26,12 +26,12 @@ const templateHints: Record<string, string | undefined> = {
   "hello-world": "Initial project to get started with Tailor Platform SDK",
   "inventory-management": "Simple inventory management system",
   "multi-application": "Multi-application setup with shared databases",
-  tailordb: "Comprehensive TailorDB type definitions with all features",
+  tailordb: "Comprehensive TailorDB table definitions with all features",
   resolver: "Resolver patterns with testing (simple, DB, env, user)",
   workflow: "Workflow patterns with job chaining and testing",
   executor: "Executor trigger types (record, resolver, schedule, webhook)",
   "static-web-site": "Static website with auth and IdP integration",
-  generators: "Built-in generators: kysely, enums, files, seed",
+  generators: "Built-in generation plugins: kysely, enums, files, seed",
 };
 
 const validateName = (name: string | undefined) => {
@@ -61,7 +61,8 @@ const validateTemplate = async (template: string) => {
   return undefined;
 };
 
-export const collectContext = async ({ name, template }: Opts): Promise<Context> => {
+export const collectContext = async (opts: Opts): Promise<Context> => {
+  let { name, template } = opts;
   if (name) {
     const err = validateName(name);
     if (err) {

@@ -24,12 +24,12 @@ jobs:
     env:
       REVIEW_BODY_FILE: ${{ github.workspace }}/dependency-review.md
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Review dependencies with Claude
-        uses: anthropics/claude-code-action@12531344451323133b0493233c759991ac61da12 # v1.0.174
+        uses: anthropics/claude-code-action@1f291e1cfe0f5fc21db2aef19af844591600ade7 # v1.0.206
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: "renovate[bot]"
@@ -303,33 +303,77 @@ jobs:
             posts (or updates) the comment for you. Your only deliverable is the
             file.
 
+            **Recommended Actions heading**: This and the Update Summary
+            section below are the only parts shown without collapsing, so
+            reviewers must be able to tell at a glance whether the comment
+            requires action **and** which library/version it is about (some
+            renovate PRs group multiple libraries under a title that shows
+            no version, e.g. "chore(deps): update eslint" bumping both
+            `eslint` and `eslint-plugin-zod`). Choose the heading based on
+            your conclusion:
+            - `### ✅ Recommended Actions` — no action is required (safe to
+              merge as-is). Write a one-line reason, e.g. "None — safe to
+              merge as-is."
+            - `### ❌ Recommended Actions` — action is required (e.g.
+              breaking changes need code updates, a security risk should
+              block merge, or the update should be held). List the concrete
+              steps the reviewer must take.
+
+            The heading line must appear exactly as
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`,
+            before any `<details>` block — a later workflow step checks for
+            this exact text at the top of the file and asks you to fix it
+            if it's missing, so don't paraphrase or add extra words to the
+            line.
+
             ```markdown
             ## 🤖 Claude Dependency Review
+
+            ### {✅ or ❌} Recommended Actions
+            {If no action is needed, state so explicitly. If action is
+            needed, list the concrete steps.}
 
             ### 📦 Update Summary
             - **Library**: {library name}
             - **Version**: {old version} → {new version}
             - **Change Type**: {Major/Minor/Patch}
 
-            ### 📝 Release Notes
+            <details>
+            <summary>📝 Release Notes</summary>
+
             {Release notes URL}
 
-            ### 🔐 Security Assessment
+            </details>
+
+            <details>
+            <summary>🔐 Security Assessment</summary>
+
             - **Risk**: {🟢 Low / 🟡 Medium / 🔴 High}
             - **Known vulnerabilities**: {CVE/GHSA fixed or introduced, or "None found"}
             - **Supply-chain notes**: {maintainer/script/dependency red flags, or "None"}
 
-            ### 🚨 Breaking Changes
+            </details>
+
+            <details>
+            <summary>🚨 Breaking Changes</summary>
+
             {Only include if there are breaking changes}
 
-            ### ✨ Main Changes
+            </details>
+
+            <details>
+            <summary>✨ Main Changes</summary>
+
             {Summary of changes}
 
-            ### 🔍 Impact Analysis
+            </details>
+
+            <details>
+            <summary>🔍 Impact Analysis</summary>
+
             {Usage location analysis results}
 
-            ### ✅ Recommended Actions
-            {Document required actions if any, otherwise "None"}
+            </details>
 
             ---
             <!-- dependencies-claude-review -->
@@ -348,6 +392,43 @@ jobs:
           claude_args: |
             --model claude-sonnet-4-5-20250929
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(pnpm view:*),WebSearch,WebFetch,Read,Glob,Grep,Write"
+
+      - name: Validate Recommended Actions heading
+        id: validate-heading
+        if: always()
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          elif awk '/<details>/{exit} {print}' "$REVIEW_BODY_FILE" \
+              | grep -qE '^### (✅|❌) Recommended Actions$'; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_fix=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fix Recommended Actions heading with Claude
+        if: always() && steps.validate-heading.outputs.needs_fix == 'true'
+        uses: anthropics/claude-code-action@1f291e1cfe0f5fc21db2aef19af844591600ade7 # v1.0.206
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "renovate[bot]"
+          prompt: |
+            The file `${{ env.REVIEW_BODY_FILE }}` is missing a
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`
+            heading (the exact literal text on its own line, appearing
+            before any `<details>` block).
+
+            Read the file, decide from its existing content whether action
+            is required, then fix **only** the heading — either correct its
+            text, or move it (or add it, if entirely absent) so it reads
+            exactly `### ✅ Recommended Actions` (no action needed) or
+            `### ❌ Recommended Actions` (action needed) as the first
+            heading in the file, before any `<details>` block. Do not change
+            any other content in the file. Save your change with the Write
+            tool.
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Read,Write"
 
       - name: Post dependency review comment
         if: always()

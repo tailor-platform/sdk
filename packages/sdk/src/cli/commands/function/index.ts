@@ -2,7 +2,8 @@ import { defineCommand, runCommand } from "politty";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
 import { logsCommand } from "./logs";
-import { testRunCommand } from "./test-run";
+import { runFunctionCommand } from "./run";
+import { scriptCommand } from "./script";
 
 export const functionCommand = defineCommand({
   name: "function",
@@ -11,7 +12,8 @@ export const functionCommand = defineCommand({
     get: getCommand,
     list: listCommand,
     logs: logsCommand,
-    "test-run": testRunCommand,
+    run: runFunctionCommand,
+    script: scriptCommand,
   },
   async run() {
     await runCommand(listCommand, []);

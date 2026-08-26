@@ -11,7 +11,7 @@ export default defineConfig({
         test: {
           name: { label: "unit", color: "blue" },
           environment: "tailor-runtime",
-          include: ["src/**/*.test.ts"],
+          include: ["src/**/*.test.ts", "migrations/**/*.test.ts"],
         },
       },
       {
@@ -20,6 +20,7 @@ export default defineConfig({
           name: { label: "e2e", color: "green" },
           include: ["e2e/**/*.test.ts"],
           globalSetup: "e2e/globalSetup.ts",
+          testTimeout: 60_000,
         },
       },
     ],

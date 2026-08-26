@@ -10,17 +10,21 @@
  */
 
 import { z } from "zod";
+import { MIGRATION_HISTORY_ID_PATTERN } from "./types";
 import type {
   TypeSettingsPatch,
   SnapshotPermissionState,
-  TypeAddedChange,
-  TypeRemovedChange,
-  TypeModifiedChange,
-  TypeSettingsModifiedChange,
+  TableAddedChange,
+  TableRemovedChange,
+  TableRenamedChange,
+  TableModifiedChange,
+  TableSettingsModifiedChange,
   SnapshotTypeSettingsState,
   FieldAddedChange,
   FieldRemovedChange,
   FieldModifiedChange,
+  FieldRenamedChange,
+  FieldTypeModifiedChange,
   IndexAddedChange,
   IndexRemovedChange,
   IndexModifiedChange,
@@ -31,10 +35,13 @@ import type {
   RelationshipRemovedChange,
   RelationshipModifiedChange,
   PermissionModifiedChange,
+  TableScriptsModifiedChange,
+  TypeScriptsState,
   DiffChange,
   BreakingChangeInfo,
   WarningChangeInfo,
   MigrationDiff,
+  ScriptSkippedInfo,
 } from "./diff-calculator";
 import type {
   SnapshotHook,
@@ -50,6 +57,7 @@ import type {
   SnapshotGqlPermission,
   TailorDBSnapshotType,
   SchemaSnapshot,
+  RebaselineMarker,
   SnapshotPermissionOperand,
   SnapshotPermissionCondition,
 } from "./snapshot-types";
@@ -73,36 +81,36 @@ function snapshotRecordSchema<T>(valueSchema: z.ZodType<T>): z.ZodType<Record<st
         record[key] = result.data;
       }
       return record;
-    }) as z.ZodType<Record<string, T>>;
+    });
 }
 
 // ============================================================================
 // Snapshot Leaf Types
 // ============================================================================
 
-export const snapshotHookSchema: z.ZodType<SnapshotHook> = z.looseObject({
+const snapshotHookSchema: z.ZodType<SnapshotHook> = z.looseObject({
   expr: z.string(),
 });
 
-export const snapshotValidationSchema: z.ZodType<SnapshotValidation> = z.looseObject({
+const snapshotValidationSchema: z.ZodType<SnapshotValidation> = z.looseObject({
   script: z.looseObject({ expr: z.string() }).optional() as z.ZodType<{ expr: string }>,
   errorMessage: z.string(),
 });
 
-export const snapshotSerialSchema: z.ZodType<SnapshotSerial> = z.looseObject({
+const snapshotSerialSchema: z.ZodType<SnapshotSerial> = z.looseObject({
   start: z.number(),
   maxValue: z.number().optional(),
   format: z.string().optional(),
 });
 
-export const snapshotEnumValueSchema: z.ZodType<SnapshotEnumValue> = z.looseObject({
+const snapshotEnumValueSchema: z.ZodType<SnapshotEnumValue> = z.looseObject({
   value: z.string(),
   description: z.string().optional(),
 });
 
 // SnapshotFieldConfig is self-referential (fields?: Record<string, SnapshotFieldConfig>)
 // z.lazy handles the recursion; the outer cast closes the type cycle.
-export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.looseObject({
+const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.looseObject({
   type: z.string(),
   // `required` defaults to true to match the pre-validation `?? true` behaviour.
   required: z.boolean().default(true),
@@ -124,15 +132,16 @@ export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.loose
   validate: z.array(snapshotValidationSchema).optional(),
   serial: snapshotSerialSchema.optional(),
   scale: z.number().optional(),
+  default: z.unknown().optional(),
   fields: z.lazy(() => snapshotRecordSchema(snapshotFieldConfigSchema)).optional(),
-}) as z.ZodType<SnapshotFieldConfig>;
+});
 
-export const snapshotIndexConfigSchema: z.ZodType<SnapshotIndexConfig> = z.looseObject({
+const snapshotIndexConfigSchema: z.ZodType<SnapshotIndexConfig> = z.looseObject({
   fields: z.array(z.string()),
   unique: z.boolean().optional(),
 });
 
-export const snapshotRelationshipSchema: z.ZodType<SnapshotRelationship> = z.looseObject({
+const snapshotRelationshipSchema: z.ZodType<SnapshotRelationship> = z.looseObject({
   targetType: z.string(),
   targetField: z.string(),
   sourceField: z.string(),
@@ -151,7 +160,7 @@ const FIELD_REF_KEYS = ["user", "record", "newRecord", "oldRecord"] as const;
 // ref keys — such an object is ambiguous and signals a malformed condition.
 const snapshotPermissionOperandSchema = z.unknown().refine((v) => {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
-  const keys = Object.keys(v as Record<string, unknown>);
+  const keys = Object.keys(v);
   const refKeyCount = FIELD_REF_KEYS.filter((k) => keys.includes(k)).length;
   return refKeyCount < 2;
 }, "Ambiguous field-ref operand: contains more than one of user/record/newRecord/oldRecord") as unknown as z.ZodType<SnapshotPermissionOperand>;
@@ -161,13 +170,13 @@ const snapshotGqlPermissionOperandSchema = z
   .unknown()
   .refine((v) => {
     if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
-    const keys = Object.keys(v as Record<string, unknown>);
+    const keys = Object.keys(v);
     const refKeyCount = FIELD_REF_KEYS.filter((k) => keys.includes(k)).length;
     return refKeyCount < 2;
   }, "Ambiguous field-ref operand: contains more than one of user/record/newRecord/oldRecord")
   .refine((v) => {
     if (typeof v !== "object" || v === null || Array.isArray(v)) return true;
-    const keys = Object.keys(v as Record<string, unknown>);
+    const keys = Object.keys(v);
     return !["record", "newRecord", "oldRecord"].some((k) => keys.includes(k));
   }, "GQL permissions only support { user } field references") as unknown as z.ZodType<SnapshotPermissionOperand>;
 
@@ -191,13 +200,13 @@ const snapshotGqlPermissionConditionSchema = z
   ])
   .rest(z.unknown()) as unknown as z.ZodType<SnapshotPermissionCondition>;
 
-export const snapshotActionPermissionSchema: z.ZodType<SnapshotActionPermission> = z.looseObject({
+const snapshotActionPermissionSchema: z.ZodType<SnapshotActionPermission> = z.looseObject({
   conditions: z.array(snapshotPermissionConditionSchema),
   description: z.string().optional(),
   permit: z.enum(["allow", "deny"]),
 });
 
-export const snapshotRecordPermissionSchema: z.ZodType<SnapshotRecordPermission> = z.looseObject({
+const snapshotRecordPermissionSchema: z.ZodType<SnapshotRecordPermission> = z.looseObject({
   create: z.array(snapshotActionPermissionSchema).default([]),
   read: z.array(snapshotActionPermissionSchema).default([]),
   update: z.array(snapshotActionPermissionSchema).default([]),
@@ -207,13 +216,12 @@ export const snapshotRecordPermissionSchema: z.ZodType<SnapshotRecordPermission>
 // Structure validated; vocabulary kept open for platform evolution
 const snapshotGqlActionSchema = z.string();
 
-export const snapshotGqlPermissionPolicySchema: z.ZodType<SnapshotGqlPermissionPolicy> =
-  z.looseObject({
-    conditions: z.array(snapshotGqlPermissionConditionSchema),
-    actions: z.array(snapshotGqlActionSchema),
-    permit: z.enum(["allow", "deny"]),
-    description: z.string().optional(),
-  }) as unknown as z.ZodType<SnapshotGqlPermissionPolicy>;
+const snapshotGqlPermissionPolicySchema: z.ZodType<SnapshotGqlPermissionPolicy> = z.looseObject({
+  conditions: z.array(snapshotGqlPermissionConditionSchema),
+  actions: z.array(snapshotGqlActionSchema),
+  permit: z.enum(["allow", "deny"]),
+  description: z.string().optional(),
+}) as unknown as z.ZodType<SnapshotGqlPermissionPolicy>;
 
 // SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[]
 const snapshotGqlPermissionSchema: z.ZodType<SnapshotGqlPermission> = z.array(
@@ -224,7 +232,7 @@ const snapshotGqlPermissionSchema: z.ZodType<SnapshotGqlPermission> = z.array(
 // TailorDBSnapshotType
 // ============================================================================
 
-export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.looseObject({
+const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.looseObject({
   name: z.string(),
   // `pluralForm` is typed as required but legacy snapshots may omit it;
   // loadSnapshot backfills it via inflection so we accept undefined here.
@@ -262,11 +270,18 @@ export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.loo
 // SchemaSnapshot
 // ============================================================================
 
+const rebaselineMarkerSchema: z.ZodType<RebaselineMarker> = z.looseObject({
+  historyId: z.string().regex(MIGRATION_HISTORY_ID_PATTERN),
+  replacedHistoryId: z.string().regex(MIGRATION_HISTORY_ID_PATTERN).nullable(),
+  replacedLatestMigration: z.number().int().min(0).max(9999),
+});
+
 export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
   version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
-  types: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
+  tables: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
+  rebaseline: rebaselineMarkerSchema.optional(),
 });
 
 // ============================================================================
@@ -306,38 +321,47 @@ const snapshotPermissionStateSchema: z.ZodType<SnapshotPermissionState> = z.loos
 // Individual change schemas are typed as z.ZodType<T> after the looseObject
 // cast so that z.discriminatedUnion can accept them.
 const typeAddedChangeSchema = z.looseObject({
-  kind: z.literal("type_added"),
-  typeName: z.string(),
+  kind: z.literal("table_added"),
+  tableName: z.string(),
   reason: z.string().optional(),
   after: tailorDBSnapshotTypeSchema,
-}) as unknown as z.ZodType<TypeAddedChange>;
+}) as unknown as z.ZodType<TableAddedChange>;
 
 const typeRemovedChangeSchema = z.looseObject({
-  kind: z.literal("type_removed"),
-  typeName: z.string(),
+  kind: z.literal("table_removed"),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: tailorDBSnapshotTypeSchema,
-}) as unknown as z.ZodType<TypeRemovedChange>;
+}) as unknown as z.ZodType<TableRemovedChange>;
+
+const typeRenamedChangeSchema = z.looseObject({
+  kind: z.literal("table_renamed"),
+  tableName: z.string(),
+  reason: z.string().optional(),
+  previousTableName: z.string(),
+  before: tailorDBSnapshotTypeSchema,
+  after: tailorDBSnapshotTypeSchema,
+}) as unknown as z.ZodType<TableRenamedChange>;
 
 const typeModifiedChangeSchema = z.looseObject({
-  kind: z.literal("type_modified"),
-  typeName: z.string(),
+  kind: z.literal("table_modified"),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: typeSettingsPatchSchema.optional(),
   after: typeSettingsPatchSchema.optional(),
-}) as unknown as z.ZodType<TypeModifiedChange>;
+}) as unknown as z.ZodType<TableModifiedChange>;
 
 const typeSettingsModifiedChangeSchema = z.looseObject({
-  kind: z.literal("type_settings_modified"),
-  typeName: z.string(),
+  kind: z.literal("table_settings_modified"),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: snapshotTypeSettingsStateSchema,
   after: snapshotTypeSettingsStateSchema,
-}) as unknown as z.ZodType<TypeSettingsModifiedChange>;
+}) as unknown as z.ZodType<TableSettingsModifiedChange>;
 
 const fieldAddedChangeSchema = z.looseObject({
   kind: z.literal("field_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   after: snapshotFieldConfigSchema,
@@ -345,7 +369,7 @@ const fieldAddedChangeSchema = z.looseObject({
 
 const fieldRemovedChangeSchema = z.looseObject({
   kind: z.literal("field_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: snapshotFieldConfigSchema,
@@ -353,16 +377,35 @@ const fieldRemovedChangeSchema = z.looseObject({
 
 const fieldModifiedChangeSchema = z.looseObject({
   kind: z.literal("field_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: snapshotFieldConfigSchema,
   after: snapshotFieldConfigSchema,
 }) as unknown as z.ZodType<FieldModifiedChange>;
 
+const fieldRenamedChangeSchema = z.looseObject({
+  kind: z.literal("field_renamed"),
+  tableName: z.string(),
+  reason: z.string().optional(),
+  fieldName: z.string(),
+  previousFieldName: z.string(),
+  before: snapshotFieldConfigSchema,
+  after: snapshotFieldConfigSchema,
+}) as unknown as z.ZodType<FieldRenamedChange>;
+
+const fieldTypeModifiedChangeSchema = z.looseObject({
+  kind: z.literal("field_type_modified"),
+  tableName: z.string(),
+  reason: z.string().optional(),
+  fieldName: z.string(),
+  before: snapshotFieldConfigSchema,
+  after: snapshotFieldConfigSchema,
+}) as unknown as z.ZodType<FieldTypeModifiedChange>;
+
 const indexAddedChangeSchema = z.looseObject({
   kind: z.literal("index_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   indexName: z.string(),
   after: snapshotIndexConfigSchema,
@@ -370,7 +413,7 @@ const indexAddedChangeSchema = z.looseObject({
 
 const indexRemovedChangeSchema = z.looseObject({
   kind: z.literal("index_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   indexName: z.string(),
   before: snapshotIndexConfigSchema,
@@ -378,7 +421,7 @@ const indexRemovedChangeSchema = z.looseObject({
 
 const indexModifiedChangeSchema = z.looseObject({
   kind: z.literal("index_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   indexName: z.string(),
   before: snapshotIndexConfigSchema,
@@ -387,7 +430,7 @@ const indexModifiedChangeSchema = z.looseObject({
 
 const fileAddedChangeSchema = z.looseObject({
   kind: z.literal("file_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   after: z.string(),
@@ -395,7 +438,7 @@ const fileAddedChangeSchema = z.looseObject({
 
 const fileRemovedChangeSchema = z.looseObject({
   kind: z.literal("file_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: z.string(),
@@ -403,7 +446,7 @@ const fileRemovedChangeSchema = z.looseObject({
 
 const fileModifiedChangeSchema = z.looseObject({
   kind: z.literal("file_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   fieldName: z.string(),
   before: z.string(),
@@ -412,7 +455,7 @@ const fileModifiedChangeSchema = z.looseObject({
 
 const relationshipAddedChangeSchema = z.looseObject({
   kind: z.literal("relationship_added"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   relationshipName: z.string(),
   relationshipType: z.enum(["forward", "backward"]).optional(),
@@ -421,7 +464,7 @@ const relationshipAddedChangeSchema = z.looseObject({
 
 const relationshipRemovedChangeSchema = z.looseObject({
   kind: z.literal("relationship_removed"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   relationshipName: z.string(),
   relationshipType: z.enum(["forward", "backward"]).optional(),
@@ -430,7 +473,7 @@ const relationshipRemovedChangeSchema = z.looseObject({
 
 const relationshipModifiedChangeSchema = z.looseObject({
   kind: z.literal("relationship_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   relationshipName: z.string(),
   relationshipType: z.enum(["forward", "backward"]).optional(),
@@ -440,22 +483,43 @@ const relationshipModifiedChangeSchema = z.looseObject({
 
 const permissionModifiedChangeSchema = z.looseObject({
   kind: z.literal("permission_modified"),
-  typeName: z.string(),
+  tableName: z.string(),
   reason: z.string().optional(),
   before: snapshotPermissionStateSchema.optional(),
   after: snapshotPermissionStateSchema.optional(),
 }) as unknown as z.ZodType<PermissionModifiedChange>;
 
+const typeScriptsStateSchema: z.ZodType<TypeScriptsState> = z.looseObject({
+  typeHookExpr: z
+    .looseObject({
+      create: z.string().optional(),
+      update: z.string().optional(),
+    })
+    .optional(),
+  typeValidateExpr: z.string().optional(),
+});
+
+const typeScriptsModifiedChangeSchema = z.looseObject({
+  kind: z.literal("table_scripts_modified"),
+  tableName: z.string(),
+  reason: z.string().optional(),
+  before: typeScriptsStateSchema,
+  after: typeScriptsStateSchema,
+}) as unknown as z.ZodType<TableScriptsModifiedChange>;
+
 type DiscriminableSchema = Parameters<typeof z.discriminatedUnion>[1][number];
 
-export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kind", [
+const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kind", [
   typeAddedChangeSchema as unknown as DiscriminableSchema,
   typeRemovedChangeSchema as unknown as DiscriminableSchema,
+  typeRenamedChangeSchema as unknown as DiscriminableSchema,
   typeModifiedChangeSchema as unknown as DiscriminableSchema,
   typeSettingsModifiedChangeSchema as unknown as DiscriminableSchema,
   fieldAddedChangeSchema as unknown as DiscriminableSchema,
   fieldRemovedChangeSchema as unknown as DiscriminableSchema,
   fieldModifiedChangeSchema as unknown as DiscriminableSchema,
+  fieldRenamedChangeSchema as unknown as DiscriminableSchema,
+  fieldTypeModifiedChangeSchema as unknown as DiscriminableSchema,
   indexAddedChangeSchema as unknown as DiscriminableSchema,
   indexRemovedChangeSchema as unknown as DiscriminableSchema,
   indexModifiedChangeSchema as unknown as DiscriminableSchema,
@@ -466,20 +530,26 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
   relationshipRemovedChangeSchema as unknown as DiscriminableSchema,
   relationshipModifiedChangeSchema as unknown as DiscriminableSchema,
   permissionModifiedChangeSchema as unknown as DiscriminableSchema,
+  typeScriptsModifiedChangeSchema as unknown as DiscriminableSchema,
 ]) as z.ZodType<DiffChange>;
 
-export const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseObject({
-  typeName: z.string(),
+const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseObject({
+  tableName: z.string(),
   fieldName: z.string().optional(),
   reason: z.string(),
   unsupported: z.boolean().optional(),
   showThreeStepHint: z.boolean().optional(),
 });
 
-export const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObject({
-  typeName: z.string(),
+const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObject({
+  tableName: z.string(),
   fieldName: z.string().optional(),
   reason: z.string(),
+});
+
+const scriptSkippedInfoSchema: z.ZodType<ScriptSkippedInfo> = z.looseObject({
+  reason: z.string().trim().min(1),
+  acknowledgedAt: z.string(),
 });
 
 // MigrationDiff: `warnings` and `hasWarnings` are optional here so that
@@ -497,4 +567,5 @@ export const migrationDiffSchema: z.ZodType<MigrationDiff> = z.looseObject({
   hasWarnings: z.boolean().optional() as z.ZodType<boolean>,
   warnings: z.array(warningChangeInfoSchema).optional() as z.ZodType<WarningChangeInfo[]>,
   requiresMigrationScript: z.boolean(),
+  scriptSkipped: scriptSkippedInfoSchema.optional(),
 });

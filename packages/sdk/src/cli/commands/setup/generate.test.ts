@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
   normalizeActionContent,
@@ -15,7 +15,11 @@ import { hashContent, readLock, writeLock } from "./lock";
 import {
   TEMPLATE_VERSION,
   detectPackageManager,
+  renderActionWorkflow,
   renderBranchWorkflow,
+  renderCoordinateWorkflow,
+  renderPreviewWorkflow,
+  renderTailorSetupAction,
   renderTagWorkflow,
   type RenderBranchParams,
   type RenderTagParams,
@@ -38,13 +42,23 @@ const tagBase: RenderTagParams = {
   packageManager: "pnpm",
 };
 
+type GeneratedWorkflow = {
+  jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
+};
+
+const TAILOR_ACTIONS_SHA = "33ae978702edd2de673419e84b66065e7a364dab";
+const TAILOR_ACTIONS_VERSION = "v2.3.0";
+
 describe("detectPackageManager", () => {
   const testDir = path.join(
     "/tmp",
     `detect-pm-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
-  beforeEach(() => fs.mkdirSync(testDir, { recursive: true }));
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
+  aroundEach(async (runTest) => {
+    fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
+  });
 
   test.each([
     ["pnpm-lock.yaml", "pnpm"],
@@ -187,9 +201,9 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain(
       "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
     );
-    expect(content).toContain(".tailor-erd-base/.github/tailor-sdk.lock");
-    expect(content).toContain("run_tailor_sdk tailordb erd export");
-    expect(content).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
+    expect(content).toContain(".tailor-erd-base/.github/tailor.lock");
+    expect(content).toContain("run_tailor_cli tailordb erd export");
+    expect(content).toContain('run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff');
     expect(content).toContain("const namespacePattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;");
     expect(content).toContain("Invalid ERD namespace in");
     expect(content).toContain("id: tailor-detect-base-package-manager");
@@ -209,12 +223,12 @@ describe("renderBranchWorkflow", () => {
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
     );
     expect(content).toContain("BASE_PACKAGE_MANAGER:");
-    expect(content).toContain("tailor_sdk_bin");
+    expect(content).toContain("tailor_cli_bin");
     expect(content).toContain("run_head_node - <<'NODE'");
     expect(content).toContain('path.join(githubWorkspace, appDir, "package.json")');
     expect(content).toContain('path.join(githubWorkspace, "package.json")');
     expect(content).toContain(
-      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+      'run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
     expect(content).toContain('yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;');
     expect(content).toContain('head_missing="false"');
@@ -313,8 +327,8 @@ describe("renderBranchWorkflow", () => {
 
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(buildStep).toContain("run_head_tailor_sdk_bin() {");
-    expect(buildStep).toContain("run_base_tailor_sdk_bin() {");
+    expect(buildStep).toContain("run_head_tailor_cli_bin() {");
+    expect(buildStep).toContain("run_base_tailor_cli_bin() {");
     expect(buildStep).toContain('cd "$GITHUB_WORKSPACE"');
     expect(buildStep).toContain('local command_cwd="$1"');
     expect(buildStep).toContain("process.chdir(commandCwd);");
@@ -326,7 +340,7 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).toContain('case "$BASE_PACKAGE_MANAGER" in');
     expect(buildStep).toContain('cd "$command_cwd"');
     expect(buildStep).toContain(
-      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+      'run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
   });
 
@@ -349,7 +363,7 @@ describe("renderBranchWorkflow", () => {
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
     );
     expect(buildStep).toContain(
-      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+      'run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
     expect(buildStep).not.toContain(".tailor-erd-base/$APP_DIR/tailor.config.ts");
     expect(buildStep).not.toContain('.tailor-erd-base/$APP_DIR" tailordb erd export');
@@ -380,9 +394,9 @@ describe("renderBranchWorkflow", () => {
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_PLATFORM_SDK_DTS_PATH',
     );
     expect(buildStep).not.toContain(
-      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_sdk tailordb erd diff',
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_cli tailordb erd diff',
     );
-    expect(buildStep).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
+    expect(buildStep).toContain('run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff');
   });
 
   test("treats missing ERD preview configs as empty diff sides", () => {
@@ -419,7 +433,7 @@ describe("renderBranchWorkflow", () => {
     const { content } = renderBranchWorkflow(branchBase);
     expect(content).toContain("uses: tailor-platform/actions/generate-check@");
     expect(content).not.toContain("git add -A");
-    expect(content).not.toContain("tailor-sdk generate");
+    expect(content).not.toContain("tailor generate");
   });
 
   test("includes paths + working-directory only when dir != '.'", () => {
@@ -504,6 +518,135 @@ describe("renderTagWorkflow", () => {
   });
 });
 
+describe("Tailor Platform action pins", () => {
+  test("pins every generated Tailor Platform action to v2.3.0", () => {
+    const contents = [
+      renderBranchWorkflow({ ...branchBase, migrationDriftCheck: true }).content,
+      renderTagWorkflow({ ...tagBase, branch: "main" }).content,
+      renderPreviewWorkflow({
+        workspaceName: "my-app",
+        branch: "main",
+        environment: "my-app",
+        packageManager: "pnpm",
+        region: "us-west",
+      }).content,
+      renderCoordinateWorkflow({
+        coordinatorName: "main",
+        kind: "tag",
+        actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
+        branch: "main",
+        environment: "main",
+        packageManager: "pnpm",
+      }).content,
+      renderActionWorkflow({ workspaceName: "my-app" }).content,
+      renderTailorSetupAction({ packageManager: "pnpm" }),
+    ];
+
+    for (const content of contents) {
+      const refs = [
+        ...content.matchAll(/tailor-platform\/actions\/\S+?@(\S+?)(?:\s+#\s+(\S+))?(?=\s|$)/g),
+      ];
+      expect(refs.length).toBeGreaterThan(0);
+      for (const [, sha, version] of refs) {
+        expect({ sha, version }).toEqual({
+          sha: TAILOR_ACTIONS_SHA,
+          version: TAILOR_ACTIONS_VERSION,
+        });
+      }
+    }
+  });
+});
+
+describe("drift check failure policy", () => {
+  test("passes the repository opt-in to every generated drift-check action", () => {
+    const workflows = [
+      [renderBranchWorkflow(branchBase).content, "tailor-plan"],
+      [renderTagWorkflow(tagBase).content, "tailor-plan"],
+      [
+        renderPreviewWorkflow({
+          workspaceName: "my-app",
+          branch: "main",
+          environment: "my-app",
+          packageManager: "pnpm",
+          region: "us-west",
+        }).content,
+        "tailor-preview-deploy",
+      ],
+      [
+        renderCoordinateWorkflow({
+          coordinatorName: "main",
+          kind: "branch",
+          actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
+          branch: "main",
+          environment: "main",
+          packageManager: "pnpm",
+        }).content,
+        "tailor-plan",
+      ],
+    ] as const;
+
+    for (const [content, jobId] of workflows) {
+      const workflow = parseYAML(content) as GeneratedWorkflow;
+      const driftSteps = workflow.jobs[jobId]?.steps.filter(
+        (step) => step.id === "tailor-drift-check",
+      );
+      expect(driftSteps).toHaveLength(1);
+      expect(driftSteps?.[0]?.with).toMatchObject({
+        "fail-on-drift": "${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}",
+      });
+    }
+  });
+
+  test("does not add a drift-check action to an action target", () => {
+    const { content } = renderActionWorkflow({ workspaceName: "my-app" });
+
+    expect(content).not.toContain("tailor-drift-check");
+    expect(content).not.toContain("TAILOR_PLATFORM_FAIL_ON_DRIFT");
+  });
+});
+
+describe("seed validation step", () => {
+  test.each([
+    ["pnpm", "pnpm exec tailor seed validate"],
+    ["npm", "npx @tailor-platform/sdk seed validate"],
+    ["yarn", "yarn tailor seed validate"],
+    ["bun", "bun run tailor seed validate"],
+  ] as const)(
+    "uses the installed CLI for %s in branch and tag workflows",
+    (packageManager, run) => {
+      const workflows = [
+        renderBranchWorkflow({
+          ...branchBase,
+          packageManager,
+          seedValidate: true,
+          workingDirectory: "apps/api",
+        }).content,
+        renderTagWorkflow({
+          ...tagBase,
+          packageManager,
+          seedValidate: true,
+          workingDirectory: "apps/api",
+        }).content,
+      ];
+
+      for (const content of workflows) {
+        const workflow = parseYAML(content) as GeneratedWorkflow;
+        const seedValidateStep = workflow.jobs["tailor-plan"]?.steps.find(
+          (step) => step.id === "tailor-seed-validate",
+        );
+
+        expect(seedValidateStep).toEqual({
+          id: "tailor-seed-validate",
+          run,
+          "working-directory": "apps/api",
+        });
+        expect(content).not.toContain("tailor-platform/actions/seed-validate@");
+        expect(content).not.toContain(".tailor-sdk/exec.mjs");
+      }
+    },
+  );
+});
+
 describe("detectDefaultBranch", () => {
   test("strips the origin/ prefix", () => {
     const run = vi.fn().mockReturnValue("origin/main");
@@ -513,6 +656,11 @@ describe("detectDefaultBranch", () => {
   test("throws an AI-first error when the ref is missing", () => {
     const run = vi.fn().mockReturnValue(null);
     expect(() => detectDefaultBranch("/repo", run)).toThrow(/--branch|set-head/);
+  });
+
+  test("suggests the caller's branch flag in the remediation hint", () => {
+    const run = vi.fn().mockReturnValue(null);
+    expect(() => detectDefaultBranch("/repo", run, "--target")).toThrow(/--target/);
   });
 });
 
@@ -624,15 +772,15 @@ describe("setupTarget (integration)", () => {
     ...overrides,
   });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "cfg-app" });\n`,
     );
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
   });
-
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
   test("generates a workflow + lock and derives the name from config", async () => {
     await setupTarget(baseOptions({ workspaceName: undefined }));
@@ -824,8 +972,10 @@ describe("setupTarget (integration)", () => {
     const content = fs.readFileSync(wf, "utf-8");
     expect(() => parseYAML(content)).not.toThrow();
     expect(content).not.toMatch(NO_MARKER);
+    expect(content).toContain("id: tailor-drift-check");
     const lock = readLock(testDir);
     expect(lock?.targets[0]).toMatchObject({ kind: "preview", workspaceName: "my-app" });
+    expect(lock?.targets[0]?.generatedIds).toContain("tailor-preview-deploy/tailor-drift-check");
   });
 
   test("preview: require-preview-label variant adds label filter to trigger", async () => {
@@ -953,15 +1103,15 @@ describe("setupCoordinate", () => {
     ...overrides,
   });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
     );
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
   });
-
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
   test("happy path: generates coordinator workflow and tailor-setup action", async () => {
     await setupTarget(actionOpts("api"));
@@ -1074,13 +1224,13 @@ describe("setupCoordinate", () => {
   });
 
   test("errors when lock file is missing", async () => {
-    await expect(setupCoordinate(coordinateOpts())).rejects.toThrow(/tailor-sdk\.lock not found/);
+    await expect(setupCoordinate(coordinateOpts())).rejects.toThrow(/tailor\.lock not found/);
   });
 
   test("errors when an action target is not in the lock", async () => {
     await setupTarget(actionOpts("api"));
     await expect(setupCoordinate(coordinateOpts({ actions: ["missing-app"] }))).rejects.toThrow(
-      /not found in .github\/tailor-sdk\.lock/,
+      /not found in .github\/tailor\.lock/,
     );
   });
 

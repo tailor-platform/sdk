@@ -1,13 +1,15 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
+import { brandValue } from "#/utils/brand";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
+import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
 // Define userType for type inference
-const userType = db.type("User", {
+const userType = db.table("User", {
   email: db.string().unique(),
   role: db.string(),
   isActive: db.bool(),
@@ -15,7 +17,7 @@ const userType = db.type("User", {
   externalId: db.uuid(),
 });
 
-type AttributeMap = {
+type Attributes = {
   role: true;
   isActive: true;
   tags: true;
@@ -24,10 +26,11 @@ type AttributeMap = {
 
 type AttributeList = ["externalId"];
 
-type AuthInput = AuthServiceInput<typeof userType, AttributeMap, AttributeList, "admin">;
+type AuthInput = AuthServiceInput<typeof userType, Attributes, AttributeList, "admin">;
 
 type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
+type IsUnknown<T> = unknown extends T ? ([keyof T] extends [never] ? true : false) : false;
 
 describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
   test("aligns top-level keys and optionality with the schema", () => {
@@ -60,6 +63,8 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     type AlignedSchemaAttributes = Pick<SchemaAttributes, keyof ServiceAttributes>;
 
     expectTypeOf<ServiceAttributes>().toMatchObjectType<AlignedSchemaAttributes>();
+    expectTypeOf<IsUnknown<SchemaUserProfile["type"]>>().toEqualTypeOf<false>();
+    expectTypeOf<SchemaUserProfile["type"]>().toExtend<TailorDBInstance>();
     expectTypeOf<ServiceUserProfile["type"]>().toExtend<SchemaUserProfile["type"]>();
     expectTypeOf<ServiceUserProfile["usernameField"]>().toExtend<
       SchemaUserProfile["usernameField"]
@@ -76,7 +81,7 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     type SchemaAttributeList = SchemaMachineUser["attributeList"];
 
     type FunctionMachineUser = MachineUserConfig;
-    type FunctionAttributeKeys = keyof AttributeMap;
+    type FunctionAttributeKeys = keyof Attributes;
     type FunctionAttributeValues = FunctionMachineUser["attributes"][FunctionAttributeKeys];
     type FunctionAttributeList = FunctionMachineUser["attributeList"];
 
@@ -104,6 +109,81 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
 
   test("rejects attributeList value mismatches", () => {
     expectTypeOf<MachineUserConfig["attributeList"] & [string, boolean]>().toBeNever();
+  });
+});
+
+// Fixture with an optional user field to cover optionality mirroring
+const mixedUserType = db.table("MixedUser", {
+  email: db.string().unique(),
+  role: db.string(),
+  nickname: db.string({ optional: true }),
+});
+
+type MixedAuthInput = AuthServiceInput<
+  typeof mixedUserType,
+  { role: true; nickname: true },
+  [],
+  "worker"
+>;
+type MixedMachineUser = NonNullable<MixedAuthInput["machineUsers"]>["worker"];
+
+describe("machine user attributes mirror user field optionality", () => {
+  test("allows omitting or nullifying keys for optional fields", () => {
+    expectTypeOf<{ attributes: { role: string } }>().toExtend<MixedMachineUser>();
+    expectTypeOf<{
+      attributes: { role: string; nickname: string | null };
+    }>().toExtend<MixedMachineUser>();
+  });
+
+  test("keeps keys for required fields mandatory", () => {
+    expectTypeOf<{ attributes: { nickname: string } }>().not.toExtend<MixedMachineUser>();
+    expectTypeOf<Record<never, never>>().not.toExtend<MixedMachineUser>();
+  });
+
+  test("makes attributes itself optional when no required keys remain", () => {
+    type AllOptionalInput = AuthServiceInput<
+      typeof mixedUserType,
+      { nickname: true },
+      [],
+      "worker"
+    >;
+    type AllOptionalMachineUser = NonNullable<AllOptionalInput["machineUsers"]>["worker"];
+
+    expectTypeOf<Record<never, never>>().toExtend<AllOptionalMachineUser>();
+  });
+
+  test("still rejects attributes not declared in userProfile", () => {
+    expectTypeOf<NonNullable<MixedMachineUser["attributes"]> & { email: string }>().toBeNever();
+  });
+});
+
+describe("AuthConfigSchema machine user attribute normalization", () => {
+  test("drops null/undefined attribute values on parse", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+        attributes: { role: true, isActive: true, tags: true },
+      },
+      machineUsers: {
+        admin: { attributes: { role: "ADMIN", isActive: null, tags: undefined } },
+      },
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.machineUsers?.admin?.attributes).toEqual({ role: "ADMIN" });
+  });
+
+  test("accepts machine users without attributes", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: { type: userType, usernameField: "email" },
+      machineUsers: { admin: {} },
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.machineUsers?.admin?.attributes).toBeUndefined();
   });
 });
 
@@ -267,5 +347,88 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
 
     const result = AuthConfigSchema.parse(config);
     expect(result.userProfile?.namespace).toBe("external-ns");
+  });
+
+  test("strips TailorDB table builder helpers from userProfile.type", () => {
+    const result = AuthConfigSchema.parse({
+      name: "my-auth",
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.userProfile?.type).toMatchObject({
+      name: "User",
+      fields: expect.any(Object),
+    });
+    expect(result.userProfile?.type).not.toHaveProperty("hooks");
+    expect(result.userProfile?.type).not.toHaveProperty("_output");
+  });
+
+  test("rejects unbranded userProfile.type copies with unknown keys", () => {
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      userProfile: {
+        type: { ...userType, unknownOption: true },
+        usernameField: "email",
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AuthConfigSchema parsing to fail");
+    }
+    expect(JSON.stringify(result.error.issues)).toContain("unknownOption");
+  });
+
+  test("omits unknown outer userProfile.type keys with TailorDB builder helpers", () => {
+    const typeWithUnknownKey = brandValue(
+      {
+        ...userType,
+        unknownOption: true,
+      },
+      "tailordb-type",
+    );
+
+    const result = AuthConfigSchema.parse({
+      name: "my-auth",
+      userProfile: {
+        type: typeWithUnknownKey,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.userProfile?.type).not.toHaveProperty("unknownOption");
+  });
+
+  test("rejects invalid TailorDB fields in userProfile.type", () => {
+    const typeWithInvalidField = brandValue(
+      {
+        ...userType,
+        fields: {
+          ...userType.fields,
+          unsupported: {
+            type: "unsupported",
+            metadata: {},
+          },
+        },
+      },
+      "tailordb-type",
+    );
+
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      userProfile: {
+        type: typeWithInvalidField,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AuthConfigSchema parsing to fail");
+    }
+    expect(JSON.stringify(result.error.issues)).toContain("unsupported");
   });
 });

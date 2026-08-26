@@ -3,17 +3,17 @@ import { db } from "#/configure/services/tailordb/index";
 import { PluginManager } from "#/plugin/manager";
 import type { Plugin } from "#/plugin/types";
 
-const orderType = () => db.type("Order", { name: db.string() });
+const orderType = () => db.table("Order", { name: db.string() });
 
 describe("PluginManager", () => {
-  test("collects namespace plugin-generated types", async () => {
+  test("collects namespace plugin-generated tables", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
-        types: {
-          auditLog: db.type("AuditLog", {
+        tables: {
+          auditLog: db.table("AuditLog", {
             message: db.string(),
           }),
         },
@@ -23,13 +23,13 @@ describe("PluginManager", () => {
     const manager = new PluginManager([plugin]);
     await manager.processNamespacePlugins("main");
 
-    const generatedTypes = manager.getPluginGeneratedTypes();
-    expect(generatedTypes).toHaveLength(1);
-    expect(generatedTypes[0]).toMatchObject({
+    const generatedTables = manager.getPluginGeneratedTables();
+    expect(generatedTables).toHaveLength(1);
+    expect(generatedTables[0]).toMatchObject({
       pluginId: "namespace-plugin",
-      sourceTypeName: "(namespace)",
+      sourceTableName: "(namespace)",
       kind: "auditLog",
-      type: {
+      table: {
         name: "AuditLog",
       },
     });
@@ -41,8 +41,8 @@ describe("PluginManager", () => {
       description: "namespace generator",
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
-        types: {
-          auditLog: db.type("AuditLog", {
+        tables: {
+          auditLog: db.table("AuditLog", {
             message: db.string(),
           }),
         },
@@ -60,21 +60,21 @@ describe("PluginManager", () => {
     await manager.processNamespacePlugins("main");
     await manager.processNamespacePlugins("analytics");
 
-    expect(manager.getPluginGeneratedTypes()).toHaveLength(1);
+    expect(manager.getPluginGeneratedTables()).toHaveLength(1);
     expect(manager.getPluginGeneratedExecutors()).toHaveLength(1);
   });
 
-  test("preserves pluralForm and plugin attachments when extending types", () => {
+  test("preserves pluralForm and plugin attachments when extending tables", () => {
     const manager = new PluginManager();
     const original = db
-      .type(["Person", "People"], {
+      .table(["Person", "People"], {
         name: db.string(),
       })
       // PluginConfigs is open; use cast to attach plugin config in tests.
-      .plugin({ "test-plugin": { enabled: true } } as Record<string, unknown>);
+      .plugin({ "test-plugin": { enabled: true } });
 
-    const extended = manager.extendType({
-      originalType: original,
+    const extended = manager.extendTable({
+      originalTable: original,
       extendFields: {
         age: db.int(),
       },
@@ -85,19 +85,19 @@ describe("PluginManager", () => {
     expect(extended.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
   });
 
-  test("requires per-type config when typeConfigRequired is true", async () => {
+  test("requires per-table config when tableConfigRequired is true", async () => {
     const plugin: Plugin = {
       id: "requires-config",
-      description: "requires per-type config",
+      description: "requires per-table config",
       importPath: "@example/require-config",
-      typeConfigRequired: true,
-      onTypeLoaded: () => ({}),
+      tableConfigRequired: true,
+      onTableLoaded: () => ({}),
     };
 
     const manager = new PluginManager([plugin]);
     const result = await manager.processAttachment({
-      type: orderType(),
-      typeConfig: undefined,
+      table: orderType(),
+      tableConfig: undefined,
       namespace: "main",
       pluginId: "requires-config",
     });
@@ -106,17 +106,17 @@ describe("PluginManager", () => {
     if (result.success) {
       throw new Error("Expected plugin attachment to fail");
     }
-    expect(result.error).toContain("requires typeConfig");
+    expect(result.error).toContain("requires tableConfig");
   });
 
-  test("processes type attachment without configSchema (arbitrary config)", async () => {
+  test("processes table attachment without configSchema (arbitrary config)", async () => {
     const plugin: Plugin = {
       id: "schema-less-plugin",
       description: "plugin without configSchema",
       importPath: "@example/schema-less",
-      onTypeLoaded: (_context: Parameters<NonNullable<Plugin["onTypeLoaded"]>>[0]) => ({
-        types: {
-          derived: db.type("Derived", {
+      onTableLoaded: (_context: Parameters<NonNullable<Plugin["onTableLoaded"]>>[0]) => ({
+        tables: {
+          derived: db.table("Derived", {
             sourceId: db.uuid(),
             customValue: db.string(),
           }),
@@ -126,8 +126,8 @@ describe("PluginManager", () => {
 
     const manager = new PluginManager([plugin]);
     const result = await manager.processAttachment({
-      type: orderType(),
-      typeConfig: { anyArbitraryValue: 42, nested: { deep: true } },
+      table: orderType(),
+      tableConfig: { anyArbitraryValue: 42, nested: { deep: true } },
       namespace: "main",
       pluginId: "schema-less-plugin",
     });
@@ -136,7 +136,7 @@ describe("PluginManager", () => {
     if (!result.success) {
       throw new Error("Expected plugin attachment to succeed");
     }
-    expect(result.output.types).toBeDefined();
-    expect(result.output.types?.["derived"]!.name).toBe("Derived");
+    expect(result.output.tables).toBeDefined();
+    expect(result.output.tables?.["derived"]!.name).toBe("Derived");
   });
 });

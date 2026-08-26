@@ -1,4 +1,3 @@
-import * as inflection from "inflection";
 import type { RawRelationConfig } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { UnionToTuple } from "type-fest";
@@ -16,9 +15,9 @@ export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
 >;
 
 export interface RelationProcessingContext {
-  typeName: string;
+  tableName: string;
   fieldName: string;
-  allTypeNames: Set<string>;
+  allTableNames: Set<string>;
 }
 
 export interface ProcessedRelationMetadata {
@@ -39,13 +38,13 @@ export interface RelationInfo {
 }
 
 function fieldRef(context: RelationProcessingContext): string {
-  return `Field "${context.fieldName}" on type "${context.typeName}"`;
+  return `Field "${context.fieldName}" on table "${context.tableName}"`;
 }
 
 /**
  * Validate relation configuration.
- * @param rawRelation - Raw relation configuration from TailorDB type definition
- * @param context - Context information for the relation (type name, field name, all type names)
+ * @param rawRelation - Raw relation configuration from TailorDB table definition
+ * @param context - Context information for the relation (table name, field name, all type names)
  */
 export function validateRelationConfig(
   rawRelation: RawRelationConfig,
@@ -66,9 +65,9 @@ export function validateRelationConfig(
     );
   }
 
-  // Validate target type exists (for non-self relations)
-  if (rawRelation.toward.type !== "self" && !context.allTypeNames.has(rawRelation.toward.type)) {
-    throw new Error(`${fieldRef(context)} references unknown type "${rawRelation.toward.type}".`);
+  // Validate target table exists (for non-self relations)
+  if (rawRelation.toward.table !== "self" && !context.allTableNames.has(rawRelation.toward.table)) {
+    throw new Error(`${fieldRef(context)} references unknown table "${rawRelation.toward.table}".`);
   }
 }
 
@@ -87,9 +86,9 @@ export function processRelationMetadata(
   const isUnique = relationTypes[rawRelation.type] === "1-1";
   const key = rawRelation.toward.key ?? "id";
 
-  // Resolve target type name (handle "self" reference)
+  // Resolve target table name (handle "self" reference)
   const targetTypeName =
-    rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
+    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
 
   // Index and unique are not supported on array fields
   const shouldSetIndex = !isArrayField;
@@ -124,20 +123,13 @@ export function buildRelationInfo(
   const isUnique = relationTypes[rawRelation.type] === "1-1";
   const key = rawRelation.toward.key ?? "id";
 
-  // Resolve target type name (handle "self" reference)
+  // Resolve target table name (handle "self" reference)
   const targetTypeName =
-    rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
+    rawRelation.toward.table === "self" ? context.tableName : rawRelation.toward.table;
 
-  // Compute forward name
   let forwardName = rawRelation.toward.as;
   if (!forwardName) {
-    if (rawRelation.toward.type === "self") {
-      // For self-relations, derive from field name by removing ID suffix
-      forwardName = context.fieldName.replace(/(ID|Id|id)$/u, "");
-    } else {
-      // Use inflection to generate default forward name
-      forwardName = inflection.camelize(targetTypeName, true);
-    }
+    forwardName = context.fieldName.replace(/(ID|Id|id)$/u, "");
   }
 
   return {

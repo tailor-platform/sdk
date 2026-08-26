@@ -17,12 +17,19 @@ export type AuthConnectionOAuth2Config = {
 export type AuthConnectionOAuth2ConfigInput = AuthConnectionOAuth2Config;
 
 export type AuthConnectionConfig = {
-  type: "oauth2";
+  /** OAuth2 provider URL */
   providerUrl: string;
+  /** OAuth2 issuer URL */
   issuerUrl: string;
+  /** OAuth2 client ID */
   clientId: string;
+  /** OAuth2 client secret */
   clientSecret: string;
+  /** Connection type */
+  type: "oauth2";
+  /** OAuth2 authorization endpoint override */
   authUrl?: string | undefined;
+  /** OAuth2 token endpoint override */
   tokenUrl?: string | undefined;
 };
 export type AuthConnectionConfigInput = AuthConnectionConfig;

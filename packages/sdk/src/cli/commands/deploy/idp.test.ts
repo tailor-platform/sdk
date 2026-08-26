@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -15,6 +15,7 @@ describe("applyIdP phase separation", () => {
       createSecretManagerVault: vi.fn().mockResolvedValue({}),
       createSecretManagerSecret: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
   }
 
@@ -24,6 +25,7 @@ describe("applyIdP phase separation", () => {
         service: {
           creates: [],
           updates: [],
+          unchanged: [],
           deletes: [
             {
               name: "test-idp",
@@ -61,8 +63,9 @@ describe("applyIdP phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planIdP>>;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test.each([
@@ -109,6 +112,7 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
         service: {
           creates: opts.op === "create" ? [entry] : [],
           updates: opts.op === "update" ? [entry] : [],
+          unchanged: [],
           deletes: [],
           title: "IdP Services",
           isEmpty: () => false,
@@ -137,12 +141,14 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
       createIdPService: vi.fn().mockResolvedValue({}),
       updateIdPService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
       getStaticWebsite,
     } as unknown as OperatorClient;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("resolves :url placeholder before createIdPService", async () => {

@@ -134,7 +134,7 @@ describe("service brand-based error categorization", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "User",
+          tableName: "User",
         },
         operation: { kind: "function", body: () => {} },
       },
@@ -150,7 +150,7 @@ describe("service brand-based error categorization", () => {
       "workflow",
       {
         name: "approvalFlow",
-        mainJob: { name: "startApproval", trigger: () => {}, body: () => {} },
+        mainJob: { name: "startApproval", start: () => {}, body: () => {} },
       },
       { name: "approvalFlow" },
       "approvalFlow",
@@ -162,7 +162,7 @@ describe("service brand-based error categorization", () => {
     itLoadsBrandedValues(
       WorkflowJobSchema,
       "workflow-job",
-      { name: "processOrder", trigger: () => {}, body: () => {} },
+      { name: "processOrder", start: () => {}, body: () => {} },
       { name: "processOrder", body: "not a function" },
       "processOrder",
       { helperFn: () => {} },

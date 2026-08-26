@@ -1,10 +1,9 @@
-import { Code, ConnectError } from "@connectrpc/connect";
-import chalk from "chalk";
+import { styles } from "./logger";
 
 /**
  * Options for creating a CLI error
  */
-export interface CLIErrorOptions {
+interface CLIErrorOptions {
   message: string;
   details?: string;
   suggestion?: string;
@@ -15,14 +14,10 @@ export interface CLIErrorOptions {
 }
 
 export interface CLIErrorNextAction {
-  /** Executable name, such as `tailor-sdk`. */
+  /** Executable name, such as `tailor`. */
   command: string;
   /** Arguments passed directly to the executable. */
   args: readonly string[];
-}
-
-export interface ErrorToJsonOptions {
-  includeStack?: boolean;
 }
 
 /**
@@ -57,12 +52,33 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-function formatNextAction(next: CLIErrorNextAction): string {
-  const argv = [next.command, ...next.args];
-  if (process.platform === "win32" && argv.some((value) => /[%$!]/.test(value))) {
-    return `with argv ${JSON.stringify(argv)}`;
+function needsArgvRendering(argv: readonly string[]): boolean {
+  // cmd.exe/PowerShell expand %, $, and ! even inside double quotes, so no
+  // quoting can keep such values literal on Windows.
+  return process.platform === "win32" && argv.some((value) => /[%$!]/.test(value));
+}
+
+/**
+ * Render an argv array as a copyable command line for the current platform's shell
+ * @param {readonly string[]} argv - Executable name followed by its arguments
+ * @returns {string} A shell-quoted command line, or an `argv [...]` JSON rendering when the platform shell cannot keep a value literal
+ */
+export function formatCopyableCommand(argv: readonly string[]): string {
+  if (needsArgvRendering(argv)) {
+    return `argv ${JSON.stringify(argv)}`;
   }
-  return `\`${argv.map(shellQuote).join(" ")}\``;
+  return argv.map(shellQuote).join(" ");
+}
+
+/**
+ * Format an executable and argv as a shell-safe user-facing command.
+ * @param next - Executable and arguments to format
+ * @returns Shell command, or an argv representation when shell quoting is unsafe
+ */
+export function formatNextAction(next: CLIErrorNextAction): string {
+  const argv = [next.command, ...next.args];
+  const rendered = formatCopyableCommand(argv);
+  return needsArgvRendering(argv) ? `with ${rendered}` : `\`${rendered}\``;
 }
 
 /**
@@ -72,25 +88,25 @@ function formatNextAction(next: CLIErrorNextAction): string {
  */
 function formatError(error: CLIError): string {
   const parts: string[] = [
-    chalk.red(`Error${error.code ? ` [${error.code}]` : ""}: ${error.message}`),
+    styles.error(`Error${error.code ? ` [${error.code}]` : ""}: ${error.message}`),
   ];
 
   if (error.details) {
-    parts.push(`\n  ${chalk.gray("Details:")} ${error.details}`);
+    parts.push(`\n  ${styles.dim("Details:")} ${error.details.split("\n").join("\n  ")}`);
   }
 
   if (error.suggestion) {
-    parts.push(`\n  ${chalk.cyan("Suggestion:")} ${error.suggestion}`);
+    parts.push(`\n  ${styles.info("Suggestion:")} ${error.suggestion}`);
   }
 
   if (error.command) {
     parts.push(
-      `\n  ${chalk.gray("Help:")} Run \`tailor-sdk ${error.command} --help\` for usage information.`,
+      `\n  ${styles.dim("Help:")} Run \`tailor ${error.command} --help\` for usage information.`,
     );
   }
 
   if (error.next) {
-    parts.push(`\n  ${chalk.cyan("Next:")} Run ${formatNextAction(error.next)}.`);
+    parts.push(`\n  ${styles.info("Next:")} Run ${formatNextAction(error.next)}.`);
   }
 
   return parts.join("");
@@ -124,64 +140,32 @@ export function isCLIError(error: unknown): error is CLIError {
 }
 
 /**
- * Convert a CLI failure into the stable JSON error envelope.
- * @param error - Failure to serialize
- * @param options - JSON serialization options
- * @returns JSON-compatible error envelope
+ * Convert a caught value into an Error, keeping Error instances as-is
+ * @param value - Caught value
+ * @returns The value itself when it is an Error, otherwise an Error of its string form
  */
-export function errorToJson(
-  error: unknown,
-  options?: ErrorToJsonOptions,
-): { error: Readonly<Record<string, unknown>> } {
-  if (isCLIError(error)) {
-    return {
-      error: {
-        code: error.code ?? "CLI_ERROR",
-        message: error.message,
-        ...(error.details ? { details: error.details } : {}),
-        ...(error.suggestion ? { suggestion: error.suggestion } : {}),
-        ...(error.command
-          ? {
-              help: executableHelpAction(error.command),
-            }
-          : {}),
-        ...(error.next ? { next: error.next } : {}),
-        ...(error.context ? { context: error.context } : {}),
-        ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
-      },
-    };
-  }
-  if (error instanceof ConnectError) {
-    const codeName = Code[error.code];
-    const stableCode =
-      typeof codeName === "string"
-        ? codeName.replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()
-        : `CODE_${error.code}`;
-    return {
-      error: {
-        code: `RPC_${stableCode}`,
-        message: error.message,
-        ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
-      },
-    };
-  }
-  if (error instanceof Error) {
-    return {
-      error: {
-        code: error.name === "CIPromptError" ? "INTERACTIVE_PROMPT_REQUIRED" : "UNEXPECTED_ERROR",
-        message: error.message,
-        ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
-      },
-    };
-  }
-  return { error: { code: "UNKNOWN_ERROR", message: String(error) } };
+export function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
 }
 
-function executableHelpAction(command: string): CLIErrorNextAction {
-  return {
-    command: "tailor-sdk",
-    args: [...command.split(/\s+/).filter(Boolean), "--help"],
-  };
+const MISSING_NAMED_EXPORT_PATTERN = /does not provide an export named '(?!default')([^']+)'/;
+
+/**
+ * Suggest `import type` when importing user code fails on a missing named
+ * export. The CLI strips types from each file in isolation, so a type-only
+ * export does not exist at runtime and a plain import of it fails to link.
+ * @param error - Error thrown while importing user modules
+ * @returns Suggestion text, or undefined when the error is not that failure
+ */
+export function typeOnlyImportHint(error: unknown): string | undefined {
+  if (!(error instanceof SyntaxError)) return undefined;
+  const name = MISSING_NAMED_EXPORT_PATTERN.exec(error.message)?.[1];
+  if (!name) return undefined;
+  return (
+    `If '${name}' is a type, import it with \`import type\` (or the inline \`type\` modifier). ` +
+    "The CLI runs TypeScript by stripping types from each file in isolation, so type-only exports do not exist at runtime. " +
+    'Set "verbatimModuleSyntax": true in tsconfig.json to catch this at typecheck.'
+  );
 }
 
 // Re-export createCLIError as CLIError for backward compatibility

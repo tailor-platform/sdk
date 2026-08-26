@@ -18,7 +18,6 @@ import {
   type TailorDBGQLPermissionSchema,
   TailorDBType_Permission_Operator,
   TailorDBType_Permission_Permit,
-  TailorDBType_PermitAction,
   type TailorDBType_FieldConfigSchema,
   type TailorDBType_FileConfigSchema,
   type TailorDBType_IndexSchema,
@@ -30,6 +29,8 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
+import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import { isSnapshotFieldRefOperand } from "./snapshot";
 import type {
   SchemaSnapshot,
@@ -47,11 +48,11 @@ import type {
 } from "./snapshot";
 
 /**
- * Options for generating TailorDB type manifest from snapshot
+ * Options for generating TailorDB table manifest from snapshot
  */
 export interface GenerateManifestOptions {
-  /** Whether to enable publishRecordEvents (default: false) */
-  publishRecordEvents?: boolean;
+  /** Whether an executor taking part in the same run subscribes to its record events */
+  subscribed?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
     create?: boolean;
@@ -62,10 +63,10 @@ export interface GenerateManifestOptions {
 }
 
 /**
- * Generate a TailorDB type manifest from a snapshot type
- * @param {TailorDBSnapshotType} snapshotType - Snapshot type to generate manifest from
+ * Generate a TailorDB table manifest from a snapshot table
+ * @param {TailorDBSnapshotType} snapshotType - Snapshot table to generate manifest from
  * @param {GenerateManifestOptions} options - Generation options
- * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
+ * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Table manifest
  */
 export function generateTailorDBTypeManifestFromSnapshot(
   snapshotType: TailorDBSnapshotType,
@@ -95,9 +96,11 @@ export function generateTailorDBTypeManifestFromSnapshot(
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
     pluralForm,
-    // Read publishEvents from snapshot settings first, then fall back to options
-    publishRecordEvents:
-      snapshotType.settings?.publishEvents ?? options.publishRecordEvents ?? false,
+    publishRecordEvents: resolvePublishEvents({
+      explicit: snapshotType.settings?.publishEvents,
+      subscribed: options.subscribed ?? false,
+      conflict: publishEventsConflict.tailorDBType(snapshotType.name),
+    }),
   };
 
   // Apply gqlOperations from snapshot settings or namespace default
@@ -112,43 +115,46 @@ export function generateTailorDBTypeManifestFromSnapshot(
   }
 
   // Build fields
-  const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
-  for (const [fieldName, fieldConfig] of Object.entries(snapshotType.fields)) {
-    if (fieldName === "id") continue;
-    fields[fieldName] = convertFieldConfigToProto(fieldConfig);
-  }
+  const fields: Record<
+    string,
+    MessageInitShape<typeof TailorDBType_FieldConfigSchema>
+  > = Object.fromEntries(
+    Object.entries(snapshotType.fields)
+      .filter(([fieldName]) => fieldName !== "id")
+      .map(([fieldName, fieldConfig]) => [fieldName, convertFieldConfigToProto(fieldConfig)]),
+  );
 
   // Build relationships
-  const relationships: Record<
+  const relationships = new Map<
     string,
     MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>
-  > = {};
+  >();
 
   if (snapshotType.forwardRelationships) {
     for (const [relationName, rel] of Object.entries(snapshotType.forwardRelationships)) {
-      relationships[relationName] = convertRelationshipToProto(rel, "forward");
+      relationships.set(relationName, convertRelationshipToProto(rel, "forward"));
     }
   }
 
   if (snapshotType.backwardRelationships) {
     for (const [relationName, rel] of Object.entries(snapshotType.backwardRelationships)) {
-      relationships[relationName] = convertRelationshipToProto(rel, "backward");
+      relationships.set(relationName, convertRelationshipToProto(rel, "backward"));
     }
   }
 
   // Build indexes
-  const indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>> = {};
+  const indexes = new Map<string, MessageInitShape<typeof TailorDBType_IndexSchema>>();
   if (snapshotType.indexes) {
     for (const [indexName, indexConfig] of Object.entries(snapshotType.indexes)) {
-      indexes[indexName] = convertIndexToProto(indexConfig);
+      indexes.set(indexName, convertIndexToProto(indexConfig));
     }
   }
 
   // Build files
-  const files: Record<string, MessageInitShape<typeof TailorDBType_FileConfigSchema>> = {};
+  const files = new Map<string, MessageInitShape<typeof TailorDBType_FileConfigSchema>>();
   if (snapshotType.files) {
     for (const [fileName, description] of Object.entries(snapshotType.files)) {
-      files[fileName] = { description: description || "" };
+      files.set(fileName, { description: description || "" });
     }
   }
 
@@ -163,20 +169,35 @@ export function generateTailorDBTypeManifestFromSnapshot(
     ? convertRecordPermissionToProto(snapshotType.permissions.record)
     : defaultPermission;
 
+  // Field hooks/validators are aggregated into table-level scripts so that a
+  // single shared timestamp is observed across every field in one operation.
+  const { typeHook, typeValidate } = buildTypeScripts(snapshotType.fields, {
+    typeHookExpr: snapshotType.typeHookExpr,
+    typeValidateExpr: snapshotType.typeValidateExpr,
+  });
+
   return {
     name: snapshotType.name,
     schema: {
       description: snapshotType.description || "",
       fields,
-      relationships,
+      relationships: Object.fromEntries(relationships),
       settings: defaultSettings,
       extends: false,
       directives: [],
-      indexes,
-      files,
+      indexes: Object.fromEntries(indexes),
+      files: Object.fromEntries(files),
       permission,
+      ...(typeHook && { typeHook }),
+      ...(typeValidate && { typeValidate }),
     },
   };
+}
+
+function optionalOnCreate(
+  config: Pick<SnapshotFieldConfig, "hooks" | "default">,
+): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "optionalOnCreate"> {
+  return config.hooks?.create || config.default !== undefined ? { optionalOnCreate: true } : {};
 }
 
 /**
@@ -194,7 +215,6 @@ export function convertFieldConfigToProto(
         ? (config.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [])
         : [],
     description: config.description || "",
-    validate: toProtoSnapshotFieldValidate(config),
     array: config.array ?? false,
     index: config.index ?? false,
     unique: config.unique ?? false,
@@ -203,7 +223,7 @@ export function convertFieldConfigToProto(
     foreignKeyField: config.foreignKeyField,
     required: config.required,
     vector: config.vector ?? false,
-    ...toProtoSnapshotFieldHooks(config),
+    ...optionalOnCreate(config),
     ...(config.serial && {
       serial: {
         start: BigInt(config.serial.start),
@@ -226,40 +246,6 @@ export function convertFieldConfigToProto(
   return fieldEntry;
 }
 
-function toProtoSnapshotFieldValidate(
-  config: SnapshotFieldConfig,
-): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["validate"] {
-  return (config.validate ?? []).map((val) => ({
-    action: TailorDBType_PermitAction.DENY,
-    errorMessage: val.errorMessage || "",
-    script: {
-      expr: val.script && val.script.expr ? `!${val.script.expr}` : "",
-    },
-  }));
-}
-
-function toProtoSnapshotFieldHooks(
-  config: SnapshotFieldConfig,
-): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
-  if (!config.hooks) {
-    return {};
-  }
-  return {
-    hooks: {
-      create: config.hooks.create
-        ? {
-            expr: config.hooks.create.expr || "",
-          }
-        : undefined,
-      update: config.hooks.update
-        ? {
-            expr: config.hooks.update.expr || "",
-          }
-        : undefined,
-    },
-  };
-}
-
 /**
  * Process nested fields from snapshot format to proto format
  * @param {Record<string, SnapshotFieldConfig>} fields - Nested fields
@@ -268,42 +254,39 @@ function toProtoSnapshotFieldHooks(
 function processNestedFieldsFromSnapshot(
   fields: Record<string, SnapshotFieldConfig>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
-  const nestedFields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
+  const nestedFields = new Map<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>();
 
   for (const [fieldName, fieldConfig] of Object.entries(fields)) {
     if (fieldConfig.type === "nested" && fieldConfig.fields) {
       const deepNestedFields = processNestedFieldsFromSnapshot(fieldConfig.fields);
-      nestedFields[fieldName] = {
+      nestedFields.set(fieldName, {
         type: "nested",
         allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
         description: fieldConfig.description || "",
-        validate: toProtoSnapshotFieldValidate(fieldConfig),
         required: fieldConfig.required,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
-        ...toProtoSnapshotFieldHooks(fieldConfig),
         fields: deepNestedFields,
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
+      });
     } else {
-      nestedFields[fieldName] = {
+      nestedFields.set(fieldName, {
         type: fieldConfig.type,
         allowedValues:
           fieldConfig.type === "enum"
             ? (fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [])
             : [],
         description: fieldConfig.description || "",
-        validate: toProtoSnapshotFieldValidate(fieldConfig),
         required: fieldConfig.required,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
-        ...toProtoSnapshotFieldHooks(fieldConfig),
+        ...optionalOnCreate(fieldConfig),
         ...(fieldConfig.serial && {
           serial: {
             start: BigInt(fieldConfig.serial.start),
@@ -316,11 +299,11 @@ function processNestedFieldsFromSnapshot(
           },
         }),
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
+      });
     }
   }
 
-  return nestedFields;
+  return Object.fromEntries(nestedFields);
 }
 
 /**
@@ -357,7 +340,7 @@ function convertRelationshipToProto(
  * @param {SnapshotIndexConfig} indexConfig - Snapshot index config
  * @returns {MessageInitShape<typeof TailorDBType_IndexSchema>} Proto index config
  */
-function convertIndexToProto(
+export function convertIndexToProto(
   indexConfig: SnapshotIndexConfig,
 ): MessageInitShape<typeof TailorDBType_IndexSchema> {
   return {
@@ -484,98 +467,78 @@ function convertOperandToProto(
 }
 
 /**
- * Options for generating all type manifests from a snapshot
+ * Options for generating all table manifests from a snapshot
  */
 export interface GenerateAllManifestsOptions extends GenerateManifestOptions {
-  /** Set of type names that should have publishRecordEvents enabled */
-  executorUsedTypes?: ReadonlySet<string>;
+  /** Set of table names that should have publishRecordEvents enabled */
+  executorUsedTables?: ReadonlySet<string>;
 }
 
 /**
- * Generate all TailorDB type manifests from a schema snapshot
+ * Generate all TailorDB table manifests from a schema snapshot
  * @param {SchemaSnapshot} snapshot - Schema snapshot
  * @param {GenerateAllManifestsOptions} options - Generation options
- * @returns {Map<string, MessageInitShape<typeof TailorDBTypeSchema>>} Map of type name to manifest
+ * @returns {Map<string, MessageInitShape<typeof TailorDBTypeSchema>>} Map of table name to manifest
  */
 export function generateAllTypeManifestsFromSnapshot(
   snapshot: SchemaSnapshot,
   options: GenerateAllManifestsOptions = {},
 ): Map<string, MessageInitShape<typeof TailorDBTypeSchema>> {
   const manifests = new Map<string, MessageInitShape<typeof TailorDBTypeSchema>>();
-  const { executorUsedTypes, ...baseOptions } = options;
+  const { executorUsedTables, ...baseOptions } = options;
 
-  for (const [typeName, snapshotType] of Object.entries(snapshot.types)) {
-    // Validate: if executor uses this type, publishEvents must not be explicitly false
-    if (executorUsedTypes?.has(typeName) && snapshotType.settings?.publishEvents === false) {
-      throw new Error(
-        `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
-          `Either remove the publishEvents: false setting or remove the executor trigger for this type.`,
-      );
-    }
-
-    // Determine publishRecordEvents:
-    // - If user explicitly sets a value (true or false), respect that (validation above ensures no executor conflict)
-    // - If not set, check if executor uses this type (true if yes)
-    // - Fall back to base options or default to false
-    let publishRecordEvents: boolean;
-    if (snapshotType.settings?.publishEvents !== undefined) {
-      publishRecordEvents = snapshotType.settings.publishEvents;
-    } else if (executorUsedTypes?.has(typeName)) {
-      publishRecordEvents = true;
-    } else {
-      publishRecordEvents = baseOptions.publishRecordEvents ?? false;
-    }
+  for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
     const typeOptions: GenerateManifestOptions = {
       ...baseOptions,
-      publishRecordEvents,
+      subscribed: executorUsedTables?.has(tableName) ?? false,
     };
-    manifests.set(typeName, generateTailorDBTypeManifestFromSnapshot(snapshotType, typeOptions));
+    manifests.set(tableName, generateTailorDBTypeManifestFromSnapshot(snapshotType, typeOptions));
   }
 
   return manifests;
 }
 
 /**
- * Result of comparing snapshot types with existing remote types
+ * Result of comparing snapshot tables with existing remote tables
  */
 export interface SnapshotTypeComparison {
-  /** Types to create (exist in snapshot but not in remote) */
+  /** Tables to create (exist in snapshot but not in remote) */
   creates: string[];
-  /** Types to update (exist in both) */
+  /** Tables to update (exist in both) */
   updates: string[];
-  /** Types to delete (exist in remote but not in snapshot) */
+  /** Tables to delete (exist in remote but not in snapshot) */
   deletes: string[];
 }
 
 /**
- * Compare snapshot types with existing remote type names
+ * Compare snapshot tables with existing remote table names
  * @param {SchemaSnapshot} snapshot - Schema snapshot
- * @param {ReadonlySet<string>} existingTypeNames - Set of existing type names in remote
+ * @param {ReadonlySet<string>} existingTableNames - Set of existing table names in remote
  * @returns {SnapshotTypeComparison} Comparison result
  */
 export function compareSnapshotWithRemote(
   snapshot: SchemaSnapshot,
-  existingTypeNames: ReadonlySet<string>,
+  existingTableNames: ReadonlySet<string>,
 ): SnapshotTypeComparison {
-  const snapshotTypeNames = new Set(Object.keys(snapshot.types));
+  const snapshotTableNames = new Set(Object.keys(snapshot.tables));
 
   const creates: string[] = [];
   const updates: string[] = [];
   const deletes: string[] = [];
 
-  // Types in snapshot
-  for (const typeName of snapshotTypeNames) {
-    if (existingTypeNames.has(typeName)) {
-      updates.push(typeName);
+  // Tables in snapshot
+  for (const tableName of snapshotTableNames) {
+    if (existingTableNames.has(tableName)) {
+      updates.push(tableName);
     } else {
-      creates.push(typeName);
+      creates.push(tableName);
     }
   }
 
-  // Types only in remote (to be deleted)
-  for (const typeName of existingTypeNames) {
-    if (!snapshotTypeNames.has(typeName)) {
-      deletes.push(typeName);
+  // Tables only in remote (to be deleted)
+  for (const tableName of existingTableNames) {
+    if (!snapshotTableNames.has(tableName)) {
+      deletes.push(tableName);
     }
   }
 

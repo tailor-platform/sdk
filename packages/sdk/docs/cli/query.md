@@ -5,7 +5,7 @@ Run SQL/GraphQL query.
 **Usage**
 
 ```
-tailor-sdk query [options]
+tailor query [options]
 ```
 
 **Options**
@@ -14,7 +14,7 @@ tailor-sdk query [options]
 | ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                         | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                    | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                              | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH`   |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                           | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`                |
 | `--engine <ENGINE>`             | -     | Query engine (sql or gql)                                                                            | Yes      | -                    | -                                   |
 | `--query <QUERY>`               | `-q`  | Query string to execute directly; omit to start REPL mode                                            | No       | -                    | -                                   |
 | `--file <FILE>`                 | `-f`  | Read query string from file; omit to start REPL mode                                                 | No       | -                    | -                                   |

@@ -48,8 +48,9 @@ pnpm -C packages/sdk docs:update
 ├── packages/
 │   ├── sdk/           # Main Tailor Platform SDK package
 │   ├── create-sdk/    # Project scaffolding CLI
-│   ├── sdk-codemod/   # Codemod runner for SDK upgrades
-│   └── tailor-proto/  # Protocol buffer definitions
+│   ├── eslint-plugin-sdk/ # Lint rules for SDK applications
+│   ├── sdk-codemod/       # Codemod runner for SDK upgrades
+│   └── tailor-proto/      # Protocol buffer definitions
 └── example/           # Development and testing example
 ```
 

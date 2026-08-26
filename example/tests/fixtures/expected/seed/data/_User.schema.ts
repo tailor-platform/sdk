@@ -7,8 +7,8 @@ const schemaType = t.object({
   password: t.string(),
 });
 
-// Simple identity hook for _User (no TailorDB backing type)
-const hook = <T>(data: unknown) => data as T;
+// Simple identity hook for _User (no TailorDB backing table)
+export const hook = <T>(data: unknown) => data as T;
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),

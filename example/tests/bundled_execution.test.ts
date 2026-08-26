@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import "@tailor-platform/sdk/runtime/globals";
 import { mockTailordb, mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { aroundAll, describe, expect, test, vi } from "vitest";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -28,12 +29,10 @@ describe("bundled execution tests", () => {
   const fixedSystemTime = new Date("2025-10-06T12:34:56.000Z");
   const formatExpectation = formatDate(fixedSystemTime, "yyyy-MM-dd HH:mm:ss");
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
-  });
-
-  afterAll(() => {
+    await runSuite();
     vi.useRealTimers();
   });
 
@@ -47,7 +46,7 @@ describe("bundled execution tests", () => {
       "resolvers/add.js": 5459 + sizeBuffer,
       "resolvers/showUserInfo.js": 5999 + sizeBuffer,
       "resolvers/stepChain.js": 182391 + sizeBuffer,
-      "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
+      "resolvers/startOrderProcessing.js": 5692 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~158KB), date-fns jobs (~20KB), simple jobs (<2KB)
       "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
       "workflow-jobs/fetch-customer.js": 157770 + sizeBuffer,
@@ -76,7 +75,7 @@ describe("bundled execution tests", () => {
       expect(result).toEqual(10);
     });
 
-    test("resolvers/showUserInfo.js returns user and invoker information", async () => {
+    test("resolvers/showUserInfo.js returns caller and invoker information", async () => {
       using _invokerSpy = vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
         id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
         type: "machine_user",
@@ -87,7 +86,7 @@ describe("bundled execution tests", () => {
 
       const main = await importActualMain("resolvers/showUserInfo.js");
       const payload = {
-        user: {
+        caller: {
           id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
           type: "user",
           workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
@@ -96,7 +95,7 @@ describe("bundled execution tests", () => {
       };
       const result = await main(payload);
       expect(result).toEqual({
-        user: {
+        caller: {
           id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
           type: "user",
           workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
@@ -183,6 +182,7 @@ describe("bundled execution tests", () => {
 
   describe("workflow-jobs", () => {
     test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
+      using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
       using wf = mockWorkflow();
       wf.setJobHandler((jobName, args) => {
         if (jobName === "fetch-customer") {
@@ -209,7 +209,7 @@ describe("bundled execution tests", () => {
         processedAt: "2025-01-01 12:00:00",
       });
 
-      expect(wf.triggeredJobs).toEqual([
+      expect(wf.startedJobs).toEqual([
         { jobName: "fetch-customer", args: { customerId: "customer-456" } },
         {
           jobName: "send-notification",
@@ -219,6 +219,11 @@ describe("bundled execution tests", () => {
           },
         },
       ]);
+      expect(logSpy).toHaveBeenCalledWith("Environment:", {
+        foo: 1,
+        bar: "hello",
+        baz: true,
+      });
     });
 
     test("workflow-jobs/process-order.js throws error when customer not found", async () => {
@@ -248,21 +253,7 @@ describe("bundled execution tests", () => {
       });
     });
 
-    test("workflow-jobs entry files contain env variables from config", () => {
-      const entryFiles = [
-        "workflow-jobs/fetch-customer.entry.js",
-        "workflow-jobs/process-order.entry.js",
-        "workflow-jobs/send-notification.entry.js",
-      ];
-
-      for (const file of entryFiles) {
-        const content = fs.readFileSync(path.join(actualDir, file), "utf-8");
-        expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
-        expect(content).toMatch(/\.body\(input, \{ env, invoker \}\)/);
-      }
-    });
-
-    test("workflow-jobs/validate-order.js triggers check-inventory job", async () => {
+    test("workflow-jobs/validate-order.js starts check-inventory job", async () => {
       using wf = mockWorkflow();
       wf.setJobHandler((jobName) => {
         if (jobName === "check-inventory") {
@@ -279,7 +270,7 @@ describe("bundled execution tests", () => {
         paymentResult: null,
       });
 
-      expect(wf.triggeredJobs).toEqual([
+      expect(wf.startedJobs).toEqual([
         { jobName: "check-inventory", args: undefined },
         { jobName: "process-payment", args: undefined },
       ]);

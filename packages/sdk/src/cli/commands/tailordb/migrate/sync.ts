@@ -2,13 +2,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { resourceTrn } from "#/cli/commands/deploy/label";
+import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import {
   fetchAll,
   fetchAllTolerant,
-  getOrNull,
   initOperatorClient,
   type OperatorClient,
 } from "#/cli/shared/client";
@@ -19,17 +18,21 @@ import { logger, styles } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { PluginManager } from "#/plugin/manager";
-import { assertDefined } from "#/utils/assert";
-import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
+import {
+  getNamespacesWithMigrations,
+  selectTargetNamespace,
+  type NamespaceWithMigrations,
+} from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { parseMigrationNumberArg } from "./migration-number";
+import { fetchRemoteMigrationNumber } from "./remote-state";
 import {
+  assertMigrationNumberExists,
   assertValidMigrationFiles,
   compareLocalTypesWithSnapshot,
   createSnapshotFromLocalTypes,
   formatMigrationNumber,
   reconstructSnapshotFromMigrations,
-  getLatestMigrationNumber,
 } from "./snapshot";
 import {
   compareSnapshotWithRemote,
@@ -39,9 +42,9 @@ import {
 } from "./snapshot-manifest";
 import {
   handleOptionalToRequiredError,
+  MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_LABEL_KEY,
-  MIGRATION_LABEL_PREFIX,
-  parseMigrationLabelNumber,
+  sanitizeMigrationLabel,
 } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
@@ -102,11 +105,11 @@ async function fetchRemoteTypes(
 
 /**
  * Verify that replaying the full migration history reproduces the current
- * local type definitions, before anything is sent to the remote.
+ * local table definitions, before anything is sent to the remote.
  *
  * Sync force-applies a snapshot reconstructed from the migration history, so
  * the history itself must be trustworthy. When the reconstruction at the
- * latest migration does not match the schema defined in the local type files,
+ * latest migration does not match the schema defined in the local table files,
  * either the migration files were edited incorrectly or a schema change has
  * not been recorded as a migration yet — and overwriting the remote with an
  * unverified snapshot could destroy data. Fails before any RPC is issued.
@@ -135,14 +138,14 @@ async function assertMigrationsReproduceLocalTypes(
     throw new Error(`No TailorDB service found for namespace "${target.namespace}"`);
   }
   // Load every namespace (not just the target): plugin executors are
-  // registered while types load, and may trigger on the target's types.
+  // registered while tables load, and may trigger on the target's tables.
   for (const service of application.tailorDBServices) {
     await service.loadTypes();
     await service.processNamespacePlugins();
   }
 
   // Mirror loadApplication: plugin-generated executor files must be loaded
-  // too, or publishRecordEvents would be applied as false for the types
+  // too, or publishRecordEvents would be applied as false for the tables
   // their record triggers depend on. Read the executors getter rather than
   // the loadExecutors() result — the latter is undefined for plugin-only
   // executor configurations.
@@ -156,20 +159,21 @@ async function assertMigrationsReproduceLocalTypes(
     (pluginExecutorFiles.length > 0
       ? (await import("#/cli/services/executor/service")).createExecutorService({
           config: { files: [] },
+          baseDir: path.dirname(config.path),
         })
       : undefined);
   await executorService?.loadExecutors();
   if (pluginExecutorFiles.length > 0) {
     await executorService?.loadPluginExecutorFiles([...pluginExecutorFiles]);
   }
-  const executorUsedTypes = new Set<string>();
+  const executorUsedTables = new Set<string>();
   for (const executor of Object.values(executorService?.executors ?? {})) {
     if (executor.trigger.kind === "tailordb") {
-      executorUsedTypes.add(executor.trigger.typeName);
+      executorUsedTables.add(executor.trigger.tableName);
     }
   }
   const manifestOptions: GenerateAllManifestsOptions = {
-    executorUsedTypes,
+    executorUsedTables,
     namespaceGqlOperations: tailordbService.config.gqlOperations,
   };
 
@@ -180,7 +184,7 @@ async function assertMigrationsReproduceLocalTypes(
   const currentSnapshot = createSnapshotFromLocalTypes(tailordbService.types, target.namespace);
   const diff = compareLocalTypesWithSnapshot(
     latestSnapshot,
-    currentSnapshot.types,
+    currentSnapshot.tables,
     target.namespace,
   );
   if (!hasChanges(diff)) {
@@ -194,73 +198,17 @@ async function assertMigrationsReproduceLocalTypes(
   logger.newline();
   logger.info("This usually means one of the following:");
   logger.info(
-    "  - Migration files were edited and replaying them no longer matches the type definitions — fix the migration files.",
+    "  - Migration files were edited and replaying them no longer matches the table definitions — fix the migration files.",
     { mode: "plain" },
   );
   logger.info(
-    "  - Type definitions changed without a new migration — run 'tailor-sdk tailordb migration generate' first.",
+    "  - Table definitions changed without a new migration — run 'tailor tailordb migration generate' first.",
     { mode: "plain" },
   );
   logger.newline();
   throw new Error(
     "Refusing to sync: the migration history must reproduce the current local schema before it can be applied to the remote.",
   );
-}
-
-interface RemoteMigrationState {
-  /** Labels currently stored on the namespace metadata (empty when none exist) */
-  labels: Record<string, string>;
-  /** Current migration number parsed from the label, or null when unset/unparseable */
-  current: number | null;
-}
-
-/**
- * Fetch the namespace's metadata labels and current migration number.
- *
- * Only GetMetadata NotFound is treated as "metadata does not exist yet".
- * Any other failure aborts the sync (which has not mutated anything at this
- * point): the fetched labels are written back verbatim at the end, so
- * proceeding with empty labels after a transient error would wipe the
- * namespace's existing metadata.
- * @param client - Operator client
- * @param trn - Namespace TRN
- * @returns Existing labels and the parsed current migration number
- */
-async function fetchRemoteMigrationState(
-  client: OperatorClient,
-  trn: string,
-): Promise<RemoteMigrationState> {
-  const metadata = await getOrNull(async () => {
-    const { metadata } = await client.getMetadata({ trn });
-    return metadata;
-  });
-  const labels = metadata?.labels ?? {};
-  const label = labels[MIGRATION_LABEL_KEY];
-  return { labels, current: label ? parseMigrationLabelNumber(label) : null };
-}
-
-function selectTargetNamespace(
-  namespacesWithMigrations: NamespaceWithMigrations[],
-  requested: string | undefined,
-): NamespaceWithMigrations {
-  if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
-  }
-  if (requested) {
-    const found = namespacesWithMigrations.find((ns) => ns.namespace === requested);
-    if (!found) {
-      throw new Error(`Namespace "${requested}" not found or does not have migrations configured`);
-    }
-    return found;
-  }
-  if (namespacesWithMigrations.length > 1) {
-    throw new Error(
-      `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations
-        .map((ns) => ns.namespace)
-        .join(", ")}`,
-    );
-  }
-  return assertDefined(namespacesWithMigrations[0], "namespace with migrations missing");
 }
 
 /**
@@ -270,7 +218,7 @@ function selectTargetNamespace(
  * then issues create/update/delete RPCs so the remote matches that snapshot.
  * Updates the migration label to `<number>` on success. Before any remote
  * mutation, verifies that the migration history reproduces the current local
- * type definitions (see {@link assertMigrationsReproduceLocalTypes}).
+ * table definitions (see {@link assertMigrationsReproduceLocalTypes}).
  *
  * Intended for recovering from drift introduced by `deploy --no-schema-check`
  * runs against an older revision: instead of having to `git checkout` that
@@ -291,12 +239,7 @@ async function sync(options: SyncOptions): Promise<void> {
 
   assertValidMigrationFiles(target.migrationsDir, target.namespace);
 
-  const latest = getLatestMigrationNumber(target.migrationsDir);
-  if (targetVersion > latest) {
-    throw new Error(
-      `Migration ${formatMigrationNumber(targetVersion)} does not exist in working tree (latest is ${formatMigrationNumber(latest)}).`,
-    );
-  }
+  const latest = assertMigrationNumberExists(target.migrationsDir, targetVersion);
 
   const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, targetVersion);
   if (!snapshot) {
@@ -317,41 +260,41 @@ async function sync(options: SyncOptions): Promise<void> {
   });
 
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
-  const remoteState = await fetchRemoteMigrationState(client, trn);
+  const current = await fetchRemoteMigrationNumber(client, trn);
   const remoteTypes = await fetchRemoteTypes(client, workspaceId, target.namespace);
   const existingTypeNames = new Set(remoteTypes.map((t) => t.name));
   const { creates, updates, deletes } = compareSnapshotWithRemote(snapshot, existingTypeNames);
 
-  // GQL permissions are reconciled alongside types: upsert the ones defined
+  // GQL permissions are reconciled alongside tables: upsert the ones defined
   // in the snapshot, delete remote ones with no snapshot counterpart
-  // (including those of deleted types — an orphaned permission can block
-  // the type deletion).
+  // (including those of deleted tables — an orphaned permission can block
+  // the table deletion).
   const remoteGqlPermissions = await fetchRemoteGqlPermissions(
     client,
     workspaceId,
     target.namespace,
   );
   const remoteGqlPermissionTypes = new Set(remoteGqlPermissions.map((p) => p.typeName));
-  const desiredGqlPermissions = Object.entries(snapshot.types).flatMap(([typeName, snapshotType]) =>
-    snapshotType.permissions?.gql
-      ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
-      : [],
+  const desiredGqlPermissions = Object.entries(snapshot.tables).flatMap(
+    ([typeName, snapshotType]) =>
+      snapshotType.permissions?.gql
+        ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
+        : [],
   );
   const desiredGqlPermissionTypes = new Set(desiredGqlPermissions.map((p) => p.typeName));
   const gqlPermissionDeletes = remoteGqlPermissions.filter(
     (p) => !desiredGqlPermissionTypes.has(p.typeName),
   );
 
-  const current = remoteState.current;
   logger.newline();
   logger.info(`Namespace: ${styles.bold(target.namespace)}`);
   logger.log(
     `  Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
   );
   logger.log(`  Target migration: ${styles.bold(formatMigrationNumber(targetVersion))}`);
-  logger.log(`  Types to create: ${styles.bold(String(creates.length))}`);
-  logger.log(`  Types to update: ${styles.bold(String(updates.length))}`);
-  logger.log(`  Types to delete: ${styles.bold(String(deletes.length))}`);
+  logger.log(`  Tables to create: ${styles.bold(String(creates.length))}`);
+  logger.log(`  Tables to update: ${styles.bold(String(updates.length))}`);
+  logger.log(`  Tables to delete: ${styles.bold(String(deletes.length))}`);
   logger.log(`  GQL permissions to set: ${styles.bold(String(desiredGqlPermissions.length))}`);
   logger.log(`  GQL permissions to delete: ${styles.bold(String(gqlPermissionDeletes.length))}`);
   logger.newline();
@@ -363,15 +306,15 @@ async function sync(options: SyncOptions): Promise<void> {
     desiredGqlPermissions.length +
     gqlPermissionDeletes.length;
   if (totalOps === 0) {
-    // Reachable only when both snapshot and remote hold no types; the label
+    // Reachable only when both snapshot and remote hold no tables; the label
     // may still be stale, so the sync proceeds to update it.
-    logger.info("No types to apply; only the migration label will be updated.");
+    logger.info("No tables to apply; only the migration label will be updated.");
   } else {
     logger.warn(
-      "This operation will overwrite remote TailorDB types to match the selected snapshot.",
+      "This operation will overwrite remote TailorDB tables to match the selected snapshot.",
     );
     if (deletes.length > 0) {
-      logger.warn("Existing data in deleted types will be lost.");
+      logger.warn("Existing data in deleted tables will be lost.");
     }
     logger.newline();
   }
@@ -416,17 +359,17 @@ async function sync(options: SyncOptions): Promise<void> {
   // Resolve all manifests before issuing any RPC: a missing manifest
   // indicates an internal inconsistency, and skipping or failing midway
   // would leave the remote schema partially synced.
-  const manifestFor = (typeName: string) => {
-    const manifest = manifests.get(typeName);
+  const manifestFor = (tableName: string) => {
+    const manifest = manifests.get(tableName);
     if (!manifest) {
       throw new Error(
-        `Internal error: no manifest generated for type "${typeName}". No changes were applied.`,
+        `Internal error: no manifest generated for table "${tableName}". No changes were applied.`,
       );
     }
     return manifest;
   };
-  const createManifests = creates.map((typeName) => manifestFor(typeName));
-  const updateManifests = updates.map((typeName) => manifestFor(typeName));
+  const createManifests = creates.map((tableName) => manifestFor(tableName));
+  const updateManifests = updates.map((tableName) => manifestFor(tableName));
 
   try {
     await Promise.all([
@@ -448,7 +391,7 @@ async function sync(options: SyncOptions): Promise<void> {
   } catch (error) {
     handleOptionalToRequiredError(error, [
       "The target snapshot marks a field as required, but existing remote records have no value for it.",
-      "Populate those records first (e.g. with a migration script applied via 'tailor-sdk deploy'), then re-run the sync.",
+      "Populate those records first (e.g. with a migration script applied via 'tailor deploy'), then re-run the sync.",
     ]);
   }
   await Promise.all(
@@ -469,21 +412,24 @@ async function sync(options: SyncOptions): Promise<void> {
     ),
   );
   await Promise.all(
-    deletes.map((typeName) =>
+    deletes.map((tableName) =>
       client.deleteTailorDBType({
         workspaceId,
         namespaceName: target.namespace,
-        tailordbTypeName: typeName,
+        tailordbTypeName: tableName,
       }),
     ),
   );
 
-  await client.setMetadata({
+  await writeMetadataLabels(client, {
     trn,
     labels: {
-      ...remoteState.labels,
-      [MIGRATION_LABEL_KEY]: `${MIGRATION_LABEL_PREFIX}${formatMigrationNumber(targetVersion)}`,
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(targetVersion),
+      ...(snapshot.rebaseline?.historyId
+        ? { [MIGRATION_HISTORY_LABEL_KEY]: snapshot.rebaseline.historyId }
+        : {}),
     },
+    remove: snapshot.rebaseline?.historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
   });
 
   logger.success(
@@ -493,7 +439,7 @@ async function sync(options: SyncOptions): Promise<void> {
   if (targetVersion < latest) {
     logger.newline();
     logger.info(
-      `Run 'tailor-sdk deploy' to apply migrations ${formatMigrationNumber(
+      `Run 'tailor deploy' to apply migrations ${formatMigrationNumber(
         targetVersion + 1,
       )}–${formatMigrationNumber(latest)} from the working tree.`,
     );
@@ -504,21 +450,18 @@ export const syncCommand = defineAppCommand({
   name: "sync",
   description:
     "Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...confirmationArgs,
-      number: arg(z.string(), {
-        positional: true,
-        description:
-          "Migration number to sync to (e.g., 0001 or 1; 0 targets the baseline snapshot)",
-      }),
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description: "Target TailorDB namespace (required if multiple namespaces exist)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...confirmationArgs,
+    number: arg(z.string(), {
+      positional: true,
+      description: "Migration number to sync to (e.g., 0001 or 1; 0 targets the baseline snapshot)",
+    }),
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "Target TailorDB namespace (required if multiple namespaces exist)",
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     await sync({

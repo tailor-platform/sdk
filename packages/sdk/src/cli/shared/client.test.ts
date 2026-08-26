@@ -1,17 +1,20 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
-import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
+import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
+  closeConnectionPool,
   concurrencyLimitInterceptor,
   createTransport,
+  errorHandlingInterceptor,
   fetchAll,
   fetchAllTolerant,
   fetchMachineUserToken,
   fetchPaged,
-  formatRequestParams,
+  fetchPlatformMachineUserToken,
   getConsoleBaseUrl,
   getEffectivePlatformConfig,
   getOAuth2ClientId,
@@ -36,8 +39,24 @@ vi.mock("#/cli/crashreport/index", () => ({
   reportCrash: vi.fn(),
 }));
 
+describe("client environment configuration", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  test("uses TAILOR_PLATFORM_URL for the platform base URL", async () => {
+    vi.resetModules();
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.staging.tailor.test");
+    const client = await import("./client");
+    expect(client.getPlatformBaseUrl()).toBe("https://api.staging.tailor.test");
+  });
+});
+
 describe("createTransport", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.clearAllMocks();
   });
 
@@ -54,7 +73,8 @@ describe("createTransport", () => {
 });
 
 describe("initOperatorClient", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     rememberPlatformConfigForToken("token-a");
     vi.clearAllMocks();
   });
@@ -76,7 +96,8 @@ describe("initOperatorClient", () => {
 });
 
 describe("getConsoleBaseUrl", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
@@ -98,7 +119,8 @@ describe("getConsoleBaseUrl", () => {
 });
 
 describe("platform environment variables", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
@@ -265,11 +287,10 @@ describe("fetchPaged", () => {
 describe("retryInterceptor", () => {
   // Stub timers so the real backoff (500ms base) does not slow the suite or make
   // it flaky under load; runAllTimersAsync below drives the awaited setTimeout.
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
     vi.mocked(reportCrash).mockClear();
-  });
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
   });
 
@@ -327,6 +348,67 @@ describe("retryInterceptor", () => {
 
     expect(res).toBe(okResponse);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("retries Aborted for no-side-effect methods then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("socket disconnected", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry Aborted for methods without an idempotency declaration", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("operation aborted", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+    ).rejects.toThrow("operation aborted");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  test("methods eligible for Aborted retries remain read-only", () => {
+    type RetryMethodDescriptor = Pick<
+      (typeof OperatorService.method)[keyof typeof OperatorService.method],
+      "idempotency" | "name"
+    >;
+    const findNonReadOnlyMethods = (methods: readonly RetryMethodDescriptor[]) =>
+      methods
+        .filter(
+          ({ idempotency }) =>
+            idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+            idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
+        )
+        .filter(({ name }) => !/^(Download|Get|List)/.test(name))
+        .map(({ name }) => name);
+
+    const methods = Object.values(OperatorService.method);
+    expect(
+      methods.some(
+        ({ idempotency }) =>
+          idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+          idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
+      ),
+    ).toBe(true);
+    expect(findNonReadOnlyMethods(methods)).toEqual([]);
+
+    const mutatingSentinel = {
+      ...OperatorService.method.getWorkspace,
+      name: "UpdateFutureResource",
+      idempotency: MethodOptions_IdempotencyLevel.IDEMPOTENT,
+    };
+    expect(findNonReadOnlyMethods([...methods, mutatingSentinel])).toEqual([
+      "UpdateFutureResource",
+    ]);
   });
 
   test("does not retry workspace creation when the outcome is ambiguous", async () => {
@@ -497,7 +579,8 @@ describe("retryInterceptor", () => {
 
 describe("concurrencyLimitInterceptor", () => {
   const original = process.env.TAILOR_APPLY_CONCURRENCY;
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (original === undefined) {
       delete process.env.TAILOR_APPLY_CONCURRENCY;
     } else {
@@ -572,72 +655,137 @@ describe("parseMethodName", () => {
   });
 });
 
-describe("formatRequestParams", () => {
-  test("serializes plain objects to JSON", () => {
-    const obj = { workspaceId: "test-id", name: "test-name" };
-    const result = formatRequestParams(obj);
-    expect(result).toBe(JSON.stringify(obj, null, 2));
-  });
-
-  test("uses toJson method if available (protobuf messages)", () => {
-    const protoMessage = {
-      workspaceId: "test-id",
-      name: "test-name",
-      toJson: () => ({ workspaceId: "test-id", name: "test-name" }),
-    };
-    const result = formatRequestParams(protoMessage);
-    expect(result).toBe(JSON.stringify({ workspaceId: "test-id", name: "test-name" }, null, 2));
-  });
-
-  test("handles null and undefined", () => {
-    expect(formatRequestParams(null)).toBe("null");
-    expect(formatRequestParams(undefined)).toBe(undefined);
-  });
-
-  test("handles arrays", () => {
-    const arr = [1, 2, 3];
-    expect(formatRequestParams(arr)).toBe(JSON.stringify(arr, null, 2));
-  });
-
-  test("handles primitive values", () => {
-    expect(formatRequestParams("string")).toBe('"string"');
-    expect(formatRequestParams(123)).toBe("123");
-    expect(formatRequestParams(true)).toBe("true");
-  });
-
-  test("returns error message for circular references", () => {
-    const circular: Record<string, unknown> = {};
-    circular.self = circular;
-    expect(formatRequestParams(circular)).toBe("(unable to serialize request)");
-  });
-
-  test("returns error message when toJson throws", () => {
-    const badProto = {
-      toJson: () => {
-        throw new Error("serialization failed");
+describe("errorHandlingInterceptor", () => {
+  test("does not leak the request payload into the enhanced error message", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.testExecScript,
+      header: new Headers(),
+      message: {
+        workspaceId: "workspace-id",
+        name: "query-gql.js",
+        code: "export async function main() {}",
+        arg: '{"endpoint":"https://app.example.com/query","accessToken":"not-a-real-token","query":"mutation { m }"}',
       },
-    };
-    expect(formatRequestParams(badProto)).toBe("(unable to serialize request)");
+    } as unknown as UnaryRequest;
+    const next = vi
+      .fn()
+      .mockRejectedValue(new ConnectError("context deadline exceeded", Code.DeadlineExceeded));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("context deadline exceeded");
+    expect(error.message).not.toContain("not-a-real-token");
+    expect(error.message).not.toContain('"arg"');
   });
 
-  test("serializes objects containing BigInt values", () => {
-    const objWithBigInt = {
-      workspaceId: "test-id",
-      duration: { seconds: BigInt(3600), nanos: 0 },
-    };
-    const result = formatRequestParams(objWithBigInt);
-    expect(result).toContain('"seconds": "3600"');
-    expect(result).toContain('"nanos": 0');
+  test("includes allowlisted resource identifiers in the enhanced error message", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.createTailorDBType,
+      header: new Headers(),
+      message: {
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+        namespaceName: "shared-db",
+        tailordbType: {
+          $typeName: "tailor.v1.TailorDBType",
+          name: "Order",
+          description: "do-not-print-payload",
+        },
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("already exists", Code.AlreadyExists));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain(
+      "Failed to create TailorDBType (workspaceId: 22222222-2222-2222-2222-222222222222, namespaceName: shared-db, tailordbType.name: Order): already exists",
+    );
+    expect(error.message).not.toContain("do-not-print-payload");
   });
 
-  test("serializes nested BigInt values in toJson result", () => {
-    const protoWithBigInt = {
-      toJson: () => ({
-        accessTokenLifetime: { seconds: BigInt(86400), nanos: 0 },
-      }),
-    };
-    const result = formatRequestParams(protoWithBigInt);
-    expect(result).toContain('"seconds": "86400"');
+  test("surfaces id-like identifiers while keeping sensitive fields out", async () => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.resumeWorkflowExecution,
+      header: new Headers(),
+      message: {
+        workspaceId: "22222222-2222-2222-2222-222222222222",
+        executionId: "0189aaaa-bbbb-cccc-dddd-eeeeffff0000",
+        authNamespace: "my-auth",
+        email: "admin@example.com",
+        secretmanagerSecretValue: "do-not-print-secret",
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("workspaceId: 22222222-2222-2222-2222-222222222222");
+    expect(error.message).toContain("executionId: 0189aaaa-bbbb-cccc-dddd-eeeeffff0000");
+    expect(error.message).toContain("authNamespace: my-auth");
+    expect(error.message).not.toContain("admin@example.com");
+    expect(error.message).not.toContain("do-not-print-secret");
+  });
+
+  test("surfaces method-scoped identifiers only on the methods that define them", async () => {
+    const message = { trn: "trn:v1:workspace/staffing:tailordb/shared-db" };
+    const makeReq = (
+      method: (typeof OperatorService.method)[keyof typeof OperatorService.method],
+    ) =>
+      ({
+        stream: false,
+        service: OperatorService,
+        method,
+        header: new Headers(),
+        message,
+      }) as unknown as UnaryRequest;
+    const next = () => vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const onMetadata = await errorHandlingInterceptor()(next())(
+      makeReq(OperatorService.method.setMetadata),
+    ).catch((e: unknown) => e as ConnectError);
+    const onOtherMethod = await errorHandlingInterceptor()(next())(
+      makeReq(OperatorService.method.resumeWorkflowExecution),
+    ).catch((e: unknown) => e as ConnectError);
+
+    expect((onMetadata as ConnectError).message).toContain(
+      "trn: trn:v1:workspace/staffing:tailordb/shared-db",
+    );
+    expect((onOtherMethod as ConnectError).message).not.toContain("trn:");
+  });
+
+  test("does not read names out of map or struct fields", async () => {
+    // Map fields (e.g. metadata labels merged from the remote resource) and
+    // google.protobuf.Struct payloads materialize without a nested message
+    // $typeName, and their entries are not under the SDK's control.
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.setMetadata,
+      header: new Headers(),
+      message: {
+        trn: "trn:v1:workspace/staffing:tailordb/shared-db",
+        labels: { name: "arbitrary-remote-value" },
+      },
+    } as unknown as UnaryRequest;
+    const next = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const promise = errorHandlingInterceptor()(next)(req);
+
+    await expect(promise).rejects.toThrow(ConnectError);
+    const error = await promise.catch((e: unknown) => e as ConnectError);
+    expect(error.message).toContain("trn: trn:v1:workspace/staffing:tailordb/shared-db");
+    expect(error.message).not.toContain("arbitrary-remote-value");
   });
 });
 
@@ -732,13 +880,22 @@ describe("resolveStaticWebsiteUrls", () => {
 
 describe("fetchMachineUserToken", () => {
   const fetchMock = vi.fn();
+  const connectTimeoutError = () =>
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Connect Timeout Error"), {
+        code: "UND_ERR_CONNECT_TIMEOUT",
+      }),
+    });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
+    fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    try {
+      await runTest();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 
   test("returns the parsed token on success", async () => {
@@ -753,6 +910,74 @@ describe("fetchMachineUserToken", () => {
     expect(result).toEqual({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 });
   });
 
+  test("retries a connection timeout after 500ms", async () => {
+    vi.useFakeTimers();
+    using randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    fetchMock.mockRejectedValueOnce(connectTimeoutError()).mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 }),
+    });
+
+    const token = fetchMachineUserToken("https://example.com", "client-id", "client-secret");
+    const result = token.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(result).resolves.toEqual({
+      ok: true,
+      value: { token_type: "Bearer", access_token: "token-1", expires_in: 3600 },
+    });
+
+    expect(fetchMock.mock.calls[1]).toEqual(fetchMock.mock.calls[0]);
+    expect(randomSpy).toHaveBeenCalledOnce();
+  });
+
+  test("stops after three connection timeouts and preserves the last error", async () => {
+    vi.useFakeTimers();
+    using randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const errors = [connectTimeoutError(), connectTimeoutError(), connectTimeoutError()];
+    for (const error of errors) {
+      fetchMock.mockRejectedValueOnce(error);
+    }
+
+    const token = fetchMachineUserToken("https://example.com", "client-id", "client-secret");
+    const result = token.then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await expect(result).resolves.toEqual({ ok: false, error: errors[2] });
+    expect(randomSpy).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry other fetch failures", async () => {
+    const socketError = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Socket Error"), { code: "UND_ERR_SOCKET" }),
+    });
+    fetchMock.mockRejectedValue(socketError);
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toBe(socketError);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   test("includes status, statusText, and response body in the error on failure", async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -764,6 +989,7 @@ describe("fetchMachineUserToken", () => {
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
     ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   test("falls back to an empty body when reading the response body fails", async () => {
@@ -777,5 +1003,187 @@ describe("fetchMachineUserToken", () => {
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
     ).rejects.toThrow("Failed to fetch machine user token: 500 Internal Server Error");
+  });
+});
+
+describe("fetchPlatformMachineUserToken", () => {
+  const fetchMock = vi.fn();
+  const connectTimeoutError = () =>
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Connect Timeout Error"), {
+        code: "UND_ERR_CONNECT_TIMEOUT",
+      }),
+    });
+  const discoveryResponse = () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    json: () =>
+      Promise.resolve({ token_endpoint: "https://api.tailor.tech/auth/platform/oauth2/token" }),
+  });
+  const tokenResponse = () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    json: () =>
+      Promise.resolve({ token_type: "bearer", access_token: "token-1", expires_in: 3600 }),
+  });
+
+  aroundEach(async (runTest) => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await runTest();
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("retries a connection timeout on the discovery request after 500ms", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    fetchMock
+      .mockRejectedValueOnce(connectTimeoutError())
+      .mockResolvedValueOnce(discoveryResponse())
+      .mockResolvedValueOnce(tokenResponse());
+
+    const result = fetchPlatformMachineUserToken("client-id", "client-secret").then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toMatchObject({
+      ok: true,
+      value: { accessToken: "token-1" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  test("retries a connection timeout on the token request after 500ms", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    fetchMock
+      .mockResolvedValueOnce(discoveryResponse())
+      .mockRejectedValueOnce(connectTimeoutError())
+      .mockResolvedValueOnce(discoveryResponse())
+      .mockResolvedValueOnce(tokenResponse());
+
+    const result = fetchPlatformMachineUserToken("client-id", "client-secret").then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(499);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toMatchObject({
+      ok: true,
+      value: { accessToken: "token-1" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  test("stops after three connection timeouts and preserves the last error", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const errors = [connectTimeoutError(), connectTimeoutError(), connectTimeoutError()];
+    for (const error of errors) {
+      fetchMock.mockRejectedValueOnce(error);
+    }
+
+    const result = fetchPlatformMachineUserToken("client-id", "client-secret").then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await expect(result).resolves.toEqual({ ok: false, error: errors[2] });
+  });
+
+  test("does not retry other fetch failures", async () => {
+    const socketError = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Socket Error"), { code: "UND_ERR_SOCKET" }),
+    });
+    fetchMock.mockRejectedValue(socketError);
+
+    await expect(fetchPlatformMachineUserToken("client-id", "client-secret")).rejects.toBe(
+      socketError,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("closeConnectionPool", () => {
+  const currentGeneration = Symbol.for("undici.globalDispatcher.2");
+  const legacyGeneration = Symbol.for("undici.globalDispatcher.1");
+  const globals = globalThis as Record<symbol, unknown>;
+  const setDispatcher = (key: symbol, value: unknown) => {
+    globals[key] = value;
+  };
+
+  aroundEach(async (runTest) => {
+    const originals = [currentGeneration, legacyGeneration].map(
+      (key) => [key, Object.hasOwn(globals, key), globals[key]] as const,
+    );
+    await runTest();
+    for (const [key, existed, value] of originals) {
+      if (existed) {
+        globals[key] = value;
+      } else {
+        delete globals[key];
+      }
+    }
+  });
+
+  test("closes only the newest dispatcher generation", async () => {
+    const closeCurrent = vi.fn().mockResolvedValue(undefined);
+    const closeLegacy = vi.fn().mockResolvedValue(undefined);
+    setDispatcher(currentGeneration, { close: closeCurrent });
+    setDispatcher(legacyGeneration, { close: closeLegacy });
+
+    await closeConnectionPool();
+
+    expect(closeCurrent).toHaveBeenCalledTimes(1);
+    expect(closeLegacy).not.toHaveBeenCalled();
+  });
+
+  test("falls back to the legacy dispatcher generation", async () => {
+    const closeLegacy = vi.fn().mockResolvedValue(undefined);
+    setDispatcher(currentGeneration, undefined);
+    setDispatcher(legacyGeneration, { close: closeLegacy });
+
+    await closeConnectionPool();
+
+    expect(closeLegacy).toHaveBeenCalledTimes(1);
+  });
+
+  test("resolves when no dispatcher is installed", async () => {
+    setDispatcher(currentGeneration, undefined);
+    setDispatcher(legacyGeneration, undefined);
+
+    await expect(closeConnectionPool()).resolves.toBeUndefined();
+  });
+
+  test("resolves when the dispatcher exposes a non-callable close", async () => {
+    setDispatcher(currentGeneration, { close: "not a function" });
+    setDispatcher(legacyGeneration, undefined);
+
+    await expect(closeConnectionPool()).resolves.toBeUndefined();
   });
 });

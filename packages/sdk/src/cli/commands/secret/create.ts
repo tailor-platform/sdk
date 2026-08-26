@@ -13,13 +13,11 @@ import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed"
 export const createSecretCommand = defineAppCommand({
   name: "create",
   description: "Create a secret in a vault.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...secretValueArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...secretValueArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({

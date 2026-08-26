@@ -1,7 +1,6 @@
-import type { AuthInvoker } from "#/configure/services/auth/index";
 import type { Workflow } from "#/configure/services/workflow/workflow";
 import type { MachineUserName } from "#/configure/types/machine-user";
-import type { TailorInvoker } from "#/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -11,18 +10,18 @@ import type {
 import type { Client } from "@urql/core";
 
 /** Function-based executor operation. The body receives the trigger args and the `invoker`. */
-export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "authInvoker"> & {
-  body: (args: Args & { invoker?: TailorInvoker }) => void | Promise<void>;
-  authInvoker?: AuthInvoker<string> | MachineUserName;
+export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "invoker"> & {
+  body: (args: Args & { invoker: TailorPrincipal | null }) => void | Promise<void>;
+  invoker?: MachineUserName;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
 
 /** GraphQL-based executor operation. Executes a GraphQL query or mutation. */
-export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" | "authInvoker"> & {
+export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" | "invoker"> & {
   query: UrqlOperationArgs[0];
   variables?: (args: Args) => UrqlOperationArgs[1];
-  authInvoker?: AuthInvoker<string> | MachineUserName;
+  invoker?: MachineUserName;
 };
 
 type RequestHeader =
@@ -286,17 +285,23 @@ export type WebhookOperation<Args> = Omit<
  * Extract mainJob's Input type from Workflow.
  * Workflow<Job> -> Job is WorkflowJob<Name, Input, Output> -> Input
  */
-type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
+type WorkflowInput<W extends Workflow> = Parameters<W["start"]>[0];
+
+type WorkflowArgs<Args, W extends Workflow> = WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
+
+type WorkflowArgsProperty<Args, W extends Workflow> =
+  undefined extends WorkflowInput<W>
+    ? { args?: WorkflowArgs<Args, W> }
+    : { args: WorkflowArgs<Args, W> };
 
 /** Workflow-triggering executor operation. Triggers a workflow in response to an event. */
 export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
   ParserWorkflowOperation,
-  "workflowName" | "args" | "authInvoker"
+  "workflowName" | "args" | "invoker"
 > & {
   workflow: W;
-  args?: WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
-  authInvoker?: AuthInvoker<string> | MachineUserName;
-};
+  invoker?: MachineUserName;
+} & WorkflowArgsProperty<Args, W>;
 
 export type Operation<Args> =
   | FunctionOperation<Args>

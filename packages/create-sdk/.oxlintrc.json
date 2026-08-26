@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["../../oxlint.shared.json"],
   "plugins": ["typescript", "import", "unicorn"],
   "categories": {
     "correctness": "error"
@@ -23,9 +24,10 @@
     "no-regex-spaces": "error",
     "no-unexpected-multiline": "error",
     "preserve-caught-error": "error",
+    "import/default": "error",
+    "import/namespace": "error",
     "import/no-named-as-default": "warn",
     "import/no-named-as-default-member": "warn",
-    "import/no-duplicates": "warn",
     "typescript/ban-ts-comment": "error",
     "typescript/no-empty-object-type": "error",
     "typescript/no-explicit-any": "error",
@@ -35,7 +37,6 @@
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-confusing-non-null-assertion": "error",
     "typescript/no-unsafe-enum-comparison": "error",
-    "typescript/no-misused-promises": "error",
     "typescript/no-unsafe-argument": "error",
     "typescript/no-unsafe-assignment": "error",
     "typescript/no-unsafe-call": "error",
@@ -43,8 +44,6 @@
     "typescript/no-unsafe-member-access": "error",
     "typescript/no-unsafe-return": "error",
     "typescript/non-nullable-type-assertion-style": "error",
-    "typescript/only-throw-error": "error",
-    "typescript/prefer-promise-reject-errors": "error",
     "typescript/require-await": "error",
     "typescript/restrict-plus-operands": "error",
     "typescript/adjacent-overload-signatures": "error",
@@ -63,7 +62,10 @@
     "typescript/prefer-includes": "error",
     "typescript/prefer-nullish-coalescing": "error",
     "typescript/prefer-regexp-exec": "error",
-    "typescript/prefer-string-starts-ends-with": "error"
+    "typescript/prefer-string-starts-ends-with": "error",
+    "tailor-zod/require-object-policy-comment": "error",
+    "zod/prefer-loose-object": "error",
+    "zod/prefer-strict-object": "error"
   },
   "overrides": [
     {
@@ -156,5 +158,6 @@
         "node": true
       }
     }
-  ]
+  ],
+  "jsPlugins": ["eslint-plugin-zod", "../../scripts/oxlint/tailor-zod-plugin.cjs"]
 }

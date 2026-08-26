@@ -44,6 +44,27 @@ export interface SnapshotEnumValue {
 }
 
 /**
+ * Optional boolean properties of {@link SnapshotFieldConfig}, absent meaning
+ * `false`. Every comparator over snapshot fields iterates this single list so
+ * a newly added property cannot be silently skipped by one of them; a
+ * comparator that ignores some of these must declare its exclusions
+ * explicitly.
+ */
+export const SNAPSHOT_FIELD_BOOLEAN_PROPS = [
+  "array",
+  "index",
+  "unique",
+  "foreignKey",
+  "vector",
+  "optionalOnCreate",
+] as const;
+
+/**
+ * One of the {@link SNAPSHOT_FIELD_BOOLEAN_PROPS} property names.
+ */
+export type SnapshotFieldBooleanProp = (typeof SNAPSHOT_FIELD_BOOLEAN_PROPS)[number];
+
+/**
  * Field configuration in schema snapshot
  */
 export interface SnapshotFieldConfig {
@@ -65,6 +86,9 @@ export interface SnapshotFieldConfig {
   validate?: SnapshotValidation[];
   serial?: SnapshotSerial;
   scale?: number;
+  default?: unknown;
+  /** Recorded on remote-derived snapshots when the platform fills the value on create. */
+  optionalOnCreate?: boolean;
   /** Nested fields (recursive) */
   fields?: Record<string, SnapshotFieldConfig>;
 }
@@ -108,7 +132,7 @@ export type SnapshotFieldRefOperand =
  * defined in the Zod parser schema (RecordPermissionOperandSchema /
  * GqlPermissionOperandSchema in parser/service/tailordb/schema.ts).
  */
-export type SnapshotValueOperand = string | boolean | string[] | boolean[];
+type SnapshotValueOperand = string | boolean | string[] | boolean[];
 
 /**
  * Permission operand union. Either a field-ref object or a literal value.
@@ -218,10 +242,19 @@ export interface TailorDBSnapshotType {
     record?: SnapshotRecordPermission;
     gql?: SnapshotGqlPermission;
   };
+  typeHookExpr?: { create?: string; update?: string };
+  typeValidateExpr?: string;
 }
 
 export type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
 export type SnapshotGqlOperations = NonNullable<SnapshotSettings["gqlOperations"]>;
+
+/** Identifies the history transition created by a full rebaseline. */
+export interface RebaselineMarker {
+  historyId: string;
+  replacedHistoryId: string | null;
+  replacedLatestMigration: number;
+}
 
 /**
  * Schema snapshot - full schema state at a point in time.
@@ -233,7 +266,8 @@ export interface SchemaSnapshot {
   version: number;
   namespace: string;
   createdAt: string;
-  types: Record<string, TailorDBSnapshotType>;
+  tables: Record<string, TailorDBSnapshotType>;
+  rebaseline?: RebaselineMarker;
 }
 
 declare const normalizedSchemaSnapshotBrand: unique symbol;

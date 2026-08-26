@@ -24,11 +24,21 @@ import {
   type OperatorClient,
 } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  addDependencyRecords,
+  buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -44,7 +54,6 @@ import type {
 } from "#/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 type IdPServiceMutationRequest = {
   workspaceId?: string;
@@ -114,18 +123,22 @@ export async function applyIdP(
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
-    // Services
+    // Services. An unchanged service still gets its labels written, because its
+    // dependency records can change while its definition does not.
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
         await resolveServiceReturnOrigins(client, create.request);
         await client.createIdPService(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.service.updates.map(async (update) => {
         await resolveServiceReturnOrigins(client, update.request);
         await client.updateIdPService(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...changeSet.service.unchanged.flatMap((entry) =>
+        entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+      ),
     ]);
 
     // Clients
@@ -210,6 +223,8 @@ export async function planIdP(context: PlanContext) {
     forRemoval,
     forceApplyAll = false,
     idpUserTriggerTargets,
+    dependentApps,
+    runAppIds,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
@@ -226,6 +241,7 @@ export async function planIdP(context: PlanContext) {
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
     expectedLocalWebsites,
+    { dependentApps, runAppIds },
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
@@ -250,13 +266,13 @@ export async function planIdP(context: PlanContext) {
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateIdPServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateService = {
   name: string;
   request: MessageInitShape<typeof UpdateIdPServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteService = {
@@ -264,11 +280,20 @@ type DeleteService = {
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
 };
 
+/**
+ * An IdP service whose definition is unchanged but whose dependency records are
+ * not. The plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedService = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
+};
+
 type ComparableIdPService = {
   authorization: string | undefined;
   lang: IdPLang;
   userAuthPolicy: Record<string, unknown> | undefined;
-  publishUserEvents: boolean;
+  publishEvents: boolean;
   disableGqlOperations: Record<string, boolean> | undefined;
   emailConfig: Record<string, string> | undefined;
   permission: MessageInitShape<typeof ProtoIdPPermissionSchema> | undefined;
@@ -284,8 +309,12 @@ function normalizeComparableUserAuthPolicy(
     passwordRequireLowercase: policy?.passwordRequireLowercase ?? false,
     passwordRequireNonAlphanumeric: policy?.passwordRequireNonAlphanumeric ?? false,
     passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
-    passwordMinLength: policy?.passwordMinLength ?? 0,
-    passwordMaxLength: policy?.passwordMaxLength ?? 0,
+    // The platform fills an omitted policy with password_min_length 6 and
+    // password_max_length 4096 and echoes those back; it also coerces an
+    // explicit 0 to the same defaults, which is why these use || (not ??) —
+    // every falsy local value must compare equal to the stored defaults.
+    passwordMinLength: policy?.passwordMinLength || 6,
+    passwordMaxLength: policy?.passwordMaxLength || 4096,
     allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
@@ -326,7 +355,7 @@ function normalizeComparableIdPService(
     | "authorization"
     | "lang"
     | "userAuthPolicy"
-    | "publishUserEvents"
+    | "publishEvents"
     | "disableGqlOperations"
     | "emailConfig"
     | "permission"
@@ -336,7 +365,7 @@ function normalizeComparableIdPService(
     authorization: input.authorization || undefined,
     lang: input.lang === IdPLang.UNSPECIFIED ? IdPLang.EN : input.lang,
     userAuthPolicy: input.userAuthPolicy,
-    publishUserEvents: input.publishUserEvents,
+    publishEvents: input.publishEvents,
     disableGqlOperations: input.disableGqlOperations,
     emailConfig: input.emailConfig,
     permission: input.permission,
@@ -385,7 +414,7 @@ function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPSe
       authorization: existing.authorization,
       lang: existing.lang,
       userAuthPolicy: normalizeComparableUserAuthPolicy(existing.userAuthPolicy),
-      publishUserEvents: existing.publishUserEvents,
+      publishEvents: existing.publishUserEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(existing.disableGqlOperations),
       emailConfig: normalizeComparableEmailConfig(existing.emailConfig),
       permission: normalizeComparablePermission(existing.permission),
@@ -402,8 +431,18 @@ async function planServices(
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,
+  records: {
+    dependentApps: DependentAppsByResource | undefined;
+    runAppIds: ReadonlySet<string> | undefined;
+  },
 ) {
-  const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
+  const changeSet = createChangeSet<
+    CreateService,
+    UpdateService,
+    DeleteService,
+    never,
+    UnchangedService
+  >("IdP services");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -425,11 +464,19 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "idp", namespaceName),
-      appName,
-      appId,
-    });
+    const metaRequest = addDependencyRecords(
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "idp", namespaceName),
+        appName,
+        appId,
+      }),
+      {
+        key: eventSourceKey.idp(namespaceName),
+        dependentApps: records.dependentApps,
+        runAppIds: records.runAppIds,
+        pinned: idp.publishEvents !== undefined,
+      },
+    );
     let authorization: string | undefined;
     switch (idp.authorization) {
       case "insecure":
@@ -448,14 +495,11 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
-    const isIdpUserTriggerTarget = idpUserTriggerTargets.has(namespaceName);
-    if (isIdpUserTriggerTarget && idp.publishUserEvents === false) {
-      throw new Error(
-        `IdP service "${namespaceName}" has "publishUserEvents: false", but executors with idpUser triggers subscribe to it. ` +
-          `Either remove "publishUserEvents: false" or remove the matching executor triggers.`,
-      );
-    }
-    const publishUserEvents = idp.publishUserEvents ?? isIdpUserTriggerTarget;
+    const publishEvents = resolvePublishEvents({
+      explicit: idp.publishEvents,
+      subscribed: idpUserTriggerTargets.has(namespaceName),
+      conflict: publishEventsConflict.idpService(namespaceName),
+    });
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
@@ -482,7 +526,7 @@ async function planServices(
       authorization,
       lang,
       userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicyForCompare),
-      publishUserEvents,
+      publishEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(
         convertGqlOperationsToDisable(idp.gqlOperations),
       ),
@@ -495,7 +539,7 @@ async function planServices(
       authorization,
       lang,
       userAuthPolicy,
-      publishUserEvents,
+      publishUserEvents: publishEvents,
       disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
       emailConfig,
       permission: protoPermission,
@@ -517,7 +561,7 @@ async function planServices(
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areIdPServicesEqual(existing.resource, desired)
       ) {
-        changeSet.unchanged.push({ name: namespaceName });
+        changeSet.unchanged.push({ name: namespaceName, metaRequest });
       } else {
         changeSet.updates.push({
           name: namespaceName,

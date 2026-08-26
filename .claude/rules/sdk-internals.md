@@ -9,6 +9,21 @@ paths:
 
 # SDK Internals
 
+## API Naming: `define*` vs `create*`
+
+Public functions in `src/configure/` follow a strict naming convention.
+
+| Prefix    | Meaning                                 | Output                                                                                             | Where used                                                               |
+| --------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `define*` | Declarative resource specification      | Pure data/config struct (no SDK-managed runtime methods)                                           | `tailor.config.ts` as resource entries                                   |
+| `create*` | Instantiation of a runtime-capable unit | Object with runtime-capable methods (`trigger`, `wait`, `resolve`) or user-written `body` function | Standalone files as default/named exports, or inside workflow job bodies |
+
+**`define*` examples:** `defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `defineAIGateway`, `defineSecretManager`, `definePlugins`
+
+**`create*` examples:** `createResolver`, `createExecutor`, `createWorkflow`, `createWorkflowJob`, `createWaitPoint`, `createWaitPoints`, `createHttpAdapter`
+
+Decision rule: if the result has a method that calls the platform at runtime (`.trigger()`, `.wait()`, `.resolve()`, etc.) or carries a user-written `body` function, use `create*`. If the result is purely a typed config object that tooling/deployer reads, use `define*`.
+
 ## Module Architecture and Import Rules
 
 The SDK enforces strict module boundaries to maintain a clean architecture:
@@ -172,9 +187,9 @@ automatically wire the resource into every consumer — check each of these:
 - `cli/commands/deploy/validate-plan.ts` — `ValidatePlanInput` is a `PlannedDeployment`
   alias, but `validatePlan` still needs `creates`/`updates` calls added for the
   new resource's proto schema.
-- `cli/commands/deploy/deploy.ts`'s `DEPLOY_MANAGED_RESOURCE_DEFINITIONS` — drives
-  dry-run display and owner-conflict detection; add an entry per resource label.
+- `cli/commands/deploy/managed-resources.ts`'s `DEPLOY_MANAGED_RESOURCE_DEFINITIONS` —
+  drives dry-run display and owner-conflict detection; add an entry per resource label.
 - `collectOwnerConflicts` / `collectUnmanagedResources` / `collectResourceOwners`
-  (`deploy.ts`) derive from `PlanResults` via `Object.values`, so no change is
-  needed there as long as the new plan result carries `conflicts`/`unmanaged`/
+  (`managed-resources.ts`) derive from `PlanResults` via `Object.values`, so no change
+  is needed there as long as the new plan result carries `conflicts`/`unmanaged`/
   `resourceOwners`.

@@ -1,0 +1,23 @@
+{
+  "name": "@tailor-platform/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal utilities shared across Tailor SDK packages. Bundled into consumers, never published.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./color": "./src/color.ts"
+  },
+  "scripts": {
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix",
+    "knip": "knip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "oxlint": "1.79.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "vitest": "4.1.11"
+  }
+}

@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { removeCommand } from "./remove";
@@ -137,6 +137,7 @@ vi.mock("#/cli/shared/logger", () => ({
   logger: {
     info: vi.fn(),
     success: vi.fn(),
+    warn: vi.fn(),
     log: vi.fn(),
     newline: vi.fn(),
   },
@@ -153,8 +154,9 @@ vi.mock("#/cli/shared/logger", () => ({
 vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
 
 describe("remove command", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("deletes a managed workflow execution policy when it is the only remaining resource", async () => {
@@ -193,5 +195,38 @@ describe("remove command", () => {
       2,
       'Successfully removed all resources managed by "my-app".',
     );
+  });
+  test("does not claim success when same-name resources were left behind", async () => {
+    // A resource tagged with this application's name that it does not own by id
+    // is skipped. Reporting success would say the workspace is clean when it is not.
+    const client = {
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+      getMetadata: vi.fn(async () => ({ metadata: { labels: {} } })),
+    };
+    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+    mocks.planExecutor.mockResolvedValueOnce({
+      changeSet: mocks.changeSet(),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set(["my-app"]),
+    });
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.success).not.toHaveBeenCalledWith(
+      'Successfully removed all resources managed by "my-app".',
+    );
+    // The mismatch happens both when the config has no id and when it carries a
+    // different one, so the message must not presuppose a missing id.
+    const warned = vi
+      .mocked(logger.warn)
+      .mock.calls.map((call) => String(call[0]))
+      .join("\n");
+    expect(warned).toContain("my-app");
+    expect(warned).toContain("does not match");
+    expect(warned).toContain("deploy");
   });
 });

@@ -4,18 +4,7 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type {
-  BaseGeneratorConfigInput,
-  CodeGeneratorInput,
-} from "#/types/generator-config.generated";
-
 export type DependencyKind = "tailordb" | "resolver" | "executor";
-
-export type GeneratorConfig = BaseGeneratorConfigInput;
-
-export type CodeGeneratorBase = Omit<CodeGeneratorInput, "dependencies"> & {
-  dependencies: readonly DependencyKind[];
-};
 
 import type {
   PluginAttachment,
@@ -32,7 +21,7 @@ import type { Resolver } from "#/types/resolver.generated";
 /**
  * A single generated file to write to disk.
  */
-export interface GeneratedFile {
+interface GeneratedFile {
   path: string;
   content: string;
   skipIfExists?: boolean;
@@ -53,7 +42,7 @@ export interface GeneratorResult {
 export interface GeneratorAuthInput {
   name: string;
   userProfile?: {
-    typeName: string;
+    tableName: string;
     namespace: string;
     usernameField: string;
   };
@@ -68,11 +57,11 @@ export interface GeneratorAuthInput {
 export interface TailorDBNamespaceData {
   /** Namespace name */
   namespace: string;
-  /** All TailorDB types in this namespace, keyed by type name */
-  types: Record<string, TailorDBType>;
-  /** Source info for each type (file path, export name, plugin info) */
+  /** All TailorDB tables in this namespace, keyed by table name */
+  tables: Record<string, TailorDBType>;
+  /** Source info for each table (file path, export name, plugin info) */
   sourceInfo: ReadonlyMap<string, TypeSourceInfoEntry>;
-  /** Plugin attachments configured on each type via .plugin() method */
+  /** Plugin attachments configured on each table via .plugin() method */
   pluginAttachments: ReadonlyMap<string, readonly PluginAttachment[]>;
 }
 
@@ -91,7 +80,7 @@ export interface ResolverNamespaceData {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface TailorDBReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their types and metadata */
+  /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
   /** Auth configuration */
   auth?: GeneratorAuthInput;
@@ -108,7 +97,7 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ResolverReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their types and metadata */
+  /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
@@ -127,7 +116,7 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ExecutorReadyContext<PluginConfig = unknown> {
-  /** All TailorDB namespaces with their types and metadata */
+  /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
@@ -143,7 +132,8 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
 }
 
-export type TypeConfigRequired<PluginConfig = unknown> =
+/** @lintignore kept exported for the zinfer-generated reference in src/types/plugin-config.generated.ts */
+export type TableConfigRequired<PluginConfig = unknown> =
   | boolean
   | ((pluginConfig: PluginConfig | undefined) => boolean);
 
@@ -157,11 +147,19 @@ export interface PluginConfigs<Fields extends string = string> {
 }
 
 /**
+ * Registry mapping a plugin's `id` literal to its plugin-level config type.
+ * Extend via declaration merging, keyed by the `id` string, from the
+ * owning plugin's own module.
+ */
+// oxlint-disable-next-line no-empty-object-type
+export interface PluginConfigRegistry {}
+
+/**
  * Context passed to plugin's process method
  */
-export interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
-  type: TailorAnyDBType;
-  typeConfig: TypeConfig;
+export interface PluginTableProcessContext<TableConfig = unknown, PluginConfig = unknown> {
+  table: TailorAnyDBType;
+  tableConfig: TableConfig;
   pluginConfig: PluginConfig;
   namespace: string;
 }
@@ -175,16 +173,16 @@ export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
 }
 
 /**
- * Interface representing a TailorDB type for plugin output.
+ * Interface representing a TailorDB table for plugin output.
  */
-export interface TailorDBTypeForPlugin {
+export interface TailorDBTableForPlugin {
   readonly name: string;
   readonly fields: Record<string, unknown>;
 }
 
-export type PluginGeneratedType = TailorDBTypeForPlugin;
+export type PluginGeneratedTable = TailorDBTableForPlugin;
 
-export type PluginGeneratedTypes = Record<string, PluginGeneratedType>;
+type PluginGeneratedTables = Record<string, PluginGeneratedTable>;
 
 export interface PluginGeneratedResolver {
   name: string;
@@ -194,23 +192,23 @@ export interface PluginGeneratedResolver {
   body: string;
 }
 
-export interface PluginRecordTriggerConfig {
+interface PluginRecordTriggerConfig {
   kind: "tailordb";
   events: (
     | "tailordb.type_record.created"
     | "tailordb.type_record.updated"
     | "tailordb.type_record.deleted"
   )[];
-  typeName: string;
+  tableName: string;
 }
 
-export interface PluginScheduleTriggerConfig {
+interface PluginScheduleTriggerConfig {
   kind: "schedule";
   cron: string;
   timezone?: string;
 }
 
-export interface PluginIncomingWebhookTriggerConfig {
+interface PluginIncomingWebhookTriggerConfig {
   kind: "incomingWebhook";
 }
 
@@ -219,28 +217,28 @@ export type PluginTriggerConfig =
   | PluginScheduleTriggerConfig
   | PluginIncomingWebhookTriggerConfig;
 
-export type PluginInjectValue = string | number | boolean | null;
+type PluginInjectValue = string | number | boolean | null;
 export type PluginInjectMap = Record<string, PluginInjectValue>;
 
-export interface PluginFunctionOperationConfig {
+interface PluginFunctionOperationConfig {
   kind: "function";
   body: string;
   inject?: PluginInjectMap;
 }
 
-export interface PluginGraphQLOperationConfig {
+interface PluginGraphQLOperationConfig {
   kind: "graphql";
   query: string;
   appName?: string;
   variables?: string;
 }
 
-export interface PluginWebhookOperationConfig {
+interface PluginWebhookOperationConfig {
   kind: "webhook";
   url: string;
 }
 
-export interface PluginWorkflowOperationConfig {
+interface PluginWorkflowOperationConfig {
   kind: "workflow";
   workflowName: string;
 }
@@ -251,16 +249,10 @@ export type PluginOperationConfig =
   | PluginWebhookOperationConfig
   | PluginWorkflowOperationConfig;
 
-export type PluginExecutorContextValue =
-  | TailorAnyDBType
-  | string
-  | number
-  | boolean
-  | null
-  | undefined;
+type PluginExecutorContextValue = TailorAnyDBType | string | number | boolean | null | undefined;
 
 export interface PluginExecutorContextBase {
-  sourceType: TailorAnyDBType | null;
+  sourceTable: TailorAnyDBType | null;
   namespace: string;
 }
 
@@ -268,7 +260,7 @@ export type PluginExecutorContext = PluginExecutorContextBase & {
   [key: string]: PluginExecutorContextValue;
 };
 
-export interface PluginExecutorModule {
+interface PluginExecutorModule {
   default: unknown;
 }
 
@@ -289,17 +281,17 @@ export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorWithFile
   | PluginGeneratedExecutorLegacy;
 
-export interface PluginExtends {
+interface PluginExtends {
   fields?: Record<string, TailorAnyDBField>;
 }
 
 export interface PluginOutput {
-  types?: PluginGeneratedTypes;
+  tables?: PluginGeneratedTables;
   resolvers?: PluginGeneratedResolver[];
   executors?: PluginGeneratedExecutor[];
 }
 
-export interface TypePluginOutput extends PluginOutput {
+export interface TablePluginOutput extends PluginOutput {
   extends?: PluginExtends;
 }
 
@@ -307,19 +299,19 @@ export type NamespacePluginOutput = PluginOutput;
 
 /**
  * Plugin interface that all plugins must implement.
- * @template TypeConfig - Type for per-type configuration passed via .plugin() method
+ * @template TableConfig - Type for per-table configuration passed via .plugin() method
  * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
  */
-export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
+export interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
   readonly id: string;
   readonly description: string;
   readonly importPath?: string;
-  readonly typeConfigRequired?: TypeConfigRequired<PluginConfig>;
+  readonly tableConfigRequired?: TableConfigRequired<PluginConfig>;
   readonly pluginConfig?: PluginConfig;
 
-  onTypeLoaded?(
-    context: PluginProcessContext<TypeConfig, PluginConfig>,
-  ): TypePluginOutput | Promise<TypePluginOutput>;
+  onTableLoaded?(
+    context: PluginTableProcessContext<TableConfig, PluginConfig>,
+  ): TablePluginOutput | Promise<TablePluginOutput>;
 
   onNamespaceLoaded?(
     context: PluginNamespaceProcessContext<PluginConfig>,

@@ -2,6 +2,7 @@
  * Types for TailorDB migration execution
  */
 
+import { randomUUID } from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { logger } from "#/cli/shared/logger";
 import { formatMigrationNumber } from "./migration-number";
@@ -20,12 +21,18 @@ export const MAX_LABEL_LENGTH = 63;
 /**
  * Prefix added to migration numbers in labels (required because migration names start with numbers)
  */
-export const MIGRATION_LABEL_PREFIX = "m";
+const MIGRATION_LABEL_PREFIX = "m";
 
 /**
  * Label key for storing migration state in TailorDB Service metadata
  */
 export const MIGRATION_LABEL_KEY = "sdk-migration";
+
+/** Label key identifying which migration history ID is deployed. */
+export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
+
+/** Valid migration history ID syntax for metadata label values. */
+export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
 
 // ============================================================================
 // Error Constants
@@ -98,6 +105,23 @@ export function parseMigrationLabelNumber(label: string): number | null {
   return num > 9999 ? null : num;
 }
 
+/**
+ * Parse and validate a migration history ID stored in metadata.
+ * @param label - Metadata label value
+ * @returns Valid history ID, or null for malformed input
+ */
+export function parseMigrationHistoryId(label: string): string | null {
+  return MIGRATION_HISTORY_ID_PATTERN.test(label) ? label : null;
+}
+
+/**
+ * Create a migration history ID that is valid as a metadata label value.
+ * @returns New migration history ID
+ */
+export function createMigrationHistoryId(): string {
+  return `h${randomUUID().replaceAll("-", "")}`;
+}
+
 // ============================================================================
 // Error Helper Functions
 // ============================================================================
@@ -141,7 +165,7 @@ export function handleOptionalToRequiredError(error: unknown, messages: string[]
 /**
  * Type of schema drift detected between remote and local snapshot
  */
-export type SchemaDriftKind =
+type SchemaDriftKind =
   | "type_missing_remote"
   | "type_missing_local"
   | "type_settings_mismatch"
@@ -157,13 +181,14 @@ export type SchemaDriftKind =
   | "relationship_missing_remote"
   | "relationship_missing_local"
   | "relationship_mismatch"
-  | "permission_mismatch";
+  | "permission_mismatch"
+  | "script_mismatch";
 
 /**
  * Single schema drift item
  */
 export interface SchemaDrift {
-  typeName: string;
+  tableName: string;
   kind: SchemaDriftKind;
   fieldName?: string;
   indexName?: string;
@@ -174,6 +199,22 @@ export interface SchemaDrift {
 }
 
 /**
+ * Reason why remote schema verification was skipped for a namespace
+ */
+export type RemoteSchemaVerificationSkipReason =
+  | "not_deployed"
+  | "no_migration_label"
+  | "no_snapshot";
+
+export interface MigrationCheckpointRepair {
+  namespace: string;
+  from: number;
+  to: 0;
+  fromHistoryId: string | null;
+  toHistoryId: string;
+}
+
+/**
  * Result of remote schema verification for a single namespace
  */
 export interface RemoteSchemaVerificationResult {
@@ -181,4 +222,10 @@ export interface RemoteSchemaVerificationResult {
   remoteMigrationNumber: number;
   drifts: SchemaDrift[];
   hasDrift: boolean;
+  /** Set when the remote migration checkpoint does not exist in the local migration history */
+  checkpointMissingLocal?: boolean;
+  /** Safe checkpoint reset offered after the remote schema matched the local baseline */
+  checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
+  /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
+  skipped?: RemoteSchemaVerificationSkipReason;
 }

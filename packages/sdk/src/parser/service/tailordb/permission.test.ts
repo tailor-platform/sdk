@@ -6,7 +6,6 @@ import {
   normalizeActionPermission,
   normalizeGqlPermission,
 } from "./permission";
-import type { RawPermissions } from "#/types/tailordb.generated";
 
 type Permission = Parameters<typeof normalizeActionPermission>[0];
 
@@ -88,19 +87,19 @@ describe("normalizeActionPermission", () => {
       ],
       [
         "with user operand",
-        [{ user: "role" }, "=", "admin"] as unknown as Permission,
+        [{ user: "role" }, "=", "admin"] as unknown,
         [{ user: "role" }, "eq", "admin"],
         "allow",
       ],
       [
         "with record operand",
-        [{ record: "status" }, "=", "active"] as unknown as Permission,
+        [{ record: "status" }, "=", "active"] as unknown,
         [{ record: "status" }, "eq", "active"],
         "allow",
       ],
       [
         "with oldRecord/newRecord operands for update",
-        [{ oldRecord: "status" }, "!=", { newRecord: "status" }] as unknown as Permission,
+        [{ oldRecord: "status" }, "!=", { newRecord: "status" }] as unknown,
         [{ oldRecord: "status" }, "ne", { newRecord: "status" }],
         "allow",
       ],
@@ -195,6 +194,29 @@ describe("normalizeActionPermission", () => {
     ])("should handle %s operator", (_name, permission, expectedCondition) => {
       const result = normalizeActionPermission(permission);
       expect(result.conditions).toEqual([expectedCondition]);
+    });
+  });
+
+  describe("Operand guards", () => {
+    test("should pass through an array carrying a user property unchanged", () => {
+      const operand = ["admin", "manager"];
+      (operand as unknown as { user: string }).user = "roles";
+      const permission = {
+        conditions: [[{ user: "roles" }, "in", operand]],
+        permit: true,
+      } as Permission;
+      const result = normalizeActionPermission(permission);
+      expect(result.conditions[0]![2]).toBe(operand);
+    });
+
+    test("should reject a null operand", () => {
+      const permission = {
+        conditions: [[{ user: "role" }, "=", null]],
+        permit: true,
+      } as Permission;
+      expect(() => normalizeActionPermission(permission)).toThrow(
+        "Invalid permission operand: null",
+      );
     });
   });
 });
@@ -538,7 +560,7 @@ describe("findOmittedPermitRules", () => {
   });
 
   test("returns empty for empty permissions", () => {
-    expect(findOmittedPermitRules({} as unknown as RawPermissions)).toEqual([]);
+    expect(findOmittedPermitRules({})).toEqual([]);
   });
 });
 
@@ -562,7 +584,7 @@ describe("isGqlOperationsFullyDisabled", () => {
 
 describe("findMissingPermissionConfig", () => {
   test("reports both missing when neither permission nor gqlPermission is set", () => {
-    const result = findMissingPermissionConfig({} as RawPermissions, undefined);
+    const result = findMissingPermissionConfig({}, undefined);
     expect(result).toEqual({ missingPermission: true, missingGqlPermission: true });
   });
 
@@ -571,25 +593,28 @@ describe("findMissingPermissionConfig", () => {
       {
         record: { create: [], read: [], update: [], delete: [] },
         gql: [],
-      } as unknown as RawPermissions,
+      },
       undefined,
     );
     expect(result).toEqual({ missingPermission: false, missingGqlPermission: false });
   });
 
   test("reports missing permission even when GraphQL exposure is fully disabled", () => {
-    const result = findMissingPermissionConfig({} as RawPermissions, {
-      create: false,
-      update: false,
-      delete: false,
-      read: false,
-    });
+    const result = findMissingPermissionConfig(
+      {},
+      {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    );
     expect(result).toEqual({ missingPermission: true, missingGqlPermission: false });
   });
 
   test("does not report missing gqlPermission when GraphQL exposure is fully disabled", () => {
     const result = findMissingPermissionConfig(
-      { record: { create: [], read: [], update: [], delete: [] } } as unknown as RawPermissions,
+      { record: { create: [], read: [], update: [], delete: [] } },
       { create: false, update: false, delete: false, read: false },
     );
     expect(result).toEqual({ missingPermission: false, missingGqlPermission: false });
@@ -597,7 +622,7 @@ describe("findMissingPermissionConfig", () => {
 
   test("reports missing gqlPermission when only some GraphQL operations are disabled", () => {
     const result = findMissingPermissionConfig(
-      { record: { create: [], read: [], update: [], delete: [] } } as unknown as RawPermissions,
+      { record: { create: [], read: [], update: [], delete: [] } },
       { create: false, update: false, delete: false, read: true },
     );
     expect(result).toEqual({ missingPermission: false, missingGqlPermission: true });

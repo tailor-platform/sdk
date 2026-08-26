@@ -1,5 +1,6 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { Spinner } from "./spinner";
+import { stripAnsi } from "./test-helpers/strip-ansi";
 
 type FakeStream = {
   isTTY: boolean;
@@ -21,9 +22,6 @@ function createFakeStream(opts: { isTTY: boolean; columns?: number }): FakeStrea
   return stream;
 }
 
-// eslint-disable-next-line no-control-regex -- ANSI escapes include ESC (U+001B) by definition
-const stripAnsi = (s: string): string => s.replace(/\[[0-9;]*[a-zA-Z]/g, "");
-
 function createStartedSpinner(opts: {
   isTTY: boolean;
   columns?: number;
@@ -41,11 +39,9 @@ function createStartedSpinner(opts: {
 }
 
 describe("Spinner", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
   });
 

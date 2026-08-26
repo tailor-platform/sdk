@@ -7,8 +7,9 @@
  * See `services/tailordb-migration.md` §"Per-migration phases".
  */
 
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applyTailorDB } from "./index";
+import { describe, test, expect, vi, aroundEach } from "vitest";
+import * as migrationModule from "./migration";
+import { applyTailorDB, captureMigrationFileState } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -21,10 +22,10 @@ vi.mock("../label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
       labels: {},
-    }),
+    })),
   };
 });
 
@@ -101,20 +102,21 @@ const snapshotFixtures = vi.hoisted(() => {
     (typesByMigration: Record<number, unknown>) => (migrationsDir: string, maxVersion?: number) => {
       void migrationsDir;
       const number = maxVersion ?? 0;
-      const types = typesByMigration[number];
-      if (!types) {
+      const tables = typesByMigration[number];
+      if (!tables) {
         throw new Error(`No snapshot fixture configured for migration number: ${number}`);
       }
       return {
         version: 1 as const,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        types,
+        tables,
       };
     };
 
   return {
     reconstructSnapshotFromMigrations: baseSnapshot({
+      0: {},
       1: { SalesOrder: salesOrderAfterMigration1, User: userAfterMigration1 },
       5: { User: userAfterMigration5 },
     }),
@@ -131,8 +133,6 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
     reconstructSnapshotFromMigrations: vi.fn(snapshotFixtures.reconstructSnapshotFromMigrations),
   };
 });
-
-import * as migrationModule from "./migration";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
@@ -192,7 +192,8 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
             },
           ],
           deletes: [],
-          title: "TailorDB Types",
+          unchanged: [],
+          title: "TailorDB tables",
           isEmpty: () => false,
           lines: () => [],
         },
@@ -216,25 +217,34 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           authService: undefined,
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        checkpointRepairs: [],
+        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
+        migrationFileState: captureMigrationFileState([
+          { namespace: "test-ns", migrationsDir: "/test/migrations" },
+        ]),
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
   }
 
+  function setPendingMigrations(migrations: PendingMigration[]): void {
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
+  }
+
   function mkFieldMigration(
     kind: "field_added" | "field_removed",
     number: number,
-    typeName: string,
+    tableName: string,
     fieldName: string,
   ): PendingMigration {
     const fieldSpec = { type: "string", array: true };
     const change =
       kind === "field_added"
-        ? { kind, typeName, fieldName, after: { ...fieldSpec, required: false } }
-        : { kind, typeName, fieldName, before: { ...fieldSpec, required: true } };
+        ? { kind, tableName, fieldName, after: { ...fieldSpec, required: false } }
+        : { kind, tableName, fieldName, before: { ...fieldSpec, required: true } };
 
     return {
       number,
@@ -255,15 +265,16 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as any;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("per-migration semantics: migration #1 prePhase must NOT apply removals declared in later migration #5", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    setPendingMigrations([
       mkFieldMigration("field_added", 1, "User", "permissions"),
       mkFieldMigration("field_removed", 5, "User", "roles"),
     ]);
@@ -291,9 +302,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkFieldMigration("field_added", 1, "SomeOtherType", "foo"),
-    ]);
+    setPendingMigrations([mkFieldMigration("field_added", 1, "SomeOtherType", "foo")]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -305,7 +314,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     expect(userUpdates).toHaveLength(0);
   });
 
-  test("creates migration prePhase types sequentially", async () => {
+  test("creates migration prePhase tables sequentially", async () => {
     const createStarts: string[] = [];
     let firstCreateStarted!: () => void;
     let releaseFirstCreate!: () => void;
@@ -318,9 +327,9 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
 
     const client = createMockClient();
     vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
-      const typeName = request.tailordbType?.name ?? "unknown";
-      createStarts.push(typeName);
-      if (typeName === "SalesOrder") {
+      const tableName = request.tailordbType?.name ?? "unknown";
+      createStarts.push(tableName);
+      if (tableName === "SalesOrder") {
         firstCreateStarted();
         await firstCreateReleasePromise;
       }
@@ -352,18 +361,18 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     migration.diff.changes = [
       {
         kind: "field_added",
-        typeName: "SalesOrder",
+        tableName: "SalesOrder",
         fieldName: "reference",
         after: { type: "string", required: false },
       },
       {
         kind: "field_added",
-        typeName: "User",
+        tableName: "User",
         fieldName: "permissions",
         after: { type: "string", required: false, array: true },
       },
     ];
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([migration]);
+    setPendingMigrations([migration]);
 
     const applyPromise = applyTailorDB(client, planResult, "create-update");
     await firstCreateStartedPromise;

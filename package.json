@@ -1,6 +1,5 @@
 {
   "name": "tailor-dev-kit",
-  "version": "0.0.0",
   "private": true,
   "description": "Tailor Development Kit - Workspace Root",
   "keywords": [],
@@ -15,9 +14,15 @@
     "deploy": "pnpm run build && pnpm -r run deploy",
     "agent:rules:update": "node scripts/sync-agent-rules.mjs --write",
     "agent:rules:check": "node scripts/sync-agent-rules.mjs --check",
+    "codemod:docs:update": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --write",
+    "codemod:docs:check": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --check",
+    "codemod:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-boundaries.ts",
+    "deprecations:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-deprecations.ts",
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
-    "check:lint": "pnpm -r run lint:fix && pnpm run lint:vitest",
+    "check:codemod-docs": "pnpm run codemod:docs:check",
+    "check:deprecations": "tsx packages/sdk-codemod/scripts/check-deprecations.ts",
+    "check:lint": "pnpm -r run lint:fix && pnpm run lint:tooling:fix && pnpm run lint:vitest",
     "check:typecheck": "pnpm run --no-bail \"/^check-type:/\"",
     "check-type:root": "pnpm run typecheck:root",
     "check-type:native-preview": "pnpm --no-bail -r run typecheck:go",
@@ -28,8 +33,10 @@
     "check:jsdoc": "pnpm -r run check:public-api-jsdoc",
     "check:zod-isolation": "pnpm -r run check:zod-isolation",
     "check:import-cycles": "pnpm -r run check:import-cycles",
-    "lint": "pnpm run build && pnpm -r run lint && pnpm run lint:vitest",
-    "lint:fix": "pnpm run build && pnpm -r run lint:fix && pnpm run lint:vitest:fix",
+    "lint": "pnpm run build && pnpm -r run lint && pnpm run lint:tooling && pnpm run lint:vitest",
+    "lint:fix": "pnpm run build && pnpm -r run lint:fix && pnpm run lint:tooling:fix && pnpm run lint:vitest:fix",
+    "lint:tooling": "oxlint --config oxlint.shared.json .agents/skills .github/scripts scripts",
+    "lint:tooling:fix": "oxlint --config oxlint.shared.json .agents/skills .github/scripts scripts --fix",
     "lint:vitest": "oxlint --config oxlint.vitest.json .",
     "lint:vitest:fix": "oxlint --config oxlint.vitest.json . --fix",
     "knip": "pnpm run build && pnpm -r run knip",
@@ -42,22 +49,23 @@
     "perf:typecheck": "pnpm --filter example perf:typecheck"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "1.0.0-next.6",
-    "@changesets/cli": "3.0.0-next.8",
+    "@changesets/changelog-github": "1.0.0",
+    "@changesets/cli": "3.0.1",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.3",
-    "knip": "6.26.0",
+    "eslint-plugin-zod": "4.9.1",
+    "knip": "6.32.2",
     "lefthook": "2.1.10",
     "madge": "8.0.0",
-    "oxfmt": "0.58.0",
-    "oxlint": "1.73.0",
-    "pkg-pr-new": "0.0.75",
-    "publint": "0.3.21",
-    "tsx": "4.23.0",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.79.0",
+    "pkg-pr-new": "0.0.88",
+    "publint": "0.3.24",
+    "tsx": "4.23.12",
     "typescript": "6.0.3"
   },
   "engines": {
-    "node": ">= 22.14.0"
+    "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@11.11.0"
+  "packageManager": "pnpm@11.22.0"
 }

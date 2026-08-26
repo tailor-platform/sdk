@@ -6,6 +6,7 @@ import { workspaceArgs } from "#/cli/shared/args";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
@@ -22,7 +23,13 @@ async function fetchOIDCDiscovery(
   providerUrl: string,
 ): Promise<{ authorization_endpoint: string }> {
   const url = providerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
-  const response = await fetch(url);
+  // A fetch failure rejects with TypeError, which the top-level handler
+  // classifies as an SDK bug and crash-reports.
+  const response = await fetch(url).catch((error: unknown) => {
+    throw new Error(`Failed to fetch OIDC discovery from ${url}: ${toError(error).message}`, {
+      cause: error,
+    });
+  });
   if (!response.ok) {
     throw new Error(`Failed to fetch OIDC discovery from ${url}: ${response.status}`);
   }
@@ -38,27 +45,21 @@ function randomState() {
 export const authorizeAuthConnectionCommand = defineAppCommand({
   name: "authorize",
   description: "Authorize an auth connection via OAuth2 flow.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...connectionNameArgs,
-      scopes: z
-        .string()
-        .optional()
-        .default(defaultScopes)
-        .describe("OAuth2 scopes to request (comma-separated)"),
-      port: z.coerce
-        .number()
-        .optional()
-        .default(defaultPort)
-        .describe("Local callback server port"),
-      "no-browser": z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Don't open browser automatically"),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...connectionNameArgs,
+    scopes: z
+      .string()
+      .optional()
+      .default(defaultScopes)
+      .describe("OAuth2 scopes to request (comma-separated)"),
+    port: z.coerce.number().optional().default(defaultPort).describe("Local callback server port"),
+    "no-browser": z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Don't open browser automatically"),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({
@@ -112,7 +113,10 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
     authUrl.searchParams.set("access_type", "offline");
 
     await new Promise<void>((resolve, reject) => {
-      const server = http.createServer(async (req, res) => {
+      const handleCallback = async (
+        req: http.IncomingMessage,
+        res: http.ServerResponse,
+      ): Promise<void> => {
         if (!req.url?.startsWith("/callback")) {
           res.writeHead(404);
           res.end("Not found");
@@ -155,9 +159,10 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           res.writeHead(400, { "Content-Type": "text/plain" });
           res.end(`Authorization failed: ${err instanceof Error ? err.message : "Unknown error"}`);
           server.close();
-          reject(err);
+          reject(toError(err));
         }
-      });
+      };
+      const server = http.createServer((req, res) => void handleCallback(req, res));
 
       const timeout = setTimeout(
         () => {
@@ -185,12 +190,12 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         logger.warn(
           `Could not start the local callback server on port ${args.port}${code ? ` (${code})` : ""}.\n` +
             `${portHint}\n` +
-            `  tailor-sdk authconnection open`,
+            `  tailor authconnection open`,
         );
         reject(err);
       });
 
-      server.listen(args.port, async () => {
+      const announceAuthorizeUrl = async (): Promise<void> => {
         const authorizeUrl = authUrl.toString();
         logger.info(
           args["no-browser"]
@@ -199,7 +204,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         );
         logger.info(
           `If this flow doesn't complete, you can authorize via the Console instead:\n` +
-            `  tailor-sdk authconnection open`,
+            `  tailor authconnection open`,
         );
         if (!args["no-browser"]) {
           try {
@@ -210,7 +215,8 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
             );
           }
         }
-      });
+      };
+      server.listen(args.port, () => void announceAuthorizeUrl());
     });
 
     logger.success(`Auth connection "${args.name}" authorized successfully.`);

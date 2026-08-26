@@ -1,6 +1,11 @@
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { waitForExecution, executeScript, DEFAULT_POLL_INTERVAL } from "./script-executor";
+import {
+  waitForExecution,
+  executeScript,
+  DEFAULT_POLL_INTERVAL,
+  type ScriptExecutionOptions,
+} from "./script-executor";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
@@ -39,6 +44,7 @@ describe("waitForExecution", () => {
   test.each([
     [FunctionExecution_Status.SUCCESS, "test logs", '{"success":true}'],
     [FunctionExecution_Status.FAILED, "error logs", "Error: something went wrong"],
+    [FunctionExecution_Status.CANCELED, "canceled logs", "Execution canceled"],
   ])("returns immediately when execution is %s", async (status, logs, result) => {
     const client = createMockClient({
       getFunctionExecution: vi.fn().mockResolvedValue(execution(status, logs, result)),
@@ -107,6 +113,34 @@ describe("waitForExecution", () => {
     expect(result.logs).toBe("final logs");
   });
 
+  test("polls through suspended and canceling states until cancellation completes", async () => {
+    const getFunctionExecution = vi
+      .fn()
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.SUSPEND, "", ""))
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.CANCELING, "", ""))
+      .mockResolvedValueOnce(
+        execution(FunctionExecution_Status.CANCELED, "canceled logs", "Execution canceled"),
+      );
+
+    const client = createMockClient({ getFunctionExecution });
+    const resultPromise = waitForExecution(client, "workspace-1", "exec-1", 100);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getFunctionExecution).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(getFunctionExecution).toHaveBeenCalledTimes(3);
+
+    await expect(resultPromise).resolves.toMatchObject({
+      status: FunctionExecution_Status.CANCELED,
+      logs: "canceled logs",
+      result: "Execution canceled",
+    });
+  });
+
   test("uses default poll interval", async () => {
     const getFunctionExecution = vi
       .fn()
@@ -165,7 +199,7 @@ describe("executeScript", () => {
       workspaceId: "workspace-1",
       name: "test-script.js",
       code: "export function main() { return { success: true }; }",
-      arg: '{"input":"value"}',
+      arg: { input: "value" },
       invoker: mockAuthInvoker,
     });
 
@@ -195,6 +229,29 @@ describe("executeScript", () => {
     });
 
     expect(client.testExecScript).toHaveBeenCalledWith(expect.objectContaining({ arg: "{}" }));
+  });
+
+  test("accepts options typed as the bare ScriptExecutionOptions", async () => {
+    const client = createMockClient({
+      testExecScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
+      getFunctionExecution: vi.fn().mockResolvedValue({
+        execution: { status: FunctionExecution_Status.SUCCESS, logs: "", result: "" },
+      }),
+    });
+
+    // Regression: a typed-out options object must stay assignable to
+    // executeScript's parameter (arg is Jsonifiable, usable on its own).
+    const options: ScriptExecutionOptions = {
+      client,
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "code",
+      arg: { a: 1 },
+      invoker: mockAuthInvoker,
+    };
+
+    const result = await executeScript(options);
+    expect(result.success).toBe(true);
   });
 
   test("returns failure result when script fails", async () => {
@@ -233,6 +290,21 @@ describe("executeScript", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Script execution failed with unknown error");
+  });
+
+  test("returns a cancellation error when a canceled execution has no result", async () => {
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.CANCELED, "", ""));
+
+    const result = await executeScript({
+      client,
+      workspaceId: "workspace-1",
+      name: "canceled-script.js",
+      code: "code",
+      invoker: mockAuthInvoker,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Script execution was canceled");
   });
 
   test("uses custom poll interval", async () => {

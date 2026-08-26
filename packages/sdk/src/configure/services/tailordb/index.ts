@@ -6,6 +6,7 @@ export {
   type TailorDBType,
 } from "./schema";
 export type { TailorDBInstance } from "./schema";
+export type { IsAutoFilledDBField, IsReadOnlyDBField } from "./types";
 export {
   unsafeAllowAllTypePermission,
   unsafeAllowAllGqlPermission,
@@ -13,6 +14,3 @@ export {
   type TailorTypeGqlPermission,
   type PermissionCondition,
 } from "./permission";
-export type { Hook, TypeFeatures } from "./types";
-export type { TailorDBServiceConfig } from "#/types/tailordb.generated";
-export type { DBFieldMetadata, GqlOperationsConfig, TailorDBServiceInput } from "./types";

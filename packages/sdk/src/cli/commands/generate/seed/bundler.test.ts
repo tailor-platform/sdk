@@ -1,23 +1,85 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { afterAll, afterEach, aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleSeedScript } from "./bundler";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 
+type SeedInput = {
+  data: Record<string, Record<string, unknown>[]>;
+  order: string[];
+  selfRefTypes: string[];
+  upsert?: boolean;
+};
+
+type SeedResult = {
+  success: boolean;
+  processed: Record<string, { inserted: number; updated: number; skipped: number }>;
+  errors: string[];
+};
+
+type RecordedQuery = { sql: string; parameters: readonly unknown[] };
+
+/**
+ * Install a `tailordb` global that records the SQL the bundled seed script issues.
+ * @param existingIds IDs returned by TailorDB's existence probe
+ * @returns Queries recorded so far, in execution order
+ */
+function stubTailordb(existingIds: string[] = []): RecordedQuery[] {
+  const queries: RecordedQuery[] = [];
+  const existing = new Set(existingIds);
+  vi.stubGlobal("tailordb", {
+    Client: class {
+      async connect() {}
+      async end() {}
+      async queryObject(sql: string, parameters: readonly unknown[]) {
+        queries.push({ sql, parameters });
+        if (sql.startsWith("select")) {
+          const rows = parameters
+            .filter((parameter): parameter is string => typeof parameter === "string")
+            .filter((id) => existing.has(id))
+            .map((id) => ({ id }));
+          return { rows, command: "SELECT", rowCount: rows.length };
+        }
+        return { rows: [], command: "INSERT", rowCount: 1 };
+      }
+    },
+  });
+  return queries;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+afterAll(() => {
+  fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });
+});
+
 describe("seed-bundler", () => {
-  beforeEach(() => {
-    // Set TAILOR_SDK_OUTPUT_DIR to test directory so bundled output goes into test directory
+  aroundEach(async (runTest) => {
+    // Set TAILOR_BUILD_OUTPUT_DIR to test directory so bundled output goes into test directory
     const testDir = path.join(
       TEST_BUNDLER_BASE,
       `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+  aroundAll(async (runSuite) => {
+    await runSuite();
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });
     } catch {
@@ -54,5 +116,182 @@ describe("seed-bundler", () => {
       expect(result.bundledCode).toContain("getDB");
       expect(result.bundledCode).toContain('"custom-namespace"');
     });
+
+    test("resolves the tsconfig from the provided project directory", async () => {
+      const projectDir = path.join(TEST_BUNDLER_BASE, "project");
+      fs.mkdirSync(projectDir, { recursive: true });
+      vi.mocked(resolveTSConfig).mockClear();
+
+      await bundleSeedScript("tailordb", ["User"], projectDir);
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(projectDir);
+    });
+
+    test("generates split insert and update logic gated on the runtime upsert input", async () => {
+      const result = await bundleSeedScript("tailordb", ["User"]);
+
+      expect(result.bundledCode).toContain("selectFrom");
+      expect(result.bundledCode).toContain("updateTable");
+      expect(result.bundledCode).toContain("upsert");
+    });
+
+    test("probes and updates by id", async () => {
+      const result = await bundleSeedScript("tailordb", ["User"]);
+
+      expect(result.bundledCode).toContain('select("id")');
+      expect(result.bundledCode).toContain('where("id", "in"');
+      expect(result.bundledCode).toContain('where("id", "="');
+    });
+  });
+});
+
+describe("seed script upsert behavior", () => {
+  const loadMain = async (namespace: string, tableNames: string[]) => {
+    const { bundledCode } = await bundleSeedScript(namespace, tableNames);
+    const modulePath = path.join(
+      process.env.TAILOR_BUILD_OUTPUT_DIR as string,
+      `main-${namespace}.mjs`,
+    );
+    fs.writeFileSync(modulePath, bundledCode);
+    return (await import(/* @vite-ignore */ modulePath)) as {
+      main: (input: SeedInput) => Promise<SeedResult>;
+    };
+  };
+
+  aroundEach(async (runTest) => {
+    const testDir = path.join(
+      TEST_BUNDLER_BASE,
+      `upsert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
+  });
+
+  aroundAll(async (runSuite) => {
+    await runSuite();
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
+  });
+
+  test("inserts new rows and updates existing rows when upsert is enabled", async () => {
+    const queries = stubTailordb(["u2"]);
+    const { main } = await loadMain("tailordb", ["User"]);
+
+    const result = await main({
+      data: {
+        User: [
+          { id: "u1", name: "Alice" },
+          { id: "u2", name: "Bob" },
+        ],
+      },
+      order: ["User"],
+      selfRefTypes: [],
+      upsert: true,
+    });
+
+    expect(queries.map(({ sql }) => sql.split(" ")[0])).toEqual(["select", "insert", "update"]);
+    expect(queries[1]?.parameters).toContain("u1");
+    expect(queries[1]?.parameters).not.toContain("u2");
+    expect(queries[2]?.parameters).toContain("u2");
+    expect(queries.every(({ sql }) => !sql.includes("on conflict"))).toBe(true);
+    expect(result.processed.User).toEqual({ inserted: 1, updated: 1, skipped: 0 });
+  });
+
+  test("does not probe or update when upsert is disabled", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["User"]);
+
+    const result = await main({
+      data: { User: [{ id: "u1", name: "Alice" }] },
+      order: ["User"],
+      selfRefTypes: [],
+      upsert: false,
+    });
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.sql).toMatch(/^insert /);
+    expect(result.processed.User).toEqual({ inserted: 1, updated: 0, skipped: 0 });
+  });
+
+  test("reports progress after each batch when upsert is disabled", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["User"]);
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const records = Array.from({ length: 101 }, (_, index) => ({
+      id: `u${index + 1}`,
+      name: `User ${index + 1}`,
+    }));
+
+    const result = await main({
+      data: { User: records },
+      order: ["User"],
+      selfRefTypes: [],
+      upsert: false,
+    });
+
+    expect(queries).toHaveLength(2);
+    expect(logSpy).toHaveBeenNthCalledWith(1, "[tailordb] User: 100/101");
+    expect(logSpy).toHaveBeenNthCalledWith(2, "[tailordb] User: 101/101");
+    expect(result.processed.User).toEqual({ inserted: 101, updated: 0, skipped: 0 });
+  });
+
+  test("updates only columns present in an existing row", async () => {
+    const queries = stubTailordb(["u2"]);
+    const { main } = await loadMain("tailordb", ["User"]);
+
+    await main({
+      data: {
+        User: [{ id: "u2", name: "Bob" }],
+      },
+      order: ["User"],
+      selfRefTypes: [],
+      upsert: true,
+    });
+
+    const update = queries.find(({ sql }) => sql.startsWith("update"));
+    const setClause = (update?.sql ?? "").split(" where ")[0];
+    expect(setClause).toContain('"name" =');
+    expect(setClause).not.toContain('"id" =');
+    expect(setClause).not.toContain('"email" =');
+  });
+
+  test("counts an id-only existing row as skipped", async () => {
+    const queries = stubTailordb(["u1"]);
+    const { main } = await loadMain("tailordb", ["User"]);
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const result = await main({
+      data: { User: [{ id: "u1" }] },
+      order: ["User"],
+      selfRefTypes: [],
+      upsert: true,
+    });
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.sql).toMatch(/^select /);
+    expect(result.processed.User).toEqual({ inserted: 0, updated: 0, skipped: 1 });
+    expect(logSpy).toHaveBeenCalledWith("[tailordb] User: 0 inserted, 0 updated, 1 skipped");
+  });
+
+  test("inserts self-referencing types one-by-one after the id probe", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c1", parentId: null },
+          { id: "c2", parentId: "c1" },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    expect(queries).toHaveLength(3);
+    expect(queries[0]?.sql).toMatch(/^select /);
+    expect(queries.slice(1).every(({ sql }) => sql.startsWith("insert"))).toBe(true);
   });
 });

@@ -82,48 +82,11 @@ export type WatchExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> 
   showProgress?: boolean;
 };
 
-/**
- * @deprecated Use ListExecutorJobsTypedOptions instead.
- */
-export interface ListExecutorJobsOptions {
-  executorName: string;
-  status?: string;
-  order?: Order;
-  limit?: number;
-  workspaceId?: string;
-  profile?: string;
-}
-
-/**
- * @deprecated Use GetExecutorJobTypedOptions instead.
- */
-export interface GetExecutorJobOptions {
-  executorName: string;
-  jobId: string;
-  attempts?: boolean;
-  workspaceId?: string;
-  profile?: string;
-}
-
-/**
- * @deprecated Use WatchExecutorJobTypedOptions instead.
- */
-export interface WatchExecutorJobOptions {
-  executorName: string;
-  jobId: string;
-  workspaceId?: string;
-  profile?: string;
-  interval?: number;
-  timeout?: number;
-  logs?: boolean;
-  showProgress?: boolean;
-}
-
 export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
   attempts?: ExecutorJobAttemptInfo[];
 }
 
-export interface WorkflowJobLog {
+interface WorkflowJobLog {
   jobName: string;
   logs?: string;
   result?: string;
@@ -171,15 +134,8 @@ function createUnknownExecutorJob(executorName: string, jobId: string): Executor
  */
 export async function listExecutorJobs<E extends ExecutorLike>(
   options: ListExecutorJobsTypedOptions<E>,
-): Promise<ExecutorJobListInfo[]>;
-export async function listExecutorJobs(
-  options: ListExecutorJobsOptions,
-): Promise<ExecutorJobListInfo[]>;
-export async function listExecutorJobs<E extends ExecutorLike>(
-  options: ListExecutorJobsOptions | ListExecutorJobsTypedOptions<E>,
 ): Promise<ExecutorJobListInfo[]> {
-  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
-  const executorName = "executorName" in options ? options.executorName : options.executor.name;
+  const executorName = options.executor.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -240,15 +196,8 @@ export async function listExecutorJobs<E extends ExecutorLike>(
  */
 export async function getExecutorJob<E extends ExecutorLike>(
   options: GetExecutorJobTypedOptions<E>,
-): Promise<ExecutorJobDetailInfo>;
-export async function getExecutorJob(
-  options: GetExecutorJobOptions,
-): Promise<ExecutorJobDetailInfo>;
-export async function getExecutorJob<E extends ExecutorLike>(
-  options: GetExecutorJobOptions | GetExecutorJobTypedOptions<E>,
 ): Promise<ExecutorJobDetailInfo> {
-  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
-  const executorName = "executorName" in options ? options.executorName : options.executor.name;
+  const executorName = options.executor.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -307,15 +256,8 @@ export async function getExecutorJob<E extends ExecutorLike>(
  */
 export async function watchExecutorJob<E extends ExecutorLike>(
   options: WatchExecutorJobTypedOptions<E>,
-): Promise<WatchExecutorJobResult>;
-export async function watchExecutorJob(
-  options: WatchExecutorJobOptions,
-): Promise<WatchExecutorJobResult>;
-export async function watchExecutorJob<E extends ExecutorLike>(
-  options: WatchExecutorJobOptions | WatchExecutorJobTypedOptions<E>,
 ): Promise<WatchExecutorJobResult> {
-  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
-  const executorName = "executorName" in options ? options.executorName : options.executor.name;
+  const executorName = options.executor.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -683,6 +625,9 @@ export function getExecutorWaitFailureMessage(result: WatchExecutorJobResult): s
   if (result.functionStatus === "FAILED") {
     return `Function execution '${result.functionExecutionId}' failed.`;
   }
+  if (result.functionStatus === "CANCELED") {
+    return `Function execution '${result.functionExecutionId}' was canceled.`;
+  }
   return undefined;
 }
 
@@ -739,54 +684,52 @@ export const jobsCommand = defineAppCommand({
       desc: "Wait for job with logs",
     },
   ],
-  args: z
-    .object({
-      ...workspaceArgs,
-      "executor-name": arg(z.string(), {
-        positional: true,
-        description: "Executor name",
-      }),
-      "job-id": arg(z.string().optional(), {
-        positional: true,
-        description: "Job ID (if provided, shows job details)",
-      }),
-      status: arg(z.string().optional(), {
-        alias: "s",
-        description:
-          "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)",
-      }),
-      attempts: arg(z.boolean().default(false), {
-        description: "Show job attempts (only with job ID) (detail mode only)",
-      }),
-      wait: arg(z.boolean().default(false), {
-        alias: "W",
-        description:
-          "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
-      }),
-      interval: arg(durationArg.default("3s"), {
-        alias: "i",
-        description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
-      }),
-      timeout: arg(durationArg.default("5m"), {
-        alias: "t",
-        description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
-      }),
-      ...pagedLogArgs,
-      limit: arg(nonNegativeIntArg.default(50), {
-        description: "Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)",
-      }),
-      logs: arg(z.boolean().default(false), {
-        alias: "l",
-        description: "Display function execution logs after completion (requires --wait)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    "executor-name": arg(z.string(), {
+      positional: true,
+      description: "Executor name",
+    }),
+    "job-id": arg(z.string().optional(), {
+      positional: true,
+      description: "Job ID (if provided, shows job details)",
+    }),
+    status: arg(z.string().optional(), {
+      alias: "s",
+      description:
+        "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)",
+    }),
+    attempts: arg(z.boolean().default(false), {
+      description: "Show job attempts (only with job ID) (detail mode only)",
+    }),
+    wait: arg(z.boolean().default(false), {
+      alias: "W",
+      description:
+        "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
+    }),
+    interval: arg(durationArg.default("3s"), {
+      alias: "i",
+      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
+    }),
+    timeout: arg(durationArg.default("5m"), {
+      alias: "t",
+      description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
+    }),
+    ...pagedLogArgs,
+    limit: arg(nonNegativeIntArg.default(50), {
+      description: "Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)",
+    }),
+    logs: arg(z.boolean().default(false), {
+      alias: "l",
+      description: "Display function execution logs after completion (requires --wait)",
+    }),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode || args.json;
     if (args.jobId) {
       if (args.wait) {
         const result = await watchExecutorJob({
-          executorName: args.executorName,
+          executor: { name: args.executorName },
           jobId: args.jobId,
           workspaceId: args["workspace-id"],
           profile: args.profile,
@@ -854,7 +797,7 @@ export const jobsCommand = defineAppCommand({
       }
 
       const job = await getExecutorJob({
-        executorName: args.executorName,
+        executor: { name: args.executorName },
         jobId: args.jobId,
         attempts: args.attempts,
         workspaceId: args["workspace-id"],
@@ -870,7 +813,7 @@ export const jobsCommand = defineAppCommand({
         logger.warn("--wait flag is ignored in list mode. Specify a job ID to wait.");
       }
       const jobs = await listExecutorJobs({
-        executorName: args.executorName,
+        executor: { name: args.executorName },
         status: args.status,
         order: args.order,
         limit: args.limit,

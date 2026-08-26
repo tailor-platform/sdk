@@ -127,6 +127,27 @@ describe("normalizeIdPActionPermission", () => {
     });
   });
 
+  describe("Operand guards", () => {
+    test("passes through an array carrying a user property unchanged", () => {
+      const operand = ["ADMIN", "MANAGER"];
+      (operand as unknown as { user: string }).user = "role";
+      const result = normalizeIdPActionPermission({
+        conditions: [[{ user: "role" }, "in", operand]],
+        permit: true,
+      });
+      expect(result.conditions[0]![2]).toBe(operand);
+    });
+
+    test("rejects a null operand", () => {
+      expect(() =>
+        normalizeIdPActionPermission({
+          conditions: [[{ user: "role" }, "=", null]],
+          permit: true,
+        }),
+      ).toThrow("Invalid permission operand: null");
+    });
+  });
+
   describe("array shorthand format", () => {
     test("normalizes single condition array", () => {
       const result = normalizeIdPActionPermission([{ user: "role" }, "=", "ADMIN"]);
@@ -195,8 +216,6 @@ describe("normalizeIdPPermission", () => {
 });
 
 describe("findOmittedPermitRules", () => {
-  type RawIdPPermission = NonNullable<Parameters<typeof findOmittedPermitRules>[0]>;
-
   test.each([
     [
       "flags object-form rules that omit permit",
@@ -247,7 +266,7 @@ describe("findOmittedPermitRules", () => {
       ["unenrollMfa[0]"],
     ],
   ] as const)("%s", (_name, permission, expected) => {
-    const result = findOmittedPermitRules(permission as RawIdPPermission);
+    const result = findOmittedPermitRules(permission);
     expect(result).toEqual(expected);
   });
 

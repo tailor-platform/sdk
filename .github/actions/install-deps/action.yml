@@ -10,10 +10,9 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
       name: Install pnpm
       with:
-        standalone: true
         run_install: false
 
     # `cache: pnpm` requires pnpm on PATH, so pnpm/action-setup must run first.
@@ -32,12 +31,9 @@ runs:
       run: pnpm install
       shell: bash
 
-    # Build SDK so that the bin entry points to a real dist file
-    - name: Build SDK package
-      run: pnpm --filter @tailor-platform/sdk run build
-      shell: bash
-
-    # Re-link workspace bin entries after their SDK target has been built.
-    - name: Re-link SDK bin entries after build
-      run: pnpm --filter '...@tailor-platform/sdk' --filter '!@tailor-platform/sdk' rebuild --pending
+    # Build the SDK and CLI plugins so their import entries point to real dist
+    # files. Their bins are committed launchers, so pnpm links them at install
+    # time and no re-link after the build is needed.
+    - name: Build SDK packages
+      run: pnpm --filter @tailor-platform/sdk --filter @tailor-platform/sdk-plugin-seed --filter @tailor-platform/sdk-plugin-tailordb-erd run build
       shell: bash

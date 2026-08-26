@@ -1,14 +1,12 @@
 {
   "name": "example",
-  "version": "0.0.0",
   "private": true,
   "description": "Example for Tailor Platform SDK usage",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "generate": "tailor-sdk generate -c tailor.config.ts",
-    "generate:watch": "tailor-sdk generate -c tailor.config.ts --watch",
-    "deploy": "tailor-sdk deploy -c tailor.config.ts",
+    "generate": "tailor generate -c tailor.config.ts",
+    "deploy": "tailor deploy -c tailor.config.ts",
     "test": "pnpm test:generator",
     "test:all": "pnpm test:generator:prepare && vitest",
     "test:generator": "pnpm test:generator:prepare && vitest --project generator",
@@ -16,9 +14,9 @@
     "test:generator:update-expects": "tsx tests/scripts/generate_files.ts expected",
     "test:e2e": "vitest --project e2e",
     "migration:e2e": "tsx tests/scripts/migration_e2e.ts",
-    "seed:validate": "node ./seed/exec.mjs validate",
-    "seed:truncate": "tailor-sdk tailordb truncate -a",
-    "seed": "node ./seed/exec.mjs",
+    "seed:validate": "tailor seed validate",
+    "seed:truncate": "tailor tailordb truncate -a",
+    "seed": "tailor seed apply",
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "oxlint --type-aware .",
     "lint:fix": "oxlint --type-aware . --fix",
@@ -32,23 +30,27 @@
     "date-fns": "4.4.0"
   },
   "devDependencies": {
-    "@bufbuild/protobuf": "2.12.1",
+    "@bufbuild/protobuf": "2.14.0",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-node": "2.1.2",
+    "@electric-sql/pglite": "0.5.6",
+    "@tailor-platform/sdk-plugin-seed": "workspace:^",
+    "@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
     "@types/node": "24.13.3",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "eslint-plugin-zod": "4.9.1",
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
-    "oxfmt": "0.58.0",
-    "oxlint": "1.73.0",
-    "oxlint-tsgolint": "0.24.0",
-    "tsdown": "0.22.5",
-    "tsx": "4.23.0",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.79.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "tsdown": "0.22.14",
+    "tsx": "4.23.12",
     "typescript": "6.0.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "engines": {
-    "node": ">= 22.14.0"
+    "node": ">= 22.18.0"
   }
 }

@@ -1,0 +1,7 @@
+jobs:
+  seed:
+    command:
+      - node
+      - --no-warnings
+      - seed/exec.mjs
+      - --yes

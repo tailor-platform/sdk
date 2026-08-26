@@ -11,7 +11,7 @@
     "dist/",
     "src/types/*.generated.ts",
     "e2e/fixtures/",
-    ".tailor-sdk/",
+    ".tailor/",
     "tailor.d.ts",
     "plugin-defined.d.ts",
     "**/__test_fixtures__/dist/",
@@ -32,11 +32,26 @@
     "no-regex-spaces": "error",
     "no-unexpected-multiline": "error",
     "preserve-caught-error": "error",
-    "typescript/await-thenable": "off",
+    "typescript/await-thenable": "error",
     "typescript/no-array-delete": "off",
     "typescript/no-base-to-string": "off",
     "typescript/no-duplicate-type-constituents": "off",
-    "typescript/no-floating-promises": "off",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/only-throw-error": [
+      "error",
+      {
+        "allow": [{ "from": "file", "name": "PendingStart" }]
+      }
+    ],
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      {
+        "considerDefaultExhaustiveForUnions": true
+      }
+    ],
+    "no-param-reassign": "error",
     "typescript/no-for-in-array": "off",
     "typescript/no-implied-eval": "off",
     "typescript/no-meaningless-void-operator": "off",
@@ -49,6 +64,7 @@
     "typescript/restrict-template-expressions": "off",
     "typescript/unbound-method": "off",
     "typescript/no-unnecessary-condition": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
     "typescript/no-non-null-assertion": "error",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
@@ -72,14 +88,14 @@
     "jsdoc/require-yields": "warn",
     "import/no-named-as-default": "warn",
     "import/no-named-as-default-member": "warn",
-    "import/no-duplicates": "warn",
+    "import/no-duplicates": ["error", { "considerQueryString": true }],
     "typescript/ban-ts-comment": [
       "error",
       {
         "ts-ignore": "allow-with-description",
         "ts-expect-error": "allow-with-description",
-        "ts-nocheck": "ban",
-        "ts-check": "ban"
+        "ts-nocheck": true,
+        "ts-check": true
       }
     ],
     "typescript/no-empty-object-type": "error",
@@ -89,7 +105,10 @@
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-unsafe-function-type": "error",
     "local/no-deprecated-type-matcher": "error",
-    "local/require-param-strict": "error"
+    "local/require-param-strict": "error",
+    "tailor-zod/require-object-policy-comment": "error",
+    "zod/prefer-loose-object": "error",
+    "zod/prefer-strict-object": "error"
   },
   "overrides": [
     {
@@ -210,10 +229,14 @@
                   "#/utils/**",
                   "!**/utils/brand",
                   "!#/utils/brand",
+                  "!**/utils/wait-point-registry",
+                  "!#/utils/wait-point-registry",
+                  "!**/utils/wait-point-key-grammar",
+                  "!#/utils/wait-point-key-grammar",
                   "!**/utils/test/**",
                   "!#/utils/test/**"
                 ],
-                "message": "Configure module can only import `brand` or `test/*` from utils module."
+                "message": "Configure module can only import `brand`, `wait-point-key-grammar`, `wait-point-registry` or `test/*` from utils module."
               },
               {
                 "group": ["zod"],
@@ -351,6 +374,22 @@
       }
     },
     {
+      "files": ["src/vitest/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "#/cli/**"],
+                "message": "Vitest module is loaded in user test environments and must not import from cli module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/cli/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
@@ -361,10 +400,6 @@
                 "name": "node:util",
                 "importNames": ["styleText"],
                 "message": "Use colors/symbols/logger from '#/cli/shared/logger' instead of styleText for consistent styling."
-              },
-              {
-                "name": "chalk",
-                "message": "Use colors/symbols/logger from '#/cli/shared/logger' instead of chalk for consistent styling."
               },
               {
                 "name": "table",
@@ -466,5 +501,9 @@
   "options": {
     "typeAware": true
   },
-  "jsPlugins": ["./oxlint-plugins/index.js"]
+  "jsPlugins": [
+    "./oxlint-plugins/index.js",
+    "eslint-plugin-zod",
+    "../../scripts/oxlint/tailor-zod-plugin.cjs"
+  ]
 }

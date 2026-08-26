@@ -1,18 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isAbsolute } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { tailorRuntime } from "./index";
 
 describe("tailorRuntime", () => {
   const ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
-  let originalConfig: string | undefined;
 
-  beforeEach(() => {
-    originalConfig = process.env[ENV_VAR];
+  aroundEach(async (runTest) => {
+    const originalConfig = process.env[ENV_VAR];
     delete process.env[ENV_VAR];
-  });
-
-  afterEach(() => {
+    await runTest();
     if (originalConfig === undefined) delete process.env[ENV_VAR];
     else process.env[ENV_VAR] = originalConfig;
   });

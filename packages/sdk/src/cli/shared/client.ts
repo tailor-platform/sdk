@@ -10,7 +10,6 @@ import {
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
-import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
@@ -192,9 +191,10 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
 /**
  * Create an interceptor that retries failed unary requests with backoff.
  *
- * Retries unary methods on `Unavailable`/`ResourceExhausted`, and `Internal`
- * only for methods declared idempotent, up to 3 attempts. Workspace creation is
- * excluded because it has no idempotency key and a lost response is ambiguous.
+ * Retries unary methods on `Unavailable`/`ResourceExhausted`, and
+ * `Aborted`/`Internal` only for methods declared side-effect-free or idempotent,
+ * up to 3 attempts. Workspace creation is excluded because it has no idempotency
+ * key and a lost response is ambiguous.
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
@@ -212,7 +212,7 @@ export function retryInterceptor(): Interceptor {
     }
 
     let lastError: unknown;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
       if (i > 0) {
         await waitRetryBackoff(i);
       }
@@ -294,8 +294,10 @@ function connectCodeName(error: unknown): string {
  *
  * Membership is deliberately an allowlist, not `startsWith("Create")`: swallowing
  * synthesizes an empty response (see `synthesizeEmptyUnaryResponse`), which is only
- * safe when every caller ignores the response body. These are the deploy/apply
- * resource creations that fire under heavy parallelism and discard their response.
+ * safe when every caller tolerates an empty response body. These are the deploy/apply
+ * resource creations that fire under heavy parallelism and discard their response —
+ * except `CreateSecretManagerSecret`, whose caller reads `secret.updateTime` but
+ * degrades safely when it is absent (the next deploy re-updates the secret).
  *
  * Intentionally excluded because their callers read the response body — swallowing
  * would hand back an empty message and corrupt downstream state:
@@ -391,6 +393,9 @@ function synthesizeEmptyUnaryResponse(req: {
  */
 const RETRY_BASE_DELAY_MS = 500;
 
+/** Maximum number of attempts, including the initial one, for a retried request. */
+const MAX_RETRY_ATTEMPTS = 3;
+
 /**
  * Wait for an exponential backoff delay with jitter.
  * @param attempt - Current retry attempt number (1-based)
@@ -418,6 +423,7 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
     case Code.ResourceExhausted:
     case Code.Unavailable:
       return true;
+    case Code.Aborted:
     case Code.Internal:
       return (
         idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
@@ -430,21 +436,22 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
 
 /**
  * Create an interceptor that enhances error messages from the Operator API.
+ * @internal
  * @returns Error handling interceptor
  */
-function errorHandlingInterceptor(): Interceptor {
+export function errorHandlingInterceptor(): Interceptor {
   return (next) => async (req) => {
     try {
       return await next(req);
     } catch (error) {
       if (error instanceof ConnectError) {
         const { operation, resourceType } = parseMethodName(req.method.name);
-        const requestParams = formatRequestParams(req.message);
+        const identity = formatRequestIdentity(req.message, req.method.name);
 
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
         throw new ConnectError(
-          `Failed to ${operation} ${resourceType}: ${error.rawMessage}\nRequest: ${requestParams}`,
+          `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
           error.code,
           error.metadata,
         );
@@ -472,33 +479,75 @@ export function parseMethodName(methodName: string): {
   return { operation: action.toLowerCase(), resourceType: resource };
 }
 
-/**
- * JSON.stringify replacer that converts BigInt values to strings.
- * @param _key - Object key (unused)
- * @param value - Value to serialize
- * @returns Serializable value
- */
-function bigIntReplacer(_key: string, value: unknown): unknown {
-  if (typeof value === "bigint") {
-    return value.toString();
+// Identifier fields surfaced in enhanced error messages. Never add fields
+// that can carry secrets or PII (tokens, scripts, query args, secret values,
+// emails), and never add a suffix that could match them (e.g. "Key" would
+// match future key material).
+//
+// Platform-wide naming conventions: on every API, a top-level string field
+// with one of these names or suffixes is a resource identifier.
+const IDENTITY_KEYS = new Set(["name", "id"]);
+const IDENTITY_KEY_SUFFIXES = ["Name", "Id", "Namespace"];
+// Key read from nested resource messages (e.g. the type in a create request).
+// Only materialized protobuf messages (marked by $typeName) qualify: map and
+// Struct fields materialize without one, and their entries can carry values
+// the SDK does not control (e.g. metadata labels merged from the remote).
+const NESTED_IDENTITY_KEY = "name";
+// API-specific identifier fields, scoped to the RPC methods that define them
+// so a same-named field on an unrelated API is never surfaced by accident.
+const METHOD_IDENTITY_KEYS: Readonly<Record<string, readonly string[]>> = {
+  GetMetadata: ["trn"],
+  SetMetadata: ["trn"],
+  AddCustomDomain: ["domain"],
+  GetCustomDomain: ["domain"],
+  RemoveCustomDomain: ["domain"],
+  CreateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  UpdateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  GetWorkflowJobFunctionExecutionPolicyByKey: ["executionPolicyKey"],
+};
+
+function isIdentityKey(key: string, methodName: string): boolean {
+  if (key.startsWith("$")) {
+    return false;
   }
-  return value;
+  return (
+    IDENTITY_KEYS.has(key) ||
+    IDENTITY_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix)) ||
+    (METHOD_IDENTITY_KEYS[methodName]?.includes(key) ?? false)
+  );
 }
 
 /**
- * @internal
- * @param message - Request message to format
- * @returns Pretty-printed JSON or error placeholder
+ * Format an allowlisted identity suffix for enhanced error messages.
+ *
+ * Only resource identifiers are included — the rest of the request payload
+ * can carry credentials and must never reach terminal or CI logs.
+ * @param message - Request message to extract identifiers from
+ * @param methodName - RPC method name used to resolve method-scoped identifiers
+ * @returns Identity suffix like " (namespaceName: x, type.name: y)", or an empty string
  */
-export function formatRequestParams(message: unknown): string {
-  try {
-    if (message && typeof message === "object" && "toJson" in message) {
-      return JSON.stringify((message as { toJson: () => unknown }).toJson(), bigIntReplacer, 2);
-    }
-    return JSON.stringify(message, bigIntReplacer, 2);
-  } catch {
-    return "(unable to serialize request)";
+function formatRequestIdentity(message: unknown, methodName: string): string {
+  if (typeof message !== "object" || message === null) {
+    return "";
   }
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(message)) {
+    if (typeof value === "string" && value !== "" && isIdentityKey(key, methodName)) {
+      parts.push(`${key}: ${value}`);
+    } else if (
+      !key.startsWith("$") &&
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).$typeName === "string"
+    ) {
+      const nestedName = (value as Record<string, unknown>)[NESTED_IDENTITY_KEY];
+      if (typeof nestedName === "string" && nestedName !== "") {
+        parts.push(`${key}.${NESTED_IDENTITY_KEY}: ${nestedName}`);
+      }
+    }
+  }
+  return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
 }
 
 export const MAX_PAGE_SIZE = 1000;
@@ -640,7 +689,9 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
   }
 
   const rawJson = await resp.json();
+  // strip unknown keys
   const schema = z.object({
+    sub: z.string(),
     email: z.string(),
   });
   return schema.parse(rawJson);
@@ -743,14 +794,17 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   formData.append("client_id", clientId);
   formData.append("client_secret", clientSecret);
 
-  const resp = await fetch(tokenEndpoint, {
+  const request = {
     method: "POST",
     headers: {
       "User-Agent": await userAgent(),
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: formData,
-  });
+  };
+  const resp = await withConnectTimeoutRetry("machine user token request", () =>
+    fetch(tokenEndpoint, request),
+  );
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
     throw new Error(
@@ -759,12 +813,46 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   }
   const rawJson = await resp.json();
 
+  // strip unknown keys
   const schema = z.object({
     token_type: z.string(),
     access_token: z.string(),
     expires_in: z.number(),
   });
   return schema.parse(rawJson);
+}
+
+function isUndiciConnectTimeout(error: unknown): boolean {
+  if (!(error instanceof TypeError)) {
+    return false;
+  }
+  const cause = error.cause;
+  return cause instanceof Error && "code" in cause && cause.code === "UND_ERR_CONNECT_TIMEOUT";
+}
+
+/**
+ * Retry a request that failed before the connection was established.
+ *
+ * Only `UND_ERR_CONNECT_TIMEOUT` is retried: the request provably never reached
+ * the server, so replaying it cannot duplicate a server-side effect.
+ * @param label - Request description for the retry debug log
+ * @param send - Sends the request; called once per attempt
+ * @returns The first successful result
+ */
+async function withConnectTimeoutRetry<T>(label: string, send: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await send();
+    } catch (error) {
+      if (!isUndiciConnectTimeout(error) || attempt >= MAX_RETRY_ATTEMPTS) {
+        throw error;
+      }
+      logger.debug(
+        `retry: ${label} attempt ${attempt} failed with UND_ERR_CONNECT_TIMEOUT; retrying`,
+      );
+      await waitRetryBackoff(attempt);
+    }
+  }
 }
 
 /**
@@ -779,20 +867,36 @@ export async function fetchPlatformMachineUserToken(
   clientSecret: string,
   config?: PlatformClientConfig,
 ) {
-  const client = new OAuth2Client({
-    clientId,
-    clientSecret,
-    server: getPlatformBaseUrl(config),
-    discoveryEndpoint: oauth2DiscoveryEndpoint,
-  });
-  return await client.clientCredentials();
+  const server = getPlatformBaseUrl(config);
+  // A new client per attempt: OAuth2Client caches its discovery promise even when
+  // it rejects, so a reused client would replay the failure without re-requesting.
+  return await withConnectTimeoutRetry("platform machine user token request", () =>
+    new OAuth2Client({
+      clientId,
+      clientSecret,
+      server,
+      discoveryEndpoint: oauth2DiscoveryEndpoint,
+    }).clientCredentials(),
+  );
 }
 
 /**
- * Close undici's global HTTP connection pool to prevent libuv UV_HANDLE_CLOSING
+ * Close the global HTTP connection pool to prevent libuv UV_HANDLE_CLOSING
  * assertion failure on Windows at process exit (Node.js 23.x+).
  * See: https://github.com/nodejs/node/issues/56645
+ *
+ * The pool is reached through the global dispatcher symbol rather than the `undici`
+ * package: importing that package installs its own Agent over these same globals,
+ * replacing the HTTP stack Node's `fetch` already uses. The symbol is versioned per
+ * Dispatcher API generation, and the newest one wins because older symbols hold a
+ * wrapper around that same pool — closing both would destroy it twice.
  */
 export async function closeConnectionPool() {
-  await getGlobalDispatcher().close();
+  const globals = globalThis as Record<symbol, { close?: () => Promise<void> } | undefined>;
+  const dispatcher =
+    globals[Symbol.for("undici.globalDispatcher.2")] ??
+    globals[Symbol.for("undici.globalDispatcher.1")];
+  if (typeof dispatcher?.close === "function") {
+    await dispatcher.close();
+  }
 }

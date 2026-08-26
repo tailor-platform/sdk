@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -9,6 +9,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
+// strip unknown keys
 const listFunctionRegistriesOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
@@ -34,7 +35,7 @@ async function loadOptions(options: ListFunctionRegistriesOptions) {
   return {
     client,
     workspaceId,
-    order: result.data.order as Order | undefined,
+    order: result.data.order,
     limit: result.data.limit,
   };
 }
@@ -77,12 +78,10 @@ export async function listFunctionRegistries(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List function registries in a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const registries = await listFunctionRegistries({

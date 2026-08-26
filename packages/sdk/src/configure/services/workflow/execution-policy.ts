@@ -138,7 +138,7 @@ export function defineWorkflowExecutionPolicy<
 /**
  * Define a group of workflow job function execution policies. Property names
  * become the workspace-unique `name` and default `key` verbatim, matching the
- * mental model of {@link defineWaitPoints}. Provide `name` / `key` explicitly
+ * mental model of {@link createWaitPoints}. Provide `name` / `key` explicitly
  * to override the property-name default (for example, when the property name
  * is not valid for the execution policy grammar or when the runtime key
  * prefix needs to differ).
@@ -162,11 +162,11 @@ export function defineWorkflowExecutionPolicy<
  *   }),
  * }));
  *
- * // In a workflow job function:
- * await tailor.workflow.startJobFunction("worker", args, {
+ * // In a workflow job body:
+ * await worker.start(args, {
  *   executionPolicyKey: executionPolicies.premium.key,
  * });
- * await tailor.workflow.startJobFunction("worker", args, {
+ * await worker.start(args, {
  *   executionPolicyKey: executionPolicies["tenant-api"].keyFor(input.tenantId),
  * });
  */

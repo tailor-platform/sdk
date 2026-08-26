@@ -13,14 +13,16 @@ import {
   resolverExecutedTrigger,
   idpUserTrigger,
   authAccessTokenTrigger,
+  workflowExecutionTrigger,
+  workflowJobExecutionTrigger,
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
-import type { TailorInvoker } from "#/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
 import type { Operation } from "./operation";
 
 const createUserType = () =>
-  db.type("User", {
+  db.table("User", {
     name: db.string(),
     age: db.int(),
   });
@@ -74,7 +76,50 @@ describe("createExecutor", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args).toEqualTypeOf<Args & { invoker?: TailorInvoker }>();
+          expectTypeOf(args).toEqualTypeOf<Args & { invoker: TailorPrincipal | null }>();
+        },
+      },
+    });
+  });
+});
+
+describe("workflow execution triggers", () => {
+  test("preserves workflow filters and event names", () => {
+    const job = createWorkflowJob({ name: "main", body: () => {} });
+    const workflow = createWorkflow({ name: "orders", mainJob: job });
+
+    expect(
+      workflowExecutionTrigger({
+        workflow,
+        events: ["started", "completed"],
+      }),
+    ).toMatchObject({
+      kind: "workflowExecution",
+      workflowName: "orders",
+      events: ["workflow.workflow_execution.started", "workflow.workflow_execution.completed"],
+    });
+    expect(workflowJobExecutionTrigger({ workflow, events: ["wait_started"] })).toMatchObject({
+      kind: "workflowJobExecution",
+      workflowName: "orders",
+      events: ["workflow.workflow_execution.job_execution.wait_started"],
+    });
+  });
+
+  test("infers completed event results as a discriminated union", () => {
+    const job = createWorkflowJob({ name: "completed-main", body: () => {} });
+    const workflow = createWorkflow({ name: "completed-orders", mainJob: job });
+
+    createExecutor({
+      name: "on-workflow-completed",
+      trigger: workflowExecutionTrigger({ workflow, events: ["completed"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.success) {
+            expectTypeOf(args.error).toEqualTypeOf<undefined>();
+          } else {
+            expectTypeOf(args.error).toEqualTypeOf<string>();
+          }
         },
       },
     });
@@ -745,6 +790,16 @@ describe("resolverExecutedTrigger", () => {
   });
 });
 
+describe("record trigger table name", () => {
+  test.each([
+    ["recordCreatedTrigger", recordCreatedTrigger],
+    ["recordUpdatedTrigger", recordUpdatedTrigger],
+    ["recordDeletedTrigger", recordDeletedTrigger],
+  ])("%s carries the table name", (_name, trigger) => {
+    expect(trigger({ type: createUserType() }).tableName).toBe("User");
+  });
+});
+
 describe("recordTrigger (multi-event)", () => {
   test("can specify multiple events", () => {
     const trigger = recordTrigger({
@@ -756,7 +811,7 @@ describe("recordTrigger (multi-event)", () => {
       "tailordb.type_record.created",
       "tailordb.type_record.updated",
     ]);
-    expect(trigger.typeName).toBe("User");
+    expect(trigger.tableName).toBe("User");
   });
 
   test("args are a union of selected events with kind discriminant", () => {
@@ -972,7 +1027,7 @@ describe("functionTarget", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+          expectTypeOf(args.invoker).toEqualTypeOf<TailorPrincipal | null>();
         },
       },
     });
@@ -1197,6 +1252,60 @@ describe("workflowTarget", () => {
     expect(executor.operation.workflow.name).toBe("test-workflow");
   });
 
+  test("requires args for workflow with required input", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      // @ts-expect-error - args is required by the workflow's main job input
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+      },
+    });
+  });
+
+  test("accepts primitive static args", () => {
+    const primitiveJob = createWorkflowJob({
+      name: "primitive-input-job",
+      body: (input: string) => input,
+    });
+    const primitiveWorkflow = createWorkflow({
+      name: "primitive-input-workflow",
+      mainJob: primitiveJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: primitiveWorkflow,
+        args: "hello",
+      },
+    });
+  });
+
+  test("accepts array static args", () => {
+    const arrayJob = createWorkflowJob({
+      name: "array-input-job",
+      body: (input: string[]) => input.length,
+    });
+    const arrayWorkflow = createWorkflow({
+      name: "array-input-workflow",
+      mainJob: arrayJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: arrayWorkflow,
+        args: ["hello"],
+      },
+    });
+  });
+
   test("args can be a function", () => {
     createExecutor({
       name: "test",
@@ -1264,7 +1373,7 @@ describe("workflowTarget", () => {
     });
   });
 
-  test("can specify authInvoker", () => {
+  test("can specify invoker", () => {
     createExecutor({
       name: "test",
       trigger: scheduleTrigger({ cron: "0 12 * * *" }),
@@ -1272,7 +1381,7 @@ describe("workflowTarget", () => {
         kind: "workflow",
         workflow: testWorkflow,
         args: { orderId: "test-id" },
-        authInvoker: { namespace: "my-auth", machineUserName: "admin" },
+        invoker: "admin",
       },
     });
   });

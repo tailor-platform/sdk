@@ -6,6 +6,6 @@ export default createResolver({
   output: t.string(),
   body: (ctx) => {
     const { caller: user } = ctx;
-    return user.id;
+    return user?.id;
   },
 });

@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -39,15 +39,13 @@ function mockConfigWith(config: Record<string, unknown>): void {
 }
 
 describe("api command body auto-injection", () => {
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterAll(() => {
+    await runSuite();
     vi.unstubAllGlobals();
   });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadPlatformClientConfig).mockResolvedValue(undefined);
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -55,9 +53,7 @@ describe("api command body auto-injection", () => {
       ok: true,
       json: () => Promise.resolve({ result: "ok" }),
     });
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 

@@ -8,7 +8,7 @@
  * The fix ensures services are deleted AFTER the Application is deleted.
  *
  * Prerequisites:
- * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  */
 
@@ -16,7 +16,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, aroundAll } from "vitest";
 import { deploy } from "../src/cli/commands/deploy/deploy";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
@@ -50,7 +50,7 @@ describe("E2E: Service deletion order", () => {
   // Node.js module caching).
   const sharedTestAppId = crypto.randomUUID();
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
@@ -81,6 +81,8 @@ describe("E2E: Service deletion order", () => {
     const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
     fs.mkdirSync(nodeModulesDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
+
+    await runSuite();
   }, 120000); // 2 minute timeout for workspace creation
 
   /**
@@ -121,9 +123,9 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
-   * Helper to list all TailorDB type names in a namespace
+   * Helper to list all TailorDB table names in a namespace
    * @param namespace - TailorDB namespace name
-   * @returns List of type names in the namespace
+   * @returns List of table names in the namespace
    */
   async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
     const types: string[] = [];
@@ -200,7 +202,7 @@ describe("E2E: Service deletion order", () => {
   }
 
   /**
-   * Helper to create TailorDB type file
+   * Helper to create TailorDB table file
    */
   function createTailorDBTypeFile(): void {
     const tailordbDir = path.join(tempDir, "tailordb");
@@ -211,7 +213,7 @@ describe("E2E: Service deletion order", () => {
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
     role: db.string({ optional: true }),
@@ -225,7 +227,7 @@ export type user = typeof user;
   }
 
   /**
-   * Helper to create additional TailorDB type file
+   * Helper to create additional TailorDB table file
    */
   function createAdditionalTailorDBTypeFile(): void {
     const tailordbDir = path.join(tempDir, "extra-tailordb");
@@ -236,7 +238,7 @@ export type user = typeof user;
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const extraUser = db
-  .type("ExtraUser", {
+  .table("ExtraUser", {
     name: db.string(),
     email: db.string(),
   })
@@ -277,7 +279,7 @@ export default defineConfig({
     const services = await listTailorDBServiceNames();
     expect(services).toContain(sharedTailordbName);
 
-    // Verify: User type should exist in the namespace
+    // Verify: User table should exist in the namespace
     const types = await listTailorDBTypeNames(sharedTailordbName);
     expect(types).toContain("User");
   }, 120000);
@@ -318,7 +320,7 @@ export default defineConfig({
     expect(servicesAfterAdd).toContain(sharedTailordbName);
     expect(servicesAfterAdd).toContain(additionalTailordbName);
 
-    // Verify: each TailorDB namespace has its own type
+    // Verify: each TailorDB namespace has its own table
     const typesInShared = await listTailorDBTypeNames(sharedTailordbName);
     expect(typesInShared).toContain("User");
     const typesInAdditional = await listTailorDBTypeNames(additionalTailordbName);
@@ -546,7 +548,7 @@ export default defineConfig({
       }),
     );
 
-    // Update type file to add a new field (causing schema diff)
+    // Update table file to add a new field (causing schema diff)
     const tailordbDir = path.join(tempDir, "tailordb");
     fs.writeFileSync(
       path.join(tailordbDir, "user.ts"),
@@ -554,7 +556,7 @@ export default defineConfig({
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
     role: db.string({ optional: true }),
@@ -605,14 +607,14 @@ export default defineConfig({
       }),
     ).resolves.not.toThrow();
 
-    // Reset user type file to original state for cleanup
+    // Reset user table file to original state for cleanup
     fs.writeFileSync(
       path.join(tailordbDir, "user.ts"),
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
     role: db.string({ optional: true }),

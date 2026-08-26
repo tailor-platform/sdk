@@ -50,19 +50,19 @@ For more details, see the [Quickstart Guide](./docs/quickstart.md).
 
 ## Agent Skill
 
-Install the `tailor-sdk` skill from the locally installed SDK package:
+Install the `tailor` skill from the locally installed SDK package:
 
 ```bash
-npx tailor-sdk skills install
+npx @tailor-platform/sdk skills add
 
-# Example: install to Codex in non-interactive mode
-npx tailor-sdk skills install -a codex -y
+# Or refresh all skills owned by this CLI
+npx @tailor-platform/sdk skills sync
 ```
 
-This uses the `skills` CLI under the hood, sourcing the skill from
-`node_modules/@tailor-platform/sdk/agent-skills` so the skill version always matches
-the installed SDK version. Files are copied (not symlinked) so they survive
-`pnpm install` wiping `node_modules`.
+This sources the skill from `node_modules/@tailor-platform/sdk/agent-skills`
+so the skill version always matches the installed SDK version. Files are copied
+into the current project under `.agents/skills` and `.claude/skills`, so rerun
+`skills sync` after upgrading the SDK.
 
 ## Learn More
 
@@ -96,5 +96,5 @@ See [Create Tailor Platform SDK](https://github.com/tailor-platform/sdk/tree/mai
 
 ## Requirements
 
-- Node.js 22 or later (or Bun)
+- Node.js 22.18.0 or later (or Bun)
 - A Tailor Platform account ([request access](https://www.tailor.tech/demo))

@@ -1,0 +1,216 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
+import { loadFilesWithIgnores } from "./file-loader";
+
+// Delegates to the real implementation by default, so only the one test
+// that needs fs.globSync to throw has to override it.
+vi.mock("node:fs", async (importOriginal) => {
+  const original = await importOriginal<typeof fs>();
+  return { ...original, globSync: vi.fn(original.globSync) };
+});
+
+describe("loadFilesWithIgnores", () => {
+  const tmpDirs: string[] = [];
+
+  aroundEach(async (runTest) => {
+    await runTest();
+    for (const dir of tmpDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function makeDirWithFile(prefix: string, relativeFile: string): string {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+    tmpDirs.push(dir);
+    fs.mkdirSync(path.dirname(path.join(dir, relativeFile)), { recursive: true });
+    fs.writeFileSync(path.join(dir, relativeFile), "export const marker = true;\n");
+    return dir;
+  }
+
+  test("resolves file patterns relative to baseDir, not process.cwd()", () => {
+    const cwdDir = makeDirWithFile("file-loader-cwd-", "src/wrong.ts");
+    const targetDir = makeDirWithFile("file-loader-target-", "src/correct.ts");
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, targetDir);
+      expect(files).toEqual([path.join(targetDir, "src", "correct.ts")]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("falls back to process.cwd() when baseDir matches nothing", () => {
+    const cwdDir = makeDirWithFile("file-loader-cwd-fallback-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      expect(files).toEqual([path.join(process.cwd(), "src", "legacy.ts")]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("warns when falling back to process.cwd()", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-cwd-warn-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-warn-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(emptyBaseDir));
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("warns only once when called repeatedly for the same baseDir", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-dedupe-cwd-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-dedupe-empty-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("warns again for a different pattern set sharing the same baseDir", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-dedupe-patterns-cwd-", "src/legacy.ts");
+    fs.mkdirSync(path.join(cwdDir, "other"), { recursive: true });
+    fs.writeFileSync(path.join(cwdDir, "other", "legacy.ts"), "export const legacy = true;\n");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-dedupe-patterns-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      loadFilesWithIgnores({ files: ["./other/**/*.ts"] }, emptyBaseDir);
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("does not warn when baseDir itself matches", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const targetDir = makeDirWithFile("file-loader-no-warn-", "src/correct.ts");
+
+    loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, targetDir);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("returns immediately without warning when files is empty, even if baseDir differs from cwd", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-patterns-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const files = loadFilesWithIgnores({ files: [] }, emptyBaseDir);
+    expect(files).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("does not warn or fall back when every pattern is already absolute", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-absolute-cwd-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-absolute-base-"));
+    tmpDirs.push(emptyBaseDir);
+    const absolutePattern = path.join(emptyBaseDir, "src", "**", "*.ts");
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: [absolutePattern] }, emptyBaseDir);
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("applies default ignores to files matched by a pattern that escapes baseDir", () => {
+    const targetDir = makeDirWithFile("file-loader-escaping-target-", "src/correct.ts");
+    fs.writeFileSync(
+      path.join(targetDir, "src", "correct.test.ts"),
+      "export const marker = true;\n",
+    );
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-escaping-base-"));
+    tmpDirs.push(baseDir);
+    const escapingPattern = path.join(targetDir, "src", "**", "*.ts");
+
+    const files = loadFilesWithIgnores({ files: [escapingPattern] }, baseDir);
+    expect(files).toEqual([path.join(targetDir, "src", "correct.ts")]);
+  });
+
+  test("does not fall back when baseDir matches something that is entirely filtered out by ignores", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    // baseDir has a match for the pattern, but it's a default-ignored test file.
+    const baseDir = makeDirWithFile("file-loader-all-ignored-", "src/foo.test.ts");
+    // cwd has an unrelated, non-ignored file that must NOT leak in via a wrongful fallback.
+    const cwdDir = makeDirWithFile("file-loader-unrelated-cwd-", "src/bar.ts");
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, baseDir);
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("does not fall back when a files pattern throws while globbing, even if baseDir has no other matches", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const baseDir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-throwing-pattern-")),
+    );
+    tmpDirs.push(baseDir);
+    // cwd has an unrelated file that must NOT leak in via a wrongful fallback.
+    const cwdDir = makeDirWithFile("file-loader-unrelated-cwd-throw-", "src/bar.ts");
+
+    // Simulate a glob failure directly, rather than relying on OS-specific
+    // fs.globSync behavior for a malformed pattern (e.g. a null byte throws
+    // on macOS but not on Linux).
+    const throwingPattern = path.resolve(baseDir, "./src/**/*.ts");
+    const mockedGlobSync = vi.mocked(fs.globSync);
+    const originalImplementation = mockedGlobSync.getMockImplementation()!;
+    mockedGlobSync.mockImplementation((pattern, options) => {
+      if (pattern === throwingPattern) {
+        throw new Error("simulated glob failure");
+      }
+      return originalImplementation(pattern, options);
+    });
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, baseDir);
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("falling back"));
+    } finally {
+      process.chdir(originalCwd);
+      mockedGlobSync.mockImplementation(originalImplementation);
+    }
+  });
+});

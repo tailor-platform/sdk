@@ -1,4 +1,4 @@
-import type { PluginGeneratedTypeSource } from "#/parser/service/tailordb/types";
+import type { PluginGeneratedTableSource } from "#/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
 /**
@@ -20,7 +20,7 @@ export interface SeedTypeInfo {
  * Metadata for lines-db schema generation
  */
 export interface LinesDbMetadata {
-  typeName: string;
+  tableName: string;
   exportName: string;
   importPath: string;
   optionalFields: string[];
@@ -28,5 +28,5 @@ export interface LinesDbMetadata {
   foreignKeys: ForeignKeyDefinition[];
   indexes: IndexDefinition[];
   /** Plugin source info if this is a plugin-generated type */
-  pluginSource?: PluginGeneratedTypeSource;
+  pluginSource?: PluginGeneratedTableSource;
 }

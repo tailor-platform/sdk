@@ -1,28 +1,22 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test } from "vitest";
 import { detectFunctionType } from "./detect";
-import type { TailorUser } from "#/runtime/types";
 
 const TEST_BASE = path.join(__dirname, "__test_detect__");
-const user: TailorUser = {
-  id: "00000000-0000-0000-0000-000000000000",
-  type: "machine_user",
-  workspaceId: "test-workspace",
-  attributes: null,
-  attributeList: [],
-};
 
 describe("detectFunctionType", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });
     } catch {
@@ -55,6 +49,52 @@ export default {
       expect(result.name).toBe("my-resolver");
     });
 
+    test("carries the resolver's `permission` config through for function run to enforce", async () => {
+      const filePath = writeFile(
+        "resolver-permission.mjs",
+        `
+export default {
+  operation: "query",
+  name: "protected",
+  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+};
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.permission).toEqual([
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ]);
+    });
+
+    test("rejects a branded resolver with unknown helper keys", async () => {
+      const filePath = path.join(testDir, "resolver-with-helper.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+const resolver = {
+  operation: "query",
+  name: "my-resolver",
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+  trigger: () => {},
+};
+
+Object.defineProperty(resolver, Symbol.for("tailor-platform/sdk"), {
+  value: "resolver",
+});
+
+export default resolver;
+`,
+      );
+
+      await expect(detectFunctionType({ filePath })).rejects.toThrow(
+        "Could not detect function type",
+      );
+    });
+
     test("builds a working local input parser from real t.* fields", async () => {
       const configureTypesUrl = pathToFileURL(
         path.join(__dirname, "../../../configure/types/index.ts"),
@@ -76,13 +116,17 @@ export default {
       const result = await detectFunctionType({ filePath });
       expect(result.hasInput).toBe(true);
 
-      const valid = result.inputSchema?.parse({ value: { name: "a", age: 1 }, data: {}, user });
+      const valid = result.inputSchema?.parse({
+        value: { name: "a", age: 1 },
+        data: {},
+        invoker: null,
+      });
       expect(valid?.issues).toBeUndefined();
 
       const invalid = result.inputSchema?.parse({
         value: { age: "not-a-number" },
         data: {},
-        user,
+        invoker: null,
       });
       expect(invalid?.issues).toEqual([
         { message: "Required field is missing", path: ["name"] },
@@ -104,6 +148,33 @@ export default {
     body: (args) => {},
   },
 };
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.type).toBe("executor");
+      expect(result.name).toBe("my-executor");
+    });
+
+    test("detects a function executor with trigger helper args", async () => {
+      const filePath = path.join(testDir, "executor-with-helper.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+const executor = {
+  name: "my-executor",
+  trigger: { kind: "schedule", cron: "0 12 * * *", __args: [{ cron: "0 12 * * *" }] },
+  operation: {
+    kind: "function",
+    body: (args) => {},
+  },
+};
+
+Object.defineProperty(executor, Symbol.for("tailor-platform/sdk"), {
+  value: "executor",
+});
+
+export default executor;
 `,
       );
 
@@ -136,13 +207,13 @@ export default {
     const multiJobSource = `
 export const job_a = {
   name: "job-a",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 
 export const job_b = {
   name: "job-b",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 `;
@@ -153,13 +224,13 @@ export const job_b = {
         `
 export const my_job = {
   name: "my-job",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 
 export default {
   name: "my-workflow",
-  mainJob: { name: "my-job", trigger: () => {}, body: () => {} },
+  mainJob: { name: "my-job", start: () => {}, body: () => {} },
 };
 `,
       );
@@ -193,7 +264,7 @@ export default {
         `
 export const my_job = {
   name: "my-job",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 `,

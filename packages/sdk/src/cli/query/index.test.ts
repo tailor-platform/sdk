@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   getReplHistoryPath,
   query,
@@ -60,11 +60,11 @@ vi.mock("../shared/config", () => ({
 }));
 
 vi.mock("../shared/tailordb-namespace", () => ({
-  resolveTypeNamespaces: vi.fn(),
+  resolveTableNamespaces: vi.fn(),
 }));
 
 vi.mock("./sql-type-extractor", () => ({
-  extractTypeNamesFromSql: vi.fn(),
+  extractTableNamesFromSql: vi.fn(),
   extractColumnTemplate: vi.fn(),
 }));
 
@@ -77,7 +77,7 @@ function sqlRowKeys(result: unknown): string[] {
 }
 
 describe("query", () => {
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     Object.defineProperty(process.stdin, "isTTY", {
@@ -98,11 +98,12 @@ describe("query", () => {
     const { extractAllNamespaces } = await import("../shared/config");
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
     const { executeScript } = await import("../shared/script-executor");
-    const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
-    const { extractTypeNamesFromSql, extractColumnTemplate } = await import("./sql-type-extractor");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { extractTableNamesFromSql, extractColumnTemplate } =
+      await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
-    vi.mocked(readFile).mockResolvedValue('select * from "User";' as never);
+    vi.mocked(readFile).mockResolvedValue('select * from "User";');
     vi.mocked(getEditorCommand).mockReturnValue("vim");
     vi.mocked(openInEditor).mockResolvedValue(true);
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
@@ -112,6 +113,7 @@ describe("query", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         name: "sample-app",
+        path: "/project/tailor.config.ts",
       },
     } as never);
     vi.mocked(extractAllNamespaces).mockReturnValue(["tailordb"]);
@@ -124,8 +126,8 @@ describe("query", () => {
     vi.mocked(fetchMachineUserToken).mockResolvedValue({
       access_token: "mu-token",
     } as never);
-    vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
-    vi.mocked(extractTypeNamesFromSql).mockReturnValue(["User"]);
+    vi.mocked(resolveTableNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
+    vi.mocked(extractTableNamesFromSql).mockReturnValue(["User"]);
     vi.mocked(extractColumnTemplate).mockReturnValue(null);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(new Map());
 
@@ -142,12 +144,14 @@ describe("query", () => {
         clientSecret: "client-secret",
       },
     });
+
+    await runTest();
   });
 
   test("executes SQL query with bundled script and inferred namespace", async () => {
     const { executeScript } = await import("../shared/script-executor");
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
-    const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
 
     const result = await query({
       workspaceId: "workspace-1",
@@ -157,8 +161,8 @@ describe("query", () => {
       query: 'select * from "User";',
     });
 
-    expect(bundleQueryScript).toHaveBeenCalledWith("sql");
-    expect(resolveTypeNamespaces).not.toHaveBeenCalled();
+    expect(bundleQueryScript).toHaveBeenCalledWith("sql", "/project");
+    expect(resolveTableNamespaces).not.toHaveBeenCalled();
     expect(executeScript).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "workspace-1",
@@ -180,11 +184,11 @@ describe("query", () => {
 
   test("resolves namespace from SQL type names when multiple namespaces exist", async () => {
     const { extractAllNamespaces } = await import("../shared/config");
-    const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
+    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
     const { executeScript } = await import("../shared/script-executor");
 
     vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
-    vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
+    vi.mocked(resolveTableNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
 
     await query({
       workspaceId: "workspace-1",
@@ -194,10 +198,10 @@ describe("query", () => {
       query: 'select * from "User";',
     });
 
-    expect(resolveTypeNamespaces).toHaveBeenCalledWith({
+    expect(resolveTableNamespaces).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       namespaces: ["crm", "sales"],
-      typeNames: ["User"],
+      tableNames: ["User"],
       client: mockClient,
     });
     expect(executeScript).toHaveBeenCalledWith(
@@ -221,10 +225,10 @@ describe("query", () => {
 
   test("throws helpful error when SQL namespace cannot be inferred", async () => {
     const { extractAllNamespaces } = await import("../shared/config");
-    const { extractTypeNamesFromSql } = await import("./sql-type-extractor");
+    const { extractTableNamesFromSql } = await import("./sql-type-extractor");
 
     vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
-    vi.mocked(extractTypeNamesFromSql).mockReturnValue([]);
+    vi.mocked(extractTableNamesFromSql).mockReturnValue([]);
 
     await expect(
       query({
@@ -280,8 +284,8 @@ describe("query", () => {
     });
 
     expect(executeScript).toHaveBeenCalled();
-    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
-    const arg = JSON.parse(call.arg ?? "{}");
+    const call = vi.mocked(executeScript).mock.calls[0]![0];
+    const arg = call.arg as unknown as { queries: string[] };
     expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
   });
 
@@ -296,8 +300,8 @@ describe("query", () => {
       query: `INSERT INTO t VALUES ('hello;world')`,
     });
 
-    const call = vi.mocked(executeScript).mock.calls[0]![0]!;
-    const arg = JSON.parse(call.arg ?? "{}");
+    const call = vi.mocked(executeScript).mock.calls[0]![0];
+    const arg = call.arg as unknown as { queries: string[] };
     expect(arg.queries).toHaveLength(1);
   });
 
@@ -327,11 +331,11 @@ describe("query", () => {
     expect(executeScript).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "query-gql.js",
-        arg: JSON.stringify({
+        arg: {
           endpoint: "https://app.example.com/query",
           accessToken: "mu-token",
           query: "{ viewer { id } }",
-        }),
+        },
       }),
     );
 
@@ -379,7 +383,7 @@ describe("query", () => {
     const { extractColumnTemplate } = await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
-    vi.mocked(extractColumnTemplate).mockReturnValue([{ type: "wildcard", typeNames: ["User"] }]);
+    vi.mocked(extractColumnTemplate).mockReturnValue([{ type: "wildcard", tableNames: ["User"] }]);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(
       new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
     );
@@ -427,7 +431,7 @@ describe("query", () => {
 
     vi.mocked(extractColumnTemplate).mockReturnValue([
       { type: "explicit", name: "orderId" },
-      { type: "wildcard", typeNames: ["User"] },
+      { type: "wildcard", tableNames: ["User"] },
       { type: "explicit", name: "orderName" },
     ]);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(
@@ -507,7 +511,7 @@ describe("query", () => {
 
     vi.mocked(extractColumnTemplate).mockReturnValue([
       { type: "explicit", name: "uid" },
-      { type: "wildcard", typeNames: ["SalesOrder"] },
+      { type: "wildcard", tableNames: ["SalesOrder"] },
     ]);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(
       new Map([["SalesOrder", ["customerID", "total", "createdAt"]]]),

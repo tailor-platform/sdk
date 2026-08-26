@@ -7,7 +7,7 @@ import {
 
 type PlatformConfig = Awaited<ReturnType<typeof readPlatformConfig>>;
 
-export function resolvePatUser(config: PlatformConfig): string | null {
+function resolvePatUser(config: PlatformConfig): string | null {
   const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
   if (activeProfile) {
     return config.profiles[activeProfile]?.user ?? null;
@@ -26,9 +26,9 @@ export async function createPatOperatorClient() {
   const user = resolvePatUser(config);
 
   if (!user) {
-    throw new Error("No user logged in.\nPlease login first using 'tailor-sdk login' command.");
+    throw new Error("No user logged in.\nPlease login first using 'tailor login' command.");
   }
 
-  const token = await fetchLatestToken(config, user, platformConfig);
-  return await initOperatorClient(token, platformConfig);
+  const { accessToken } = await fetchLatestToken(config, user, platformConfig);
+  return await initOperatorClient(accessToken, platformConfig);
 }

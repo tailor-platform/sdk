@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock, type LockFile } from "./lock";
 
 function makeLock(): LockFile {
@@ -40,13 +40,13 @@ describe("readLock / writeLock", () => {
     "/tmp",
     `lock-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
+  const outsideDir = `${testDir}-outside`;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(testDir, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
   });
 
   test("returns null when no lock exists", () => {
@@ -56,10 +56,40 @@ describe("readLock / writeLock", () => {
   test("round-trips through disk with 2-space indent and trailing newline", () => {
     const lock = makeLock();
     writeLock(testDir, lock);
-    const raw = fs.readFileSync(path.join(testDir, ".github/tailor-sdk.lock"), "utf-8");
+    const raw = fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8");
     expect(raw.endsWith("\n")).toBe(true);
     expect(raw).toContain('  "version": 1');
     expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("refuses to read a lock through a symbolic link", () => {
+    const outsideLock = path.join(outsideDir, "tailor.lock");
+    const content = `${JSON.stringify(makeLock(), null, 2)}\n`;
+    fs.mkdirSync(path.dirname(outsideLock), { recursive: true });
+    fs.writeFileSync(outsideLock, content);
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.symlinkSync(outsideLock, path.join(testDir, ".github/tailor.lock"));
+
+    expect(() => readLock(testDir)).toThrow(/symbolic link/);
+    expect(fs.readFileSync(outsideLock, "utf-8")).toBe(content);
+  });
+
+  test("refuses to write a lock through a symbolic link", () => {
+    const outsideLock = path.join(outsideDir, "tailor.lock");
+    fs.mkdirSync(path.dirname(outsideLock), { recursive: true });
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.symlinkSync(outsideLock, path.join(testDir, ".github/tailor.lock"));
+
+    expect(() => writeLock(testDir, makeLock())).toThrow(/symbolic link/);
+    expect(fs.existsSync(outsideLock)).toBe(false);
+  });
+
+  test("refuses to write a lock through a symbolic-link directory", () => {
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.symlinkSync(outsideDir, path.join(testDir, ".github"));
+
+    expect(() => writeLock(testDir, makeLock())).toThrow(/symbolic link/);
+    expect(fs.existsSync(path.join(outsideDir, "tailor.lock"))).toBe(false);
   });
 
   test("throws on a forward-incompatible version", () => {
@@ -91,7 +121,7 @@ describe("readLock / writeLock", () => {
     },
   ])("$title", ({ content, error }) => {
     fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
-    fs.writeFileSync(path.join(testDir, ".github/tailor-sdk.lock"), content());
+    fs.writeFileSync(path.join(testDir, ".github/tailor.lock"), content());
     expect(() => readLock(testDir)).toThrow(error);
   });
 });

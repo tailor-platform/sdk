@@ -8,8 +8,11 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 
 export type SeedBundleResult = {
@@ -33,11 +36,12 @@ function generateSeedScriptContent(namespace: string): string {
       data: Record<string, Record<string, unknown>[]>;
       order: string[];
       selfRefTypes: string[];
+      upsert?: boolean;
     };
 
     type SeedResult = {
       success: boolean;
-      processed: Record<string, number>;
+      processed: Record<string, { inserted: number; updated: number; skipped: number }>;
       errors: string[];
     };
 
@@ -50,40 +54,87 @@ function generateSeedScriptContent(namespace: string): string {
 
     export async function main(input: SeedInput): Promise<SeedResult> {
       const db = getDB("${namespace}");
-      const processed: Record<string, number> = {};
+      const processed: Record<
+        string,
+        { inserted: number; updated: number; skipped: number }
+      > = {};
       const errors: string[] = [];
       const BATCH_SIZE = ${String(BATCH_SIZE)};
+      const upsert = input.upsert === true;
 
-      for (const typeName of input.order) {
-        const records = input.data[typeName];
+      for (const tableName of input.order) {
+        const records = input.data[tableName];
         if (!records || records.length === 0) {
-          console.log(\`[${namespace}] \${typeName}: skipped (no data)\`);
+          console.log(\`[${namespace}] \${tableName}: skipped (no data)\`);
           continue;
         }
 
-        processed[typeName] = 0;
-        const hasSelfRef = (input.selfRefTypes || []).includes(typeName);
+        processed[tableName] = { inserted: 0, updated: 0, skipped: 0 };
+        const hasSelfRef = (input.selfRefTypes || []).includes(tableName);
 
         try {
+          let recordsToInsert = records;
+          let recordsToUpdate: Record<string, unknown>[] = [];
+          if (upsert) {
+            const existing = await db
+              .selectFrom(tableName)
+              .select("id")
+              .where(
+                "id",
+                "in",
+                records.map((record) => record.id),
+              )
+              .execute();
+            const existingIds = new Set(existing.map((record) => record.id));
+            recordsToInsert = records.filter((record) => !existingIds.has(record.id));
+            recordsToUpdate = records.filter((record) => existingIds.has(record.id));
+          }
+
           if (hasSelfRef) {
             // Insert one-by-one to respect self-referencing foreign key order
-            for (const record of records) {
-              await db.insertInto(typeName).values(record).execute();
-              processed[typeName] += 1;
+            for (const record of recordsToInsert) {
+              await db.insertInto(tableName).values(record).execute();
+              processed[tableName].inserted += 1;
             }
-            console.log(\`[${namespace}] \${typeName}: \${processed[typeName]}/\${records.length} (one-by-one)\`);
+            if (!upsert) {
+              console.log(
+                \`[${namespace}] \${tableName}: \${processed[tableName].inserted}/\${records.length} (one-by-one)\`,
+              );
+            }
           } else {
-            for (let i = 0; i < records.length; i += BATCH_SIZE) {
-              const batch = records.slice(i, i + BATCH_SIZE);
-              await db.insertInto(typeName).values(batch).execute();
-              processed[typeName] += batch.length;
-              console.log(\`[${namespace}] \${typeName}: \${processed[typeName]}/\${records.length}\`);
+            for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
+              const batch = recordsToInsert.slice(i, i + BATCH_SIZE);
+              await db.insertInto(tableName).values(batch).execute();
+              processed[tableName].inserted += batch.length;
+              if (!upsert) {
+                console.log(
+                  \`[${namespace}] \${tableName}: \${processed[tableName].inserted}/\${records.length}\`,
+                );
+              }
             }
+          }
+
+          for (const record of recordsToUpdate) {
+            const { id, ...values } = record;
+            if (Object.keys(values).length === 0) {
+              processed[tableName].skipped += 1;
+              continue;
+            }
+            await db.updateTable(tableName).set(values).where("id", "=", id).execute();
+            processed[tableName].updated += 1;
+          }
+
+          const counts = processed[tableName];
+          if (upsert) {
+            const skipped = counts.skipped > 0 ? \`, \${counts.skipped} skipped\` : "";
+            console.log(
+              \`[${namespace}] \${tableName}: \${counts.inserted} inserted, \${counts.updated} updated\${skipped}\`,
+            );
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          errors.push(\`\${typeName}: \${message}\`);
-          console.error(\`[${namespace}] \${typeName}: failed - \${message}\`);
+          errors.push(\`\${tableName}: \${message}\`);
+          console.error(\`[${namespace}] \${tableName}: failed - \${message}\`);
         }
       }
 
@@ -105,14 +156,16 @@ function generateSeedScriptContent(namespace: string): string {
  * 3. Reports progress via console.log
  * 4. Exports as main() for TestExecScript
  * @param namespace - TailorDB namespace
- * @param typeNames - List of type names to include in the seed
+ * @param tableNames - List of table names to include in the seed
+ * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses
  * @returns Bundled seed script result
  */
 export async function bundleSeedScript(
   namespace: string,
-  typeNames: string[],
+  tableNames: string[],
+  baseDir: string = process.cwd(),
 ): Promise<SeedBundleResult> {
-  // Output directory in .tailor-sdk (relative to project root)
+  // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -125,14 +178,19 @@ export async function bundleSeedScript(
 
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig();
+    tsconfig = await resolveTSConfig(baseDir);
   } catch {
     tsconfig = undefined;
   }
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
+  const bundleLog = createBundleLog({ tsconfig });
   const result = await rolldown.build({
-    plugins: [platformBundleDefinePlugin],
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, baseDir),
+      createTsconfigPathsPlugin(),
+      platformBundleDefinePlugin,
+    ],
     input: entryPath,
     write: false,
     output: {
@@ -154,14 +212,15 @@ export async function bundleSeedScript(
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    logLevel: "silent",
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = result.output[0].code;
 
   return {
     namespace,
     bundledCode,
-    typesIncluded: typeNames,
+    typesIncluded: tableNames,
   };
 }

@@ -25,13 +25,13 @@ import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { parseBoolean } from "../shared/parse-boolean";
 import { executeScript } from "../shared/script-executor";
-import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
+import { resolveTableNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
 import { isGraphQLInputComplete } from "./graphql-repl";
 import { isSqlInputComplete } from "./sql-repl";
 import {
   extractColumnTemplate,
-  extractTypeNamesFromSql,
+  extractTableNamesFromSql,
   type ColumnSlot,
 } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
@@ -41,6 +41,7 @@ import type { Application } from "@tailor-platform/tailor-proto/application_reso
 export type { QueryEngine } from "./types";
 
 const queryEngineSchema = z.enum(queryEngines);
+// strip unknown keys
 const queryBaseOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
@@ -107,32 +108,32 @@ async function getNamespaceFromSqlQuery(
     return assertDefined(namespaces[0], "namespace missing");
   }
 
-  const typeNames = extractTypeNamesFromSql(query);
-  if (typeNames.length === 0) {
+  const tableNames = extractTableNamesFromSql(query);
+  if (tableNames.length === 0) {
     throw new Error(
       `Could not infer namespace from query. Detected namespaces: ${namespaces.join(", ")}.`,
     );
   }
 
-  const typeNamespaceMap = await resolveTypeNamespaces({
+  const tableNamespaceMap = await resolveTableNamespaces({
     workspaceId,
     namespaces,
-    typeNames,
+    tableNames,
     client,
   });
 
-  const notFoundTypes = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
-  if (notFoundTypes.length > 0) {
-    throw new Error(`Could not find namespace for types in query: ${notFoundTypes.join(", ")}.`);
+  const notFoundTables = tableNames.filter((tableName) => !tableNamespaceMap.has(tableName));
+  if (notFoundTables.length > 0) {
+    throw new Error(`Could not find namespace for tables in query: ${notFoundTables.join(", ")}.`);
   }
 
-  const namespacesFromTypes = new Set(typeNamespaceMap.values());
-  if (namespacesFromTypes.size === 1) {
-    return assertDefined([...namespacesFromTypes][0], "namespace from types missing");
+  const namespacesFromTables = new Set(tableNamespaceMap.values());
+  if (namespacesFromTables.size === 1) {
+    return assertDefined([...namespacesFromTables][0], "namespace from types missing");
   }
 
   throw new Error(
-    `Query references types from multiple namespaces: ${[...namespacesFromTypes].join(", ")}.`,
+    `Query references tables from multiple namespaces: ${[...namespacesFromTables].join(", ")}.`,
   );
 }
 
@@ -152,7 +153,7 @@ async function loadOptions(options: QueryBaseOptions) {
   });
   if (!machineUser) {
     throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 
@@ -212,10 +213,10 @@ async function sqlQuery(
     workspaceId: args.workspaceId,
     name: `query-sql-${args.namespace}.js`,
     code: args.bundledCode,
-    arg: JSON.stringify({
+    arg: {
       namespace: args.namespace,
       queries,
-    }),
+    },
     invoker,
   });
 
@@ -253,11 +254,11 @@ async function gqlQuery(
     workspaceId: args.workspaceId,
     name: `query-gql.js`,
     code: args.bundledCode,
-    arg: JSON.stringify({
+    arg: {
       endpoint: `${application.url}/query`,
       accessToken,
       query: args.query,
-    }),
+    },
     invoker,
   });
 
@@ -385,7 +386,7 @@ async function prepareQueryExecutor(
 ): Promise<(query: string) => Promise<QueryDispatchResult>> {
   const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
     await loadOptions(options);
-  const bundledCode = await bundleQueryScript(engine);
+  const bundledCode = await bundleQueryScript(engine, path.dirname(config.path));
   const invoker = create(AuthInvokerSchema, {
     namespace: application.authNamespace,
     machineUserName: machineUserResource.name,
@@ -706,9 +707,9 @@ function buildExpectedColumnOrder(
     if (slot.type === "explicit") {
       order.push(slot.name);
     } else {
-      for (const typeName of slot.typeNames) {
+      for (const tableName of slot.tableNames) {
         order.push(...SYSTEM_FIELD_ORDER);
-        order.push(...(fieldOrder.get(typeName) ?? []));
+        order.push(...(fieldOrder.get(tableName) ?? []));
       }
     }
   }
@@ -748,7 +749,7 @@ export const queryCommand = defineAppCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
   args: z
-    .object({
+    .strictObject({
       ...deploymentArgs,
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",
@@ -766,7 +767,6 @@ export const queryCommand = defineAppCommand({
       }),
       "machine-user": arg(z.string().optional(), {
         alias: "m",
-        hiddenAlias: "machineuser",
         description:
           "Machine user name for query execution. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
@@ -800,8 +800,7 @@ export const queryCommand = defineAppCommand({
           message: "Pass only one of --edit, -q/--query, or -f/--file.",
         });
       }
-    })
-    .strict(),
+    }),
   run: async (args) => {
     const mode = await resolveQueryCommandInput({
       query: args.query,
@@ -826,9 +825,7 @@ export const queryCommand = defineAppCommand({
 
     if (mode.mode === "repl") {
       const newlineOnEnter =
-        args["newline-on-enter"] ??
-        parseBoolean(process.env.TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER) ??
-        true;
+        args["newline-on-enter"] ?? parseBoolean(process.env.TAILOR_QUERY_NEWLINE_ON_ENTER) ?? true;
       await runRepl({
         ...sharedOptions,
         json: args.json,

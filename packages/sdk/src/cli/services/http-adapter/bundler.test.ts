@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { bundleHttpAdapters } from "./bundler";
 
 const nodeRequire = createRequire(import.meta.url);
@@ -11,7 +11,8 @@ const graphqlWebModule = nodeRequire.resolve("@0no-co/graphql.web");
 describe("bundleHttpAdapters", () => {
   let tmpDir: string | undefined;
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;
@@ -27,7 +28,7 @@ describe("bundleHttpAdapters", () => {
   }
 
   test("returns empty result when no adapters are provided", async () => {
-    const result = await bundleHttpAdapters([]);
+    const result = await bundleHttpAdapters([], process.cwd());
     expect(result.bundledInputs.size).toBe(0);
     expect(result.bundledOutputs.size).toBe(0);
   });
@@ -58,9 +59,10 @@ export default createHttpAdapter({
 `,
     });
 
-    const result = await bundleHttpAdapters([
-      { name: "get-user", sourceFile, methods: ["get"], hasOutput: true },
-    ]);
+    const result = await bundleHttpAdapters(
+      [{ name: "get-user", sourceFile, methods: ["get"], hasOutput: true }],
+      process.cwd(),
+    );
 
     const inputCode = result.bundledInputs.get("get-user");
     const outputCode = result.bundledOutputs.get("get-user");
@@ -102,9 +104,10 @@ export default createHttpAdapter({
 `,
     });
 
-    const result = await bundleHttpAdapters([
-      { name: "multi", sourceFile, methods: ["get", "post", "delete"], hasOutput: false },
-    ]);
+    const result = await bundleHttpAdapters(
+      [{ name: "multi", sourceFile, methods: ["get", "post", "delete"], hasOutput: false }],
+      process.cwd(),
+    );
 
     const inputCode = result.bundledInputs.get("multi");
     expect(inputCode).toBeDefined();
@@ -140,9 +143,10 @@ export default createHttpAdapter({
 `,
     );
 
-    const result = await bundleHttpAdapters([
-      { name: "nullish", sourceFile, methods: ["get", "post"], hasOutput: false },
-    ]);
+    const result = await bundleHttpAdapters(
+      [{ name: "nullish", sourceFile, methods: ["get", "post"], hasOutput: false }],
+      process.cwd(),
+    );
 
     const inputCode = result.bundledInputs.get("nullish");
     expect(inputCode).toBeDefined();
@@ -185,6 +189,7 @@ export default createHttpAdapter({
 
     const result = await bundleHttpAdapters(
       [{ name: "logs", sourceFile, methods: ["get"], hasOutput: true }],
+      process.cwd(),
       undefined,
       "WARN",
     );
@@ -222,8 +227,11 @@ export default createHttpAdapter({
     });
 
     await expect(
-      bundleHttpAdapters([{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }]),
-    ).rejects.toThrow(/Node module/);
+      bundleHttpAdapters(
+        [{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }],
+        process.cwd(),
+      ),
+    ).rejects.toThrow(/"node:fs" is not available in the Tailor Platform runtime/);
   });
 
   test("rejects bundles where an imported helper introduces async/await", async () => {
@@ -247,9 +255,10 @@ export default createHttpAdapter({
     });
 
     await expect(
-      bundleHttpAdapters([
-        { name: "async-helper", sourceFile, methods: ["get"], hasOutput: false },
-      ]),
+      bundleHttpAdapters(
+        [{ name: "async-helper", sourceFile, methods: ["get"], hasOutput: false }],
+        process.cwd(),
+      ),
     ).rejects.toThrow(/async\/await, which is unavailable/);
   });
 });

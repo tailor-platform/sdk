@@ -1,8 +1,9 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { importUserModule } from "#/cli/shared/user-modules";
+import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import {
   findMissingPermissionConfig,
@@ -44,6 +45,8 @@ export interface CreateTailorDBServiceParams {
   config: TailorDBServiceConfig;
   /** Plugin manager for processing plugins */
   pluginManager?: PluginManager;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -52,7 +55,7 @@ export interface CreateTailorDBServiceParams {
  * @returns A new TailorDBService instance
  */
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
-  const { namespace, config, pluginManager } = params;
+  const { namespace, config, pluginManager, baseDir } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
   const createRawTypesByName = (): TailorDBTypesByName =>
     Object.create(null) as TailorDBTypesByName;
@@ -64,34 +67,34 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
   const registerRawType = (
     rawTypesKey: string,
-    typeName: string,
+    tableName: string,
     type: TailorDBTypeSchemaOutput,
     sourceInfo: TypeSourceInfoEntry,
   ): void => {
-    const existingSourceInfo = Object.hasOwn(typeSourceInfo, typeName)
-      ? typeSourceInfo[typeName]
+    const existingSourceInfo = Object.hasOwn(typeSourceInfo, tableName)
+      ? typeSourceInfo[tableName]
       : undefined;
     if (existingSourceInfo) {
       const firstSource = formatTailorDBTypeSourceInfo(existingSourceInfo) ?? "unknown source";
       const secondSource = formatTailorDBTypeSourceInfo(sourceInfo) ?? "unknown source";
       throw new Error(
-        `Duplicate TailorDB type name "${typeName}" detected in TailorDB service "${namespace}". ` +
+        `Duplicate TailorDB table name "${tableName}" detected in TailorDB service "${namespace}". ` +
           `First: ${firstSource}. Second: ${secondSource}. ` +
-          "TailorDB type names must be unique across all TailorDB files in a service.",
+          "TailorDB table names must be unique across all TailorDB files in a service.",
       );
     }
 
-    assertDefined(rawTypes[rawTypesKey], `raw types entry missing for key: ${rawTypesKey}`)[
-      typeName
+    assertDefined(rawTypes[rawTypesKey], `raw table entry missing for key: ${rawTypesKey}`)[
+      tableName
     ] = type;
-    typeSourceInfo[typeName] = sourceInfo;
+    typeSourceInfo[tableName] = sourceInfo;
   };
 
   const doParseTypes = (): void => {
     const allTypes = createRawTypesByName();
     for (const fileTypes of Object.values(rawTypes)) {
-      for (const [typeName, type] of Object.entries(fileTypes)) {
-        allTypes[typeName] = type;
+      for (const [tableName, type] of Object.entries(fileTypes)) {
+        allTypes[tableName] = type;
       }
     }
 
@@ -103,11 +106,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   // way to accidentally lock out access the rule was meant to grant.
   const warnOmittedPermit = (): void => {
     for (const fileTypes of Object.values(rawTypes)) {
-      for (const [typeName, type] of Object.entries(fileTypes)) {
+      for (const [tableName, type] of Object.entries(fileTypes)) {
         const locations = findOmittedPermitRules(type.metadata.permissions);
         if (locations.length > 0) {
           logger.warn(
-            `TailorDB type "${typeName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+            `TailorDB table "${tableName}" has permission rule(s) ${locations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
           );
         }
       }
@@ -118,11 +121,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   // fails closed for record operations without a .permission(), producing an
   // opaque "internal error" instead of a clear denial when only
   // .gqlPermission() is set. Catching the omission here, rather than at
-  // deploy/insert time, surfaces it while the type is still local.
+  // deploy/insert time, surfaces it while the table is still local.
   const validateRequiredPermissions = (): void => {
     const errors: string[] = [];
     for (const fileTypes of Object.values(rawTypes)) {
-      for (const [typeName, type] of Object.entries(fileTypes)) {
+      for (const [tableName, type] of Object.entries(fileTypes)) {
         const effectiveGqlOperations =
           type.metadata.settings?.gqlOperations ?? config.gqlOperations;
         const { missingPermission, missingGqlPermission } = findMissingPermissionConfig(
@@ -132,16 +135,16 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         if (!missingPermission && !missingGqlPermission) {
           continue;
         }
-        const source = formatTailorDBTypeSourceInfo(typeSourceInfo[typeName]);
+        const source = formatTailorDBTypeSourceInfo(typeSourceInfo[tableName]);
         const location = source ? ` (${source})` : "";
         if (missingPermission) {
           errors.push(
-            `TailorDB type "${typeName}"${location} has no .permission() configured. TailorDB denies all record operations for types without permission; call .permission(...) to grant access explicitly.`,
+            `TailorDB table "${tableName}"${location} has no .permission() configured. TailorDB denies all record operations for tables without permission; call .permission(...) to grant access explicitly.`,
           );
         }
         if (missingGqlPermission) {
           errors.push(
-            `TailorDB type "${typeName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
+            `TailorDB table "${tableName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
           );
         }
       }
@@ -154,53 +157,54 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   };
 
   /**
-   * Process plugins for a type and add generated types to rawTypes
-   * @param rawType - The raw TailorDB type being processed
-   * @param attachments - Plugin attachments for this type
-   * @param sourceFilePath - The file path where the type was loaded from
+   * Process plugins for a table and add generated tables to rawTypes
+   * @param rawTable - The raw TailorDB table being processed
+   * @param attachments - Plugin attachments for this table
+   * @param sourceFilePath - The file path where the table was loaded from
    */
-  const processPluginsForType = async (
-    rawType: TailorDBTypeSchemaOutput,
+  const processPluginsForTable = async (
+    rawTable: TailorDBTypeSchemaOutput,
     attachments: PluginAttachment[],
     sourceFilePath: string,
   ): Promise<void> => {
     if (!pluginManager) return;
 
-    const { extendedType, generatedTypes, events } = await pluginManager.processAttachmentsForType({
-      rawType,
-      attachments,
-      namespace,
-    });
+    const { extendedTable, generatedTables, events } =
+      await pluginManager.processAttachmentsForTable({
+        rawTable,
+        attachments,
+        namespace,
+      });
 
-    if (extendedType) {
+    if (extendedTable) {
       assertDefined(
         rawTypes[sourceFilePath],
-        `raw types entry missing for file: ${sourceFilePath}`,
-      )[rawType.name] = extendedType;
+        `raw table entry missing for file: ${sourceFilePath}`,
+      )[rawTable.name] = extendedTable;
     }
-    for (const gen of generatedTypes) {
-      // Plugin-generated types don't have a source file.
-      // Generators that need to import these types should generate their own type files.
+    for (const generatedTable of generatedTables) {
+      // Plugin-generated tables don't have a source file.
+      // Generators that need to import these tables should generate their own type files.
       const sourceInfo: TypeSourceInfoEntry = {
-        exportName: gen.typeName,
-        pluginId: gen.pluginId,
-        pluginImportPath: gen.pluginImportPath,
+        exportName: generatedTable.tableName,
+        pluginId: generatedTable.pluginId,
+        pluginImportPath: generatedTable.pluginImportPath,
         originalFilePath: sourceFilePath,
-        originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
-        generatedTypeKind: gen.kind,
-        pluginConfig: gen.pluginConfig,
+        originalExportName: typeSourceInfo[rawTable.name]?.exportName || rawTable.name,
+        generatedTableKind: generatedTable.kind,
+        pluginConfig: generatedTable.pluginConfig,
         namespace,
       };
-      registerRawType(sourceFilePath, gen.typeName, gen.type, sourceInfo);
+      registerRawType(sourceFilePath, generatedTable.tableName, generatedTable.table, sourceInfo);
     }
     for (const ev of events) {
       if (ev.kind === "extended") {
         logger.log(
-          `  Extended: ${styles.success(ev.typeName)} with ${styles.highlight(ev.fieldCount.toString())} fields by plugin ${styles.info(ev.pluginId)}`,
+          `  Extended: ${styles.success(ev.tableName)} with ${styles.highlight(ev.fieldCount.toString())} fields by plugin ${styles.info(ev.pluginId)}`,
         );
       } else {
         logger.log(
-          `  Generated: ${styles.success(ev.typeName)} by plugin ${styles.info(ev.pluginId)}`,
+          `  Generated: ${styles.success(ev.tableName)} by plugin ${styles.info(ev.pluginId)}`,
         );
       }
     }
@@ -213,12 +217,12 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     rawTypes[typeFile] = createRawTypesByName();
     const loadedTypes = createRawTypesByName();
     try {
-      const module = await import(pathToFileURL(typeFile).href);
+      const module = await importUserModule(typeFile);
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
 
-        const result = TailorDBTypeSchema.safeParse(exportedValue);
+        const result = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(exportedValue));
         if (!result.success) {
           if (isSdkBranded(exportedValue, "tailordb-type")) {
             throw result.error;
@@ -238,22 +242,21 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         });
 
         // Process plugins if any
-        if (
-          exportedValue.plugins &&
-          Array.isArray(exportedValue.plugins) &&
-          exportedValue.plugins.length > 0
-        ) {
-          pluginAttachments.set(exportedValue.name, [...exportedValue.plugins]);
+        const rawType = exportedValue as TailorDBTypeSchemaOutput & {
+          plugins?: PluginAttachment[];
+        };
+        if (rawType.plugins && Array.isArray(rawType.plugins) && rawType.plugins.length > 0) {
+          pluginAttachments.set(rawType.name, [...rawType.plugins]);
           logger.log(
-            `  Plugin attachments: ${styles.info(exportedValue.plugins.map((p: PluginAttachment) => p.pluginId).join(", "))}`,
+            `  Plugin attachments: ${styles.info(rawType.plugins.map((p) => p.pluginId).join(", "))}`,
           );
 
-          await processPluginsForType(exportedValue, exportedValue.plugins, typeFile);
+          await processPluginsForTable(rawType, rawType.plugins, typeFile);
         }
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), typeFile);
-      logger.error(`Failed to load type from ${styles.bold(relativePath)}`);
+      logger.error(`Failed to load table from ${styles.bold(relativePath)}`);
       logger.error(String(error));
       throw error;
     }
@@ -279,18 +282,13 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = [...new Set(loadFilesWithIgnores(config))];
+          const typeFiles = [...new Set(loadFilesWithIgnores(config, baseDir))];
 
-          let tsconfig: string | undefined;
-          try {
-            tsconfig = await resolveTSConfig();
-          } catch {
-            tsconfig = undefined;
-          }
+          const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
           logger.newline();
           logger.log(
-            `Found ${styles.highlight(typeFiles.length.toString())} type files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
+            `Found ${styles.highlight(typeFiles.length.toString())} table files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
           );
 
           if (pluginManager) {
@@ -322,49 +320,49 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         return { pluginId, config, output: result.output };
       });
 
-      const hasPreviousGeneratedTypes = Object.hasOwn(rawTypes, pluginGeneratedKey);
-      const previousGeneratedTypes = rawTypes[pluginGeneratedKey];
-      const previousGeneratedTypeKeys = previousGeneratedTypes
-        ? Object.keys(previousGeneratedTypes)
+      const hasPreviousGeneratedTables = Object.hasOwn(rawTypes, pluginGeneratedKey);
+      const previousGeneratedTables = rawTypes[pluginGeneratedKey];
+      const previousGeneratedTableKeys = previousGeneratedTables
+        ? Object.keys(previousGeneratedTables)
         : [];
-      const hadPreviousGeneratedTypes = previousGeneratedTypeKeys.length > 0;
-      if (hasPreviousGeneratedTypes) {
-        for (const typeName of previousGeneratedTypeKeys) {
-          delete typeSourceInfo[typeName];
+      const hadPreviousGeneratedTables = previousGeneratedTableKeys.length > 0;
+      if (hasPreviousGeneratedTables) {
+        for (const tableName of previousGeneratedTableKeys) {
+          delete typeSourceInfo[tableName];
         }
       }
       rawTypes[pluginGeneratedKey] = createRawTypesByName();
 
-      let hasGeneratedTypes = false;
+      let hasGeneratedTables = false;
       for (const { pluginId, config, output } of successfulResults) {
-        // Add generated types to rawTypes
-        for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
+        // Add generated tables to rawTypes
+        for (const [kind, generatedTable] of Object.entries(output.tables ?? {})) {
           const sourceInfo: TypeSourceInfoEntry = {
-            exportName: generatedType.name,
+            exportName: generatedTable.name,
             pluginId,
             pluginImportPath: pluginManager.getPluginImportPath(pluginId) ?? "",
             originalFilePath: "",
             originalExportName: "",
-            generatedTypeKind: kind,
+            generatedTableKind: kind,
             pluginConfig: config,
             namespace,
           };
           registerRawType(
             pluginGeneratedKey,
-            generatedType.name,
-            generatedType as TailorDBTypeSchemaOutput,
+            generatedTable.name,
+            generatedTable as TailorDBTypeSchemaOutput,
             sourceInfo,
           );
-          hasGeneratedTypes = true;
+          hasGeneratedTables = true;
 
           logger.log(
-            `  Generated: ${styles.success(generatedType.name)} by namespace plugin ${styles.info(pluginId)}`,
+            `  Generated: ${styles.success(generatedTable.name)} by namespace plugin ${styles.info(pluginId)}`,
           );
         }
       }
 
-      // Re-parse types to include namespace plugin types
-      if (hasGeneratedTypes || hadPreviousGeneratedTypes) {
+      // Re-parse tables to include namespace plugin tables
+      if (hasGeneratedTables || hadPreviousGeneratedTables) {
         doParseTypes();
         validateRequiredPermissions();
       }

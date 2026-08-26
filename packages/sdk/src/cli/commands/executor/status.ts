@@ -39,7 +39,7 @@ export function colorizeExecutorJobStatus(status: string): string {
  * @param status - Executor job status enum value
  * @returns True if status is terminal
  */
-export function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean {
+function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean {
   return isExecutorJobSuccessStatus(status) || isExecutorJobFailureStatus(status);
 }
 
@@ -48,7 +48,7 @@ export function isExecutorJobTerminalStatus(status: ExecutorJobStatus): boolean 
  * @param status - Executor job status enum value
  * @returns True if status is success
  */
-export function isExecutorJobSuccessStatus(status: ExecutorJobStatus): boolean {
+function isExecutorJobSuccessStatus(status: ExecutorJobStatus): boolean {
   return status === ExecutorJobStatus.SUCCESS;
 }
 
@@ -57,7 +57,7 @@ export function isExecutorJobSuccessStatus(status: ExecutorJobStatus): boolean {
  * @param status - Executor job status enum value
  * @returns True if status is failure
  */
-export function isExecutorJobFailureStatus(status: ExecutorJobStatus): boolean {
+function isExecutorJobFailureStatus(status: ExecutorJobStatus): boolean {
   return status === ExecutorJobStatus.FAILED || status === ExecutorJobStatus.CANCELED;
 }
 
@@ -66,7 +66,7 @@ export function isExecutorJobFailureStatus(status: ExecutorJobStatus): boolean {
  * @param status - Executor job status enum value
  * @returns True if status is transient
  */
-export function isExecutorJobTransientStatus(status: ExecutorJobStatus): boolean {
+function isExecutorJobTransientStatus(status: ExecutorJobStatus): boolean {
   return (
     status === ExecutorJobStatus.UNSPECIFIED ||
     status === ExecutorJobStatus.PENDING ||
@@ -146,7 +146,11 @@ export function colorizeFunctionExecutionStatus(status: string): string {
  * @returns True if status is terminal
  */
 export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Status): boolean {
-  return status === FunctionExecution_Status.SUCCESS || status === FunctionExecution_Status.FAILED;
+  return (
+    status === FunctionExecution_Status.SUCCESS ||
+    status === FunctionExecution_Status.FAILED ||
+    status === FunctionExecution_Status.CANCELED
+  );
 }
 
 // ============================================================================

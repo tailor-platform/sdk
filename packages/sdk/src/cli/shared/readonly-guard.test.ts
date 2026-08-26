@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "./context";
 import { assertWritable } from "./readonly-guard";
 import { resetKeyringState } from "./token-store";
@@ -37,6 +37,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // (including Create*/Update*/Delete*) and must guard.
   "api/inspect.ts",
   "api/list.ts",
+  // Auth token retrieval (may refresh via the OAuth server and persist tokens
+  // locally, but mutates no workspace/platform state)
+  "auth/token.ts",
   // Auth connections (read-only)
   "authconnection/index.ts",
   "authconnection/list.ts",
@@ -53,7 +56,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "executor/jobs.ts",
   "executor/list.ts",
   "executor/webhook.ts",
-  // Function (read-only / local execution). `function/test-run.ts` is exempt
+  // Function (read-only / local execution). `function/run.ts` is exempt
   // because it runs under a machine user via `testExecScript` whose own
   // permissions gate any application-data effects.
   "function/index.ts",
@@ -61,7 +64,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "function/get.ts",
   "function/list.ts",
   "function/logs.ts",
-  "function/test-run.ts",
+  "function/run.ts",
+  // Scaffolds local files; only --remote reads the deployed schema.
+  "function/script.ts",
   // Generate (local code generation)
   "generate/index.ts",
   // Machine user (read-only; token retrieval only fetches, does not mutate)
@@ -80,6 +85,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "organization/folder/index.ts",
   "organization/folder/get.ts",
   "organization/folder/list.ts",
+  // Plugin discovery (local filesystem listing only)
+  "plugin/index.ts",
+  "plugin/list.ts",
   // Profile management (local config only, never platform state)
   "profile/index.ts",
   "profile/create.ts",
@@ -93,9 +101,6 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "secret/vault/list.ts",
   // Setup (local file generation)
   "setup/index.ts",
-  // Skills (local file install)
-  "skills/index.ts",
-  "skills/install.ts",
   // Static website (read-only)
   "staticwebsite/index.ts",
   "staticwebsite/get.ts",
@@ -105,14 +110,11 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "staticwebsite/domain/list.ts",
   // TailorDB (read-only / local ops)
   "tailordb/index.ts",
-  "tailordb/erd/index.ts",
-  "tailordb/erd/diff-command.ts",
-  "tailordb/erd/export.ts",
-  "tailordb/erd/serve.ts",
   "tailordb/migrate/index.ts",
   "tailordb/migrate/generate.ts",
   "tailordb/migrate/script.ts",
   "tailordb/migrate/status.ts",
+  "tailordb/migrate/validate.ts",
   // Upgrade (local SDK upgrade)
   "upgrade/index.ts",
   // User (read-only / local switch)
@@ -144,7 +146,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
 ]);
 
 /**
- * Recursively list `*.ts` files under `dir`, excluding tests and fixtures.
+ * Recursively list `*.ts` files under `dir`, excluding tests and test-only
+ * fixtures/bundler workspaces.
  * Paths are returned relative to `dir` with forward slashes.
  * @param dir - Root directory to walk
  * @returns Relative file paths
@@ -154,6 +157,7 @@ function listCommandSourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of entries) {
     if (entry.name === "__test_fixtures__") continue;
+    if (entry.name === "__test_bundler__") continue;
     const child = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       const nested = listCommandSourceFiles(child).map((p) => `${entry.name}/${p}`);
@@ -196,18 +200,16 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 
 describe("assertWritable", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.resetModules();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
@@ -222,9 +224,7 @@ describe("assertWritable", () => {
       },
       current_user: null,
     });
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 

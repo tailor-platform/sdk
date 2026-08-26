@@ -5,7 +5,7 @@ export default createResolver({
   operation: "query",
   output: t.string(),
   body: ({ caller }) => {
-    const userId = caller.id;
+    const userId = caller?.id;
     return userId;
   },
 });

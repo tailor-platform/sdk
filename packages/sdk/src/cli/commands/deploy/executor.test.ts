@@ -1,4 +1,7 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { create } from "@bufbuild/protobuf";
+import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { describe, test, expect, vi, aroundEach } from "vitest";
+import { symbols } from "#/cli/shared/logger";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -16,7 +19,7 @@ vi.mock("node:fs", () => ({
 
 // Mock dist-dir to avoid getDistDir issues
 vi.mock("#/cli/shared/dist-dir", () => ({
-  getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
+  getDistDir: vi.fn().mockReturnValue(".tailor"),
 }));
 
 // Mock config values for tests
@@ -28,13 +31,13 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:executor:test",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -145,6 +148,7 @@ describe("planExecutor", () => {
       resolverNames?: Record<string, string>;
       idpNames?: ReadonlyArray<string>;
       authName?: string;
+      externalAuthName?: string;
     },
   ): Application {
     const tailorDBServices = Object.entries(
@@ -165,7 +169,6 @@ describe("planExecutor", () => {
 
     return {
       name: appName,
-      config: {},
       subgraphs: idpServices.map((idp) => ({ Type: "idp", Name: idp.name })),
       env: {},
       executorService: createMockExecutorService(executors),
@@ -173,6 +176,9 @@ describe("planExecutor", () => {
       resolverServices,
       idpServices,
       authService: options?.authName ? { config: { name: options.authName } } : undefined,
+      config: options?.externalAuthName
+        ? { auth: { name: options.externalAuthName, external: true } }
+        : {},
     } as unknown as Application;
   }
 
@@ -190,8 +196,9 @@ describe("planExecutor", () => {
     };
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   describe("rename scenarios", () => {
@@ -246,6 +253,20 @@ describe("planExecutor", () => {
   });
 
   describe("delete scenarios", () => {
+    test("deletes owned executors when the executor service is stripped for a migration-test baseline", async () => {
+      const client = createMockClient([{ name: "active-executor", label: appName }]);
+      const application: Application = {
+        ...createMockApplication([createMockExecutor("active-executor")]),
+        executorService: undefined,
+      };
+
+      const result = await planExecutor(buildPlanContext(application, { client }));
+
+      expect(result.changeSet.creates).toHaveLength(0);
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.deletes.map((entry) => entry.name)).toEqual(["active-executor"]);
+    });
+
     test("executor is deleted when removed from config", async () => {
       // Existing: executor-a, executor-b
       const client = createMockClient([
@@ -368,6 +389,29 @@ describe("planExecutor", () => {
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
+
+    test.each([
+      ["false", false, "false"],
+      ["zero", 0, "0"],
+      ["empty string", "", '""'],
+    ])("preserves %s workflow args", async (_description, args, expectedExpression) => {
+      const executor = createMockExecutor("workflow-executor");
+      executor.operation = {
+        kind: "workflow",
+        workflowName: "test-workflow",
+        args,
+      };
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client: createMockClient([]) }),
+      );
+      const targetConfig = result.changeSet.creates[0]?.request.executor?.targetConfig?.config;
+      if (targetConfig?.case !== "workflow") {
+        throw new Error("Expected workflow target config");
+      }
+
+      expect(targetConfig.value.variables?.expr).toBe(expectedExpression);
+    });
   });
 
   describe("update scenarios", () => {
@@ -398,7 +442,7 @@ describe("planExecutor", () => {
         {
           name: "existing-executor",
           label: appName,
-          resource: desiredExecutor as Record<string, unknown>,
+          resource: desiredExecutor,
         },
       ]);
 
@@ -411,6 +455,35 @@ describe("planExecutor", () => {
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
+    test("existing executor is unchanged when a remote nested proto has an implicit default", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const application = createMockApplication([executor]);
+      const createResult = await planExecutor(buildPlanContext(application));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+      const remoteExecutor = create(ExecutorExecutorSchema, desiredExecutor);
+      const targetConfig = remoteExecutor.targetConfig?.config;
+      if (targetConfig?.case !== "function") {
+        throw new Error("Expected function target config");
+      }
+      const remoteFunction = targetConfig.value as typeof targetConfig.value & {
+        futureImplicitDefault?: boolean;
+      };
+      remoteFunction.futureImplicitDefault = false;
+
+      const client = createMockClient([
+        {
+          name: "existing-executor",
+          label: appName,
+          resource: remoteExecutor,
+        },
+      ]);
+
+      const result = await planExecutor(buildPlanContext(application, { client }));
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
     test("event executor is unchanged when remote response includes empty eventType", async () => {
       const executor: Executor = {
         name: "existing-executor",
@@ -418,7 +491,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "tailordb",
-          typeName: "User",
+          tableName: "User",
           events: ["tailordb.type_record.created"],
         },
         operation: {
@@ -441,7 +514,7 @@ describe("planExecutor", () => {
         {
           name: "existing-executor",
           label: appName,
-          resource: desiredExecutor as Record<string, unknown>,
+          resource: desiredExecutor,
         },
       ]);
 
@@ -560,6 +633,46 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("result: args.succeeded?.result.resolver");
       expect(variablesExpr).toContain("error: args.failed?.error");
     });
+
+    test("string invoker uses external auth config name", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "test-executor",
+        description: "Executor test-executor",
+        disabled: false,
+        trigger: {
+          kind: "schedule",
+          timezone: "UTC",
+          cron: "0 * * * *",
+        },
+        operation: {
+          kind: "function",
+          body: () => {},
+          invoker: "batch-user",
+        },
+      };
+      const application = createMockApplication([executor], {
+        externalAuthName: "external-auth",
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const create = result.changeSet.creates[0]!;
+      const targetConfig = create.request.executor?.targetConfig?.config as {
+        case: "function";
+        value: { invoker: { namespace: string; machineUserName: string } };
+      };
+      expect(targetConfig.value.invoker).toEqual({
+        namespace: "external-auth",
+        machineUserName: "batch-user",
+      });
+    });
   });
 
   describe("typed event config", () => {
@@ -583,7 +696,7 @@ describe("planExecutor", () => {
           trigger: {
             kind: "tailordb",
             events: ["tailordb.type_record.created"],
-            typeName: "User",
+            tableName: "User",
           },
           operation: { kind: "function", body: () => {} },
         } satisfies Executor,
@@ -659,7 +772,7 @@ describe("planExecutor", () => {
           trigger: {
             kind: "tailordb",
             events: ["tailordb.type_record.created", "tailordb.type_record.updated"],
-            typeName: "User",
+            tableName: "User",
           },
           operation: { kind: "function", body: () => {} },
         } satisfies Executor,
@@ -753,7 +866,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "User",
+          tableName: "User",
           condition: ({ newRecord }: { newRecord: { active: boolean } }) => newRecord.active,
         },
         operation: { kind: "function", body: () => {} },
@@ -770,6 +883,32 @@ describe("planExecutor", () => {
       expect((typedConfig.value.condition as { expr: string }).expr).not.toContain("args.typeName");
     });
 
+    test("workflow execution emits workflow typed config and normalizes result args", async () => {
+      const executor: Executor = {
+        name: "on-workflow-completed",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "workflowExecution",
+          events: ["workflow.workflow_execution.completed"],
+          workflowName: "orders",
+          condition: ({ success }: { success: boolean }) => success,
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const result = await planExecutor(buildPlanContext(createMockApplication([executor])));
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("workflow");
+      expect(typedConfig.value.eventTypes).toEqual(["workflow.workflow_execution.completed"]);
+      expect(typedConfig.value.workflowName).toBe("orders");
+      expect((typedConfig.value.condition as { expr: string }).expr).toContain("success: true");
+      expect((typedConfig.value.condition as { expr: string }).expr).toContain(
+        'error: args.failed.error ?? ""',
+      );
+      expect((typedConfig.value.condition as { expr: string }).expr).not.toContain("appNamespace:");
+    });
+
     test("recordCreated resolves same-run peer TailorDB namespaces", async () => {
       const client = createMockClient([]);
       const executor: Executor = {
@@ -779,7 +918,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "User",
+          tableName: "User",
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -949,7 +1088,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
-          typeName: "Unknown",
+          tableName: "Unknown",
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -959,7 +1098,7 @@ describe("planExecutor", () => {
 
       await expect(
         planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow('TailorDB type "Unknown" not found in any namespace');
+      ).rejects.toThrow('TailorDB table "Unknown" not found in any namespace');
     });
 
     test("resolverExecuted throws when resolver not found in any namespace", async () => {
@@ -1083,7 +1222,7 @@ describe("planExecutor", () => {
         trigger: {
           kind: "tailordb",
           events: ["tailordb.type_record.created", "tailordb.type_record.updated"],
-          typeName: "User",
+          tableName: "User",
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1185,7 +1324,7 @@ describe("planExecutor", () => {
             "tailordb.type_record.updated",
             "tailordb.type_record.deleted",
           ],
-          typeName: "User",
+          tableName: "User",
           condition: ({ typeName }: { typeName: string }) => typeName === "User",
         },
         operation: { kind: "function", body: () => {} },
@@ -1216,12 +1355,12 @@ describe("planExecutor", () => {
           trigger: {
             kind: "tailordb",
             events: ["tailordb.type_record.created"],
-            typeName: "Unknown",
+            tableName: "Unknown",
           },
           operation: { kind: "function", body: () => {} },
         } satisfies Executor,
         appOptions: { tailorDBTypes: { User: "my-tailordb" } },
-        errorPattern: 'TailorDB type "Unknown" not found in any namespace',
+        errorPattern: 'TailorDB table "Unknown" not found in any namespace',
       },
       {
         name: "resolverExecuted throws when resolver not found in any namespace",
@@ -1329,7 +1468,7 @@ describe("formatExecutorChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "user-created",
         labels: ["executor", "function"],
       },
@@ -1364,7 +1503,7 @@ describe("formatExecutorChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "user-created",
         labels: ["executor", "function"],
       },

@@ -11,9 +11,9 @@
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { aroundAll, describe, expect, test } from "vitest";
+import { tempDir } from "../../shared/test-helpers/temp-dir";
 import {
   renderBranchWorkflow,
   renderCoordinateWorkflow,
@@ -43,13 +43,11 @@ function runActionlint(workflowPath: string): LintResult {
 
 let tmpDir: string;
 
-beforeAll(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-lint-"));
+aroundAll(async (runSuite) => {
+  using tmp = tempDir("workflow-lint-");
+  tmpDir = tmp.dir;
   fs.mkdirSync(path.join(tmpDir, ".github", "workflows"), { recursive: true });
-});
-
-afterAll(() => {
-  if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+  await runSuite();
 });
 
 const COMMON = {
@@ -124,7 +122,7 @@ describe("repository ERD schema workflow", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain("example/tailor.config.ts");
-    expect(content).toContain("packages/sdk/src/cli/commands/tailordb/erd/");
+    expect(content).toContain("packages/sdk-plugin-tailordb-erd/");
     expect(content).toContain("relevant-path-prefix: example/");
   });
 
@@ -244,13 +242,14 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
-  // workingDirectory + environment
-  test("branch / npm / with workingDirectory + environment", () => {
+  // seed validation + workingDirectory + environment
+  test("branch / npm / with seed validation + workingDirectory + environment", () => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "develop",
       packageManager: "npm",
       erdPreview: null,
+      seedValidate: true,
       workingDirectory: "apps/api",
       environment: "staging",
     });
@@ -272,12 +271,13 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
       params: { tagPattern: "v*", packageManager: pm, branch: "main" },
     })),
     {
-      name: "tag / pnpm / with guard + workingDirectory + environment",
+      name: "tag / pnpm / with guard + seed validation + workingDirectory + environment",
       fileName: "tag-pnpm-guard-dir-env",
       params: {
         tagPattern: "release-*",
         packageManager: "pnpm" as const,
         branch: "main",
+        seedValidate: true,
         workingDirectory: "apps/backend",
         environment: "production",
       },
@@ -335,8 +335,9 @@ runs:
 describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinateWorkflow", () => {
   let cTmpDir: string;
 
-  beforeAll(() => {
-    cTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "coord-lint-"));
+  aroundAll(async (runSuite) => {
+    using tmp = tempDir("coord-lint-");
+    cTmpDir = tmp.dir;
     fs.mkdirSync(path.join(cTmpDir, ".github", "workflows"), { recursive: true });
     fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-setup"), { recursive: true });
     fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-api"), { recursive: true });
@@ -351,10 +352,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
       path.join(cTmpDir, ".github", "actions", "tailor-api", "action.yml"),
       COMPOSITE_ACTION_STUB,
     );
-  });
-
-  afterAll(() => {
-    if (cTmpDir) fs.rmSync(cTmpDir, { recursive: true, force: true });
+    await runSuite();
   });
 
   function lintCoordinate(name: string, content: string): LintResult {

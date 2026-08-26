@@ -3,23 +3,40 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, copyFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-// Get SDK version or URL from environment variable or package.json
-const sdkVersionOrUrl = process.env.TAILOR_SDK_VERSION;
-
-let version;
-if (sdkVersionOrUrl) {
-  // If TAILOR_SDK_VERSION is set, use it (can be version string or pkg-pr-new URL)
-  version = sdkVersionOrUrl;
-  console.log(`Using SDK version from environment: ${version}`);
-} else {
-  // Otherwise, read version from tailor-sdk's package.json
-  const tailorSdkPackageJsonPath = resolve(import.meta.dirname, "..", "..", "sdk", "package.json");
-  const tailorSdkPackageJson = JSON.parse(readFileSync(tailorSdkPackageJsonPath, "utf-8"));
-  version = tailorSdkPackageJson.version;
-  console.log(`Using SDK version from package.json: ${version}`);
+// Resolve a package's version or URL from an environment variable (can be a
+// version string or a pkg-pr-new URL), falling back to the package.json in
+// this repository.
+function resolveVersion({ envVar, packageDir, label }) {
+  const fromEnv = process.env[envVar];
+  if (fromEnv) {
+    console.log(`Using ${label} version from environment: ${fromEnv}`);
+    return fromEnv;
+  }
+  const packageJsonPath = resolve(import.meta.dirname, "..", "..", packageDir, "package.json");
+  const { version } = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+  console.log(`Using ${label} version from package.json: ${version}`);
+  return version;
 }
 
-// Update version in each template's package.json
+const packageVersions = {
+  "@tailor-platform/sdk": resolveVersion({
+    envVar: "TAILOR_TEMPLATE_SDK_VERSION",
+    packageDir: "sdk",
+    label: "SDK",
+  }),
+  "@tailor-platform/eslint-plugin-sdk": resolveVersion({
+    envVar: "TAILOR_TEMPLATE_ESLINT_PLUGIN_VERSION",
+    packageDir: "eslint-plugin-sdk",
+    label: "ESLint plugin",
+  }),
+  "@tailor-platform/sdk-plugin-seed": resolveVersion({
+    envVar: "TAILOR_TEMPLATE_SEED_PLUGIN_VERSION",
+    packageDir: "sdk-plugin-seed",
+    label: "seed plugin",
+  }),
+};
+
+// Update versions in each template's package.json
 const templatesDir = resolve(import.meta.dirname, "..", "templates");
 const templates = readdirSync(templatesDir, { withFileTypes: true })
   .filter((dirent) => dirent.isDirectory())
@@ -29,15 +46,22 @@ for (const template of templates) {
   if (!existsSync(packageJsonPath)) continue;
 
   const content = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-  if (content.dependencies?.["@tailor-platform/sdk"]) {
-    content.dependencies["@tailor-platform/sdk"] = version;
-  }
-  if (content.devDependencies?.["@tailor-platform/sdk"]) {
-    content.devDependencies["@tailor-platform/sdk"] = version;
+  const updated = [];
+  for (const [packageName, packageVersion] of Object.entries(packageVersions)) {
+    if (content.dependencies?.[packageName]) {
+      content.dependencies[packageName] = packageVersion;
+      updated.push(`${packageName}@${packageVersion}`);
+    }
+    if (content.devDependencies?.[packageName]) {
+      content.devDependencies[packageName] = packageVersion;
+      updated.push(`${packageName}@${packageVersion}`);
+    }
   }
 
   writeFileSync(packageJsonPath, JSON.stringify(content, null, 2) + "\n");
-  console.log(`Updated ${template}/package.json to use SDK: ${version}`);
+  if (updated.length > 0) {
+    console.log(`Updated ${template}/package.json to use ${updated.join(", ")}`);
+  }
 }
 
 // Copy .gitignore to __dot__gitignore

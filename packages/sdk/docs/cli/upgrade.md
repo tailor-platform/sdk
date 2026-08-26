@@ -5,7 +5,7 @@ Run codemods to upgrade your project to a newer SDK version.
 **Usage**
 
 ```
-tailor-sdk upgrade [options]
+tailor upgrade [options]
 ```
 
 **Options**
@@ -25,7 +25,7 @@ The `upgrade` command runs codemods that automatically transform your project co
 **Typical workflow:**
 
 1. Update your SDK packages to the new version (e.g., `pnpm update @tailor-platform/sdk`)
-2. Run `tailor-sdk upgrade --from <old-version>` to apply codemods
+2. Run `tailor upgrade --from <old-version>` to apply codemods
 3. Review changes and commit
 
 Use `--dry-run` to preview what changes will be made before applying them.

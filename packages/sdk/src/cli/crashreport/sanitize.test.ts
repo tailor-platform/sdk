@@ -128,42 +128,42 @@ describe("sanitizeMessage", () => {
 
 describe("sanitizeArgv", () => {
   test("keeps command and subcommand names", () => {
-    const argv = ["node", "tailor-sdk", "apply"];
-    expect(sanitizeArgv(argv)).toEqual(["node", "tailor-sdk", "apply"]);
+    const argv = ["node", "tailor", "apply"];
+    expect(sanitizeArgv(argv)).toEqual(["node", "tailor", "apply"]);
   });
 
   test.each([
     {
       name: "redacts value after any long flag (space format)",
-      argv: ["node", "tailor-sdk", "show", "--workspace-id", "some-uuid"],
-      expected: ["node", "tailor-sdk", "show", "--workspace-id", "<redacted>"],
+      argv: ["node", "tailor", "show", "--workspace-id", "some-uuid"],
+      expected: ["node", "tailor", "show", "--workspace-id", "<redacted>"],
     },
     {
       name: "redacts value after any short flag (space format)",
-      argv: ["node", "tailor-sdk", "show", "-w", "some-uuid"],
-      expected: ["node", "tailor-sdk", "show", "-w", "<redacted>"],
+      argv: ["node", "tailor", "show", "-w", "some-uuid"],
+      expected: ["node", "tailor", "show", "-w", "<redacted>"],
     },
     {
       name: "redacts value after any flag regardless of flag name",
-      argv: ["node", "tailor-sdk", "apply", "--region", "asia-northeast"],
-      expected: ["node", "tailor-sdk", "apply", "--region", "<redacted>"],
+      argv: ["node", "tailor", "apply", "--region", "asia-northeast"],
+      expected: ["node", "tailor", "apply", "--region", "<redacted>"],
     },
     {
       name: "treats consecutive flags correctly (no value between them)",
-      argv: ["node", "tailor-sdk", "apply", "--verbose", "--yes"],
-      expected: ["node", "tailor-sdk", "apply", "--verbose", "--yes"],
+      argv: ["node", "tailor", "apply", "--verbose", "--yes"],
+      expected: ["node", "tailor", "apply", "--verbose", "--yes"],
     },
     {
       name: "redacts value after boolean flag followed by valued flag",
-      argv: ["node", "tailor-sdk", "apply", "--verbose", "--workspace-id", "secret"],
-      expected: ["node", "tailor-sdk", "apply", "--verbose", "--workspace-id", "<redacted>"],
+      argv: ["node", "tailor", "apply", "--verbose", "--workspace-id", "secret"],
+      expected: ["node", "tailor", "apply", "--verbose", "--workspace-id", "<redacted>"],
     },
   ])("$name", ({ argv, expected }) => {
     expect(sanitizeArgv(argv)).toEqual(expected);
   });
 
   test("redacts --flag=value (equals format)", () => {
-    const argv = ["node", "tailor-sdk", "show", "--workspace-id=some-uuid"];
+    const argv = ["node", "tailor", "show", "--workspace-id=some-uuid"];
     const result = sanitizeArgv(argv);
     expect(result).toContain("--workspace-id=<redacted>");
     expect(result).not.toContain("some-uuid");
@@ -172,19 +172,19 @@ describe("sanitizeArgv", () => {
   test.each([
     {
       name: "redacts absolute path positional arguments",
-      argv: ["node", "tailor-sdk", "/home/user/project/tailor.config.ts"],
+      argv: ["node", "tailor", "/home/user/project/tailor.config.ts"],
       contains: "<path>",
       excludes: "/home/user/",
     },
     {
       name: "redacts Windows-style absolute path positional arguments",
-      argv: ["node", "tailor-sdk", "C:\\Users\\admin\\project\\tailor.config.ts"],
+      argv: ["node", "tailor", "C:\\Users\\admin\\project\\tailor.config.ts"],
       contains: "<path>",
       excludes: "C:\\Users\\admin",
     },
     {
       name: "redacts email address positional arguments",
-      argv: ["node", "tailor-sdk", "user", "switch", "user@example.com"],
+      argv: ["node", "tailor", "user", "switch", "user@example.com"],
       contains: "<email>",
       excludes: "user@example.com",
     },

@@ -3,15 +3,15 @@ import { gqlPermissionLoggedIn, permissionLoggedIn } from "./common/permission";
 import { product } from "./product";
 
 export const inventory = db
-  .type("Inventory", {
+  .table("Inventory", {
     productId: db
       .uuid()
       .description("ID of the product")
-      .relation({ type: "1-1", toward: { type: product } }),
+      .relation({ type: "1-1", toward: { table: product } }),
     quantity: db
       .int()
       .description("Quantity of the product in inventory")
-      .validate(({ value }) => value >= 0),
+      .validate(({ value }) => (value < 0 ? "Quantity must be non-negative" : undefined)),
     ...db.fields.timestamps(),
   })
   .permission(permissionLoggedIn)

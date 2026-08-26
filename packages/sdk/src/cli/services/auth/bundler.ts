@@ -1,16 +1,19 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
-import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
+import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
-import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { LogLevel } from "#/configure/config/types";
 
@@ -26,21 +29,25 @@ export interface BundleAuthHooksOptions {
   handlerAccessPath: string;
   /** Environment variables to inject into the hook args */
   env?: Record<string, string | number | boolean>;
-  /** Trigger context for workflow/job transformations */
-  triggerContext?: TriggerContext;
+  /** Start context for workflow/job transformations */
+  startContext?: StartContext;
   /** Optional bundle cache for skipping unchanged builds */
   cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Directory the tsconfig is resolved against */
+  baseDir: string;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
  * Bundle a single auth hook handler.
  *
  * Follows the same pattern as the executor bundler:
- * 1. Generate an entry file that re-exports the handler as `main`
+ * 1. Generate an in-memory entry module that re-exports the handler as `main`
  * 2. Bundle with rolldown + tree-shaking
  * @param options - Bundle options
  * @returns Map of function name to bundled code
@@ -53,31 +60,24 @@ export async function bundleAuthHooks(
     authName,
     handlerAccessPath,
     env = {},
-    triggerContext,
+    startContext,
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
+    baseDir,
+    tsconfigCache,
   } = options;
 
   logger.newline();
   logger.log(`Bundling auth hook for ${styles.info(`"${authName}"`)}`);
 
-  const outputDir = path.resolve(getDistDir(), "auth-hooks");
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  await removeStaleEntryFiles(outputDir);
-
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
-
-  const functionName = `auth-hook--${authName}--before-login`;
   const absoluteConfigPath = path.resolve(configPath);
 
-  const serializedTriggerContext = serializeTriggerContext(triggerContext);
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
+
+  const functionName = `auth-hook--${authName}--before-login`;
+
+  const serializedStartContext = serializeStartContext(startContext);
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
   const sortedEnvPrefix = JSON.stringify(
@@ -85,7 +85,7 @@ export async function bundleAuthHooks(
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: absoluteConfigPath,
-    serializedTriggerContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -98,9 +98,7 @@ export async function bundleAuthHooks(
     name: functionName,
     sourceFile: absoluteConfigPath,
     contextHash,
-    async build(cachePlugins) {
-      const entryPath = path.join(outputDir, `${functionName}.entry.js`);
-
+    async build(cachePlugins, trackDependency) {
       const entryContent = ml /* js */ `
         import _config from "${absoluteConfigPath}";
         const __auth_hook_function = _config.${handlerAccessPath};
@@ -109,14 +107,27 @@ export async function bundleAuthHooks(
           return await __auth_hook_function({ ...args, env });
         }
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(
+        `auth-hook:${functionName}`,
+        entryContent,
+        "js",
+        absoluteConfigPath,
+      );
 
-      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
+      const startPlugin = createStartTransformPlugin(startContext);
+      const plugins: rolldown.Plugin[] = [entry.plugin];
+      if (startPlugin) {
+        plugins.push(startPlugin);
+      }
+      plugins.push(
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      );
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",
@@ -134,14 +145,15 @@ export async function bundleAuthHooks(
         plugins,
         transform: {
           define: {
-            "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),
+            "process.env.TAILOR_APP_LOG_LEVEL": JSON.stringify(bundleLogLevel),
           },
         },
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        logLevel: "silent",
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
 
       return result.output[0].code;
     },

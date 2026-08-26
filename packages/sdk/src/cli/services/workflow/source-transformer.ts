@@ -2,7 +2,7 @@ import { parseSync } from "oxc-parser";
 import { type ASTNode, type Replacement, applyReplacements, findStatementEnd } from "./ast-utils";
 import { findAllJobs } from "./job-detector";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
-import type { Program, VariableDeclaration, ExportDefaultDeclaration } from "@oxc-project/types";
+import type { Program } from "@oxc-project/types";
 
 /**
  * Find variable declarations by export names
@@ -20,7 +20,7 @@ function findVariableDeclarationsByName(
       statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
     if (declaration?.type !== "VariableDeclaration") continue;
 
-    const variableDeclaration = declaration as VariableDeclaration;
+    const variableDeclaration = declaration;
     for (const declarator of variableDeclaration.declarations) {
       if (declarator.id.type === "Identifier") {
         declarations.set(declarator.id.name, {
@@ -45,7 +45,7 @@ function findWorkflowDefaultExport(program: Program): { start: number; end: numb
 
   for (const statement of program.body) {
     if (statement.type === "ExportDefaultDeclaration") {
-      const exportDecl = statement as ExportDefaultDeclaration;
+      const exportDecl = statement;
       const declaration = exportDecl.declaration;
 
       // Check for direct createWorkflow call: export default createWorkflow({...})

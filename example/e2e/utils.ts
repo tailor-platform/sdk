@@ -1,20 +1,67 @@
-import { createClient, type Interceptor } from "@connectrpc/connect";
+import { Code, ConnectError, createClient, type Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { GraphQLClient } from "graphql-request";
 import { inject } from "vitest";
 
 export function createOperatorClient() {
-  const baseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+  const baseUrl = process.env.TAILOR_PLATFORM_URL ?? "https://api.tailor.tech";
   const workspaceId = inject("workspaceId");
   const platformToken = inject("platformToken");
 
   const transport = createConnectTransport({
     httpVersion: "2",
     baseUrl,
-    interceptors: [userAgentInterceptor(), bearerTokenInterceptor(platformToken)],
+    // Every OperatorService call in e2e is a read (get*/list*), so a stalled
+    // request is safe to cut short and retry instead of eating the test timeout.
+    interceptors: [
+      retryInterceptor(),
+      userAgentInterceptor(),
+      bearerTokenInterceptor(platformToken),
+    ],
   });
   return [createClient(OperatorService, transport), workspaceId] as const;
+}
+
+// The per-attempt deadline lives here rather than in the transport's
+// `defaultTimeoutMs`: the transport creates its deadline signal once per RPC,
+// so after a timeout every retry would reuse an already-aborted request.
+function retryInterceptor(maxAttempts = 3, attemptTimeoutMs = 10_000): Interceptor {
+  const retryableCodes = new Set([Code.DeadlineExceeded, Code.Unavailable]);
+  return (next) => async (req) => {
+    if (req.stream) {
+      return await next(req);
+    }
+
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+      const deadline = new AbortController();
+      const timer = setTimeout(
+        () => deadline.abort(new ConnectError("attempt timed out", Code.DeadlineExceeded)),
+        attemptTimeoutMs,
+      );
+      try {
+        return await next({ ...req, signal: AbortSignal.any([req.signal, deadline.signal]) });
+      } catch (error) {
+        const connectError = ConnectError.from(error);
+        if (!retryableCodes.has(connectError.code)) {
+          throw error;
+        }
+        if (attempt < maxAttempts) {
+          console.warn(
+            `retrying ${req.method.name} after attempt ${attempt}/${maxAttempts} failed: ${connectError.message}`,
+          );
+        }
+        lastError = error;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastError;
+  };
 }
 
 function userAgentInterceptor(): Interceptor {
@@ -23,7 +70,7 @@ function userAgentInterceptor(): Interceptor {
       return await next(req);
     }
 
-    req.header.set("User-Agent", "tailor-sdk-ci");
+    req.header.set("User-Agent", "tailor-ci");
     return await next(req);
   };
 }
@@ -47,4 +94,10 @@ export function createGraphQLClient(appUrl: string, token: string) {
     },
     errorPolicy: "all",
   });
+}
+
+/** A client that sends no credentials, for asserting what anonymous callers can reach. */
+export function createAnonymousGraphQLClient(appUrl: string) {
+  const endpoint = new URL("/query", appUrl).href;
+  return new GraphQLClient(endpoint, { errorPolicy: "all" });
 }

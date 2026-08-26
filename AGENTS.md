@@ -22,6 +22,7 @@ When editing files matching these globs, read and follow the linked rule documen
 - `.changeset/**`: [Changeset Rules](.agents/rules/changeset.md)
 - `packages/sdk/src/cli/**/*.ts`: [CLI Logging Guidelines](.agents/rules/cli-logging.md)
 - `**`: [Code Comments](.agents/rules/code-comments.md)
+- `packages/sdk/src/**/*.ts`, `packages/sdk-codemod/src/registry.ts`: [Deprecating a Public API](.agents/rules/deprecation.md)
 - `packages/sdk/docs/**`, `packages/sdk/src/**/*.ts`: [User-Facing Docs Authoring](.agents/rules/docs-authoring.md)
 - `packages/sdk/src/**/*.ts`: [JSDoc Parameter Rules (SDK)](.agents/rules/jsdoc.md)
 - `packages/sdk/src/types/**/*.ts`, `packages/sdk/src/parser/**/types.ts`, `packages/sdk/src/configure/**/types.ts`, `packages/sdk/src/configure/**/*.types.ts`, `packages/sdk/src/plugin/types.ts`, `packages/sdk/src/runtime/types.ts`, `packages/sdk/src/parser/**/schema.ts`, `packages/sdk/zinfer.config.ts`: [Schema Types](.agents/rules/schema-types.md)
@@ -49,6 +50,9 @@ When editing files matching these globs, read and follow the linked rule documen
 
 - `pnpm agent:rules:update` - Regenerate `AGENTS.md`'s path-scoped rule index and `.claude/rules/*.md`
 - `pnpm agent:rules:check` - Verify generated agent rule files are up to date
+- `pnpm codemod:docs:update` - Regenerate `packages/sdk/docs/migration/v<major>.md` from the codemod registry
+- `pnpm codemod:docs:check` - Verify migration docs are up to date
+- `pnpm check:deprecations` - Verify every `@deprecated` in `packages/sdk/src` states its `since` version and codemod (see [Deprecating a Public API](.agents/rules/deprecation.md))
 
 ### CLI
 
@@ -71,7 +75,7 @@ Refer to `example/` for working implementations of all patterns (config, models,
 Key files:
 
 - `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, defineAIGateway, definePlugins
-- `example/tailordb/*.ts` - Model definitions with `db.type()`
+- `example/tailordb/*.ts` - Model definitions with `db.table()`
 - `example/resolvers/*.ts` - Resolver implementations with `createResolver`
 - `example/executors/*.ts` - Executor implementations with `createExecutor`
 - `example/workflows/*.ts` - Workflow implementations with `createWorkflow` / `createWorkflowJob`
@@ -83,10 +87,13 @@ Key files:
 - `createWorkflow()` result **must** be default exported
 - All jobs **must** be named exports (including mainJob and triggered jobs)
 - Job names must be unique across the entire project
-- `.trigger()` returns a `Promise<Awaited<Output>>` — typically `await` it to read the value
-- `defineWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
+- Job `.trigger()` returns `Awaited<Output>` directly; read the value synchronously unless the job output itself is promise-like
+- `createWorkflowJob`'s `name` and `body` must be static literals (a string literal name, an inline function expression body) — not a variable or the result of another function call — or the build fails instead of silently dropping the job
+- `.start()` calls must be lexically inside the calling job's `body` (a function defined inside `body` may call it too) — not a function defined outside `body` — or the build fails instead of silently dropping the call
+- Calling `execJobFunction` directly (on the ambient `tailor.workflow` global or the `workflow` value imported from `@tailor-platform/sdk/runtime`) instead of `<job>.start()` is not detected as a dependency and fails the build
+- `createWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
 - Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; acquire the mock with `using wf = mockWorkflow()` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) and use `wf.setWaitHandler` / `wf.setResolveHandler` to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
-- Use `wps.key.wait()` for namespaced access, or `export const { key } = defineWaitPoints(...)` for destructured 2-level access
+- Use `wps.key.wait()` for namespaced access, or `export const { key } = createWaitPoints(...)` for destructured 2-level access
 
 ### Executors
 
@@ -95,6 +102,8 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 - `resolverExecutedTrigger` - Resolver execution
 - `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - IdP user events. Pass `{ idp: "my-idp" }` to target a specific IdP when the project defines multiple IdPs
 - `authAccessTokenIssuedTrigger` / `authAccessTokenRefreshedTrigger` / `authAccessTokenRevokedTrigger` - Auth token events
+- `workflowExecutionStartedTrigger` / `workflowExecutionCompletedTrigger` / `workflowExecutionRetriedTrigger` / `workflowExecutionResumedTrigger` / `workflowExecutionWaitStartedTrigger` / `workflowExecutionWaitResolvedTrigger` - Workflow execution lifecycle events. Pass `{ workflow: myWorkflow }` to target a workflow
+- `workflowJobExecutionStartedTrigger` / `workflowJobExecutionCompletedTrigger` / `workflowJobExecutionWaitStartedTrigger` / `workflowJobExecutionWaitResolvedTrigger` - Workflow job execution lifecycle events. Pass `{ workflow: myWorkflow }` to target a workflow's jobs
 - `scheduleTrigger` - CRON schedule
 - `incomingWebhookTrigger` - Webhook
 
@@ -103,16 +112,22 @@ Multi-event trigger variants handle multiple events in one executor:
 - `recordTrigger({ type, events: ["created", "updated"] })` - Multiple record events
 - `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events. Add `idp: "my-idp"` to target a specific IdP in multi-IdP projects
 - `authAccessTokenTrigger({ events: ["issued", "revoked"] })` - Multiple auth token events
+- `workflowExecutionTrigger({ workflow: myWorkflow, events: ["started", "completed"] })` - Multiple workflow execution events
+- `workflowJobExecutionTrigger({ workflow: myWorkflow, events: ["started", "wait_resolved"] })` - Multiple workflow job execution events
 
 Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
 
 ### Plugins
 
-`definePlugins()` takes plugin instances as rest arguments (see `example/tailor.config.ts`). The `kyselyTypePlugin` from `@tailor-platform/sdk/plugin/kysely-type` is required for `getDB()` in resolvers/executors/workflows. `defineGenerators()` is deprecated — use `definePlugins()` instead.
+`definePlugins()` takes plugin instances as rest arguments (see `example/tailor.config.ts`). The `kyselyTypePlugin` from `@tailor-platform/sdk/plugin/kysely-type` is required for `getDB()` in resolvers/executors/workflows.
 
 ### Configuration
 
 - Static website `.url` property is resolved at deployment time — use it in CORS and redirect URIs
+
+## Git Workflow
+
+- Merge pull requests with a merge commit; do not squash or rebase.
 
 ## Developer Guides
 

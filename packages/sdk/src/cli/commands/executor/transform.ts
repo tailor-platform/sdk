@@ -252,6 +252,18 @@ function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<st
     };
   }
 
+  // Workflows are workspace-scoped, so this is the only case with no namespace.
+  // Returning early keeps `namespaceName` in the key position every other case
+  // has always emitted it in.
+  if (typedConfig.case === "workflow") {
+    return {
+      kind: typedConfig.case,
+      eventTypes: typedConfig.value.eventTypes,
+      condition: typedConfig.value.condition?.expr || "",
+      ...(typedConfig.value.workflowName && { workflowName: typedConfig.value.workflowName }),
+    };
+  }
+
   const base = {
     kind: typedConfig.case,
     eventTypes: typedConfig.value.eventTypes,

@@ -16,9 +16,6 @@ This example is used for:
 # Generate code and types
 pnpm generate
 
-# Watch mode
-pnpm generate:watch
-
 # Deploy to Tailor Platform
 pnpm deploy
 

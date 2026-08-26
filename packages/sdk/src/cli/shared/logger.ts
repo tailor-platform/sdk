@@ -1,7 +1,7 @@
 import { formatWithOptions, type InspectOptions } from "node:util";
-import chalk from "chalk";
+import { color, renderFor } from "@tailor-platform/shared/color";
 import { formatDistanceToNowStrict } from "date-fns";
-import { getBorderCharacters, table } from "table";
+import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
 
 /**
@@ -22,50 +22,51 @@ export class CIPromptError extends Error {
  */
 export const styles = {
   // Status colors
-  success: chalk.green,
-  error: chalk.red,
-  warning: chalk.yellow,
-  info: chalk.cyan,
+  success: color.green,
+  error: color.red,
+  warning: color.yellow,
+  info: color.cyan,
 
   // Action colors (for change sets)
-  create: chalk.green,
-  update: chalk.yellow,
-  delete: chalk.red,
-  unchanged: chalk.gray,
+  create: color.green,
+  update: color.yellow,
+  delete: color.red,
+  replace: color.magenta,
+  unchanged: color.gray,
 
   // Emphasis
-  bold: chalk.bold,
-  dim: chalk.gray,
-  highlight: chalk.cyanBright,
-  successBright: chalk.greenBright,
-  errorBright: chalk.redBright,
+  bold: color.bold,
+  dim: color.gray,
+  highlight: color.cyanBright,
+  successBright: color.greenBright,
+  errorBright: color.redBright,
 
   // Resource types
-  resourceType: chalk.bold,
-  resourceName: chalk.cyan,
+  resourceType: color.bold,
+  resourceName: color.cyan,
 
   // File paths
-  path: chalk.cyan,
+  path: color.cyan,
 
   // Values
-  value: chalk.white,
-  placeholder: chalk.gray.italic,
+  value: color.white,
+  placeholder: (text: string) => color.italic(color.gray(text)),
 };
 
 /**
  * Standardized symbols for CLI output
  */
 export const symbols = {
-  success: chalk.green("\u2713"),
-  error: chalk.red("\u2716"),
-  warning: chalk.yellow("\u26a0"),
-  info: chalk.cyan("i"),
-  create: chalk.green("+"),
-  update: chalk.yellow("~"),
-  delete: chalk.red("-"),
-  replace: chalk.magenta("\u00b1"),
-  bullet: chalk.gray("\u2022"),
-  arrow: chalk.gray("\u2192"),
+  success: styles.success("\u2713"),
+  error: styles.error("\u2716"),
+  warning: styles.warning("\u26a0"),
+  info: styles.info("i"),
+  create: styles.create("+"),
+  update: styles.update("~"),
+  delete: styles.delete("-"),
+  replace: styles.replace("\u00b1"),
+  bullet: styles.dim("\u2022"),
+  arrow: styles.dim("\u2192"),
 };
 
 /**
@@ -93,6 +94,7 @@ export interface OutOptions {
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
 let _jsonMode = false;
+let _verbose = false;
 
 // Type icons for log output
 const TYPE_ICONS: Record<string, string> = {
@@ -107,12 +109,12 @@ const TYPE_ICONS: Record<string, string> = {
 
 // Color functions for icon and message text
 const TYPE_COLORS: Record<string, (text: string) => string> = {
-  info: chalk.cyan,
-  success: chalk.green,
-  warn: chalk.yellow,
-  error: chalk.red,
-  debug: chalk.gray,
-  trace: chalk.gray,
+  info: styles.info,
+  success: styles.success,
+  warn: styles.warning,
+  error: styles.error,
+  debug: styles.dim,
+  trace: styles.dim,
   log: (text) => text,
 };
 
@@ -163,15 +165,28 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const formattedMessage = formatWithOptions(inspectOpts, message);
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
   const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
-  process.stderr.write(output);
+  process.stderr.write(renderFor(process.stderr, output));
 }
 
+/**
+ * The CLI logger. Diagnostics go to stderr; `out()` writes primary output to
+ * stdout as a table, or as JSON when `jsonMode` is on. `--json` and
+ * `--verbose` feed the `jsonMode` / `verbose` state, which CLI plugins share
+ * with the SDK code paths they call.
+ */
 export const logger = {
   get jsonMode(): boolean {
     return _jsonMode;
   },
   set jsonMode(value: boolean) {
     _jsonMode = value;
+  },
+
+  get verbose(): boolean {
+    return _verbose;
+  },
+  set verbose(value: boolean) {
+    _verbose = value;
   },
 
   info(message: string, opts?: LogOptions): void {
@@ -199,14 +214,14 @@ export const logger = {
   },
 
   debug(message: string): void {
-    if (parseBoolean(process.env.DEBUG) === true) {
+    if (_verbose || parseBoolean(process.env.DEBUG) === true) {
       writeLog("log", styles.dim(message), { mode: "plain" });
     }
   },
 
   out(data: string | object | object[], options?: OutOptions): void {
     if (typeof data === "string") {
-      process.stdout.write(data.endsWith("\n") ? data : data + "\n");
+      process.stdout.write(renderFor(process.stdout, data.endsWith("\n") ? data : data + "\n"));
       return;
     }
 
@@ -253,11 +268,8 @@ export const logger = {
         key,
         transformValue(key, value, data, true),
       ]);
-      const t = table(formattedEntries, {
-        singleLine: false,
-        border: getBorderCharacters("norc"),
-      });
-      process.stdout.write(t);
+      const t = renderTable(formattedEntries, { singleLine: false });
+      process.stdout.write(renderFor(process.stdout, t));
       return;
     }
 
@@ -267,18 +279,20 @@ export const logger = {
 
     const allHeaders = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
     const headers = allHeaders.filter((h) => !isExcluded(h));
+    if (headers.length === 0) {
+      return;
+    }
     const rows = data.map((item) =>
       headers.map((header) =>
         transformValue(header, (item as Record<string, unknown>)[header], item),
       ),
     );
 
-    const t = table([headers, ...rows], {
-      border: getBorderCharacters("norc"),
+    const t = renderTable([headers, ...rows], {
       drawHorizontalLine: (lineIndex, rowCount) => {
         return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
       },
     });
-    process.stdout.write(t);
+    process.stdout.write(renderFor(process.stdout, t));
   },
 };

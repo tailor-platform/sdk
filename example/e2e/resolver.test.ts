@@ -4,7 +4,7 @@ import { gql } from "graphql-request";
 import ml from "multiline-ts";
 import { describe, expect, inject, test } from "vitest";
 import { filterByMetadata, pipelineTrn } from "./metadata";
-import { createGraphQLClient, createOperatorClient } from "./utils";
+import { createAnonymousGraphQLClient, createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {
   const [client, workspaceId] = createOperatorClient();
@@ -261,7 +261,7 @@ describe("dataplane", () => {
       const query = gql`
         query {
           showUserInfo {
-            user {
+            caller {
               id
               type
               workspaceId
@@ -280,7 +280,7 @@ describe("dataplane", () => {
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
         showUserInfo: {
-          user: {
+          caller: {
             id: expect.any(String),
             type: "machine_user",
             workspaceId: expect.any(String),
@@ -310,13 +310,15 @@ describe("dataplane", () => {
 
       const responseFields = userInfo?.response?.type?.fields ?? [];
 
-      const userField = responseFields.find((f) => f.name === "user");
-      expect(userField?.description).toBe("Authenticated user");
-      const userSubFields = userField?.type?.fields ?? [];
-      expect(userSubFields.find((f) => f.name === "id")?.description).toBe("User ID");
-      expect(userSubFields.find((f) => f.name === "type")?.description).toBe("User type");
-      expect(userSubFields.find((f) => f.name === "workspaceId")?.description).toBe("Workspace ID");
-      expect(userSubFields.find((f) => f.name === "role")?.description).toBe("User role");
+      const callerField = responseFields.find((f) => f.name === "caller");
+      expect(callerField?.description).toBe("Authenticated caller");
+      const callerSubFields = callerField?.type?.fields ?? [];
+      expect(callerSubFields.find((f) => f.name === "id")?.description).toBe("User ID");
+      expect(callerSubFields.find((f) => f.name === "type")?.description).toBe("User type");
+      expect(callerSubFields.find((f) => f.name === "workspaceId")?.description).toBe(
+        "Workspace ID",
+      );
+      expect(callerSubFields.find((f) => f.name === "role")?.description).toBe("User role");
 
       const invokerField = responseFields.find((f) => f.name === "invoker");
       expect(invokerField?.description).toBe("Function invoker");
@@ -431,14 +433,14 @@ describe("dataplane", () => {
     });
   });
 
-  describe("triggerOrderProcessing", () => {
-    test("triggers workflow and returns workflowRunId", async () => {
+  describe("startOrderProcessing", () => {
+    test("starts workflow and returns workflowRunId", async () => {
       const orderId = randomUUID();
       const customerId = randomUUID();
 
       const mutation = gql`
         mutation {
-          triggerOrderProcessing(
+          startOrderProcessing(
             orderId: "${orderId}"
             customerId: "${customerId}"
           ) {
@@ -450,15 +452,15 @@ describe("dataplane", () => {
       const result = await graphQLClient.rawRequest(mutation);
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
-        triggerOrderProcessing: {
+        startOrderProcessing: {
           workflowRunId: expect.any(String),
-          message: `Workflow triggered for order ${orderId}`,
+          message: `Workflow started for order ${orderId}`,
         },
       });
 
       // Verify workflowRunId is a valid UUID
-      const workflowRunId = (result.data as { triggerOrderProcessing: { workflowRunId: string } })
-        .triggerOrderProcessing.workflowRunId;
+      const workflowRunId = (result.data as { startOrderProcessing: { workflowRunId: string } })
+        .startOrderProcessing.workflowRunId;
       expect(workflowRunId).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       );
@@ -473,37 +475,78 @@ describe("dataplane", () => {
         pipelineResolverView: PipelineResolverView.FULL,
       });
 
-      const triggerResolver = pipelineResolvers.find((e) => e.name === "triggerOrderProcessing");
-      expect(triggerResolver).toBeDefined();
-      expect(triggerResolver).toMatchObject({
-        name: "triggerOrderProcessing",
-        description: "Trigger the order processing workflow",
+      const startResolver = pipelineResolvers.find((e) => e.name === "startOrderProcessing");
+      expect(startResolver).toBeDefined();
+      expect(startResolver).toMatchObject({
+        name: "startOrderProcessing",
+        description: "Start the order processing workflow",
         operationType: "mutation",
       });
 
       // Verify inputs
-      const inputNames = triggerResolver?.inputs?.map((i) => i.name) ?? [];
+      const inputNames = startResolver?.inputs?.map((i) => i.name) ?? [];
       expect(inputNames).toContain("orderId");
       expect(inputNames).toContain("customerId");
 
       // Verify orderId input
-      const orderIdInput = triggerResolver?.inputs?.find((i) => i.name === "orderId");
+      const orderIdInput = startResolver?.inputs?.find((i) => i.name === "orderId");
       expect(orderIdInput?.description).toBe("Order ID to process");
       expect(orderIdInput?.type?.kind).toBe("ScalarType");
       expect(orderIdInput?.type?.name).toBe("String");
 
       // Verify customerId input
-      const customerIdInput = triggerResolver?.inputs?.find((i) => i.name === "customerId");
+      const customerIdInput = startResolver?.inputs?.find((i) => i.name === "customerId");
       expect(customerIdInput?.description).toBe("Customer ID for the order");
       expect(customerIdInput?.type?.kind).toBe("ScalarType");
-      expect(customerIdInput?.type?.name).toBe("String");
+      expect(customerIdInput?.type?.name).toBe("ID");
 
       // Verify response
-      const responseFields = triggerResolver?.response?.type?.fields ?? [];
+      const responseFields = startResolver?.response?.type?.fields ?? [];
       const workflowRunIdField = responseFields.find((f) => f.name === "workflowRunId");
       expect(workflowRunIdField).toBeDefined();
       const messageField = responseFields.find((f) => f.name === "message");
       expect(messageField).toBeDefined();
     });
+  });
+});
+
+describe("permission", () => {
+  const anonymousClient = createAnonymousGraphQLClient(inject("url"));
+  const authenticatedClient = createGraphQLClient(inject("url"), inject("token"));
+
+  const addQuery = gql`
+    query {
+      add(a: 1, b: 2)
+    }
+  `;
+  const passThroughQuery = gql`
+    query {
+      passThrough(
+        input: {
+          userInfo: { name: "John Doe", email: "john@example.com" }
+          metadata: { created: "2024-01-01T00:00:00.000Z", version: 1 }
+        }
+      ) {
+        userInfo {
+          name
+        }
+      }
+    }
+  `;
+
+  test("a resolver inheriting the namespace default rejects an anonymous caller", async () => {
+    const result = await anonymousClient.rawRequest(passThroughQuery);
+    expect(result.errors?.[0]?.message).toContain("access denied");
+  });
+
+  test("the same resolver accepts an authenticated caller", async () => {
+    const result = await authenticatedClient.rawRequest(passThroughQuery);
+    expect(result.errors).toBeUndefined();
+  });
+
+  test("a resolver overriding the default with allowAnonymous stays reachable", async () => {
+    const result = await anonymousClient.rawRequest(addQuery);
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ add: 3 });
   });
 });

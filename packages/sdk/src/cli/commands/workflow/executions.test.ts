@@ -1,5 +1,5 @@
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { getWorkflowExecution } from "./executions";
@@ -24,11 +24,12 @@ function execution(status: WorkflowExecution_Status): WorkflowExecution {
 }
 
 describe("getWorkflowExecution", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
+    await runTest();
   });
 
   test("returns wait diagnostics when waiting times out", async () => {

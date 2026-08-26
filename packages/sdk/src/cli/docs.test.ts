@@ -3,8 +3,8 @@ import { format } from "oxfmt";
 import { assertDocMatch } from "politty/docs";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
+import { mainCommand } from "./main";
 import { commonArgs } from "./shared/args";
-import { mainCommand } from "./index";
 
 async function mdFormatter(content: string): Promise<string> {
   const result = await format("file.md", content);
@@ -25,7 +25,7 @@ const templateFiles: [output: string, commands: string[]][] = [
   ["application", ["init", "generate", "deploy", "remove", "show", "open", "api"]],
   ["tailordb", ["tailordb"]],
   ["query", ["query"]],
-  ["user", ["login", "logout", "user"]],
+  ["user", ["login", "logout", "auth", "user"]],
   ["organization", ["organization"]],
   ["workspace", ["workspace", "profile"]],
   ["auth", ["authconnection", "machineuser", "oauth2client"]],
@@ -38,6 +38,7 @@ const templateFiles: [output: string, commands: string[]][] = [
   ["setup", ["setup"]],
   ["upgrade", ["upgrade"]],
   ["skills", ["skills"]],
+  ["plugin", ["plugin"]],
   ["completion", ["completion"]],
 ];
 
@@ -65,6 +66,7 @@ describe("CLI Documentation", () => {
       command: mainCommand,
       templates,
       targetCommands,
+      // strip unknown keys
       globalArgs: z.object(commonArgs),
       formatter: mdFormatter,
     });

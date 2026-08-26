@@ -6,7 +6,7 @@
     ":pinAllExceptPeerDependencies",
     ":disableDependencyDashboard"
   ],
-  "gitIgnoredAuthors": ["247949890+tailor-pr-trigger[bot]@users.noreply.github.com"],
+  "gitIgnoredAuthors": ["247949890+tailor-platform-pr-trigger[bot]@users.noreply.github.com"],
   "dependencyDashboardApproval": false,
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
@@ -88,6 +88,11 @@
       "description": "Group aquaproj tooling to reduce review overhead",
       "matchPackageNames": ["aquaproj/*"],
       "groupName": "aquaproj"
+    },
+    {
+      "description": "Group all tailor-platform/actions pins so every generated reference bumps atomically",
+      "matchPackageNames": ["tailor-platform/actions"],
+      "groupName": "tailor-platform/actions"
     },
     {
       "matchManagers": ["npm"],

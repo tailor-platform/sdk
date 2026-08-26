@@ -1,37 +1,12 @@
-import { cpSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
-const runtimeGlobalsBanner = '/// <reference types="@tailor-platform/sdk/runtime/globals" />';
-const runtimeGlobalsBannerPattern =
-  /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\r?\n/;
-
-function copyErdViewerAssets(outDir: string): void {
-  const source = path.resolve("src/cli/commands/tailordb/erd/viewer-assets");
-  const target = path.resolve(outDir, "cli/erd-viewer-assets");
-  rmSync(target, { recursive: true, force: true });
-  cpSync(source, target, { recursive: true });
-}
-
-function stripBannerExceptConfigureEntry(outDir: string): void {
-  const root = path.resolve(outDir);
-  const keep = path.join(root, "configure", "index.d.mts");
-  const walk = (current: string): void => {
-    for (const dirent of readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, dirent.name);
-      if (dirent.isDirectory()) {
-        walk(full);
-      } else if (dirent.isFile() && dirent.name.endsWith(".d.mts") && full !== keep) {
-        const content = readFileSync(full, "utf-8");
-        const cleaned = content.replace(runtimeGlobalsBannerPattern, "");
-        if (cleaned !== content) writeFileSync(full, cleaned, "utf-8");
-      }
-    }
-  };
-  walk(root);
+function copyToOutDir(outDir: string, source: string, dest: string): void {
+  cpSync(path.resolve(source), path.join(outDir, dest));
 }
 
 function yamlText() {
@@ -81,14 +56,17 @@ export default defineConfig([
     clean: true,
     dts: false,
     sourcemap: true,
+    minify: { mangle: { keepNames: true } },
     // peer dependencies: prevent bundling, resolve at runtime.
     // `@tailor-platform/sdk` (self-name) is kept external so subpath entries can reference
-    // types like `ConnectionName` from the main entry instead of inlining them, letting a
-    // single `declare module "@tailor-platform/sdk"` augmentation narrow every entry point.
+    // types like `ConnectionName`/`MachineUserName` from the main entry instead of inlining
+    // them, letting a single `declare module "@tailor-platform/sdk"` augmentation narrow
+    // every entry point.
     deps: { neverBundle: externalDeps },
     plugins: jsPlugins,
     onSuccess: (config) => {
-      copyErdViewerAssets(config.outDir);
+      copyToOutDir(config.outDir, "src/cli/ts-hook.mjs", "cli/ts-hook.mjs");
+      copyToOutDir(config.outDir, "src/cli/ts-hook.d.mts", "cli/ts-hook.d.mts");
     },
   },
   {
@@ -96,15 +74,10 @@ export default defineConfig([
     name: "dts",
     dts: {
       emitDtsOnly: true,
+      eager: true,
     },
     unbundle: true,
     root: "src",
-    banner: {
-      dts: runtimeGlobalsBanner,
-    },
     deps: { neverBundle: externalDeps },
-    onSuccess: (config) => {
-      stripBannerExceptConfigureEntry(config.outDir);
-    },
   },
 ]);

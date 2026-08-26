@@ -1,9 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { QueryEngine } from "#/cli/query/types";
 
@@ -80,9 +83,10 @@ function createGqlEntry(): string {
 /**
  * Bundle a query executor script for TestExecScript.
  * @param engine - Query engine type
+ * @param baseDir - Directory to resolve the bundler's tsconfig against
  * @returns Bundled code
  */
-export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
+export async function bundleQueryScript(engine: QueryEngine, baseDir: string): Promise<string> {
   const outputDir = path.resolve(getDistDir(), "query");
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -90,15 +94,15 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
   const entryContent = engine === "sql" ? createSqlEntry() : createGqlEntry();
   fs.writeFileSync(entryPath, entryContent);
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
+  const bundleLog = createBundleLog({ tsconfig });
   const result = await rolldown.build({
-    plugins: [platformBundleDefinePlugin],
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, baseDir),
+      createTsconfigPathsPlugin(),
+      platformBundleDefinePlugin,
+    ],
     input: entryPath,
     write: false,
     output: {
@@ -120,8 +124,9 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    logLevel: "silent",
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   return result.output[0].code;
 }

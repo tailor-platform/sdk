@@ -12,6 +12,7 @@ import {
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
+import { formatMigrationScriptCommand } from "#/cli/commands/tailordb/migrate/hints";
 import {
   loadDiff,
   getMigrationFiles,
@@ -20,25 +21,28 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
   type PendingMigration,
+  MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
+  sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
-import { type OperatorClient } from "#/cli/shared/client";
+import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
-import { resourceTrn } from "../label";
+import { resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface MigrationExecutionOptions {
+interface MigrationExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
-  authInvoker: AuthInvoker;
+  invoker: AuthInvoker;
   env: Record<string, string | number | boolean>;
+  configDir: string;
 }
 
 /**
@@ -51,6 +55,7 @@ export interface MigrationContext {
   machineUsers: string[] | undefined;
   dbConfig: Record<string, TailorDBServiceConfig | undefined>;
   env: Record<string, string | number | boolean>;
+  configDir: string;
 }
 
 interface ExecutionResult {
@@ -89,8 +94,11 @@ async function getCurrentMigrationNumber(
     }
     const num = parseMigrationLabelNumber(label);
     return num ?? 0;
-  } catch {
-    return 0;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return 0;
+    }
+    throw error;
   }
 }
 
@@ -99,18 +107,24 @@ async function getCurrentMigrationNumber(
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
+ * @param {string} [configPath] - Config file path, included in remediation guidance when provided
+ * @param {ReadonlyMap<string, number>} [currentMigrationOverrides] - Confirmed current migration numbers to use instead of remote metadata
  * @returns {Promise<PendingMigration[]>} List of pending migrations
  */
 export async function detectPendingMigrations(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
+  configPath?: string,
+  currentMigrationOverrides?: ReadonlyMap<string, number>,
 ): Promise<PendingMigration[]> {
   const pendingMigrations: PendingMigration[] = [];
 
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     // Get current applied migration number
-    const currentMigration = await getCurrentMigrationNumber(client, workspaceId, namespace);
+    const currentMigration =
+      currentMigrationOverrides?.get(namespace) ??
+      (await getCurrentMigrationNumber(client, workspaceId, namespace));
 
     // Get all migration files
     const migrationFiles = getMigrationFiles(migrationsDir);
@@ -131,15 +145,33 @@ export async function detectPendingMigrations(
       const diff = loadDiff(diffPath);
 
       // The migration script is executed when migrate.ts exists on disk.
-      // Breaking changes still hard-require a script; warnings (e.g. field_removed)
-      // may optionally have one added via `tailordb migration script <num>`.
+      // Breaking changes hard-require a script unless the user recorded an
+      // explicit skip acknowledgment; warnings (e.g. field_removed) may
+      // optionally have one added via `tailordb migration script <num>`.
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
       const hasScript = fs.existsSync(scriptPath);
-      if (diff.requiresMigrationScript && !hasScript) {
-        logger.warn(
-          `Migration ${namespace}/${file.number} requires a script but migrate.ts not found`,
+      if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
+        const commandOptions = { migrationNumber: file.number, namespace, configPath };
+        throw new Error(
+          `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
+            `To resolve, either:\n` +
+            `  - Add a script: ${formatMigrationScriptCommand(commandOptions)}\n` +
+            `  - Or record that no script is needed: ${formatMigrationScriptCommand({ ...commandOptions, noScript: true })}`,
         );
-        continue;
+      }
+      if (diff.scriptSkipped) {
+        const migrationLabel = `${namespace}/${formatMigrationNumber(file.number)}`;
+        if (hasScript) {
+          throw new Error(
+            `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.\n` +
+              `To resolve, either:\n` +
+              `  - Keep the script and clear the stale acknowledgment: ${formatMigrationScriptCommand({ migrationNumber: file.number, namespace, configPath })}\n` +
+              `  - Or keep the skip: delete migrate.ts`,
+          );
+        }
+        logger.info(
+          `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
+        );
       }
 
       pendingMigrations.push({
@@ -177,7 +209,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, authInvoker, env } = options;
+  const { client, workspaceId, invoker, env, configDir } = options;
 
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
@@ -187,6 +219,7 @@ async function executeSingleMigration(
     migration.namespace,
     migration.number,
     env,
+    configDir,
   );
 
   // Execute the script using the shared script executor
@@ -195,7 +228,7 @@ async function executeSingleMigration(
     workspaceId,
     name: migrationName,
     code: bundleResult.bundledCode,
-    invoker: authInvoker,
+    invoker,
   });
 
   return {
@@ -213,6 +246,7 @@ async function executeSingleMigration(
  * @param {string} workspaceId - Workspace ID
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number to set
+ * @param historyId - Optional migration history ID to set atomically with the checkpoint
  * @returns {Promise<void>}
  */
 export async function updateMigrationLabel(
@@ -220,22 +254,17 @@ export async function updateMigrationLabel(
   workspaceId: string,
   namespace: string,
   migrationNumber: number,
+  historyId?: string,
 ): Promise<void> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
-  // Get existing metadata
-  const { metadata } = await client.getMetadata({ trn });
-  const existingLabels = metadata?.labels ?? {};
-
-  const newLabel = `m${formatMigrationNumber(migrationNumber)}`;
-
-  // Update with new migration label
-  await client.setMetadata({
+  await writeMetadataLabelsDirect(client, {
     trn,
     labels: {
-      ...existingLabels,
-      [MIGRATION_LABEL_KEY]: newLabel,
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
+      ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
     },
+    remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
   });
 }
 
@@ -274,8 +303,7 @@ export async function executeMigrations(
       );
     }
 
-    // Create authInvoker for this namespace
-    const authInvoker = create(AuthInvokerSchema, {
+    const invoker = create(AuthInvokerSchema, {
       namespace: context.authNamespace,
       machineUserName,
     });
@@ -283,8 +311,9 @@ export async function executeMigrations(
     const options: MigrationExecutionOptions = {
       client: context.client,
       workspaceId: context.workspaceId,
-      authInvoker,
+      invoker,
       env: context.env,
+      configDir: context.configDir,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

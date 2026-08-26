@@ -8,7 +8,7 @@ import { logger } from "#/cli/shared/logger";
 export const openAuthConnectionCommand = defineAppCommand({
   name: "open",
   description: "Open the auth connections page in the Tailor Platform Console.",
-  args: z.object({ ...workspaceArgs }).strict(),
+  args: z.strictObject({ ...workspaceArgs }),
   run: async (args) => {
     const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],

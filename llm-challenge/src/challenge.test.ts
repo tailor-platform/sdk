@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
@@ -26,7 +26,8 @@ import type { Problem } from "./types";
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tempDirs: string[] = [];
 
-afterEach(async () => {
+aroundEach(async (runTest) => {
+  await runTest();
   vi.unstubAllEnvs();
   const dirs = [...tempDirs];
   tempDirs.length = 0;
@@ -300,12 +301,12 @@ describe("artifact summary", () => {
     await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, "node_modules/pkg"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, ".pnpm-home/store"), { recursive: true });
-    await fs.mkdir(path.join(worktreePath, ".tailor-sdk/cache"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, ".tailor/cache"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, ".turbo/cache"), { recursive: true });
     await fs.writeFile(path.join(worktreePath, "src/app.ts"), "export {};\n");
     await fs.writeFile(path.join(worktreePath, "node_modules/pkg/index.js"), "");
     await fs.writeFile(path.join(worktreePath, ".pnpm-home/store/index.db"), "");
-    await fs.writeFile(path.join(worktreePath, ".tailor-sdk/cache/generated.json"), "{}");
+    await fs.writeFile(path.join(worktreePath, ".tailor/cache/generated.json"), "{}");
     await fs.writeFile(path.join(worktreePath, ".turbo/cache/state.json"), "{}");
     await runCommand("git", ["init"], { cwd: worktreePath });
 
@@ -375,7 +376,7 @@ describe("artifact summary", () => {
     expect(summary.files).toContain("src/app.ts");
     expect(summary.files).not.toContain("node_modules/pkg/index.js");
     expect(summary.files).not.toContain(".pnpm-home/store/index.db");
-    expect(summary.files).not.toContain(".tailor-sdk/cache/generated.json");
+    expect(summary.files).not.toContain(".tailor/cache/generated.json");
     expect(summary.files).not.toContain(".turbo/cache/state.json");
     expect(summary.gitStatus).toContain("?? src/app.ts");
     expect(summary.commands.map((command) => command.command)).toEqual([
@@ -954,12 +955,12 @@ describe("verification summary", () => {
     const problemRoot = path.join(dir, "problem");
     const worktreePath = path.join(dir, "work");
     await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
-    await fs.mkdir(path.join(worktreePath, ".tailor-sdk/cache"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, ".tailor/cache"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
     await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
-    await fs.writeFile(path.join(worktreePath, ".tailor-sdk/cache/generated.ts"), "cacheOnly\n");
+    await fs.writeFile(path.join(worktreePath, ".tailor/cache/generated.ts"), "cacheOnly\n");
     await fs.symlink(
-      path.join(worktreePath, ".tailor-sdk/cache/generated.ts"),
+      path.join(worktreePath, ".tailor/cache/generated.ts"),
       path.join(worktreePath, "src/cache-alias.ts"),
     );
     const verifyPath = path.join(problemRoot, "verify.json");
@@ -1162,7 +1163,7 @@ describe("workspace preparation", () => {
     const dir = await makeTempDir();
     const worktreePath = path.join(dir, "work");
     await Promise.all(
-      ["node_modules", ".pnpm-store", ".pnpm-home", ".cache", ".turbo", ".tailor-sdk/cache"].map(
+      ["node_modules", ".pnpm-store", ".pnpm-home", ".cache", ".turbo", ".tailor/cache"].map(
         (name) => fs.mkdir(path.join(worktreePath, name), { recursive: true }),
       ),
     );
@@ -1175,7 +1176,7 @@ describe("workspace preparation", () => {
       ".pnpm-home",
       ".cache",
       ".turbo",
-      ".tailor-sdk/cache",
+      ".tailor/cache",
     ]) {
       await expect(fs.access(path.join(worktreePath, name))).rejects.toThrow("ENOENT");
     }

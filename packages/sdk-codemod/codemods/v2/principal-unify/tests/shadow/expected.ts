@@ -10,6 +10,6 @@ export default createResolver({
       const user = { id: "fake" };
       return { id: user.id };
     }
-    return { id: caller.id };
+    return { id: caller?.id };
   },
 });

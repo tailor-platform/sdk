@@ -1,8 +1,9 @@
-// Members exposed by the deprecated `Tailordb` ambient namespace from
-// `@tailor-platform/function-types`. Each was a type-only declaration that
-// has been re-published under the new lowercase `tailordb` namespace by the
-// SDK. Anything outside this list is left untouched so user-defined symbols
-// that happen to share the `Tailordb.` prefix are not rewritten by accident.
+// Members of the removed capital-cased `Tailordb` ambient namespace
+// (originally from `@tailor-platform/function-types`). Each is a type-only
+// declaration now available under the lowercase `tailordb` namespace exposed
+// by `@tailor-platform/sdk/runtime/globals`. Anything outside this list is
+// left untouched so user-defined symbols that happen to share the
+// `Tailordb.` prefix are not rewritten by accident.
 const TAILORDB_MEMBERS = ["QueryResult", "CommandType", "Client"] as const;
 
 const MEMBER_GROUP = TAILORDB_MEMBERS.join("|");
@@ -14,10 +15,11 @@ const MEMBER_GROUP = TAILORDB_MEMBERS.join("|");
 const PATTERN = new RegExp(String.raw`\bTailordb\.(${MEMBER_GROUP})\b`, "g");
 
 /**
- * Rewrite references to the deprecated capital-cased `Tailordb` ambient
- * namespace to the new lowercase `tailordb` namespace. The capital-cased
- * namespace was inherited from `@tailor-platform/function-types`; the SDK
- * keeps it as a `@deprecated` alias in v1 and removes it in v2.
+ * Rewrite references to the capital-cased `Tailordb` ambient namespace to the
+ * lowercase `tailordb` namespace. The capital-cased namespace was inherited
+ * from `@tailor-platform/function-types`; the SDK kept it as a `@deprecated`
+ * alias in v1 and removed it in v2, leaving only the lowercase `tailordb.*`
+ * namespace exposed by `@tailor-platform/sdk/runtime/globals`.
  *
  * Only the known type-only members (`QueryResult`, `CommandType`, `Client`)
  * are rewritten so that unrelated user-defined symbols sharing the

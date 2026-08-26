@@ -1,11 +1,10 @@
 import { type TailorDBInstance } from "../tailordb/schema";
 import type {
-  AuthConnectionTokenResult,
   AuthDefinitionBrand,
   AuthServiceInput,
   DefinedAuth,
   UserAttributeListKey,
-  UserAttributeMap,
+  UserAttributes,
 } from "#/configure/services/auth/types";
 import type {
   DefinedFieldMetadata,
@@ -13,7 +12,6 @@ import type {
   TailorFieldType,
   TailorField,
 } from "#/configure/types/field.types";
-import type { AuthInvoker as ParserAuthInvoker } from "#/types/auth.generated";
 
 type MachineUserAttributeFields = Record<
   string,
@@ -21,21 +19,21 @@ type MachineUserAttributeFields = Record<
 >;
 
 type PlaceholderUser = TailorDBInstance<Record<string, never>, Record<string, never>>;
-type PlaceholderAttributeMap = UserAttributeMap<PlaceholderUser>;
+type PlaceholderAttributes = UserAttributes<PlaceholderUser>;
 type PlaceholderAttributeList = UserAttributeListKey<PlaceholderUser>[];
 
 type UserProfileAuthInput<
   User extends TailorDBInstance,
-  AttributeMap extends UserAttributeMap<User>,
+  Attributes extends UserAttributes<User>,
   AttributeList extends UserAttributeListKey<User>[],
   MachineUserNames extends string,
   ConnectionNames extends string = string,
 > = Omit<
-  AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames, undefined, ConnectionNames>,
+  AuthServiceInput<User, Attributes, AttributeList, MachineUserNames, undefined, ConnectionNames>,
   "userProfile" | "machineUserAttributes"
 > & {
   userProfile: NonNullable<
-    AuthServiceInput<User, AttributeMap, AttributeList, MachineUserNames, undefined>["userProfile"]
+    AuthServiceInput<User, Attributes, AttributeList, MachineUserNames, undefined>["userProfile"]
   >;
   machineUserAttributes?: never;
 };
@@ -47,7 +45,7 @@ type MachineUserOnlyAuthInput<
 > = Omit<
   AuthServiceInput<
     PlaceholderUser,
-    PlaceholderAttributeMap,
+    PlaceholderAttributes,
     PlaceholderAttributeList,
     MachineUserNames,
     MachineUserAttributes,
@@ -91,7 +89,7 @@ export type {
   UsernameFieldKey,
   UserAttributeKey,
   UserAttributeListKey,
-  UserAttributeMap,
+  UserAttributes,
   AuthConnectionTokenResult,
   AuthServiceInput,
   AuthConfig,
@@ -101,22 +99,12 @@ export type {
 } from "#/configure/services/auth/types";
 
 /**
- * Invoker type compatible with tailor.v1.AuthInvoker
- * - namespace: auth service name
- * - machineUserName: machine user name
- */
-export type AuthInvoker<M extends string> = Omit<ParserAuthInvoker, "machineUserName"> & {
-  machineUserName: M;
-};
-
-/**
  * Define an auth service for the Tailor SDK.
  * @template Name
  * @template User
- * @template AttributeMap
+ * @template Attributes
  * @template AttributeList
  * @template MachineUserNames
- * @template M
  * @param name - Auth service name
  * @param config - Auth service configuration
  * @returns Defined auth service
@@ -124,23 +112,16 @@ export type AuthInvoker<M extends string> = Omit<ParserAuthInvoker, "machineUser
 export function defineAuth<
   const Name extends string,
   const User extends TailorDBInstance,
-  const AttributeMap extends UserAttributeMap<User>,
+  const Attributes extends UserAttributes<User>,
   const AttributeList extends UserAttributeListKey<User>[],
   const MachineUserNames extends string,
   const ConnectionNames extends string = string,
 >(
   name: Name,
-  config: UserProfileAuthInput<
-    User,
-    AttributeMap,
-    AttributeList,
-    MachineUserNames,
-    ConnectionNames
-  >,
+  config: UserProfileAuthInput<User, Attributes, AttributeList, MachineUserNames, ConnectionNames>,
 ): DefinedAuth<
   Name,
-  UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames, ConnectionNames>,
-  MachineUserNames
+  UserProfileAuthInput<User, Attributes, AttributeList, MachineUserNames, ConnectionNames>
 >;
 export function defineAuth<
   const Name extends string,
@@ -152,14 +133,13 @@ export function defineAuth<
   config: MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>,
 ): DefinedAuth<
   Name,
-  MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>,
-  MachineUserNames
+  MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>
 >;
 /* @__NO_SIDE_EFFECTS__ */
 export function defineAuth<
   const Name extends string,
   const User extends TailorDBInstance,
-  const AttributeMap extends UserAttributeMap<User>,
+  const Attributes extends UserAttributes<User>,
   const AttributeList extends UserAttributeListKey<User>[],
   const MachineUserAttributes extends MachineUserAttributeFields,
   const MachineUserNames extends string,
@@ -167,25 +147,17 @@ export function defineAuth<
 >(
   name: Name,
   config:
-    | UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames, ConnectionNames>
+    | UserProfileAuthInput<User, Attributes, AttributeList, MachineUserNames, ConnectionNames>
     | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>,
 ) {
   const result = {
     ...config,
     name,
-    invoker<M extends MachineUserNames>(machineUser: M) {
-      return { namespace: name, machineUserName: machineUser } as const;
-    },
-    getConnectionToken<C extends string>(connectionName: C): Promise<AuthConnectionTokenResult> {
-      return tailor.authconnection.getConnectionToken(connectionName);
-    },
   } as const satisfies (
-    | UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames>
-    | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes>
+    | UserProfileAuthInput<User, Attributes, AttributeList, MachineUserNames, ConnectionNames>
+    | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>
   ) & {
     name: string;
-    invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
-    getConnectionToken<C extends string>(connectionName: C): Promise<AuthConnectionTokenResult>;
   };
 
   return result as typeof result & AuthDefinitionBrand;

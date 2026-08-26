@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { isCLIError } from "#/cli/shared/errors";
 import { resolveDeployWorkspace } from "./workspace";
 import type * as ClientModule from "#/cli/shared/client";
@@ -89,7 +89,7 @@ const contextTargets = (...configPaths: string[]) =>
   configPaths.map((configPath) => ({ configPath, applicationId: `app:${configPath}` }));
 
 describe("resolveDeployWorkspace", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mocks.canPrompt.mockReturnValue(false);
     mocks.getPlatformBaseUrl.mockReturnValue("https://api.tailor.tech");
@@ -109,6 +109,7 @@ describe("resolveDeployWorkspace", () => {
         region: "us-west",
       },
     }));
+    await runTest();
   });
 
   test("uses an explicitly configured workspace without discovery", async () => {
@@ -370,7 +371,7 @@ describe("resolveDeployWorkspace", () => {
       if (!isCLIError(error)) return false;
       expect(error.code).toBe("WORKSPACE_NOT_FOUND");
       expect(error.next).toEqual({
-        command: "tailor-sdk",
+        command: "tailor",
         args: [
           "deploy",
           "--config",
@@ -443,7 +444,7 @@ describe("resolveDeployWorkspace", () => {
       name: "CLIError",
       code: "WORKSPACE_CREATE_FLAG_REQUIRED",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: [
           "deploy",
           "--create-workspace",
@@ -655,7 +656,7 @@ describe("resolveDeployWorkspace", () => {
       name: "CLIError",
       code: "WORKSPACE_SELECTION_REQUIRED",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: ["deploy", "--workspace-id", "<workspace-id>"],
       },
     });
@@ -691,7 +692,7 @@ describe("resolveDeployWorkspace", () => {
       default: true,
     });
     expect(mocks.info).toHaveBeenCalledWith(
-      `Reuse this workspace with: tailor-sdk deploy --workspace-id ${created.id}`,
+      `Reuse this workspace with: tailor deploy --workspace-id ${created.id}`,
     );
     expect(mocks.info).toHaveBeenCalledWith(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${created.id}.`);
   });
@@ -839,7 +840,7 @@ describe("resolveDeployWorkspace", () => {
       name: "CLIError",
       code: "WORKSPACE_CREATE_CONFLICT",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: [
           "workspace",
           "create",
@@ -945,7 +946,7 @@ describe("resolveDeployWorkspace", () => {
       name: "CLIError",
       code: "WORKSPACE_CREATION_FAILED",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: ["workspace", "list", "--env-file", "/apps/example/.env.staging", "--json"],
       },
     });
@@ -978,7 +979,7 @@ describe("resolveDeployWorkspace", () => {
       }),
     ).rejects.toMatchObject({
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: ["workspace", "list", "--profile=--json", "--json"],
       },
     });

@@ -1,30 +1,28 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
-import { join, resolve } from "pathe";
+import { resolve } from "pathe";
 import * as rolldown from "rolldown";
-import { getDistDir } from "#/cli/shared/dist-dir";
+import { createBundleLog } from "#/cli/shared/bundle-log";
+import { findUndefinedReferences, TS_TYPE_FIELDS } from "#/cli/shared/free-variables";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
-import { stringifyFunction, tailorUserMap } from "#/parser/service/tailordb/field";
-import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
+import { stringifyFunction } from "#/parser/service/tailordb/field";
+import { buildHookCallArgs } from "#/parser/service/tailordb/hook-args-object";
+import {
+  getPrecompiledScriptExpr,
+  setPrecompiledScriptExpr,
+} from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
 import { assertParsableExpression } from "#/utils/script-expr";
-import { ES_BUILTINS } from "./es-builtins";
+import type { ScriptExprKind } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
-import type {
-  BindingPattern,
-  ExportNamedDeclaration,
-  Function as OxcFunction,
-  ImportDeclaration,
-  Node,
-  ParamPattern,
-  VariableDeclaration,
-} from "@oxc-project/types";
 
 type ScriptFunction = (...args: unknown[]) => unknown;
 
 type ScriptTarget = {
   fn: ScriptFunction;
-  kind: "hooks" | "validate";
+  kind: ScriptExprKind;
 };
 
 /** Binding found in the source file: either an import or a top-level declaration */
@@ -35,57 +33,12 @@ export type SourceBinding = {
   kind: "import" | "declaration";
 };
 
-/**
- * Recursively extract binding names from a destructuring pattern node.
- * @param pattern - The binding pattern AST node.
- * @param bindings - Set to collect binding names into.
- */
-function collectBindingsFromPattern(pattern: BindingPattern, bindings: Set<string>): void {
-  switch (pattern.type) {
-    case "Identifier":
-      bindings.add(pattern.name);
-      break;
-    case "ObjectPattern":
-      for (const prop of pattern.properties) {
-        if (prop.type === "RestElement") {
-          collectBindingsFromPattern(prop.argument, bindings);
-        } else {
-          collectBindingsFromPattern(prop.value, bindings);
-        }
-      }
-      break;
-    case "ArrayPattern":
-      for (const elem of pattern.elements) {
-        if (elem) {
-          if (elem.type === "RestElement") {
-            collectBindingsFromPattern(elem.argument, bindings);
-          } else {
-            collectBindingsFromPattern(elem, bindings);
-          }
-        }
-      }
-      break;
-    case "AssignmentPattern":
-      collectBindingsFromPattern(pattern.left, bindings);
-      break;
-  }
-}
-
-/** Fields that contain TypeScript type annotations (not runtime references). */
-const TS_TYPE_FIELDS = new Set([
-  "typeAnnotation",
-  "typeParameters",
-  "returnType",
-  "superTypeArguments",
-  "typeArguments",
-]);
-
-function isBindingPattern(param: ParamPattern): param is BindingPattern {
-  return param.type !== "TSParameterProperty";
-}
-
-function toScriptFunction(value: unknown): ScriptFunction | undefined {
+function toScriptFunction(value: unknown, kind: ScriptExprKind): ScriptFunction | undefined {
   if (typeof value !== "function") return undefined;
+  // Already pinned (e.g. a built-in SDK hook, see `db.fields.timestamps()`) - bundling
+  // it again would derive a new expr from this build's `Function.prototype.toString()`
+  // output and overwrite the pin.
+  if (getPrecompiledScriptExpr(value as ScriptFunction, kind)) return undefined;
   return value as unknown as ScriptFunction;
 }
 
@@ -95,23 +48,18 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
   const collectFieldTargets = (field: TailorDBTypeSchemaOutput["fields"][string]) => {
     const metadata = field.metadata;
 
-    const createHook = toScriptFunction(metadata.hooks?.create);
+    const createHook = toScriptFunction(metadata.hooks?.create, "hooks.create");
     if (createHook) {
-      targets.push({ fn: createHook, kind: "hooks" });
+      targets.push({ fn: createHook, kind: "hooks.create" });
     }
-    const updateHook = toScriptFunction(metadata.hooks?.update);
+    const updateHook = toScriptFunction(metadata.hooks?.update, "hooks.update");
     if (updateHook) {
-      targets.push({ fn: updateHook, kind: "hooks" });
+      targets.push({ fn: updateHook, kind: "hooks.update" });
     }
 
     for (const validateInput of metadata.validate ?? []) {
-      if (typeof validateInput === "function") {
-        const validateFn = toScriptFunction(validateInput);
-        if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
-      } else {
-        const validateFn = toScriptFunction(validateInput[0]);
-        if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
-      }
+      const validateFn = toScriptFunction(validateInput, "validate");
+      if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
     }
 
     if (field.type === "nested" && field.fields) {
@@ -125,104 +73,22 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
     collectFieldTargets(field);
   }
 
-  return targets;
-}
-
-/**
- * Parse a code string with oxc-parser and return identifiers that are referenced
- * but never bound anywhere in the snippet (free variables), excluding ES builtins.
- * @param code - Valid JavaScript code to analyze.
- * @returns Set of undefined variable names.
- */
-export function findUndefinedReferences(code: string): Set<string> {
-  const { program } = parseSync("_.js", code);
-  const references = new Set<string>();
-  const bindings = new Set<string>();
-
-  const walk = (node: Node | null | undefined): void => {
-    if (!node) return;
-
-    switch (node.type) {
-      case "VariableDeclarator":
-        collectBindingsFromPattern(node.id, bindings);
-        walk(node.init);
-        return;
-
-      case "FunctionDeclaration":
-      case "FunctionExpression":
-        if (node.id) bindings.add(node.id.name);
-        for (const param of node.params) {
-          if (isBindingPattern(param)) {
-            collectBindingsFromPattern(param, bindings);
-            walk(param);
-          }
-        }
-        walk(node.body);
-        return;
-
-      case "ArrowFunctionExpression":
-        for (const param of node.params) {
-          if (isBindingPattern(param)) {
-            collectBindingsFromPattern(param, bindings);
-            walk(param);
-          }
-        }
-        walk(node.body);
-        return;
-
-      case "ClassDeclaration":
-      case "ClassExpression":
-        if (node.id) bindings.add(node.id.name);
-        walk(node.superClass);
-        walk(node.body);
-        return;
-
-      case "CatchClause":
-        if (node.param) collectBindingsFromPattern(node.param, bindings);
-        walk(node.body);
-        return;
-
-      case "MemberExpression":
-        walk(node.object);
-        if (node.computed) walk(node.property);
-        return;
-
-      case "Property":
-        if (node.computed) walk(node.key);
-        walk(node.value);
-        return;
-
-      case "LabeledStatement":
-        walk(node.body);
-        return;
-
-      case "Identifier":
-        references.add(node.name);
-        return;
-    }
-
-    // Generic child walk for all other node types, skipping TS type-annotation fields
-    const rec = node as unknown as Record<string, unknown>;
-    for (const [key, value] of Object.entries(rec)) {
-      if (key === "type" || TS_TYPE_FIELDS.has(key)) continue;
-      if (Array.isArray(value)) {
-        for (const item of value) walk(item as Node);
-      } else if (value && typeof value === "object" && "type" in value) {
-        walk(value as Node);
+  if (type.metadata.typeHook) {
+    for (const op of ["create", "update"] as const) {
+      const kind = `typeHook.${op}` as const;
+      const fn = toScriptFunction(type.metadata.typeHook[op], kind);
+      if (fn) {
+        targets.push({ fn, kind });
       }
     }
-  };
-
-  walk(program);
-
-  // Free variables = references - bindings - builtins
-  const freeVars = new Set<string>();
-  for (const ref of references) {
-    if (!bindings.has(ref) && !ES_BUILTINS.has(ref)) {
-      freeVars.add(ref);
-    }
   }
-  return freeVars;
+
+  const typeValidateFn = toScriptFunction(type.metadata.typeValidate, "typeValidate");
+  if (typeValidateFn) {
+    targets.push({ fn: typeValidateFn, kind: "typeValidate" });
+  }
+
+  return targets;
 }
 
 /**
@@ -270,7 +136,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
 
   for (const stmt of program.body) {
     if (stmt.type === "ImportDeclaration") {
-      const importDecl = stmt as ImportDeclaration;
+      const importDecl = stmt;
       const text = source.slice(importDecl.start, importDecl.end);
       for (const spec of importDecl.specifiers) {
         bindings.set(spec.local.name, {
@@ -280,7 +146,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         });
       }
     } else if (stmt.type === "VariableDeclaration") {
-      const varDecl = stmt as VariableDeclaration;
+      const varDecl = stmt;
       const text = source.slice(varDecl.start, varDecl.end);
       for (const decl of varDecl.declarations) {
         if (decl.id.type === "Identifier") {
@@ -288,7 +154,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         }
       }
     } else if (stmt.type === "FunctionDeclaration") {
-      const funcDecl = stmt as OxcFunction;
+      const funcDecl = stmt;
       if (funcDecl.id) {
         const text = source.slice(funcDecl.start, funcDecl.end);
         bindings.set(funcDecl.id.name, {
@@ -298,12 +164,12 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         });
       }
     } else if (stmt.type === "ExportNamedDeclaration") {
-      const exportDecl = stmt as ExportNamedDeclaration;
+      const exportDecl = stmt;
       const innerDecl = exportDecl.declaration;
       if (!innerDecl) continue;
 
       if (innerDecl.type === "VariableDeclaration") {
-        const varDecl = innerDecl as VariableDeclaration;
+        const varDecl = innerDecl;
         // Slice only the inner declaration (without export keyword) so it is valid standalone
         const text = source.slice(varDecl.start, varDecl.end);
         for (const decl of varDecl.declarations) {
@@ -316,7 +182,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
           }
         }
       } else if (innerDecl.type === "FunctionDeclaration") {
-        const funcDecl = innerDecl as OxcFunction;
+        const funcDecl = innerDecl;
         if (funcDecl.id) {
           const text = source.slice(funcDecl.start, funcDecl.end);
           bindings.set(funcDecl.id.name, {
@@ -386,13 +252,13 @@ export function resolveNeededBindings(
   };
 }
 
-function buildPrecompiledExpr(bundleCode: string): string {
+function buildPrecompiledExpr(bundleCode: string, argsObject: string): string {
   return (
     "(() => {\n" +
     "  const module = { exports: {} };\n" +
     "  const exports = module.exports;\n" +
     `${bundleCode}\n` +
-    `  return module.exports.main({ value: _value, data: _data, user: ${tailorUserMap} });\n` +
+    `  return module.exports.main(${argsObject});\n` +
     "})()"
   );
 }
@@ -403,6 +269,7 @@ function buildPrecompiledExpr(bundleCode: string): string {
  * @param declarations - Declaration statement texts.
  * @param fnSource - The function source code.
  * @param sourceFilePath - Path to the source file for resolving relative imports.
+ * @param multiArg - Whether the function accepts multiple arguments (spread via `...args`).
  * @returns Entry file content string.
  */
 export function buildMinimalEntryFromResolved(
@@ -410,6 +277,7 @@ export function buildMinimalEntryFromResolved(
   declarations: string[],
   fnSource: string,
   sourceFilePath: string,
+  multiArg = false,
 ): string {
   const sourceDir = resolve(sourceFilePath, "..").replace(/\\/g, "/");
 
@@ -424,27 +292,32 @@ export function buildMinimalEntryFromResolved(
   const lines = [
     ...resolvedImports,
     ...declarations,
-    `export function main(input) { return (${fnSource})(input); }`,
+    multiArg
+      ? `export function main(...args) { return (${fnSource})(...args); }`
+      : `export function main(input) { return (${fnSource})(input); }`,
   ];
   return lines.join("\n");
 }
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
-  kind: "hooks" | "validate";
+  kind: ScriptExprKind;
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
-  tempDir: string;
+  tableName: string;
   targetIndex: number;
   tsconfig: string | undefined;
 }): Promise<string> {
-  const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
+  const { fn, kind, sourceFilePath, sourceBindings, tableName, targetIndex, tsconfig } = args;
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
-  const inlineExpr = assertParsableExpression(
-    `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`,
-    context,
-  );
+  if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
+    throw new Error(
+      `${context} must be synchronous — the generated validator runs synchronously, ` +
+        "so issues reported after an await are silently lost. Remove the async keyword.",
+    );
+  }
+  const inlineExpr = assertParsableExpression(`(${fnSource})(${buildHookCallArgs(kind)})`, context);
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
@@ -467,14 +340,23 @@ async function bundleScriptTarget(args: {
     declarations,
     fnSource,
     sourceFilePath,
+    kind === "typeValidate",
   );
-  const entryPath = join(tempDir, `tailordb-script-${targetIndex}.entry.ts`);
+  const entry = createVirtualEntry(
+    `tailordb-script:${tableName}:${targetIndex}`,
+    entryContent,
+    "ts",
+    sourceFilePath,
+  );
 
-  writeFileSync(entryPath, entryContent);
-
+  const bundleLog = createBundleLog({ tsconfig });
   const buildResult = await rolldown.build({
-    plugins: [platformBundleDefinePlugin],
-    input: entryPath,
+    plugins: [
+      entry.plugin,
+      createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFilePath }),
+      platformBundleDefinePlugin,
+    ],
+    input: entry.input,
     write: false,
     output: {
       format: "cjs",
@@ -488,19 +370,23 @@ async function bundleScriptTarget(args: {
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    logLevel: "silent",
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = buildResult.output[0].code;
-  return assertParsableExpression(buildPrecompiledExpr(bundledCode), context);
+  return assertParsableExpression(
+    buildPrecompiledExpr(bundledCode, buildHookCallArgs(kind)),
+    context,
+  );
 }
 
 /**
  * Precompile TailorDB hooks/validators into self-contained script expressions using rolldown.
  * Uses oxc-parser AST walking to extract free variables from functions, then builds
  * minimal entry points containing only the needed imports and declarations.
- * @param type - TailorDB type schema output.
- * @param sourceFilePath - Source file where the type is defined.
+ * @param type - TailorDB table schema output.
+ * @param sourceFilePath - Source file where the table is defined.
  * @param tsconfig - Resolved tsconfig path, or undefined if not found.
  */
 export async function precompileTailorDBTypeScripts(
@@ -514,38 +400,27 @@ export async function precompileTailorDBTypeScripts(
   // Collect source bindings once for all targets in this file
   const sourceBindings = collectSourceBindings(sourceFilePath);
 
-  // Use type name in temp dir to avoid race conditions when multiple type files
-  // are precompiled concurrently via Promise.all in service.ts
-  const tempDir = resolve(getDistDir(), "hooks-validate-scripts", type.name);
-  mkdirSync(tempDir, { recursive: true });
-
-  try {
-    const results = await Promise.allSettled(
-      targets.map((target, index) =>
-        bundleScriptTarget({
-          fn: target.fn,
-          kind: target.kind,
-          sourceFilePath,
-          sourceBindings,
-          tempDir,
-          targetIndex: index,
-          tsconfig,
-        }),
-      ),
-    );
-    const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-    if (firstError) {
-      throw firstError.reason;
+  const results = await Promise.allSettled(
+    targets.map((target, index) =>
+      bundleScriptTarget({
+        fn: target.fn,
+        kind: target.kind,
+        sourceFilePath,
+        sourceBindings,
+        tableName: type.name,
+        targetIndex: index,
+        tsconfig,
+      }),
+    ),
+  );
+  const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (firstError) {
+    throw firstError.reason;
+  }
+  for (const [index, result] of results.entries()) {
+    if (result.status === "fulfilled") {
+      const target = assertDefined(targets[index], `bundle target at index ${index} missing`);
+      setPrecompiledScriptExpr(target.fn, target.kind, result.value);
     }
-    for (const [index, result] of results.entries()) {
-      if (result.status === "fulfilled") {
-        setPrecompiledScriptExpr(
-          assertDefined(targets[index], `bundle target at index ${index} missing`).fn,
-          result.value,
-        );
-      }
-    }
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
   }
 }

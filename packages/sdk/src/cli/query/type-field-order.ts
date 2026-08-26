@@ -1,15 +1,17 @@
 import { pathToFileURL } from "node:url";
+import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 type TypeFieldOrderMap = Map<string, string[]>;
 
 /**
- * Load field definition order for all TailorDB types in a namespace.
+ * Load field definition order for all TailorDB tables in a namespace.
  * @param config - Loaded application configuration
  * @param namespace - TailorDB namespace name
- * @returns Map of type name to field names in definition order
+ * @returns Map of table name to field names in definition order
  */
 export async function loadTypeFieldOrder(
   config: LoadedConfig,
@@ -22,7 +24,8 @@ export async function loadTypeFieldOrder(
     return fieldOrder;
   }
 
-  const typeFiles = loadFilesWithIgnores(dbConfig);
+  const baseDir = path.dirname(config.path);
+  const typeFiles = loadFilesWithIgnores(dbConfig, baseDir);
 
   await Promise.all(
     typeFiles.map(async (typeFile) => {
@@ -30,7 +33,9 @@ export async function loadTypeFieldOrder(
         const module = await import(pathToFileURL(typeFile).href);
 
         for (const exportedValue of Object.values(module)) {
-          const result = TailorDBTypeSchema.safeParse(exportedValue);
+          const result = TailorDBTypeSchema.safeParse(
+            stripTailorDBTypeBuilderHelpers(exportedValue),
+          );
           if (!result.success) {
             continue;
           }

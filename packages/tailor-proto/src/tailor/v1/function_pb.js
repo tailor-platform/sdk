@@ -12,7 +12,7 @@ import { file_tailor_v1_resource } from "./resource_pb";
  * Describes the file tailor/v1/function.proto.
  */
 export const file_tailor_v1_function = /*@__PURE__*/
-  fileDesc("Chh0YWlsb3IvdjEvZnVuY3Rpb24ucHJvdG8SCXRhaWxvci52MSKcAQoVVGVzdEV4ZWNTY3JpcHRSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESDAoEbmFtZRgCIAEoCRIMCgRjb2RlGAMgASgJEhAKA2FyZxgEIAEoCUgAiAEBEicKB2ludm9rZXIYBSABKAsyFi50YWlsb3IudjEuQXV0aEludm9rZXJCBgoEX2FyZ0oECAYQByJOChZUZXN0RXhlY1NjcmlwdFJlc3BvbnNlEg4KBnJlc3VsdBgBIAEoCRIeCgxleGVjdXRpb25faWQYAyABKAlCCLpIBXIDsAEBSgQIAhADIl0KG0dldEZ1bmN0aW9uRXhlY3V0aW9uUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEh4KDGV4ZWN1dGlvbl9pZBgCIAEoCUIIukgFcgOwAQEiTwocR2V0RnVuY3Rpb25FeGVjdXRpb25SZXNwb25zZRIvCglleGVjdXRpb24YASABKAsyHC50YWlsb3IudjEuRnVuY3Rpb25FeGVjdXRpb24izAEKHUxpc3RGdW5jdGlvbkV4ZWN1dGlvbnNSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESEgoKcGFnZV90b2tlbhgCIAEoCRIRCglwYWdlX3NpemUYAyABKA0SMAoOcGFnZV9kaXJlY3Rpb24YBCABKA4yGC50YWlsb3IudjEuUGFnZURpcmVjdGlvbhIhCgZmaWx0ZXIYBSABKAsyES50YWlsb3IudjEuRmlsdGVyEg8KB3NvcnRfYnkYBiABKAkigAEKHkxpc3RGdW5jdGlvbkV4ZWN1dGlvbnNSZXNwb25zZRIwCgpleGVjdXRpb25zGAEgAygLMhwudGFpbG9yLnYxLkZ1bmN0aW9uRXhlY3V0aW9uEhcKD25leHRfcGFnZV90b2tlbhgCIAEoCRITCgt0b3RhbF9jb3VudBgDIAEoA2IGcHJvdG8z", [file_buf_validate_validate, file_tailor_v1_auth_resource, file_tailor_v1_function_resource, file_tailor_v1_resource]);
+  fileDesc("Chh0YWlsb3IvdjEvZnVuY3Rpb24ucHJvdG8SCXRhaWxvci52MSKcAQoVVGVzdEV4ZWNTY3JpcHRSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESDAoEbmFtZRgCIAEoCRIMCgRjb2RlGAMgASgJEhAKA2FyZxgEIAEoCUgAiAEBEicKB2ludm9rZXIYBSABKAsyFi50YWlsb3IudjEuQXV0aEludm9rZXJCBgoEX2FyZ0oECAYQByJOChZUZXN0RXhlY1NjcmlwdFJlc3BvbnNlEg4KBnJlc3VsdBgBIAEoCRIeCgxleGVjdXRpb25faWQYAyABKAlCCLpIBXIDsAEBSgQIAhADIpIBChFFeGVjU2NyaXB0UmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEgwKBG5hbWUYAiABKAkSDAoEY29kZRgDIAEoCRIQCgNhcmcYBCABKAlIAIgBARInCgdpbnZva2VyGAUgASgLMhYudGFpbG9yLnYxLkF1dGhJbnZva2VyQgYKBF9hcmciRAoSRXhlY1NjcmlwdFJlc3BvbnNlEg4KBnJlc3VsdBgBIAEoCRIeCgxleGVjdXRpb25faWQYAiABKAlCCLpIBXIDsAEBIl0KG0dldEZ1bmN0aW9uRXhlY3V0aW9uUmVxdWVzdBIeCgx3b3Jrc3BhY2VfaWQYASABKAlCCLpIBXIDsAEBEh4KDGV4ZWN1dGlvbl9pZBgCIAEoCUIIukgFcgOwAQEiTwocR2V0RnVuY3Rpb25FeGVjdXRpb25SZXNwb25zZRIvCglleGVjdXRpb24YASABKAsyHC50YWlsb3IudjEuRnVuY3Rpb25FeGVjdXRpb24i6gEKHUxpc3RGdW5jdGlvbkV4ZWN1dGlvbnNSZXF1ZXN0Eh4KDHdvcmtzcGFjZV9pZBgBIAEoCUIIukgFcgOwAQESEgoKcGFnZV90b2tlbhgCIAEoCRIRCglwYWdlX3NpemUYAyABKA0SMAoOcGFnZV9kaXJlY3Rpb24YBCABKA4yGC50YWlsb3IudjEuUGFnZURpcmVjdGlvbhIhCgZmaWx0ZXIYBSABKAsyES50YWlsb3IudjEuRmlsdGVyEi0KB3NvcnRfYnkYBiABKAlCHLpIGXIXMhVeKFthLXpfXVthLXowLTlfXSopPyQigAEKHkxpc3RGdW5jdGlvbkV4ZWN1dGlvbnNSZXNwb25zZRIwCgpleGVjdXRpb25zGAEgAygLMhwudGFpbG9yLnYxLkZ1bmN0aW9uRXhlY3V0aW9uEhcKD25leHRfcGFnZV90b2tlbhgCIAEoCRITCgt0b3RhbF9jb3VudBgDIAEoA2IGcHJvdG8z", [file_buf_validate_validate, file_tailor_v1_auth_resource, file_tailor_v1_function_resource, file_tailor_v1_resource]);
 
 /**
  * Describes the message tailor.v1.TestExecScriptRequest.
@@ -29,30 +29,44 @@ export const TestExecScriptResponseSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_function, 1);
 
 /**
+ * Describes the message tailor.v1.ExecScriptRequest.
+ * Use `create(ExecScriptRequestSchema)` to create a new message.
+ */
+export const ExecScriptRequestSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_function, 2);
+
+/**
+ * Describes the message tailor.v1.ExecScriptResponse.
+ * Use `create(ExecScriptResponseSchema)` to create a new message.
+ */
+export const ExecScriptResponseSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_function, 3);
+
+/**
  * Describes the message tailor.v1.GetFunctionExecutionRequest.
  * Use `create(GetFunctionExecutionRequestSchema)` to create a new message.
  */
 export const GetFunctionExecutionRequestSchema = /*@__PURE__*/
-  messageDesc(file_tailor_v1_function, 2);
+  messageDesc(file_tailor_v1_function, 4);
 
 /**
  * Describes the message tailor.v1.GetFunctionExecutionResponse.
  * Use `create(GetFunctionExecutionResponseSchema)` to create a new message.
  */
 export const GetFunctionExecutionResponseSchema = /*@__PURE__*/
-  messageDesc(file_tailor_v1_function, 3);
+  messageDesc(file_tailor_v1_function, 5);
 
 /**
  * Describes the message tailor.v1.ListFunctionExecutionsRequest.
  * Use `create(ListFunctionExecutionsRequestSchema)` to create a new message.
  */
 export const ListFunctionExecutionsRequestSchema = /*@__PURE__*/
-  messageDesc(file_tailor_v1_function, 4);
+  messageDesc(file_tailor_v1_function, 6);
 
 /**
  * Describes the message tailor.v1.ListFunctionExecutionsResponse.
  * Use `create(ListFunctionExecutionsResponseSchema)` to create a new message.
  */
 export const ListFunctionExecutionsResponseSchema = /*@__PURE__*/
-  messageDesc(file_tailor_v1_function, 5);
+  messageDesc(file_tailor_v1_function, 7);
 

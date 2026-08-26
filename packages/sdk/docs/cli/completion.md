@@ -7,7 +7,7 @@ Generate shell completion script
 **Usage**
 
 ```
-tailor-sdk completion [options] [shell]
+tailor completion [options] [shell]
 ```
 
 **Arguments**

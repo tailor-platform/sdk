@@ -1,6 +1,6 @@
 /**
  * Stack trace parsing, sourcemap-based source identification, and
- * formatted error display for the test-run command.
+ * formatted error display for the function run command.
  *
  * The platform runtime automatically applies inline sourcemaps to V8
  * stack traces, so frame positions are already original source positions.
@@ -87,7 +87,7 @@ const INLINE_SOURCEMAP_REGEX =
   /\/\/[#@]\s*sourceMappingURL=data:application\/json[^,]*;base64,(.+)$/m;
 
 /** Original source position resolved from a sourcemap */
-export interface MappedSourcePosition {
+interface MappedSourcePosition {
   source: string;
   line: number;
   column: number;
@@ -295,7 +295,7 @@ export function formatMappedError(
       const rel = path.relative(process.cwd(), absolutePath);
       // Only paths escaping cwd (starting with `..`) are shown as-is; all
       // other relative paths get an explicit `./` prefix so dotfiles like
-      // `.tailor-sdk/...` are not mistaken for relative-path markers.
+      // `.tailor/...` are not mistaken for relative-path markers.
       const displaySource = rel.startsWith("..") ? rel : `./${rel}`;
       const fnName = name ?? frame.original.functionName;
       const link = buildSourceLink(displaySource, absolutePath, line, column);
@@ -322,7 +322,7 @@ export function formatMappedError(
 
 /**
  * Format an error string with sourcemap-based source locations.
- * This is the main entry point for test-run error display.
+ * This is the main entry point for function run error display.
  *
  * The platform runtime applies inline sourcemaps automatically, so V8
  * stack frames already contain original source positions. This function

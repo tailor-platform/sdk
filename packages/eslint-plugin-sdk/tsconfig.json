@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "types": ["node"],
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "*.config.ts", "vitest.global-setup.ts"],
+  "exclude": ["node_modules", "dist"]
+}

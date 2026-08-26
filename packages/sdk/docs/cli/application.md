@@ -9,7 +9,7 @@ Initialize a new project using create-sdk.
 **Usage**
 
 ```
-tailor-sdk init [options] [name]
+tailor init [options] [name]
 ```
 
 **Arguments**
@@ -33,15 +33,14 @@ Generate files using Tailor configuration.
 **Usage**
 
 ```
-tailor-sdk generate [options]
+tailor generate [options]
 ```
 
 **Options**
 
-| Option              | Alias | Description                                    | Required | Default              |
-| ------------------- | ----- | ---------------------------------------------- | -------- | -------------------- |
-| `--config <CONFIG>` | `-c`  | Path to SDK config file                        | No       | `"tailor.config.ts"` |
-| `--watch`           | `-W`  | Watch for type/resolver changes and regenerate | No       | `false`              |
+| Option              | Alias | Description             | Required | Default              |
+| ------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--config <CONFIG>` | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -49,12 +48,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 Deploy your application by applying the Tailor configuration.
 
-**Aliases:** `apply`
-
 **Usage**
 
 ```
-tailor-sdk deploy [options]
+tailor deploy [options]
 ```
 
 **Options**
@@ -100,7 +97,7 @@ When the project has no saved selection, `deploy` discovers the account's worksp
 In CI and other non-interactive environments, workspace creation must be explicit:
 
 ```bash
-tailor-sdk deploy \
+tailor deploy \
   --create-workspace \
   --workspace-name example-workspace \
   --workspace-region us-west
@@ -128,10 +125,12 @@ On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into 
 To deploy interdependent applications to the same workspace in one run, pass comma-separated config paths:
 
 ```bash
-tailor-sdk deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
+tailor deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
 ```
 
 When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
+
+Each config's `files` and `ignores` patterns (see [Service Configuration](../configuration.md#service-configuration)) resolve relative to that config's own directory, not the directory you ran `deploy` from. For example, `apps/buyer/tailor.config.ts` declaring `files: ["db/**/*.ts"]` loads files from `apps/buyer/db/`, independent of where `apps/supplier/tailor.config.ts`'s patterns resolve. If a config's relative patterns match nothing under its own directory, the SDK falls back to the invocation directory and logs a warning (see [Service Configuration](../configuration.md#service-configuration) for details).
 
 **Migration Handling:**
 
@@ -143,6 +142,10 @@ When migrations are configured (`db.tailordb.migration` in config), the `deploy`
 4. Updates the migration checkpoint so the same migrations are not re-run
 
 See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details on automatic migration execution.
+
+**Concurrent Deploys:**
+
+Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. Deploys to different workspaces or applications are not affected.
 
 **Schema Check:**
 
@@ -173,7 +176,7 @@ Plan: 5 to create, 3 to update, 1 to delete
 Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
 
 ```bash
-tailor-sdk deploy --dry-run > plan.txt
+tailor deploy --dry-run > plan.txt
 ```
 
 In apply mode, the plan is printed to stderr so it does not interfere with piped output.
@@ -187,7 +190,9 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 ```json
 {
   "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0 },
-  "changes": [{ "action": "create", "name": "Order", "labels": ["type"], "namespace": "tailordb" }],
+  "changes": [
+    { "action": "create", "name": "Order", "labels": ["table"], "namespace": "tailordb" }
+  ],
   "warnings": [
     { "type": "unmanaged", "resourceType": "tailorDB", "name": "LegacyType" },
     { "type": "skippedSecret", "resourceType": "secret", "name": "DB_PASSWORD" }
@@ -214,17 +219,17 @@ Remove all resources managed by the application from the workspace.
 **Usage**
 
 ```
-tailor-sdk remove [options]
+tailor remove [options]
 ```
 
 **Options**
 
-| Option                          | Alias | Description               | Required | Default              | Env                               |
-| ------------------------------- | ----- | ------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false`              | -                                 |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts  | No       | `false`              | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -235,16 +240,16 @@ Show information about the deployed application.
 **Usage**
 
 ```
-tailor-sdk show [options]
+tailor show [options]
 ```
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -255,16 +260,16 @@ Open Tailor Platform Console.
 **Usage**
 
 ```
-tailor-sdk open [options]
+tailor open [options]
 ```
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -275,7 +280,7 @@ Call Tailor Platform API endpoints directly.
 **Usage**
 
 ```
-tailor-sdk api [options] [command] <endpoint>
+tailor api [options] [command] <endpoint>
 ```
 
 **Arguments**
@@ -286,13 +291,13 @@ tailor-sdk api [options] [command] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description                                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                             | No       | `"{}"`               | -                                 |
-| `--field <FIELD>`               | `-f`  | Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body. | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                                       | Required | Default              | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                             | No       | `"{}"`               | -                              |
+| `--field <FIELD>`               | `-f`  | Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body. | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -308,30 +313,30 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Call an endpoint; workspaceId is auto-injected.**
 
 ```bash
-$ tailor-sdk api GetApplication -b '{"applicationName":"app-1"}'
+$ tailor api GetApplication -b '{"applicationName":"app-1"}'
 ```
 
 **Same as above, using --field instead of --body.**
 
 ```bash
-$ tailor-sdk api GetApplication -f applicationName=app-1
+$ tailor api GetApplication -f applicationName=app-1
 ```
 
 **List all invocable OperatorService methods.**
 
 ```bash
-$ tailor-sdk api list
+$ tailor api list
 ```
 
 **Show the input message tree for an endpoint.**
 
 ```bash
-$ tailor-sdk api inspect GetApplication
+$ tailor api inspect GetApplication
 ```
 
 **Notes**
 
-Use `tailor-sdk api list` to enumerate invocable methods and `tailor-sdk api inspect <endpoint>` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
+Use `tailor api list` to enumerate invocable methods and `tailor api inspect <endpoint>` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
 
 The request body is inferred from the target endpoint's request schema, and commonly required fields are auto-injected so they can be omitted from `--body`:
 
@@ -351,7 +356,7 @@ Print the input message tree of an OperatorService endpoint.
 **Usage**
 
 ```
-tailor-sdk api inspect <endpoint>
+tailor api inspect <endpoint>
 ```
 
 **Arguments**
@@ -367,18 +372,18 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Show fields of GetApplicationRequest.**
 
 ```bash
-$ tailor-sdk api inspect GetApplication
+$ tailor api inspect GetApplication
 ```
 
 **Inspect a deeply nested input with `(oneof config)` annotations.**
 
 ```bash
-$ tailor-sdk api inspect CreateExecutorExecutor
+$ tailor api inspect CreateExecutorExecutor
 ```
 
 **Notes**
 
-Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor-sdk api list` to discover endpoint names.
+Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor api list` to discover endpoint names.
 
 ### api list
 
@@ -387,7 +392,7 @@ List all invocable OperatorService methods.
 **Usage**
 
 ```
-tailor-sdk api list
+tailor api list
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.

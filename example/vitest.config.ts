@@ -9,7 +9,7 @@ export default defineConfig({
     // Disable inline sourcemaps during tests to keep bundled output stable
     // for size and fixture comparisons.
     env: {
-      TAILOR_ENABLE_INLINE_SOURCEMAP: "false",
+      TAILOR_INLINE_SOURCEMAP: "false",
     },
     projects: [
       {
@@ -17,7 +17,7 @@ export default defineConfig({
         test: {
           name: { label: "generator", color: "blue" },
           environment: "tailor-runtime",
-          include: ["tests/**/*.{test,spec}.ts"],
+          include: ["tests/**/*.{test,spec}.ts", "migrations/**/*.test.ts"],
         },
       },
       {

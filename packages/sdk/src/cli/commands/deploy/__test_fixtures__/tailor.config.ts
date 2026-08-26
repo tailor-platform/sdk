@@ -6,7 +6,7 @@ import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants"
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
-const outDir = process.env.TAILOR_SDK_OUTPUT_DIR ?? path.join(__dirname, "dist");
+const outDir = process.env.TAILOR_BUILD_OUTPUT_DIR ?? path.join(__dirname, "dist");
 
 export default defineConfig({
   // SDK-managed app id — do not edit, except when copying this config to a separate app.

@@ -1,17 +1,14 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/aigateway` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import * as aigateway from "#/runtime/aigateway";
-import { cleanupMocks, injectMocks, mockAigateway } from "#/vitest/mock";
+import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
+import { aigateway, type GetAIGatewayResult } from "#/runtime/aigateway";
+import { injectMocks, mockAigateway } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/aigateway", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("get forwards to global and returns Promise<{ url: string }>", async () => {
@@ -20,7 +17,7 @@ describe("@tailor-platform/sdk/runtime/aigateway", () => {
 
     const result = aigateway.get("my-aigateway");
 
-    expectTypeOf(result).toEqualTypeOf<Promise<aigateway.GetAIGatewayResult>>();
+    expectTypeOf(result).toEqualTypeOf<Promise<GetAIGatewayResult>>();
     await expect(result).resolves.toEqual({ url: "https://my-aigateway.example.com" });
     expect(ag.calls).toEqual([{ name: "my-aigateway" }]);
   });

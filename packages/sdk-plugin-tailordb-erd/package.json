@@ -1,0 +1,65 @@
+{
+  "name": "@tailor-platform/sdk-plugin-tailordb-erd",
+  "version": "0.1.6",
+  "description": "Tailor CLI plugin providing the `tailor tailordb erd` commands (TailorDB ERD viewer)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tailor-platform/sdk.git",
+    "directory": "packages/sdk-plugin-tailordb-erd"
+  },
+  "bin": {
+    "tailor-tailordb-erd": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "CHANGELOG.md",
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown && politty generate-shim --entry ../dist/cli.js",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix",
+    "knip": "knip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "prepack": "pnpm run build",
+    "publint": "publint --strict"
+  },
+  "dependencies": {
+    "chokidar": "5.0.0",
+    "mime-types": "3.0.2",
+    "open": "11.0.1",
+    "pathe": "2.0.3",
+    "pkg-types": "2.3.1",
+    "politty": "0.11.9",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailor-platform/sdk": "workspace:^",
+    "@types/mime-types": "3.0.1",
+    "@types/node": "24.13.3",
+    "eslint-plugin-zod": "4.9.1",
+    "oxlint": "1.79.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "tsdown": "0.22.14",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@tailor-platform/sdk": "workspace:^"
+  },
+  "engines": {
+    "bun": ">=1.2.0",
+    "node": ">=22.18.0"
+  }
+}

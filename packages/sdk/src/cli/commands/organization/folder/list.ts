@@ -8,6 +8,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { folderListInfo, type FolderListInfo } from "../transform";
 
+// strip unknown keys
 const listFoldersOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   parentFolderId: z.string().optional(),
@@ -54,15 +55,13 @@ export async function listFolders(options: ListFoldersOptions): Promise<FolderLi
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List folders in an organization.",
-  args: z
-    .object({
-      ...organizationArgs,
-      "parent-folder-id": arg(z.string().optional(), {
-        description: "Parent folder ID to list children of",
-      }),
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    "parent-folder-id": arg(z.string().optional(), {
+      description: "Parent folder ID to list children of",
+    }),
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const folders = await listFolders({
       organizationId: args["organization-id"],

@@ -48,12 +48,10 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all executors",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const executors = await listExecutors({
@@ -81,7 +79,7 @@ export const listCommand = defineAppCommand({
     if (!jsonOutput) {
       const hasWebhook = executors.some((e) => e.triggerType === "webhook");
       if (hasWebhook) {
-        logger.info("To see webhook URLs, run: tailor-sdk executor webhook list");
+        logger.info("To see webhook URLs, run: tailor executor webhook list");
       }
     }
   },

@@ -18,10 +18,13 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read # checkout the repository
+    outputs:
+      lint-failed: ${{ steps.lint.outcome == 'failure' || steps.lint_vitest.outcome == 'failure' || steps.lint_tooling.outcome == 'failure' }}
+      format-failed: ${{ steps.format.outcome == 'failure' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -36,34 +39,74 @@ jobs:
       - name: Build packages
         run: pnpm -r --filter '!@tailor-platform/sdk' run build
 
-      - parallel:
-          - name: Run lint
-            run: pnpm -r run lint
+      - name: Run lint
+        id: lint
+        continue-on-error: true
+        run: pnpm -r run lint
 
-          - name: Run Vitest lint
-            run: pnpm run lint:vitest
+      - name: Run Vitest lint
+        id: lint_vitest
+        continue-on-error: true
+        run: pnpm run lint:vitest
 
-          # Ensure no executable files are present
-          # refs: https://github.com/changesets/action/issues/523
-          # Skip symlinks: `-x` follows symlinks to directories and reports them as executable.
-          - name: Check for executable files
-            run: |
-              executable_files=$(git ls-files | while read -r file; do [ ! -L "$file" ] && [ -x "$file" ] && echo "$file"; done || true)
-              if [ -n "$executable_files" ]; then
-                echo "Error: Found executable files (changesets/action does not support executable files):"
-                echo "$executable_files"
-                exit 1
-              fi
+      - name: Run tooling lint
+        id: lint_tooling
+        continue-on-error: true
+        run: pnpm run lint:tooling
 
-          - name: Check format
-            run: pnpm format:check
+      - name: Fail if lint failed
+        if: steps.lint.outcome == 'failure' || steps.lint_vitest.outcome == 'failure' || steps.lint_tooling.outcome == 'failure'
+        run: exit 1
+
+      # Ensure no executable files are committed
+      # refs: https://github.com/changesets/action/issues/523
+      # Checks git object modes (not the working tree) because pnpm chmods
+      # declared bin targets +x at install time. Those targets are exempt:
+      # they are committed as 755 so installs keep checkouts clean, and
+      # changesets/action never commits them.
+      - name: Check for executable files
+        run: |
+          bin_targets=$(git ls-files '*package.json' | xargs node -e '
+            const fs = require("fs");
+            const path = require("path");
+            for (const pkgPath of process.argv.slice(1)) {
+              const { bin } = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+              if (!bin) continue;
+              for (const target of typeof bin === "string" ? [bin] : Object.values(bin)) {
+                console.log(path.posix.normalize(path.posix.join(path.posix.dirname(pkgPath), target)));
+              }
+            }
+          ')
+          executable_files=$(git ls-files --format='%(objectmode) %(path)' | while read -r mode file; do
+            [ "$mode" = "100755" ] && ! grep -Fqx "$file" <<< "$bin_targets" && echo "$file"
+          done || true)
+          if [ -n "$executable_files" ]; then
+            echo "Error: Found committed executable files (changesets/action does not support executable files):"
+            echo "$executable_files"
+            exit 1
+          fi
+
+      - name: Check format
+        id: format
+        continue-on-error: true
+        run: pnpm format:check
+
+      - name: Fail if format failed
+        if: steps.format.outcome == 'failure'
+        run: exit 1
 
       - name: Generate code
         run: pnpm -r run generate
 
+      # These checks only read the generated tree, so they run concurrently.
+      # GitHub caps a job at 10 concurrent background steps; this group is at
+      # that cap, so adding another check here needs a second group.
       - parallel:
           - name: Check type by tsgo
             run: pnpm -r run typecheck:go
+
+          - name: Check type
+            run: pnpm -r run typecheck
 
           - name: Check unused code (knip)
             run: pnpm -r run knip
@@ -79,5 +122,61 @@ jobs:
           - name: Check import cycles
             run: pnpm -r run check:import-cycles
 
-      - name: Check type
-        run: pnpm -r run typecheck
+          # The checks below guard files that are generated from a source of truth.
+          # They were only reachable through `pnpm check` locally, so forgetting the
+          # matching `:update` command left CI green while the generated copy drifted.
+          - name: Check agent rules are up to date
+            run: pnpm run check:agent-rules
+
+          - name: Check migration docs match the codemod registry
+            run: pnpm run check:codemod-docs
+
+          - name: Check public API JSDoc
+            run: pnpm run check:jsdoc
+
+          # Also gates the release PR: once its version bump reaches a codemod's
+          # boundary, an API that was supposed to be removed there still carrying a
+          # `@deprecated` declaration fails here.
+          - name: Check deprecations
+            run: pnpm run check:deprecations
+
+  auto-fix-lint-format:
+    name: Auto-fix lint/format (renovate)
+    needs: [ci]
+    if: >-
+      always() &&
+      (needs.ci.outputs.lint-failed == 'true' || needs.ci.outputs.format-failed == 'true') &&
+      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+      github.event.pull_request.user.login == 'renovate[bot]' &&
+      github.event.pull_request.user.type == 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout the PR head
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Install aqua
+        uses: ./.github/actions/install-aqua
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Apply lint fix
+        run: pnpm run lint:fix
+
+      - name: Apply format fix
+        run: pnpm run format
+
+      - name: Push changes to the remote branch
+        uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
+        with:
+          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          commit_message: "chore: apply oxlint --fix and oxfmt --write"
+          fail_on_self_push: false

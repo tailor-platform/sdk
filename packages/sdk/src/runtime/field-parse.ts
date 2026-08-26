@@ -1,26 +1,26 @@
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
-import type { TailorUser } from "./types";
+import type { TailorPrincipal } from "#/runtime/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 const regex = {
   uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
+  time: /^(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)$/,
   datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(\.(?<millisec>\d{3}))?Z$/,
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})[Tt](?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d):(?<second>[0-5]\d|60)(\.(?<fraction>\d+))?(?<offset>[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/,
   decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
 export type FieldParseArgs = {
   value: unknown;
   data: unknown;
-  user: TailorUser;
+  invoker: TailorPrincipal | null;
 };
 
 export type FieldParseInternalArgs = {
   value: unknown;
   data: unknown;
-  user: TailorUser;
+  invoker: TailorPrincipal | null;
   pathArray: string[];
 };
 
@@ -175,18 +175,14 @@ function validateCustomValue<T extends TailorFieldType>(
   args: FieldValidationArgs<T>,
   validateFns: NonNullable<FieldMetadata["validate"]>,
 ): void {
-  const { value, data, user, pathArray, issues } = args;
+  const { value, pathArray, issues } = args;
   const path = pathArray.length > 0 ? pathArray : undefined;
 
-  for (const validateInput of validateFns) {
-    const { fn, message } =
-      typeof validateInput === "function"
-        ? { fn: validateInput, message: "Validation failed" }
-        : { fn: validateInput[0], message: validateInput[1] };
-
-    if (!fn({ value, data, user })) {
+  for (const fn of validateFns) {
+    const result = fn({ value });
+    if (typeof result === "string") {
       issues.push({
-        message,
+        message: result,
         path,
       });
     }

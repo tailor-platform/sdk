@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { approval } from "../workflow/approval";
 import resolver from "./resolveApproval";
 
@@ -18,7 +17,8 @@ describe("resolveApproval resolver", () => {
 
     const result = await resolver.body({
       input: { executionId: "exec-1", approved: true },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 
@@ -36,7 +36,8 @@ describe("resolveApproval resolver", () => {
 
     const result = await resolver.body({
       input: { executionId: "exec-2", approved: false },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 

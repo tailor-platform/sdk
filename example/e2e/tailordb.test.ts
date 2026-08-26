@@ -21,7 +21,7 @@ describe("controlplane", () => {
     expect(tailordbService?.namespace?.name).toBe(namespaceName);
   });
 
-  test("type applied", async () => {
+  test("table applied", async () => {
     const { tailordbTypes } = await client.listTailorDBTypes({
       workspaceId,
       namespaceName,
@@ -47,13 +47,11 @@ describe("controlplane", () => {
             type: "datetime",
             required: true,
             array: false,
-            hooks: expect.any(Object),
           },
           updatedAt: {
             type: "datetime",
-            required: false,
+            required: true,
             array: false,
-            hooks: expect.any(Object),
           },
         },
         indexes: {
@@ -236,6 +234,7 @@ describe("dataplane", () => {
               email: "customer-${randomUUID()}@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345 USA"
               state: "California"
             }
           ) {
@@ -419,6 +418,7 @@ describe("dataplane", () => {
               email: "customer@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345 USA"
               state: "California"
             }
           ) {
@@ -497,8 +497,8 @@ describe("dataplane", () => {
         createUser: {
           id: string;
           name: string;
-          createdAt?: string;
-          updatedAt?: string;
+          createdAt: string;
+          updatedAt: string;
         };
       }
       const createResult = await graphQLClient.rawRequest<Data>(create);
@@ -508,7 +508,7 @@ describe("dataplane", () => {
           id: expect.any(String),
           name: "alice",
           createdAt: expect.any(String),
-          updatedAt: null,
+          updatedAt: expect.any(String),
         },
       });
       const userId = createResult.data.createUser.id;
@@ -546,6 +546,7 @@ describe("dataplane", () => {
               postalCode: "12345"
               address: "123 Main St"
               city: "Los Angeles"
+              fullAddress: "12345 123 Main St Los Angeles"
               state: "California"
             }
           ) {
@@ -577,6 +578,7 @@ describe("dataplane", () => {
               email: "bob@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345 USA"
               state: "California"
             }
           ) {
@@ -608,6 +610,153 @@ describe("dataplane", () => {
         },
       );
       expect(result.errors).toBeDefined();
+    });
+  });
+
+  describe("productBundle", async () => {
+    test("table-level hook computes label from input fields", async () => {
+      const query = gql`
+        mutation {
+          createProductBundle(
+            input: {
+              name: "Summer Sale"
+              items: [
+                { productName: "Widget", qty: 1, unitPrice: 10.0 }
+                { productName: "Gadget", qty: 2, unitPrice: 25.0 }
+              ]
+            }
+          ) {
+            id
+            name
+            label
+            items {
+              productName
+              qty
+              unitPrice
+            }
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeUndefined();
+      expect(result.data).toEqual({
+        createProductBundle: {
+          id: expect.any(String),
+          name: "Summer Sale",
+          label: "Summer Sale Bundle",
+          items: [
+            { productName: "Widget", qty: 1, unitPrice: 10.0 },
+            { productName: "Gadget", qty: 2, unitPrice: 25.0 },
+          ],
+        },
+      });
+    });
+
+    test("table-level hook recomputes label on update", async () => {
+      const create = gql`
+        mutation {
+          createProductBundle(
+            input: { name: "Original", items: [{ productName: "Item", qty: 1, unitPrice: 5.0 }] }
+          ) {
+            id
+            label
+          }
+        }
+      `;
+      interface Data {
+        createProductBundle: { id: string; label: string };
+      }
+      const createResult = await graphQLClient.rawRequest<Data>(create);
+      expect(createResult.errors).toBeUndefined();
+      expect(createResult.data.createProductBundle.label).toBe("Original Bundle");
+      const id = createResult.data.createProductBundle.id;
+
+      const update = gql`
+        mutation {
+          updateProductBundle(id: "${id}", input: { name: "Renamed" }) {
+            id
+            label
+          }
+        }
+      `;
+      const updateResult = await graphQLClient.rawRequest(update);
+      expect(updateResult.errors).toBeUndefined();
+      expect(updateResult.data).toEqual({
+        updateProductBundle: {
+          id,
+          label: "Renamed Bundle",
+        },
+      });
+    });
+
+    test("table-level hook falls back to oldRecord when name is not in input", async () => {
+      const create = gql`
+        mutation {
+          createProductBundle(
+            input: { name: "Stable", items: [{ productName: "Item", qty: 1, unitPrice: 5.0 }] }
+          ) {
+            id
+            label
+          }
+        }
+      `;
+      interface Data {
+        createProductBundle: { id: string; label: string };
+      }
+      const createResult = await graphQLClient.rawRequest<Data>(create);
+      expect(createResult.errors).toBeUndefined();
+      expect(createResult.data.createProductBundle.label).toBe("Stable Bundle");
+      const id = createResult.data.createProductBundle.id;
+
+      const update = gql`
+        mutation {
+          updateProductBundle(
+            id: "${id}"
+            input: { items: [{ productName: "Item", qty: 3, unitPrice: 5.0 }] }
+          ) {
+            id
+            name
+            label
+          }
+        }
+      `;
+      const updateResult = await graphQLClient.rawRequest(update);
+      expect(updateResult.errors).toBeUndefined();
+      expect(updateResult.data).toEqual({
+        updateProductBundle: {
+          id,
+          name: "Stable",
+          label: "Stable Bundle",
+        },
+      });
+    });
+
+    test("inner field validate rejects invalid qty", async () => {
+      const query = gql`
+        mutation {
+          createProductBundle(
+            input: { name: "Bad qty", items: [{ productName: "Widget", qty: 0, unitPrice: 10.0 }] }
+          ) {
+            id
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeDefined();
+      expect(result.errors![0].message).toMatch("qty must be positive");
+    });
+
+    test("table-level validate rejects empty items", async () => {
+      const query = gql`
+        mutation {
+          createProductBundle(input: { name: "Empty", items: [] }) {
+            id
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeDefined();
+      expect(result.errors![0].message).toMatch("At least one item is required");
     });
   });
 

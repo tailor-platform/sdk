@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { gql } from "graphql-request";
-import { beforeAll, describe, expect, inject, test } from "vitest";
+import { aroundAll, describe, expect, inject, test } from "vitest";
 import { createGraphQLClient } from "./utils";
 
 const appUrl = inject("url");
@@ -21,7 +21,7 @@ describe("HTTP adapter routing", () => {
     expect(res.headers.get("content-type") ?? "").toContain("application/xml");
     const body = await res.text();
     expect(body).toContain("<whoami>");
-    expect(body).toMatch(/<user>[\s\S]*<\/user>/);
+    expect(body).toMatch(/<caller>[\s\S]*<\/caller>/);
   });
 
   test("POST /api/whoami fails with 404 because the adapter only declares GET", async () => {
@@ -40,7 +40,7 @@ describe("HTTP adapter with path wildcard", () => {
   let userId = "";
   let userName = "";
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     userName = `http-adapter-${randomUUID()}`;
     const result = await graphQLClient.rawRequest<{
       createUser: { id: string };
@@ -59,6 +59,7 @@ describe("HTTP adapter with path wildcard", () => {
       throw new Error(JSON.stringify(result.errors));
     }
     userId = result.data.createUser.id;
+    await runSuite();
   });
 
   test("GET /api/users/{id} returns the user as XML", async () => {

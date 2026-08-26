@@ -1,10 +1,10 @@
 # GitHub Actions Integration
 
-`tailor-sdk setup` generates a GitHub Actions workflow that deploys your
-Tailor Platform application automatically on push or tag.
+`tailor setup` generates GitHub repository automation for your Tailor Platform
+application, including deploy workflows and Renovate configuration.
 
 > **Beta:** This command is under active development. CLI flags, the generated
-> workflow, and the `.github/tailor-sdk.lock` schema may change before general
+> workflow, and the `.github/tailor.lock` schema may change before general
 > availability.
 
 ## Quick start
@@ -14,15 +14,12 @@ lives):
 
 ```bash
 # Branch target: deploy to stg on every push to main
-tailor-sdk setup -n my-app-stg
+tailor setup branch --name my-app-stg
 
 # Tag target: deploy to production when a tag is pushed, with an approval gate
-tailor-sdk setup -n my-app-prod \
-  --tag --branch main --environment production
+tailor setup tag --name my-app-prod \
+  --branch main --environment production
 ```
-
-`setup` defaults to the GitHub provider; `--provider github` (`-p github`) is
-accepted but optional, and other providers are not yet supported.
 
 After running the command, follow the **Next steps** printed to the terminal to
 set the required secrets, set the `TAILOR_PLATFORM_WORKSPACE_ID` variable, and
@@ -41,12 +38,13 @@ Run `setup` once per target.
 ### Branch target (recommended for staging)
 
 The branch target fires on pull requests and pushes to the branch you specify
-(defaulting to the repository's default branch when `--branch` is omitted):
+(defaulting to the repository's default branch when `--target` is
+omitted):
 
 ```bash
-tailor-sdk setup -n my-app-stg
+tailor setup branch --name my-app-stg
 # Equivalent to:
-tailor-sdk setup -n my-app-stg --branch main
+tailor setup branch --name my-app-stg --target main
 ```
 
 What it does:
@@ -69,7 +67,15 @@ Pass `--erd-preview` on a branch target to add TailorDB ERD preview artifacts
 to pull requests:
 
 ```bash
-tailor-sdk setup -n my-app-stg --erd-preview
+tailor setup branch --name my-app-stg --erd-preview
+```
+
+The generated workflow runs `tailor tailordb erd`, which is provided by the
+`@tailor-platform/sdk-plugin-tailordb-erd` CLI plugin — install it as a
+dev-dependency in your project:
+
+```bash
+npm install -D @tailor-platform/sdk-plugin-tailordb-erd
 ```
 
 The generated workflow builds one self-contained ERD viewer HTML file for each
@@ -82,11 +88,10 @@ ERD preview does not use Tailor Platform credentials. Fork pull requests still
 build artifacts, but the comment step is skipped because fork tokens cannot
 write PR comments.
 
-`--erd-preview` is only available for branch targets with the plan job enabled;
-it cannot be combined with `--tag` or `--no-plan`. The namespace list is
-recorded in `.github/tailor-sdk.lock`; the pull request workflow compares the
-head and base lock files so newly added or removed namespaces can still produce
-all-added or all-removed viewer artifacts. Re-run `setup` after adding or
+`--erd-preview` is only available for branch targets. The namespace list is
+recorded in `.github/tailor.lock`; the pull request workflow compares the head
+and base lock files so newly added or removed namespaces can still produce
+all-added or all-removed viewer artifacts. Re-run `setup branch` after adding or
 removing TailorDB namespaces. `setup check` reports drift when the recorded ERD
 preview namespaces no longer match the current config.
 
@@ -96,8 +101,8 @@ The tag target fires when a tag matching `--tag-pattern` (default `v*`) is
 pushed:
 
 ```bash
-tailor-sdk setup -n my-app-prod \
-  --tag --tag-pattern "v*" --branch main --environment production
+tailor setup tag --name my-app-prod \
+  --tag-pattern "v*" --branch main --environment production
 ```
 
 What it does:
@@ -116,14 +121,14 @@ What it does:
 
 ### Choosing `--branch` for the tag target
 
-`--branch` has two different roles depending on the target kind:
+The branch each target reads plays a different role, under a different flag:
 
-| Target | Role of `--branch`                                                                             |
-| ------ | ---------------------------------------------------------------------------------------------- |
-| Branch | The branch that triggers the workflow (push + PR base). Defaults to the repo's default branch. |
-| Tag    | The branch whose history the tag must be reachable from. Omit to disable the guard entirely.   |
+| Target | Flag       | Role                                                                                           |
+| ------ | ---------- | ---------------------------------------------------------------------------------------------- |
+| Branch | `--target` | The branch that triggers the workflow (push + PR base). Defaults to the repo's default branch. |
+| Tag    | `--branch` | The branch whose history the tag must be reachable from. Omit to disable the guard entirely.   |
 
-The workspace name (`--workspace-name`, or the config `name` when omitted) must
+The workspace name (`--name`, or the config `name` when omitted) must
 be 3–63 characters of lowercase letters, numbers, and hyphens, and cannot start
 or end with a hyphen. It is used for the generated file name, the workflow
 `name:`, the plan label, and the default GitHub Environment name; it does not
@@ -145,7 +150,7 @@ Because the variable is scoped to a GitHub Environment, both the `plan` and
    this is a manual step:
 
    ```bash
-   tailor-sdk workspace create   # copy the printed workspace id
+   tailor workspace create   # copy the printed workspace id
    ```
 
 2. Set the id as the Environment variable (the environment name is your
@@ -166,7 +171,7 @@ environment is planned.)
 
 ## Generated files
 
-Running `setup` creates or updates:
+Running a workflow setup subcommand creates or updates:
 
 ### `.github/workflows/tailor-<workspace-name>.yml`
 
@@ -188,7 +193,7 @@ step or added your own — the command stops and reports the conflict. Pass
 re-apply your own steps. (Preserving user-added steps across regeneration is
 planned.)
 
-### `.github/tailor-sdk.lock`
+### `.github/tailor.lock`
 
 A machine-owned JSON file that tracks which files the SDK manages, the inputs
 they were generated from, and their content hashes. **Commit this file. Never
@@ -198,14 +203,14 @@ detect hand edits.
 ### `tailor.config.ts` (id injection)
 
 If your config does not already have an `id` field, `setup` injects one.
-This `id` must be committed alongside the workflow file. In CI, `tailor-sdk
+This `id` must be committed alongside the workflow file. In CI, `tailor
 deploy` refuses to inject a new id — if the id were assigned fresh on each CI
 run, every deploy would create a brand-new application and lose ownership of
 previously deployed resources.
 
 If your pipeline intentionally deploys a fresh, throwaway application on every
 run (for example an end-to-end test harness that creates and deletes its own
-workspace), set `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true` to opt back
+workspace), set `TAILOR_CI_ALLOW_ID_INJECTION=true` to opt back
 into automatic id injection for that pipeline.
 
 ## Secrets
@@ -268,7 +273,7 @@ you can deploy any commit regardless of branch membership.
 For a monorepo where your SDK app lives in a subdirectory, pass `--dir`:
 
 ```bash
-tailor-sdk setup -n my-app --dir apps/backend
+tailor setup branch --name my-app --dir apps/backend
 ```
 
 The generated workflow adds a `paths` filter on `apps/backend/**` so the
@@ -277,7 +282,7 @@ SDK commands is set accordingly.
 
 ## Rollback
 
-`tailor-sdk deploy` is declarative: redeploying a past configuration returns
+`tailor deploy` is declarative: redeploying a past configuration returns
 the platform to that state. The recommended rollback approaches are:
 
 ### Option 1 — Revert the commit (branch target)
@@ -333,11 +338,11 @@ A typical setup with staging and production:
 
 ```bash
 # Staging: main → stg (deploy on every push to main)
-tailor-sdk setup -n my-app-stg
+tailor setup branch --name my-app-stg
 
 # Production: tagged commits → prod, with approval gate and branch guard
-tailor-sdk setup -n my-app-prod \
-  --tag --branch main --environment production
+tailor setup tag --name my-app-prod \
+  --branch main --environment production
 ```
 
 Then provision each workspace and set its id on the matching environment (the
@@ -354,24 +359,74 @@ gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID --env production
 gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env production
 ```
 
-Commit both workflow files and `.github/tailor-sdk.lock`.
+Commit both workflow files and `.github/tailor.lock`.
+
+## Keeping dependencies and actions updated
+
+Run this command once from the repository root to add Renovate configuration:
+
+```bash
+tailor setup deps
+```
+
+It generates `renovate.json`, which extends Tailor's shared Renovate preset. The
+preset groups `@tailor-platform/*` package updates into one pull request and
+lets Renovate update the SHA-pinned GitHub Actions used by generated workflows.
+Enable Renovate for the repository by following the
+[Renovate onboarding guide](https://docs.renovatebot.com/getting-started/installing-onboarding/),
+then commit the generated file.
+
+If the repository already has Renovate configuration, the command adds
+`github>tailor-inc/renovate-config` to its `extends` array in place instead of
+writing a new file, leaving your other settings untouched. It checks Renovate's
+standard root, `.github`, `.gitlab`, and `.renovaterc` locations, including the
+deprecated `package.json` configuration. When that configuration already extends
+the preset, the command reports that Renovate is set up and changes nothing.
+
+JSONC and JSON5 configurations are updated in place while preserving their
+comments and formatting. Configurations that Renovate itself cannot load — such
+as invalid syntax, or duplicate keys outside JSON5 — are left unchanged and
+reported for manual inspection.
+
+`renovate.json` is yours to edit — it is not tracked in `.github/tailor.lock`.
+Add your own rules freely; re-running `tailor setup deps` does not overwrite
+them. To remove it, delete the file.
+
+Renovate updates the SDK dependency and action pins, but it does not regenerate
+the workflow template. After an SDK update, `tailor setup check --ci` reports a
+template-version warning until you re-run the relevant workflow setup
+subcommand.
 
 ## Checking for drift
 
-`tailor-sdk setup check` audits the workflows recorded in
-`.github/tailor-sdk.lock` against your current config and repository, without
+`tailor setup check` audits the workflows recorded in
+`.github/tailor.lock` against your current config and repository, without
 writing anything. It reports when a workflow file is missing or hand-edited, a
 newer template is available, `tailor.config.ts` is no longer under the recorded
 `--dir`, or the repository default branch no longer matches a branch target's
 trigger. It exits non-zero when it finds drift, so you can run it in CI. Each
 finding names a stable rule key for future suppression.
 
+Workflows generated by `setup branch`, `setup tag`, `setup preview`, and
+`setup coordinate` self-audit: each contains a `tailor-drift-check` step that
+runs the check in CI. Preview workflows run it alongside each preview deploy,
+so pull requests that deploy no preview (drafts, fork PRs, and unlabeled PRs
+in label-triggered mode) skip the check. A single run audits every target
+recorded in `.github/tailor.lock`, so per-app composite actions generated by
+`setup action` are covered by their coordinator's step and do not carry one of
+their own.
+
+Drift findings are advisory by default. Set the repository variable
+`TAILOR_PLATFORM_FAIL_ON_DRIFT` to `true` to make unsuppressed findings fail
+the job. Execution and configuration errors fail regardless of this variable.
+
 ## Updating the generated workflow
 
-When you upgrade the SDK, re-run `setup` with the same flags to pick up
-template improvements. If the SDK detects that you have hand-edited a managed
-section, it stops and asks you to use `--force` to overwrite your edits, or to
-move your customizations into your own steps before regenerating.
+When you upgrade the SDK, re-run the relevant workflow setup subcommand with
+the same flags to pick up template improvements. If the SDK detects that you
+have hand-edited a managed section, it stops and asks you to use `--force` to
+overwrite your edits, or to move your customizations into your own steps before
+regenerating.
 
-The `.github/tailor-sdk.lock` file records the flags used at generation time,
+The `.github/tailor.lock` file records the flags used at generation time,
 so you can check what arguments were used previously.

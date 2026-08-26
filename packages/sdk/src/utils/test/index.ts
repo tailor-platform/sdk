@@ -1,93 +1,134 @@
-import type { output, TailorUser } from "#/configure/index";
+import type { output } from "#/configure/index";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { TailorField } from "#/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
-export { WORKFLOW_TEST_ENV_KEY } from "#/configure/services/workflow/job";
-export {
-  setupTailordbMock,
-  setupTailorErrorsMock,
-  setupWorkflowMock,
-  setupInvokerMock,
-  setupWaitPointMock,
-  createImportMain,
-} from "./mock";
-
-/** Represents an unauthenticated user in the Tailor platform. */
-export const unauthenticatedTailorUser = {
-  id: "00000000-0000-0000-0000-000000000000",
-  type: "",
-  workspaceId: "00000000-0000-0000-0000-000000000000",
-  attributes: null,
-  attributeList: [],
-} as const satisfies TailorUser;
+// Not `record[key] = value`: assigning to `__proto__` goes through the inherited
+// setter, which mutates the prototype instead of recording the field and leaves
+// no own property behind for the value to be read from.
+function setField(record: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
 
 /**
- * Creates a hook function that processes TailorDB type fields
+ * Creates a hook function that processes TailorDB table fields
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
+ * - Takes each field from the data's own properties, so a field named after a
+ *   member of `Object` such as `toString` is read from the record rather than
+ *   from the prototype
  * @template T - The output type of the hook function
- * @param type - TailorDB type definition
+ * @param type - TailorDB table definition
  * @returns A function that transforms input data according to field hooks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
-  return (data: unknown) => {
-    return Object.entries(type.fields).reduce(
+  return (data: unknown, now: Date = new Date()) => {
+    const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
+    const hooked = Object.entries(type.fields).reduce(
       (hooked, [key, value]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const field = value as TailorField<any, any, any>;
+        // `Object.hasOwn`, not `obj?.[key]`: a field named after an Object member
+        // such as `toString` would otherwise read the inherited value.
+        const input = obj && Object.hasOwn(obj, key) ? obj[key] : undefined;
+        let hookedValue: unknown;
         if (key === "id") {
-          // Use existing id from data if provided, otherwise generate new UUID
-          const existingId =
-            data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
-          hooked[key] = existingId ?? crypto.randomUUID();
+          hookedValue = input ?? crypto.randomUUID();
         } else if (field.type === "nested") {
-          const nestedValue =
-            data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const nestedHook = createTailorDBHook({ fields: field.fields } as any);
           if (field.metadata.array) {
-            // For nested array fields, recurse per element and pass through non-array values
-            // (e.g. null/undefined for optional fields) so validation sees the original value.
-            hooked[key] = Array.isArray(nestedValue)
-              ? nestedValue.map((item) => nestedHook(item))
-              : nestedValue;
+            hookedValue = Array.isArray(input) ? input.map((item) => nestedHook(item, now)) : input;
           } else {
-            hooked[key] = nestedHook(nestedValue);
+            hookedValue = nestedHook(input, now);
           }
         } else if (field.metadata.hooks?.create) {
-          hooked[key] = field.metadata.hooks.create({
-            value: (data as Record<string, unknown>)[key],
-            data: data,
-            user: unauthenticatedTailorUser,
-          });
-          if (hooked[key] instanceof Date) {
-            hooked[key] = hooked[key].toISOString();
+          hookedValue = field.metadata.hooks.create({ input, invoker: null, now });
+          if (hookedValue instanceof Date) {
+            hookedValue = hookedValue.toISOString();
           }
-        } else if (data && typeof data === "object") {
-          hooked[key] = (data as Record<string, unknown>)[key];
+        } else {
+          hookedValue = input;
         }
+        if (hookedValue == null && field.metadata.default !== undefined) {
+          const isTimeType =
+            field.type === "datetime" || field.type === "date" || field.type === "time";
+          hookedValue =
+            field.metadata.default === "now" && isTimeType
+              ? now.toISOString()
+              : field.metadata.default;
+        }
+        // Set even when there is no value: the key carrying `undefined` is what
+        // tells a schema inferred from the record that the column is nullable,
+        // and it shadows a same-named member of `Object.prototype`.
+        setField(hooked, key, hookedValue);
         return hooked;
       },
       {} as Record<string, unknown>,
-    ) as Partial<output<T>>;
+    );
+
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
+    if (type.metadata?.typeHook?.create) {
+      const { id: _id, ...typeHookInput } = hooked;
+      // oxlint-disable-next-line typescript/no-unsafe-function-type
+      const overrides = type.metadata.typeHook.create({
+        input: typeHookInput,
+        invoker: null,
+        now,
+      });
+      if (overrides && typeof overrides === "object") {
+        for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
+          setField(hooked, key, value instanceof Date ? value.toISOString() : value);
+        }
+      }
+    }
+
+    return hooked as Partial<output<T>>;
   };
 }
 
+// Collect the issues the table's own `validate` reports for a record, so they
+// surface the same way a field's do instead of ending the run.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unknown) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- absent on a nested type
+  const typeValidate = type?.metadata?.typeValidate;
+  if (!typeValidate) {
+    return [];
+  }
+  const { id: _id, ...newRecord } = hooked as Record<string, unknown>;
+  const issues: StandardSchemaV1.Issue[] = [];
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  typeValidate({ newRecord, oldRecord: null, invoker: null }, (field: string, message: string) => {
+    issues.push({ message, path: [field] });
+  });
+  return issues;
+}
+
 /**
- * Creates the standard schema definition for lines-db
- * This returns the first argument for defineSchema with the ~standard section
+ * Creates the standard schema definition used to validate seed rows.
+ * Runs the hook, then the table's own `validate`, and the field schema only when
+ * that reported nothing, so both levels of validation report as issues rather
+ * than by throwing.
  * @template T - The output type after validation
  * @param schemaType - TailorDB field schema for validation
  * @param hook - Hook function to transform data before validation
+ * @param type - TailorDB table definition, when it carries a table-level `validate`
  * @returns Schema object with ~standard section for defineSchema
  */
 export function createStandardSchema<T = Record<string, unknown>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schemaType: TailorField<any, T>,
   hook: (data: unknown) => Partial<T>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type?: TailorDBType<any, any>,
 ) {
   return {
     "~standard": {
@@ -95,10 +136,14 @@ export function createStandardSchema<T = Record<string, unknown>>(
       vendor: "@tailor-platform/sdk",
       validate: (value: unknown) => {
         const hooked = hook(value);
+        const issues = typeLevelIssues(type, hooked);
+        if (issues.length > 0) {
+          return { issues };
+        }
         const result = schemaType.parse({
           value: hooked,
           data: hooked,
-          user: unauthenticatedTailorUser,
+          invoker: null,
         });
         if (result.issues) {
           return result;

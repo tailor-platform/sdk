@@ -1,4 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
+import { symbols } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { Application } from "#/cli/services/application";
@@ -6,6 +7,7 @@ import type { ExecutorService } from "#/cli/services/executor/service";
 import type { ResolverService } from "#/cli/services/resolver/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { Resolver } from "#/types/resolver.generated";
 import type { PlanContext } from "./types";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
@@ -15,13 +17,13 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:pipeline:test",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -128,8 +130,9 @@ function buildCtx(overrides: Partial<PlanContext>): PlanContext {
   };
 }
 
-beforeEach(() => {
+aroundEach(async (runTest) => {
   vi.clearAllMocks();
+  await runTest();
 });
 
 describe("planPipeline (resolver service level)", () => {
@@ -147,39 +150,109 @@ describe("planPipeline (resolver service level)", () => {
     });
   });
 
-  test("enables publishExecutionEvents when a peer executor targets the resolver", async () => {
-    const client = createMockClient([]);
-    const resolverService = {
-      namespace: "shared-pipeline",
-      config: {},
-      resolvers: {
-        myResolver: {
-          name: "myResolver",
-          operation: "query",
-          body: () => "hello",
-          output: { type: "string", metadata: {}, fields: {} },
+  describe("publishEvents", () => {
+    function createResolverServiceWith(publishEvents: boolean | undefined): ResolverService {
+      return {
+        namespace: "shared-pipeline",
+        config: {},
+        resolvers: {
+          myResolver: {
+            name: "myResolver",
+            operation: "query",
+            body: () => "hello",
+            output: { type: "string", metadata: {}, fields: {} },
+            ...(publishEvents === undefined ? {} : { publishEvents }),
+          },
         },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+    }
+
+    async function planWith(params: {
+      publishEvents: boolean | undefined;
+      subscribed: boolean;
+      remote?: boolean;
+    }) {
+      const { publishEvents, subscribed, remote } = params;
+      const client =
+        remote === undefined
+          ? createMockClient([])
+          : createMockClient(
+              [{ name: "shared-pipeline", label: appName }],
+              {
+                "shared-pipeline": [{ name: "myResolver", publishExecutionEvents: remote }],
+              },
+              {},
+            );
+      return await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([createResolverServiceWith(publishEvents)]),
+        forRemoval: false,
+        config: mockConfig,
+        executorUsedResolvers: subscribed ? new Set(["myResolver"]) : new Set<string>(),
+      });
+    }
+
+    function desiredPublishExecutionEvents(
+      result: Awaited<ReturnType<typeof planPipeline>>,
+    ): boolean | undefined {
+      const entry = result.changeSet.resolver.creates[0] ?? result.changeSet.resolver.updates[0];
+      expect(entry).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (entry as any).request.pipelineResolver.publishExecutionEvents;
+    }
+
+    test.each([
+      { publishEvents: undefined, subscribed: true, expected: true },
+      { publishEvents: undefined, subscribed: false, expected: false },
+      { publishEvents: true, subscribed: false, expected: true },
+      { publishEvents: true, subscribed: true, expected: true },
+      { publishEvents: false, subscribed: false, expected: false },
+    ])(
+      "resolves publishEvents=$publishEvents subscribed=$subscribed to $expected",
+      async ({ publishEvents, subscribed, expected }) => {
+        const result = await planWith({ publishEvents, subscribed });
+
+        expect(desiredPublishExecutionEvents(result)).toBe(expected);
       },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ResolverService;
-    const application = createMockApplication([resolverService]);
+    );
 
-    const ctx: PlanContext = {
-      client,
-      workspaceId,
-      application,
-      forRemoval: false,
-      config: mockConfig,
-      executorUsedResolvers: new Set(["myResolver"]),
-    };
+    test("throws when an opt-out is combined with a subscribing executor", async () => {
+      await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
+        'Resolver "myResolver" has "publishEvents: false", but executors with resolverExecuted triggers subscribe to it.',
+      );
+    });
 
-    const result = await planPipeline(ctx);
+    test("rejects a conflicting opt-out before listing remote resolvers", async () => {
+      const client = createMockClient([{ name: "shared-pipeline", label: appName }]);
 
-    const resolverCreate = result.changeSet.resolver.creates[0];
-    expect(resolverCreate).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const proto = (resolverCreate as any).request.pipelineResolver;
-    expect(proto.publishExecutionEvents).toBe(true);
+      await expect(
+        planPipeline({
+          client,
+          workspaceId,
+          application: createMockApplication([createResolverServiceWith(false)]),
+          forRemoval: false,
+          config: mockConfig,
+          executorUsedResolvers: new Set(["myResolver"]),
+        }),
+      ).rejects.toThrow('Resolver "myResolver" has "publishEvents: false"');
+
+      expect(client.listPipelineResolvers).not.toHaveBeenCalled();
+    });
+
+    test("turns a remote opt-in back off once nothing subscribes", async () => {
+      const result = await planWith({ publishEvents: undefined, subscribed: false, remote: true });
+
+      expect(desiredPublishExecutionEvents(result)).toBe(false);
+      expect(result.changeSet.resolver.updates).toHaveLength(1);
+    });
+
+    test("keeps a remote opt-in while an executor still subscribes", async () => {
+      const result = await planWith({ publishEvents: undefined, subscribed: true, remote: true });
+
+      expect(desiredPublishExecutionEvents(result)).toBe(true);
+    });
   });
 
   describe("delete scenarios (service level)", () => {
@@ -260,11 +333,17 @@ describe("planPipeline (resolver service level)", () => {
   });
 
   describe("resolver no-op detection", () => {
-    function createPipeline(resolver: Record<string, unknown>): ResolverService {
+    type PipelineResolverFixture = {
+      name: string;
+      operation: Resolver["operation"];
+      [key: string]: unknown;
+    };
+
+    function createPipeline(resolver: PipelineResolverFixture): ResolverService {
       return {
         namespace: "my-resolver",
         config: {},
-        resolvers: { [resolver.name as string]: resolver },
+        resolvers: { [resolver.name]: resolver },
         loadResolvers: vi.fn().mockResolvedValue(undefined),
       } as unknown as ResolverService;
     }
@@ -281,7 +360,7 @@ describe("planPipeline (resolver service level)", () => {
     test("resolver is unchanged when remote definition matches desired definition", async () => {
       const pipeline = createPipeline({
         name: "test-resolver",
-        operation: 0,
+        operation: "query",
         output: { type: "string", metadata: {} },
       });
       const desiredResolver = await getDesiredResolver(pipeline);
@@ -298,10 +377,38 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.resolver.updates).toHaveLength(0);
     });
 
+    test("resolver is updated when an input field is added", async () => {
+      const remotePipeline = createPipeline({
+        name: "test-resolver",
+        operation: "query",
+        output: { type: "string", metadata: {} },
+      });
+      const remoteResolver = await getDesiredResolver(remotePipeline);
+
+      const pipeline = createPipeline({
+        name: "test-resolver",
+        operation: "query",
+        input: {
+          extraArg: { type: "string", metadata: { required: false }, fields: {} },
+        },
+        output: { type: "string", metadata: {} },
+      });
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [remoteResolver as Record<string, unknown>],
+      });
+      const result = await planPipeline(
+        buildCtx({ client, application: createMockApplication([pipeline]) }),
+      );
+
+      expect(result.changeSet.resolver.updates).toHaveLength(1);
+      expect(result.changeSet.resolver.unchanged).toHaveLength(0);
+    });
+
     test("resolver is unchanged when list response is summary-only but get returns full definition", async () => {
       const pipeline = createPipeline({
         name: "test-resolver",
-        operation: 0,
+        operation: "query",
         body: () => "hello",
         output: { type: "string", metadata: {} },
       });
@@ -324,7 +431,7 @@ describe("planPipeline (resolver service level)", () => {
     test("resolver is updated when forceApplyAll is enabled", async () => {
       const pipeline = createPipeline({
         name: "test-resolver",
-        operation: 0,
+        operation: "query",
         body: () => "hello",
         output: { type: "string", metadata: {} },
       });
@@ -345,13 +452,13 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
     });
 
-    test("resolver is updated when authInvoker differs", async () => {
+    test("resolver is updated when invoker differs", async () => {
       const pipeline = createPipeline({
         name: "test-resolver",
-        operation: 0,
+        operation: "query",
         body: () => "hello",
         output: { type: "string", metadata: {} },
-        authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+        invoker: { namespace: "my-auth", machineUserName: "batch-user" },
       });
       const desiredResolver = structuredClone(await getDesiredResolver(pipeline));
       expect(desiredResolver).toBeDefined();
@@ -371,9 +478,9 @@ describe("planPipeline (resolver service level)", () => {
   });
 });
 
-describe("processResolver authInvoker mapping", () => {
+describe("processResolver invoker mapping", () => {
   function createResolverServiceWithAuthInvoker(
-    authInvoker?: Record<string, unknown> | string,
+    invoker?: Record<string, unknown> | string,
   ): ResolverService {
     return {
       namespace: "test-ns",
@@ -384,7 +491,7 @@ describe("processResolver authInvoker mapping", () => {
           operation: "query",
           body: () => "hello",
           output: { type: "string", metadata: {}, fields: {} },
-          ...(authInvoker !== undefined ? { authInvoker } : {}),
+          ...(invoker !== undefined ? { invoker } : {}),
         },
       },
       loadResolvers: vi.fn().mockResolvedValue(undefined),
@@ -400,7 +507,7 @@ describe("processResolver authInvoker mapping", () => {
     return planPipeline(buildCtx({ client, application }));
   }
 
-  test("authInvoker is mapped to proto invoker field", async () => {
+  test("invoker is mapped to proto invoker field", async () => {
     const resolverService = createResolverServiceWithAuthInvoker({
       namespace: "my-auth",
       machineUserName: "batch-user",
@@ -418,7 +525,7 @@ describe("processResolver authInvoker mapping", () => {
     });
   });
 
-  test("string authInvoker is normalized using the configured auth service name", async () => {
+  test("string invoker is normalized using the configured auth service name", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
     const result = await planWithResolverService(resolverService, {
@@ -435,7 +542,7 @@ describe("processResolver authInvoker mapping", () => {
     });
   });
 
-  test("string authInvoker without auth service configured throws", async () => {
+  test("string invoker without auth service configured throws", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
     await expect(planWithResolverService(resolverService)).rejects.toThrow(
@@ -443,7 +550,7 @@ describe("processResolver authInvoker mapping", () => {
     );
   });
 
-  test("invoker is undefined when authInvoker is not set", async () => {
+  test("invoker is undefined when invoker is not set", async () => {
     const resolverService = createResolverServiceWithAuthInvoker();
 
     const result = await planWithResolverService(resolverService);
@@ -461,7 +568,13 @@ describe("formatResolverChangeEntries", () => {
     const entries = formatResolverChangeEntries(
       {
         creates: [],
-        updates: [{ name: "add", request: { workspaceId: "ws", namespaceName: "my-resolver" } }],
+        updates: [
+          {
+            name: "add",
+            request: { workspaceId: "ws", namespaceName: "my-resolver" },
+            metaRequest: { trn: "trn:x" },
+          },
+        ],
         deletes: [],
         replaces: [],
       },
@@ -476,7 +589,7 @@ describe("formatResolverChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "add",
         labels: ["resolver", "function"],
         namespace: "my-resolver",
@@ -503,7 +616,7 @@ describe("formatResolverChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "add",
         labels: ["resolver", "function"],
         namespace: "my-resolver",
@@ -536,6 +649,7 @@ describe("applyPipeline phase separation", () => {
               request: { workspaceId: "test-workspace", namespaceName: "test-pipeline" },
             },
           ],
+          unchanged: [],
           title: "Pipeline Services",
           isEmpty: () => false,
           lines: () => [],
@@ -553,6 +667,7 @@ describe("applyPipeline phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "Pipeline Resolvers",
           isEmpty: () => false,
           lines: () => [],

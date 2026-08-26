@@ -1,14 +1,55 @@
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
-import { describe, expect, test, beforeAll, afterAll } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { findUndefinedReferences } from "#/cli/shared/free-variables";
+import { db } from "#/configure/services/tailordb/schema";
+import { getPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import {
-  findUndefinedReferences,
   collectSourceBindings,
   resolveNeededBindings,
   buildMinimalEntryFromResolved,
+  precompileTailorDBTypeScripts,
   type SourceBinding,
 } from "./hooks-validate-bundler";
+import type { UpdateHookFn } from "#/configure/services/tailordb/types";
+import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
+import type * as rolldown from "rolldown";
+
+let expectVirtualEntry = false;
+
+type RolldownModule = typeof rolldown;
+
+vi.mock("rolldown", async (importOriginal) => {
+  const original = await importOriginal<RolldownModule>();
+  return {
+    ...original,
+    build: async (...args: Parameters<RolldownModule["build"]>) => {
+      if (!expectVirtualEntry) {
+        return original.build(...args);
+      }
+
+      const options = args[0] as unknown as rolldown.BuildOptions;
+      const input = options.input;
+      if (typeof input !== "string" || existsSync(input)) {
+        throw new Error(`Expected a virtual TailorDB script entry, received ${String(input)}`);
+      }
+      const plugins = options.plugins as rolldown.Plugin[];
+      if (!plugins.some((plugin) => plugin.name === "tailor-virtual-entry")) {
+        throw new Error("Virtual entry plugin was not configured");
+      }
+
+      return {
+        output: [{ code: "module.exports.main = input => input.value;" }],
+      } as unknown as Awaited<ReturnType<RolldownModule["build"]>>;
+    },
+  };
+});
+
+aroundEach(async (runTest) => {
+  await runTest();
+  expectVirtualEntry = false;
+});
 
 /**
  * Extract free variables from a function source for testing.
@@ -25,38 +66,173 @@ const bindingsMap = (
     entries.map(([name, sourceText, kind]) => [name, { name, sourceText, kind }]),
   );
 
-describe("findUndefinedReferences", () => {
-  test.each<[name: string, fnSource: string, expected: string[]]>([
-    ["returns empty set for self-contained function", "({ value }) => value.length > 5", []],
-    ["detects a single free variable", "({ value }) => value.length < MAX_LENGTH", ["MAX_LENGTH"]],
-    [
-      "detects multiple free variables",
-      "({ data }) => formatAddress(data, PREFIX)",
-      ["formatAddress", "PREFIX"],
-    ],
-    [
-      "does not treat destructured parameters as free variables",
-      "({ value, data, user }) => value + data.name + user.id",
-      [],
-    ],
-    [
-      "does not treat local variables as free variables",
-      "({ value }) => { const x = 1; return value + x; }",
-      [],
-    ],
-    [
-      "detects free variables in function body with local variables",
-      "({ value }) => { const x = helper(value); return x + OFFSET; }",
-      ["helper", "OFFSET"],
-    ],
-    [
-      "handles regular function syntax",
-      "function({ data }) { return compute(data); }",
-      ["compute"],
-    ],
-  ])("%s", (_name, fnSource, expected) => {
-    const vars = extractFreeVariables(fnSource);
-    expect(vars).toEqual(new Set(expected));
+describe("precompileTailorDBTypeScripts", () => {
+  test("bundles captured declarations with TypeScript syntax", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typescript-entry-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const prefix: string = "PREFIX";\n');
+    const prefix = "unused";
+    const createHook = ({ value }: { value: string }) => prefix + value;
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toBeDefined();
+  });
+
+  test("keeps per-role expressions when one function serves multiple roles", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-fn-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedHook = ({ now }: { now: string }) => now;
+    const type = {
+      name: "SharedType",
+      fields: {
+        touchedAt: {
+          type: "datetime",
+          metadata: { hooks: { create: sharedHook, update: sharedHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).not.toContain("_oldValue");
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.update")).toContain("_oldValue");
+  });
+
+  test("keeps per-operation expressions when one function serves both type hooks", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-type-hook-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedTypeHook = ({ input }: { input: Record<string, unknown> }) => input;
+    const type = {
+      name: "SharedType",
+      fields: {},
+      metadata: { typeHook: { create: sharedTypeHook, update: sharedTypeHook } },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedTypeHook, "typeHook.create")).toBeDefined();
+    expect(getPrecompiledScriptExpr(sharedTypeHook, "typeHook.update")).toBeDefined();
+  });
+
+  test("ignores a user-owned precompiled-expression property", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-user-property-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const sharedHook = Object.assign(({ now }: { now: string }) => now, {
+      __precompiledScriptExpr: { "hooks.create": "USER_VALUE" },
+    });
+    const inheritedPin = {
+      [Symbol.for("tailor-platform/sdk:precompiled-script-expr")]: {
+        "hooks.create": "INHERITED_VALUE",
+      },
+    };
+    Object.setPrototypeOf(inheritedPin, Object.getPrototypeOf(sharedHook));
+    Object.setPrototypeOf(sharedHook, inheritedPin);
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).toBeUndefined();
+    const type = {
+      name: "SharedType",
+      fields: {
+        touchedAt: {
+          type: "datetime",
+          metadata: { hooks: { create: sharedHook, update: sharedHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).not.toBe("USER_VALUE");
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.create")).not.toContain("_oldValue");
+    expect(getPrecompiledScriptExpr(sharedHook, "hooks.update")).toContain("_oldValue");
+  });
+
+  test("applies a pinned built-in expression only to its role", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-pinned-role-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, "");
+    const pinnedHook = db.fields.timestamps().updatedAt.metadata.hooks?.update as
+      | UpdateHookFn<string | Date | null, string | Date>
+      | undefined;
+    expect(pinnedHook).toBeDefined();
+    const pinnedUpdateExpr = getPrecompiledScriptExpr(pinnedHook!, "hooks.update");
+    expect(pinnedUpdateExpr).toBeDefined();
+    const type = {
+      name: "SharedType",
+      fields: {
+        touchedAt: {
+          type: "datetime",
+          metadata: { hooks: { create: pinnedHook, update: pinnedHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(pinnedHook!, "hooks.create")).not.toContain("_oldValue");
+    expect(getPrecompiledScriptExpr(pinnedHook!, "hooks.update")).toBe(pinnedUpdateExpr);
+  });
+
+  test("uses an in-memory entry for scripts with source dependencies", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-entry-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const prefix = "PREFIX";\n');
+    const prefix = "unused";
+    const createHook = ({ value }: { value: string }) => prefix + value;
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    expectVirtualEntry = true;
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook, "hooks.create")).toContain("module.exports.main");
   });
 });
 
@@ -64,11 +240,9 @@ describe("collectSourceBindings", () => {
   let tempDir: string;
   let fileCounter = 0;
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     tempDir = mkdtempSync(join(tmpdir(), "test-bindings-"));
-  });
-
-  afterAll(() => {
+    await runSuite();
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -125,7 +299,7 @@ describe("collectSourceBindings", () => {
         `import { db } from "@tailor-platform/sdk";`,
         `import { formatAddress } from "./helpers";`,
         `const MAX = 100;`,
-        `export const customer = db.type("Customer", {`,
+        `export const customer = db.table("Customer", {`,
         `  name: db.string(),`,
         `}).hooks({ fullAddress: { create: ({ data }) => formatAddress(data) } });`,
         ``,

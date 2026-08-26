@@ -5,7 +5,7 @@ import {
 } from "@tailor-platform/sdk";
 
 export const post = db
-  .type("Post", {
+  .table("Post", {
     title: db.string(),
     content: db.string({ optional: true }),
   })

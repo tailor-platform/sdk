@@ -1,6 +1,6 @@
 name: "@tailor-platform/apply-to-deploy"
 version: "1.0.0"
-description: "Rewrite `tailor-sdk apply` invocations to `tailor-sdk deploy` (the v2 recommended name)"
+description: "Rewrite `tailor-sdk apply` invocations to the canonical v2 `tailor-sdk deploy` command"
 engine: jssg
 language: text
 since: "1.0.0"

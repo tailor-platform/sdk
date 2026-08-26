@@ -1,9 +1,19 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
-import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
+import { resolveTSConfig } from "pkg-types";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BASE = path.join(__dirname, "__test_bundler__");
 
@@ -16,17 +26,19 @@ const defaultMachineUser: ResolvedMachineUser = {
 
 const defaultWorkspaceId = "11111111-2222-3333-4444-555555555555";
 
-describe("bundleForTestRun", () => {
+describe("bundleForRun", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+  aroundAll(async (runSuite) => {
+    await runSuite();
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });
     } catch {
@@ -38,13 +50,14 @@ describe("bundleForTestRun", () => {
     fileName: string,
     source: string,
     detected: DetectedFunction,
-    options?: Partial<Omit<Parameters<typeof bundleForTestRun>[0], "detected" | "sourceFile">>,
+    options?: Partial<Omit<Parameters<typeof bundleForRun>[0], "detected" | "sourceFile">>,
   ) {
     const sourceFile = path.join(testDir, fileName);
     fs.writeFileSync(sourceFile, source);
-    return bundleForTestRun({
+    return bundleForRun({
       detected,
       sourceFile,
+      baseDir: testDir,
       machineUser: defaultMachineUser,
       workspaceId: defaultWorkspaceId,
       ...options,
@@ -59,6 +72,22 @@ describe("bundleForTestRun", () => {
   }
 
   describe("plain function", () => {
+    test("resolves tsconfig from the provided baseDir", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
+      const detected: DetectedFunction = { type: "plain", name: "tsconfig-base" };
+      await bundle(
+        "tsconfig-base.ts",
+        `
+export default function(input: any) {
+  return { hello: input.name };
+}
+`,
+        detected,
+      );
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(testDir);
+    });
+
     test("bundles a default-exported function as main", async () => {
       const detected: DetectedFunction = { type: "plain", name: "fn" };
       const result = await bundle(
@@ -122,6 +151,48 @@ export function main() {
   });
 
   describe("resolver", () => {
+    test("resolves generated imports from the configured project directory", async () => {
+      const root = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), "function-bundler-cross-project-")),
+      );
+      try {
+        const projectDir = path.join(root, "project");
+        const dependencyDir = path.join(projectDir, "node_modules", "@tailor-platform", "sdk");
+        const outputDir = path.join(root, "invocation", ".tailor-sdk");
+        fs.mkdirSync(dependencyDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(dependencyDir, "package.json"),
+          JSON.stringify({
+            name: "@tailor-platform/sdk",
+            type: "module",
+            exports: { ".": "./index.js" },
+          }),
+        );
+        fs.writeFileSync(
+          path.join(dependencyDir, "index.js"),
+          "export const t = { object: () => ({ parse: ({ value }) => value }) };\n",
+        );
+        const sourceFile = path.join(projectDir, "resolver.ts");
+        fs.writeFileSync(
+          sourceFile,
+          "export default { body: ({ input }: { input: unknown }) => input };\n",
+        );
+        process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
+
+        const result = await bundleForRun({
+          detected: { type: "resolver", name: "cross-project" },
+          sourceFile,
+          baseDir: projectDir,
+          machineUser: defaultMachineUser,
+          workspaceId: defaultWorkspaceId,
+        });
+
+        expect(result.bundledCode).not.toContain("@tailor-platform/sdk");
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    });
+
     test("bundles a resolver with validation wrapper", async () => {
       const detected: DetectedFunction = { type: "resolver", name: "add" };
       const result = await bundle(
@@ -138,9 +209,9 @@ export default {
       );
 
       expect(result.scriptName).toBe("test-run--add.js");
-      // Check bundled code structure (can't import because it references @tailor-platform/sdk)
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
+      expect(result.bundledCode).not.toContain("@tailor-platform/sdk");
       // Validation wrapper should be present
       expect(result.bundledCode).toContain("input");
     });
@@ -191,6 +262,94 @@ export default {
       expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain(defaultWorkspaceId);
     });
+
+    test("injects the permission guard when the resolver has one", async () => {
+      const detected: DetectedFunction = {
+        type: "resolver",
+        name: "protected",
+        permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      };
+      const result = await bundle(
+        "resolver-permission.ts",
+        `
+export default {
+  operation: "query",
+  name: "protected",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).toContain("TailorErrors");
+      expect(result.bundledCode).toContain("access denied");
+    });
+
+    test("does not inject a guard when permission is omitted", async () => {
+      const detected: DetectedFunction = { type: "resolver", name: "open" };
+      const result = await bundle(
+        "resolver-open.ts",
+        `
+export default {
+  operation: "query",
+  name: "open",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).not.toContain("access denied");
+    });
+
+    test("injects the namespace default when the resolver declares no permission", async () => {
+      const detected: DetectedFunction = { type: "resolver", name: "inherits" };
+      const result = await bundle(
+        "resolver-inherits.ts",
+        `
+export default {
+  operation: "query",
+  name: "inherits",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+        {
+          defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+        },
+      );
+
+      expect(result.bundledCode).toContain("TailorErrors");
+      expect(result.bundledCode).toContain("access denied");
+    });
+
+    test("lets the resolver's own permission override the namespace default", async () => {
+      const detected: DetectedFunction = {
+        type: "resolver",
+        name: "opted-out",
+        permission: "allowAnonymous",
+      };
+      const result = await bundle(
+        "resolver-opted-out.ts",
+        `
+export default {
+  operation: "query",
+  name: "opted-out",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+        {
+          defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+        },
+      );
+
+      expect(result.bundledCode).not.toContain("access denied");
+    });
   });
 
   describe("executor", () => {
@@ -234,7 +393,7 @@ export default {
         detected,
       );
 
-      expect(result.bundledCode).toContain("USER_TYPE_MACHINE_USER");
+      expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain("ADMIN");
       expect(result.bundledCode).toContain(defaultMachineUser.id);
       expect(result.bundledCode).toContain(defaultWorkspaceId);

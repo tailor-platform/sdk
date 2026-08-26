@@ -37,7 +37,7 @@ export async function waitWorkflowExecution(
  * @param options - Workflow wait options
  * @returns Workflow wait result with optional job details
  */
-export async function addWorkflowLogsToWaitResult(
+async function addWorkflowLogsToWaitResult(
   result: WorkflowWaitResult,
   options: WaitWorkflowExecutionOptions,
 ): Promise<WorkflowWaitOutput> {
@@ -71,16 +71,14 @@ export const waitCommand = defineAppCommand({
       desc: "Wait for success, failure, or suspension",
     },
   ],
-  args: z
-    .object({
-      ...workspaceArgs,
-      "execution-id": arg(z.string(), {
-        positional: true,
-        description: "Execution ID",
-      }),
-      ...workflowWaitControlArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    "execution-id": arg(z.string(), {
+      positional: true,
+      description: "Execution ID",
+    }),
+    ...workflowWaitControlArgs,
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode || args.json;
     const result = await waitWorkflowExecution({

@@ -1,3 +1,4 @@
+import { createPermissionNormalizer, hasOmittedPermit } from "#/parser/service/permission";
 import type {
   StandardTailorTypePermission,
   StandardTailorTypeGqlPermission,
@@ -11,30 +12,17 @@ import type { GqlOperations, RawPermissions } from "#/types/tailordb.generated";
 // Raw permission types for normalize function parameters
 type PermissionOperator = "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny";
 
-type ObjectOperand =
-  | { user: string }
-  | { record: string }
-  | { oldRecord: string }
-  | { newRecord: string }
-  | { value: unknown };
+type PermissionCondition = readonly [unknown, PermissionOperator, unknown];
 
-type ValueOperand = string | boolean | string[] | boolean[];
-
-// GQL string reference pattern (e.g., "user.id", "user.roles")
-type GqlStringRef = `user.${string}`;
-
-type PermissionOperand = ObjectOperand | ValueOperand | GqlStringRef;
-
-type PermissionCondition = readonly [PermissionOperand, PermissionOperator, PermissionOperand];
-
-const operatorMap: Record<PermissionOperator, string> = {
-  "=": "eq",
-  "!=": "ne",
-  in: "in",
-  "not in": "nin",
-  hasAny: "hasAny",
-  "not hasAny": "nhasAny",
-};
+const { normalizeConditions, normalizeActionPermission: normalizeRawActionPermission } =
+  createPermissionNormalizer<PermissionOperator, StandardPermissionCondition>({
+    "=": "eq",
+    "!=": "ne",
+    in: "in",
+    "not in": "nin",
+    hasAny: "hasAny",
+    "not hasAny": "nhasAny",
+  });
 
 type GqlPermissionPolicy = {
   conditions: readonly PermissionCondition[];
@@ -45,36 +33,9 @@ type GqlPermissionPolicy = {
 
 type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
-function normalizeOperand(operand: PermissionOperand): PermissionOperand {
-  if (typeof operand === "object" && "user" in operand) {
-    const mapped = operand.user === "id" ? "_id" : operand.user;
-    return { user: mapped };
-  }
-  return operand;
-}
-
-function normalizeConditions(
-  conditions: readonly PermissionCondition[],
-): StandardPermissionCondition[] {
-  return conditions.map((cond) => {
-    const [left, operator, right] = cond;
-    return [normalizeOperand(left), operatorMap[operator], normalizeOperand(right)];
-  }) as StandardPermissionCondition[];
-}
-
-function isObjectFormat(
-  p: unknown,
-): p is { conditions: unknown; permit?: boolean; description?: string } {
-  return typeof p === "object" && p !== null && "conditions" in p;
-}
-
-function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
-  return cond.length >= 2 && typeof cond[1] === "string"; // Check if middle element is an operator
-}
-
 /**
  * Normalize record-level permissions into a standard structure.
- * @param permission - Tailor type permission
+ * @param permission - Tailor table permission
  * @returns Normalized record permissions
  */
 function normalizePermission(
@@ -96,9 +57,7 @@ function normalizePermission(
 export function normalizeGqlPermission(
   permission: NonNullable<RawPermissions["gql"]>,
 ): StandardTailorTypeGqlPermission {
-  return (permission as readonly GqlPermissionPolicy[]).map((policy) =>
-    normalizeGqlPolicy(policy),
-  ) as StandardTailorTypeGqlPermission;
+  return (permission as readonly GqlPermissionPolicy[]).map((policy) => normalizeGqlPolicy(policy));
 }
 
 function normalizeGqlPolicy(policy: GqlPermissionPolicy): StandardGqlPermissionPolicy {
@@ -133,66 +92,12 @@ export function parsePermissions(rawPermissions: RawPermissions): Permissions {
  * @returns Normalized action permission
  */
 export function normalizeActionPermission(permission: unknown): StandardActionPermission {
-  // object format
-  if (isObjectFormat(permission)) {
-    const conditions = permission.conditions as
-      | PermissionCondition
-      | readonly PermissionCondition[];
-    return {
-      conditions: normalizeConditions(
-        isSingleArrayConditionFormat(conditions)
-          ? [conditions as PermissionCondition]
-          : (conditions as readonly PermissionCondition[]),
-      ),
-      permit: permission.permit ? "allow" : "deny",
-      description: permission.description,
-    };
-  }
-
-  if (!Array.isArray(permission)) {
-    throw new Error("Invalid permission format");
-  }
-
-  if (isSingleArrayConditionFormat(permission)) {
-    const [op1, operator, op2, permit] = [...permission, true] as [
-      PermissionOperand,
-      string,
-      PermissionOperand,
-      boolean,
-    ];
-    return {
-      conditions: normalizeConditions([[op1, operator, op2] as PermissionCondition]),
-      permit: permit ? "allow" : "deny",
-    };
-  }
-
-  // Array of conditions format
-  const conditions: PermissionCondition[] = [];
-  const conditionArray = permission as readonly unknown[];
-  let conditionArrayPermit = true;
-
-  for (const item of conditionArray) {
-    if (typeof item === "boolean") {
-      conditionArrayPermit = item;
-      continue;
-    }
-    conditions.push(item as PermissionCondition);
-  }
-
-  return {
-    conditions: normalizeConditions(conditions),
-    permit: conditionArrayPermit ? "allow" : "deny",
-  };
+  return normalizeRawActionPermission(permission);
 }
 
 /**
- * Find object-format permission rules that omit `permit`.
- *
- * Object-format rules default to `deny` when `permit` is omitted, whereas the
- * array shorthand defaults to `allow`. Omitting `permit` on an object rule is
- * therefore an easy way to accidentally deny access you meant to grant, so the
- * CLI warns about these locations to nudge authors toward setting `permit`
- * explicitly.
+ * Find object-format permission rules that omit `permit` (which defaults to
+ * `deny` there, unlike the array shorthand), so the CLI can warn about them.
  * @param rawPermissions - Raw permissions definition
  * @returns Dotted locations of offending rules, e.g. `record.read[0]`, `gql[1]`
  */
@@ -203,7 +108,7 @@ export function findOmittedPermitRules(rawPermissions: RawPermissions): string[]
   if (record) {
     for (const action of Object.keys(record) as Array<keyof typeof record>) {
       record[action].forEach((rule: unknown, index: number) => {
-        if (isObjectFormat(rule) && rule.permit === undefined) {
+        if (hasOmittedPermit(rule)) {
           locations.push(`record.${String(action)}[${index}]`);
         }
       });
@@ -224,8 +129,8 @@ export function findOmittedPermitRules(rawPermissions: RawPermissions): string[]
 }
 
 /**
- * Check whether GraphQL exposure is fully disabled for a type, given its
- * effective gqlOperations (the type's own setting, falling back to the
+ * Check whether GraphQL exposure is fully disabled for a table, given its
+ * effective gqlOperations (the table's own setting, falling back to the
  * TailorDB namespace default). `undefined` means the default of all
  * operations enabled, so it is never considered fully disabled.
  * @param gqlOperations - Effective, normalized gqlOperations configuration
@@ -244,7 +149,7 @@ export function isGqlOperationsFullyDisabled(gqlOperations: GqlOperations | unde
 }
 
 /**
- * Missing permission configuration detected for a TailorDB type.
+ * Missing permission configuration detected for a TailorDB table.
  */
 export interface MissingTypePermissionConfig {
   /** Whether record-level permission (`.permission()`) is missing */
@@ -254,15 +159,15 @@ export interface MissingTypePermissionConfig {
 }
 
 /**
- * Find missing permission configuration for a TailorDB type.
+ * Find missing permission configuration for a TailorDB table.
  *
  * Record-level permission is always required: TailorDB denies all record
- * operations for a type without it, regardless of whether the type is
+ * operations for a table without it, regardless of whether the table is
  * exposed via GraphQL. GraphQL permission is required whenever GraphQL
- * exposure is enabled for the type (the default, unless every operation is
+ * exposure is enabled for the table (the default, unless every operation is
  * explicitly disabled via `gqlOperations`).
- * @param rawPermissions - Raw permissions definition for the type
- * @param effectiveGqlOperations - The type's own gqlOperations, falling back to the namespace default
+ * @param rawPermissions - Raw permissions definition for the table
+ * @param effectiveGqlOperations - The table's own gqlOperations, falling back to the namespace default
  * @returns Which permission configuration, if any, is missing
  */
 export function findMissingPermissionConfig(

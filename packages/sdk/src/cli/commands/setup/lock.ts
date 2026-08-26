@@ -6,13 +6,26 @@ import * as path from "pathe";
 export const LOCK_VERSION = 1;
 
 /** Lock file path, relative to the repository root. */
-const LOCK_FILENAME = ".github/tailor-sdk.lock";
+const LOCK_FILENAME = ".github/tailor.lock";
+
+function assertSafeLockPath(outputDir: string): void {
+  for (const relativePath of [".github", LOCK_FILENAME]) {
+    try {
+      if (fs.lstatSync(path.join(outputDir, relativePath)).isSymbolicLink()) {
+        throw new Error(`Refusing to use ${LOCK_FILENAME}: "${relativePath}" is a symbolic link.`);
+      }
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") continue;
+      throw error;
+    }
+  }
+}
 
 export type TargetKind = "branch" | "tag" | "preview" | "action" | "coordinate";
 
 export type LockInputs = {
   branch: string | null;
-  /** True when `branch` was auto-detected (no explicit `--branch`). */
+  /** True when `branch` was auto-detected (no explicit branch flag). */
   branchAutoDetected?: boolean;
   tagPattern: string | null;
   environment: string;
@@ -71,7 +84,7 @@ export function hashContent(content: string): string {
  * @param outputDir - Repository root where `.github` lives
  * @returns Absolute path to the lock file
  */
-export function lockPath(outputDir: string): string {
+function lockPath(outputDir: string): string {
   return path.join(outputDir, LOCK_FILENAME);
 }
 
@@ -84,6 +97,7 @@ export function lockPath(outputDir: string): string {
  * @returns Parsed lock file, or null when absent
  */
 export function readLock(outputDir: string): LockFile | null {
+  assertSafeLockPath(outputDir);
   const file = lockPath(outputDir);
   if (!fs.existsSync(file)) {
     return null;
@@ -94,14 +108,14 @@ export function readLock(outputDir: string): LockFile | null {
   } catch (cause) {
     throw new Error(
       `${LOCK_FILENAME} is not valid JSON. The lock file is machine-owned; ` +
-        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
       { cause },
     );
   }
   if (typeof parsed.version !== "number") {
     throw new Error(
       `${LOCK_FILENAME} has no valid 'version' field. The lock file is machine-owned; ` +
-        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
   if (parsed.version > LOCK_VERSION) {
@@ -113,7 +127,7 @@ export function readLock(outputDir: string): LockFile | null {
   if (!Array.isArray(parsed.targets)) {
     throw new Error(
       `${LOCK_FILENAME} has no valid 'targets' array. The lock file is machine-owned; ` +
-        "restore it from git (git checkout -- .github/tailor-sdk.lock) and re-run setup.",
+        "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
   return parsed;
@@ -125,6 +139,7 @@ export function readLock(outputDir: string): LockFile | null {
  * @param lock - Lock file contents to serialize
  */
 export function writeLock(outputDir: string, lock: LockFile): void {
+  assertSafeLockPath(outputDir);
   const file = lockPath(outputDir);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(lock, null, 2)}\n`, "utf-8");

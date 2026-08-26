@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { category } from "./category";
 
 export const product = db
-  .type("Product", {
+  .table("Product", {
     name: db.string(),
     description: db.string({ optional: true }),
     price: db.float(),
@@ -13,7 +13,7 @@ export const product = db
     ]),
     categoryId: db.uuid({ optional: true }).relation({
       type: "n-1",
-      toward: { type: category },
+      toward: { table: category },
     }),
     ...db.fields.timestamps(),
   })

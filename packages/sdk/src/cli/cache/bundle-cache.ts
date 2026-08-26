@@ -54,7 +54,7 @@ function combineHash(fileHash: string, contextHash?: string): string {
 
 type ComputeBundlerContextHashParams = {
   sourceFile: string;
-  serializedTriggerContext: string;
+  extraContext: string;
   tsconfig?: string;
   inlineSourcemap?: boolean;
   bundleLogLevel?: string;
@@ -64,25 +64,19 @@ type ComputeBundlerContextHashParams = {
 /**
  * Compute a context hash for cache invalidation across bundlers.
  *
- * Combines the source file path, serialized trigger context, tsconfig hash,
- * sourcemap mode, bundle log level, and an optional prefix (e.g., serialized
- * env variables) into a single SHA-256 hash.
+ * Combines the source file path, a caller-supplied extra context string
+ * (e.g. serialized workflow start-call bindings, or an HTTP adapter's method
+ * list), tsconfig hash, sourcemap mode, bundle log level, and an optional
+ * prefix (e.g., serialized env variables) into a single SHA-256 hash.
  * @param params - Context hash computation parameters
  * @returns SHA-256 hex digest of the combined context
  */
 function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
-  const {
-    sourceFile,
-    serializedTriggerContext,
-    tsconfig,
-    inlineSourcemap,
-    bundleLogLevel,
-    prefix,
-  } = params;
+  const { sourceFile, extraContext, tsconfig, inlineSourcemap, bundleLogLevel, prefix } = params;
   return hashContent(
     (prefix ?? "") +
       path.resolve(sourceFile) +
-      serializedTriggerContext +
+      extraContext +
       (tsconfig ? hashFile(tsconfig) : "") +
       String(inlineSourcemap ?? false) +
       (bundleLogLevel ?? ""),
@@ -96,7 +90,7 @@ type WithCacheParams = {
   name: string;
   sourceFile: string;
   contextHash: string | undefined;
-  build: (plugins: Plugin[]) => Promise<string>;
+  build: (plugins: Plugin[], trackDependency: (filePath: string) => void) => Promise<string>;
 };
 
 /**
@@ -110,7 +104,7 @@ async function withCache(params: WithCacheParams): Promise<string> {
   const { cache, kind, namespace, name, sourceFile, contextHash, build } = params;
 
   if (!cache) {
-    return await build([]);
+    return await build([], () => {});
   }
 
   const content = cache.tryRestore({ kind, namespace, name, contextHash });
@@ -119,8 +113,11 @@ async function withCache(params: WithCacheParams): Promise<string> {
     return content;
   }
 
+  // Files a build reads without rolldown loading them as modules — tsconfigs
+  // consulted for path aliases — still have to invalidate the entry.
+  const extraDependencies = new Set<string>();
   const { plugin, getResult } = createDepCollectorPlugin();
-  const code = await build([plugin]);
+  const code = await build([plugin], (filePath) => extraDependencies.add(filePath));
 
   cache.save({
     kind,
@@ -128,7 +125,7 @@ async function withCache(params: WithCacheParams): Promise<string> {
     name,
     sourceFile,
     content: code,
-    dependencyPaths: getResult(),
+    dependencyPaths: [...getResult(), ...extraDependencies],
     contextHash,
   });
 
@@ -149,8 +146,9 @@ function createBundleCache(store: CacheStore): BundleCache {
       return undefined;
     }
 
-    // Recompute hash of all stored dependency paths.
-    // If any file is missing or unreadable, treat as cache miss.
+    // Recompute hash of all stored dependency paths. A path that has appeared or
+    // disappeared since the entry was saved changes the hash, so it lands on the
+    // mismatch below rather than needing its own branch.
     let currentHash: string;
     try {
       currentHash = combineHash(hashFiles(entry.dependencyPaths), params.contextHash);
@@ -162,7 +160,12 @@ function createBundleCache(store: CacheStore): BundleCache {
       return undefined;
     }
 
-    return store.restoreBundleContent(cacheKey);
+    const content = store.restoreBundleContent(cacheKey);
+    const output = entry.outputFiles.find((file) => file.outputPath === cacheKey);
+    if (content === undefined || !output || hashContent(content) !== output.contentHash) {
+      return undefined;
+    }
+    return content;
   }
 
   function save(params: BundleCacheSaveParams): void {
@@ -174,7 +177,16 @@ function createBundleCache(store: CacheStore): BundleCache {
     const allDeps = dependencyPaths.includes(sourceFile)
       ? dependencyPaths
       : [sourceFile, ...dependencyPaths];
-    const inputHash = combineHash(hashFiles(allDeps), contextHash);
+
+    // Mirror tryRestore()'s tolerance: a non-ENOENT read error (e.g. EISDIR)
+    // should give up on caching this entry rather than fail the build.
+    let inputHash: string;
+    try {
+      inputHash = combineHash(hashFiles(allDeps), contextHash);
+    } catch {
+      return;
+    }
+
     const contentHash = hashContent(content);
 
     store.storeBundleContent(cacheKey, content);
@@ -192,4 +204,4 @@ function createBundleCache(store: CacheStore): BundleCache {
 }
 
 export { computeBundlerContextHash, createBundleCache, withCache };
-export type { BundleCache, BundleCacheRestoreParams, BundleCacheSaveParams };
+export type { BundleCache };

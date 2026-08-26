@@ -4,37 +4,37 @@ type ListTailorDBTypesClient = {
   }>;
 };
 
-type ResolveTypeNamespacesArgs = {
+type ResolveTableNamespacesArgs = {
   workspaceId: string;
   namespaces: string[];
-  typeNames: string[];
+  tableNames: string[];
   client: ListTailorDBTypesClient;
 };
 
 /**
- * Resolve TailorDB type names to namespace names.
+ * Resolve TailorDB table names to namespace names.
  * @param args - Resolution inputs
- * @returns Type to namespace map for found types
+ * @returns Table to namespace map for found tables
  */
-export async function resolveTypeNamespaces(
-  args: ResolveTypeNamespacesArgs,
+export async function resolveTableNamespaces(
+  args: ResolveTableNamespacesArgs,
 ): Promise<Map<string, string>> {
-  const requestedTypesByLowercase = new Map<string, string[]>();
-  for (const typeName of args.typeNames) {
-    const key = typeName.toLowerCase();
-    const existing = requestedTypesByLowercase.get(key);
+  const requestedTablesByLowercase = new Map<string, string[]>();
+  for (const tableName of args.tableNames) {
+    const key = tableName.toLowerCase();
+    const existing = requestedTablesByLowercase.get(key);
     if (existing) {
-      existing.push(typeName);
+      existing.push(tableName);
       continue;
     }
-    requestedTypesByLowercase.set(key, [typeName]);
+    requestedTablesByLowercase.set(key, [tableName]);
   }
 
-  const unresolvedTypes = new Set(args.typeNames);
-  const typeNamespaceMap = new Map<string, string>();
+  const unresolvedTables = new Set(args.tableNames);
+  const tableNamespaceMap = new Map<string, string>();
 
   for (const namespace of args.namespaces) {
-    if (unresolvedTypes.size === 0) {
+    if (unresolvedTables.size === 0) {
       break;
     }
 
@@ -45,17 +45,17 @@ export async function resolveTypeNamespaces(
       });
 
       for (const type of tailordbTypes) {
-        const matchedRequestedTypes = requestedTypesByLowercase.get(type.name.toLowerCase());
+        const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
         if (!matchedRequestedTypes) {
           continue;
         }
 
-        for (const requestedTypeName of matchedRequestedTypes) {
-          if (typeNamespaceMap.has(requestedTypeName)) {
+        for (const requestedTableName of matchedRequestedTypes) {
+          if (tableNamespaceMap.has(requestedTableName)) {
             continue;
           }
-          typeNamespaceMap.set(requestedTypeName, namespace);
-          unresolvedTypes.delete(requestedTypeName);
+          tableNamespaceMap.set(requestedTableName, namespace);
+          unresolvedTables.delete(requestedTableName);
         }
       }
     } catch {
@@ -63,28 +63,30 @@ export async function resolveTypeNamespaces(
     }
   }
 
-  return typeNamespaceMap;
+  return tableNamespaceMap;
 }
 
-type ResolveTypeNamespaceArgs = {
+type ResolveTableNamespaceArgs = {
   workspaceId: string;
   namespaces: string[];
-  typeName: string;
+  tableName: string;
   client: ListTailorDBTypesClient;
 };
 
 /**
- * Resolve a single TailorDB type name to namespace.
+ * Resolve a single TailorDB table name to namespace.
  * @param args - Resolution inputs
  * @returns Namespace name if found
  */
-export async function resolveTypeNamespace(args: ResolveTypeNamespaceArgs): Promise<string | null> {
-  const typeNamespaceMap = await resolveTypeNamespaces({
+export async function resolveTableNamespace(
+  args: ResolveTableNamespaceArgs,
+): Promise<string | null> {
+  const tableNamespaceMap = await resolveTableNamespaces({
     workspaceId: args.workspaceId,
     namespaces: args.namespaces,
-    typeNames: [args.typeName],
+    tableNames: [args.tableName],
     client: args.client,
   });
 
-  return typeNamespaceMap.get(args.typeName) ?? null;
+  return tableNamespaceMap.get(args.tableName) ?? null;
 }

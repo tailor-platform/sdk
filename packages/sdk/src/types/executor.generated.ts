@@ -9,8 +9,8 @@ export type TailorDBTrigger = {
     | "tailordb.type_record.updated"
     | "tailordb.type_record.deleted"
   )[];
-  /** TailorDB type name to watch for events */
-  typeName: string;
+  /** TailorDB table name to watch for events */
+  tableName: string;
   /** Condition function to filter events */
   condition?: Function | undefined;
 };
@@ -78,13 +78,51 @@ export type AuthAccessTokenTrigger = {
 };
 export type AuthAccessTokenTriggerInput = AuthAccessTokenTrigger;
 
+export type WorkflowExecutionTrigger = {
+  /** Workflow execution event trigger */
+  kind: "workflowExecution";
+  /** Workflow execution event types to trigger on */
+  events: (
+    | "workflow.workflow_execution.started"
+    | "workflow.workflow_execution.completed"
+    | "workflow.workflow_execution.retried"
+    | "workflow.workflow_execution.resumed"
+    | "workflow.workflow_execution.wait_started"
+    | "workflow.workflow_execution.wait_resolved"
+  )[];
+  /** Workflow name to subscribe to. */
+  workflowName: string;
+  /** Condition function to filter events */
+  condition?: Function | undefined;
+};
+export type WorkflowExecutionTriggerInput = WorkflowExecutionTrigger;
+
+export type WorkflowJobExecutionTrigger = {
+  /** Workflow job execution event trigger */
+  kind: "workflowJobExecution";
+  /** Workflow job execution event types to trigger on */
+  events: (
+    | "workflow.workflow_execution.job_execution.started"
+    | "workflow.workflow_execution.job_execution.completed"
+    | "workflow.workflow_execution.job_execution.wait_started"
+    | "workflow.workflow_execution.job_execution.wait_resolved"
+  )[];
+  /** Workflow name to subscribe to. */
+  workflowName: string;
+  /** Condition function to filter events */
+  condition?: Function | undefined;
+};
+export type WorkflowJobExecutionTriggerInput = WorkflowJobExecutionTrigger;
+
 export type TriggerInput =
   | TailorDBTrigger
   | ResolverExecutedTrigger
   | ScheduleTriggerInput
   | IncomingWebhookTrigger
   | IdpUserTrigger
-  | AuthAccessTokenTrigger;
+  | AuthAccessTokenTrigger
+  | WorkflowExecutionTrigger
+  | WorkflowJobExecutionTrigger;
 
 export type Trigger =
   | TailorDBTrigger
@@ -92,17 +130,21 @@ export type Trigger =
   | ScheduleTrigger
   | IncomingWebhookTrigger
   | IdpUserTrigger
-  | AuthAccessTokenTrigger;
+  | AuthAccessTokenTrigger
+  | WorkflowExecutionTrigger
+  | WorkflowJobExecutionTrigger;
 
 export type FunctionOperation = {
   kind: "function" | "jobFunction";
   /** Function implementation */
   body: Function;
-  /** Auth invoker for the function execution */
-  authInvoker?:
+  /** Invoker for the function execution */
+  invoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -116,11 +158,13 @@ export type GqlOperationInput = {
   appName?: string | undefined;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
-  /** Auth invoker for the GraphQL execution */
-  authInvoker?:
+  /** Invoker for the GraphQL execution */
+  invoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -133,11 +177,13 @@ export type GqlOperation = {
   appName?: string | undefined;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
-  /** Auth invoker for the GraphQL execution */
-  authInvoker?:
+  /** Invoker for the GraphQL execution */
+  invoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -163,25 +209,112 @@ export type WebhookOperation = {
 };
 export type WebhookOperationInput = WebhookOperation;
 
-export type WorkflowOperationInput = unknown;
+export type JsonValueInput =
+  | string
+  | number
+  | boolean
+  | JsonValueInput[]
+  | { [key: string]: JsonValueInput }
+  | null;
 
-export type WorkflowOperation = {
-  kind: "workflow";
-  workflowName: string;
-  args?:
-    | Function
-    | {
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | JsonValue[]
+  | { [key: string]: JsonValue }
+  | null;
+
+export type WorkflowInput = string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+export type WorkflowInputInput = WorkflowInput;
+
+/**
+ * Arguments to pass to the workflow
+ */
+export type WorkflowOperationArgs = WorkflowInput | Function;
+export type WorkflowOperationArgsInput = WorkflowOperationArgs;
+
+export type WorkflowOperationInput =
+  | {
+      workflow: {
         [x: string]: unknown;
-      }
-    | undefined;
-  authInvoker?:
-    | string
-    | {
-        namespace: string;
-        machineUserName: string;
-      }
-    | undefined;
-};
+        name: string;
+      };
+      kind: "workflow";
+      /** Name of the workflow to execute */
+      workflowName?: string | undefined;
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      /** Name of the workflow to execute */
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    };
+
+export type WorkflowOperation =
+  | {
+      /** Name of the workflow to execute */
+      workflowName: string;
+      kind: "workflow";
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      /** Name of the workflow to execute */
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    };
+
+export type OperationInput =
+  | FunctionOperation
+  | GqlOperationInput
+  | WebhookOperation
+  | WorkflowOperationInput;
+
+export type Operation = FunctionOperation | GqlOperation | WebhookOperation | WorkflowOperation;
 
 export type ExecutorInput = {
   /** Executor name */
@@ -189,7 +322,7 @@ export type ExecutorInput = {
   /** Event trigger configuration */
   trigger: TriggerInput;
   /** Operation to execute when triggered */
-  operation: unknown;
+  operation: OperationInput;
   /** Executor description */
   description?: string | undefined;
   /** Whether the executor is disabled */
@@ -204,63 +337,7 @@ export type Executor = {
   /** Event trigger configuration */
   trigger: Trigger;
   /** Operation to execute when triggered */
-  operation:
-    | {
-        kind: "workflow";
-        workflowName: string;
-        args?:
-          | Function
-          | {
-              [x: string]: unknown;
-            }
-          | undefined;
-        authInvoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "function" | "jobFunction";
-        body: Function;
-        authInvoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "graphql";
-        query: string;
-        appName?: string | undefined;
-        variables?: Function | undefined;
-        authInvoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "webhook";
-        url: Function;
-        requestBody?: Function | undefined;
-        headers?:
-          | {
-              [x: string]:
-                | string
-                | {
-                    vault: string;
-                    key: string;
-                  };
-            }
-          | undefined;
-      };
+  operation: Operation;
   /** Executor description */
   description?: string | undefined;
 };

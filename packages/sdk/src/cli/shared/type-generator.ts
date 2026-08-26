@@ -2,22 +2,29 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
+import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
 import type { AppConfig } from "#/configure/config/types";
 
-export interface AttributeMapConfig {
-  [key: string]: string;
+interface AttributeTypeInfo {
+  type: string;
+  optional?: boolean;
+}
+
+export interface AttributesConfig {
+  [key: string]: AttributeTypeInfo;
 }
 
 export type AttributeListConfig = readonly string[];
 
 interface ExtractedAttributes {
-  attributeMap?: AttributeMapConfig;
+  attributes?: AttributesConfig;
   attributeList?: AttributeListConfig;
   env?: Record<string, string | number | boolean>;
   machineUserNames?: string[];
   idpNames?: string[];
   connectionNames?: string[];
   aiGatewayNames?: string[];
+  authNamespaceNames?: string[];
 }
 
 type AttributeFieldLike = {
@@ -25,52 +32,60 @@ type AttributeFieldLike = {
   metadata?: {
     array?: boolean;
     allowedValues?: Array<{ value: string }>;
+    required?: boolean;
   };
 };
 
 /**
  * Extract attribute definitions from the app config for user-defined typing.
  * @param config - Application config to inspect
- * @returns Extracted attribute map/list and env values
+ * @returns Extracted attributes/list and env values
  * @internal
  */
 export function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   return collectAttributesFromConfig(config);
 }
 
+// Quote generated keys only when they aren't valid TypeScript identifiers — matches
+// the formatter (oxfmt) output so subsequent format passes are no-ops.
+const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s);
+
 /**
  * Generate the contents of the user-defined type definition file.
- * @param attributeMap - Attribute map configuration
+ * @param attributes - Attribute configuration
  * @param attributeList - Attribute list configuration
  * @param env - Environment configuration
- * @param machineUserNames - Registered machine user names (used to narrow `authInvoker` strings)
+ * @param machineUserNames - Registered machine user names (used to narrow `invoker` strings)
  * @param idpNames - Registered IdP names (used to narrow `idpUser*Trigger({ idp })` strings)
  * @param connectionNames - Registered auth connection names (used to narrow `getConnectionToken()` strings)
  * @param aiGatewayNames - Registered AI Gateway names (used to narrow `aigateway.get()` strings)
+ * @param authNamespaceNames - Registered auth namespace names (used to narrow `authNamespace` strings)
  * @returns Generated type definition source
  */
 export function generateTypeDefinition(
-  attributeMap: AttributeMapConfig | undefined,
+  attributes: AttributesConfig | undefined,
   attributeList: AttributeListConfig | undefined,
   env?: Record<string, string | number | boolean>,
   machineUserNames?: readonly string[],
   idpNames?: readonly string[],
   connectionNames?: readonly string[],
   aiGatewayNames?: readonly string[],
+  authNamespaceNames?: readonly string[],
 ): string {
-  // Generate AttributeMap interface
-  // attributeMap values are type string representations (e.g., "string", "boolean", "string[]")
-  const mapFields = attributeMap
-    ? Object.entries(attributeMap)
-        .map(([key, value]) => `    ${key}: ${value};`)
+  // Generate Attributes interface
+  // attributes values carry a type string representation (e.g., "string", "boolean", "string[]")
+  // and whether the underlying field is optional, so the key mirrors that optionality.
+  const attributeFields = attributes
+    ? Object.entries(attributes)
+        .map(([key, { type, optional }]) => `    ${key}${optional ? "?" : ""}: ${type};`)
         .join("\n")
     : "";
 
-  const mapBody =
-    !attributeMap || Object.keys(attributeMap).length === 0
+  const attributesBody =
+    !attributes || Object.keys(attributes).length === 0
       ? "{}"
       : `{
-${mapFields}
+${attributeFields}
   }`;
 
   // Generate AttributeList type as a tuple of strings based on the length
@@ -81,13 +96,15 @@ ${mapFields}
     __tuple?: ${listType};
   }`;
 
-  // Generate Env interface
+  // Generate Env interface.
+  // Emit the value's type, never the value itself — a literal would leak the
+  // configured value into this generated file.
   const envFields = env
     ? Object.entries(env)
-        .map(([key, value]) => {
-          const valueType = typeof value === "string" ? `"${value}"` : String(value);
-          return `    ${key}: ${valueType};`;
-        })
+        .map(
+          ([key, value]) =>
+            `    ${isValidIdentifier(key) ? key : JSON.stringify(key)}: ${typeof value};`,
+        )
         .join("\n")
     : "";
 
@@ -99,9 +116,6 @@ ${envFields}
   }`;
 
   // Generate MachineUserNameRegistry interface.
-  // Quote keys only when they aren't valid TypeScript identifiers — matches
-  // the formatter (oxfmt) output so subsequent format passes are no-ops.
-  const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s);
   const machineUserFields = machineUserNames?.length
     ? machineUserNames
         .map((name) => `    ${isValidIdentifier(name) ? name : JSON.stringify(name)}: true;`)
@@ -157,19 +171,34 @@ ${connectionNameFields}
 ${aiGatewayNameFields}
   }`;
 
+  // Generate AuthNamespaceNameRegistry interface (same quoting rules as machine users).
+  const authNamespaceNameFields = authNamespaceNames?.length
+    ? authNamespaceNames
+        .map((name) => `    ${isValidIdentifier(name) ? name : JSON.stringify(name)}: true;`)
+        .join("\n")
+    : "";
+
+  const authNamespaceNameBody =
+    !authNamespaceNames || authNamespaceNames.length === 0
+      ? "{}"
+      : `{
+${authNamespaceNameFields}
+  }`;
+
   return ml /* ts */ `
 // This file is auto-generated by @tailor-platform/sdk
 // Do not edit this file manually
-// Regenerated automatically when running 'tailor-sdk deploy' or 'tailor-sdk generate'
+// Regenerated automatically when running 'tailor deploy' or 'tailor generate'
 
 declare module "@tailor-platform/sdk" {
-  interface AttributeMap ${mapBody}
+  interface Attributes ${attributesBody}
   interface AttributeList ${listBody}
   interface Env ${envBody}
   interface MachineUserNameRegistry ${machineUserBody}
   interface IdpNameRegistry ${idpNameBody}
   interface ConnectionNameRegistry ${connectionNameBody}
   interface AIGatewayNameRegistry ${aiGatewayNameBody}
+  interface AuthNamespaceNameRegistry ${authNamespaceNameBody}
 }
 
 export {};
@@ -188,8 +217,13 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     : undefined;
 
   const auth = config.auth;
+
+  // An application has exactly one auth namespace: its own `auth`, local or external.
+  const authNamespaceNames =
+    auth && typeof auth === "object" && typeof auth.name === "string" ? [auth.name] : undefined;
+
   if (!auth || typeof auth !== "object") {
-    return idpNames || aiGatewayNames ? { idpNames, aiGatewayNames } : {};
+    return { idpNames, aiGatewayNames, authNamespaceNames };
   }
 
   // Extract machine user names from auth.machineUsers (available regardless of userProfile vs. machineUserAttributes)
@@ -204,13 +238,13 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   const connectionNames =
     connectionsObj && typeof connectionsObj === "object" ? Object.keys(connectionsObj) : undefined;
 
-  const inferAttributeType = (field?: AttributeFieldLike): string => {
+  const inferAttributeType = (field?: AttributeFieldLike): AttributeTypeInfo => {
     const type = field?.type;
     const metadata = field?.metadata;
 
     // Default to string if no metadata
     if (!metadata) {
-      return "string";
+      return { type: "string" };
     }
 
     let typeStr = "string";
@@ -224,10 +258,10 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
 
     // Add array suffix if needed
     if (metadata.array) {
-      typeStr += "[]";
+      typeStr = typeStr.includes(" | ") ? `(${typeStr})[]` : `${typeStr}[]`;
     }
 
-    return typeStr;
+    return { type: typeStr, optional: metadata.required === false };
   };
 
   // Check if auth has userProfile with attributes/attributeList
@@ -244,25 +278,26 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
       }
     ).userProfile;
 
-    const attributes = userProfile?.attributes;
+    const selectedAttributes = userProfile?.attributes;
     const fields = userProfile?.type?.fields;
     const attributeList = userProfile?.attributeList;
 
-    // Convert attributes to AttributeMapConfig by inferring types from field metadata
-    const attributeMap: AttributeMapConfig | undefined = attributes
-      ? Object.keys(attributes).reduce((acc, key) => {
+    // Convert attributes to AttributesConfig by inferring types from field metadata
+    const attributes: AttributesConfig | undefined = selectedAttributes
+      ? Object.keys(selectedAttributes).reduce((acc, key) => {
           acc[key] = inferAttributeType(fields?.[key]);
           return acc;
-        }, {} as AttributeMapConfig)
+        }, {} as AttributesConfig)
       : undefined;
 
     return {
-      attributeMap,
+      attributes,
       attributeList,
       machineUserNames,
       idpNames,
       connectionNames,
       aiGatewayNames,
+      authNamespaceNames,
     };
   }
 
@@ -274,37 +309,38 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     ).machineUserAttributes;
 
     if (!machineUserAttributes) {
-      return { machineUserNames, idpNames, connectionNames, aiGatewayNames };
+      return { machineUserNames, idpNames, connectionNames, aiGatewayNames, authNamespaceNames };
     }
 
-    const attributeMap = Object.entries(machineUserAttributes).reduce((acc, [key, field]) => {
+    const attributes = Object.entries(machineUserAttributes).reduce((acc, [key, field]) => {
       acc[key] = inferAttributeType(field);
       return acc;
-    }, {} as AttributeMapConfig);
+    }, {} as AttributesConfig);
 
     return {
-      attributeMap,
+      attributes,
       machineUserNames,
       idpNames,
       connectionNames,
       aiGatewayNames,
+      authNamespaceNames,
     };
   }
 
-  return { machineUserNames, idpNames, connectionNames, aiGatewayNames };
+  return { machineUserNames, idpNames, connectionNames, aiGatewayNames, authNamespaceNames };
 }
 
 /**
  * Resolve the output path for the generated type definition file.
  *
- * When the `TAILOR_PLATFORM_SDK_DTS_PATH` environment variable is set, the value is
+ * When the `TAILOR_DTS_PATH` environment variable is set, the value is
  * used as the output path (resolved relative to cwd when relative).
  * Otherwise, the file is written next to the config file as `tailor.d.ts`.
  * @param configPath - Path to Tailor config file
  * @returns Absolute path to the type definition file
  */
 export function resolveTypeDefinitionPath(configPath: string): string {
-  const envPath = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+  const envPath = process.env.TAILOR_DTS_PATH;
   if (envPath) {
     return path.resolve(envPath);
   }
@@ -315,8 +351,8 @@ export function resolveTypeDefinitionPath(configPath: string): string {
  * Options for generating user type definitions
  */
 interface GenerateUserTypesOptions {
-  /** Application config */
-  config: AppConfig;
+  /** Application config with resolved `env` values */
+  config: ResolvedEnvAppConfig;
   /** Path to Tailor config file */
   configPath: string;
 }
@@ -330,19 +366,20 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
   const { config, configPath } = options;
   try {
     const {
-      attributeMap,
+      attributes,
       attributeList,
       machineUserNames,
       idpNames,
       connectionNames,
       aiGatewayNames,
+      authNamespaceNames,
     } = extractAttributesFromConfig(config);
-    if (!attributeMap && !attributeList) {
+    if (!attributes && !attributeList) {
       logger.info("No attributes found in configuration", { mode: "plain" });
     }
 
-    if (attributeMap) {
-      logger.debug(`Extracted AttributeMap: ${JSON.stringify(attributeMap)}`);
+    if (attributes) {
+      logger.debug(`Extracted Attributes: ${JSON.stringify(attributes)}`);
     }
     if (attributeList) {
       logger.debug(`Extracted AttributeList: ${JSON.stringify(attributeList)}`);
@@ -359,6 +396,9 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
     if (aiGatewayNames?.length) {
       logger.debug(`Extracted AIGatewayNames: ${JSON.stringify(aiGatewayNames)}`);
     }
+    if (authNamespaceNames?.length) {
+      logger.debug(`Extracted AuthNamespaceNames: ${JSON.stringify(authNamespaceNames)}`);
+    }
 
     const env = config.env;
     if (env) {
@@ -367,13 +407,14 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
 
     // Generate type definition
     const typeDefContent = generateTypeDefinition(
-      attributeMap,
+      attributes,
       attributeList,
       env,
       machineUserNames,
       idpNames,
       connectionNames,
       aiGatewayNames,
+      authNamespaceNames,
     );
     const outputPath = resolveTypeDefinitionPath(configPath);
 

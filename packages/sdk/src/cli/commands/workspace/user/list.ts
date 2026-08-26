@@ -7,6 +7,7 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { userInfo, type UserInfo } from "./transform";
 
+// strip unknown keys
 const listUsersOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
@@ -65,12 +66,10 @@ export async function listUsers(options: ListUsersOptions): Promise<UserInfo[]> 
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List users in a workspace",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const users = await listUsers({
       workspaceId: args["workspace-id"],

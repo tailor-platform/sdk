@@ -465,7 +465,7 @@ describe("formatMappedError", () => {
     const traceMap = new TraceMap({
       version: 3,
       sources: ["resolvers/error-test.ts"],
-      sourcesContent: [null as unknown as string],
+      sourcesContent: [null],
       names: [],
       mappings: "",
     });
@@ -478,14 +478,14 @@ describe("formatMappedError", () => {
   });
 
   test("prefixes dotfile-rooted paths with ./ so they are not mistaken for relative-path markers", () => {
-    // Regression: paths like `.tailor-sdk/test-run/...` start with `.` but
+    // Regression: paths like `.tailor/test-run/...` start with `.` but
     // are not `../` escapes. The display must prefix them with `./` so
     // users can tell they are cwd-relative.
     const frames: MappedStackFrame[] = [
       {
         original: { functionName: "main", file: "file:///bundle.js", line: 1, column: 1 },
         mapped: {
-          source: ".tailor-sdk/test-run/test-run--add.entry.js",
+          source: ".tailor/test-run/test-run--add.entry.js",
           line: 16,
           column: 13,
           name: null,
@@ -496,7 +496,7 @@ describe("formatMappedError", () => {
     const result = formatMappedError("Error: test", frames, null, process.cwd());
     const plain = stripVTControlCharacters(result);
 
-    expect(plain).toContain("./.tailor-sdk/test-run/test-run--add.entry.js:16:13");
+    expect(plain).toContain("./.tailor/test-run/test-run--add.entry.js:16:13");
   });
 });
 

@@ -1,11 +1,11 @@
 import { astVisitor, parse, type From, type Statement } from "pgsql-ast-parser";
 
 /**
- * Extract TailorDB type names from SQL query.
+ * Extract TailorDB table names from SQL query.
  * @param query - SQL query
- * @returns Type names referenced by query
+ * @returns Table names referenced by query
  */
-export function extractTypeNamesFromSql(query: string): string[] {
+export function extractTableNamesFromSql(query: string): string[] {
   let statements: Statement[];
   try {
     statements = parse(query);
@@ -16,11 +16,11 @@ export function extractTypeNamesFromSql(query: string): string[] {
       { cause: error },
     );
   }
-  const typeNames = new Set<string>();
+  const tableNames = new Set<string>();
 
   const visitor = astVisitor((mapper) => ({
     tableRef: (tableRef) => {
-      typeNames.add(tableRef.name);
+      tableNames.add(tableRef.name);
 
       mapper.super().tableRef(tableRef);
       return tableRef;
@@ -31,7 +31,7 @@ export function extractTypeNamesFromSql(query: string): string[] {
     visitor.statement(statement);
   }
 
-  return [...typeNames];
+  return [...tableNames];
 }
 
 function collectAliasMap(fromClauses: From[]): Map<string, string> {
@@ -50,7 +50,7 @@ function collectAliasMap(fromClauses: From[]): Map<string, string> {
 
 export type ColumnSlot =
   | { type: "explicit"; name: string }
-  | { type: "wildcard"; typeNames: string[] };
+  | { type: "wildcard"; tableNames: string[] };
 
 /**
  * Extract the column template from a SQL query's SELECT clause.
@@ -81,10 +81,10 @@ export function extractColumnTemplate(query: string): ColumnSlot[] | null {
         if (column.expr.type === "ref" && column.expr.name === "*") {
           hasWildcard = true;
           if (column.expr.table) {
-            const typeName = aliasMap.get(column.expr.table.name);
-            slots.push({ type: "wildcard", typeNames: typeName ? [typeName] : [] });
+            const tableName = aliasMap.get(column.expr.table.name);
+            slots.push({ type: "wildcard", tableNames: tableName ? [tableName] : [] });
           } else {
-            slots.push({ type: "wildcard", typeNames: [...new Set(aliasMap.values())] });
+            slots.push({ type: "wildcard", tableNames: [...new Set(aliasMap.values())] });
           }
         } else {
           const name = column.alias?.name ?? (column.expr.type === "ref" ? column.expr.name : null);

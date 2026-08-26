@@ -9,7 +9,7 @@ Login to Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk login [options]
+tailor login [options]
 ```
 
 **Options**
@@ -41,7 +41,7 @@ Logout from Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk logout [options]
+tailor logout [options]
 ```
 
 **Options**
@@ -52,6 +52,42 @@ tailor-sdk logout [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+## auth
+
+Authentication helpers for scripts and plugins.
+
+**Usage**
+
+```
+tailor auth <command>
+```
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Commands**
+
+| Command                     | Description                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| [`auth token`](#auth-token) | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
+
+### auth token
+
+Print a valid Tailor Platform access token to stdout, refreshing it first if expired.
+
+**Usage**
+
+```
+tailor auth token [options]
+```
+
+**Options**
+
+| Option                | Alias | Description       | Required | Default | Env                       |
+| --------------------- | ----- | ----------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 ## user
 
 Manage Tailor Platform users.
@@ -59,7 +95,7 @@ Manage Tailor Platform users.
 **Usage**
 
 ```
-tailor-sdk user [command]
+tailor user [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -80,7 +116,7 @@ Show current user.
 **Usage**
 
 ```
-tailor-sdk user current
+tailor user current
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -92,7 +128,7 @@ List all users.
 **Usage**
 
 ```
-tailor-sdk user list
+tailor user list
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -104,7 +140,7 @@ Manage personal access tokens.
 **Usage**
 
 ```
-tailor-sdk user pat [command]
+tailor user pat [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -125,7 +161,7 @@ Create a new personal access token.
 **Usage**
 
 ```
-tailor-sdk user pat create [options] <name>
+tailor user pat create [options] <name>
 ```
 
 **Arguments**
@@ -149,7 +185,7 @@ Delete a personal access token.
 **Usage**
 
 ```
-tailor-sdk user pat delete <name>
+tailor user pat delete <name>
 ```
 
 **Arguments**
@@ -167,7 +203,7 @@ List all personal access tokens.
 **Usage**
 
 ```
-tailor-sdk user pat list [options]
+tailor user pat list [options]
 ```
 
 **Options**
@@ -186,7 +222,7 @@ Update a personal access token (delete and recreate).
 **Usage**
 
 ```
-tailor-sdk user pat update [options] <name>
+tailor user pat update [options] <name>
 ```
 
 **Arguments**
@@ -210,14 +246,14 @@ Set current user.
 **Usage**
 
 ```
-tailor-sdk user switch <user>
+tailor user switch <user>
 ```
 
 **Arguments**
 
-| Argument | Description | Required |
-| -------- | ----------- | -------- |
-| `user`   | User email  | Yes      |
+| Argument | Description                                  | Required |
+| -------- | -------------------------------------------- | -------- |
+| `user`   | User email address or machine user client ID | Yes      |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 When no subcommand is provided, defaults to `list`.

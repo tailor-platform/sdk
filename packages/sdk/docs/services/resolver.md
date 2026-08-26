@@ -108,7 +108,7 @@ Define input/output schemas using methods of `t` object. Basic usage and support
 You can reuse fields defined with `db` object, but note that unsupported options will be ignored:
 
 ```typescript
-const user = db.type("User", {
+const user = db.table("User", {
   name: db.string().unique(),
   age: db.int(),
 });
@@ -150,11 +150,11 @@ createResolver({
 
 This is useful when the same logical type appears in multiple resolvers or when you want a predictable, human-readable name in the generated GraphQL schema.
 
-**Warning:** Do not set `typeName` to an existing TailorDB type name on an `object()` that contains enum or nested fields. Child fields without an explicit `typeName` auto-generate names using `{parentTypeName}{FieldName}`, which can collide with the TailorDB type's own enum/nested type names.
+**Warning:** Do not set `typeName` to an existing TailorDB table name on an `object()` that contains enum or nested fields. Child fields without an explicit `typeName` auto-generate names using `{parentTypeName}{FieldName}`, which can collide with the TailorDB table's own enum/nested type names.
 
 ```typescript
 // Collision — "Item" + "status" auto-generates "ItemStatus",
-//   which collides with the TailorDB Item type's status enum
+//   which collides with the TailorDB Item table's status enum
 output: t
   .object({
     id: t.uuid(),
@@ -208,7 +208,7 @@ Validation functions receive:
 
 - `value` - The field value being validated
 - `data` - The entire input object
-- `user` - The user performing the operation
+- `invoker` - The principal performing the operation
 
 You can specify validation as:
 
@@ -234,13 +234,13 @@ Validation runs automatically before the `body` function executes. When validati
 Define actual resolver logic in the `body` function. Function arguments include:
 
 - `input` - Input data from GraphQL request
-- `user` - The user who called this resolver; unaffected by `authInvoker`
-- `invoker` - The principal running this function; equals `user` by default, or the machine user set by `authInvoker`. `null` for anonymous calls.
+- `caller` - The user or machine user who called this resolver; unaffected by `invoker`. `null` for anonymous calls.
+- `invoker` - The principal running this function; equals `caller` by default, or the machine user configured through the resolver `invoker` option. `null` for anonymous calls.
 - `env` - Environment variables declared in `tailor.config.ts`
 
 ### Using Kysely for Database Access
 
-If you're generating Kysely types with a generator, you can use `getDB` to execute typed queries:
+If you're generating Kysely types with `kyselyTypePlugin`, you can use `getDB` to execute typed queries:
 
 ```typescript
 import { getDB } from "../generated/tailordb";
@@ -305,12 +305,12 @@ createResolver({
 **Behavior:**
 
 - When `publishEvents: true`, resolver execution events are published
-- When not specified, it is **automatically set to `true`** if an executor uses this resolver with `resolverExecutedTrigger`
-- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor apply`
+- When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this resolver with `resolverExecutedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When explicitly set to `false` while an executor taking part in the same run uses this resolver, `deploy` fails
 
 **Use cases:**
 
-1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this resolver
@@ -339,7 +339,7 @@ createResolver({
    });
    ```
 
-3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if executor uses it)
+3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if an executor taking part in the same run uses it)
 
    ```typescript
    createResolver({
@@ -350,9 +350,97 @@ createResolver({
    });
    ```
 
+**Sharing a resolver across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the resolver to keep it on regardless of which configs take part.
+
+## Permissions
+
+### Access Requirement (`permission`)
+
+By default, a resolver with no in-body check is reachable by an anonymous (unauthenticated) caller. Set `permission` to reject callers that don't match a condition, evaluated before `body` runs:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+
+export default createResolver({
+  name: "getMyOrders",
+  operation: "query",
+  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  output: t.object({ count: t.int() }),
+  body: async (context) => {
+    // context.user is guaranteed to be an authenticated caller here
+    return { count: 0 };
+  },
+});
+```
+
+`permission` uses the same `conditions`/`permit` notation as TailorDB's `.permission()` — an array of policies, restricted to `user` operands (a resolver has no associated record to compare against) with equality (`=`/`!=`) comparisons:
+
+- `{ user: "_loggedIn" }` — whether the caller is authenticated
+- `{ user: "id" }` — the caller's user ID
+- `{ user: "someAttribute" }` — any string or boolean attribute enabled in `auth.userProfile.attributes` (or `auth.machineUserAttributes` for machine users); array attributes aren't supported, since conditions only compare against a single string/boolean value
+
+Multiple conditions within the same policy's `conditions` array are combined with AND. `permit` is required, with no implicit default. At least one `permit: true` policy is required: `permission` is an allow-list, denied by default and granted only by a matching `permit: true` policy. This lets you express different eligibility paths, e.g. allowing machine-user callers unconditionally while gating regular users behind a role check:
+
+```typescript
+permission: [
+  { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
+  { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+],
+```
+
+A `permit: false` policy always denies matching callers, even ones another policy would otherwise allow. Combine it with a `permit: true` policy to carve out an explicit exception, e.g. granting access broadly but rejecting one banned role:
+
+```typescript
+permission: [
+  { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+  { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
+],
+```
+
+A policy array made up of only `permit: false` policies is rejected: since none of its conditions apply to a caller presenting no user attributes at all, it wouldn't actually keep anyone out who's willing to drop their credentials, so it can't stand in for an allow-list.
+
+Besides a policy array, `permission` also accepts:
+
+- `"allowAnonymous"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `permission`, but records the decision so it isn't mistaken for an oversight.
+- Omitted (default) — unchanged: anonymous callers can still reach the resolver.
+
+This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.
+
+### Namespace-wide default (`defaultPermission`)
+
+Declaring `permission` on every resolver is the only way to close a whole namespace, and one file that forgets it is enough to leave an opening. Declare `defaultPermission` on the resolver namespace in your config instead, and it applies to every resolver in that namespace:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  resolver: {
+    "main-resolver": {
+      files: ["./src/resolver/*.ts"],
+      defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    },
+  },
+});
+```
+
+`defaultPermission` takes the same values as a resolver's own `permission`, including `"allowAnonymous"` — use that to record that a namespace is public by design rather than by oversight.
+
+A resolver's own `permission` **replaces** the namespace default rather than adding to it, so a single resolver opts out of a namespace-wide requirement explicitly:
+
+```typescript
+export default createResolver({
+  name: "healthCheck",
+  operation: "query",
+  permission: "allowAnonymous", // reachable even though the namespace requires a login
+  output: t.string(),
+  body: () => "ok",
+});
+```
+
+When a namespace declares no `defaultPermission` and some of its resolvers declare no `permission` either, `generate` and `deploy` warn that those resolvers are reachable by anonymous callers. Declaring either one silences the warning.
+
 ## Authentication
 
-Specify an `authInvoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:
+Specify an `invoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
@@ -365,12 +453,10 @@ export default createResolver({
     // Executes as "batch-processor" machine user
     return { result: "ok" };
   },
-  authInvoker: "batch-processor",
+  invoker: "batch-processor",
 });
 ```
 
 The machine user name is looked up in the auth service configured on your app (`machineUsers` in `defineAuth`). The namespace is resolved automatically — no need to import `auth` from `tailor.config.ts` in resolver files.
 
-> **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Importing `auth` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
-
-**Note:** `authInvoker` controls the permissions for database operations and other platform actions. The `user` object passed to `body` still reflects the original caller, while `invoker` reflects the principal actually running the body.
+**Note:** The `invoker` option controls the permissions for database operations and other platform actions. The `caller` object passed to `body` still reflects the original caller, while the `invoker` body field reflects the principal actually running the body.

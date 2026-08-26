@@ -1,5 +1,5 @@
-import { create, type DescMessage } from "@bufbuild/protobuf";
-import { pathToString } from "@bufbuild/protobuf/reflect";
+import { create, createRegistry, type DescMessage } from "@bufbuild/protobuf";
+import { pathToString, usedTypes } from "@bufbuild/protobuf/reflect";
 import { createValidator, type Validator } from "@bufbuild/protovalidate";
 import {
   CreateAIGatewayRequestSchema,
@@ -90,7 +90,6 @@ type HasCreateRequest = { name: string; createRequest: unknown };
 type HasUpdateRequest = { name: string; updateRequest: unknown };
 
 type ValidateItemsParams<Desc extends DescMessage> = {
-  validator: Validator;
   schema: Desc;
   kind: string;
   action: "create" | "update" | "replace";
@@ -99,8 +98,28 @@ type ValidateItemsParams<Desc extends DescMessage> = {
   violations: ViolationEntry[];
 };
 
+const validators = new Map<string, Validator>();
+
+// A validator's CEL environment snapshots its registry at construction, leaving types the
+// validator discovers later unresolvable in CEL. Message-level rules that name a
+// fully-qualified enum — AuthOAuth2Client's `browser_client_cannot_require_dpop` — then fail
+// with "unresolved attribute", so seed each schema's registry with its transitive types.
+function validatorFor(schema: DescMessage): Validator {
+  const cached = validators.get(schema.typeName);
+  if (cached) {
+    return cached;
+  }
+  const validator = createValidator({ registry: createRegistry(schema, ...usedTypes(schema)) });
+  validators.set(schema.typeName, validator);
+  return validator;
+}
+
 function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Desc>): void {
-  const { validator, schema, kind, action, items, requestKey, violations } = params;
+  const { schema, kind, action, items, requestKey, violations } = params;
+  if (items.length === 0) {
+    return;
+  }
+  const validator = validatorFor(schema);
   for (const item of items) {
     const init = (item as Record<string, unknown>)[requestKey];
     const msg = create(schema, init as never);
@@ -159,7 +178,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     secretManager,
   } = input;
 
-  const validator = createValidator();
   const violations: ViolationEntry[] = [];
 
   function creates<Desc extends DescMessage>(
@@ -168,7 +186,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
-      validator,
       schema,
       kind,
       action: "create",
@@ -184,7 +201,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     items: ReadonlyArray<HasRequest>,
   ): void {
     validateItems({
-      validator,
       schema,
       kind,
       action: "update",
@@ -200,7 +216,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     items: ReadonlyArray<HasCreateRequest>,
   ): void {
     validateItems({
-      validator,
       schema,
       kind,
       action: "replace",
@@ -216,7 +231,6 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     items: ReadonlyArray<HasUpdateRequest>,
   ): void {
     validateItems({
-      validator,
       schema,
       kind,
       action: "replace",
@@ -235,12 +249,12 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
 
   creates(
     CreateTailorDBTypeRequestSchema,
-    "TailorDB type",
+    "TailorDB table",
     tailorDB.changeSet.type.creates as HasRequest[],
   );
   updates(
     UpdateTailorDBTypeRequestSchema,
-    "TailorDB type",
+    "TailorDB table",
     tailorDB.changeSet.type.updates as HasRequest[],
   );
 

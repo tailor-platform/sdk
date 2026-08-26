@@ -5,30 +5,29 @@ import type { Plugin } from "#/plugin/types";
 // Custom plugin schema (object form)
 // Using passthrough() to preserve additional properties on Plugin instances
 export const PluginConfigSchema = z
-  .object({
+  .looseObject({
     id: z.string(),
     description: z.string(),
     importPath: z.string().optional(),
     pluginConfig: z.unknown().optional(),
-    typeConfigRequired: z.union([z.boolean(), functionSchema]).optional(),
+    tableConfigRequired: z.union([z.boolean(), functionSchema]).optional(),
     // Definition-time hooks
-    onTypeLoaded: functionSchema.optional(),
+    onTableLoaded: functionSchema.optional(),
     onNamespaceLoaded: functionSchema.optional(),
     // Generation-time hooks
     onTailorDBReady: functionSchema.optional(),
     onResolverReady: functionSchema.optional(),
     onExecutorReady: functionSchema.optional(),
   })
-  .passthrough()
   .refine(
     (p) => {
       // importPath is required when plugin has definition-time hooks
-      const hasDefineHooks = p.onTypeLoaded || p.onNamespaceLoaded;
+      const hasDefineHooks = p.onTableLoaded || p.onNamespaceLoaded;
       return !hasDefineHooks || !!p.importPath;
     },
     {
       message:
-        "importPath is required when plugin has definition-time hooks (onTypeLoaded/onNamespaceLoaded)",
+        "importPath is required when plugin has definition-time hooks (onTableLoaded/onNamespaceLoaded)",
     },
   )
   .transform((plugin) => plugin as Plugin);

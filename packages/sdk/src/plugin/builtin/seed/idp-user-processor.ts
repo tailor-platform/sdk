@@ -8,7 +8,7 @@ export interface IdpUserMetadata {
   idpNamespace: string;
   schema: {
     usernameField: string;
-    userTypeName: string;
+    userTableName: string;
   };
 }
 
@@ -23,16 +23,16 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
     return undefined;
   }
 
-  const { typeName, usernameField } = auth.userProfile;
+  const { tableName, usernameField } = auth.userProfile;
 
   return {
     name: "_User",
-    dependencies: [typeName],
+    dependencies: [tableName],
     dataFile: "data/_User.jsonl",
     idpNamespace: auth.idProvider.namespace,
     schema: {
       usernameField,
-      userTypeName: typeName,
+      userTableName: tableName,
     },
   };
 }
@@ -49,22 +49,65 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
       const errors = [];
       let processed = 0;
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+      const upsert = input.upsert === true;
+      // Rows may arrive as one chunk of a larger dataset; report row numbers
+      // relative to the whole dataset so they match the source JSONL.
+      const offset = typeof input.offset === "number" ? input.offset : 0;
+      const total = typeof input.total === "number" ? input.total : input.users.length;
 
       for (let i = 0; i < input.users.length; i++) {
         try {
-          await client.createUser(input.users[i]);
+          if (upsert) {
+            let existing;
+            let lookupError;
+            try {
+              existing = await client.userByName(input.users[i].name);
+            } catch (error) {
+              existing = undefined;
+              lookupError = error instanceof Error ? error.message : String(error);
+            }
+
+            if (existing) {
+              const { name, ...attributes } = input.users[i];
+              if (Object.keys(attributes).length === 0) {
+                skipped++;
+              } else {
+                await client.updateUser({ id: existing.id, ...attributes });
+                updated++;
+              }
+            } else {
+              try {
+                await client.createUser(input.users[i]);
+                created++;
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                throw new Error(
+                  lookupError ? \`create failed (\${message}); lookup failed (\${lookupError})\` : message,
+                );
+              }
+            }
+          } else {
+            await client.createUser(input.users[i]);
+            created++;
+          }
           processed++;
-          console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
+          console.log(\`[_User] \${offset + i + 1}/\${total}: \${input.users[i].name}\`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          errors.push(\`Row \${i} (\${input.users[i].name}): \${message}\`);
-          console.error(\`[_User] Row \${i} failed: \${message}\`);
+          errors.push(\`Row \${offset + i + 1} (\${input.users[i].name}): \${message}\`);
+          console.error(\`[_User] Row \${offset + i + 1} failed: \${message}\`);
         }
       }
 
       return {
         success: errors.length === 0,
         processed,
+        created,
+        updated,
+        skipped,
         errors,
       };
     }
@@ -119,10 +162,10 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
 
 type GenerateIdpUserSchemaFileOptions = {
   usernameField: string;
-  userTypeName: string;
+  userTableName: string;
   /**
    * When `true` (default), emit a foreign key from `_User.name` to the
-   * userProfile type's username field so that seed validation rejects `_User`
+   * userProfile table's username field so that seed validation rejects `_User`
    * rows without a matching userProfile row. Set to `false` to seed `_User`
    * rows that do not yet have a corresponding userProfile row.
    */
@@ -136,12 +179,12 @@ type GenerateIdpUserSchemaFileOptions = {
  * that do not yet have a corresponding userProfile row).
  * @param options - Schema generation options
  * @param options.usernameField - Username field name
- * @param options.userTypeName - TailorDB user type name
+ * @param options.userTableName - TailorDB user table name
  * @param options.includeUserProfileFK - Whether to emit the `_User -> userProfile` foreign key (default `true`)
  * @returns Schema file contents
  */
 export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOptions): string {
-  const { usernameField, userTypeName, includeUserProfileFK = true } = options;
+  const { usernameField, userTableName, includeUserProfileFK = true } = options;
   const schemaBody = includeUserProfileFK
     ? ml`
       primaryKey: "name",
@@ -152,7 +195,7 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
         {
           column: "name",
           references: {
-            table: "${userTypeName}",
+            table: "${userTableName}",
             column: "${usernameField}",
           },
         },
@@ -175,8 +218,8 @@ export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOpti
       password: t.string(),
     });
 
-    // Simple identity hook for _User (no TailorDB backing type)
-    const hook = <T>(data: unknown) => data as T;
+    // Simple identity hook for _User (no TailorDB backing table)
+    export const hook = <T>(data: unknown) => data as T;
 
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),

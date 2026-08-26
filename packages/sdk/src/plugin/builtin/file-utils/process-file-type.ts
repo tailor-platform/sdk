@@ -2,9 +2,9 @@ import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { FileUtilMetadata } from "./types";
 
 /**
- * Process a TailorDB type and extract file field metadata.
- * @param type - The parsed TailorDB type to process
- * @returns File utility metadata for the type
+ * Process a TailorDB table and extract file field metadata.
+ * @param type - The parsed TailorDB table to process
+ * @returns File utility metadata for the table
  */
 export async function processFileType(type: TailorDBType): Promise<FileUtilMetadata> {
   const fileFields: string[] = [];

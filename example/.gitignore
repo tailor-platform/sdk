@@ -7,7 +7,7 @@ build/
 *.tsbuildinfo
 
 # Tailor Platform SDK generated files
-.tailor-sdk/
+.tailor/
 
 # Test fixtures (keep expected/ only)
 tests/fixtures/*

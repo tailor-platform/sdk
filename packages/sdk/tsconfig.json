@@ -7,7 +7,8 @@
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
     "paths": {
-      "@tailor-platform/sdk": ["./src/configure/index.ts"]
+      "@tailor-platform/sdk": ["./src/configure/index.ts"],
+      "@tailor-platform/sdk/plugin": ["./src/plugin/index.ts"]
     }
   },
   "include": [
@@ -18,6 +19,7 @@
     "./knip.ts",
     "./tsdown.config.ts",
     "./vitest.config.ts",
+    "./vitest.setup.ts",
     "./zinfer.config.ts"
   ],
   "exclude": ["node_modules", "dist", "e2e/fixtures", "**/__test_fixtures__/**"]

@@ -5,7 +5,6 @@ import type {
   FileDownloadResponse,
   FileDownloadStreamResponse,
   FileMetadata,
-  FileStreamIterator,
   FileUploadResponse,
   TailorDBFileAPI,
 } from "../../runtime/file";
@@ -16,7 +15,7 @@ type FileResolver = (method: string, call: FileCall) => unknown;
 interface FileCall {
   method: string;
   namespace: string;
-  typeName: string;
+  tableName: string;
   fieldName: string;
   recordId: string;
 }
@@ -37,7 +36,6 @@ const FILE_METHODS = [
   "downloadAsBase64",
   "delete",
   "getMetadata",
-  "openDownloadStream",
   "downloadStream",
   "uploadStream",
 ] as const satisfies readonly FileMethod[];
@@ -56,111 +54,6 @@ const FILE_DEFAULTS: Partial<Record<FileMethod, unknown>> = {
   downloadStream: null,
   uploadStream: { metadata: { fileSize: 0, sha256sum: "" } },
 };
-
-function wrapFileIterator(
-  inner: Iterator<unknown> | AsyncIterator<unknown>,
-  closeSource: () => void | Promise<void>,
-): FileStreamIterator {
-  let closePromise: Promise<void> | undefined;
-  const closeSourceOnce = () => (closePromise ??= Promise.resolve(closeSource()));
-  const close = async () => {
-    try {
-      await inner.return?.();
-    } finally {
-      await closeSourceOnce();
-    }
-  };
-  const stream = {
-    async next() {
-      const result = await inner.next();
-      if (!result.done) assertStreamValue(result.value);
-      return result.done ? { done: true as const, value: undefined } : result;
-    },
-    close,
-    async return(value?: unknown) {
-      try {
-        return inner.return ? await inner.return(value) : { done: true as const, value };
-      } finally {
-        await closeSourceOnce();
-      }
-    },
-    async throw(error?: unknown) {
-      try {
-        if (inner.throw) return await inner.throw(error);
-        throw error;
-      } finally {
-        await closeSourceOnce();
-      }
-    },
-    [Symbol.asyncIterator]() {
-      return stream;
-    },
-  } as FileStreamIterator;
-  return stream;
-}
-
-function toFileStream(value: unknown): FileStreamIterator {
-  if (
-    value !== null &&
-    typeof value === "object" &&
-    Symbol.asyncIterator in value &&
-    typeof (value as { close?: unknown }).close === "function"
-  ) {
-    const source = value as AsyncIterable<unknown> & { close(): Promise<void> };
-    return wrapFileIterator(source[Symbol.asyncIterator](), () => source.close());
-  }
-  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-    throw new TypeError(
-      "openDownloadStream expects an iterable of StreamValue items " +
-        '(e.g. [{ type: "chunk", data, position }, { type: "complete" }]); ' +
-        "got raw bytes. Wrap the bytes in a structured chunk first.",
-    );
-  }
-  if (
-    value !== null &&
-    typeof value === "object" &&
-    (Symbol.iterator in value || Symbol.asyncIterator in value)
-  ) {
-    const source = value as Iterable<unknown> | AsyncIterable<unknown>;
-    const inner =
-      Symbol.asyncIterator in source
-        ? (source as AsyncIterable<unknown>)[Symbol.asyncIterator]()
-        : (source as Iterable<unknown>)[Symbol.iterator]();
-    return wrapFileIterator(inner, () => {});
-  }
-  const empty = {
-    async next() {
-      return { done: true as const, value: undefined };
-    },
-    async close() {},
-    [Symbol.asyncIterator]() {
-      return empty;
-    },
-  } as FileStreamIterator;
-  return empty;
-}
-
-function assertStreamValue(value: unknown): void {
-  if (value === null || typeof value !== "object") {
-    throw new TypeError(
-      'openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
-        `got ${typeof value === "object" ? "null" : typeof value}.`,
-    );
-  }
-  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-    throw new TypeError(
-      "openDownloadStream expected a StreamValue item, got raw bytes. " +
-        'Wrap the bytes in a structured chunk first (e.g. { type: "chunk", data, position }).',
-    );
-  }
-  const type = (value as { type?: unknown }).type;
-  if (type !== "metadata" && type !== "chunk" && type !== "complete") {
-    throw new TypeError(
-      'openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
-        `got ${JSON.stringify(type)}.`,
-    );
-  }
-}
 
 /**
  * Acquire a disposable mock for `tailordb.file`. Restored on dispose.
@@ -189,12 +82,12 @@ export function mockFile(options: MockFileOptions = {}) {
   function handle(
     method: FileMethod,
     namespace: string,
-    typeName: string,
+    tableName: string,
     fieldName: string,
     recordId: string,
   ): unknown {
     if (queue.length > 0) return queue.shift();
-    const call: FileCall = { method, namespace, typeName, fieldName, recordId };
+    const call: FileCall = { method, namespace, tableName, fieldName, recordId };
     const resolved = resolver(method, call);
     if (resolved != null) return resolved;
     if (onUnhandled === "error") {
@@ -205,8 +98,8 @@ export function mockFile(options: MockFileOptions = {}) {
   }
 
   const upload = vi.fn<TailorDBFileAPI["upload"]>(async (...args) => {
-    const [namespace, typeName, fieldName, recordId] = args;
-    return handle("upload", namespace, typeName, fieldName, recordId) as FileUploadResponse;
+    const [namespace, tableName, fieldName, recordId] = args;
+    return handle("upload", namespace, tableName, fieldName, recordId) as FileUploadResponse;
   });
   const download = vi.fn<TailorDBFileAPI["download"]>(
     async (...args) => handle("download", ...args) as FileDownloadResponse,
@@ -219,9 +112,6 @@ export function mockFile(options: MockFileOptions = {}) {
   });
   const getMetadata = vi.fn<TailorDBFileAPI["getMetadata"]>(
     async (...args) => handle("getMetadata", ...args) as FileMetadata,
-  );
-  const openDownloadStream = vi.fn<TailorDBFileAPI["openDownloadStream"]>(async (...args) =>
-    toFileStream(handle("openDownloadStream", ...args)),
   );
   const downloadStream = vi.fn<TailorDBFileAPI["downloadStream"]>(async (...args) => {
     const resolved = handle("downloadStream", ...args);
@@ -236,8 +126,8 @@ export function mockFile(options: MockFileOptions = {}) {
     };
   });
   const uploadStream = vi.fn<TailorDBFileAPI["uploadStream"]>(async (...args) => {
-    const [namespace, typeName, fieldName, recordId] = args;
-    return handle("uploadStream", namespace, typeName, fieldName, recordId) as FileUploadResponse;
+    const [namespace, tableName, fieldName, recordId] = args;
+    return handle("uploadStream", namespace, tableName, fieldName, recordId) as FileUploadResponse;
   });
 
   const mocks: FileMocks = {
@@ -246,7 +136,6 @@ export function mockFile(options: MockFileOptions = {}) {
     downloadAsBase64,
     delete: deleteFile,
     getMetadata,
-    openDownloadStream,
     downloadStream,
     uploadStream,
   };
@@ -258,10 +147,10 @@ export function mockFile(options: MockFileOptions = {}) {
     return function (this: unknown, ...args: Parameters<TailorDBFileAPI[Method]>) {
       calls.push({
         method,
-        namespace: args[0] as string,
-        typeName: args[1] as string,
-        fieldName: args[2] as string,
-        recordId: args[3] as string,
+        namespace: args[0],
+        tableName: args[1],
+        fieldName: args[2],
+        recordId: args[3],
       });
       return (
         operation as (
@@ -277,7 +166,6 @@ export function mockFile(options: MockFileOptions = {}) {
     downloadAsBase64: track("downloadAsBase64", downloadAsBase64),
     delete: track("delete", deleteFile),
     getMetadata: track("getMetadata", getMetadata),
-    openDownloadStream: track("openDownloadStream", openDownloadStream),
     downloadStream: track("downloadStream", downloadStream),
     uploadStream: track("uploadStream", uploadStream),
   };

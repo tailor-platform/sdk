@@ -2,17 +2,15 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { hashContent, hashFile, hashFiles } from "./hasher";
 
 describe("hasher", () => {
   let tmpDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hasher-test-"));
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -73,6 +71,10 @@ describe("hasher", () => {
 
       const hashAfter = hashFiles([fileA, fileB]);
       expect(hashBefore).not.toBe(hashAfter);
+    });
+
+    test("rethrows file read errors other than a missing path", () => {
+      expect(() => hashFiles([tmpDir])).toThrow(/EISDIR/);
     });
   });
 });

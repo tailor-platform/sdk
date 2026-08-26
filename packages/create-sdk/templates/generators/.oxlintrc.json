@@ -1,14 +1,26 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript"],
+  "plugins": ["typescript", "import"],
+  "jsPlugins": [
+    {
+      "name": "tailor-sdk",
+      "specifier": "@tailor-platform/eslint-plugin-sdk"
+    }
+  ],
   "categories": {
     "correctness": "error"
   },
   "env": {
     "builtin": true
   },
-  "ignorePatterns": [".tailor-sdk/", "src/generated/", "src/seed/", "tailor.d.ts"],
+  "ignorePatterns": [".tailor/", "src/generated/", "src/seed/", "tailor.d.ts"],
   "rules": {
+    "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-execute-script-arg-stringify": "warn",
+    "tailor-sdk/no-unconditional-permit": "warn",
+    "import/default": "off",
+    "import/namespace": "off",
+    "import/no-duplicates": ["error", { "considerQueryString": true }],
     "no-case-declarations": "error",
     "no-empty": "error",
     "no-fallthrough": "error",

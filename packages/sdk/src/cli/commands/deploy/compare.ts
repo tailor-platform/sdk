@@ -1,3 +1,24 @@
+import { create, toJson, type DescMessage, type MessageInitShape } from "@bufbuild/protobuf";
+
+/**
+ * Canonicalize a proto message (or init shape) into proto JSON for comparison.
+ *
+ * Deserialized messages materialize implicit proto3 fields with their zero
+ * values while locally built init shapes omit them, so comparing the raw
+ * objects reports a diff for every field the SDK does not set — including
+ * fields newly added to the proto. Proto JSON omits implicit zero values on
+ * both sides, which matches wire semantics (unset == zero value).
+ * @param schema - Message schema describing the value
+ * @param value - Message or init shape to canonicalize
+ * @returns Proto JSON representation of the value
+ */
+export function toComparableProtoJson<Desc extends DescMessage>(
+  schema: Desc,
+  value: MessageInitShape<Desc>,
+): unknown {
+  return toJson(schema, create(schema, value));
+}
+
 /**
  * Stable JSON-like serialization that sorts object keys and ignores proto runtime metadata.
  * @param value - Value to serialize

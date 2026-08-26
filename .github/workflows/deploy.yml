@@ -19,10 +19,10 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.changes }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: "false"
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
@@ -61,7 +61,7 @@ jobs:
         shell: ${{ matrix.shell }}
     steps:
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: "false"
 
@@ -73,7 +73,7 @@ jobs:
 
       - name: Login as machine user
         if: runner.os != 'Windows'
-        run: pnpm tailor-sdk login --machineuser
+        run: pnpm tailor login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
@@ -81,7 +81,7 @@ jobs:
       - name: Create workspace
         if: runner.os != 'Windows'
         working-directory: example
-        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --json > workspace.json
+        run: pnpm --silent tailor workspace create --name "sdk-ci-${RUN_ID}-${SLUG}" --region asia-northeast --json > workspace.json
         env:
           RUN_ID: ${{ github.run_id }}
           SLUG: ${{ matrix.slug }}
@@ -104,14 +104,14 @@ jobs:
         working-directory: example
         run: pnpm run deploy
         env:
-          TAILOR_PLATFORM_SDK_BUILD_ONLY: ${{ runner.os == 'Windows' && 'true' || '' }}
+          TAILOR_DEPLOY_BUILD_ONLY: ${{ runner.os == 'Windows' && 'true' || '' }}
 
       - name: Verify all migrations applied
         if: runner.os != 'Windows'
         working-directory: example
         shell: bash
         run: |
-          STATUS=$(pnpm --silent tailor-sdk tailordb migration status --namespace tailordb)
+          STATUS=$(pnpm --silent tailor tailordb migration status --namespace tailordb)
           echo "$STATUS"
 
           # Check for pending migrations
@@ -121,6 +121,22 @@ jobs:
           fi
 
           echo "✅ All migrations applied successfully"
+
+      # A redeploy of unchanged code must be a no-op; anything else is
+      # comparison drift (e.g. new proto fields read as updates on every run).
+      - name: Dry run must report no changes
+        if: runner.os != 'Windows'
+        working-directory: example
+        shell: bash
+        run: |
+          summary=$(pnpm --silent tailor deploy -c tailor.config.ts --dry-run --yes --json | tail -1 | jq -c '.summary')
+          echo "Plan summary: $summary"
+          if ! echo "$summary" | jq -e '.create == 0 and .update == 0 and .delete == 0 and .replace == 0' > /dev/null; then
+            echo "::error::Dry run after deploy reported drift: $summary"
+            echo "Re-running without --json for a readable diff:"
+            pnpm tailor deploy -c tailor.config.ts --dry-run --yes
+            exit 1
+          fi
 
       - name: Validate seed data
         if: runner.os == 'Windows'
@@ -143,7 +159,7 @@ jobs:
       - name: Destroy workspace
         if: always() && runner.os != 'Windows'
         working-directory: example
-        run: pnpm tailor-sdk workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
+        run: pnpm tailor workspace delete --workspace-id "$TAILOR_PLATFORM_WORKSPACE_ID" --yes
 
   deploy-result:
     name: deploy-result # required status check context (ruleset status_check_main) — keep equal to the job id

@@ -4,10 +4,10 @@ import { defaultGqlPermission, defaultPermission } from "./permissions";
 import { supplier } from "./supplier";
 
 export const purchaseOrder = db
-  .type(["PurchaseOrder", "PurchaseOrderList"], {
+  .table(["PurchaseOrder", "PurchaseOrderList"], {
     supplierID: db.uuid().relation({
       type: "n-1",
-      toward: { type: supplier },
+      toward: { table: supplier },
     }),
     totalPrice: db.int(),
     discount: db.float({ optional: true }),

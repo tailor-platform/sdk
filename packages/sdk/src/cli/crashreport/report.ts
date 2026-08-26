@@ -84,26 +84,44 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     errorMessage: sanitizeMessage(rawMessage),
     stackTrace: sanitizeStackTrace(rawStack),
     errorType,
-    userId: currentUser,
-    userEmail: currentUser,
+    userId: currentUser?.id ?? null,
+    userEmail: currentUser?.email ?? null,
   };
 }
+
+type CurrentUser = {
+  id: string;
+  email: string | null;
+};
 
 /**
  * Read current_user from Tailor Platform config without side effects.
  * Unlike readPlatformConfig(), this never triggers migration or logs warnings.
- * @returns The current user email, or null if unavailable
+ * @returns The current user ID and email, or null if unavailable
  */
-function readCurrentUser(): string | null {
+function readCurrentUser(): CurrentUser | null {
   try {
     if (!xdgConfig) return null;
     const configPath = path.join(xdgConfig, "tailor-platform", "config.yaml");
     if (!fs.existsSync(configPath)) return null;
-    const raw = parseYAML(fs.readFileSync(configPath, "utf-8")) as { current_user?: string | null };
+    const raw = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      current_user?: string | null;
+      users?: Record<string, { email?: unknown } | undefined>;
+    };
     // parseYAML returns null for empty documents
     // oxlint-disable-next-line typescript/no-unnecessary-condition
-    return raw?.current_user ?? null;
+    const currentUser = raw?.current_user ?? null;
+    if (!currentUser) return null;
+    const email = raw.users?.[currentUser]?.email;
+    return {
+      id: currentUser,
+      email: typeof email === "string" ? email : legacyEmail(currentUser),
+    };
   } catch {
     return null;
   }
+}
+
+function legacyEmail(user: string): string | null {
+  return user.includes("@") ? user : null;
 }

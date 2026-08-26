@@ -9,7 +9,7 @@ Manage auth connections.
 **Usage**
 
 ```
-tailor-sdk authconnection [command]
+tailor authconnection [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -31,7 +31,7 @@ Authorize an auth connection via OAuth2 flow.
 **Usage**
 
 ```
-tailor-sdk authconnection authorize [options]
+tailor authconnection authorize [options]
 ```
 
 **Options**
@@ -54,7 +54,7 @@ Delete an auth connection entirely.
 **Usage**
 
 ```
-tailor-sdk authconnection delete [options]
+tailor authconnection delete [options]
 ```
 
 **Options**
@@ -75,7 +75,7 @@ List all auth connections.
 **Usage**
 
 ```
-tailor-sdk authconnection list [options]
+tailor authconnection list [options]
 ```
 
 **Options**
@@ -96,7 +96,7 @@ Open the auth connections page in the Tailor Platform Console.
 **Usage**
 
 ```
-tailor-sdk authconnection open [options]
+tailor authconnection open [options]
 ```
 
 **Options**
@@ -115,7 +115,7 @@ Revoke an auth connection's tokens (keeps the connection; use 'delete' to remove
 **Usage**
 
 ```
-tailor-sdk authconnection revoke [options]
+tailor authconnection revoke [options]
 ```
 
 **Options**
@@ -140,7 +140,7 @@ Manage machine users in your Tailor Platform application.
 **Usage**
 
 ```
-tailor-sdk machineuser [command]
+tailor machineuser [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -159,18 +159,18 @@ List all machine users in the application.
 **Usage**
 
 ```
-tailor-sdk machineuser list [options]
+tailor machineuser list [options]
 ```
 
 **Options**
 
-| Option                          | Alias | Description                                              | Required | Default              | Env                               |
-| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                  | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"`             | -                                 |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -                    | -                                 |
+| Option                          | Alias | Description                                              | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                               | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"`             | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -181,7 +181,7 @@ Get an access token for a machine user.
 **Usage**
 
 ```
-tailor-sdk machineuser token [options] [name]
+tailor machineuser token [options] [name]
 ```
 
 **Arguments**
@@ -192,11 +192,11 @@ tailor-sdk machineuser token [options] [name]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -207,7 +207,7 @@ Manage OAuth2 clients in your Tailor Platform application.
 **Usage**
 
 ```
-tailor-sdk oauth2client [command]
+tailor oauth2client [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -226,18 +226,18 @@ List all OAuth2 clients in the application.
 **Usage**
 
 ```
-tailor-sdk oauth2client list [options]
+tailor oauth2client list [options]
 ```
 
 **Options**
 
-| Option                          | Alias | Description                                              | Required | Default              | Env                               |
-| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                  | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"`             | -                                 |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -                    | -                                 |
+| Option                          | Alias | Description                                              | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                               | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"`             | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -259,7 +259,7 @@ Get OAuth2 client credentials (including client secret).
 **Usage**
 
 ```
-tailor-sdk oauth2client get [options] <name>
+tailor oauth2client get [options] <name>
 ```
 
 **Arguments**
@@ -270,11 +270,11 @@ tailor-sdk oauth2client get [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

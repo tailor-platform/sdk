@@ -1,5 +1,5 @@
 /**
- * Function type detection for test-run command
+ * Function type detection for the function run command
  *
  * Detects the function type (resolver, executor, workflow job, or plain function)
  * by dynamically importing the module and checking against known schemas.
@@ -7,19 +7,21 @@
 
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { type FieldRuntime, parseInputFields } from "#/runtime/field-parse";
 import { assertDefined } from "#/utils/assert";
-import type { TailorUser } from "#/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
+import type { Resolver } from "#/types/resolver.generated";
 
-export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
+type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 
 interface InputParseArgs {
   value: unknown;
   data: unknown;
-  user: TailorUser;
+  invoker: TailorPrincipal | null;
 }
 
 /** Minimal schema interface for local format detection (subset of TailorField) */
@@ -42,6 +44,8 @@ export interface DetectedFunction {
   hasInput?: boolean;
   /** For resolvers with input: pre-built schema object with .parse() for local format detection */
   inputSchema?: InputSchema;
+  /** For resolvers: the resolver's `permission` config, enforced the same way as production */
+  permission?: Resolver["permission"];
 }
 
 interface DetectFunctionOptions {
@@ -83,11 +87,12 @@ export async function detectFunctionType(
       name: resolverResult.data.name,
       hasInput: rawInput != null,
       inputSchema,
+      permission: resolverResult.data.permission,
     };
   }
 
   // 2. Check executor (only function/jobFunction kinds)
-  const executorResult = ExecutorSchema.safeParse(module.default);
+  const executorResult = ExecutorSchema.safeParse(stripExecutorTriggerArgs(module.default));
   if (executorResult.success) {
     const { operation } = executorResult.data;
     if (operation.kind === "function" || operation.kind === "jobFunction") {

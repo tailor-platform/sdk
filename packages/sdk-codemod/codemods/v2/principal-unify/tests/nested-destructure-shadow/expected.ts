@@ -6,5 +6,5 @@ export default createResolver({
   name: "n",
   operation: "query",
   output: t.array(t.string()),
-  body: ({ caller }) => items.map(({ user }) => user.id).concat(caller.id),
+  body: ({ caller }) => items.map(({ user }) => user.id).concat(caller?.id),
 });

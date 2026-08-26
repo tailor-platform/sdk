@@ -11,6 +11,28 @@ export interface EnsureConfigIdResult {
   injected: boolean;
 }
 
+/**
+ * Warn when a command that decides resource ownership resolved a config
+ * without an app id.
+ *
+ * Injection only reaches an inline `defineConfig({...})` call, so a config
+ * that re-exports one from another file resolves without an id and nothing
+ * says so. Ownership then falls back to the application name, and resources
+ * tagged with an id from an earlier deploy read as another application's.
+ * @param appId - Application id from the resolved config, when it has one
+ */
+export function warnMissingAppId(appId: string | undefined): void {
+  if (appId) return;
+  logger.warn("The config resolved without an 'id'.");
+  logger.log(
+    "  Resources tagged with an id from an earlier deploy read as another application's:\n" +
+      "  deploy asks before taking them over, and remove leaves them in place. Only resources\n" +
+      "  carrying no id are matched by application name.\n" +
+      "  Add an 'id' to the object passed to defineConfig() — a config that re-exports it from\n" +
+      "  another file cannot have one injected automatically. 'tailor setup' can add it for you.",
+  );
+}
+
 type ASTNode = Record<string, unknown>;
 
 // The user-facing id is a plain UUID. A label-compatible prefix is added
@@ -33,7 +55,7 @@ function findDefineConfigCalls(node: unknown, results: ConfigCallSite[]): void {
       const arg = ce.arguments[0];
       // callee may be a ComputedMemberExpression at runtime
       // oxlint-disable-next-line typescript/no-unnecessary-condition
-      const configObj = arg && arg.type === "ObjectExpression" ? (arg as ObjectExpression) : null;
+      const configObj = arg && arg.type === "ObjectExpression" ? arg : null;
       results.push({ callExpr: ce, configObj });
     }
   }
@@ -169,7 +191,7 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
     throw new Error(
       `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
         `(each run would be treated as a separate app and break resource ownership). ` +
-        `Run 'tailor-sdk setup' or 'tailor-sdk apply' locally and commit the injected id.`,
+        `Run 'tailor setup' or 'tailor deploy' locally and commit the injected id.`,
     );
   }
   // Keep CI and local behavior aligned: ensureConfigId() enforces the same
@@ -190,7 +212,7 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
  * ownership. CI dry-runs (plan) perform the same check read-only, so a
  * forgotten id fails at PR time instead of at deploy. Ephemeral pipelines that
  * intentionally deploy a fresh app per run (such as e2e harnesses) can opt
- * back into injection with `TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION=true`.
+ * back into injection with `TAILOR_CI_ALLOW_ID_INJECTION=true`.
  * Local dry-run and build-only flows skip both injection and the check (no
  * on-disk side effects are expected, and build-only never talks to the
  * platform).
@@ -207,8 +229,7 @@ export async function ensureConfigIdForDeploy(obj: {
   const { configPath, dryRun, buildOnly } = obj;
   if (buildOnly) return;
 
-  const allowCIInjection =
-    parseBoolean(process.env.TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION) === true;
+  const allowCIInjection = parseBoolean(process.env.TAILOR_CI_ALLOW_ID_INJECTION) === true;
   const strictCI = isCI && !allowCIInjection;
 
   if (dryRun) {

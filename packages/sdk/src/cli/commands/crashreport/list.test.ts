@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { orderAndLimitCrashReports } from "./list";
 
 vi.mock("std-env", () => ({
@@ -11,14 +11,12 @@ vi.mock("std-env", () => ({
 describe("crashreport list command", () => {
   let tmpDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.stubEnv("TAILOR_CRASH_REPORTS_LOCAL", undefined);
     vi.stubEnv("TAILOR_CRASH_REPORTS_REMOTE", undefined);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "crash-report-list-test-"));
     vi.resetModules();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -43,7 +41,7 @@ describe("crashreport list command", () => {
     const config = await mockConfigWithLocalDir(tmpDir);
 
     const files = fs
-      .readdirSync(config.localDir!)
+      .readdirSync(config.localDir)
       .filter((f) => f.endsWith(".crash.log"))
       .toSorted()
       .toReversed();
@@ -54,7 +52,7 @@ describe("crashreport list command", () => {
   test("returns empty list when no crash reports exist", async () => {
     const config = await mockConfigWithLocalDir(tmpDir);
 
-    const files = fs.readdirSync(config.localDir!).filter((f) => f.endsWith(".crash.log"));
+    const files = fs.readdirSync(config.localDir).filter((f) => f.endsWith(".crash.log"));
 
     expect(files).toEqual([]);
   });
@@ -62,7 +60,7 @@ describe("crashreport list command", () => {
   test("handles non-existent directory gracefully", async () => {
     const config = await mockConfigWithLocalDir(path.join(tmpDir, "does-not-exist"));
 
-    expect(fs.existsSync(config.localDir!)).toBe(false);
+    expect(fs.existsSync(config.localDir)).toBe(false);
   });
 });
 

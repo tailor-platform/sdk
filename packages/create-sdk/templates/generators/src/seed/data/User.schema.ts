@@ -4,14 +4,14 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { user } from "../../db/user";
 
 const schemaType = t.object({
-  ...user.pickFields(["id","createdAt"], { optional: true }),
-  ...user.omitFields(["id","createdAt"]),
+  ...user.pickFields(["id"], { optional: true }),
+  ...user.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(user);
+export const hook = createTailorDBHook(user);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, user),
   {
     indexes: [
       {"name":"user_email_unique_idx","columns":["email"],"unique":true},

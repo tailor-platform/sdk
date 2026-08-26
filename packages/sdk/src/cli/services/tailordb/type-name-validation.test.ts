@@ -16,16 +16,16 @@ type ListTailorDBTypesResult = {
   nextPageToken?: string;
 };
 
-function localService(namespace: string, typeNames: string[]) {
+function localService(namespace: string, tableNames: string[]) {
   return {
     namespace,
-    types: Object.fromEntries(typeNames.map((typeName) => [typeName, {}])),
+    types: Object.fromEntries(tableNames.map((tableName) => [tableName, {}])),
     typeSourceInfo: Object.fromEntries(
-      typeNames.map((typeName) => [
-        typeName,
+      tableNames.map((tableName) => [
+        tableName,
         {
-          filePath: `/app/${namespace}/${typeName}.ts`,
-          exportName: typeName.toLowerCase(),
+          filePath: `/app/${namespace}/${tableName}.ts`,
+          exportName: tableName.toLowerCase(),
         },
       ]),
     ),
@@ -50,7 +50,7 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
       assertUniqueLocalTailorDBTypeNames({
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
       }),
-    ).toThrow(/Duplicate TailorDB type names detected/);
+    ).toThrow(/Duplicate TailorDB table names detected/);
     expect(() =>
       assertUniqueLocalTailorDBTypeNames({
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
@@ -75,8 +75,8 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
     });
 
     expect(result).toEqual([
-      { namespace: "shared", typeName: "User", kind: "external" },
-      { namespace: "shared", typeName: "Order", kind: "external" },
+      { namespace: "shared", tableName: "User", kind: "external" },
+      { namespace: "shared", tableName: "Order", kind: "external" },
     ]);
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(2);
   });
@@ -115,9 +115,9 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
     pending.get("shared-b:")?.(page(["Event"]));
 
     await expect(promise).resolves.toEqual([
-      { namespace: "shared-a", typeName: "User", kind: "external" },
-      { namespace: "shared-a", typeName: "Order", kind: "external" },
-      { namespace: "shared-b", typeName: "Event", kind: "external" },
+      { namespace: "shared-a", tableName: "User", kind: "external" },
+      { namespace: "shared-a", tableName: "Order", kind: "external" },
+      { namespace: "shared-b", tableName: "Event", kind: "external" },
     ]);
   });
 
@@ -149,7 +149,7 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         tailorDBServices: [localService("main", ["User"])],
         externalTailorDBNamespaces: ["shared"],
       }),
-    ).rejects.toThrow(/Type "User" is defined more than once/);
+    ).rejects.toThrow(/Table "User" is defined more than once/);
   });
 
   test("rejects duplicate type names between external namespaces", async () => {

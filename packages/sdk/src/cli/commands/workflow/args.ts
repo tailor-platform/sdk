@@ -5,7 +5,7 @@ import type { WorkflowWaitUntil } from "./status";
 
 type ArgsShape = Record<string, z.ZodType>;
 
-export const workflowWaitUntilArg = z.enum([
+const workflowWaitUntilArg = z.enum([
   "success",
   "suspended",
   "terminal",

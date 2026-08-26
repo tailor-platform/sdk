@@ -4,14 +4,14 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { order } from "../../db/order";
 
 const schemaType = t.object({
-  ...order.pickFields(["id","createdAt"], { optional: true }),
-  ...order.omitFields(["id","createdAt"]),
+  ...order.pickFields(["id"], { optional: true }),
+  ...order.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(order);
+export const hook = createTailorDBHook(order);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, order),
   {
     foreignKeys: [
       {"column":"productId","references":{"table":"Product","column":"id"}},

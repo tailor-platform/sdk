@@ -7,7 +7,7 @@ function createConfig(overrides: Partial<LoadedConfig>): LoadedConfig {
     name: "test-app",
     path: "/tmp/tailor.config.ts",
     ...overrides,
-  } as LoadedConfig;
+  };
 }
 
 describe("extractAllNamespaces", () => {

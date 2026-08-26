@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { loadWorkspaceContext, saveWorkspaceContext } from "./workspace-context";
 
 const temporaryDirectories: string[] = [];
@@ -12,7 +12,13 @@ async function temporaryDirectory(): Promise<string> {
   return directory;
 }
 
-afterEach(async () => {
+// getDistDir() memoizes its result across calls in the same worker; pin it
+// explicitly so this file's assumed ".tailor" dirname holds regardless of
+// what other shared-worker test files set TAILOR_BUILD_OUTPUT_DIR to.
+aroundEach(async (runTest) => {
+  process.env.TAILOR_BUILD_OUTPUT_DIR = ".tailor";
+  await runTest();
+  delete process.env.TAILOR_BUILD_OUTPUT_DIR;
   const { rm } = await import("node:fs/promises");
   await Promise.all(
     temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })),
@@ -35,7 +41,7 @@ describe("workspace context", () => {
       context,
     );
     await expect(
-      readFile(join(projectDirectory, ".tailor-sdk", "tailor.config.ts.context.json"), "utf8"),
+      readFile(join(projectDirectory, ".tailor", "tailor.config.ts.context.json"), "utf8"),
     ).resolves.toBe(`${JSON.stringify(context, null, 2)}\n`);
   });
 
@@ -62,7 +68,7 @@ describe("workspace context", () => {
     await expect(
       loadWorkspaceContext("https://api.tailor.tech", secondConfigPath),
     ).resolves.toEqual(secondContext);
-    await expect(readdir(join(projectDirectory, ".tailor-sdk"))).resolves.toEqual([
+    await expect(readdir(join(projectDirectory, ".tailor"))).resolves.toEqual([
       "first.config.ts.context.json",
       "second.config.ts.context.json",
     ]);
@@ -90,7 +96,7 @@ describe("workspace context", () => {
   test("does not rewrite an unchanged context", async () => {
     const projectDirectory = await temporaryDirectory();
     const configPath = join(projectDirectory, "tailor.config.ts");
-    const targetPath = join(projectDirectory, ".tailor-sdk", "tailor.config.ts.context.json");
+    const targetPath = join(projectDirectory, ".tailor", "tailor.config.ts.context.json");
     const context = {
       version: 1 as const,
       platformUrl: "https://api.tailor.tech",
@@ -123,7 +129,7 @@ describe("workspace context", () => {
   test("removes the temporary file when the atomic rename fails", async () => {
     const projectDirectory = await temporaryDirectory();
     const configPath = join(projectDirectory, "tailor.config.ts");
-    const stateDirectory = join(projectDirectory, ".tailor-sdk");
+    const stateDirectory = join(projectDirectory, ".tailor");
     const targetPath = join(stateDirectory, "tailor.config.ts.context.json");
     await mkdir(targetPath, { recursive: true });
 
@@ -156,7 +162,7 @@ describe("workspace context", () => {
     const projectDirectory = await temporaryDirectory();
     const configPath = join(projectDirectory, "tailor.config.ts");
     if (contents !== undefined) {
-      const stateDirectory = join(projectDirectory, ".tailor-sdk");
+      const stateDirectory = join(projectDirectory, ".tailor");
       await mkdir(stateDirectory, { recursive: true });
       await writeFile(join(stateDirectory, "tailor.config.ts.context.json"), contents);
     }

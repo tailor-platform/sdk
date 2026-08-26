@@ -9,6 +9,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
+// strip unknown keys
 const updateOrganizationOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   name: z.string().min(1, "Name must not be empty"),
@@ -47,15 +48,13 @@ export async function updateOrganization(
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update an organization's name.",
-  args: z
-    .object({
-      ...organizationArgs,
-      name: arg(z.string(), {
-        alias: "n",
-        description: "New organization name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    name: arg(z.string(), {
+      alias: "n",
+      description: "New organization name",
+    }),
+  }),
   run: async (args) => {
     await assertWritable();
     const organization = await updateOrganization({

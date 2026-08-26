@@ -6,8 +6,8 @@ export type PluginConfigInput = {
   description: string;
   importPath?: string | undefined;
   pluginConfig?: unknown;
-  typeConfigRequired?: boolean | Function | undefined;
-  onTypeLoaded?: Function | undefined;
+  tableConfigRequired?: boolean | Function | undefined;
+  onTableLoaded?: Function | undefined;
   onNamespaceLoaded?: Function | undefined;
   onTailorDBReady?: Function | undefined;
   onResolverReady?: Function | undefined;
@@ -18,14 +18,14 @@ export type PluginConfig = {
   readonly id: string;
   readonly description: string;
   readonly importPath?: string | undefined;
-  readonly typeConfigRequired?: import("#/plugin/types").TypeConfigRequired<unknown> | undefined;
+  readonly tableConfigRequired?: import("#/plugin/types").TableConfigRequired<unknown> | undefined;
   readonly pluginConfig?: unknown;
-  onTypeLoaded?:
+  onTableLoaded?:
     | ((
-        context: import("#/plugin/types").PluginProcessContext<unknown, unknown>,
+        context: import("#/plugin/types").PluginTableProcessContext<unknown, unknown>,
       ) =>
-        | import("#/plugin/types").TypePluginOutput
-        | Promise<import("#/plugin/types").TypePluginOutput>)
+        | import("#/plugin/types").TablePluginOutput
+        | Promise<import("#/plugin/types").TablePluginOutput>)
     | undefined;
   onNamespaceLoaded?:
     | ((

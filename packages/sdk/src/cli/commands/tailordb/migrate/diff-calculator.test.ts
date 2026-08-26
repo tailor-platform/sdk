@@ -45,7 +45,7 @@ describe("diff-calculator", () => {
       const diff = createDiff([
         {
           kind: "field_added",
-          typeName: "User",
+          tableName: "User",
           fieldName: "email",
           after: { type: "string", required: false },
         },
@@ -65,7 +65,7 @@ describe("diff-calculator", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: false },
           },
@@ -77,7 +77,7 @@ describe("diff-calculator", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: true },
           },
@@ -89,7 +89,7 @@ describe("diff-calculator", () => {
         changes: [
           {
             kind: "field_removed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             before: { type: "string", required: true },
           },
@@ -101,7 +101,7 @@ describe("diff-calculator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             before: { type: "string", required: false },
             after: { type: "string", required: true },
@@ -110,21 +110,34 @@ describe("diff-calculator", () => {
         expected: ["~ email: required: false → true"],
       },
       {
+        name: "modified field type",
+        changes: [
+          {
+            kind: "field_type_modified",
+            tableName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        expected: ["~ age: type: integer → float"],
+      },
+      {
         name: "type addition",
-        changes: [{ kind: "type_added", typeName: "NewType", after: snapshotType("NewType") }],
-        expected: ["+ [Type] NewType (new type)"],
+        changes: [{ kind: "table_added", tableName: "NewType", after: snapshotType("NewType") }],
+        expected: ["+ [Table] NewType (new table)"],
       },
       {
         name: "type removal",
-        changes: [{ kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") }],
-        expected: ["- [Type] OldType (removed)"],
+        changes: [{ kind: "table_removed", tableName: "OldType", before: snapshotType("OldType") }],
+        expected: ["- [Table] OldType (removed)"],
       },
       {
         name: "array field",
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "tags",
             after: { type: "string", required: false, array: true },
           },
@@ -136,19 +149,19 @@ describe("diff-calculator", () => {
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: false },
           },
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "phone",
             after: { type: "string", required: false },
           },
           {
             kind: "field_added",
-            typeName: "Product",
+            tableName: "Product",
             fieldName: "price",
             after: { type: "number", required: true },
           },
@@ -170,24 +183,24 @@ describe("diff-calculator", () => {
 
     test("should format breaking changes with field", () => {
       const breakingChanges: BreakingChangeInfo[] = [
-        { typeName: "User", fieldName: "email", reason: "Required field added" },
+        { tableName: "User", fieldName: "email", reason: "Required field added" },
       ];
       const result = formatBreakingChanges(breakingChanges);
       expect(result).toContain("Breaking changes detected:");
       expect(result).toContain("User.email: Required field added");
     });
 
-    test("should format breaking changes without field (type-level)", () => {
+    test("should format breaking changes without field (table-level)", () => {
       const breakingChanges: BreakingChangeInfo[] = [
-        { typeName: "OldType", reason: "Type removed" },
+        { tableName: "OldType", reason: "Type removed" },
       ];
       expect(formatBreakingChanges(breakingChanges)).toContain("OldType: Type removed");
     });
 
     test("should format multiple breaking changes", () => {
       const breakingChanges: BreakingChangeInfo[] = [
-        { typeName: "User", fieldName: "email", reason: "Field removed" },
-        { typeName: "Product", fieldName: "price", reason: "Type changed" },
+        { tableName: "User", fieldName: "email", reason: "Field removed" },
+        { tableName: "Product", fieldName: "price", reason: "Type changed" },
       ];
       const result = formatBreakingChanges(breakingChanges);
       expect(result).toContain("User.email: Field removed");
@@ -203,35 +216,35 @@ describe("diff-calculator", () => {
     test("should format warnings with field", () => {
       const warnings: WarningChangeInfo[] = [
         {
-          typeName: "User",
+          tableName: "User",
           fieldName: "legacyId",
-          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+          reason: "Field removed (existing data will no longer be accessible through the schema)",
         },
       ];
       const result = formatWarnings(warnings);
       expect(result).toContain("Warning: data loss possible:");
       expect(result).toContain(
-        "User.legacyId: Field removed (existing data will be dropped in the post-migration phase)",
+        "User.legacyId: Field removed (existing data will no longer be accessible through the schema)",
       );
     });
 
-    test("should format warnings without field (type-level)", () => {
+    test("should format warnings without field (table-level)", () => {
       const warnings: WarningChangeInfo[] = [
         {
-          typeName: "OldType",
+          tableName: "OldType",
           reason:
-            "Type removed (all records of this type will be dropped in the post-migration phase)",
+            "Table removed (all records in this table will be deleted during post-migration cleanup)",
         },
       ];
       expect(formatWarnings(warnings)).toContain(
-        "OldType: Type removed (all records of this type will be dropped in the post-migration phase)",
+        "OldType: Table removed (all records in this table will be deleted during post-migration cleanup)",
       );
     });
 
     test("should format multiple warnings", () => {
       const warnings: WarningChangeInfo[] = [
-        { typeName: "User", fieldName: "legacyId", reason: "Field removed" },
-        { typeName: "OldType", reason: "Type removed" },
+        { tableName: "User", fieldName: "legacyId", reason: "Field removed" },
+        { tableName: "OldType", reason: "Type removed" },
       ];
       const result = formatWarnings(warnings);
       expect(result).toContain("User.legacyId: Field removed");
@@ -246,24 +259,24 @@ describe("diff-calculator", () => {
 
     test.each<{ name: string; changes: MigrationDiff["changes"]; expected: string[] }>([
       {
-        name: "types added",
+        name: "tables added",
         changes: [
-          { kind: "type_added", typeName: "NewType1", after: snapshotType("NewType1") },
-          { kind: "type_added", typeName: "NewType2", after: snapshotType("NewType2") },
+          { kind: "table_added", tableName: "NewType1", after: snapshotType("NewType1") },
+          { kind: "table_added", tableName: "NewType2", after: snapshotType("NewType2") },
         ],
-        expected: ["2 type(s) added"],
+        expected: ["2 table(s) added"],
       },
       {
-        name: "types removed",
-        changes: [{ kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") }],
-        expected: ["1 type(s) removed"],
+        name: "tables removed",
+        changes: [{ kind: "table_removed", tableName: "OldType", before: snapshotType("OldType") }],
+        expected: ["1 table(s) removed"],
       },
       {
         name: "fields added",
         changes: [
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: false },
           },
@@ -275,7 +288,7 @@ describe("diff-calculator", () => {
         changes: [
           {
             kind: "field_removed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "oldField",
             before: { type: "string", required: false },
           },
@@ -287,7 +300,7 @@ describe("diff-calculator", () => {
         changes: [
           {
             kind: "field_modified",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             before: { type: "string", required: false },
             after: { type: "string", required: true },
@@ -296,23 +309,36 @@ describe("diff-calculator", () => {
         expected: ["1 field(s) modified"],
       },
       {
+        name: "field types modified",
+        changes: [
+          {
+            kind: "field_type_modified",
+            tableName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        expected: ["1 field type(s) modified"],
+      },
+      {
         name: "multiple counts",
         changes: [
-          { kind: "type_added", typeName: "NewType", after: snapshotType("NewType") },
+          { kind: "table_added", tableName: "NewType", after: snapshotType("NewType") },
           {
             kind: "field_added",
-            typeName: "User",
+            tableName: "User",
             fieldName: "email",
             after: { type: "string", required: false },
           },
           {
             kind: "field_removed",
-            typeName: "User",
+            tableName: "User",
             fieldName: "oldField",
             before: { type: "string", required: false },
           },
         ],
-        expected: ["1 type(s) added", "1 field(s) added", "1 field(s) removed"],
+        expected: ["1 table(s) added", "1 field(s) added", "1 field(s) removed"],
       },
     ])("should count $name", ({ changes, expected }) => {
       const result = formatDiffSummary(createDiff(changes));

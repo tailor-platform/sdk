@@ -17,13 +17,11 @@ export namespace t {
 
 export { type TailorField } from "#/configure/types/type";
 export {
-  type TailorUser,
-  type TailorInvoker,
-  type AttributeMap,
+  type TailorPrincipal,
+  type Attributes,
   type AttributeList,
   type Env,
 } from "#/runtime/types";
-export { unauthenticatedTailorUser } from "#/configure/user";
 export { type MachineUserNameRegistry, type MachineUserName } from "#/configure/types/machine-user";
 export { type IdpNameRegistry, type IdpName } from "#/configure/types/idp-name";
 export {
@@ -31,28 +29,32 @@ export {
   type ConnectionName,
 } from "#/configure/types/connection-name";
 export { type AIGatewayNameRegistry, type AIGatewayName } from "#/configure/types/aigateway-name";
+export {
+  type AuthNamespaceNameRegistry,
+  type AuthNamespaceName,
+} from "#/configure/types/auth-namespace-name";
 
 export * from "#/configure/services/index";
 
-export { defineConfig, defineGenerators, definePlugins } from "#/configure/config/index";
+export { defineConfig, definePlugins } from "#/configure/config/index";
 
 // Plugin types for custom plugin development
 export type {
   Plugin,
   PluginConfigs,
   PluginOutput,
-  TypePluginOutput,
+  TablePluginOutput,
   NamespacePluginOutput,
-  PluginProcessContext,
+  PluginTableProcessContext,
   PluginNamespaceProcessContext,
   PluginAttachment,
-  PluginGeneratedType,
+  PluginGeneratedTable,
   PluginGeneratedResolver,
   PluginGeneratedExecutor,
   PluginGeneratedExecutorWithFile,
   PluginExecutorContext,
   PluginExecutorContextBase,
-  TailorDBTypeForPlugin,
+  TailorDBTableForPlugin,
 } from "#/plugin/types";
 
 // Generation-time hook context types for plugin development

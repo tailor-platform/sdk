@@ -6,6 +6,7 @@ import {
   definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
@@ -22,7 +23,7 @@ const erdSite = defineStaticWebSite("my-erd-site", {
 });
 
 const aiGateway = defineAIGateway("my-aigateway", {
-  authNamespace: "default",
+  // authNamespace omitted: defaults to this app's own Auth service ("my-auth" below).
   cors: [website.url],
 });
 
@@ -113,7 +114,7 @@ export default defineConfig({
   // SDK-managed app id — do not edit, except when copying this config to a separate app.
   id: "d0a3398a-f79c-4c2e-be1e-b81469bb0a43",
   name: "my-app",
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
   env: {
     foo: 1,
     bar: "hello",
@@ -125,15 +126,22 @@ export default defineConfig({
   db: {
     tailordb: {
       files: ["./tailordb/*.ts"],
-      erdSite: erdSite.name,
       migration: {
         directory: "./migrations",
       },
     },
-    analyticsdb: { files: ["./analyticsdb/*.ts"] },
+    analyticsdb: {
+      files: ["./analyticsdb/*.ts"],
+      migration: {
+        directory: "./migrations/analyticsdb",
+      },
+    },
   },
   resolver: {
-    "my-resolver": { files: ["./resolvers/*.ts"] },
+    "my-resolver": {
+      files: ["./resolvers/*.ts"],
+      defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    },
   },
   idp: [idp],
   auth,
@@ -154,4 +162,5 @@ export const plugins = definePlugins(
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
   fileUtilsPlugin({ distPath: "./generated/files.ts" }),
   seedPlugin({ distPath: "./seed", machineUserName: "manager-machine-user" }),
+  tailordbErdPlugin({ sites: { tailordb: erdSite.name } }),
 );

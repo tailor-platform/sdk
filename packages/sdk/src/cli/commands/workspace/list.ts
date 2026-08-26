@@ -60,15 +60,13 @@ export async function listWorkspacesWithClient(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all Tailor Platform workspaces.",
-  args: z
-    .object({
-      ...paginationArgs(),
-      profile: arg(profileNameSchema.optional(), {
-        description: "Workspace profile used for authentication and Platform selection",
-        env: "TAILOR_PLATFORM_PROFILE",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...paginationArgs(),
+    profile: arg(profileNameSchema.optional(), {
+      description: "Workspace profile used for authentication and Platform selection",
+      env: "TAILOR_PLATFORM_PROFILE",
+    }),
+  }),
   run: async (args) => {
     const workspaces = await listWorkspaces({
       order: args.order,

@@ -10,7 +10,7 @@ import { createPatOperatorClient } from "./user";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z.object({ ...paginationArgs() }).strict(),
+  args: z.strictObject({ ...paginationArgs() }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const client = await createPatOperatorClient();
@@ -31,7 +31,7 @@ export const listCommand = defineAppCommand({
     if (pats.length === 0) {
       logger.info(ml`
         No personal access tokens found.
-        Please create a token using 'tailor-sdk user pat create' command.
+        Please create a token using 'tailor user pat create' command.
       `);
       if (!jsonOutput) {
         return;

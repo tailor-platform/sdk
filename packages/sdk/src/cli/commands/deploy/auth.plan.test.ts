@@ -1,17 +1,20 @@
-import { fromJson } from "@bufbuild/protobuf";
+import { create, fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
+  AuthIDPConfigSchema,
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
+  TenantProviderConfigSchema,
+  UserProfileProviderConfigSchema,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
-import { logger } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
-import { formatAuthHookChangeEntries, planAuth } from "./auth";
+import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -20,13 +23,13 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:auth:auth-a",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -106,6 +109,28 @@ function createMockApplication(): Application {
   } as unknown as Application;
 }
 
+type MockUserProfileOptions = {
+  includeAttributes?: boolean;
+};
+
+function createMockApplicationWithUserProfile(options: MockUserProfileOptions = {}): Application {
+  const application = createMockApplication();
+  const includeAttributes = options.includeAttributes ?? true;
+  return {
+    ...application,
+    authService: {
+      ...application.authService,
+      userProfile: {
+        namespace: "tailordb",
+        type: { name: "User" },
+        usernameField: "email",
+        attributeList: includeAttributes ? ["email"] : [],
+        attributes: includeAttributes ? { email: true } : undefined,
+      },
+    },
+  } as unknown as Application;
+}
+
 function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
   return {
     name: appName,
@@ -154,6 +179,43 @@ function createMockApplicationWithBuiltInIdP(): Application {
   } as unknown as Application;
 }
 
+function createMockApplicationWithSamlIdP(): Application {
+  const application = createMockApplication();
+  return {
+    ...application,
+    authService: {
+      ...application.authService,
+      config: {
+        ...application.authService?.config,
+        idProvider: {
+          name: "saml",
+          kind: "SAML",
+          enableSignRequest: false,
+          rawMetadata: "<EntityDescriptor />",
+        },
+      },
+    },
+  } as unknown as Application;
+}
+
+function createMockApplicationWithTenantProvider(): Application {
+  const application = createMockApplication();
+  return {
+    ...application,
+    authService: {
+      ...application.authService,
+      config: {
+        ...application.authService?.config,
+        tenantProvider: {
+          namespace: "tailordb",
+          type: "Tenant",
+          signatureField: "signature",
+        },
+      },
+    },
+  } as unknown as Application;
+}
+
 function notFound(): never {
   throw new ConnectError("not found", Code.NotFound);
 }
@@ -164,11 +226,7 @@ function createMockClient(opts?: {
     publishSessionEvents: boolean;
     label?: string;
   }>;
-  authIdPConfigs?: Array<{
-    name: string;
-    authType?: number;
-    config?: Record<string, unknown>;
-  }>;
+  authIdPConfigs?: Array<MessageInitShape<typeof AuthIDPConfigSchema>>;
   machineUsers?: Array<{
     name: string;
     attributes: string[];
@@ -191,6 +249,8 @@ function createMockClient(opts?: {
       machineUserName: string;
     };
   };
+  userProfileConfig?: Record<string, unknown>;
+  tenantConfig?: Record<string, unknown>;
 }): OperatorClient {
   const authServices = opts?.authServices ?? [];
   const authIdPConfigs = opts?.authIdPConfigs ?? [];
@@ -221,8 +281,13 @@ function createMockClient(opts?: {
     }),
     getIdPService: vi.fn().mockImplementation(notFound),
     getIdPClient: vi.fn().mockImplementation(notFound),
-    getUserProfileConfig: vi.fn().mockImplementation(notFound),
-    getTenantConfig: vi.fn().mockImplementation(notFound),
+    getUserProfileConfig: opts?.userProfileConfig
+      ? vi.fn().mockResolvedValue(opts.userProfileConfig)
+      : vi.fn().mockImplementation(notFound),
+    deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
+    getTenantConfig: opts?.tenantConfig
+      ? vi.fn().mockResolvedValue(opts.tenantConfig)
+      : vi.fn().mockImplementation(notFound),
     listAuthMachineUsers: vi.fn().mockResolvedValue({
       machineUsers,
       nextPageToken: "",
@@ -268,6 +333,33 @@ function createContext(
 }
 
 describe("planAuth", () => {
+  test("plans user profiles from the application while keeping machine users", async () => {
+    const strippedApplication = createMockApplication();
+    const emptyTarget = await planAuth(createContext(createMockClient(), strippedApplication));
+
+    expect(emptyTarget.changeSet.userProfileConfig.creates).toHaveLength(0);
+    expect(emptyTarget.changeSet.machineUser.creates).toHaveLength(1);
+
+    const retainedClient = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [managerMachineUserRemote],
+      userProfileConfig: { provider: "TAILORDB" },
+    });
+    const retainedTarget = await planAuth(createContext(retainedClient, strippedApplication));
+
+    expect(retainedTarget.changeSet.userProfileConfig.deletes).toHaveLength(1);
+    await applyAuth(retainedClient, retainedTarget, "create-update-prerequisites");
+    expect(retainedClient.deleteUserProfileConfig).not.toHaveBeenCalled();
+    await applyAuth(retainedClient, retainedTarget, "delete-resources");
+    expect(retainedClient.deleteUserProfileConfig).toHaveBeenCalledTimes(1);
+
+    const migratedTarget = await planAuth(
+      createContext(createMockClient(), createMockApplicationWithUserProfile()),
+    );
+
+    expect(migratedTarget.changeSet.userProfileConfig.creates).toHaveLength(1);
+  });
+
   test("marks auth service, machine user, and oauth2 client unchanged when remote matches", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
@@ -289,6 +381,97 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks a SAML idpConfig unchanged when its remote proto materializes defaults", async () => {
+    const application = createMockApplicationWithSamlIdP();
+    const createResult = await planAuth(createContext(createMockClient(), application));
+    const desired = createResult.changeSet.idpConfig.creates[0]?.request.idpConfig;
+    expect(desired).toBeDefined();
+    const remote = create(AuthIDPConfigSchema, desired);
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      authIdPConfigs: [remote],
+    });
+
+    const result = await planAuth(createContext(client, application));
+
+    expect(result.changeSet.idpConfig.unchanged).toHaveLength(1);
+    expect(result.changeSet.idpConfig.updates).toHaveLength(0);
+  });
+
+  test("marks a user profile unchanged when a remote nested proto has an implicit default", async () => {
+    const application = createMockApplicationWithUserProfile({ includeAttributes: false });
+    const createResult = await planAuth(createContext(createMockClient(), application));
+    const desired =
+      createResult.changeSet.userProfileConfig.creates[0]?.request.userProfileProviderConfig;
+    expect(desired).toBeDefined();
+    const remote = create(UserProfileProviderConfigSchema, desired);
+    const desiredConfig = desired?.config?.config;
+    const remoteConfig = remote.config?.config;
+    if (desiredConfig?.case !== "tailordb" || remoteConfig?.case !== "tailordb") {
+      throw new Error("Expected TailorDB user profile configs");
+    }
+    expect(desiredConfig.value.attributeMap).toBeUndefined();
+    expect(remoteConfig.value.attributeMap).toEqual({});
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      userProfileConfig: { userProfileProviderConfig: remote },
+    });
+
+    const result = await planAuth(createContext(client, application));
+
+    expect(result.changeSet.userProfileConfig.unchanged).toHaveLength(1);
+    expect(result.changeSet.userProfileConfig.updates).toHaveLength(0);
+  });
+
+  test("marks a tenant provider unchanged when its remote proto materializes defaults", async () => {
+    const application = createMockApplicationWithTenantProvider();
+    const createResult = await planAuth(createContext(createMockClient(), application));
+    const desired = createResult.changeSet.tenantConfig.creates[0]?.request.tenantProviderConfig;
+    expect(desired).toBeDefined();
+    const remote = create(TenantProviderConfigSchema, desired);
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      tenantConfig: { tenantProviderConfig: remote },
+    });
+
+    const result = await planAuth(createContext(client, application));
+
+    expect(result.changeSet.tenantConfig.unchanged).toHaveLength(1);
+    expect(result.changeSet.tenantConfig.updates).toHaveLength(0);
+  });
+
+  test("marks machine user without attributes unchanged when remote attribute map is empty", async () => {
+    const application = {
+      name: appName,
+      staticWebsiteServices: [],
+      authService: {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        connections: {},
+        config: {
+          name: "auth-a",
+          publishSessionEvents: true,
+          machineUsers: {
+            // parse output for a machine user whose attributes were all
+            // omitted or normalized away (null/undefined values)
+            "bare-machine-user": { attributes: undefined },
+          },
+        },
+        userProfile: undefined,
+      },
+    } as unknown as Application;
+
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [{ name: "bare-machine-user", attributes: [], attributeMap: {} }],
+    });
+
+    const result = await planAuth(createContext(client, application));
+
+    expect(result.changeSet.machineUser.unchanged).toHaveLength(1);
+    expect(result.changeSet.machineUser.updates).toHaveLength(0);
+    expect(result.changeSet.machineUser.creates).toHaveLength(0);
   });
 
   test("marks auth hook unchanged when remote definition matches", async () => {
@@ -610,7 +793,7 @@ describe("formatAuthHookChangeEntries", () => {
       expected: [
         {
           action: "update",
-          symbol: "~",
+          symbol: symbols.update,
           name: "before-login",
           labels: ["authHook", "function"],
           namespace: "my-auth",
@@ -628,14 +811,14 @@ describe("formatAuthHookChangeEntries", () => {
       expected: [
         {
           action: "update",
-          symbol: "~",
+          symbol: symbols.update,
           name: "before-login",
           labels: ["authHook"],
           namespace: "my-auth",
         },
         {
           action: "create",
-          symbol: "+",
+          symbol: symbols.create,
           name: "before-login",
           labels: ["function"],
           namespace: "my-auth",

@@ -1,11 +1,8 @@
 import { assertDefined } from "#/utils/assert";
 import type {
   Expression,
-  AwaitExpression,
-  ImportExpression,
   CallExpression,
   StaticMemberExpression,
-  IdentifierReference,
   ObjectPropertyKind,
   ObjectProperty,
   ArrowFunctionExpression,
@@ -21,7 +18,7 @@ export interface Replacement {
   text: string;
 }
 
-export interface TriggerCallInfo {
+export interface StartCallInfo {
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
@@ -65,7 +62,7 @@ export function getImportSource(node: Expression | null | undefined): string | n
   if (!node) return null;
   // await import("@tailor-platform/sdk")
   if (node.type === "ImportExpression") {
-    const importExpr = node as ImportExpression;
+    const importExpr = node;
     const source = importExpr.source;
     if (source.type === "Literal" && typeof source.value === "string") {
       return source.value;
@@ -73,7 +70,7 @@ export function getImportSource(node: Expression | null | undefined): string | n
   }
   // require("@tailor-platform/sdk")
   if (node.type === "CallExpression") {
-    const callExpr = node as CallExpression;
+    const callExpr = node;
     if (callExpr.callee.type === "Identifier" && callExpr.callee.name === "require") {
       const arg = callExpr.arguments[0];
       if (
@@ -100,15 +97,15 @@ function argumentSourceText(arg: unknown, sourceText: string): string | undefine
 }
 
 /**
- * Get metadata for a static `identifier.trigger(...)` call.
+ * Get metadata for a static `identifier.start(...)` call.
  * @param node - AST node to inspect
  * @param sourceText - Source code text
- * @returns Trigger call metadata, or null when the node is not a trigger call
+ * @returns Start call metadata, or null when the node is not a start call
  */
-export function getTriggerCallInfo(
+export function getStartCallInfo(
   node: ASTNode | null | undefined,
   sourceText: string,
-): TriggerCallInfo | null {
+): StartCallInfo | null {
   if (!node || typeof node !== "object" || node.type !== "CallExpression") {
     return null;
   }
@@ -124,14 +121,14 @@ export function getTriggerCallInfo(
     // callee may be a ComputedMemberExpression at runtime
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     memberExpr.computed ||
-    memberExpr.property.name !== "trigger" ||
+    memberExpr.property.name !== "start" ||
     memberExpr.object.type !== "Identifier"
   ) {
     return null;
   }
 
   return {
-    identifierName: (memberExpr.object as IdentifierReference).name,
+    identifierName: memberExpr.object.name,
     callRange: { start: callExpr.start, end: callExpr.end },
     argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
     optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
@@ -145,7 +142,7 @@ export function getTriggerCallInfo(
  */
 export function unwrapAwait(node: Expression | null | undefined): Expression | null | undefined {
   if (node?.type === "AwaitExpression") {
-    return (node as AwaitExpression).argument;
+    return node.argument;
   }
   return node;
 }
@@ -183,7 +180,7 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
   for (const prop of properties) {
     // Note: oxc uses "Property" for object properties
     if (prop.type === "Property") {
-      const objProp = prop as ObjectProperty;
+      const objProp = prop;
       const keyName =
         objProp.key.type === "Identifier"
           ? objProp.key.name

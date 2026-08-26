@@ -1,7 +1,7 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { importUserModule } from "#/cli/shared/user-modules";
 import { type HttpAdapterServiceInput } from "#/configure/config/types";
 import {
   HTTP_METHOD_KEYS,
@@ -11,9 +11,9 @@ import {
 import { type HttpAdapterConfig } from "#/types/http-adapter.generated";
 import { isSdkBranded } from "#/utils/brand";
 
-export type HttpAdapterServiceConfig = HttpAdapterServiceInput;
+type HttpAdapterServiceConfig = HttpAdapterServiceInput;
 
-export type LoadedHttpAdapter = {
+type LoadedHttpAdapter = {
   adapter: HttpAdapterConfig;
   sourceFile: string;
   methods: HttpMethodKey[];
@@ -30,12 +30,14 @@ export type HttpAdapterService = {
 
 export interface CreateHttpAdapterServiceParams {
   config: HttpAdapterServiceConfig;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 export function createHttpAdapterService(
   params: CreateHttpAdapterServiceParams,
 ): HttpAdapterService {
-  const { config } = params;
+  const { config, baseDir } = params;
   let adapters: LoadedHttpAdapter[] = [];
   let fileCount = 0;
   let loaded = false;
@@ -50,7 +52,7 @@ export function createHttpAdapterService(
     },
     loadAdapters: async () => {
       if (loaded) return;
-      const result = await loadAdapterFiles(config);
+      const result = await loadAdapterFiles(config, baseDir);
       adapters = result.adapters;
       fileCount = result.fileCount;
       loaded = true;
@@ -73,12 +75,13 @@ export function createHttpAdapterService(
 
 async function loadAdapterFiles(
   config: HttpAdapterServiceConfig,
+  baseDir: string,
 ): Promise<{ adapters: LoadedHttpAdapter[]; fileCount: number }> {
   if (config.files.length === 0) {
     return { adapters: [], fileCount: 0 };
   }
 
-  const files = loadFilesWithIgnores(config);
+  const files = loadFilesWithIgnores(config, baseDir);
 
   // Import every matched file and keep the ones whose default export is a
   // createHttpAdapter() result, mirroring the resolver/executor loaders.
@@ -107,7 +110,7 @@ async function loadAdapterFiles(
 
 async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter | null> {
   try {
-    const module = (await import(pathToFileURL(filePath).href)) as Record<string, unknown>;
+    const module = await importUserModule(filePath);
     // Only a createHttpAdapter() result is a valid default export; a plain
     // object that happens to match the schema is rejected by the brand check.
     if (!isSdkBranded(module.default, "http-adapter")) {

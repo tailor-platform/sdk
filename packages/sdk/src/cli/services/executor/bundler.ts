@@ -1,19 +1,23 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
-import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
-import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
+import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
+import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
@@ -29,8 +33,8 @@ interface ExecutorInfo {
 export interface BundleExecutorsOptions {
   /** Executor file loading configuration */
   config: FileLoadConfig;
-  /** Trigger context for workflow/job transformations */
-  triggerContext?: TriggerContext;
+  /** Start context for workflow/job transformations */
+  startContext?: StartContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
   /** Optional bundle cache for skipping unchanged builds */
@@ -39,13 +43,17 @@ export interface BundleExecutorsOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
  * Bundle executors from the specified configuration
  *
  * This function:
- * 1. Creates entry file that extracts operation.body
+ * 1. Creates an in-memory entry module that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
  * @param options - Bundle executor options
  * @returns Map of executor name to bundled code
@@ -56,13 +64,15 @@ export async function bundleExecutors(
   const bundledCode = new Map<string, string>();
   const {
     config,
-    triggerContext,
+    startContext,
     additionalFiles = [],
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
+    baseDir,
+    tsconfigCache,
   } = options;
-  const configFiles = loadFilesWithIgnores(config);
+  const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
     logger.warn(`No executor files found for patterns: ${config.files.join(", ")}`);
@@ -100,33 +110,19 @@ export async function bundleExecutors(
     return bundledCode;
   }
 
-  const outputDir = path.resolve(getDistDir(), "executors");
-
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  // Clean stale entry files from previous builds.
-  // Must complete before Promise.all below; parallel processing
-  // would require separate output directories.
-  await removeStaleEntryFiles(outputDir);
-
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
   const results = await withBundleConcurrency(executors, (executor) =>
     bundleSingleExecutor(
       executor,
-      outputDir,
       tsconfig,
-      triggerContext,
+      startContext,
       cache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     ),
   );
 
@@ -141,18 +137,18 @@ export async function bundleExecutors(
 
 async function bundleSingleExecutor(
   executor: ExecutorInfo,
-  outputDir: string,
   tsconfig: string | undefined,
-  triggerContext?: TriggerContext,
+  startContext?: StartContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, string]> {
-  const serializedTriggerContext = serializeTriggerContext(triggerContext);
+  const serializedStartContext = serializeStartContext(startContext);
 
   const contextHash = computeBundlerContextHash({
     sourceFile: executor.sourceFile,
-    serializedTriggerContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -164,9 +160,7 @@ async function bundleSingleExecutor(
     name: executor.name,
     sourceFile: executor.sourceFile,
     contextHash,
-    async build(cachePlugins) {
-      // Step 1: Create entry file that imports and extracts operation.body
-      const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(executor.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -179,15 +173,27 @@ async function bundleSingleExecutor(
 
         export { __executor_function as main };
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(
+        `executor:${executor.name}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
-      // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
-      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
+      const startPlugin = createStartTransformPlugin(startContext);
+      const plugins: rolldown.Plugin[] = [entry.plugin];
+      if (startPlugin) {
+        plugins.push(startPlugin);
+      }
+      plugins.push(
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      );
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",
@@ -206,10 +212,13 @@ async function bundleSingleExecutor(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        logLevel: "silent",
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
 
-      return result.output[0].code;
+      const bundledCode = result.output[0].code;
+      assertNoForbiddenRuntimeGlobals(bundledCode, `Executor "${executor.name}"`);
+      return bundledCode;
     },
   });
 

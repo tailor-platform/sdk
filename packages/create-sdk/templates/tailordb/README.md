@@ -1,12 +1,12 @@
 # TailorDB Template
 
-Comprehensive TailorDB type definitions demonstrating all features of `db.type()`.
+Comprehensive TailorDB table definitions demonstrating all features of `db.table()`.
 
 ## Features
 
 - All field types (string, int, float, datetime, uuid, enum, boolean)
 - Relations (n-1, self-referential)
-- Validations (field-level and type-level)
+- Validations (field-level and table-level)
 - Hooks (computed fields)
 - File attachments
 - Composite indexes

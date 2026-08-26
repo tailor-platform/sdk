@@ -1,10 +1,12 @@
-import * as path from "node:path";
-import { pathToFileURL } from "node:url";
+/**
+ * SDK-internal platform-global mocks for tests that exercise bundled output.
+ * Not part of the public API: user-facing mocks live in `@tailor-platform/sdk/vitest`
+ * and run under its `tailor-runtime` environment.
+ */
 import type { ContextInvoker } from "#/runtime/context";
-import type { TailorInvoker } from "#/runtime/types";
-import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
+import type { TailorPrincipal } from "#/runtime/types";
+import type { ExecJobFunctionOptions } from "#/runtime/workflow";
 
-type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
 type JobHandler = (jobName: string, args: unknown) => unknown;
 type WaitHandler = (key: string, payload: unknown) => unknown;
@@ -27,10 +29,10 @@ interface TailordbGlobal {
   };
   tailor?: {
     workflow: {
-      triggerJobFunction: (
+      execJobFunction: (
         jobName: string,
         args: unknown,
-        options?: TriggerJobFunctionOptions,
+        options?: ExecJobFunctionOptions,
       ) => unknown;
       wait?: (key: string, payload?: unknown) => unknown;
       resolve?: (
@@ -54,11 +56,10 @@ interface TailorErrorsGlobal {
   TailorErrors?: new (errors: TailorErrorItem[]) => Error;
 }
 
-const GlobalThis = globalThis as TailordbGlobal & TailorErrorsGlobal;
+const GlobalThis = globalThis as unknown as TailordbGlobal & TailorErrorsGlobal;
 
 /**
  * Sets up a mock for `globalThis.tailordb.Client` used in bundled resolver/executor tests.
- * @deprecated Use `mockTailordb` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param resolver - Optional function to resolve query results. Defaults to returning empty arrays.
  * @returns Object containing arrays of executed queries and created clients for assertions.
  */
@@ -93,23 +94,27 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
   GlobalThis.tailordb = {
     Client: MockTailordbClient,
-  } as typeof GlobalThis.tailordb;
+  };
 
   return { executedQueries, createdClients };
 }
 
 /**
- * Sets up a mock for `globalThis.tailor.workflow.triggerJobFunction` used in bundled workflow tests.
+ * Sets up a mock for `globalThis.tailor.workflow.execJobFunction` used in bundled workflow tests.
  * `wait`/`resolve` are stubbed to throw a helpful error directing to `mockWorkflow`,
  * so mistakenly calling wait without wait-point mocks produces a clear message instead of a TypeError.
- * @deprecated Use `mockWorkflow` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
- * @param handler - Function that handles triggered job calls and returns results.
- * @returns Object containing an array of triggered jobs for assertions.
+ * @param handler - Function that handles started job calls and returns results.
+ * @returns Object containing an array of started jobs for assertions.
  */
 export function setupWorkflowMock(handler: JobHandler): {
-  triggeredJobs: { jobName: string; args: unknown }[];
+  startedJobs: { jobName: string; args: unknown }[];
 } {
-  const triggeredJobs: { jobName: string; args: unknown }[] = [];
+  const startedJobs: { jobName: string; args: unknown }[] = [];
+
+  const execJobFunction = (jobName: string, args: unknown): unknown => {
+    startedJobs.push({ jobName, args });
+    return handler(jobName, args);
+  };
 
   GlobalThis.tailor = {
     ...GlobalThis.tailor,
@@ -125,30 +130,26 @@ export function setupWorkflowMock(handler: JobHandler): {
         );
       },
       ...GlobalThis.tailor?.workflow,
-      triggerJobFunction: (jobName: string, args: unknown) => {
-        triggeredJobs.push({ jobName, args });
-        return handler(jobName, args);
-      },
+      execJobFunction,
     },
   } as typeof GlobalThis.tailor;
 
-  return { triggeredJobs };
+  return { startedJobs };
 }
 
 /**
  * Sets up a mock for `globalThis.tailor.context.getInvoker` used in bundled
  * resolver/executor/workflow tests.
- * @deprecated With the `tailor-runtime` environment from `@tailor-platform/sdk/vitest`, drive the invoker via `vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue(...)` for bundled tests, or pass `invoker` directly to `.body()` when unit-testing resolvers/executors/workflow jobs against the TypeScript source.
- * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
+ * @param invoker - The `TailorPrincipal` value to return, or `null` for anonymous.
  */
-export function setupInvokerMock(invoker: TailorInvoker): void {
+export function setupInvokerMock(invoker: TailorPrincipal | null): void {
   const raw: ContextInvoker | null = invoker
     ? {
         id: invoker.id,
         type: invoker.type,
         workspaceId: invoker.workspaceId,
         attributes: invoker.attributeList as string[],
-        attributeMap: invoker.attributes as Record<string, unknown>,
+        attributeMap: invoker.attributes,
       }
     : null;
 
@@ -163,7 +164,6 @@ export function setupInvokerMock(invoker: TailorInvoker): void {
 /**
  * Sets up a mock for `globalThis.TailorErrors` used in bundled resolver tests.
  * Mimics the PF runtime's TailorErrors class that serializes errors with the `TailorErrors: ` prefix.
- * @deprecated Use the `tailor-runtime` environment from `@tailor-platform/sdk/vitest` which auto-injects TailorErrors.
  */
 export function setupTailorErrorsMock(): void {
   GlobalThis.TailorErrors = class TailorErrors extends Error {
@@ -179,10 +179,8 @@ export function setupTailorErrorsMock(): void {
 
 /**
  * Sets up mocks for `globalThis.tailor.workflow.wait` and `.resolve` used in bundled workflow tests.
- * `triggerJobFunction` is stubbed to throw a helpful error directing to `setupWorkflowMock()`,
- * so mistakenly triggering a job without job mocks produces a clear message instead of silently returning undefined.
- * @deprecated Use `mockWorkflow` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
- *   `setWaitHandler` / `setResolveHandler` cover wait/resolve, and `waitCalls` / `resolveCalls` give the same assertion shape.
+ * `execJobFunction` is stubbed to throw a helpful error directing to `setupWorkflowMock()`,
+ * so mistakenly starting a job without job mocks produces a clear message instead of silently returning undefined.
  * @param config - Optional handlers for wait and resolve calls.
  * @param config.onWait - Handler called when wait is invoked.
  * @param config.onResolve - Handler called when resolve is invoked.
@@ -195,14 +193,16 @@ export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: 
   const waitCalls: { key: string; payload: unknown }[] = [];
   const resolveCalls: { executionId: string; key: string }[] = [];
 
+  const throwUnmocked = (): never => {
+    throw new Error(
+      "tailor.workflow.execJobFunction is not mocked. Use setupWorkflowMock() in tests.",
+    );
+  };
+
   GlobalThis.tailor = {
     ...GlobalThis.tailor,
     workflow: {
-      triggerJobFunction: () => {
-        throw new Error(
-          "tailor.workflow.triggerJobFunction is not mocked. Use setupWorkflowMock() in tests.",
-        );
-      },
+      execJobFunction: throwUnmocked,
       ...GlobalThis.tailor?.workflow,
       wait: (key: string, payload?: unknown) => {
         waitCalls.push({ key, payload });
@@ -220,26 +220,4 @@ export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: 
   } as typeof GlobalThis.tailor;
 
   return { waitCalls, resolveCalls };
-}
-
-/**
- * Creates a function that imports a bundled JS file and returns its `main` export.
- * Used to test bundled output from `apply --buildOnly`.
- * @param baseDir - Base directory where bundled files are located.
- * @returns An async function that takes a relative path and returns the `main` function.
- * @deprecated This is an SDK-internal testing helper. Bundling integrity is the SDK's responsibility,
- * not the application's — verify your code through unit tests against the TypeScript source and
- * E2E tests against a deployed application instead. This export will be removed in a future release.
- */
-export function createImportMain(baseDir: string): (relativePath: string) => Promise<MainFunction> {
-  return async (relativePath: string): Promise<MainFunction> => {
-    const fileUrl = pathToFileURL(path.join(baseDir, relativePath));
-    fileUrl.searchParams.set("v", `${Date.now()}-${Math.random()}`);
-    const module = await import(fileUrl.href);
-    const main = module.main;
-    if (typeof main !== "function") {
-      throw new Error(`Expected "main" to be a function in ${relativePath}, got ${typeof main}`);
-    }
-    return main;
-  };
 }

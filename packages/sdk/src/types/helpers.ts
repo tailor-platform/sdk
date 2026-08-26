@@ -13,13 +13,14 @@ export type DeepWritable<T> = T extends Date | RegExp | Function
     ? { -readonly [P in keyof T]: DeepWritable<T[P]> } & {}
     : T;
 
-type LiteralToString<T> = T extends string ? string : T;
-type SpecificNumberToNumber<T> = T extends number ? number : T;
-type TrueFalseToBool<T> = T extends number ? number : T;
-type Widening<T> = TrueFalseToBool<SpecificNumberToNumber<LiteralToString<T>>>;
-export type DeepWidening<T> = T extends object
-  ? { [K in keyof T]: DeepWidening<T[K]> }
-  : Widening<T>;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+export type DeepReadonly<T> = T extends Date | RegExp | Function
+  ? T
+  : T extends readonly (infer E)[]
+    ? readonly DeepReadonly<E>[]
+    : T extends object
+      ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+      : T;
 
 export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never;
 

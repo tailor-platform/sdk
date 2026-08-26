@@ -1,0 +1,176 @@
+name: "Deploy Drift Check"
+
+# Deploys create-sdk templates to a fresh workspace and verifies that an
+# immediate dry run reports "Plan: 0 to create, 0 to update, 0 to delete" — a
+# redeploy of unchanged code must be a no-op. Guards against comparison drift
+# such as newly added proto fields being reported as updates on every deploy.
+# example/ gets the same check inside the existing Workspace Deploy Test
+# (deploy.yml), which already deploys it on every PR.
+#
+# The target list intentionally covers config-shape diversity rather than
+# every template: example configures everything explicitly, so drift caused by
+# the platform filling defaults for OMITTED sections (e.g. IdP userAuthPolicy)
+# only reproduces on minimal configs like these.
+#
+# Targets run as a serial loop in a single job, not a matrix: it keeps the
+# platform load at one ephemeral workspace at a time and pays the
+# checkout/install/build setup only once. The job is nowhere near the PR
+# critical path (Workspace Deploy Test and the e2e suites take far longer),
+# so the extra wall-clock over a parallel matrix costs nothing. A failing
+# target does not stop the loop — every target reports before the job fails.
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  changes:
+    name: Detect changes
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            changes:
+              - .github/workflows/deploy-drift-check.yml
+              - .github/actions/**
+              - packages/**
+              - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
+              - pnpm-lock.yaml
+
+  drift-check:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    name: Drift check (templates)
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor login --machine-user
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+      - name: Deploy each template and verify a dry run reports no changes
+        env:
+          TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          # Fresh checkout deploys a throwaway app; per-run id injection is intended here.
+          TAILOR_CI_ALLOW_ID_INJECTION: "true"
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          failed=()
+
+          check_target() {
+            local target="$1" dir="$2" config="$3"
+            local workspace_id summary
+
+            workspace_id=$(cd "$dir" && pnpm exec tailor workspace create -n "e2e-ws-${RUN_ID}-drift-${target}" -r us-west --json | tail -1 | jq -r '.id') || workspace_id=""
+            if [[ -z "$workspace_id" || "$workspace_id" == "null" ]]; then
+              echo "::error::${target}: failed to create workspace"
+              return 1
+            fi
+
+            local result=0
+            if ! (cd "$dir" && pnpm exec tailor deploy -c "$config" -w "$workspace_id" --yes); then
+              echo "::error::${target}: deploy failed"
+              result=1
+            else
+              summary=$(cd "$dir" && pnpm exec tailor deploy -c "$config" -w "$workspace_id" --dry-run --yes --json | tail -1 | jq -c '.summary') || summary=""
+              echo "${target} plan summary: $summary"
+              if ! echo "$summary" | jq -e '.create == 0 and .update == 0 and .delete == 0 and .replace == 0' > /dev/null; then
+                echo "::error::${target}: dry run after deploy reported drift: $summary"
+                echo "Re-running without --json for a readable diff:"
+                (cd "$dir" && pnpm exec tailor deploy -c "$config" -w "$workspace_id" --dry-run --yes) || true
+                result=1
+              fi
+            fi
+
+            pnpm exec tailor workspace delete -w "$workspace_id" -y \
+              || echo "::warning::${target}: workspace delete failed (the cleanup step sweeps it)"
+            return "$result"
+          }
+
+          while IFS='|' read -r target dir config; do
+            echo "::group::${target}"
+            check_target "$target" "$dir" "$config" || failed+=("$target")
+            echo "::endgroup::"
+          done <<'TARGETS'
+          hello-world|packages/create-sdk/templates/hello-world|tailor.config.ts
+          generators|packages/create-sdk/templates/generators|tailor.config.ts
+          multi-application|packages/create-sdk/templates/multi-application|apps/user/tailor.config.ts,apps/admin/tailor.config.ts
+          static-web-site|packages/create-sdk/templates/static-web-site|tailor.config.ts
+          TARGETS
+
+          if (( ${#failed[@]} > 0 )); then
+            echo "::error::Deploy drift check failed for: ${failed[*]}"
+            exit 1
+          fi
+          echo "All templates redeploy as a no-op"
+
+      - name: Cleanup workspaces
+        if: always()
+        working-directory: packages/sdk
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="${RUN_ID}-drift"
+
+  drift-check-result:
+    name: Deploy drift check result
+    needs: [changes, drift-check]
+    if: >-
+      always() &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          DRIFT_CHECK_RESULT: ${{ needs.drift-check.result }}
+        run: |
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
+            echo "Skipped - no relevant changes"
+            exit 0
+          fi
+          if [[ "$DRIFT_CHECK_RESULT" != "success" ]]; then
+            echo "Drift check job failed"
+            exit 1
+          fi
+          echo "Deploy drift check succeeded"

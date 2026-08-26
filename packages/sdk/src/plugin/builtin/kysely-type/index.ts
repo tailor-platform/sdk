@@ -9,8 +9,21 @@ type KyselyTypePluginOptions = {
   distPath: string;
 };
 
+// Register this plugin's config type under its own id, via the package's
+// real public specifier, so callers can resolve it type-safely from a
+// `Plugin[]` array (see plugin/get-plugin-config.ts's resolvePluginConfig)
+// without importing KyselyTypePluginOptions, which stays unexported.
+declare module "@tailor-platform/sdk/plugin" {
+  interface PluginConfigRegistry {
+    "@tailor-platform/kysely-type": KyselyTypePluginOptions;
+  }
+}
+
+/** Conventional output path used when `kyselyTypePlugin` has no `distPath` configured. */
+export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
+
 /**
- * Plugin that generates Kysely type definitions for TailorDB types.
+ * Plugin that generates Kysely type definitions for TailorDB tables.
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated types
  * @returns Plugin instance with onTailorDBReady hook
@@ -20,7 +33,7 @@ export function kyselyTypePlugin(
 ): Plugin<unknown, KyselyTypePluginOptions> {
   return {
     id: KyselyGeneratorID,
-    description: "Generates Kysely type definitions for TailorDB types",
+    description: "Generates Kysely type definitions for TailorDB tables",
     pluginConfig: options,
 
     async onTailorDBReady(
@@ -31,7 +44,7 @@ export function kyselyTypePlugin(
       for (const ns of ctx.tailordb) {
         const typeMetadataList: KyselyTypeMetadata[] = [];
 
-        for (const type of Object.values(ns.types)) {
+        for (const type of Object.values(ns.tables)) {
           const metadata = await processKyselyType(type);
           typeMetadataList.push(metadata);
         }

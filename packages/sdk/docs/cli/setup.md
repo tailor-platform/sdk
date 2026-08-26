@@ -4,12 +4,12 @@ Commands for setting up project infrastructure.
 
 ## setup
 
-Generate CI deploy workflows for your project. (beta)
+Set up repository automation for your project. (beta)
 
 **Usage**
 
 ```
-tailor-sdk setup <command>
+tailor setup <command>
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -23,8 +23,9 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`setup preview`](#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
 | [`setup action`](#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
 | [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [`setup deps`](#setup-deps)             | Generate a dependency update config for Tailor dependency and workflow updates.                  |
 | [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
-| [`setup delete`](#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.                |
+| [`setup delete`](#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
 
 ### setup action
 
@@ -33,7 +34,7 @@ Generate a per-app composite action for use with setup coordinate (monorepo mult
 **Usage**
 
 ```
-tailor-sdk setup action [options]
+tailor setup action [options]
 ```
 
 **Options**
@@ -54,7 +55,7 @@ Generate a branch-target deploy workflow (push to branch triggers deploy).
 **Usage**
 
 ```
-tailor-sdk setup branch [options]
+tailor setup branch [options]
 ```
 
 **Options**
@@ -62,13 +63,17 @@ tailor-sdk setup branch [options]
 | Option                        | Alias | Description                                                                    | Required | Default |
 | ----------------------------- | ----- | ------------------------------------------------------------------------------ | -------- | ------- |
 | `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                                           | No       | -       |
-| `--branch <BRANCH>`           | -     | Deploy trigger branch (defaults to the detected default branch)                | No       | -       |
+| `--target <TARGET>`           | -     | Deploy trigger branch (defaults to the detected default branch)                | No       | -       |
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name)   | No       | -       |
 | `--erd-preview`               | -     | Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces | No       | `false` |
 | `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                            | No       | `"."`   |
 | `--force`                     | -     | Discard hand edits / take over unmanaged files and regenerate                  | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+`--branch` is a deprecated alias of `--target` and will be removed in v3.
 
 ### setup check
 
@@ -77,7 +82,7 @@ Audit generated workflows for drift against the current config/repo (read-only).
 **Usage**
 
 ```
-tailor-sdk setup check [options]
+tailor setup check [options]
 ```
 
 **Options**
@@ -95,7 +100,7 @@ Generate a coordinator workflow that orchestrates multiple --action-generated co
 **Usage**
 
 ```
-tailor-sdk setup coordinate [options]
+tailor setup coordinate [options]
 ```
 
 **Options**
@@ -113,12 +118,12 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### setup delete
 
-Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.
+Delete managed workflow/action file(s) and their .github/tailor.lock entries.
 
 **Usage**
 
 ```
-tailor-sdk setup delete [options] <files>
+tailor setup delete [options] <files>
 ```
 
 **Arguments**
@@ -135,6 +140,24 @@ tailor-sdk setup delete [options] <files>
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+### setup deps
+
+Generate a dependency update config for Tailor dependency and workflow updates.
+
+**Usage**
+
+```
+tailor setup deps [options]
+```
+
+**Options**
+
+| Option                  | Alias | Description                             | Required | Default      |
+| ----------------------- | ----- | --------------------------------------- | -------- | ------------ |
+| `--provider <PROVIDER>` | -     | Dependency update provider to configure | No       | `"renovate"` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 ### setup preview
 
 Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).
@@ -142,7 +165,7 @@ Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace)
 **Usage**
 
 ```
-tailor-sdk setup preview [options]
+tailor setup preview [options]
 ```
 
 **Options**
@@ -166,7 +189,7 @@ Generate a tag-target deploy workflow (tag push triggers deploy).
 **Usage**
 
 ```
-tailor-sdk setup tag [options]
+tailor setup tag [options]
 ```
 
 **Options**

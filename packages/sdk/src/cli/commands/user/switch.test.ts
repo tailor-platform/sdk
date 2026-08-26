@@ -34,6 +34,64 @@ describe("user switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("stores the subject-keyed user when switching by email metadata", async () => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "platform-user-sub": {
+          storage: "file",
+          access_token: "token",
+          refresh_token: "refresh",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+          email: "user@example.com",
+        },
+      },
+      profiles: {},
+      current_user: null,
+    });
+
+    const result = await runCommand(switchCommand, ["user@example.com"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("platform-user-sub");
+  });
+
+  test("stores the bare user when switching to a TAILOR_PLATFORM_URL-scoped token", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {},
+      current_user: null,
+    });
+
+    const result = await runCommand(switchCommand, ["u@example.com"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("u@example.com");
+  });
+
+  test("updates the active profile user when switching users", async () => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -47,38 +105,26 @@ describe("user switch", () => {
       profiles: {},
       current_user: null,
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
-    if (fs.existsSync(configPath)) fs.rmSync(configPath);
-  });
-
-  test("stores the bare user when switching to a TAILOR_PLATFORM_URL-scoped token", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
-
-    const result = await runCommand(switchCommand, ["u@example.com"]);
-
-    expect(result.success).toBe(true);
-    const config = await readPlatformConfig();
-    expect(config.current_user).toBe("u@example.com");
-  });
-
-  test("updates the active profile user when switching users", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    const config = await readPlatformConfig();
-    config.users["https://api.dev.tailor.tech|other@example.com"] = {
-      storage: "file",
-      access_token: "other-token",
-      token_expires_at: "2999-01-01T00:00:00.000Z",
-    };
-    config.profiles.dev = {
-      user: "u@example.com",
-      workspace_id: "12345678-1234-4abc-8def-123456789012",
-      platform_url: "https://api.dev.tailor.tech",
-    };
-    writePlatformConfig(config);
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "https://api.dev.tailor.tech|other@example.com": {
+          storage: "file",
+          access_token: "other-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
 
     const result = await runCommand(switchCommand, ["other@example.com"]);
 
@@ -89,6 +135,20 @@ describe("user switch", () => {
   });
 
   test("rejects scoped token keys as current user values", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {},
+      current_user: null,
+    });
+
     const result = await runCommand(switchCommand, ["https://api.dev.tailor.tech|u@example.com"]);
 
     expect(result.success).toBe(false);

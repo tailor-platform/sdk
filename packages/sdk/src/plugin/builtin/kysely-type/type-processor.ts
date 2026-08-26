@@ -1,6 +1,11 @@
+import { mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import multiline from "#/utils/multiline";
-import { type KyselyNamespaceMetadata, type KyselyTypeMetadata } from "./types";
-import type { OperatorFieldConfig, TailorDBType } from "#/parser/service/tailordb/types";
+import {
+  type KyselyFieldConfig,
+  type KyselyNamespaceMetadata,
+  type KyselyTypeMetadata,
+} from "./types";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
 
 type UsedUtilityTypes = { Timestamp: boolean; Serial: boolean };
 
@@ -14,7 +19,7 @@ type FieldTypeResult = {
  * @param fieldConfig - The field configuration
  * @returns The enum type as a string union
  */
-function getEnumType(fieldConfig: OperatorFieldConfig): string {
+function getEnumType(fieldConfig: KyselyFieldConfig): string {
   const allowedValues = fieldConfig.allowedValues;
 
   if (allowedValues && Array.isArray(allowedValues)) {
@@ -33,7 +38,7 @@ function getEnumType(fieldConfig: OperatorFieldConfig): string {
  * @param fieldConfig - The field configuration
  * @returns The nested type with used utility types
  */
-function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
+function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const fields = fieldConfig.fields;
   if (!fields || typeof fields !== "object") {
     return {
@@ -63,7 +68,11 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
 
   const hasOptionalFields = Object.values(fields).some((config) => config.required !== true);
-  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields) {
+  const hasGeneratedFields = Object.values(fields).some(
+    (config) =>
+      config.hooks?.create || config.default !== undefined || config.optionalOnCreate === true,
+  );
+  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields || hasGeneratedFields) {
     return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
   }
   return { type: obj, usedUtilityTypes: aggregatedUtilityTypes };
@@ -74,41 +83,19 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
  * @param fieldConfig - The field configuration
  * @returns The base type with used utility types
  */
-function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
+function getBaseType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = { Timestamp: false, Serial: false };
 
-  let type: string;
-  switch (fieldType) {
-    case "uuid":
-    case "string":
-    case "decimal":
-      type = "string";
-      break;
-    case "integer":
-    case "float":
-      type = "number";
-      break;
-    case "date":
-    case "datetime":
-      usedUtilityTypes.Timestamp = true;
-      type = "Timestamp";
-      break;
-    case "bool":
-    case "boolean":
-      type = "boolean";
-      break;
-    case "enum":
-      type = getEnumType(fieldConfig);
-      break;
-    case "nested": {
-      const nestedResult = getNestedType(fieldConfig);
-      return nestedResult;
-    }
-    default:
-      type = "string";
-      break;
+  if (fieldType === "enum") {
+    return { type: getEnumType(fieldConfig), usedUtilityTypes };
   }
+  if (fieldType === "nested") {
+    return getNestedType(fieldConfig);
+  }
+
+  const type = mapFieldTypeToColumnType(fieldType);
+  usedUtilityTypes.Timestamp = type === "Timestamp";
 
   return { type, usedUtilityTypes };
 }
@@ -118,7 +105,7 @@ function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
  * @param fieldConfig - The field configuration
  * @returns The complete field type with used utility types
  */
-function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
+function generateFieldType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const baseTypeResult = getBaseType(fieldConfig);
   const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
 
@@ -149,7 +136,11 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     usedUtilityTypes.Serial = true;
     finalType = `Serial<${finalType}>`;
   }
-  if (fieldConfig.hooks?.create) {
+  if (
+    fieldConfig.hooks?.create ||
+    fieldConfig.default !== undefined ||
+    fieldConfig.optionalOnCreate === true
+  ) {
     finalType = `Generated<${finalType}>`;
   }
 
@@ -158,21 +149,25 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
 
 /**
  * Generate the table interface.
- * @param type - The parsed TailorDB type
+ * @param name - Table name
+ * @param fields - Field configurations keyed by field name
  * @returns The type definition and used utility types
  */
-function generateTableInterface(type: TailorDBType): {
+function generateTableInterface(
+  name: string,
+  fields: Record<string, KyselyFieldConfig>,
+): {
   typeDef: string;
   usedUtilityTypes: UsedUtilityTypes;
 } {
-  const fieldEntries = Object.entries(type.fields).filter(([fieldName]) => fieldName !== "id");
+  const fieldEntries = Object.entries(fields).filter(([fieldName]) => fieldName !== "id");
 
-  const fieldResults = fieldEntries.map(([fieldName, parsedField]) => ({
+  const fieldResults = fieldEntries.map(([fieldName, fieldConfig]) => ({
     fieldName,
-    ...generateFieldType(parsedField.config),
+    ...generateFieldType(fieldConfig),
   }));
 
-  const fields = [
+  const fieldLines = [
     "id: Generated<string>;",
     ...fieldResults.map((result) => `${result.fieldName}: ${result.type};`),
   ];
@@ -187,8 +182,8 @@ function generateTableInterface(type: TailorDBType): {
   );
 
   const typeDef = multiline /* ts */ `
-    ${type.name}: {
-      ${fields.join("\n")}
+    ${name}: {
+      ${fieldLines.join("\n")}
     }
   `;
 
@@ -196,18 +191,39 @@ function generateTableInterface(type: TailorDBType): {
 }
 
 /**
- * Convert a TailorDBType into KyselyTypeMetadata.
- * @param type - Parsed TailorDB type
+ * Generate KyselyTypeMetadata from field configurations.
+ * @param name - Table name
+ * @param fields - Field configurations keyed by field name
  * @returns Generated Kysely type metadata
  */
-export async function processKyselyType(type: TailorDBType): Promise<KyselyTypeMetadata> {
-  const result = generateTableInterface(type);
+export function processKyselyFields(
+  name: string,
+  fields: Record<string, KyselyFieldConfig>,
+): KyselyTypeMetadata {
+  const result = generateTableInterface(name, fields);
 
   return {
-    name: type.name,
+    name,
     typeDef: result.typeDef,
     usedUtilityTypes: result.usedUtilityTypes,
   };
+}
+
+/**
+ * Convert a TailorDBType into KyselyTypeMetadata.
+ * @param type - Parsed TailorDB table
+ * @returns Generated Kysely type metadata
+ */
+export async function processKyselyType(type: TailorDBType): Promise<KyselyTypeMetadata> {
+  return processKyselyFields(
+    type.name,
+    Object.fromEntries(
+      Object.entries(type.fields).map(([fieldName, parsedField]) => [
+        fieldName,
+        parsedField.config,
+      ]),
+    ),
+  );
 }
 
 /**

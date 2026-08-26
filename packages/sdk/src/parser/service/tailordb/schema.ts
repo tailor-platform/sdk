@@ -25,7 +25,7 @@ function normalizeGqlOperations(
 export const GqlOperationsSchema = z
   .union([
     z.literal("query"),
-    z.object({
+    z.strictObject({
       create: z.boolean().optional().describe("Enable create mutation (default: true)"),
       update: z.boolean().optional().describe("Enable update mutation (default: true)"),
       delete: z.boolean().optional().describe("Enable delete mutation (default: true)"),
@@ -36,7 +36,7 @@ export const GqlOperationsSchema = z
     }),
   ])
   .describe(
-    "Configuration for GraphQL operations on a TailorDB type.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
+    "Configuration for GraphQL operations on a TailorDB table.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
   )
   .transform((val) => normalizeGqlOperations(val));
 
@@ -54,12 +54,12 @@ const TailorFieldTypeSchema = z.enum([
   "nested",
 ]);
 
-const AllowedValueSchema = z.object({
+const AllowedValueSchema = z.strictObject({
   value: z.string(),
   description: z.string().optional(),
 });
 
-export const DBFieldMetadataSchema = z.object({
+export const DBFieldMetadataSchema = z.strictObject({
   required: z.boolean().optional().describe("Whether the field is required"),
   array: z.boolean().optional().describe("Whether the field is an array"),
   description: z.string().optional().describe("Field description"),
@@ -72,21 +72,18 @@ export const DBFieldMetadataSchema = z.object({
     .optional()
     .describe("Whether the field is a vector field for similarity search"),
   foreignKey: z.boolean().optional().describe("Whether the field is a foreign key"),
-  foreignKeyType: z.string().optional().describe("Target type name for foreign key relations"),
+  foreignKeyType: z.string().optional().describe("Target table name for foreign key relations"),
   foreignKeyField: z.string().optional().describe("Target field name for foreign key relations"),
   hooks: z
-    .object({
+    .strictObject({
       create: functionSchema.optional().describe("Hook function called on record creation"),
       update: functionSchema.optional().describe("Hook function called on record update"),
     })
     .optional()
     .describe("Lifecycle hooks for the field"),
-  validate: z
-    .array(z.union([functionSchema, z.tuple([functionSchema, z.string()])]))
-    .optional()
-    .describe("Validation functions for the field"),
+  validate: z.array(functionSchema).optional().describe("Validation functions for the field"),
   serial: z
-    .object({
+    .strictObject({
       start: z.number().describe("Starting value for the serial sequence"),
       maxValue: z.number().optional().describe("Maximum value for the serial sequence"),
       format: z.string().optional().describe("Format string for serial value (string type only)"),
@@ -100,21 +97,23 @@ export const DBFieldMetadataSchema = z.object({
     .max(12)
     .optional()
     .describe("Decimal scale (number of digits after decimal point, 0-12)"),
+  default: z.unknown().optional().describe("Default value for the field on create"),
 });
 
 const RelationTypeSchema = z.enum(relationTypesKeys);
 
-export const RawRelationConfigSchema = z.object({
+export const RawRelationConfigSchema = z.strictObject({
   type: RelationTypeSchema.describe("Relation cardinality type"),
-  toward: z.object({
-    type: z.string().describe("Target type name, or 'self' for self-relations"),
+  toward: z.strictObject({
+    table: z.string().describe("Target table name, or 'self' for self-relations"),
     as: z.string().optional().describe("Custom forward relation name"),
     key: z.string().optional().describe("Target field to join on (default: 'id')"),
   }),
-  backward: z.string().optional().describe("Backward relation name on the target type"),
+  backward: z.string().optional().describe("Backward relation name on the target table"),
 });
 
 const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
+  // strip unknown keys
   z.object({
     type: TailorFieldTypeSchema,
     fields: z.record(z.string(), TailorDBFieldSchema).optional(),
@@ -124,21 +123,21 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
 );
 
 /**
- * Schema for TailorDB type settings.
+ * Schema for TailorDB table settings.
  * Normalizes gqlOperations from alias ("query") to object format.
  */
-export const TailorDBTypeSettingsSchema = z.object({
-  pluralForm: z.string().optional().describe("Custom plural form of the type name for GraphQL"),
-  aggregation: z.boolean().optional().describe("Enable aggregation queries for this type"),
-  bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this type"),
+export const TailorDBTypeSettingsSchema = z.strictObject({
+  pluralForm: z.string().optional().describe("Custom plural form of the table name for GraphQL"),
+  aggregation: z.boolean().optional().describe("Enable aggregation queries for this table"),
+  bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this table"),
   gqlOperations: GqlOperationsSchema.optional().describe(
-    'Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control.',
+    'Configure GraphQL operations for this table. Use "query" for read-only mode, or an object for granular control.',
   ),
   publishEvents: z
     .boolean()
     .optional()
     .describe(
-      "Enable publishing events for this type.\nWhen enabled, record creation/update/deletion events are published.\nIf not specified, this is automatically set to true when an executor uses this type\nwith recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false\nwhile an executor uses this type, an error will be thrown during apply.",
+      "Enable publishing events for this table.\nWhen enabled, record creation/update/deletion events are published.\nIf not specified, this is automatically set to true when an executor uses this table\nwith recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false\nwhile an executor uses this table, an error will be thrown during apply.",
     ),
 });
 
@@ -147,7 +146,7 @@ export const GQL_PERMISSION_INVALID_OPERAND_MESSAGE =
 
 const GqlPermissionOperandSchema = z.union(
   [
-    z.object({ user: z.string() }).strict(),
+    z.strictObject({ user: z.string() }),
     z.string(),
     z.boolean(),
     z.array(z.string()),
@@ -169,9 +168,9 @@ const GqlPermissionOperandSchema = z.union(
 
 const RecordPermissionOperandSchema = z.union([
   GqlPermissionOperandSchema,
-  z.object({ record: z.string() }),
-  z.object({ oldRecord: z.string() }),
-  z.object({ newRecord: z.string() }),
+  z.strictObject({ record: z.string() }),
+  z.strictObject({ oldRecord: z.string() }),
+  z.strictObject({ newRecord: z.string() }),
 ]);
 
 const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in", "hasAny", "not hasAny"]);
@@ -186,7 +185,7 @@ const GqlPermissionConditionSchema = z
 
 const ActionPermissionSchema = z.union([
   // Object format: { conditions, description?, permit? }
-  z.object({
+  z.strictObject({
     conditions: z.union([
       RecordPermissionConditionSchema,
       z.array(RecordPermissionConditionSchema).readonly(),
@@ -229,16 +228,16 @@ const GqlPermissionActionSchema = z.enum([
   "bulkUpsert",
 ]);
 
-const GqlPermissionPolicySchema = z.object({
+const GqlPermissionPolicySchema = z.strictObject({
   conditions: z.array(GqlPermissionConditionSchema).readonly(),
   actions: z.union([z.literal("all"), z.array(GqlPermissionActionSchema).readonly()]),
   permit: z.boolean().optional(),
   description: z.string().optional(),
 });
 
-export const RawPermissionsSchema = z.object({
+export const RawPermissionsSchema = z.strictObject({
   record: z
-    .object({
+    .strictObject({
       create: z.array(ActionPermissionSchema).readonly(),
       read: z.array(ActionPermissionSchema).readonly(),
       update: z.array(ActionPermissionSchema).readonly(),
@@ -248,28 +247,38 @@ export const RawPermissionsSchema = z.object({
   gql: z.array(GqlPermissionPolicySchema).readonly().optional(),
 });
 
-export const TailorDBTypeSchema = z.object({
+export const TailorDBTypeSchema = z.strictObject({
   name: z.string(),
   fields: z.record(z.string(), TailorDBFieldSchema),
-  metadata: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    settings: TailorDBTypeSettingsSchema.optional(),
-    permissions: RawPermissionsSchema,
-    files: z.record(z.string(), z.string()),
-    indexes: z
-      .record(
-        z.string(),
-        z.object({
-          fields: z.array(z.string()),
-          unique: z.boolean().optional(),
-        }),
-      )
-      .optional(),
-  }),
+  // oxlint-disable-next-line zod/prefer-strict-object, tailor-zod/require-object-policy-comment -- Keep z.object().strict() so zinfer preserves the RawPermissions alias in generated types.
+  metadata: z
+    .object({
+      name: z.string(),
+      description: z.string().optional(),
+      settings: TailorDBTypeSettingsSchema.optional(),
+      permissions: RawPermissionsSchema,
+      files: z.record(z.string(), z.string()),
+      indexes: z
+        .record(
+          z.string(),
+          z.strictObject({
+            fields: z.array(z.string()),
+            unique: z.boolean().optional(),
+          }),
+        )
+        .optional(),
+      typeHook: z
+        .strictObject({
+          create: functionSchema.optional(),
+          update: functionSchema.optional(),
+        })
+        .optional(),
+      typeValidate: functionSchema.optional(),
+    })
+    .strict(),
 });
 
-const TailorDBMigrationConfigSchema = z.object({
+const TailorDBMigrationConfigSchema = z.strictObject({
   directory: z.string().describe("Directory containing migration files"),
   machineUser: z.string().optional().describe("Machine user name for migration execution"),
 });
@@ -278,12 +287,11 @@ const TailorDBMigrationConfigSchema = z.object({
  * Schema for TailorDB service configuration.
  * Normalizes gqlOperations from alias ("query") to object format.
  */
-export const TailorDBServiceConfigSchema = z.object({
-  files: z.array(z.string()).describe("Glob patterns for TailorDB type definition files"),
-  ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from type discovery"),
-  erdSite: z.string().optional().describe("URL for the ERD (Entity Relationship Diagram) site"),
+export const TailorDBServiceConfigSchema = z.strictObject({
+  files: z.array(z.string()).describe("Glob patterns for TailorDB table definition files"),
+  ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from table discovery"),
   migration: TailorDBMigrationConfigSchema.optional().describe("Migration configuration"),
   gqlOperations: GqlOperationsSchema.optional().describe(
-    "Default GraphQL operations for all types in this service",
+    "Default GraphQL operations for all tables in this service",
   ),
 });

@@ -52,7 +52,7 @@ describe("chunkSeedData", () => {
     expect(chunks).toHaveLength(0);
   });
 
-  test("returns empty array when all types have empty arrays", () => {
+  test("returns empty array when all tables have empty arrays", () => {
     const chunks = chunkSeedData({
       data: { User: [], Order: [] },
       order: ["User", "Order"],
@@ -117,7 +117,7 @@ describe("chunkSeedData", () => {
     }
   });
 
-  test("splits records within a single large type", () => {
+  test("splits records within a single large table", () => {
     const largeRecords = makeRecords(200, 500);
     const data: SeedData = { HugeType: largeRecords };
     const singleTypeSize = jsonByteSize(data, ["HugeType"]);
@@ -163,7 +163,7 @@ describe("chunkSeedData", () => {
         codeByteSize: 1000,
         maxMessageSize: 100_000,
       }),
-    ).toThrow(/single record in type "HugeType"/);
+    ).toThrow(/single record in table "HugeType"/);
   });
 
   test("uses default maxMessageSize when not specified", () => {
@@ -182,7 +182,7 @@ describe("chunkSeedData", () => {
     expect(DEFAULT_MAX_MESSAGE_SIZE).toBe(3.5 * 1024 * 1024);
   });
 
-  test("skips types not in data", () => {
+  test("skips tables not in data", () => {
     const data: SeedData = {
       User: [{ id: "1" }],
     };
@@ -197,7 +197,7 @@ describe("chunkSeedData", () => {
     expect(chunks[0]!.order).toEqual(["User", "MissingType"]);
   });
 
-  test("handles types with data but listed in order without data", () => {
+  test("handles tables with data but listed in order without data", () => {
     const data: SeedData = {
       User: [{ id: "1" }],
       EmptyType: [],

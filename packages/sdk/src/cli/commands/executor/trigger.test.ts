@@ -4,7 +4,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -31,10 +31,10 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
-describe("triggerExecutor runtime overload", () => {
+describe("triggerExecutor", () => {
   let triggerExecutorMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -47,33 +47,38 @@ describe("triggerExecutor runtime overload", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       triggerExecutor: triggerExecutorMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    await runTest();
   });
 
-  test("prefers legacy shape when executorName exists even if executor key is present", async () => {
-    await triggerExecutor({
-      executorName: "legacy-executor",
-      payload: {
-        body: {
-          message: "hello",
-        },
-      },
+  test("triggers a webhook executor by definition and forwards the payload", async () => {
+    const result = await triggerExecutor({
       executor: {
-        name: "typed-executor",
-        trigger: {
-          kind: "incomingWebhook",
-        },
+        name: "my-executor",
+        trigger: { kind: "incomingWebhook" },
       },
-    } as never);
+      payload: { body: { message: "hello" } },
+    });
 
+    expect(result).toEqual({ jobId: "job-1" });
     expect(triggerExecutorMock).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
-      executorName: "legacy-executor",
-      payload: {
-        body: {
-          message: "hello",
-        },
-      },
+      executorName: "my-executor",
+      payload: { body: { message: "hello" } },
     });
+  });
+
+  test("rejects a payload for an executor whose trigger is not an incoming webhook", async () => {
+    await expect(
+      triggerExecutor({
+        executor: {
+          name: "scheduled-executor",
+          trigger: { kind: "schedule", cron: "0 * * * *", timezone: "UTC" },
+        },
+        // @ts-expect-error - the type also rejects a payload for a non-webhook trigger
+        payload: { body: { message: "hello" } },
+      }),
+    ).rejects.toThrow(/only available for 'incomingWebhook' trigger type/);
+    expect(triggerExecutorMock).not.toHaveBeenCalled();
   });
 
   test("trigger command wait with jsonMode emits only parseable JSON to stdout", async () => {

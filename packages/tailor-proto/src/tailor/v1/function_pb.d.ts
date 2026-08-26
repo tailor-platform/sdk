@@ -71,6 +71,63 @@ export declare type TestExecScriptResponse = Message<"tailor.v1.TestExecScriptRe
 export declare const TestExecScriptResponseSchema: GenMessage<TestExecScriptResponse>;
 
 /**
+ * @generated from message tailor.v1.ExecScriptRequest
+ */
+export declare type ExecScriptRequest = Message<"tailor.v1.ExecScriptRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string code = 3;
+   */
+  code: string;
+
+  /**
+   * @generated from field: optional string arg = 4;
+   */
+  arg?: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthInvoker invoker = 5;
+   */
+  invoker?: AuthInvoker;
+};
+
+/**
+ * Describes the message tailor.v1.ExecScriptRequest.
+ * Use `create(ExecScriptRequestSchema)` to create a new message.
+ */
+export declare const ExecScriptRequestSchema: GenMessage<ExecScriptRequest>;
+
+/**
+ * @generated from message tailor.v1.ExecScriptResponse
+ */
+export declare type ExecScriptResponse = Message<"tailor.v1.ExecScriptResponse"> & {
+  /**
+   * @generated from field: string result = 1;
+   */
+  result: string;
+
+  /**
+   * @generated from field: string execution_id = 2;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.ExecScriptResponse.
+ * Use `create(ExecScriptResponseSchema)` to create a new message.
+ */
+export declare const ExecScriptResponseSchema: GenMessage<ExecScriptResponse>;
+
+/**
  * @generated from message tailor.v1.GetFunctionExecutionRequest
  */
 export declare type GetFunctionExecutionRequest = Message<"tailor.v1.GetFunctionExecutionRequest"> & {

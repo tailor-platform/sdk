@@ -27,7 +27,7 @@ modules** — files named `types.ts` (or `*.types.ts` under `configure/`):
 | `parser/service/tailordb/types.ts`                                 | Parsed data structures (`TailorDBType`, `ParsedField`, permissions, ...) |
 | `parser/service/idp/types.ts`                                      | Normalized IdP permission types shared by parser and CLI                 |
 | `plugin/types.ts`                                                  | Plugin authoring types, generation hook contexts, generator config       |
-| `runtime/types.ts`                                                 | Runtime principal/env types (`TailorUser`, `TailorActor`, `TailorEnv`)   |
+| `runtime/types.ts`                                                 | Runtime principal/env types (`TailorPrincipal`, `TailorEnv`)             |
 
 Rules for pure type modules (enforced by oxlint):
 

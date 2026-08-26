@@ -1,0 +1,2 @@
+// tailor-sdk
+apply(config);

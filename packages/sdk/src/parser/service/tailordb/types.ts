@@ -23,28 +23,28 @@ export type TailorDBFieldOutput = {
 export type TypeSourceInfo = Record<string, TypeSourceInfoEntry>;
 
 // Source info types
-export interface UserDefinedTypeSource {
+interface UserDefinedTypeSource {
   filePath: string;
   exportName: string;
   pluginId?: never;
 }
 
-export interface PluginGeneratedTypeSource {
+export interface PluginGeneratedTableSource {
   filePath?: never;
   exportName: string;
   pluginId: string;
   pluginImportPath: string;
   originalFilePath: string;
   originalExportName: string;
-  generatedTypeKind?: string;
+  generatedTableKind?: string;
   pluginConfig?: unknown;
   namespace?: string;
 }
 
-export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTypeSource;
+export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTableSource;
 
 // Operator field types
-export interface Script {
+interface Script {
   expr: string;
 }
 
@@ -79,6 +79,7 @@ export interface OperatorFieldConfig {
     format?: string;
   };
   scale?: number;
+  default?: unknown;
   fields?: Record<string, OperatorFieldConfig>;
 }
 
@@ -95,7 +96,7 @@ type StandardRecordOperand<Update extends boolean = false> = Update extends true
   ? { oldRecord: string } | { newRecord: string }
   : { record: string };
 
-export type PermissionOperand<
+type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
   Update extends boolean = boolean,
 > = UserOperand | ValueOperand | (Level extends "record" ? StandardRecordOperand<Update> : never);
@@ -171,4 +172,25 @@ export interface TailorDBType {
   permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
+  typeHookExpr?: { create?: string; update?: string };
+  typeValidateExpr?: string;
 }
+
+export type ScriptExprKind =
+  | "hooks.create"
+  | "hooks.update"
+  | "validate"
+  | "typeHook.create"
+  | "typeHook.update"
+  | "typeValidate";
+
+export type PrecompiledScriptExprMap = Partial<Record<ScriptExprKind, string>>;
+
+/**
+ * Registry key `./hooks-validate-precompiled-expr.ts` passes to `Symbol.for()`
+ * to read a role-keyed script expression map from a hook/validator function.
+ * Shared as a type so `configure/services/tailordb/schema.ts` can pin the
+ * SDK's own built-in hooks without a runtime import across the configure/parser
+ * boundary; a mismatched literal on either side fails to typecheck.
+ */
+export type PrecompiledScriptExprKey = "tailor-platform/sdk:precompiled-script-expr";

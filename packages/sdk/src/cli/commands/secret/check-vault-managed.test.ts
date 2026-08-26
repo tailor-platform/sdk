@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -15,8 +15,9 @@ const clientWithMetadata = (metadata: unknown) =>
   ({ getMetadata: vi.fn().mockResolvedValue({ metadata }) }) as unknown as OperatorClient;
 
 describe("checkVaultManaged", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("returns isManaged: true with labels when vault has sdk-name label", async () => {
@@ -66,11 +67,34 @@ describe("releaseVaultOwnership", () => {
       { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
       {},
     ],
-  ])("%s", async (_name, existingLabels, expectedLabels) => {
-    const client = { setMetadata: vi.fn().mockResolvedValue({}) } as unknown as OperatorClient;
+    [
+      // Ownership is decided by sdk-app-id alone, so a vault that kept it would
+      // still be deleted by the next deploy of a config that dropped it.
+      "removes sdk-app-id, which decides ownership on its own",
+      { "sdk-name": "my-app", "sdk-version": "v1-0-0", "sdk-app-id": "app-uuid", custom: "value" },
+      { custom: "value" },
+    ],
+  ])("%s", async (_name, remoteLabels, expectedLabels) => {
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: remoteLabels } }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
 
-    await releaseVaultOwnership({ client, trn: TRN, existingLabels });
+    await releaseVaultOwnership({ client, trn: TRN });
 
     expect(client.setMetadata).toHaveBeenCalledWith({ trn: TRN, labels: expectedLabels });
+  });
+
+  test("keeps a label written after checkVaultManaged read the metadata", async () => {
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0", added: "later" } },
+      }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    await releaseVaultOwnership({ client, trn: TRN });
+
+    expect(client.setMetadata).toHaveBeenCalledWith({ trn: TRN, labels: { added: "later" } });
   });
 });

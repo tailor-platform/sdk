@@ -1,5 +1,10 @@
-import { AuthConnection_Type } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { describe, expect, test } from "vitest";
+import {
+  AuthConnection_Type,
+  AuthOAuth2Client_ClientType,
+  AuthOAuth2Client_GrantType,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { validatePlan, type ValidatePlanInput } from "./validate-plan";
 
@@ -36,7 +41,7 @@ function emptyInput(): ValidatePlanInput {
     tailorDB: {
       changeSet: {
         service: createChangeSet("TailorDB services"),
-        type: createChangeSet("TailorDB types"),
+        type: createChangeSet("TailorDB tables"),
         gqlPermission: createChangeSet("TailorDB gqlPermissions"),
       },
       conflicts: [],
@@ -46,9 +51,12 @@ function emptyInput(): ValidatePlanInput {
         workspaceId: "00000000-0000-0000-0000-000000000001",
         application: {} as ValidatePlanInput["tailorDB"]["context"]["application"],
         tailorDBInputs: [],
-        executorUsedTypes: new Set(),
+        executorUsedTables: new Set(),
         config: {} as ValidatePlanInput["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
+        namespacesWithMigrations: [],
+        migrationFileState: {},
+        checkpointRepairs: [],
       },
     },
     staticWebsite: {
@@ -104,7 +112,11 @@ function emptyInput(): ValidatePlanInput {
       unmanaged: [],
       resourceOwners: new Set(),
     },
-    app: createChangeSet("Applications"),
+    app: Object.assign(createChangeSet("Applications"), {
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    }) as unknown as ValidatePlanInput["app"],
     executor: {
       changeSet: createChangeSet("Executors"),
       conflicts: [],
@@ -115,6 +127,7 @@ function emptyInput(): ValidatePlanInput {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set(),
       jobFunctionDeletes: [],
+      jobFunctionPublishEvents: new Map<string, boolean>(),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set(),
@@ -156,7 +169,7 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
-    name: "(b2) TailorDB type with valid name passes",
+    name: "(b2) TailorDB table with valid name passes",
     mutate: (input) => {
       input.tailorDB.changeSet.type.creates.push({
         name: "ValidTypeName",
@@ -182,7 +195,7 @@ const validCases: Case<undefined>[] = [
           subgraphs: [{ serviceType: 1, serviceNamespace: "tailordb" }],
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -198,7 +211,7 @@ const validCases: Case<undefined>[] = [
           cors: ["my-frontend:url"],
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -209,7 +222,7 @@ const validCases: Case<undefined>[] = [
         name: "example.com",
         request: { workspaceId: WS_ID, staticWebsiteName: "my-site", domain: "example.com" },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -243,7 +256,7 @@ const validCases: Case<undefined>[] = [
       input.idp.changeSet.client.creates.push({
         name: "my-client",
         request: { workspaceId: WS_ID, namespaceName: "my-idp", client: { name: "my-client" } },
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -258,7 +271,7 @@ const validCases: Case<undefined>[] = [
           userAuthPolicy: { enableMfa: true, allowedReturnOrigins: ["my-frontend:url"] },
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: undefined,
   },
@@ -289,6 +302,26 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
+    name: "(o) OAuth2 client with clientType public and requireDpop passes",
+    mutate: (input) => {
+      input.auth.changeSet.oauth2Client.creates.push({
+        name: "default",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-auth",
+          oauth2Client: {
+            name: "default",
+            clientType: AuthOAuth2Client_ClientType.PUBLIC,
+            requireDpop: true,
+            grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+            redirectUris: ["https://example.com/callback"],
+          },
+        },
+      });
+    },
+    expected: undefined,
+  },
+  {
     name: "(n2) workflow execution policy with `:` in key passes",
     mutate: (input) => {
       input.workflowExecutionPolicy.changeSet.creates.push({
@@ -304,7 +337,7 @@ const validCases: Case<undefined>[] = [
 
 const invalidCases: Case<RegExp>[] = [
   {
-    name: "(b) TailorDB type name violating ^[A-Z][a-zA-Z0-9]{0,62}$ produces a violation",
+    name: "(b) TailorDB table name violating ^[A-Z][a-zA-Z0-9]{0,62}$ produces a violation",
     mutate: (input) => {
       input.tailorDB.changeSet.type.creates.push({
         name: "invalidLowercaseName",
@@ -361,7 +394,7 @@ const invalidCases: Case<RegExp>[] = [
           cors: [],
         },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -400,7 +433,7 @@ const invalidCases: Case<RegExp>[] = [
         name: "INVALID_DOMAIN",
         request: { workspaceId: WS_ID, staticWebsiteName: "my-site", domain: "INVALID_DOMAIN" },
         metaRequest: METADATA,
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -410,7 +443,7 @@ const invalidCases: Case<RegExp>[] = [
       input.secretManager.vaultChangeSet.creates.push({
         name: "INVALID_VAULT",
         workspaceId: WS_ID,
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -423,7 +456,7 @@ const invalidCases: Case<RegExp>[] = [
         workspaceId: WS_ID,
         vaultName: "my-vault",
         value: "my-value",
-      } as never);
+      });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
   },
@@ -467,7 +500,7 @@ const invalidCases: Case<RegExp>[] = [
       input.idp.changeSet.client.creates.push({
         name: clientName,
         request: { workspaceId: WS_ID, namespaceName: namespace, client: { name: clientName } },
-      } as never);
+      });
     },
     expected: /validation error/,
   },
@@ -484,6 +517,26 @@ const invalidCases: Case<RegExp>[] = [
       input.workflow.unchangedWorkflowJobNames.add("camelCaseJobFromUnchanged");
     },
     expected: /validation error/,
+  },
+  {
+    name: "(o2) OAuth2 client with clientType browser and requireDpop is rejected",
+    mutate: (input) => {
+      input.auth.changeSet.oauth2Client.creates.push({
+        name: "default",
+        request: {
+          workspaceId: WS_ID,
+          namespaceName: "my-auth",
+          oauth2Client: {
+            name: "default",
+            clientType: AuthOAuth2Client_ClientType.BROWSER,
+            requireDpop: true,
+            grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+            redirectUris: ["https://example.com/callback"],
+          },
+        },
+      });
+    },
+    expected: /1 validation error\(s\) found in 1 resource\(s\)/,
   },
   {
     name: "(e) violations from multiple resources are aggregated into one error",
@@ -524,5 +577,27 @@ describe("validatePlan", () => {
     const input = emptyInput();
     mutate(input);
     await expect(validatePlan(input)).rejects.toThrow(expected);
+  });
+
+  test("evaluates message-level CEL rules instead of warning that they could not run", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const input = emptyInput();
+    input.auth.changeSet.oauth2Client.creates.push({
+      name: "default",
+      request: {
+        workspaceId: WS_ID,
+        namespaceName: "my-auth",
+        oauth2Client: {
+          name: "default",
+          clientType: AuthOAuth2Client_ClientType.PUBLIC,
+          requireDpop: true,
+          grantTypes: [AuthOAuth2Client_GrantType.AUTHORIZATION_CODE],
+          redirectUris: ["https://example.com/callback"],
+        },
+      },
+    });
+
+    await expect(validatePlan(input)).resolves.toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

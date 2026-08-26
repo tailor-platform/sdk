@@ -18,7 +18,7 @@ export interface ShowOptions {
   configPath?: string;
 }
 
-export interface WorkspaceInfo {
+interface WorkspaceInfo {
   workspaceId: string;
   workspaceName: string;
   workspaceFolderName?: string;
@@ -136,11 +136,9 @@ const showWorkspaceNameTransformer = createWorkspaceNameTransformer(
 export const showCommand = defineAppCommand({
   name: "show",
   description: "Show information about the deployed application.",
-  args: z
-    .object({
-      ...deploymentArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+  }),
   run: async (args) => {
     // Execute show logic
     const appInfo = await show({

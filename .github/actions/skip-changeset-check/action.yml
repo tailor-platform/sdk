@@ -1,0 +1,36 @@
+name: Skip changeset check
+description: >-
+  Decides whether an automated pnpm-lock.yaml change needs a changeset, by
+  diffing importer `dependencies` (never `devDependencies`) between a
+  before/after snapshot. devDependencies-only bumps and pnpm-workspace.yaml
+  policy pruning don't affect consumers.
+
+inputs:
+  before-lockfile:
+    description: Path to the pnpm-lock.yaml snapshot captured before the automated change
+    required: true
+  after-lockfile:
+    description: Path to the current (changed) pnpm-lock.yaml
+    required: false
+    default: pnpm-lock.yaml
+
+outputs:
+  has-runtime-changes:
+    description: "'true' if any non-private package's runtime dependencies changed"
+    value: ${{ steps.diff.outputs.has-runtime-changes }}
+  changed-names:
+    description: Newline-separated list of affected package names
+    value: ${{ steps.diff.outputs.changed-names }}
+
+runs:
+  using: composite
+  steps:
+    - id: diff
+      shell: bash
+      env:
+        BEFORE_LOCKFILE: ${{ inputs.before-lockfile }}
+        AFTER_LOCKFILE: ${{ inputs.after-lockfile }}
+      run: |
+        node "${{ github.action_path }}/../../scripts/lockfile-runtime-diff.mjs" \
+          --before "$BEFORE_LOCKFILE" \
+          --after "$AFTER_LOCKFILE"

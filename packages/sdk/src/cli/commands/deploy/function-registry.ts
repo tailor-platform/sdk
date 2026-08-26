@@ -1,8 +1,15 @@
 import * as crypto from "node:crypto";
+import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -19,7 +26,6 @@ import type {
   CreateFunctionRegistryRequestSchema,
   UpdateFunctionRegistryRequestSchema,
 } from "@tailor-platform/tailor-proto/function_registry_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 
@@ -28,13 +34,13 @@ const CHUNK_SIZE = 64 * 1024; // 64KB
 type CreateFunction = {
   name: string;
   entry: FunctionEntry;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateFunction = {
   name: string;
   entry: FunctionEntry;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteFunction = {
@@ -42,7 +48,7 @@ type DeleteFunction = {
   workspaceId: string;
 };
 
-export type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, DeleteFunction>;
+type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, DeleteFunction>;
 
 /**
  * Compute SHA-256 content hash for a script string.
@@ -305,12 +311,10 @@ export async function planFunctionRegistry(
         pageSize: maxPageSize,
       });
       return [
-        response.functions.map(
-          (f): ExistingFunction => ({
-            name: f.name,
-            contentHash: f.contentHash,
-          }),
-        ),
+        response.functions.map((f): ExistingFunction => ({
+          name: f.name,
+          contentHash: f.contentHash,
+        })),
         response.nextPageToken,
       ];
     },
@@ -473,17 +477,24 @@ export async function applyFunctionRegistry(
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
-    // Upload new functions
-    for (const create of changeSet.creates) {
-      await uploadFunctionScript(client, workspaceId, create.entry, true);
-      await client.setMetadata(create.metaRequest);
-    }
+    // Streaming uploads bypass the client's unary concurrency cap, so bound
+    // each upload + metadata pair here with the same apply-concurrency budget.
+    const limitFunction = createApplyLimiter();
 
-    // Update existing functions (server deduplicates content by hash)
-    for (const update of changeSet.updates) {
-      await uploadFunctionScript(client, workspaceId, update.entry, false);
-      await client.setMetadata(update.metaRequest);
-    }
+    await Promise.all([
+      ...changeSet.creates.map((create) =>
+        limitFunction(async () => {
+          await uploadFunctionScript(client, workspaceId, create.entry, true);
+          await writeMetadataLabels(client, create.metaRequest);
+        }),
+      ),
+      ...changeSet.updates.map((update) =>
+        limitFunction(async () => {
+          await uploadFunctionScript(client, workspaceId, update.entry, false);
+          await writeMetadataLabels(client, update.metaRequest);
+        }),
+      ),
+    ]);
   } else {
     await Promise.all(
       changeSet.deletes.map((del) =>

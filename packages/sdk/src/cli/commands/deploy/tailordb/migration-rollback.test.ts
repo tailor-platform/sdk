@@ -1,10 +1,11 @@
 /**
- * A failed `migrate.ts` must roll back its Pre-phase DDL, leaving the workspace
- * at its prior checkpoint and prior schema.
+ * A failed migration phase must restore the workspace to its prior checkpoint
+ * and prior schema whenever the schema operations are reversible.
  */
 
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applyTailorDB } from "./index";
+import { describe, test, expect, vi, aroundEach } from "vitest";
+import { applyTailorDB, captureMigrationFileState } from "./index";
+import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -16,10 +17,10 @@ vi.mock("../label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
       labels: {},
-    }),
+    })),
   };
 });
 
@@ -63,7 +64,7 @@ const snapshotFixtures = vi.hoisted(() => {
     fields,
   });
 
-  // Migration 1 adds a new type (StockReservation) and a `note` field on GoodsReceipt.
+  // Migration 1 adds a new table (StockReservation) and a `note` field on GoodsReceipt.
   const typesByMigration: Record<number, unknown> = {
     0: {
       GoodsReceipt: buildType("GoodsReceipt", "goodsReceipts", {
@@ -95,15 +96,15 @@ const snapshotFixtures = vi.hoisted(() => {
     reconstructSnapshotFromMigrations: (migrationsDir: string, maxVersion?: number) => {
       void migrationsDir;
       const number = maxVersion ?? 0;
-      const types = typesByMigration[number];
-      if (!types) {
+      const tables = typesByMigration[number];
+      if (!tables) {
         throw new Error(`No snapshot fixture configured for migration number: ${number}`);
       }
       return {
         version: 1 as const,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        types,
+        tables,
       };
     },
   };
@@ -125,10 +126,13 @@ import * as migrationModule from "./migration";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
-describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", () => {
+describe("applyTailorDB: rollback of migration schema after failures", () => {
   function createMockClient() {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0000" } },
+      }),
       setMetadata: vi.fn().mockResolvedValue({}),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
@@ -140,23 +144,27 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     } as unknown as OperatorClient;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function changeSetGroup(title: string, entries: { creates?: any[]; updates?: any[] } = {}) {
+  function changeSetGroup(
+    title: string,
+    entries: { creates?: unknown[]; updates?: unknown[]; deletes?: unknown[] } = {},
+  ) {
     const creates = entries.creates ?? [];
     const updates = entries.updates ?? [];
+    const deletes = entries.deletes ?? [];
     return {
       creates,
       updates,
-      deletes: [],
+      deletes,
+      unchanged: [],
       title,
-      isEmpty: () => creates.length === 0 && updates.length === 0,
+      isEmpty: () => creates.length === 0 && updates.length === 0 && deletes.length === 0,
       lines: () => [],
     };
   }
 
   function buildPlanResult(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    typeChanges: { creates?: any[]; updates?: any[] },
+    typeChanges: { creates?: any[]; updates?: any[]; deletes?: any[] },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): any {
     const mockService = {
@@ -168,7 +176,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     return {
       changeSet: {
         service: changeSetGroup("TailorDB Services"),
-        type: changeSetGroup("TailorDB Types", typeChanges),
+        type: changeSetGroup("TailorDB tables", typeChanges),
         gqlPermission: changeSetGroup("TailorDB GQL Permissions"),
       },
       conflicts: [],
@@ -184,11 +192,20 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
           },
         } as unknown as Application,
         tailorDBInputs: [],
-        executorUsedTypes: new Set<string>(),
+        executorUsedTables: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        checkpointRepairs: [],
+        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
+        migrationFileState: captureMigrationFileState([
+          { namespace: "test-ns", migrationsDir: "/test/migrations" },
+        ]),
       },
     };
+  }
+
+  function setPendingMigrations(migrations: PendingMigration[]): void {
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
   }
 
   function createMockPlanResult() {
@@ -240,7 +257,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
 
   function mkAddFieldMigration(
     number: number,
-    typeName: string,
+    tableName: string,
     fieldName: string,
   ): PendingMigration {
     return {
@@ -257,7 +274,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
         changes: [
           {
             kind: "field_added",
-            typeName,
+            tableName,
             fieldName,
             after: { type: "string", required: false },
           },
@@ -270,7 +287,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     } as any;
   }
 
-  function mkAddTypeMigration(number: number, typeName: string): PendingMigration {
+  function mkAddTypeMigration(number: number, tableName: string): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -284,8 +301,8 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
         createdAt: new Date().toISOString(),
         changes: [
           {
-            kind: "type_added",
-            typeName,
+            kind: "table_added",
+            tableName,
           },
         ],
         hasBreakingChanges: false,
@@ -296,7 +313,100 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     } as any;
   }
 
-  function deletedTypeNames(client: OperatorClient) {
+  function mkFieldTypeMigration(number: number, tableNames: string[]): PendingMigration {
+    return {
+      number,
+      scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
+      diffPath: `/test/migrations/${String(number).padStart(4, "0")}/diff.json`,
+      hasScript: true,
+      namespace: "test-ns",
+      migrationsDir: "/test/migrations",
+      diff: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        changes: tableNames.map((tableName) => ({
+          kind: "field_type_modified" as const,
+          tableName,
+          fieldName: "value",
+          before: { type: "integer" as const, required: false },
+          after: { type: "float" as const, required: false },
+        })),
+        hasBreakingChanges: true,
+        breakingChanges: tableNames.map((tableName) => ({
+          tableName,
+          fieldName: "value",
+          reason: "Field type changed from integer to float",
+        })),
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      },
+    };
+  }
+
+  function mkRemoveTypeMigration(number: number, tableName: string): PendingMigration {
+    return {
+      number,
+      scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
+      diffPath: `/test/migrations/${String(number).padStart(4, "0")}/diff.json`,
+      hasScript: false,
+      namespace: "test-ns",
+      migrationsDir: "/test/migrations",
+      diff: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "table_removed",
+            tableName,
+            before: {
+              name: tableName,
+              pluralForm: "retiredTypes",
+              fields: { value: { type: "string", required: false } },
+            },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: true,
+        warnings: [{ tableName, reason: "Type removed" }],
+        requiresMigrationScript: false,
+      },
+    };
+  }
+
+  function createFieldTypePlanResult(tableNames: string[]) {
+    return buildPlanResult({
+      updates: tableNames.map((tableName) => ({
+        name: tableName,
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-ns",
+          tailordbType: {
+            name: tableName,
+            schema: { fields: { value: { type: "float", required: false } } },
+          },
+        },
+      })),
+    });
+  }
+
+  function fieldTypeUpdates(client: OperatorClient, tableName: string): string[] {
+    return vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call) => (call[0] as any)?.tailordbType?.name === tableName,
+      )
+      .map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call) => (call[0] as any)?.tailordbType?.schema?.fields?.value?.type,
+      );
+  }
+
+  function deletedTableNames(client: OperatorClient) {
     return vi.mocked(client.deleteTailorDBType).mock.calls.map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (c) => (c[0] as any)?.tailordbTypeName,
@@ -304,7 +414,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
   }
 
   async function withOverriddenSnapshot(
-    override: (migrationsDir: string, maxVersion?: number) => unknown,
+    override: (migrationsDir: string, maxVersion?: number) => SchemaSnapshot | null,
     run: () => Promise<void>,
   ) {
     const snap = vi.mocked(reconstructSnapshotFromMigrations);
@@ -317,17 +427,16 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     }
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("deletes the type created by the failed migration's Pre-phase and does not advance the checkpoint", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddTypeMigration(1, "StockReservation"),
-    ]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = Error: field 'supplierSnapshotName' not found"),
     );
@@ -336,36 +445,34 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
       "supplierSnapshotName",
     );
 
-    // Pre-phase committed the DDL (the new type was created)...
+    // Pre-phase committed the DDL (the new table was created)...
     expect(client.createTailorDBType).toHaveBeenCalledTimes(1);
 
     // ...so the failed apply must roll it back: StockReservation did not exist at
     // the prior checkpoint, so it is dropped.
-    expect(deletedTypeNames(client)).toContain("StockReservation");
+    expect(deletedTableNames(client)).toContain("StockReservation");
 
     // The checkpoint must stay at the prior migration.
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("deletes the new type's GQL permission before dropping the type on rollback", async () => {
+  test("deletes the new table's GQL permission before dropping the table on rollback", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
-    // The Pre-phase also created a GQL permission for the new type.
+    // The Pre-phase also created a GQL permission for the new table.
     planResult.changeSet.gqlPermission.creates = [
       {
         name: "StockReservation",
         request: {
           workspaceId: "test-workspace",
           namespaceName: "test-ns",
-          typeName: "StockReservation",
+          tableName: "StockReservation",
           permission: {},
         },
       },
     ];
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddTypeMigration(1, "StockReservation"),
-    ]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -391,7 +498,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("rolls back types the pre-phase created via missingTypeCreates, not just diff types", async () => {
+  test("rolls back tables the pre-phase created via missingTypeCreates, not just diff tables", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
     // LeakedType is not in this migration's diff, but the pre-phase creates it
@@ -410,15 +517,13 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
         request: {
           workspaceId: "test-workspace",
           namespaceName: "test-ns",
-          typeName: "LeakedType",
+          tableName: "LeakedType",
           permission: {},
         },
       },
     ];
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddTypeMigration(1, "StockReservation"),
-    ]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -427,7 +532,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
       "migration failed",
     );
 
-    const deletedNames = deletedTypeNames(client);
+    const deletedNames = deletedTableNames(client);
     expect(deletedNames).toContain("StockReservation");
     expect(deletedNames).toContain("LeakedType");
   });
@@ -436,9 +541,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddTypeMigration(1, "StockReservation"),
-    ]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -461,9 +564,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createUpdatePlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddFieldMigration(1, "GoodsReceipt", "note"),
-    ]);
+    setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -496,7 +597,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createUpdatePlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    setPendingMigrations([
       mkAddFieldMigration(1, "GoodsReceipt", "note"),
       mkAddFieldMigration(2, "GoodsReceipt", "extra"),
     ]);
@@ -533,14 +634,319 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     expect(restoredFields).not.toContain("extra");
   });
 
+  test("rolls back only types touched by the failed migration", async () => {
+    const table = (name: string, fields: SchemaSnapshot["tables"][string]["fields"]) => ({
+      name,
+      pluralForm: `${name}s`,
+      fields,
+    });
+    const snapshots: Record<number, SchemaSnapshot> = {
+      0: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        tables: {
+          Audit: table("Audit", { message: { type: "string", required: true } }),
+          Existing: table("Existing", { code: { type: "string", required: true } }),
+        },
+      },
+      1: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        tables: {
+          Audit: table("Audit", { message: { type: "string", required: true } }),
+          Existing: table("Existing", { code: { type: "string", required: true } }),
+          New1: table("New1", { value: { type: "string", required: false } }),
+        },
+      },
+      2: {
+        version: 1,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        tables: {
+          Audit: table("Audit", { message: { type: "string", required: true } }),
+          Existing: table("Existing", {
+            code: { type: "string", required: true },
+            extra: { type: "string", required: false },
+          }),
+          New1: table("New1", { value: { type: "string", required: false } }),
+          New2: table("New2", { value: { type: "string", required: false } }),
+        },
+      },
+    };
+    const client = createMockClient();
+    const planResult = buildPlanResult({
+      creates: ["Audit", "Existing", "New1", "New2"].map((name) => ({
+        name,
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-ns",
+          tailordbType: { name, schema: { fields: [] } },
+        },
+      })),
+    });
+    const migration2 = mkAddTypeMigration(2, "New2");
+    migration2.diff.changes.push({
+      kind: "field_added",
+      tableName: "Existing",
+      fieldName: "extra",
+      after: { type: "string", required: false },
+    });
+    setPendingMigrations([mkAddTypeMigration(1, "New1"), migration2]);
+    vi.mocked(migrationModule.executeMigrations).mockImplementation(
+      (_ctx: unknown, migrations: PendingMigration[]) =>
+        migrations.some((migration) => migration.number === 2)
+          ? Promise.reject(new Error("migration 2 failed"))
+          : Promise.resolve(undefined),
+    );
+
+    await withOverriddenSnapshot(
+      (_migrationsDir, maxVersion) => snapshots[maxVersion ?? 0]!,
+      async () => {
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          "migration 2 failed",
+        );
+      },
+    );
+
+    const createdTypeNames = vi
+      .mocked(client.createTailorDBType)
+      .mock.calls.map((call) => call[0].tailordbType?.name);
+    expect(createdTypeNames).toContain("Audit");
+    expect(createdTypeNames).toContain("New1");
+    expect(
+      vi.mocked(migrationModule.updateMigrationLabel).mock.calls.map((call) => call[3]),
+    ).toEqual([1]);
+
+    const updatedTypeNames = vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.map((call) => call[0].tailordbType?.name);
+    expect(updatedTypeNames.filter((name) => name === "Existing")).toHaveLength(2);
+    expect(updatedTypeNames).not.toContain("Audit");
+    expect(updatedTypeNames).not.toContain("New1");
+    expect(deletedTableNames(client)).toEqual(["New2"]);
+
+    const restoredExisting = vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.filter((call) => call[0].tailordbType?.name === "Existing")
+      .at(-1)?.[0].tailordbType;
+    expect(Object.keys(restoredExisting?.schema?.fields ?? {})).toContain("code");
+    expect(Object.keys(restoredExisting?.schema?.fields ?? {})).not.toContain("extra");
+  });
+
+  test("restores every updated type when the post-phase fails partway through", async () => {
+    const tableNames = ["Alpha", "Beta"];
+    const snapshots = (number: number) => ({
+      version: 1 as const,
+      namespace: "test-ns",
+      createdAt: new Date().toISOString(),
+      tables: Object.fromEntries(
+        tableNames.map((tableName) => [
+          tableName,
+          {
+            name: tableName,
+            pluralForm: `${tableName}s`,
+            fields: {
+              value: { type: number === 0 ? "integer" : "float", required: false },
+            },
+          },
+        ]),
+      ),
+    });
+    const client = createMockClient();
+    const planResult = createFieldTypePlanResult(tableNames);
+    let rejected = false;
+    vi.mocked(client.updateTailorDBType).mockImplementation((request) => {
+      const tableName = request.tailordbType?.name;
+      const fieldType = request.tailordbType?.schema?.fields?.value?.type;
+      if (!rejected && tableName === "Beta" && fieldType === "float") {
+        rejected = true;
+        return Promise.reject(new Error("post-phase update failed"));
+      }
+      return Promise.resolve({}) as never;
+    });
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
+
+    await withOverriddenSnapshot(
+      (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
+      async () => {
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          "post-phase update failed",
+        );
+      },
+    );
+
+    expect(fieldTypeUpdates(client, "Alpha").at(-1)).toBe("integer");
+    expect(fieldTypeUpdates(client, "Beta").at(-1)).toBe("integer");
+    expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
+  test("keeps the target schema when the failed checkpoint update reads back an older value", async () => {
+    const tableNames = ["GoodsReceipt"];
+    const snapshots = (number: number) => ({
+      version: 1 as const,
+      namespace: "test-ns",
+      createdAt: new Date().toISOString(),
+      tables: {
+        GoodsReceipt: {
+          name: "GoodsReceipt",
+          pluralForm: "goodsReceipts",
+          fields: {
+            value: { type: number === 0 ? "integer" : "float", required: false },
+          },
+        },
+      },
+    });
+    const client = createMockClient();
+    const planResult = createFieldTypePlanResult(tableNames);
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
+    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+      new Error("checkpoint update failed"),
+    );
+
+    await withOverriddenSnapshot(
+      (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
+      async () => {
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          "checkpoint update failed",
+        );
+      },
+    );
+
+    expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
+  });
+
+  test("keeps the target schema when checkpoint read-back confirms a lost response", async () => {
+    const tableNames = ["GoodsReceipt"];
+    const snapshots = (number: number) => ({
+      version: 1 as const,
+      namespace: "test-ns",
+      createdAt: new Date().toISOString(),
+      tables: {
+        GoodsReceipt: {
+          name: "GoodsReceipt",
+          pluralForm: "goodsReceipts",
+          fields: {
+            value: { type: number === 0 ? "integer" : "float", required: false },
+          },
+        },
+      },
+    });
+    const client = createMockClient();
+    const planResult = createFieldTypePlanResult(tableNames);
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
+    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+      new Error("checkpoint response lost"),
+    );
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001" } },
+    } as never);
+
+    await withOverriddenSnapshot(
+      (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
+      async () => {
+        await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+      },
+    );
+
+    expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
+  });
+
+  test("does not roll back when checkpoint read-back has advanced past this migration", async () => {
+    const tableNames = ["GoodsReceipt"];
+    const snapshots = (number: number) => ({
+      version: 1 as const,
+      namespace: "test-ns",
+      createdAt: new Date().toISOString(),
+      tables: {
+        GoodsReceipt: {
+          name: "GoodsReceipt",
+          pluralForm: "goodsReceipts",
+          fields: {
+            value: { type: number === 0 ? "integer" : "float", required: false },
+          },
+        },
+      },
+    });
+    const client = createMockClient();
+    const planResult = createFieldTypePlanResult(tableNames);
+    setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
+    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+      new Error("checkpoint response lost"),
+    );
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0002" } },
+    } as never);
+
+    await withOverriddenSnapshot(
+      (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
+      async () => {
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          /advanced concurrently/,
+        );
+      },
+    );
+
+    expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
+  });
+
+  test("advances the checkpoint before deleting a removed table", async () => {
+    const tableName = "RetiredType";
+    const snapshots = (number: number): SchemaSnapshot => ({
+      version: 1 as const,
+      namespace: "test-ns",
+      createdAt: new Date().toISOString(),
+      tables:
+        number === 0
+          ? {
+              [tableName]: {
+                name: tableName,
+                pluralForm: "retiredTypes",
+                fields: { value: { type: "string" as const, required: false } },
+              },
+            }
+          : {},
+    });
+    const planResult = buildPlanResult({
+      deletes: [
+        {
+          name: tableName,
+          request: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-ns",
+            tailordbTypeName: tableName,
+          },
+        },
+      ],
+    });
+    const client = createMockClient();
+    const order: string[] = [];
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(async () => {
+      order.push("checkpoint");
+    });
+    vi.mocked(client.deleteTailorDBType).mockImplementation(async () => {
+      order.push("delete");
+      return {} as never;
+    });
+    setPendingMigrations([mkRemoveTypeMigration(1, tableName)]);
+
+    await withOverriddenSnapshot(
+      (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
+      async () => {
+        await applyTailorDB(client, planResult, "create-update");
+      },
+    );
+
+    expect(order).toEqual(["checkpoint", "delete"]);
+  });
+
   test("rolls back when the pre-phase itself fails (createTailorDBType rejects)", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
     vi.mocked(client.createTailorDBType).mockRejectedValue(new Error("pre-phase create failed"));
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddTypeMigration(1, "StockReservation"),
-    ]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
       "pre-phase create failed",
@@ -549,7 +955,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     // The script never ran, the type the pre-phase tried to create is rolled
     // back, and the checkpoint is untouched.
     expect(migrationModule.executeMigrations).not.toHaveBeenCalled();
-    expect(deletedTypeNames(client)).toContain("StockReservation");
+    expect(deletedTableNames(client)).toContain("StockReservation");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
@@ -557,21 +963,24 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddTypeMigration(1, "StockReservation"),
-    ]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
 
-    // Make rollback's prior-snapshot reconstruction throw (e.g. missing files),
-    // while the pre-phase reconstruction (migration N) still succeeds.
+    // Let preflight and the pre-loop baseline materialization capture the
+    // baseline, then make rollback's third baseline reconstruction throw
+    // (e.g. files disappeared after the migration loop started).
+    let baselineReads = 0;
     await withOverriddenSnapshot(
       (migrationsDir, maxVersion) => {
-        if ((maxVersion ?? 0) === 0) {
+        if ((maxVersion ?? 0) === 0 && ++baselineReads > 2) {
           throw new Error("rollback snapshot reconstruction failed");
         }
-        return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);
+        return snapshotFixtures.reconstructSnapshotFromMigrations(
+          migrationsDir,
+          maxVersion,
+        ) as SchemaSnapshot;
       },
       async () => {
         // The original failure must surface, not the rollback error.
@@ -587,20 +996,23 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddTypeMigration(1, "StockReservation"),
-    ]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
 
-    // Prior snapshot is unavailable: new and pre-existing types are then
-    // indistinguishable, so nothing must be deleted.
+    // Prior snapshot becomes unavailable at rollback time: new and
+    // pre-existing tables are then indistinguishable, so nothing must be
+    // deleted.
+    let baselineReads = 0;
     await withOverriddenSnapshot(
       (migrationsDir, maxVersion) =>
-        (maxVersion ?? 0) === 0
+        (maxVersion ?? 0) === 0 && ++baselineReads > 2
           ? null
-          : snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion),
+          : (snapshotFixtures.reconstructSnapshotFromMigrations(
+              migrationsDir,
+              maxVersion,
+            ) as SchemaSnapshot),
       async () => {
         await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
           "original migration failure",

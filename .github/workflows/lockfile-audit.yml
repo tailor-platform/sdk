@@ -4,15 +4,27 @@ name: Lockfile Audit
 # pnpm-lock.yaml changes. Renovate's lock file maintenance bumps in-range
 # transitive deps weekly, but lockfile conflict resolutions in long-lived
 # branches can silently downgrade them again (this happened with fast-uri
-# and picomatch). This gate fails such PRs before they reach main.
+# and picomatch). This job diffs the audit result of this change against
+# the base commit and only fails on advisories newly introduced by this
+# change, so pre-existing vulnerabilities elsewhere in the lockfile don't
+# block unrelated PRs. Those are instead picked up and auto-fixed by the
+# scheduled lockfile-audit-fix workflow.
+#
+# Also the PR-time home for the auto-fix normalizer's tests: that script only
+# ever runs on a schedule, so without this its changes would reach main
+# untested.
 on:
   push:
     branches: [main]
     paths:
       - pnpm-lock.yaml
+      - .github/scripts/lockfile-audit-fix-normalize.mjs
+      - .github/scripts/lockfile-audit-fix-normalize.test.mjs
   pull_request:
     paths:
       - pnpm-lock.yaml
+      - .github/scripts/lockfile-audit-fix-normalize.mjs
+      - .github/scripts/lockfile-audit-fix-normalize.test.mjs
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,12 +42,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Install pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
           run_install: false
@@ -43,8 +56,79 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "24.18.0"
+          node-version: "24.19.0"
+
+      - name: Determine base commit
+        id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "sha=$PR_BASE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$PUSH_BEFORE_SHA" >> "$GITHUB_OUTPUT"
+          fi
 
       # pnpm audit resolves advisories against the lockfile only; no install needed.
-      - name: Audit lockfile
-        run: pnpm audit --audit-level=moderate
+      - name: Audit lockfile at this change
+        run: pnpm audit --audit-level=moderate --json > /tmp/head-audit.json || true
+
+      - name: Audit lockfile at base commit
+        id: base_audit
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base commit to compare against; skipping regression check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git cat-file -e "$BASE_SHA:pnpm-lock.yaml" 2>/dev/null; then
+            echo "Base commit has no pnpm-lock.yaml; skipping regression check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cp pnpm-lock.yaml /tmp/head-pnpm-lock.yaml
+          git show "$BASE_SHA:pnpm-lock.yaml" > pnpm-lock.yaml
+          pnpm audit --audit-level=moderate --json > /tmp/base-audit.json || true
+          cp /tmp/head-pnpm-lock.yaml pnpm-lock.yaml
+
+      - name: Compare advisories
+        if: steps.base_audit.outputs.skip != 'true'
+        run: |
+          jq -r '.advisories[]?.github_advisory_id // empty' /tmp/head-audit.json | sort -u > /tmp/head-ids.txt
+          jq -r '.advisories[]?.github_advisory_id // empty' /tmp/base-audit.json | sort -u > /tmp/base-ids.txt
+          NEW_IDS=$(comm -23 /tmp/head-ids.txt /tmp/base-ids.txt)
+          if [ -n "$NEW_IDS" ]; then
+            echo "::error::This change introduces new security advisories not present on the base commit:"
+            while IFS= read -r id; do
+              jq -r --arg id "$id" \
+                '.advisories[] | select(.github_advisory_id == $id) | "- \(.github_advisory_id): \(.title) (module: \(.module_name), severity: \(.severity))"' \
+                /tmp/head-audit.json
+            done <<< "$NEW_IDS"
+            exit 1
+          fi
+          echo "No new advisories introduced by this change."
+
+  normalize-tests:
+    name: Test auto-fix normalizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+
+      - name: Run tests
+        run: node --test .github/scripts/lockfile-audit-fix-normalize.test.mjs

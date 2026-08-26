@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
-import { describe, expect, test, vi, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, vi, aroundAll, aroundEach } from "vitest";
 import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
@@ -11,7 +12,11 @@ import {
   MIGRATE_FILE_NAME,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
-import { MIGRATION_LABEL_KEY } from "#/cli/commands/tailordb/migrate/types";
+import {
+  MIGRATION_HISTORY_LABEL_KEY,
+  MIGRATION_LABEL_KEY,
+} from "#/cli/commands/tailordb/migrate/types";
+import { withMetadataWriteBatch } from "../label";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
@@ -25,7 +30,8 @@ import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
 
 // Mock label.ts for resourceTrn
-vi.mock("../label", () => ({
+vi.mock("../label", async (importOriginal) => ({
+  ...(await importOriginal()),
   resourceTrn: (workspaceId: string, kind: string, name: string) =>
     `trn:v1:workspace:${workspaceId}:${kind}:${name}`,
 }));
@@ -130,11 +136,13 @@ function createMetadataClient(
 describe("migration", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = makeTestDir("test");
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     try {
       fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
     } catch {
@@ -252,6 +260,39 @@ describe("migration", () => {
       expect(result).toHaveLength(0);
     });
 
+    test("treats a missing remote namespace as migration 0", async () => {
+      const client = {
+        getMetadata: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+      } as unknown as OperatorClient;
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
+
+      expect(result.map((migration) => migration.number)).toEqual([1]);
+    });
+
+    test.each([
+      ["unavailable", new ConnectError("unavailable", Code.Unavailable)],
+      ["permission denied", new ConnectError("permission denied", Code.PermissionDenied)],
+    ])("propagates %s errors while reading the migration checkpoint", async (_name, error) => {
+      const client = {
+        getMetadata: vi.fn().mockRejectedValue(error),
+      } as unknown as OperatorClient;
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      await expect(
+        detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
+      ).rejects.toBe(error);
+    });
+
     test("detects single pending migration", async () => {
       const client = createMockClient({ tailordb: 0 });
       writeDiffFile(testDir, 1, createMockMigrationDiff());
@@ -265,6 +306,25 @@ describe("migration", () => {
       expect(result).toHaveLength(1);
       expect(result[0]!.number).toBe(1);
       expect(result[0]!.namespace).toBe("tailordb");
+    });
+
+    test("uses an approved checkpoint override without reading remote metadata", async () => {
+      const client = createMockClient({ tailordb: 5 });
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const result = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+        undefined,
+        new Map([["tailordb", 0]]),
+      );
+
+      expect(result.map((migration) => migration.number)).toEqual([1]);
+      expect(client.getMetadata).not.toHaveBeenCalled();
     });
 
     test("detects multiple pending migrations", async () => {
@@ -300,8 +360,7 @@ describe("migration", () => {
       expect(result).toHaveLength(0);
     });
 
-    test("warns when breaking change migration missing script", async () => {
-      const { logger } = await import("#/cli/shared/logger");
+    test("throws when breaking change migration missing script", async () => {
       const client = createMockClient({ tailordb: 0 });
 
       // Create migration with breaking change but no script (no migrate.ts file)
@@ -315,12 +374,145 @@ describe("migration", () => {
         { namespace: "tailordb", migrationsDir: testDir },
       ];
 
+      await expect(
+        detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
+      ).rejects.toThrow(/requires a migration script but migrate\.ts was not found/);
+    });
+
+    test("error for missing script mentions both resolution paths", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const error = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+        path.join(process.cwd(), "custom", "tailor.config.ts"),
+      ).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).not.toBeNull();
+      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(error!.message).toContain("--no-script --reason '<reason>'");
+      expect(error!.message).toContain(`--config=${path.join("custom", "tailor.config.ts")}`);
+    });
+
+    test("omits --config from the hint for the default config path", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const error = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+        path.join(process.cwd(), "tailor.config.ts"),
+      ).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).not.toBeNull();
+      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(error!.message).not.toContain("--config");
+    });
+
+    test("throws before returning later migrations when a script is missing", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeDiffFile(testDir, 2, createMockMigrationDiff());
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      await expect(
+        detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
+      ).rejects.toThrow(/requires a migration script/);
+    });
+
+    test("includes migration when script skip is acknowledged", async () => {
+      const { logger } = await import("#/cli/shared/logger");
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({
+          hasBreakingChanges: true,
+          requiresMigrationScript: true,
+          scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+        }),
+      );
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
       const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
 
-      expect(result).toHaveLength(0);
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining("requires a script but migrate.ts not found"),
+      expect(result).toHaveLength(1);
+      expect(result[0]!.hasScript).toBe(false);
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("no data yet"));
+    });
+
+    test("throws when a migration has both a script skip acknowledgment and migrate.ts", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({
+          hasBreakingChanges: true,
+          requiresMigrationScript: true,
+          scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+        }),
       );
+      writeMigrateFile(testDir, 1, "export async function main() {}");
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const error = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+      ).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).not.toBeNull();
+      expect(error!.message).toContain("has both a --no-script skip acknowledgment and migrate.ts");
+      expect(error!.message.split("\n")).toContain(
+        "  - Keep the script and clear the stale acknowledgment: tailor tailordb migration script 0001 --namespace tailordb",
+      );
+      expect(error!.message).toContain("delete migrate.ts");
     });
 
     test("includes breaking change migration with script", async () => {
@@ -410,6 +602,48 @@ describe("migration", () => {
       });
     });
 
+    test("updates the migration checkpoint and history ID atomically", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient(
+        { labels: { "existing-label": "value" } },
+        setMetadataMock,
+      );
+
+      await updateMigrationLabel(client, workspaceId, namespace, 0, "hcurrent");
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "existing-label": "value",
+          [MIGRATION_LABEL_KEY]: "m0000",
+          [MIGRATION_HISTORY_LABEL_KEY]: "hcurrent",
+        },
+      });
+    });
+
+    test("removes a stale history ID for a markerless local history", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient(
+        {
+          labels: {
+            "existing-label": "value",
+            [MIGRATION_HISTORY_LABEL_KEY]: "hstale",
+          },
+        },
+        setMetadataMock,
+      );
+
+      await updateMigrationLabel(client, workspaceId, namespace, 1);
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "existing-label": "value",
+          [MIGRATION_LABEL_KEY]: "m0001",
+        },
+      });
+    });
+
     test("handles missing metadata gracefully", async () => {
       const setMetadataMock = vi.fn();
       const client = createMetadataClient(null, setMetadataMock);
@@ -420,6 +654,24 @@ describe("migration", () => {
         trn: expectedTrn,
         labels: { [MIGRATION_LABEL_KEY]: "m0001" },
       });
+    });
+
+    test("commits migration checkpoints immediately inside a resource metadata batch", async () => {
+      const setMetadataMock = vi.fn();
+      const bulkSetMetadata = vi.fn();
+      const client = Object.assign(createMetadataClient({ labels: {} }, setMetadataMock), {
+        bulkSetMetadata,
+      });
+
+      await withMetadataWriteBatch(client as never, async (batchClient) => {
+        await updateMigrationLabel(batchClient, workspaceId, namespace, 2);
+        expect(setMetadataMock).toHaveBeenCalledWith({
+          trn: expectedTrn,
+          labels: { [MIGRATION_LABEL_KEY]: "m0002" },
+        });
+      });
+
+      expect(bulkSetMetadata).not.toHaveBeenCalled();
     });
   });
 
@@ -437,10 +689,11 @@ describe("migration", () => {
         machineUsers: ["test-machine-user"],
         dbConfig: {},
         env: {},
+        configDir: "/project",
       };
     }
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       bundleMigrationScriptMock.mockReset();
       executeScriptMock.mockReset();
       bundleMigrationScriptMock.mockResolvedValue({
@@ -452,6 +705,7 @@ describe("migration", () => {
         logs: "",
         result: "",
       });
+      await runTest();
     });
 
     test("skips migrations without a script file on disk", async () => {

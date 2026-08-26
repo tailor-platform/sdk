@@ -20,7 +20,7 @@ export interface Namespace {
       entityId: string;
       message: string;
       createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
+      updatedAt: Generated<Timestamp>;
     }
 
     Notification: {
@@ -30,7 +30,7 @@ export interface Namespace {
       body: string;
       isRead: boolean;
       createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
+      updatedAt: Generated<Timestamp>;
     }
 
     User: {
@@ -39,7 +39,7 @@ export interface Namespace {
       email: string;
       role: "ADMIN" | "MEMBER";
       createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
+      updatedAt: Generated<Timestamp>;
     }
   }
 }

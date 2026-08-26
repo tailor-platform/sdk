@@ -2,16 +2,16 @@ import { db } from "@tailor-platform/sdk";
 import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const selfie = db
-  .type("Selfie", {
+  .table("Selfie", {
     name: db.string(),
     parentID: db.uuid({ optional: true }).relation({
       type: "n-1",
-      toward: { type: "self" },
+      toward: { table: "self" },
       backward: "children",
     }),
     dependId: db.uuid({ optional: true }).relation({
       type: "1-1",
-      toward: { type: "self", as: "dependsOn" },
+      toward: { table: "self", as: "dependsOn" },
       backward: "dependedBy",
     }),
   })

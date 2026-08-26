@@ -1,8 +1,7 @@
 export const entry = [
   "src/configure/index.ts",
-  "src/cli/index.ts",
+  "src/cli/main.ts",
   "src/cli/lib.ts",
-  "src/cli/skills.ts",
   "src/utils/test/index.ts",
   "src/kysely/index.ts",
   "src/plugin/index.ts",
@@ -24,4 +23,5 @@ export const entry = [
   "src/runtime/context.ts",
   "src/runtime/file.ts",
   "src/runtime/aigateway.ts",
+  "src/runtime/logger.ts",
 ];

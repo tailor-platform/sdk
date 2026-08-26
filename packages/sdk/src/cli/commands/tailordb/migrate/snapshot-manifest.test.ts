@@ -26,14 +26,14 @@ describe("snapshot-manifest", () => {
   }
 
   function createTestSnapshot(
-    types: Record<string, TailorDBSnapshotType>,
+    tables: Record<string, TailorDBSnapshotType>,
     namespace = "tailordb",
   ): SchemaSnapshot {
     return {
       version: SCHEMA_SNAPSHOT_VERSION,
       namespace,
       createdAt: new Date().toISOString(),
-      types,
+      tables,
     };
   }
 
@@ -83,15 +83,15 @@ describe("snapshot-manifest", () => {
     });
 
     test.each([
-      { publishRecordEvents: true, expected: true },
-      { publishRecordEvents: false, expected: false },
+      { subscribed: true, expected: true },
+      { subscribed: false, expected: false },
     ])(
-      "sets publishRecordEvents to $expected from options.publishRecordEvents=$publishRecordEvents",
-      ({ publishRecordEvents, expected }) => {
+      "sets publishRecordEvents to $expected from options.subscribed=$subscribed",
+      ({ subscribed, expected }) => {
         const snapshotType = createTestSnapshotType("User");
 
         const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-          publishRecordEvents,
+          subscribed,
         });
 
         expect(manifest.schema?.settings?.publishRecordEvents).toBe(expected);
@@ -112,13 +112,13 @@ describe("snapshot-manifest", () => {
       },
     );
 
-    test("prioritizes snapshot settings.publishEvents over options.publishRecordEvents", () => {
+    test("prioritizes snapshot settings.publishEvents over options.subscribed", () => {
       const snapshotType = createTestSnapshotType("User", {
         settings: { publishEvents: true },
       });
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        publishRecordEvents: false,
+        subscribed: false,
       });
 
       expect(manifest.schema?.settings?.publishRecordEvents).toBe(true);
@@ -158,6 +158,40 @@ describe("snapshot-manifest", () => {
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
       expect(manifest.schema?.fields?.tags?.array).toBe(true);
+    });
+
+    test("preserves a field named __proto__", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        fields: Object.fromEntries([
+          ["id", { type: "uuid", required: true }],
+          ["__proto__", { type: "string", required: false }],
+        ]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      expect(Object.hasOwn(manifest.schema?.fields ?? {}, "__proto__")).toBe(true);
+      expect(manifest.schema?.fields?.__proto__?.type).toBe("string");
+    });
+
+    test("records a nested field named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        fields: {
+          id: { type: "uuid", required: true },
+          profile: {
+            type: "nested",
+            required: false,
+            fields: Object.fromEntries([["__proto__", { type: "string", required: false }]]),
+          },
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const nestedFields = manifest.schema?.fields?.profile?.fields ?? {};
+
+      expect(Object.hasOwn(nestedFields, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(nestedFields)).toBe(Object.prototype);
+      expect(nestedFields["__proto__"]?.type).toBe("string");
     });
 
     test("handles foreign key relationships", () => {
@@ -203,6 +237,19 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.indexes?.name_status?.unique).toBe(false);
     });
 
+    test("records an index named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        indexes: Object.fromEntries([["__proto__", { fields: ["name"], unique: true }]]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const indexes = manifest.schema?.indexes ?? {};
+
+      expect(Object.hasOwn(indexes, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(indexes)).toBe(Object.prototype);
+      expect(indexes["__proto__"]?.fieldNames).toEqual(["name"]);
+    });
+
     test("handles file fields", () => {
       const snapshotType = createTestSnapshotType("Document", {
         files: {
@@ -215,6 +262,19 @@ describe("snapshot-manifest", () => {
 
       expect(manifest.schema?.files?.attachment?.description).toBe("Document attachment");
       expect(manifest.schema?.files?.thumbnail?.description).toBe("");
+    });
+
+    test("records a file named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("Document", {
+        files: Object.fromEntries([["__proto__", "Document attachment"]]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const files = manifest.schema?.files ?? {};
+
+      expect(Object.hasOwn(files, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(files)).toBe(Object.prototype);
+      expect(files["__proto__"]?.description).toBe("Document attachment");
     });
 
     test("handles forward relationships", () => {
@@ -236,6 +296,30 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.relationships?.author?.array).toBe(false);
     });
 
+    test("records a forward relationship named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("Post", {
+        forwardRelationships: Object.fromEntries([
+          [
+            "__proto__",
+            {
+              targetType: "User",
+              targetField: "authorId",
+              sourceField: "id",
+              isArray: false,
+              description: "Post author",
+            },
+          ],
+        ]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const relationships = manifest.schema?.relationships ?? {};
+
+      expect(Object.hasOwn(relationships, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(relationships)).toBe(Object.prototype);
+      expect(relationships["__proto__"]?.refType).toBe("User");
+    });
+
     test("handles backward relationships", () => {
       const snapshotType = createTestSnapshotType("User", {
         backwardRelationships: {
@@ -253,6 +337,30 @@ describe("snapshot-manifest", () => {
 
       expect(manifest.schema?.relationships?.posts?.refType).toBe("Post");
       expect(manifest.schema?.relationships?.posts?.array).toBe(true);
+    });
+
+    test("records a backward relationship named __proto__ as an own manifest property", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        backwardRelationships: Object.fromEntries([
+          [
+            "__proto__",
+            {
+              targetType: "Post",
+              targetField: "authorId",
+              sourceField: "id",
+              isArray: true,
+              description: "User posts",
+            },
+          ],
+        ]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      const relationships = manifest.schema?.relationships ?? {};
+
+      expect(Object.hasOwn(relationships, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(relationships)).toBe(Object.prototype);
+      expect(relationships["__proto__"]?.refType).toBe("Post");
     });
 
     test("handles record permissions", () => {
@@ -294,7 +402,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
-    test("handles hooks configuration", () => {
+    test("aggregates field hooks into a table-level hook script", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -311,11 +419,19 @@ describe("snapshot-manifest", () => {
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
-      expect(manifest.schema?.fields?.updatedAt?.hooks?.create?.expr).toBe("now()");
-      expect(manifest.schema?.fields?.updatedAt?.hooks?.update?.expr).toBe("now()");
+      expect(manifest.schema?.fields?.updatedAt?.optionalOnCreate).toBe(true);
+      expect(manifest.schema?.fields?.updatedAt?.hooks).toBeUndefined();
+
+      // They are aggregated into a single table-level script that binds a shared
+      // timestamp once and dispatches each field's hook.
+      const createHook = manifest.schema?.typeHook?.create?.expr ?? "";
+      expect(createHook).toContain("const _now = new Date()");
+      expect(createHook).toContain('"updatedAt": ((_value) => (now()))(_input["updatedAt"])');
+      expect(manifest.schema?.typeHook?.update?.expr).toContain('_input["updatedAt"]');
+      expect(manifest.schema?.typeValidate).toBeUndefined();
     });
 
-    test("keeps validate and hooks in nested fields", () => {
+    test("aggregates nested field hooks and validators into table-level scripts", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {
           id: { type: "uuid", required: true },
@@ -366,16 +482,51 @@ describe("snapshot-manifest", () => {
       const displayNameField = profileField?.fields?.displayName;
       const emailField = profileField?.fields?.contact?.fields?.email;
 
-      expect(displayNameField?.validate).toHaveLength(1);
-      expect(displayNameField?.validate?.[0]?.errorMessage).toBe("Display name is required");
-      expect(displayNameField?.validate?.[0]?.script?.expr).toBe("!((_value ?? '').length > 0)");
-      expect(displayNameField?.hooks?.create?.expr).toBe("(_value ?? '').trim()");
-      expect(displayNameField?.hooks?.update?.expr).toBe("(_value ?? '').trim()");
+      expect(displayNameField?.optionalOnCreate).toBe(true);
+      expect(displayNameField?.hooks).toBeUndefined();
+      expect(displayNameField?.validate ?? []).toHaveLength(0);
+      expect(emailField?.optionalOnCreate).toBe(true);
+      expect(emailField?.hooks).toBeUndefined();
+      expect(emailField?.validate ?? []).toHaveLength(0);
 
-      expect(emailField?.validate).toHaveLength(1);
-      expect(emailField?.validate?.[0]?.errorMessage).toBe("Email must contain @");
-      expect(emailField?.validate?.[0]?.script?.expr).toBe("!((_value ?? '').includes('@'))");
-      expect(emailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
+      // Hooks are aggregated into a table-level script that reconstructs nested
+      // objects so unhooked siblings are preserved.
+      const hookExpr = manifest.schema?.typeHook?.create?.expr ?? "";
+      expect(hookExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
+      expect(hookExpr).toContain("(_value ?? '').trim()");
+      expect(hookExpr).toContain('(_input["profile"] || {})["displayName"]');
+      expect(hookExpr).toContain(
+        '"contact": Object.assign({}, (_input["profile"] || {})["contact"], {',
+      );
+      expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
+
+      // Validators are aggregated into a table-level validate script using ?? chain.
+      const validateExpr = manifest.schema?.typeValidate?.create?.expr ?? "";
+      expect(validateExpr).toContain('__errs["profile.displayName"]');
+      expect(validateExpr).toContain("((_value ?? '').length > 0)");
+      expect(validateExpr).toContain('if (typeof __r === "string")');
+      expect(validateExpr).toContain('__errs["profile.contact.email"]');
+      expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
+    });
+
+    test("table-level create hook does not make required fields optionalOnCreate", () => {
+      const snapshotType = createTestSnapshotType("Customer", {
+        fields: {
+          id: { type: "uuid", required: true },
+          name: { type: "string", required: true },
+          fullAddress: { type: "string", required: true },
+          phone: { type: "string", required: false },
+        },
+        typeHookExpr: {
+          create:
+            '((_input, _oldRecord, _invoker, _now) => ({ fullAddress: "computed" }))(_input, null, _invoker, _now)',
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      expect(manifest.schema?.fields?.name?.optionalOnCreate).toBeUndefined();
+      expect(manifest.schema?.fields?.fullAddress?.optionalOnCreate).toBeUndefined();
+      expect(manifest.schema?.fields?.phone?.optionalOnCreate).toBeUndefined();
     });
 
     test("handles serial configuration", () => {
@@ -436,7 +587,7 @@ describe("snapshot-manifest", () => {
   });
 
   describe("generateAllTypeManifestsFromSnapshot", () => {
-    test("generates manifests for all types in snapshot", () => {
+    test("generates manifests for all tables in snapshot", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -453,9 +604,9 @@ describe("snapshot-manifest", () => {
 
     test.each([
       {
-        name: "applies executorUsedTypes to enable publishRecordEvents",
+        name: "applies executorUsedTables to enable publishRecordEvents",
         types: { User: {}, Post: {} },
-        options: { executorUsedTypes: new Set(["User"]) },
+        options: { executorUsedTables: new Set(["User"]) },
         expected: { User: true, Post: false },
       },
       {
@@ -477,14 +628,14 @@ describe("snapshot-manifest", () => {
           Post: { settings: { publishEvents: false } },
           Comment: {},
         },
-        options: { executorUsedTypes: new Set(["Comment"]) },
+        options: { executorUsedTables: new Set(["Comment"]) },
         expected: { User: true, Post: false, Comment: true },
       },
       {
-        name: "falls back to baseOptions.publishRecordEvents when no manual setting and no executor",
+        name: "stays false when no manual setting and no executor subscribes",
         types: { User: {}, Post: {} },
-        options: { executorUsedTypes: new Set(["Other"]), publishRecordEvents: true },
-        expected: { User: true, Post: true },
+        options: { executorUsedTables: new Set(["Other"]) },
+        expected: { User: false, Post: false },
       },
     ])("$name", ({ types, options, expected }) => {
       const snapshot = createTestSnapshot(
@@ -503,7 +654,7 @@ describe("snapshot-manifest", () => {
       }
     });
 
-    test("applies namespace gqlOperations to all types", () => {
+    test("applies namespace gqlOperations to all tables", () => {
       const snapshot = createTestSnapshot({
         User: createTestSnapshotType("User"),
         Post: createTestSnapshotType("Post"),
@@ -531,10 +682,10 @@ describe("snapshot-manifest", () => {
 
       expect(() =>
         generateAllTypeManifestsFromSnapshot(snapshot, {
-          executorUsedTypes: new Set(["User"]),
+          executorUsedTables: new Set(["User"]),
         }),
       ).toThrow(
-        'Type "User" has publishEvents set to false, but it is used by an executor with a record trigger.',
+        'TailorDB table "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
       );
     });
 

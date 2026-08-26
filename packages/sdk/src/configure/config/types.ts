@@ -5,6 +5,7 @@
 import type { AIGatewayConfig } from "#/configure/services/aigateway/types";
 import type { AuthConfig } from "#/configure/services/auth/types";
 import type { IdPConfig } from "#/configure/services/idp/types";
+import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { SecretsConfig } from "#/configure/services/secrets/types";
 import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
@@ -14,18 +15,54 @@ import type { LogLevelEnum } from "#/types/app-config.generated";
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});
 
+/** Value an `env` entry resolves to at runtime. */
+export type EnvValue = string | number | boolean;
+
+/**
+ * An `env` value that credential detection flags, allowed through together with
+ * the reason it is safe to deploy as plaintext.
+ *
+ * Booleans are excluded: `true` and `false` match no credential format and are
+ * far too short for the randomness heuristic, so they are never flagged.
+ */
+type AllowedSecretEnvValue = {
+  value: Exclude<EnvValue, boolean>;
+  /** Why this value is safe to deploy as plaintext even though it looks like a credential. */
+  allowSecretReason: string;
+};
+
+/** An entry of `defineConfig({ env })`. */
+export type EnvEntry = EnvValue | AllowedSecretEnvValue;
+
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
 
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
 
-export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
+export type ResolverServiceConfig = {
+  /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
+  files: string[];
+  ignores?: string[];
+  /**
+   * Access requirement applied to every resolver in this namespace that
+   * declares no `permission` of its own. Takes the same values as a
+   * resolver's `permission`, including `"allowAnonymous"` to record that the
+   * namespace is public by design.
+   *
+   * A resolver's own `permission` replaces this default rather than merging
+   * with it, so a single resolver opts out with `permission: "allowAnonymous"`.
+   */
+  defaultPermission?: ResolverPermission;
+};
 export type ResolverExternalConfig = { external: true };
 export type ResolverServiceInput = {
   [namespace: string]: ResolverServiceConfig | ResolverExternalConfig;
 };
 
 export type WorkflowServiceConfig = {
+  /** Resolved relative to this config's own directory, not the invocation directory. */
   files: string[];
   job_files?: string[];
   ignores?: string[];
@@ -45,14 +82,14 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `idp`: Array of IdP configs, e.g. `[myIdp]`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
- * - `db`, `resolver`, `executor`, `workflow`: Service configs with file globs
+ * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
   Idp extends IdPConfig[] = IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
   AIGateways extends AIGatewayConfig[] = AIGatewayConfig[],
-  Env extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
+  Env extends Record<string, EnvEntry> = Record<string, EnvEntry>,
 > {
   /** Application name (required). */
   name: string;
@@ -66,7 +103,14 @@ export interface AppConfig<
    * data is preserved.
    */
   id?: string;
-  /** Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies. */
+  /**
+   * Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies.
+   *
+   * A value that looks like a credential is rejected, since `env` is deployed
+   * as plaintext. When the detection is wrong about a value, wrap it as
+   * `{ value, allowSecretReason }` to allow it and record why it is safe. Real
+   * credentials belong in `defineSecretManager()`.
+   */
   env?: Env;
   /** Allowed CORS origins. Must be an array of strings, e.g. `["https://example.com"]`. */
   cors?: string[];
@@ -74,7 +118,7 @@ export interface AppConfig<
   allowedIpAddresses?: string[];
   /** Disable GraphQL introspection in production. */
   disableIntrospection?: boolean;
-  /** TailorDB service configuration with type definition files. */
+  /** TailorDB service configuration with table definition files. */
   db?: TailorDBServiceInput;
   /** Resolver service configuration with resolver files. */
   resolver?: ResolverServiceInput;
@@ -100,7 +144,9 @@ export interface AppConfig<
    */
   inlineSourcemap?: boolean;
   /**
-   * Controls which `console.*` calls remain in bundled functions.
+   * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
+   * calls remain in bundled functions. `logger.setAttributes` has no severity and
+   * is never dropped.
    * @default "DEBUG"
    */
   logLevel?: LogLevelInput;

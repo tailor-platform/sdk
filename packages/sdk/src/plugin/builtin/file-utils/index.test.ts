@@ -18,12 +18,12 @@ describe("FileUtilsPlugin", () => {
   const testDistPath = "/test/dist/files.ts";
 
   function createCtx(
-    namespaces: { namespace: string; types: Record<string, TailorDBType> }[],
+    namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
   ): TailorDBReadyContext<{ distPath: string }> {
     return {
       tailordb: namespaces.map((ns) => ({
         namespace: ns.namespace,
-        types: ns.types,
+        tables: ns.tables,
         sourceInfo: new Map(),
         pluginAttachments: new Map(),
       })),
@@ -39,7 +39,7 @@ describe("FileUtilsPlugin", () => {
       const plugin = fileUtilsPlugin({ distPath: testDistPath });
       expect(plugin.id).toBe(FileUtilsGeneratorID);
       expect(plugin.description).toBe(
-        "Generates TypeWithFiles interface from TailorDB type definitions",
+        "Generates TypeWithFiles interface from TailorDB table definitions",
       );
     });
   });
@@ -54,8 +54,8 @@ describe("FileUtilsPlugin", () => {
         ["receipt", "form"],
       ],
       ["should return empty array when no files are present", "User", undefined, []],
-    ])("%s", async (_name, typeName, files, expectedFields) => {
-      let type = db.type(typeName, { name: db.string() });
+    ])("%s", async (_name, tableName, files, expectedFields) => {
+      let type = db.table(tableName, { name: db.string() });
       if (files) type = type.files(files);
 
       const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
@@ -85,6 +85,12 @@ describe("FileUtilsPlugin", () => {
       expect(result).toContain('"receipt" | "form"');
       expect(result).toContain('User: "tailordb"');
       expect(result).toContain('SalesOrder: "tailordb"');
+      expect(result).toContain("FileDownloadStreamResponse");
+      expect(result).toContain("export async function downloadFileStream");
+      expect(result).toContain("return await file.downloadStream");
+      expect(result).not.toContain("FileStreamIterator");
+      expect(result).not.toContain("openFileDownloadStream");
+      expect(result).not.toContain("openDownloadStream");
     });
 
     test("should merge types from multiple namespaces", () => {
@@ -139,7 +145,7 @@ describe("FileUtilsPlugin", () => {
   describe("onTailorDBReady integration", () => {
     test("should generate file utils for types with file fields", async () => {
       const userType = db
-        .type("User", {
+        .table("User", {
           name: db.string(),
         })
         .files({
@@ -147,7 +153,7 @@ describe("FileUtilsPlugin", () => {
         });
 
       const salesOrderType = db
-        .type("SalesOrder", {
+        .table("SalesOrder", {
           name: db.string(),
         })
         .files({
@@ -158,7 +164,7 @@ describe("FileUtilsPlugin", () => {
       const ctx = createCtx([
         {
           namespace: "tailordb",
-          types: {
+          tables: {
             User: parseTailorDBType(toSchemaOutput(userType)),
             SalesOrder: parseTailorDBType(toSchemaOutput(salesOrderType)),
           },
@@ -178,14 +184,14 @@ describe("FileUtilsPlugin", () => {
     });
 
     test("should return empty files when no types have file fields", async () => {
-      const userType = db.type("User", {
+      const userType = db.table("User", {
         name: db.string(),
       });
 
       const ctx = createCtx([
         {
           namespace: "tailordb",
-          types: {
+          tables: {
             User: parseTailorDBType(toSchemaOutput(userType)),
           },
         },
@@ -199,7 +205,7 @@ describe("FileUtilsPlugin", () => {
 
     test("should handle multiple namespaces", async () => {
       const userType = db
-        .type("User", {
+        .table("User", {
           name: db.string(),
         })
         .files({
@@ -207,7 +213,7 @@ describe("FileUtilsPlugin", () => {
         });
 
       const customerType = db
-        .type("Customer", {
+        .table("Customer", {
           name: db.string(),
         })
         .files({
@@ -217,11 +223,11 @@ describe("FileUtilsPlugin", () => {
       const ctx = createCtx([
         {
           namespace: "tailordb",
-          types: { User: parseTailorDBType(toSchemaOutput(userType)) },
+          tables: { User: parseTailorDBType(toSchemaOutput(userType)) },
         },
         {
           namespace: "someNamespace",
-          types: { Customer: parseTailorDBType(toSchemaOutput(customerType)) },
+          tables: { Customer: parseTailorDBType(toSchemaOutput(customerType)) },
         },
       ]);
 

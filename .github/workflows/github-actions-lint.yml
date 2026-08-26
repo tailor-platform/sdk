@@ -1,9 +1,13 @@
 ---
-# Static analysis for GitHub Actions using actionlint, ghalint, and zizmor
+# Static analysis for GitHub Actions using ghalint and zizmor
 #
-# - actionlint: https://github.com/rhysd/actionlint
 # - ghalint: https://github.com/suzuki-shunsuke/ghalint
 # - zizmor: https://docs.zizmor.sh/
+#
+# actionlint is intentionally absent here: it does not parse `parallel:` steps
+# yet (rhysd/actionlint#693). zizmor covers the security audits actionlint
+# offers, so this job keeps its security coverage. The generated-workflow
+# templates below still run under actionlint, which they parse cleanly.
 name: GitHub Actions Lint
 
 on:
@@ -32,15 +36,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install aqua
         uses: ./.github/actions/install-aqua
-
-      - name: Run actionlint
-        run: actionlint -color
 
       - name: Run ghalint workflows
         run: ghalint run
@@ -61,7 +62,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 

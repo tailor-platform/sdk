@@ -1,7 +1,50 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
-import { CLIError, errorToJson } from "./errors";
+import { errorToJson, serializeError } from "./error-json";
+import { CLIError, formatCopyableCommand, typeOnlyImportHint } from "./errors";
 import { CIPromptError } from "./logger";
+
+describe("typeOnlyImportHint", () => {
+  test("suggests import type for a missing named export", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'Row'",
+    );
+
+    const hint = typeOnlyImportHint(error);
+
+    expect(hint).toContain("import type");
+    expect(hint).toContain("'Row'");
+    expect(hint).toContain("verbatimModuleSyntax");
+  });
+
+  test("ignores a missing default export", () => {
+    const error = new SyntaxError(
+      "The requested module './config.ts' does not provide an export named 'default'",
+    );
+
+    expect(typeOnlyImportHint(error)).toBeUndefined();
+  });
+
+  test("suggests for a name that merely starts with 'default'", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'defaultRow'",
+    );
+
+    expect(typeOnlyImportHint(error)).toContain("'defaultRow'");
+  });
+
+  test("ignores unrelated syntax errors", () => {
+    expect(typeOnlyImportHint(new SyntaxError("Unexpected token '}'"))).toBeUndefined();
+  });
+
+  test("ignores non-syntax errors with a matching message", () => {
+    const error = new Error(
+      "The requested module './types.ts' does not provide an export named 'Row'",
+    );
+
+    expect(typeOnlyImportHint(error)).toBeUndefined();
+  });
+});
 
 describe("errorToJson", () => {
   test("preserves machine-actionable CLI error fields", () => {
@@ -11,7 +54,7 @@ describe("errorToJson", () => {
       suggestion: "Create a workspace.",
       command: "deploy",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: ["deploy", "--create-workspace", "--workspace-name", "example"],
       },
       context: { availableRegions: ["us-west"] },
@@ -22,12 +65,27 @@ describe("errorToJson", () => {
         code: "WORKSPACE_NOT_FOUND",
         message: "No workspaces are available.",
         suggestion: "Create a workspace.",
-        help: { command: "tailor-sdk", args: ["deploy", "--help"] },
+        help: { command: "tailor", args: ["deploy", "--help"] },
         next: {
-          command: "tailor-sdk",
+          command: "tailor",
           args: ["deploy", "--create-workspace", "--workspace-name", "example"],
         },
         context: { availableRegions: ["us-west"] },
+      },
+    });
+  });
+
+  test("serializes a stable fallback when the error context is not JSON-compatible", () => {
+    const error = CLIError({
+      code: "WORKSPACE_NOT_FOUND",
+      message: "No workspaces are available.",
+      context: { availableRegions: 1n },
+    });
+
+    expect(JSON.parse(serializeError(error, { includeStack: true }))).toEqual({
+      error: {
+        code: "WORKSPACE_NOT_FOUND",
+        message: "No workspaces are available.",
       },
     });
   });
@@ -64,7 +122,7 @@ describe("errorToJson", () => {
     const error = CLIError({
       message: "Choose a workspace.",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: [
           "deploy",
           "--config",
@@ -76,7 +134,7 @@ describe("errorToJson", () => {
     });
 
     expect(error.format()).toContain(
-      'tailor-sdk deploy --config "C:\\Users\\Jane Doe\\tailor.config.ts" --workspace-id "<workspace-id>"',
+      'tailor deploy --config "C:\\Users\\Jane Doe\\tailor.config.ts" --workspace-id "<workspace-id>"',
     );
   });
 
@@ -85,13 +143,35 @@ describe("errorToJson", () => {
     const error = CLIError({
       message: "Choose a workspace.",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"],
       },
     });
 
     expect(error.format()).toContain(
-      'argv ["tailor-sdk","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
+      'argv ["tailor","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
+    );
+  });
+
+  test("leaves shell-safe copyable command values unquoted", () => {
+    expect(formatCopyableCommand(["tailor", "deploy", "--config=custom.config.ts"])).toBe(
+      "tailor deploy --config=custom.config.ts",
+    );
+  });
+
+  test("single-quotes POSIX-unsafe copyable command values", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    expect(formatCopyableCommand(["tailor", "deploy", "--config=weird $config.ts"])).toBe(
+      "tailor deploy '--config=weird $config.ts'",
+    );
+  });
+
+  test("renders copyable commands with Windows expansion characters as argv", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    expect(formatCopyableCommand(["tailor", "deploy", "--config=%APPDATA%.config.ts"])).toBe(
+      'argv ["tailor","deploy","--config=%APPDATA%.config.ts"]',
     );
   });
 
@@ -100,6 +180,14 @@ describe("errorToJson", () => {
 
     expect(errorToJson(error, { includeStack: true }).error.stack).toBe(error.stack);
     expect(errorToJson(error).error).not.toHaveProperty("stack");
+  });
+
+  test("carries the type-only import suggestion for a missing named export", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'Row'",
+    );
+
+    expect(errorToJson(error).error.suggestion).toContain("import type");
   });
 
   test("includes a Connect RPC stack trace when requested", () => {
@@ -116,5 +204,19 @@ describe("errorToJson", () => {
         message: expect.stringContaining("unknown code"),
       },
     });
+  });
+});
+
+describe("CLIError formatting", () => {
+  test("indents every line of a multi-line details string", () => {
+    const error = CLIError({
+      message: "Deploy failed.",
+      details: "first line\nsecond line",
+    });
+
+    const lines = error.format().split("\n");
+    const detailsLineIndex = lines.findIndex((line) => line.includes("Details:"));
+    expect(lines[detailsLineIndex]).toContain("first line");
+    expect(lines[detailsLineIndex + 1]).toMatch(/^\s{2}second line$/);
   });
 });

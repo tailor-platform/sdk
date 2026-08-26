@@ -16,22 +16,36 @@ export type TailorFieldInput = {
     | "nested";
   /** Field metadata configuration */
   metadata: {
+    /** Whether the field is required */
     required?: boolean | undefined;
+    /** Whether the field is an array */
     array?: boolean | undefined;
+    /** Field description */
     description?: string | undefined;
+    /** Allowed values for enum fields */
     allowedValues?:
       | {
+          /** The allowed value */
           value: string;
+          /** Description of the allowed value */
           description?: string | undefined;
         }[]
       | undefined;
+    /** Lifecycle hooks */
     hooks?:
       | {
+          /** Hook function called on creation */
           create?: Function | undefined;
+          /** Hook function called on update */
           update?: Function | undefined;
         }
       | undefined;
+    /** Validation functions for the field */
+    validate?: Function[] | undefined;
+    /** Type name for nested or enum fields */
     typeName?: string | undefined;
+    /** Default value for the field on create */
+    default?: unknown;
   };
   fields: {
     [x: string]: TailorFieldInput;
@@ -54,22 +68,36 @@ export type TailorField = {
     | "nested";
   /** Field metadata configuration */
   metadata: {
+    /** Whether the field is required */
     required?: boolean | undefined;
+    /** Whether the field is an array */
     array?: boolean | undefined;
+    /** Field description */
     description?: string | undefined;
+    /** Allowed values for enum fields */
     allowedValues?:
       | {
+          /** The allowed value */
           value: string;
+          /** Description of the allowed value */
           description?: string | undefined;
         }[]
       | undefined;
+    /** Lifecycle hooks */
     hooks?:
       | {
+          /** Hook function called on creation */
           create?: Function | undefined;
+          /** Hook function called on update */
           update?: Function | undefined;
         }
       | undefined;
+    /** Validation functions for the field */
+    validate?: Function[] | undefined;
+    /** Type name for nested or enum fields */
     typeName?: string | undefined;
+    /** Default value for the field on create */
+    default?: unknown;
   };
   fields: {
     [x: string]: TailorField;

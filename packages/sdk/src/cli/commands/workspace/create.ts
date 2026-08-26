@@ -11,11 +11,11 @@ import {
 } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
-  hasUserTokenEntry,
   loadAccessToken,
   loadPlatformClientConfig,
   platformConfigFromProfile,
   readPlatformConfig,
+  resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -36,6 +36,7 @@ import type { ProfileInfo } from "../profile";
  * - name: 3-63 chars, lowercase alphanumeric and hyphens, cannot start/end with hyphen
  * - organizationId, folderId: optional UUIDs
  */
+// strip unknown keys
 const createWorkspaceOptionsSchema = z.object({
   name: workspaceNameSchema,
   region: z.string(),
@@ -128,47 +129,46 @@ export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        alias: "n",
-        description: "Workspace name",
-      }),
-      region: arg(z.string(), {
-        alias: "r",
-        description: "Workspace region (us-west, asia-northeast)",
-      }),
-      "delete-protection": arg(z.boolean().default(false), {
-        alias: "d",
-        description: "Enable delete protection",
-      }),
-      "organization-id": arg(z.string().optional(), {
-        alias: "o",
-        description: "Organization ID to workspace associate with",
-        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
-      }),
-      "folder-id": arg(z.string().optional(), {
-        alias: "f",
-        description: "Folder ID to workspace associate with",
-        env: "TAILOR_PLATFORM_FOLDER_ID",
-      }),
-      "profile-name": arg(z.string().optional(), {
-        alias: "p",
-        description: "Profile name to create",
-      }),
-      profile: arg(profileNameSchema.optional(), {
-        description: "Workspace profile used for authentication and Platform selection",
-        env: "TAILOR_PLATFORM_PROFILE",
-      }),
-      "profile-user": arg(z.string().optional(), {
-        description: "User email for the profile (defaults to current user)",
-      }),
-      permission: arg(z.enum(["write", "read"]).default("write"), {
-        description:
-          "Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      alias: "n",
+      description: "Workspace name",
+    }),
+    region: arg(z.string(), {
+      alias: "r",
+      description: "Workspace region (us-west, asia-northeast)",
+    }),
+    "delete-protection": arg(z.boolean().default(false), {
+      alias: "d",
+      description: "Enable delete protection",
+    }),
+    "organization-id": arg(z.string().optional(), {
+      alias: "o",
+      description: "Organization ID to workspace associate with",
+      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    }),
+    "folder-id": arg(z.string().optional(), {
+      alias: "f",
+      description: "Folder ID to workspace associate with",
+      env: "TAILOR_PLATFORM_FOLDER_ID",
+    }),
+    "profile-name": arg(z.string().optional(), {
+      alias: "p",
+      description: "Profile name to create",
+    }),
+    profile: arg(profileNameSchema.optional(), {
+      description: "Workspace profile used for authentication and Platform selection",
+      env: "TAILOR_PLATFORM_PROFILE",
+    }),
+    "profile-user": arg(z.string().optional(), {
+      description:
+        "User email address or machine user client ID for the profile (defaults to current user)",
+    }),
+    permission: arg(z.enum(["write", "read"]).default("write"), {
+      description:
+        "Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.",
+    }),
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const profileName = args["profile-name"];
@@ -197,14 +197,15 @@ export const createCommand = defineAppCommand({
         );
       }
 
-      if (!hasUserTokenEntry(config, profileUser, platformConfig)) {
+      const resolvedProfileUser = resolveConfigUser(config, profileUser, platformConfig);
+      if (!resolvedProfileUser) {
         throw new Error(
-          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor-sdk login' command.`,
+          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor login' command.`,
         );
       }
       profileSetup = {
         name: profileName,
-        user: profileUser,
+        user: resolvedProfileUser,
         platformSettings: profilePlatformSettings(platformConfig),
       };
     }

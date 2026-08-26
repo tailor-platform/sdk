@@ -16,9 +16,11 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
   readPlatformConfig,
+  removeLegacyUserAlias,
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
@@ -47,8 +49,14 @@ function randomState() {
 function getProfileUserMismatch(
   args: ProfileLoginOptions,
   authenticatedUser: string,
+  authenticatedSubject?: string,
 ): ProfileUserMismatch | undefined {
-  if (!args.profile || !args.profileUser || authenticatedUser === args.profileUser) {
+  if (
+    !args.profile ||
+    !args.profileUser ||
+    authenticatedUser === args.profileUser ||
+    authenticatedSubject === args.profileUser
+  ) {
     return undefined;
   }
   return {
@@ -73,10 +81,10 @@ function profileUpdateCommand(mismatch: ProfileUserMismatch) {
   const profileArg = quoteCommandArg(mismatch.profile);
   const userArg = quoteCommandArg(mismatch.authenticatedUser);
   if (profileArg && userArg) {
-    return `tailor-sdk profile update --user ${userArg} -- ${profileArg}`;
+    return `tailor profile update --user ${userArg} -- ${profileArg}`;
   }
   return [
-    "tailor-sdk profile update --user <authenticated-user> -- <profile>",
+    "tailor profile update --user <authenticated-user> -- <profile>",
     `profile = ${JSON.stringify(mismatch.profile)}`,
     `authenticated user = ${JSON.stringify(mismatch.authenticatedUser)}`,
   ].join("\n");
@@ -90,7 +98,7 @@ function retryInstruction(mismatch: ProfileUserMismatch) {
   if (!profileArg) {
     return "Then retry the browser login with the same profile value.";
   }
-  return `Then run:\n  tailor-sdk login --profile ${profileArg}`;
+  return `Then run:\n  tailor login --profile ${profileArg}`;
 }
 
 function profileUserMismatchError(mismatch: ProfileUserMismatch) {
@@ -116,9 +124,21 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
   const client = initOAuth2Client(args.platformConfig);
   const state = randomState();
   const codeVerifier = await generateCodeVerifier();
+  // A fetch failure here rejects with TypeError, which the top-level handler
+  // classifies as an SDK bug and crash-reports.
+  const authorizeUri = await client.authorizationCode
+    .getAuthorizeUri({ redirectUri, state, codeVerifier })
+    .catch((error: unknown) => {
+      throw new Error(`Failed to prepare the login authorization URL: ${toError(error).message}`, {
+        cause: error,
+      });
+    });
 
   return new Promise<void>((resolve, reject) => {
-    const server = http.createServer(async (req, res) => {
+    const handleCallback = async (
+      req: http.IncomingMessage,
+      res: http.ServerResponse,
+    ): Promise<void> => {
       try {
         if (!req.url?.startsWith("/callback")) {
           throw new Error("Invalid callback URL");
@@ -136,7 +156,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         const pfConfig = await readPlatformConfig();
         await saveUserTokens(
           pfConfig,
-          userInfo.email,
+          userInfo.sub,
           {
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken ?? undefined,
@@ -144,16 +164,17 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           new Date(
             assertDefined(tokens.expiresAt, "token response missing expiresAt"),
           ).toISOString(),
-          args.platformConfig,
+          { platformConfig: args.platformConfig, email: userInfo.email },
         );
-        const mismatch = getProfileUserMismatch(args, userInfo.email);
+        const mismatch = getProfileUserMismatch(args, userInfo.email, userInfo.sub);
         if (mismatch) {
           writePlatformConfig(pfConfig);
           throw profileUserMismatchError(mismatch);
         }
         if (args.updateCurrentUser ?? true) {
-          pfConfig.current_user = userInfo.email;
+          pfConfig.current_user = userInfo.sub;
         }
+        await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub, args.platformConfig);
         writePlatformConfig(pfConfig);
 
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -167,12 +188,13 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       } catch (error) {
         res.writeHead(401);
         res.end("Authentication failed");
-        reject(error);
+        reject(toError(error));
       } finally {
         // Close the server after handling one request.
         server.close();
       }
-    });
+    };
+    const server = http.createServer((req, res) => void handleCallback(req, res));
 
     const timeout = setTimeout(
       () => {
@@ -190,20 +212,15 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
       reject(error);
     });
 
-    server.listen(redirectPort, async () => {
-      const authorizeUri = await client.authorizationCode.getAuthorizeUri({
-        redirectUri,
-        state,
-        codeVerifier,
-      });
-
+    const openBrowser = async (): Promise<void> => {
       logger.info(`Opening browser for login:\n\n${authorizeUri}\n`);
       try {
         await open(authorizeUri);
       } catch {
         logger.warn("Failed to open browser automatically. Please open the URL above manually.");
       }
-    });
+    };
+    server.listen(redirectPort, () => void openBrowser());
   });
 };
 
@@ -223,7 +240,7 @@ async function loginAsMachineUser(
     args.clientId,
     { accessToken: tokens.accessToken },
     new Date(assertDefined(tokens.expiresAt, "token response missing expiresAt")).toISOString(),
-    args.platformConfig,
+    { platformConfig: args.platformConfig },
   );
   const mismatch = getProfileUserMismatch(args, args.clientId);
   if (mismatch) {
@@ -241,19 +258,17 @@ export const loginCommand = defineAppCommand({
   description: "Login to Tailor Platform.",
   args: z.xor([
     z
-      .object({
+      .strictObject({
         profile: arg(z.string().optional(), {
           alias: "p",
           description: "Workspace profile whose platform settings should be used for login.",
           env: "TAILOR_PLATFORM_PROFILE",
         }),
       })
-      .strict()
       .describe("User Login"),
     z
-      .object({
+      .strictObject({
         "machine-user": arg(z.literal(true), {
-          hiddenAlias: "machineuser",
           description: "Login as a platform machine user.",
           required: true,
         }),
@@ -272,7 +287,6 @@ export const loginCommand = defineAppCommand({
           env: "TAILOR_PLATFORM_PROFILE",
         }),
       })
-      .strict()
       .describe("Machine User Login"),
   ]),
   run: async (args) => {

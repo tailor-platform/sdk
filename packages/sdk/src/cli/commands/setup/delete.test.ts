@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { prompt } from "#/cli/shared/prompt";
 import { setupDelete } from "./delete";
 import { type CoordinateSetupOptions, setupCoordinate, setupTarget } from "./generate";
@@ -63,7 +63,7 @@ describe("setupDelete", () => {
     ...overrides,
   });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     fs.writeFileSync(
@@ -71,9 +71,9 @@ describe("setupDelete", () => {
       `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
     );
     vi.mocked(prompt.confirm).mockReset();
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
   });
-
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
   test("deletes a managed workflow file and its lock entry, skipping the prompt with yes", async () => {
     await setupTarget(branchOpts("my-app"));
@@ -157,7 +157,7 @@ describe("setupDelete", () => {
         yes: true,
         outputDir: testDir,
       }),
-    ).rejects.toThrow(/tailor-sdk\.lock is missing or empty/);
+    ).rejects.toThrow(/tailor\.lock is missing or empty/);
   });
 
   test("refuses to delete a file that is not recorded in the lock", async () => {
@@ -171,7 +171,7 @@ describe("setupDelete", () => {
         yes: true,
         outputDir: testDir,
       }),
-    ).rejects.toThrow(/not recorded in .github\/tailor-sdk\.lock/);
+    ).rejects.toThrow(/not recorded in .github\/tailor\.lock/);
     expect(fs.existsSync(strayFile)).toBe(true);
   });
 
@@ -187,7 +187,7 @@ describe("setupDelete", () => {
         yes: true,
         outputDir: testDir,
       }),
-    ).rejects.toThrow(/not recorded in .github\/tailor-sdk\.lock/);
+    ).rejects.toThrow(/not recorded in .github\/tailor\.lock/);
     expect(fs.existsSync(setupAction)).toBe(true);
   });
 

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { runCommand } from "politty";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
@@ -11,7 +11,7 @@ import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
-const xdgTempDir = vi.hoisted(() => `/tmp/tailor-login-${Date.now()}-${Math.random()}`);
+const xdgTempDir = vi.hoisted(() => `/tmp/sdk-login-test-${Date.now()}-${Math.random()}`);
 const openMock = vi.hoisted(() => vi.fn());
 const getAuthorizeUriMock = vi.hoisted(() => vi.fn());
 const getTokenFromCodeRedirectMock = vi.hoisted(() => vi.fn());
@@ -49,16 +49,14 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 describe("login --profile", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
     writePlatformConfig({
@@ -74,6 +72,7 @@ describe("login --profile", () => {
       },
       current_user: null,
     });
+    await runTest();
   });
 
   test("rejects a profile user mismatch with a profile update command", async () => {
@@ -101,20 +100,21 @@ describe("login --profile", () => {
       'Profile "dev" is configured for "u@example.com", but login authenticated "machine-client".',
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'machine-client' -- 'dev'",
+      "tailor profile update --user 'machine-client' -- 'dev'",
     );
     expect((result as { error?: Error }).error?.message).toContain(
       "Then retry the original machine-user login command.",
     );
     expect((result as { error?: Error }).error?.message).not.toContain(
-      "tailor-sdk login --profile 'dev'",
+      "tailor login --profile 'dev'",
     );
 
     const pfConfig = await readPlatformConfig();
     expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
     expect(pfConfig.current_user).toBeNull();
     expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
-      access_token: "dev-token",
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
     });
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
   });
@@ -126,7 +126,10 @@ describe("login --profile", () => {
       refreshToken: "browser-refresh-token",
       expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
     });
-    vi.mocked(fetchUserInfo).mockResolvedValue({ email: "browser@example.com" });
+    vi.mocked(fetchUserInfo).mockResolvedValue({
+      sub: "browser@example.com",
+      email: "browser@example.com",
+    });
     openMock.mockImplementation(async () => {
       await fetch("http://localhost:8085/callback?code=browser-code&state=browser-state");
     });
@@ -152,10 +155,10 @@ describe("login --profile", () => {
       'Profile "dev" is configured for "u@example.com", but login authenticated "browser@example.com".',
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'browser@example.com' -- 'dev'",
+      "tailor profile update --user 'browser@example.com' -- 'dev'",
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "Then run:\n  tailor-sdk login --profile 'dev'",
+      "Then run:\n  tailor login --profile 'dev'",
     );
     expect((result as { error?: Error }).error?.message).not.toContain(
       "Then retry the original machine-user login command.",
@@ -165,10 +168,22 @@ describe("login --profile", () => {
     expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
     expect(pfConfig.current_user).toBeNull();
     expect(pfConfig.users["https://api.dev.tailor.tech|browser@example.com"]).toMatchObject({
-      access_token: "browser-token",
-      refresh_token: "browser-refresh-token",
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
     });
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
+  });
+
+  test("fails login when the authorization URL cannot be prepared", async () => {
+    getAuthorizeUriMock.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await runCommand(loginCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(false);
+    const error = (result as { error?: Error }).error;
+    expect(error?.message).toContain("fetch failed");
+    // A native error type would be classified as an SDK bug and crash-reported.
+    expect(error).not.toBeInstanceOf(TypeError);
   });
 
   test("quotes dynamic profile update command arguments", async () => {
@@ -203,7 +218,7 @@ describe("login --profile", () => {
 
     expect(result.success).toBe(false);
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'machine client; echo nope' -- 'dev profile'",
+      "tailor profile update --user 'machine client; echo nope' -- 'dev profile'",
     );
     expect((result as { error?: Error }).error?.message).toContain(
       "Then retry the original machine-user login command.",
@@ -241,10 +256,10 @@ describe("login --profile", () => {
 
     expect(result.success).toBe(false);
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'machine-client' -- '-dev'",
+      "tailor profile update --user 'machine-client' -- '-dev'",
     );
     expect((result as { error?: Error }).error?.message).not.toContain(
-      "tailor-sdk profile update '-dev' --user 'machine-client'",
+      "tailor profile update '-dev' --user 'machine-client'",
     );
   });
 
@@ -270,13 +285,13 @@ describe("login --profile", () => {
 
       expect(result.success).toBe(false);
       expect((result as { error?: Error }).error?.message).toContain(
-        "tailor-sdk profile update --user machine-client -- dev",
+        "tailor profile update --user machine-client -- dev",
       );
       expect((result as { error?: Error }).error?.message).toContain(
         "Then retry the original machine-user login command.",
       );
       expect((result as { error?: Error }).error?.message).not.toContain(
-        "tailor-sdk login --profile dev",
+        "tailor login --profile dev",
       );
     } finally {
       if (platformDescriptor) {
@@ -320,14 +335,14 @@ describe("login --profile", () => {
 
       expect(result.success).toBe(false);
       expect((result as { error?: Error }).error?.message).toContain(
-        "tailor-sdk profile update --user <authenticated-user> -- <profile>",
+        "tailor profile update --user <authenticated-user> -- <profile>",
       );
       expect((result as { error?: Error }).error?.message).toContain('profile = "%USERNAME%"');
       expect((result as { error?: Error }).error?.message).toContain(
         'authenticated user = "machine-client"',
       );
       expect((result as { error?: Error }).error?.message).not.toContain(
-        "tailor-sdk profile update %USERNAME% --user machine-client",
+        "tailor profile update %USERNAME% --user machine-client",
       );
     } finally {
       if (platformDescriptor) {
@@ -379,7 +394,8 @@ describe("login --profile", () => {
       access_token: "default-token",
     });
     expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
-      access_token: "dev-token",
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
     });
   });
 });

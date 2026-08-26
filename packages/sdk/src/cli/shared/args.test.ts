@@ -1,9 +1,11 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
-import { describe, expect, beforeEach, afterEach, test, vi } from "vitest";
+import { runCommand } from "politty";
+import { describe, expect, aroundEach, test, vi } from "vitest";
+import { z } from "zod";
 import {
+  createCommonArgs,
   loadEnvFiles,
   durationArg,
   parseDuration,
@@ -11,21 +13,20 @@ import {
   resolveMachineUserInputSource,
   toPageDirection,
 } from "./args";
+import { defineAppCommand } from "./command";
+import { logger } from "./logger";
+import { tempCwd } from "./test-helpers/temp-cwd";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
   let tempDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-env-test-"));
-    vi.spyOn(process, "cwd").mockReturnValue(tempDir);
-  });
-
-  afterEach(() => {
+    using tmp = tempCwd("tailor-env-test-");
+    tempDir = tmp.dir;
+    await runTest();
     process.env = originalEnv;
-    vi.restoreAllMocks();
-    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
   describe("required env files (envFiles)", () => {
@@ -207,11 +208,9 @@ describe("toPageDirection", () => {
 });
 
 describe("resolveMachineUserInputSource", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
@@ -250,5 +249,41 @@ describe("resolveMachineUserInputSource", () => {
     expect(resolveMachineUserInputSource("bot", ["query", "--", "--machine-user", "bot"])).toBe(
       "env",
     );
+  });
+});
+
+describe("createCommonArgs effects", () => {
+  test("--json and --verbose set the shared logger state", async () => {
+    const previousJsonMode = logger.jsonMode;
+    const previousVerbose = logger.verbose;
+    try {
+      const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+      const result = await runCommand(command, ["--json", "--verbose"], {
+        // Strip unknown keys the same way the CLI entrypoint parses global args.
+        globalArgs: z.object(createCommonArgs()),
+      });
+      expect(result.exitCode).toBe(0);
+      expect(logger.jsonMode).toBe(true);
+      expect(logger.verbose).toBe(true);
+    } finally {
+      logger.jsonMode = previousJsonMode;
+      logger.verbose = previousVerbose;
+    }
+  });
+
+  test("verboseAlias adds a short alias for --verbose", async () => {
+    const previousVerbose = logger.verbose;
+    try {
+      logger.verbose = false;
+      const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+      const result = await runCommand(command, ["-v"], {
+        // Strip unknown keys the same way the plugin entrypoints parse global args.
+        globalArgs: z.object(createCommonArgs({ verboseAlias: "v" })),
+      });
+      expect(result.exitCode).toBe(0);
+      expect(logger.verbose).toBe(true);
+    } finally {
+      logger.verbose = previousVerbose;
+    }
   });
 });

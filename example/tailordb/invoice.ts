@@ -3,14 +3,14 @@ import { defaultGqlPermission, defaultPermission } from "./permissions";
 import { salesOrder } from "./salesOrder";
 
 export const invoice = db
-  .type("Invoice", {
+  .table("Invoice", {
     invoiceNumber: db.string().serial({
       start: 1000,
       format: "INV-%05d",
     }),
     salesOrderID: db.uuid().relation({
       type: "1-1",
-      toward: { type: salesOrder },
+      toward: { table: salesOrder },
     }),
     amount: db.int({ optional: true }),
     sequentialId: db.int().serial({

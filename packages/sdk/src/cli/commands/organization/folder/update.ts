@@ -9,6 +9,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
+// strip unknown keys
 const updateFolderOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
@@ -47,16 +48,14 @@ export async function updateFolder(options: UpdateFolderOptions): Promise<Folder
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a folder's name.",
-  args: z
-    .object({
-      ...organizationArgs,
-      ...folderArgs,
-      name: arg(z.string(), {
-        alias: "n",
-        description: "New folder name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    ...folderArgs,
+    name: arg(z.string(), {
+      alias: "n",
+      description: "New folder name",
+    }),
+  }),
   run: async (args) => {
     await assertWritable();
     const folder = await updateFolder({

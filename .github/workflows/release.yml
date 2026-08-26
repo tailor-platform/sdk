@@ -1,5 +1,3 @@
-# pinact:skip-file — this workflow's action versions are pinned deliberately;
-# changesets/action's `next` prereleases have repeatedly broken releases.
 name: Release
 
 on:
@@ -23,7 +21,7 @@ jobs:
       id-token: write # OIDC for npm trusted publishing
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # Full history: changesets/action's changelog generation walks
@@ -52,29 +50,24 @@ jobs:
         run: pnpm add -g npm@latest
         shell: bash
 
-      # `--no-git-tag` skips @changesets/cli's own `git tag -m` (an annotated
-      # tag, which needs a git identity we don't configure here). We create
-      # tags and releases entirely through the `gh` API instead — see the
-      # "Ensure GitHub releases" step below.
       - name: Create Release PR or Publish
         id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
-          commitMode: "github-api"
-          publish: "pnpm changeset publish --no-git-tag"
-          createGithubReleases: false
-        env:
-          GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
+          publish-script: "pnpm changeset publish"
+          create-github-releases: true
+          pr-title: "Release - ${{ github.ref_name }}"
+          github-token: ${{ steps.get_access_token.outputs.token }}
 
-      # Idempotent: creates a release (and its tag, via `gh release create
-      # --target`) for every package version that doesn't have one yet, and
-      # fails the job if creation fails — so a broken release step is caught
-      # immediately instead of the gap going unnoticed.
-      - name: Ensure GitHub releases exist for published packages
+      # Only fires when changesets/action created/updated a release PR (as
+      # opposed to publishing). See resolve-pending-release-versions.sh.
+      - name: Resolve pending release versions
+        if: steps.changesets.outputs['pr-number']
         env:
           GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
+          PR_NUMBER: ${{ steps.changesets.outputs['pr-number'] }}
         shell: bash
-        run: bash ./.github/scripts/ensure-github-releases.sh
+        run: bash ./.github/scripts/resolve-pending-release-versions.sh
 
       - name: Notify Slack on failure
         if: failure()

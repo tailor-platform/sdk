@@ -3,14 +3,17 @@ import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
-import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { syncCommand } from "./sync";
-import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
+import {
+  parsedType,
+  snapshotType,
+  writeDiff,
+  writeInitialSchema,
+} from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -79,65 +82,6 @@ vi.mock("#/cli/services/application", () => ({
   generatePluginFilesIfNeeded: vi.fn(() => state.pluginExecutorFiles),
 }));
 
-// Parsed-type shape consumed by createSnapshotFromLocalTypes; produces the
-// same snapshot type as snapshotType() below.
-function parsedType(name: string): TailorDBType {
-  return {
-    name,
-    pluralForm: `${name}s`,
-    fields: {
-      id: { name: "id", config: { type: "uuid", required: true } },
-      name: { name: "name", config: { type: "string", required: true } },
-    },
-    settings: {},
-    forwardRelationships: {},
-    backwardRelationships: {},
-    permissions: {},
-  };
-}
-
-function snapshotType(name: string): TailorDBSnapshotType {
-  return {
-    name,
-    pluralForm: `${name}s`,
-    fields: {
-      id: { type: "uuid", required: true },
-      name: { type: "string", required: true },
-    },
-  };
-}
-
-function writeInitialSchema(types: Record<string, TailorDBSnapshotType>): void {
-  const snapshot: SchemaSnapshot = {
-    version: SCHEMA_SNAPSHOT_VERSION,
-    namespace: "tailordb",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    types,
-  };
-  const dir = path.join(state.migrationsDir, "0000");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "schema.json"), JSON.stringify(snapshot));
-}
-
-function writeDiff(number: number, changes: unknown[]): void {
-  const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "diff.json"),
-    JSON.stringify({
-      version: SCHEMA_SNAPSHOT_VERSION,
-      namespace: "tailordb",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      changes,
-      hasBreakingChanges: false,
-      breakingChanges: [],
-      hasWarnings: false,
-      warnings: [],
-      requiresMigrationScript: false,
-    }),
-  );
-}
-
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
   const db: Record<string, unknown> = {};
   for (const namespace of namespaces) {
@@ -153,18 +97,18 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
 }
 
 describe("tailordb migration sync", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-sync-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-sync-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
 
-    writeInitialSchema({ User: snapshotType("User") });
-    writeDiff(1, [{ kind: "type_added", typeName: "Post", after: snapshotType("Post") }]);
-    writeDiff(2, []);
+    writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
+    writeDiff(state.migrationsDir, 1, [
+      { kind: "table_added", typeName: "Post", after: snapshotType("Post") },
+    ]);
+    writeDiff(state.migrationsDir, 2, []);
     mockConfig();
-    // Local types matching reconstruct(latest) so the pre-apply consistency
+    // Local tables matching reconstruct(latest) so the pre-apply consistency
     // check passes by default.
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
     state.executors = {};
@@ -200,9 +144,9 @@ describe("tailordb migration sync", () => {
       getMetadata: state.getMetadata,
       setMetadata: state.setMetadata,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  });
 
-  afterEach(() => {
+    await runTest();
+
     vi.restoreAllMocks();
     state.listTailorDBTypes.mockReset();
     state.createTailorDBType.mockReset();
@@ -249,9 +193,59 @@ describe("tailordb migration sync", () => {
     );
   });
 
+  test("sets the current migration history ID from a re-baselined snapshot", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: null,
+          replacedLatestMigration: 2,
+        },
+      }),
+    );
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-migration-history": "hcurrent",
+          "sdk-name": "my-app",
+        },
+      }),
+    );
+  });
+
+  test("removes a stale remote history ID for a markerless local history", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0002",
+          "sdk-migration-history": "hstale",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
+      }),
+    );
+  });
+
   test("reconciles GQL permissions with the snapshot", async () => {
     const gqlPolicy = { conditions: [], actions: ["read"], permit: "allow" };
-    writeInitialSchema({
+    writeInitialSchema(state.migrationsDir, {
       User: { ...snapshotType("User"), permissions: { gql: [gqlPolicy] } } as ReturnType<
         typeof snapshotType
       >,
@@ -274,7 +268,7 @@ describe("tailordb migration sync", () => {
       expect.objectContaining({ namespaceName: "tailordb", typeName: "User" }),
     );
     expect(state.updateTailorDBGQLPermission).not.toHaveBeenCalled();
-    // Stale's permission has no snapshot counterpart → deleted before the type.
+    // Stale's permission has no snapshot counterpart → deleted before the table.
     expect(state.deleteTailorDBGQLPermission).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "tailordb", typeName: "Stale" }),
     );
@@ -330,7 +324,7 @@ describe("tailordb migration sync", () => {
 
   test("includes plugin-generated executors in publishRecordEvents detection", async () => {
     state.pluginExecutorFiles = ["/tmp/plugin-executor.ts"];
-    state.pluginExecutors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
+    state.pluginExecutors = { onUser: { trigger: { kind: "tailordb", tableName: "User" } } };
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
@@ -340,8 +334,8 @@ describe("tailordb migration sync", () => {
     });
   });
 
-  test("enables publishRecordEvents for types used by executor record triggers", async () => {
-    state.executors = { onUser: { trigger: { kind: "tailordb", typeName: "User" } } };
+  test("enables publishRecordEvents for tables used by executor record triggers", async () => {
+    state.executors = { onUser: { trigger: { kind: "tailordb", tableName: "User" } } };
 
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
@@ -401,8 +395,8 @@ describe("tailordb migration sync", () => {
     expect(String(result.error)).toMatch(/not found or does not have migrations configured/);
   });
 
-  test("refuses to apply when the migration history does not reproduce local types", async () => {
-    // Local types lack Post, but reconstruct(latest) contains it — the
+  test("refuses to apply when the migration history does not reproduce local tables", async () => {
+    // Local tables lack Post, but reconstruct(latest) contains it — the
     // history (or the working tree) is inconsistent and nothing may be sent.
     state.localTypes = { User: parsedType("User") };
 

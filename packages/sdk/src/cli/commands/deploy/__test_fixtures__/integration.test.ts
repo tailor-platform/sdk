@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { aroundAll, describe, expect, test, vi } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { setupInvokerMock, setupTailordbMock, setupTailorErrorsMock } from "#/utils/test/mock";
 import { prepareFixtures } from "./prepare";
@@ -50,7 +50,7 @@ describe("deploy command integration tests", () => {
     return files;
   };
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
@@ -59,12 +59,10 @@ describe("deploy command integration tests", () => {
     const result = await prepareFixtures();
     outputDir = result.outputDir;
     bundledScripts = result.bundledScripts;
-  }, 120000);
-
-  afterAll(() => {
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    await runSuite();
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     vi.useRealTimers();
-  });
+  }, 120000);
 
   test("compare directory structure", () => {
     const actualFiles = collectGeneratedFiles(outputDir).toSorted();
@@ -73,9 +71,11 @@ describe("deploy command integration tests", () => {
     const pluginFiles = actualFiles.filter((f) => f === "db.ts" || f === "enums.ts");
     expect(pluginFiles.length).toBeGreaterThan(0);
 
-    // Entry files should exist on disk (rolldown input)
-    const entryFiles = actualFiles.filter((f) => f.endsWith(".entry.js"));
-    expect(entryFiles.length).toBeGreaterThan(0);
+    // Deployment bundling should not leave entry files on disk
+    const entryFiles = actualFiles.filter(
+      (f) => f.endsWith(".entry.js") || f.endsWith(".entry.ts"),
+    );
+    expect(entryFiles).toEqual([]);
 
     // Bundle output files should NOT exist on disk (in-memory only)
     const bundleOutputFiles = actualFiles.filter(
@@ -100,12 +100,13 @@ describe("deploy command integration tests", () => {
     let main: MainFunction;
     const addResolverBundleKey = resolverBundleKey("test-resolver", "add");
 
-    beforeAll(async () => {
+    aroundAll(async (runSuite) => {
       const code = bundledScripts.resolvers.get(addResolverBundleKey);
       if (!code) {
         throw new Error("resolvers/add bundle not found");
       }
       main = await importFromCode(code, "resolvers/add");
+      await runSuite();
     });
 
     test("resolvers/add bundle is defined", () => {

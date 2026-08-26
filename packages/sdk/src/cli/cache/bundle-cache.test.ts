@@ -1,19 +1,17 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { computeBundlerContextHash, createBundleCache, withCache } from "./bundle-cache";
 import { createCacheStore } from "./store";
 
 let tmpDir: string;
 let cacheDir: string;
 
-beforeEach(() => {
+aroundEach(async (runTest) => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-cache-test-"));
   cacheDir = path.join(tmpDir, "cache");
-});
-
-afterEach(() => {
+  await runTest();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -84,6 +82,23 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({ kind: "resolver", name: "myResolver" });
 
       expect(result).toBeUndefined();
+    });
+
+    test("returns undefined when cached bundle content does not match its metadata", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store);
+      const sourceFile = writeFile("src/resolver.ts", "export default {}");
+      cache.save({
+        kind: "resolver",
+        name: "myResolver",
+        sourceFile,
+        content: "expected bundle",
+        dependencyPaths: [sourceFile],
+      });
+
+      store.storeBundleContent("resolver:myResolver", "another config's bundle");
+
+      expect(cache.tryRestore({ kind: "resolver", name: "myResolver" })).toBeUndefined();
     });
 
     test("returns undefined when a dependency file no longer exists", () => {
@@ -221,6 +236,25 @@ describe("createBundleCache", () => {
       expect(secondEntry).toBeDefined();
       expect(secondEntry?.inputHash).not.toBe(firstInputHash);
     });
+
+    test("skips storing the entry instead of throwing when a dependency path is unreadable", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store);
+      const sourceFile = writeFile("src/resolver.ts", "export default {}");
+      const unreadableDir = path.join(tmpDir, "src");
+
+      expect(() =>
+        cache.save({
+          kind: "resolver",
+          name: "myResolver",
+          sourceFile,
+          content: "bundled output",
+          dependencyPaths: [sourceFile, unreadableDir],
+        }),
+      ).not.toThrow();
+
+      expect(store.getEntry("resolver:myResolver")).toBeUndefined();
+    });
   });
 
   describe("cache key format", () => {
@@ -290,8 +324,115 @@ describe("withCache", () => {
     });
 
     expect(build).toHaveBeenCalledOnce();
-    expect(build).toHaveBeenCalledWith([]);
+    expect(build).toHaveBeenCalledWith([], expect.any(Function));
     expect(result).toBe("built output");
+  });
+
+  // tsconfigs consulted for path aliases are never loaded as modules, so only
+  // the explicit dependency registration can invalidate the entry.
+  test("invalidates the entry when a build-tracked non-module file changes", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const ancestorTsconfig = writeFile(
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib-a/*"] } } }),
+    );
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    const first = await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(ancestorTsconfig);
+        return "built from lib-a";
+      },
+    });
+    expect(first).toBe("built from lib-a");
+
+    fs.writeFileSync(
+      ancestorTsconfig,
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib-b/*"] } } }),
+    );
+
+    const rebuild = vi.fn(async () => "built from lib-b");
+    const second = await withCache({ ...params, build: rebuild });
+
+    expect(rebuild).toHaveBeenCalledOnce();
+    expect(second).toBe("built from lib-b");
+  });
+
+  // A tracked file disappearing changes the hash rather than throwing, so it
+  // still has to land on a cache miss.
+  test("invalidates the entry when a tracked file is deleted", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const tsconfig = writeFile("tsconfig.json", JSON.stringify({ compilerOptions: {} }));
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(tsconfig);
+        return "built with tsconfig";
+      },
+    });
+
+    fs.rmSync(tsconfig);
+
+    const rebuild = vi.fn(async () => "built without tsconfig");
+    expect(await withCache({ ...params, build: rebuild })).toBe("built without tsconfig");
+    expect(rebuild).toHaveBeenCalledOnce();
+  });
+
+  // The walk reports directories it passed over as well, so a tsconfig.json
+  // appearing in one later has to invalidate the entry even though the build
+  // that saved it never read that file.
+  test("invalidates the entry when a tracked but absent file is created", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const laterTsconfig = path.join(tmpDir, "src", "tsconfig.json");
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    const first = await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(laterTsconfig);
+        return "built without nearer tsconfig";
+      },
+    });
+    expect(first).toBe("built without nearer tsconfig");
+
+    const cachedRebuild = vi.fn(async () => "should not run");
+    expect(await withCache({ ...params, build: cachedRebuild })).toBe(
+      "built without nearer tsconfig",
+    );
+    expect(cachedRebuild).not.toHaveBeenCalled();
+
+    fs.writeFileSync(
+      laterTsconfig,
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./near/*"] } } }),
+    );
+
+    const rebuild = vi.fn(async () => "built with nearer tsconfig");
+    expect(await withCache({ ...params, build: rebuild })).toBe("built with nearer tsconfig");
+    expect(rebuild).toHaveBeenCalledOnce();
   });
 
   test("skips build when cache restores successfully", async () => {
@@ -427,7 +568,7 @@ describe("withCache", () => {
 describe("computeBundlerContextHash", () => {
   const baseParams = {
     sourceFile: "/tmp/src/resolver.ts",
-    serializedTriggerContext: "ctx",
+    extraContext: "ctx",
   };
 
   test("returns the same hash for identical inputs", () => {
@@ -440,7 +581,7 @@ describe("computeBundlerContextHash", () => {
 
   test.each([
     ["sourceFile", {}, { sourceFile: "/tmp/src/executor.ts" }],
-    ["serializedTriggerContext", {}, { serializedTriggerContext: "other" }],
+    ["extraContext", {}, { extraContext: "other" }],
     ["prefix", { prefix: "ENV_A=1" }, { prefix: "ENV_B=2" }],
     ["bundleLogLevel", { bundleLogLevel: "DEBUG" }, { bundleLogLevel: "WARN" }],
   ])("returns different hash when %s differs", (_label, overrideA, overrideB) => {

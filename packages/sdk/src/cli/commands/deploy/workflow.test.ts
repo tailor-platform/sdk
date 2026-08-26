@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { MAX_PAGE_SIZE, type OperatorClient } from "#/cli/shared/client";
-import { logger } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { Workflow, WorkflowJob } from "#/types/workflow.generated";
@@ -12,13 +12,15 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    // A fresh object per call, as the real one returns: callers mutate the write
+    // they get back, so a shared literal accumulates across tests.
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:workflow:test",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -42,7 +44,7 @@ describe("planWorkflow", () => {
   function createMockJob(name: string): WorkflowJob {
     return {
       name,
-      trigger: () => {},
+      start: () => {},
       body: () => {},
     };
   }
@@ -54,6 +56,12 @@ describe("planWorkflow", () => {
     };
   }
 
+  type MockJobFunction = {
+    label?: string;
+    sdkVersion?: string;
+    publishExecutionEvents?: boolean;
+  };
+
   function createMockClient(
     existingWorkflows: Array<{
       id: string;
@@ -61,10 +69,12 @@ describe("planWorkflow", () => {
       label?: string;
       resource?: Record<string, unknown>;
       sdkVersion?: string;
+      /** Extra labels the workflow's own TRN answers with. */
+      extraLabels?: Record<string, string>;
     }>,
-    jobFunctionLabels?: Record<string, { label?: string; sdkVersion?: string }>,
+    jobFunctionLabels?: Record<string, MockJobFunction>,
   ): OperatorClient {
-    const inferredJobFunctionLabels: Record<string, { label?: string; sdkVersion?: string }> = {};
+    const inferredJobFunctionLabels: Record<string, MockJobFunction> = {};
     for (const workflow of existingWorkflows) {
       const resource = workflow.resource;
       if (!resource) {
@@ -114,24 +124,340 @@ describe("planWorkflow", () => {
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
           metadata: {
-            labels: workflow?.label
-              ? {
-                  [sdkNameLabelKey]: workflow.label,
-                  "sdk-version": workflow.sdkVersion ?? "v1-0-0",
-                }
-              : {},
+            labels: {
+              ...(workflow?.label
+                ? {
+                    [sdkNameLabelKey]: workflow.label,
+                    "sdk-version": workflow.sdkVersion ?? "v1-0-0",
+                  }
+                : {}),
+              ...workflow?.extraLabels,
+            },
           },
         };
       }),
       listWorkflowJobFunctions: vi.fn().mockResolvedValue({
-        jobFunctions: Object.keys(labelsByJobFunction).map((name) => ({ name })),
+        jobFunctions: Object.entries(labelsByJobFunction).map(([name, jobFunction]) => ({
+          name,
+          publishExecutionEvents: jobFunction.publishExecutionEvents ?? false,
+        })),
         nextPageToken: "",
       }),
     } as unknown as OperatorClient;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
+  });
+
+  describe("workflow execution event publishing", () => {
+    test("enables publishing for a workflow with a matching executor subscription", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+      const result = await planWorkflow(
+        createMockClient([]),
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job"] },
+        new Set(),
+        {
+          execution: { workflowNames: new Set(["orders"]) },
+        },
+      );
+
+      expect(result.changeSet.creates[0]!.workflow.publishEvents).toBe(true);
+    });
+
+    test("rejects an explicit opt-out with a matching executor subscription", async () => {
+      const workflow = { ...createMockWorkflow("orders", "main-job"), publishEvents: false };
+
+      await expect(
+        planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          {
+            execution: { workflowNames: new Set(["orders"]) },
+          },
+        ),
+      ).rejects.toThrow('Workflow "orders" has "publishEvents: false"');
+    });
+
+    test("enables publishing for every job of a workflow with a job execution subscription", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+      const result = await planWorkflow(
+        createMockClient([]),
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job", "child-job"] },
+        new Set(),
+        {
+          jobExecution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map(),
+        },
+      );
+
+      expect(result.jobFunctionPublishEvents).toEqual(
+        new Map([
+          ["main-job", true],
+          ["child-job", true],
+        ]),
+      );
+    });
+
+    test("leaves jobs opted out when no executor subscribes to job execution events", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+      const result = await planWorkflow(
+        createMockClient([]),
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job", "child-job"] },
+        new Set(),
+        {
+          execution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map([["child-job", true]]),
+        },
+      );
+
+      expect(result.jobFunctionPublishEvents).toEqual(
+        new Map([
+          ["main-job", false],
+          ["child-job", true],
+        ]),
+      );
+    });
+
+    test.each([
+      { publishEvents: true, subscribed: false, expected: true },
+      { publishEvents: true, subscribed: true, expected: true },
+      { publishEvents: false, subscribed: false, expected: false },
+      { publishEvents: undefined, subscribed: false, expected: false },
+      { publishEvents: undefined, subscribed: true, expected: true },
+    ])(
+      "resolves a workflow with publishEvents=$publishEvents subscribed=$subscribed to $expected",
+      async ({ publishEvents, subscribed, expected }) => {
+        const workflow = {
+          ...createMockWorkflow("orders", "main-job"),
+          ...(publishEvents === undefined ? {} : { publishEvents }),
+        };
+
+        const result = await planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          subscribed ? { execution: { workflowNames: new Set(["orders"]) } } : {},
+        );
+
+        expect(result.changeSet.creates[0]!.workflow.publishEvents).toBe(expected);
+      },
+    );
+
+    test("turns a remote workflow opt-in back off once nothing subscribes", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "orders",
+          label: appName,
+          sdkVersion: "v0-9-0",
+          resource: {
+            id: "1",
+            name: "orders",
+            mainJobFunctionName: "main-job",
+            jobFunctions: { "main-job": "1" },
+            publishExecutionEvents: true,
+          },
+        },
+      ]);
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {},
+      );
+
+      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(false);
+    });
+
+    test("turns a remote job opt-in back off once nothing subscribes", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: true } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {},
+      );
+
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(false);
+    });
+
+    test("honors an explicit opt-out over a remote opt-in", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            sdkVersion: "v0-9-0",
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+              publishExecutionEvents: true,
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: true } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: { ...createMockWorkflow("orders", "main-job"), publishEvents: false } },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        { jobPublishEvents: new Map([["main-job", false]]) },
+      );
+
+      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(false);
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(false);
+    });
+
+    test("rejects an explicit job opt-out with a matching job execution subscription", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+
+      await expect(
+        planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          {
+            jobExecution: { workflowNames: new Set(["orders"]) },
+            jobPublishEvents: new Map([["main-job", false]]),
+          },
+        ),
+      ).rejects.toThrow('Job "main-job" has "publishEvents: false"');
+    });
+
+    test("updates an otherwise unchanged workflow when a job's publishing flag drifts", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: false } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {
+          jobExecution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map(),
+        },
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(0);
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(true);
+    });
+
+    test("keeps a workflow unchanged when its jobs already publish the resolved events", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+              publishExecutionEvents: true,
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: true } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {
+          execution: { workflowNames: new Set(["orders"]) },
+          jobExecution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map(),
+        },
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
   });
 
   describe("rename scenarios", () => {
@@ -570,7 +896,10 @@ describe("planWorkflow", () => {
 
     test("plans owned orphaned job functions for deletion even when remaining workflows are unchanged", async () => {
       const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
-        jobFunctions: [{ name: "keep-job" }, { name: "orphaned-job" }],
+        jobFunctions: [
+          { name: "keep-job", publishExecutionEvents: false },
+          { name: "orphaned-job", publishExecutionEvents: false },
+        ],
         nextPageToken: "",
       });
       const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
@@ -623,6 +952,30 @@ describe("planWorkflow", () => {
         pageSize: MAX_PAGE_SIZE,
       });
       expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
+    });
+
+    test("records the owner of an orphaned job function it cannot claim", async () => {
+      // Skipping it silently lets remove report that it deleted everything the
+      // application manages while this one is still there.
+      const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
+        jobFunctions: [{ name: "orphaned-job", publishExecutionEvents: false }],
+        nextPageToken: "",
+      });
+      const getMetadata = vi.fn().mockResolvedValue({
+        metadata: {
+          labels: { [sdkNameLabelKey]: appName, "sdk-app-id": "app-id-1" },
+        },
+      });
+      const client = {
+        listWorkflows: vi.fn().mockResolvedValue({ workflows: [], nextPageToken: "" }),
+        listWorkflowJobFunctions,
+        getMetadata,
+      } as unknown as OperatorClient;
+
+      const result = await planWorkflow(client, workspaceId, appName, "id-2", {}, {}, new Set());
+
+      expect(result.jobFunctionDeletes).toEqual([]);
+      expect(result.resourceOwners.has(appName)).toBe(true);
     });
   });
 
@@ -748,6 +1101,57 @@ describe("planWorkflow", () => {
       warn.mockRestore();
     });
   });
+
+  describe("dependency records and job-level publishing", () => {
+    /**
+     * Plan one workflow carrying a record, with the jobs it runs declaring
+     * `publishEvents` or not.
+     * @param jobPublishEvents - Explicit job values, keyed by job name
+     * @returns The workflow's planned metadata write
+     */
+    async function planWith(jobPublishEvents: ReadonlyMap<string, boolean>) {
+      const workflow = { ...createMockWorkflow("orders", "main-job"), publishEvents: true };
+      const client = createMockClient([{ id: "wf-1", name: "orders" }]);
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job", "child-job"] },
+        new Set(),
+        {
+          jobPublishEvents,
+          dependentApps: new Map(),
+          runAppIds: new Set<string>(),
+        },
+      );
+      const [entry] = [...result.changeSet.updates, ...result.changeSet.unchanged];
+      // The reconciliation resolves against the labels read at write time, so the
+      // planner's decision is the pinned flag it attaches for the jobs scope.
+      return entry?.metaRequest?.dependencies?.find((pending) => pending.scope === "jobs");
+    }
+
+    test("leaves the job records alive while a job it runs declares nothing", async () => {
+      // fetchMissingDependentApps reads this workflow precisely because a job of it
+      // is still recomputed, so treating it as pinned would drop the record and the
+      // confirmation would never fire for job-level changes.
+      const jobs = await planWith(new Map([["main-job", true]]));
+
+      expect(jobs?.pinned).toBe(false);
+    });
+
+    test("pins the job records once every job it runs declares the value", async () => {
+      const jobs = await planWith(
+        new Map([
+          ["main-job", true],
+          ["child-job", true],
+        ]),
+      );
+
+      expect(jobs?.pinned).toBe(true);
+    });
+  });
 });
 
 describe("formatWorkflowChangeEntries", () => {
@@ -761,7 +1165,7 @@ describe("formatWorkflowChangeEntries", () => {
             workspaceId: "ws",
             workflow: {
               name: "order-processing",
-              mainJob: { name: "process-order", body: () => {}, trigger: () => {} },
+              mainJob: { name: "process-order", body: () => {}, start: () => {} },
             },
             usedJobNames: ["process-order"],
             metaRequest: { trn: "t", labels: {} },
@@ -781,7 +1185,7 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "order-processing",
         labels: ["workflow", "function"],
       },
@@ -807,7 +1211,7 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "process-order",
         labels: ["function"],
       },
@@ -841,7 +1245,7 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "order-processing",
         labels: ["workflow", "function"],
       },
@@ -875,13 +1279,13 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "order-processing",
         labels: ["workflow"],
       },
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "send-notification",
         labels: ["function"],
       },

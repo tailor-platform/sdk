@@ -8,7 +8,13 @@ import { resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/clie
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -18,7 +24,6 @@ import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { AIGateway as ProtoAIGateway } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply AI Gateway changes for the given phase.
@@ -43,7 +48,7 @@ export async function applyAIGateway(
           "AIGateway CORS",
         );
         await client.createAIGateway(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
@@ -53,7 +58,7 @@ export async function applyAIGateway(
           "AIGateway CORS",
         );
         await client.updateAIGateway(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {
@@ -64,13 +69,13 @@ export async function applyAIGateway(
 type CreateAIGateway = {
   name: string;
   request: MessageInitShape<typeof CreateAIGatewayRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateAIGateway = {
   name: string;
   request: MessageInitShape<typeof UpdateAIGatewayRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteAIGateway = {
@@ -180,7 +185,7 @@ export async function planAIGateway(context: PlanContext) {
       if (
         owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areAIGatewaysEqual(existing.resource as ProtoAIGateway, desired)
+        areAIGatewaysEqual(existing.resource, desired)
       ) {
         changeSet.unchanged.push({ name });
       } else {

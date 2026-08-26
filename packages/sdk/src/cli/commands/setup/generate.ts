@@ -61,13 +61,13 @@ export type BranchSetupOptions = CommonSetupOptions & {
   erdPreview: boolean;
 };
 
-export type TagSetupOptions = CommonSetupOptions & {
+type TagSetupOptions = CommonSetupOptions & {
   kind: "tag";
   tagPattern: string;
   branch?: string;
 };
 
-export type PreviewSetupOptions = CommonSetupOptions & {
+type PreviewSetupOptions = CommonSetupOptions & {
   kind: "preview";
   branch?: string;
   /** Workspace region for preview workspace creation (e.g. `us-west`). */
@@ -79,7 +79,7 @@ export type PreviewSetupOptions = CommonSetupOptions & {
   requirePreviewLabel?: boolean;
 };
 
-export type ActionSetupOptions = CommonSetupOptions & {
+type ActionSetupOptions = CommonSetupOptions & {
   kind: "action";
 };
 
@@ -360,7 +360,8 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       validateErdNamespaces(erdNamespaces);
     }
     branchAutoDetected = options.branch === undefined;
-    branch = options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner);
+    branch =
+      options.branch ?? detectDefaultBranch(options.outputDir, options.gitRunner, "--target");
     validateBranch(branch);
     hasMigrations = await loadHasMigrations(configPath);
     hasSeeds = await loadHasSeeds(configPath);
@@ -597,13 +598,13 @@ function printNextSteps(obj: { environment: string; idInjected: boolean }): void
     `2. Provision the workspace and set its id as the TAILOR_PLATFORM_WORKSPACE_ID variable ` +
       `on the "${environment}" environment:`,
   );
-  logger.log("   tailor-sdk workspace create   # if it does not exist yet; copy the id");
+  logger.log("   tailor workspace create   # if it does not exist yet; copy the id");
   logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
 
   logger.newline();
   logger.log("3. Commit the generated files:");
   logger.log("   - .github/workflows/tailor-*.yml");
-  logger.log("   - .github/tailor-sdk.lock");
+  logger.log("   - .github/tailor.lock");
   if (idInjected) {
     logger.log("   - tailor.config.ts (app id was added)");
   }
@@ -711,7 +712,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     logger.newline();
     logger.log(`The composite action has been generated at ${styles.path(resolved.file)}.`);
     logger.log(
-      "Use `tailor-sdk setup coordinate` to generate a coordinator workflow that orchestrates this action.",
+      "Use `tailor setup coordinate` to generate a coordinator workflow that orchestrates this action.",
     );
   } else {
     printNextSteps({ environment: resolved.environment, idInjected });
@@ -735,7 +736,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   if (actions.length === 0) {
     throw new Error(
       "At least one --action is required. " +
-        "Run `tailor-sdk setup action --dir <app-dir>` for each app first.",
+        "Run `tailor setup action --dir <app-dir>` for each app first.",
     );
   }
 
@@ -763,8 +764,8 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
 
   if (!lock) {
     throw new Error(
-      ".github/tailor-sdk.lock not found. " +
-        "Run `tailor-sdk setup action --name <name>` for each app before running setup coordinate.",
+      ".github/tailor.lock not found. " +
+        "Run `tailor setup action --name <name>` for each app before running setup coordinate.",
     );
   }
 
@@ -787,14 +788,14 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       const entry = actionTargets.get(name);
       if (!entry) {
         throw new Error(
-          `Action target "${name}" not found in .github/tailor-sdk.lock. ` +
-            `Run \`tailor-sdk setup action --name ${name}\` first.`,
+          `Action target "${name}" not found in .github/tailor.lock. ` +
+            `Run \`tailor setup action --name ${name}\` first.`,
         );
       }
       if (names.length > 1 && entry.templateVersion < TEMPLATE_VERSION) {
         throw new Error(
           `Action target "${name}" was generated with an older setup template. ` +
-            `Run \`tailor-sdk setup action --name ${name} --force\` before grouping it in setup coordinate.`,
+            `Run \`tailor setup action --name ${name} --force\` before grouping it in setup coordinate.`,
         );
       }
       validateDir(entry.inputs.dir);
@@ -893,11 +894,11 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   logger.log(
     `2. Provision the target workspace and set TAILOR_PLATFORM_WORKSPACE_ID on the "${environment}" environment:`,
   );
-  logger.log("   tailor-sdk workspace create   # if it does not exist yet; copy the id");
+  logger.log("   tailor workspace create   # if it does not exist yet; copy the id");
   logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
   logger.newline();
   logger.log("3. Commit the generated files:");
   logger.log(`   - ${file}`);
   logger.log(`   - ${tailorSetupFile}  (if newly created)`);
-  logger.log("   - .github/tailor-sdk.lock");
+  logger.log("   - .github/tailor.lock");
 }

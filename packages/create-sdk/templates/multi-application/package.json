@@ -1,12 +1,11 @@
 {
   "name": "multi-application",
-  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "deploy": "pnpm run deploy:user && pnpm run deploy:admin",
-    "deploy:user": "tailor-sdk deploy -c apps/user/tailor.config.ts",
-    "deploy:admin": "tailor-sdk deploy -c apps/admin/tailor.config.ts",
+    "deploy:user": "tailor deploy -c apps/user/tailor.config.ts",
+    "deploy:admin": "tailor deploy -c apps/admin/tailor.config.ts",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware .",
@@ -14,11 +13,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@tailor-platform/eslint-plugin-sdk": "workspace:^",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.3",
-    "oxfmt": "0.58.0",
-    "oxlint": "1.73.0",
-    "oxlint-tsgolint": "0.24.0",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.79.0",
+    "oxlint-tsgolint": "7.0.2001",
     "typescript": "6.0.3"
   }
 }

@@ -9,47 +9,45 @@ import type { ProfileInfo } from "./types";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new profile.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        positional: true,
-        description: "Profile name",
-      }),
-      user: arg(z.string(), {
-        alias: "u",
-        description: "User email",
-      }),
-      "workspace-id": arg(z.string(), {
-        alias: "w",
-        description: "Workspace ID",
-      }),
-      permission: arg(z.enum(["write", "read"]).default("write"), {
-        description:
-          "Profile permission. 'read' blocks all write commands while the profile is active.",
-      }),
-      "machine-user": arg(z.string().optional(), {
-        alias: "m",
-        description:
-          "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).",
-      }),
-      "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
-        description:
-          "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user.",
-      }),
-      "platform-url": arg(z.url().optional(), {
-        description: "Platform API base URL for this profile.",
-        env: "TAILOR_PLATFORM_URL",
-      }),
-      "oauth2-client-id": arg(z.string().optional(), {
-        description: "OAuth2 client ID for logging in to this profile's platform.",
-        env: "TAILOR_PLATFORM_OAUTH2_CLIENT_ID",
-      }),
-      "console-url": arg(z.url().optional(), {
-        description: "Console base URL for this profile.",
-        env: "TAILOR_PLATFORM_CONSOLE_URL",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
+    user: arg(z.string(), {
+      alias: "u",
+      description: "User email address or machine user client ID",
+    }),
+    "workspace-id": arg(z.string(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    permission: arg(z.enum(["write", "read"]).default("write"), {
+      description:
+        "Profile permission. 'read' blocks all write commands while the profile is active.",
+    }),
+    "machine-user": arg(z.string().optional(), {
+      alias: "m",
+      description:
+        "Default machine user name for application-data commands (query, workflow start, function run, machineuser token).",
+    }),
+    "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+      description:
+        "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user.",
+    }),
+    "platform-url": arg(z.url().optional(), {
+      description: "Platform API base URL for this profile.",
+      env: "TAILOR_PLATFORM_URL",
+    }),
+    "oauth2-client-id": arg(z.string().optional(), {
+      description: "OAuth2 client ID for logging in to this profile's platform.",
+      env: "TAILOR_PLATFORM_OAUTH2_CLIENT_ID",
+    }),
+    "console-url": arg(z.url().optional(), {
+      description: "Console base URL for this profile.",
+      env: "TAILOR_PLATFORM_CONSOLE_URL",
+    }),
+  }),
   run: async (args) => {
     if (args["machine-user-override"] === "deny" && !args["machine-user"]) {
       throw new Error("--machine-user-override deny requires --machine-user.");
@@ -70,7 +68,11 @@ export const createCommand = defineAppCommand({
     };
     const platformConfig =
       Object.keys(platformConfigInput).length > 0 ? platformConfigInput : undefined;
-    const token = await fetchLatestToken(config, args.user, platformConfig);
+    const { accessToken: token, user: resolvedUser } = await fetchLatestToken(
+      config,
+      args.user,
+      platformConfig,
+    );
 
     // Check if workspace exists
     const client = await initOperatorClient(token, platformConfig);
@@ -89,7 +91,7 @@ export const createCommand = defineAppCommand({
 
     // Create new profile
     config.profiles[args.name] = {
-      user: args.user,
+      user: resolvedUser,
       workspace_id: args["workspace-id"],
       ...(args.permission === "read" ? { readonly: true } : {}),
       ...(args["machine-user"] ? { machine_user: args["machine-user"] } : {}),
@@ -109,7 +111,7 @@ export const createCommand = defineAppCommand({
     // Show profile info
     const profileInfo: ProfileInfo = {
       name: args.name,
-      user: args.user,
+      user: resolvedUser,
       workspaceId: args["workspace-id"],
       permission: args.permission,
       ...(args["machine-user"]

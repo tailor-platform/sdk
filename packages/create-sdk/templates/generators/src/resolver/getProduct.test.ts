@@ -1,4 +1,3 @@
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { mockTailordb } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import resolver from "./getProduct";
@@ -24,7 +23,8 @@ describe("getProduct resolver", () => {
 
     const result = await resolver.body({
       input: { productId: "product-1" },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 
@@ -54,7 +54,8 @@ describe("getProduct resolver", () => {
 
     const result = await resolver.body({
       input: { productId: "product-2" },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 
