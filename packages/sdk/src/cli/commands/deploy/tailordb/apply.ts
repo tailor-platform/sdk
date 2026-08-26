@@ -23,6 +23,7 @@ import {
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
+  restoreRecordEventPublishing,
   getDeletedTableNames,
   migrationSnapshotCache,
   processedTables,
@@ -358,7 +359,6 @@ export async function applyTailorDB(
             changeSet,
             migration,
             migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTables,
             attemptedTables,
           );
 
@@ -384,7 +384,6 @@ export async function applyTailorDB(
             changeSet,
             migration,
             migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTables,
             attemptedTables,
           );
         } catch (error) {
@@ -462,6 +461,14 @@ export async function applyTailorDB(
         logger.newline();
         logger.success(`All data migrations completed successfully.`);
       }
+
+      await restoreRecordEventPublishing(
+        client,
+        pendingMigrations,
+        migrationContext.tailorDBInputs,
+        migrationContext.executorUsedTables,
+        migrationContext.workspaceId,
+      );
 
       // Step 4: Delete remaining GQL permissions that weren't deleted with their tables
       const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter((del) => {
