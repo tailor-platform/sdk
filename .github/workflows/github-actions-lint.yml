@@ -1,9 +1,13 @@
 ---
-# Static analysis for GitHub Actions using actionlint, ghalint, and zizmor
+# Static analysis for GitHub Actions using ghalint and zizmor
 #
-# - actionlint: https://github.com/rhysd/actionlint
 # - ghalint: https://github.com/suzuki-shunsuke/ghalint
 # - zizmor: https://docs.zizmor.sh/
+#
+# actionlint is intentionally absent here: it does not parse `parallel:` steps
+# yet (rhysd/actionlint#693). zizmor covers the security audits actionlint
+# offers, so this job keeps its security coverage. The generated-workflow
+# templates below still run under actionlint, which they parse cleanly.
 name: GitHub Actions Lint
 
 on:
@@ -38,9 +42,6 @@ jobs:
 
       - name: Install aqua
         uses: ./.github/actions/install-aqua
-
-      - name: Run actionlint
-        run: actionlint -color
 
       - name: Run ghalint workflows
         run: ghalint run
