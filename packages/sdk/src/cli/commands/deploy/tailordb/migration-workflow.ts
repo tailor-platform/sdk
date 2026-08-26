@@ -7,9 +7,10 @@
  * spans the migration's real duration.
  *
  * The temporary function, job function, and workflow are removed once the
- * execution reaches a terminal state. Every resource carries the app's
- * ownership labels so a run interrupted before teardown leaves resources a
- * later deploy can still recognize and reclaim.
+ * execution reaches a terminal state. Every resource is labeled with the app's
+ * ownership immediately, so a run interrupted before teardown stays
+ * attributable, and the next run of the same migration reclaims the leftovers
+ * before recreating them.
  */
 
 import * as crypto from "node:crypto";
@@ -17,7 +18,7 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
 import { isNotFoundError } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
-import { buildMetaRequest, resourceTrn, writeMetadataLabels } from "../label";
+import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -50,8 +51,8 @@ export interface LongRunningMigrationResult {
 
 /**
  * Build the shared resource name for a migration's temporary workflow resources.
- * The name is stable per migration so an interrupted run's leftovers are
- * replaced rather than duplicated on retry.
+ * The name is stable per migration so a retry reclaims an interrupted run's
+ * leftovers rather than duplicating them.
  * @param namespace - TailorDB namespace
  * @param migrationNumber - Migration number
  * @returns Resource name
@@ -66,12 +67,16 @@ export function migrationWorkflowResourceName(namespace: string, migrationNumber
  * @param workspaceId - Workspace ID
  * @param name - Function registry name
  * @param code - Bundled script content
+ * @param appName - Owning application name for the resource's labels
+ * @param appId - Owning application id, when known
  */
 async function uploadMigrationFunction(
   client: OperatorClient,
   workspaceId: string,
   name: string,
   code: string,
+  appName: string,
+  appId: string | undefined,
 ): Promise<void> {
   const buffer = Buffer.from(code, "utf-8");
   const info = {
@@ -98,6 +103,14 @@ async function uploadMigrationFunction(
   }
 
   await client.createFunctionRegistry(stream());
+  await writeMetadataLabelsDirect(
+    client,
+    await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "function_registry", name),
+      appName,
+      appId,
+    }),
+  );
 }
 
 /**
@@ -148,6 +161,46 @@ async function teardown(
 }
 
 /**
+ * Remove any leftovers from an earlier interrupted run of this migration.
+ *
+ * The resource name is stable per migration and `createFunctionRegistry` is
+ * create-only, so a retry would otherwise fail on a name collision. Deleting
+ * first makes the create path idempotent across retries.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ */
+async function reclaimLeftovers(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<void> {
+  const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
+  await teardown(client, workspaceId, name, workflowId);
+}
+
+/**
+ * Find the temporary workflow created for this migration, if it still exists.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ * @returns Workflow id, or undefined when no such workflow exists
+ */
+async function findMigrationWorkflowId(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<string | undefined> {
+  try {
+    const { workflow } = await client.getWorkflowByName({ workspaceId, workflowName: name });
+    return workflow?.id;
+  } catch (error) {
+    if (isNotFoundError(error)) return undefined;
+    throw error;
+  }
+}
+
+/**
  * Execute a migration script as a temporary workflow and wait for completion.
  *
  * Unlike synchronous script execution, only the start call is bound by the
@@ -165,7 +218,8 @@ export async function executeMigrationAsWorkflow(
 
   let workflowId: string | undefined;
   try {
-    await uploadMigrationFunction(client, workspaceId, name, code);
+    await reclaimLeftovers(client, workspaceId, name);
+    await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
 
     const { jobFunction } = await client.createWorkflowJobFunction({
       workspaceId,
@@ -173,7 +227,7 @@ export async function executeMigrationAsWorkflow(
       scriptRef: name,
       publishExecutionEvents: false,
     });
-    await writeMetadataLabels(
+    await writeMetadataLabelsDirect(
       client,
       await buildMetaRequest({
         trn: resourceTrn(workspaceId, "workflow_job_function", name),
@@ -197,7 +251,7 @@ export async function executeMigrationAsWorkflow(
     if (!workflowId) {
       throw new Error(`Temporary migration workflow '${name}' was created without an id.`);
     }
-    await writeMetadataLabels(
+    await writeMetadataLabelsDirect(
       client,
       await buildMetaRequest({
         trn: resourceTrn(workspaceId, "workflow", name),

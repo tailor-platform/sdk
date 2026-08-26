@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { writeMetadataLabelsDirect } from "../label";
 import { executeMigrationAsWorkflow, migrationWorkflowResourceName } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -23,7 +24,7 @@ vi.mock("../label", async (importOriginal) => ({
   ...(await importOriginal()),
   resourceTrn: (workspaceId: string, kind: string, name: string) =>
     `trn:v1:workspace:${workspaceId}:${kind}:${name}`,
-  writeMetadataLabels: vi.fn(),
+  writeMetadataLabelsDirect: vi.fn(),
   buildMetaRequest: vi.fn(async (params: unknown) => params),
 }));
 
@@ -34,6 +35,8 @@ interface MockClientOptions {
   logs?: string;
   failOn?: string;
   failWith?: Error;
+  /** Workflow left behind by an earlier interrupted run of the same migration. */
+  leftoverWorkflowId?: string;
 }
 
 function createMockClient(options: MockClientOptions = {}) {
@@ -50,6 +53,13 @@ function createMockClient(options: MockClientOptions = {}) {
   };
 
   const client = {
+    getWorkflowByName: vi.fn(() => {
+      calls.push("getWorkflowByName");
+      if (options.leftoverWorkflowId === undefined) {
+        return Promise.reject(new ConnectError("not found", Code.NotFound));
+      }
+      return Promise.resolve({ workflow: { id: options.leftoverWorkflowId } });
+    }),
     createFunctionRegistry: vi.fn(() => record("createFunctionRegistry", {})),
     createWorkflowJobFunction: vi.fn(() =>
       record("createWorkflowJobFunction", { jobFunction: { version: 1n } }),
@@ -99,6 +109,7 @@ describe("migrationWorkflowResourceName", () => {
 describe("executeMigrationAsWorkflow", () => {
   beforeEach(() => {
     vi.mocked(logger.warn).mockClear();
+    vi.mocked(writeMetadataLabelsDirect).mockClear();
   });
 
   test("registers, starts, and tears down the temporary resources", async () => {
@@ -108,6 +119,10 @@ describe("executeMigrationAsWorkflow", () => {
 
     expect(result.success).toBe(true);
     expect(calls).toEqual([
+      // No leftovers, so the reclaim sweep only probes for a stale workflow.
+      "getWorkflowByName",
+      "deleteWorkflowJobFunction",
+      "deleteFunctionRegistry",
       "createFunctionRegistry",
       "createWorkflowJobFunction",
       "createWorkflow",
@@ -192,5 +207,38 @@ describe("executeMigrationAsWorkflow", () => {
 
     expect(raw.deleteWorkflow).not.toHaveBeenCalled();
     expect(raw.deleteWorkflowJobFunction).toHaveBeenCalled();
+  });
+
+  test("reclaims an interrupted run's leftovers before recreating them", async () => {
+    const { client, raw, calls } = createMockClient({ leftoverWorkflowId: "stale-wf" });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    // The stale workflow is deleted by id before the create path runs, so
+    // `createFunctionRegistry` cannot fail on a name collision.
+    expect(raw.deleteWorkflow).toHaveBeenNthCalledWith(1, {
+      workspaceId: "ws-1",
+      workflowId: "stale-wf",
+    });
+    expect(calls.indexOf("deleteFunctionRegistry")).toBeLessThan(
+      calls.indexOf("createFunctionRegistry"),
+    );
+  });
+
+  test("labels every temporary resource immediately rather than via the deploy batch", async () => {
+    const { client } = createMockClient();
+
+    await run(client);
+
+    const labeled = vi
+      .mocked(writeMetadataLabelsDirect)
+      .mock.calls.map(([, write]) => (write as { trn: string }).trn);
+    const name = "tailordb-migration--tailordb--0003";
+    expect(labeled).toEqual([
+      `trn:v1:workspace:ws-1:function_registry:${name}`,
+      `trn:v1:workspace:ws-1:workflow_job_function:${name}`,
+      `trn:v1:workspace:ws-1:workflow:${name}`,
+    ]);
   });
 });
