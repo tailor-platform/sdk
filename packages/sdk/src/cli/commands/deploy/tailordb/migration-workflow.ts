@@ -298,14 +298,15 @@ async function waitForMigrationWorkflow(
     }
 
     if (execution.status === WorkflowExecution_Status.SUCCESS) {
-      return { success: true, logs: await collectJobLogs(client, workspaceId, execution) };
+      const { logs } = await collectJobOutcomes(client, workspaceId, execution);
+      return { success: true, logs };
     }
     if (execution.status === WorkflowExecution_Status.FAILED) {
-      const logs = await collectJobLogs(client, workspaceId, execution);
+      const outcomes = await collectJobOutcomes(client, workspaceId, execution);
       return {
         success: false,
-        logs,
-        error: extractFailureMessage(logs),
+        logs: outcomes.logs,
+        error: extractFailureMessage(outcomes),
       };
     }
 
@@ -314,44 +315,62 @@ async function waitForMigrationWorkflow(
 }
 
 /**
- * Collect the logs of every job in a workflow execution.
+ * Collect the logs and failure reasons of every job in a workflow execution.
  *
- * Workflow executions do not carry logs; each job's logs live on its
- * corresponding function execution.
+ * Workflow executions carry neither logs nor the error a job threw; both live
+ * on the job's corresponding function execution.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param execution - Workflow execution to read jobs from
- * @returns Concatenated job logs
+ * @returns Concatenated job logs and the reasons the jobs failed
  */
-async function collectJobLogs(
+async function collectJobOutcomes(
   client: OperatorClient,
   workspaceId: string,
   execution: WorkflowExecution,
-): Promise<string> {
-  const logs = await Promise.all(
+): Promise<{ logs: string; failures: string[] }> {
+  const outcomes = await Promise.all(
     execution.jobExecutions.map(async (job) => {
-      if (!job.executionId) return "";
+      if (!job.executionId) return undefined;
       try {
         const { execution: functionExecution } = await client.getFunctionExecution({
           workspaceId,
           executionId: job.executionId,
         });
-        return functionExecution?.logs ?? "";
+        if (!functionExecution) return undefined;
+        // The script's own error is reported as structured error info, or as
+        // the execution result; logs only carry what the script printed.
+        const failure =
+          functionExecution.error?.message.trim() || functionExecution.result.trim() || "";
+        return { logs: functionExecution.logs, failure };
       } catch {
-        return "";
+        return undefined;
       }
     }),
   );
-  return logs.filter(Boolean).join("\n");
+
+  return {
+    logs: outcomes
+      .map((outcome) => outcome?.logs)
+      .filter(Boolean)
+      .join("\n"),
+    failures: outcomes
+      .map((outcome) => outcome?.failure)
+      .filter((failure): failure is string => !!failure),
+  };
 }
 
 /**
- * Derive a failure message from job logs, falling back to a generic message.
- * @param logs - Collected job logs
+ * Derive a failure message from the jobs' failure reasons, falling back to the
+ * last log line mentioning an error and then to a generic message.
+ * @param outcomes - Collected job logs and failure reasons
  * @returns Failure message
  */
-function extractFailureMessage(logs: string): string {
-  const lastErrorLine = logs
+function extractFailureMessage(outcomes: { logs: string; failures: string[] }): string {
+  const failure = outcomes.failures.at(-1);
+  if (failure) return failure;
+
+  const lastErrorLine = outcomes.logs
     .split("\n")
     .filter((line) => /error/i.test(line))
     .at(-1);

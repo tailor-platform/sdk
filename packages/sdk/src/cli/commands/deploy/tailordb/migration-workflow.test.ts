@@ -33,6 +33,10 @@ const invoker = { namespace: "auth", machineUserName: "migrator" } as AuthInvoke
 interface MockClientOptions {
   statuses?: WorkflowExecution_Status[];
   logs?: string;
+  /** Structured error the migration script threw, as the platform reports it. */
+  errorMessage?: string;
+  /** Execution result, which carries the failure reason when error info is absent. */
+  executionResult?: string;
   failOn?: string;
   failWith?: Error;
   /** Workflow left behind by an earlier interrupted run of the same migration. */
@@ -77,7 +81,15 @@ function createMockClient(options: MockClientOptions = {}) {
         },
       });
     }),
-    getFunctionExecution: vi.fn(() => Promise.resolve({ execution: { logs: options.logs ?? "" } })),
+    getFunctionExecution: vi.fn(() =>
+      Promise.resolve({
+        execution: {
+          logs: options.logs ?? "",
+          error: options.errorMessage ? { message: options.errorMessage } : undefined,
+          result: options.executionResult ?? "",
+        },
+      }),
+    ),
     deleteWorkflow: vi.fn(() => record("deleteWorkflow", {})),
     deleteWorkflowJobFunction: vi.fn(() => record("deleteWorkflowJobFunction", {})),
     deleteFunctionRegistry: vi.fn(() => record("deleteFunctionRegistry", {})),
@@ -167,6 +179,33 @@ describe("executeMigrationAsWorkflow", () => {
     expect(result.success).toBe(false);
     expect(result.logs).toContain("relation does not exist");
     expect(result.error).toContain("relation does not exist");
+  });
+
+  test("reports the error the migration script threw rather than a log line", async () => {
+    const { client } = createMockClient({
+      statuses: [WorkflowExecution_Status.FAILED],
+      logs: "INFO backfilling users",
+      errorMessage: "simulated migration failure",
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(false);
+    // Without this the caller only sees a generic "workflow execution failed",
+    // because the thrown error never reaches the job logs.
+    expect(result.error).toBe("simulated migration failure");
+  });
+
+  test("falls back to the execution result when no structured error is reported", async () => {
+    const { client } = createMockClient({
+      statuses: [WorkflowExecution_Status.FAILED],
+      executionResult: "constraint violation on users.email",
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("constraint violation on users.email");
   });
 
   test("tears the temporary resources down even when the start call fails", async () => {
