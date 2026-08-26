@@ -40,20 +40,27 @@ The `deploy` command emits the following span tree:
 
 ```
 deploy
+├── config.preflight
 ├── build
 │   ├── build.loadConfig
 │   ├── build.generateUserTypes
 │   └── build.loadApplication
+├── plan.metadataLookup
+├── plan.validateTailorDBTypeNames
+├── plan.detectSdkVersionChange
 ├── plan
 │   ├── plan.functionRegistry
 │   ├── plan.tailorDB
 │   ├── plan.staticWebsite
+│   ├── plan.aiGateway
 │   ├── plan.idp
 │   ├── plan.auth
 │   ├── plan.pipeline
 │   ├── plan.application
 │   ├── plan.executor
-│   └── plan.workflow
+│   ├── plan.workflow
+│   ├── plan.workflowExecutionPolicy
+│   └── plan.secretManager
 ├── confirm
 ├── apply.preflight
 ├── apply.createUpdateServices
@@ -136,10 +143,11 @@ curl -s "http://localhost:16686/api/traces?service=tailor&limit=1" | jq '
   [.data[0].spans[]
    | select(.operationName
             | test("^apply\\.(tailorDB\\.createUpdate|executor\\.createUpdate)$"))]
-  | {
+  | if length == 0 then "no schema/executor spans in this trace"
+    else {
       window_ms: (((map(.startTime + .duration) | max) - (map(.startTime) | min)) / 1000),
       spans: (sort_by(.startTime) | map({operationName, duration_ms: (.duration / 1000 | round)}))
-    }
+    } end
 '
 ```
 
