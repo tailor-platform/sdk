@@ -11,12 +11,13 @@ import {
   formatMigrationNumber,
   INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
-  type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
+import {
+  generateTailorDBTypeManifestFromSnapshot,
+  publishesRecordEvents,
+} from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { logger } from "#/cli/shared/logger";
-import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import type {
   FieldDiffChange,
   TableScriptsModifiedChange,
@@ -415,20 +416,6 @@ export async function executeSingleMigrationPostPhase(
       "Ensure all existing records have values for fields being changed to required.",
     ]);
   }
-}
-
-/**
- * Whether a table publishes record events once the migrations have settled.
- * @param snapshotType - Table as of the snapshot being applied
- * @param subscribed - Whether an enabled executor subscribes to it
- * @returns Whether the table's manifest would enable publishing
- */
-function publishesRecordEvents(snapshotType: TailorDBSnapshotType, subscribed: boolean): boolean {
-  return resolvePublishEvents({
-    explicit: snapshotType.settings?.publishEvents,
-    subscribed,
-    conflict: publishEventsConflict.tailorDBType(snapshotType.name),
-  });
 }
 
 /**

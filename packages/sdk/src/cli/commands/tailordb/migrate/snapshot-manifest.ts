@@ -70,6 +70,26 @@ export interface GenerateManifestOptions {
 }
 
 /**
+ * Whether a table's manifest enables record event publishing.
+ *
+ * The one place the rule lives: a declared `publishEvents` wins, and an unset
+ * value follows whether an executor in the run subscribes.
+ * @param snapshotType - Table to resolve the flag for
+ * @param subscribed - Whether an executor taking part in the run subscribes
+ * @returns Whether the table publishes record events
+ */
+export function publishesRecordEvents(
+  snapshotType: TailorDBSnapshotType,
+  subscribed: boolean,
+): boolean {
+  return resolvePublishEvents({
+    explicit: snapshotType.settings?.publishEvents,
+    subscribed,
+    conflict: publishEventsConflict.tailorDBType(snapshotType.name),
+  });
+}
+
+/**
  * Generate a TailorDB table manifest from a snapshot table
  * @param {TailorDBSnapshotType} snapshotType - Snapshot table to generate manifest from
  * @param {GenerateManifestOptions} options - Generation options
@@ -106,11 +126,7 @@ export function generateTailorDBTypeManifestFromSnapshot(
     publishRecordEvents:
       options.suppressRecordEvents === true
         ? false
-        : resolvePublishEvents({
-            explicit: snapshotType.settings?.publishEvents,
-            subscribed: options.subscribed ?? false,
-            conflict: publishEventsConflict.tailorDBType(snapshotType.name),
-          }),
+        : publishesRecordEvents(snapshotType, options.subscribed ?? false),
   };
 
   // Apply gqlOperations from snapshot settings or namespace default
