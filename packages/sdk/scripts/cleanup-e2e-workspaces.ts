@@ -11,16 +11,19 @@
  *     --min-age-hours=24                                          # See "Local orphans" below
  *
  * Local orphans:
- *   A local test run (no GITHUB_RUN_ID) produces workspace names with no numeric run id, and
- *   globalSetup.ts never attaches an organization to them. Their teardown runs on normal exit but
- *   not when the process is killed or crashes, so a killed local run leaves an org-less workspace
- *   behind that CI's own run-id-scoped cleanup can never match (it has no run to look up). This
- *   authenticates as loadAccessToken()'s fallback identity (the local `tailor login` session, i.e.
- *   whoever is running the script) — the same identity the orphan workspace was created under — so
- *   it can actually delete it, unlike a CI machine user that generally cannot. `--local-orphans`
- *   restricts the sweep to workspaces with no organizationId and no run id in their name;
- *   `--min-age-hours` (required with it) additionally requires the workspace to be at least that
- *   old, so an in-progress local run is never touched.
+ *   Every e2e test suite reads TAILOR_PLATFORM_ORGANIZATION_ID from the environment and passes it
+ *   as organizationId to createWorkspace, so organizationId is set the same way locally and in CI —
+ *   it does not distinguish the two. What does is the workspace name: each suite embeds
+ *   resolveE2ERunId() (GITHUB_RUN_ID, empty locally) in the name, so only CI-run workspaces carry a
+ *   numeric run id. A local test run's teardown runs on normal exit but not when the process is
+ *   killed or crashes, so a killed local run leaves a run-id-less workspace behind that CI's own
+ *   run-id-scoped cleanup can never match (it has no run to look up). This authenticates as
+ *   loadAccessToken()'s fallback identity (the local `tailor login` session, i.e. whoever is running
+ *   the script) — the same identity the orphan workspace was created under — so it can actually
+ *   delete it, unlike a CI machine user that generally cannot. `--local-orphans` restricts the sweep
+ *   to workspaces with no run id in their name; `--min-age-hours` (required with it, and must be
+ *   greater than 0) additionally requires the workspace to be at least that old, so an in-progress
+ *   local run is never touched.
  */
 
 import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
@@ -36,7 +39,6 @@ const RUN_ID_PATTERN = /^(?:e2e-ws-|template-e2e-|sdk-ci-migration-|sdk-ci-)(\d+
 interface Workspace {
   id?: string;
   name?: string;
-  organizationId?: string;
   createTime?: Timestamp;
 }
 
@@ -68,7 +70,18 @@ async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> 
   return allWorkspaces;
 }
 
+const KNOWN_FLAGS = new Set(["--dry-run", "--local-orphans"]);
+const KNOWN_VALUE_PREFIXES = ["--run-id=", "--min-age-hours="];
+
 async function main() {
+  for (const arg of process.argv.slice(2)) {
+    if (KNOWN_FLAGS.has(arg) || KNOWN_VALUE_PREFIXES.some((prefix) => arg.startsWith(prefix))) {
+      continue;
+    }
+    console.error(`Unrecognized argument: "${arg}".`);
+    process.exit(1);
+  }
+
   const dryRun = process.argv.includes("--dry-run");
   const localOrphans = process.argv.includes("--local-orphans");
   const runId = process.argv.find((a) => a.startsWith("--run-id="))?.split("=")[1];
@@ -85,8 +98,8 @@ async function main() {
       process.exit(1);
     }
     minAgeHours = Number(minAgeHoursArg);
-    if (!Number.isFinite(minAgeHours) || minAgeHours < 0) {
-      console.error(`--min-age-hours must be a non-negative number, got "${minAgeHoursArg}".`);
+    if (!Number.isFinite(minAgeHours) || minAgeHours <= 0) {
+      console.error(`--min-age-hours must be a positive number, got "${minAgeHoursArg}".`);
       process.exit(1);
     }
   }
@@ -113,7 +126,6 @@ async function main() {
     const matchesPrefix = E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix));
     if (!matchesPrefix) return false;
     if (localOrphans) {
-      if (ws.organizationId) return false;
       if (ws.name && RUN_ID_PATTERN.test(ws.name)) return false;
       const createdAt = ws.createTime ? timestampDate(ws.createTime) : undefined;
       if (!createdAt) return false;
