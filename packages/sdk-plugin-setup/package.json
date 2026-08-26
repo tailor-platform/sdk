@@ -41,7 +41,7 @@
     "@types/node": "24.13.3",
     "confbox": "0.2.4",
     "eslint-plugin-zod": "4.9.1",
-    "oxlint": "1.78.0",
+    "oxlint": "1.79.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
