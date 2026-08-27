@@ -226,6 +226,10 @@ function includeUndeletedTables(
   };
 }
 
+function describeMigrationCheckpoint(number: number | null): string {
+  return number === null ? "<unset>" : formatMigrationNumber(number);
+}
+
 /**
  * Apply TailorDB-related changes for the given phase.
  * @param client - Operator client instance
@@ -415,8 +419,16 @@ export async function applyTailorDB(
       const restorationSettings = new Map(restrictionState);
       const restorationCheckpoints = new Map<
         string,
-        { number: number; historyId: string | null }
-      >();
+        { number: number | null; historyId: string | null }
+      >(
+        [...firstPendingByNamespace].map(([namespaceName, firstMigration]) => [
+          namespaceName,
+          {
+            number: firstMigration.number > 0 ? firstMigration.number - 1 : null,
+            historyId: migrationHistoryIds[namespaceName] ?? null,
+          },
+        ]),
+      );
       let migrationFailure: { error: unknown } | undefined;
       try {
         // A committed checkpoint drops its migration from the next run's pending set.
@@ -510,10 +522,9 @@ export async function applyTailorDB(
 
             const remoteMigrationNumber = remoteState.number ?? undefined;
             const differentHistoryAtCheckpoint =
-              remoteMigrationNumber === migration.number &&
-              (remoteState.historyIdInvalid || remoteState.historyId !== expectedHistoryId);
+              remoteState.historyIdInvalid || remoteState.historyId !== expectedHistoryId;
             const concurrentCheckpoint = differentHistoryAtCheckpoint
-              ? "the same number in a different migration history"
+              ? `${describeMigrationCheckpoint(remoteState.number)} in a different migration history`
               : remoteMigrationNumber !== undefined && remoteMigrationNumber > migration.number
                 ? formatMigrationNumber(remoteMigrationNumber)
                 : undefined;
@@ -572,20 +583,9 @@ export async function applyTailorDB(
           try {
             await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
           } catch (error) {
-            restorationSnapshots.set(
-              migration.namespace,
-              includeUndeletedTables(postMigrationSnapshot, previousRestorationSnapshot, migration),
-            );
-            const committedSettings = restorationSettings.get(migration.namespace);
-            if (committedSettings) {
-              for (const tableName of getDeletedTableNames(migration)) {
-                const settings = previousRestorationSettings?.get(tableName);
-                if (settings) committedSettings.set(tableName, settings);
-              }
-            }
             logger.warn(
               `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-                "Remove the leftover resources manually before the next deployment; remote schema verification will fail closed until then.",
+                "The leftover resources remain read-only. Remove them manually before the next deployment; remote schema verification will fail closed until then.",
             );
             throw error;
           }
@@ -612,10 +612,8 @@ export async function applyTailorDB(
           if (checkpointStillOwned) continue;
 
           restorationSnapshots.delete(namespaceName);
-          const remoteNumber =
-            remoteState.number === null ? "<unset>" : formatMigrationNumber(remoteState.number);
           const concurrencyError = new Error(
-            `Migration checkpoint ${namespaceName}/${formatMigrationNumber(expectedCheckpoint.number)} advanced concurrently to ${remoteNumber}. ` +
+            `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
           );
           if (migrationFailure) {
@@ -626,11 +624,19 @@ export async function applyTailorDB(
             migrationFailure = { error: concurrencyError };
           }
         } catch (checkpointReadError) {
-          logger.warn(
-            `Could not verify ownership of migration checkpoint ${namespaceName}/${formatMigrationNumber(expectedCheckpoint.number)} before restoring table settings: ` +
+          restorationSnapshots.delete(namespaceName);
+          const ownershipError = new Error(
+            `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
               `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ` +
-              "Continuing restoration so the namespace is not left read-only.",
+              "Skipping restoration for this namespace and aborting this deployment.",
           );
+          if (migrationFailure) {
+            logger.warn(
+              `${ownershipError.message} The original migration error is reported below.`,
+            );
+          } else {
+            migrationFailure = { error: ownershipError };
+          }
         }
       }
 

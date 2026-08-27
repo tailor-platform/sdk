@@ -14,7 +14,7 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 const remoteCheckpoint = vi.hoisted(() => ({
-  number: null as number | null,
+  number: 0 as number | null,
   historyId: null as string | null,
 }));
 
@@ -399,7 +399,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     vi.clearAllMocks();
     snapshotState.tablesByVersion = {};
     snapshotState.historyId = null;
-    remoteCheckpoint.number = null;
+    remoteCheckpoint.number = 0;
     remoteCheckpoint.historyId = null;
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
       async (_client, _workspaceId, _namespace, number, historyId) => {
@@ -811,6 +811,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const planResult = createMockPlanResult({ creates: [] });
     const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
     snapshotState.historyId = "hlocal";
+    remoteCheckpoint.historyId = "hlocal";
     snapshotState.tablesByVersion = { 0: { Retired: retired }, 1: {} };
     planResult.changeSet.type.deletes.push({
       name: "Retired",
@@ -844,6 +845,79 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     expect(client.deleteTailorDBType).not.toHaveBeenCalled();
   });
 
+  test("rejects a lower checkpoint from a different migration history", async () => {
+    const client = createMockClient({
+      existingSettings: { Order: { publishRecordEvents: true } },
+    });
+    const planResult = createMockPlanResult({ creates: [] });
+    const order = snapshotTable("Order", { value: { type: "string", required: true } });
+    snapshotState.historyId = "hlocal";
+    remoteCheckpoint.historyId = "hlocal";
+    snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+      new Error("checkpoint update failed"),
+    );
+    vi.mocked(client.getMetadata).mockResolvedValueOnce({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0000",
+          "sdk-migration-history": "hother",
+        },
+      },
+    } as never);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /advanced concurrently.*history/i,
+    );
+    expect(publishFlagWrites(client).filter(([name]) => name === "Order")).toEqual([
+      ["Order", false],
+    ]);
+  });
+
+  test("does not restore when checkpoint ownership cannot be verified", async () => {
+    const client = createMockClient({
+      existingSettings: { Order: { publishRecordEvents: true } },
+    });
+    const planResult = createMockPlanResult({ creates: [] });
+    const order = snapshotTable("Order", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
+    remoteCheckpoint.number = 0;
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /Could not verify ownership.*ownership read failed/i,
+    );
+    expect(publishFlagWrites(client).filter(([name]) => name === "Order")).toEqual([
+      ["Order", false],
+    ]);
+  });
+
+  test("does not restore over a checkpoint that advances before the first migration commits", async () => {
+    const client = createMockClient({
+      existingSettings: { Order: { publishRecordEvents: true } },
+    });
+    const planResult = createMockPlanResult({ creates: [] });
+    const order = snapshotTable("Order", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
+    remoteCheckpoint.number = 0;
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([], { hasScript: true }),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockImplementationOnce(async () => {
+      remoteCheckpoint.number = 2;
+      throw new Error("migration failed");
+    });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /migration failed/,
+    );
+    expect(publishFlagWrites(client).filter(([name]) => name === "Order")).toEqual([
+      ["Order", false],
+    ]);
+  });
+
   test("does not restore over a checkpoint that advances after this migration commits", async () => {
     const client = createMockClient({
       existingSettings: { Order: { publishRecordEvents: true } },
@@ -864,7 +938,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     ]);
   });
 
-  test("restores a deleted table when post-checkpoint cleanup fails", async () => {
+  test("leaves a deleted table read-only when post-checkpoint cleanup fails", async () => {
     const client = createMockClient({
       existingSettings: { Retired: { publishRecordEvents: true } },
     });
@@ -893,7 +967,6 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
     expect(publishFlagWrites(client).filter(([name]) => name === "Retired")).toEqual([
       ["Retired", false],
-      ["Retired", true],
     ]);
   });
 
