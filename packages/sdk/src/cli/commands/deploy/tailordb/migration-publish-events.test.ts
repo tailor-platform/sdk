@@ -1,9 +1,7 @@
 /**
- * A migration script writes records through the platform, so a table that
- * publishes record events emits them from a shape that is mid-migration, to
- * executors still registered from the previous deploy. The per-migration
- * phases therefore apply the table with publishing off, and publishing has to
- * come back on once the migrations have settled.
+ * A migrating namespace must not accept GraphQL mutations or publish record
+ * events from a shape that executors and callers cannot safely use. The
+ * restrictions have to remain in place until every migration has settled.
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -99,7 +97,7 @@ import * as migrationModule from "./migration";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
-describe("migration flow: record events while migrations run", () => {
+describe("migration flow: namespace restrictions while migrations run", () => {
   function createMockClient() {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
@@ -118,7 +116,15 @@ describe("migration flow: record events while migrations run", () => {
   function snapshotTable(
     name: string,
     fields: Record<string, { type: string; required: boolean }>,
-    settings?: { publishEvents?: boolean },
+    settings?: {
+      publishEvents?: boolean;
+      gqlOperations?: {
+        create?: boolean;
+        update?: boolean;
+        delete?: boolean;
+        read?: boolean;
+      };
+    },
   ) {
     return { name, pluralForm: `${name.toLowerCase()}s`, fields, ...(settings && { settings }) };
   }
@@ -259,31 +265,47 @@ describe("migration flow: record events while migrations run", () => {
     };
   }
 
-  /**
-   * Every type write, in call order, with the publishing flag it carried.
-   * @param client - Mock operator client the apply wrote through
-   * @returns Table name and publishing flag per write, in call order
-   */
-  function publishFlagWrites(client: OperatorClient): Array<[string, boolean | undefined]> {
-    const writes: Array<{ order: number; entry: [string, boolean | undefined] }> = [];
+  type WrittenSettings = {
+    publishRecordEvents?: boolean;
+    disableGqlOperations?: {
+      create?: boolean;
+      update?: boolean;
+      delete?: boolean;
+      read?: boolean;
+    };
+  };
+
+  function typeSettingWrites(client: OperatorClient) {
+    const writes: Array<{
+      order: number;
+      entry: readonly [string, WrittenSettings | undefined];
+    }> = [];
     for (const fn of [client.createTailorDBType, client.updateTailorDBType]) {
       const mock = vi.mocked(fn);
       mock.mock.calls.forEach((call, index) => {
-        const request = call[0] as {
-          tailordbType?: {
-            name?: string;
-            schema?: { settings?: { publishRecordEvents?: boolean } };
-          };
-        };
+        const request = call[0];
         const name = request.tailordbType?.name;
         if (name === undefined) return;
         writes.push({
           order: mock.mock.invocationCallOrder[index]!,
-          entry: [name, request.tailordbType?.schema?.settings?.publishRecordEvents],
+          entry: [name, request.tailordbType?.schema?.settings],
         });
       });
     }
     return writes.toSorted((a, b) => a.order - b.order).map(({ entry }) => entry);
+  }
+
+  function publishFlagWrites(client: OperatorClient): Array<[string, boolean | undefined]> {
+    return typeSettingWrites(client).map(([name, settings]) => [
+      name,
+      settings?.publishRecordEvents,
+    ]);
+  }
+
+  function gqlOperationWrites(client: OperatorClient) {
+    return typeSettingWrites(client).map(
+      ([name, settings]) => [name, settings?.disableGqlOperations] as const,
+    );
   }
 
   beforeEach(() => {
@@ -326,6 +348,13 @@ describe("migration flow: record events while migrations run", () => {
 
     // ...and the state deploy leaves behind has to publish again.
     expect(orderWrites.at(-1)?.[1]).toBe(true);
+
+    const operationWrites = gqlOperationWrites(client).filter(([name]) => name === "Order");
+    expect(operationWrites.length).toBeGreaterThan(0);
+    for (const [, operations] of operationWrites.slice(0, -1)) {
+      expect(operations).toEqual({ create: true, update: true, delete: true, read: false });
+    }
+    expect(operationWrites.at(-1)?.[1]).toBeUndefined();
   });
 
   test("restores the surviving table when a migration renames it", async () => {
@@ -411,6 +440,35 @@ describe("migration flow: record events while migrations run", () => {
     expect(flags.at(-1)?.[1]).toBe(true);
   });
 
+  test("makes the namespace read-only while a data-only migration runs", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [] });
+    const order = snapshotTable("Order", { status: { type: "string", required: true } });
+    const privateLog = snapshotTable(
+      "PrivateLog",
+      { message: { type: "string", required: true } },
+      { gqlOperations: { read: false } },
+    );
+    snapshotState.tablesByVersion = {
+      0: { Order: order, PrivateLog: privateLog },
+      1: { Order: order, PrivateLog: privateLog },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const writes = gqlOperationWrites(client);
+    expect(writes.filter(([name]) => name === "Order").map(([, operations]) => operations)).toEqual(
+      [{ create: true, update: true, delete: true, read: false }, undefined],
+    );
+    expect(
+      writes.filter(([name]) => name === "PrivateLog").map(([, operations]) => operations),
+    ).toEqual([
+      { create: true, update: true, delete: true, read: true },
+      { create: false, update: false, delete: false, read: true },
+    ]);
+  });
+
   test("restores publishing when a migration fails partway", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult({ creates: ["Order"], subscribedTables: ["Order"] });
@@ -434,6 +492,11 @@ describe("migration flow: record events while migrations run", () => {
     // set, so publishing has to come back on before the throw escapes.
     const flags = publishFlagWrites(client).filter(([name]) => name === "Order");
     expect(flags.at(-1)?.[1]).toBe(true);
+    expect(
+      gqlOperationWrites(client)
+        .filter(([name]) => name === "Order")
+        .at(-1)?.[1],
+    ).toBeUndefined();
   });
 
   test("leaves publishing off for a table nothing subscribes to", async () => {

@@ -402,6 +402,26 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
+    test.each([
+      { read: true, disabledRead: false },
+      { read: false, disabledRead: true },
+    ])("suppresses GraphQL mutations while preserving read=$read", ({ read, disabledRead }) => {
+      const snapshotType = createTestSnapshotType("User", {
+        settings: { gqlOperations: { create: true, update: true, delete: true, read } },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+        suppressGqlMutations: true,
+      });
+
+      expect(manifest.schema?.settings?.disableGqlOperations).toEqual({
+        create: true,
+        update: true,
+        delete: true,
+        read: disabledRead,
+      });
+    });
+
     test("aggregates field hooks into a table-level hook script", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {

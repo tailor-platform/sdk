@@ -565,6 +565,8 @@ db.table("User", {
 
 Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a table. All operations are enabled by default.
 
+While a `deploy` applies pending migrations, `create`, `update`, and `delete` are switched off across the migrating namespace. Each table's configured `read` setting stays unchanged. The original operations are restored once the migrations finish, or before a migration error is reported.
+
 ```typescript
 db.table("Order", {
   status: db.string(),

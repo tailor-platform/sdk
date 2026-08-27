@@ -19,12 +19,12 @@ import { logger } from "#/cli/shared/logger";
 import { resourceTrn, writeMetadataLabels } from "../label";
 import { executeMigrations, updateMigrationLabel, type MigrationContext } from "./migration";
 import {
+  applyMigrationRestrictions,
   deletedResources,
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
   executeSingleMigrationPrePhase,
-  restoreRecordEventPublishing,
-  suppressRecordEventPublishing,
+  restoreMigrationRestrictions,
   getDeletedTableNames,
   migrationSnapshotCache,
   processedTables,
@@ -351,10 +351,9 @@ export async function applyTailorDB(
         logger.newline();
       }
 
-      // Publishing is restored in `finally`: a committed checkpoint drops its
-      // migration from the next run's pending set, so a namespace left
-      // suppressed by an aborted deploy would never be rewritten.
-      await suppressRecordEventPublishing(
+      // Restrictions are restored in `finally`: a committed checkpoint drops
+      // its migration from the next run's pending set.
+      await applyMigrationRestrictions(
         client,
         pendingMigrations,
         migrationContext.tailorDBInputs,
@@ -474,7 +473,7 @@ export async function applyTailorDB(
           logger.success(`All data migrations completed successfully.`);
         }
       } finally {
-        await restoreRecordEventPublishing(
+        await restoreMigrationRestrictions(
           client,
           pendingMigrations,
           migrationContext.tailorDBInputs,

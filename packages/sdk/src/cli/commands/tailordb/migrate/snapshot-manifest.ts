@@ -60,6 +60,8 @@ export interface GenerateManifestOptions {
    * subscribes, so `subscribed` alone cannot silence it while migrations run.
    */
   suppressRecordEvents?: boolean;
+  /** Force GraphQL mutations off while preserving the configured read operation. */
+  suppressGqlMutations?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
     create?: boolean;
@@ -78,10 +80,7 @@ export interface GenerateManifestOptions {
  * @param subscribed - Whether an executor taking part in the run subscribes
  * @returns Whether the table publishes record events
  */
-export function publishesRecordEvents(
-  snapshotType: TailorDBSnapshotType,
-  subscribed: boolean,
-): boolean {
+function publishesRecordEvents(snapshotType: TailorDBSnapshotType, subscribed: boolean): boolean {
   return resolvePublishEvents({
     explicit: snapshotType.settings?.publishEvents,
     subscribed,
@@ -131,12 +130,12 @@ export function generateTailorDBTypeManifestFromSnapshot(
 
   // Apply gqlOperations from snapshot settings or namespace default
   const ops = snapshotType.settings?.gqlOperations ?? options.namespaceGqlOperations;
-  if (ops) {
+  if (ops || options.suppressGqlMutations === true) {
     defaultSettings.disableGqlOperations = {
-      create: ops.create === false,
-      update: ops.update === false,
-      delete: ops.delete === false,
-      read: ops.read === false,
+      create: options.suppressGqlMutations === true || ops?.create === false,
+      update: options.suppressGqlMutations === true || ops?.update === false,
+      delete: options.suppressGqlMutations === true || ops?.delete === false,
+      read: ops?.read === false,
     };
   }
 
