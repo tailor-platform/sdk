@@ -13,6 +13,11 @@ import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
+const remoteCheckpoint = vi.hoisted(() => ({
+  number: null as number | null,
+  historyId: null as string | null,
+}));
+
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("../label");
@@ -44,7 +49,20 @@ vi.mock("./migration", async (importOriginal) => {
     ...original,
     detectPendingMigrations: vi.fn(),
     executeMigrations: vi.fn().mockResolvedValue(undefined),
-    updateMigrationLabel: vi.fn().mockResolvedValue(undefined),
+    updateMigrationLabel: vi
+      .fn()
+      .mockImplementation(
+        async (
+          _client: unknown,
+          _workspaceId: string,
+          _namespace: string,
+          number: number,
+          historyId?: string,
+        ) => {
+          remoteCheckpoint.number = number;
+          remoteCheckpoint.historyId = historyId ?? null;
+        },
+      ),
   };
 });
 
@@ -112,6 +130,18 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockImplementation(async () => ({
+        metadata: {
+          labels: {
+            ...(remoteCheckpoint.number !== null && {
+              "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
+            }),
+            ...(remoteCheckpoint.historyId && {
+              "sdk-migration-history": remoteCheckpoint.historyId,
+            }),
+          },
+        },
+      })),
       listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
@@ -229,6 +259,14 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
 
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    remoteCheckpoint.number = null;
+    remoteCheckpoint.historyId = null;
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+      },
+    );
     await runTest();
   });
 

@@ -34,6 +34,7 @@ type MigrationTableSettings = {
     delete: boolean;
     read: boolean;
   };
+  tailordbType?: MessageInitShape<typeof TailorDBTypeSchema>;
 };
 
 export type MigrationRestrictionState = Map<string, Map<string, MigrationTableSettings>>;
@@ -76,6 +77,7 @@ export async function captureMigrationRestrictionState(
             read: settings.disableGqlOperations.read,
           },
         }),
+        tailordbType: structuredClone(type),
       });
     }
     state.set(namespaceName, settingsByTable);
@@ -569,25 +571,42 @@ async function rewriteRestrictedTables(
     continueOnError = false,
   } = params;
   let firstError: Error | undefined;
-  for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
+  const tableNames = new Set([...Object.keys(snapshot.tables), ...(settingsState?.keys() ?? [])]);
+  for (const tableName of tableNames) {
     try {
+      const snapshotType = snapshot.tables[tableName];
       const activeSettings = settingsState?.get(tableName);
       if (settingsState && !activeSettings) continue;
       if (restricted && (!activeSettings || !acceptsMigrationWrites(activeSettings))) continue;
-      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        subscribed: executorUsedTables.has(tableName),
-        namespaceGqlOperations: input.config.gqlOperations,
-      });
-      const tailordbType = restricted
-        ? generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-            suppressRecordEvents: true,
-            suppressGqlMutations: true,
-            gqlReadDisabled: activeSettings?.disableGqlOperations?.read ?? false,
-            namespaceGqlOperations: input.config.gqlOperations,
-          })
-        : manifest;
-      const settings = tailordbType.schema?.settings;
-      if (!restricted && activeSettings && settings) {
+      const tailordbType = snapshotType
+        ? restricted
+          ? generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+              suppressRecordEvents: true,
+              suppressGqlMutations: true,
+              gqlReadDisabled: activeSettings?.disableGqlOperations?.read ?? false,
+              namespaceGqlOperations: input.config.gqlOperations,
+            })
+          : generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+              subscribed: executorUsedTables.has(tableName),
+              namespaceGqlOperations: input.config.gqlOperations,
+            })
+        : activeSettings?.tailordbType
+          ? structuredClone(activeSettings.tailordbType)
+          : undefined;
+      if (!tailordbType?.schema) continue;
+      tailordbType.schema.settings ??= {};
+      const settings = tailordbType.schema.settings;
+      if (restricted) {
+        settings.bulkUpsert = false;
+        settings.publishRecordEvents = false;
+        settings.disableGqlOperations = {
+          create: true,
+          update: true,
+          delete: true,
+          read: activeSettings?.disableGqlOperations?.read ?? false,
+        };
+      }
+      if (!restricted && activeSettings) {
         settings.bulkUpsert = activeSettings.bulkUpsert;
         settings.publishRecordEvents = activeSettings.publishRecordEvents;
         settings.disableGqlOperations = activeSettings.disableGqlOperations
@@ -601,6 +620,47 @@ async function rewriteRestrictedTables(
     }
   }
   if (firstError !== undefined) throw firstError;
+}
+
+/**
+ * Resolve the settings represented by a committed migration snapshot.
+ *
+ * Intermediate snapshots may intentionally conflict with executors from the
+ * final deployment. They still need restorable settings if a later migration
+ * fails, so explicit snapshot values win without re-running that final-state
+ * conflict check.
+ * @param snapshot - Committed schema snapshot
+ * @param input - TailorDB deploy input for the namespace
+ * @param executorUsedTables - Tables an enabled executor in this deploy subscribes to
+ * @returns Settings keyed by table name
+ */
+export function resolveMigrationSnapshotSettings(
+  snapshot: SchemaSnapshot,
+  input: TailorDBDeployInput,
+  executorUsedTables: ReadonlySet<string>,
+): Map<string, MigrationTableSettings> {
+  const settingsByTable = new Map<string, MigrationTableSettings>();
+  for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
+    const settings = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+      subscribed: false,
+      namespaceGqlOperations: input.config.gqlOperations,
+    }).schema?.settings;
+    if (!settings) continue;
+    settingsByTable.set(tableName, {
+      bulkUpsert: settings.bulkUpsert ?? false,
+      publishRecordEvents:
+        snapshotType.settings?.publishEvents ?? executorUsedTables.has(tableName),
+      ...(settings.disableGqlOperations && {
+        disableGqlOperations: {
+          create: settings.disableGqlOperations.create ?? false,
+          update: settings.disableGqlOperations.update ?? false,
+          delete: settings.disableGqlOperations.delete ?? false,
+          read: settings.disableGqlOperations.read ?? false,
+        },
+      }),
+    });
+  }
+  return settingsByTable;
 }
 
 /**
@@ -650,7 +710,7 @@ export async function applyMigrationRestrictions(
  * checkpoint drops its migration from the next run's pending set.
  * @param client - Operator client instance
  * @param snapshots - Latest schema that settled in each migrating namespace
- * @param settingsToRestore - Exact pre-deploy settings to restore after failure
+ * @param settingsToRestore - Settings for the latest confirmed checkpoint, including exact active settings for snapshot-external tables
  * @param tailorDBInputs - TailorDB deploy inputs for the run
  * @param executorUsedTables - Tables an enabled executor subscribes to
  * @param workspaceId - Target workspace ID

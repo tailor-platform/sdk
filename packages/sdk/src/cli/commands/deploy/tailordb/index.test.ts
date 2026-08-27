@@ -2497,9 +2497,17 @@ describe("applyTailorDB migration label reconciliation", () => {
       planResult.context.namespacesWithMigrations,
     );
     const client = schemaVerificationClient(unchangedRemoteSettings());
-    vi.mocked(client.getMetadata).mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0005" } },
-    } as never);
+    let remoteLabels: Record<string, string> = { "sdk-migration": "m0005" };
+    vi.mocked(client.getMetadata).mockImplementation(
+      async () =>
+        ({
+          metadata: { labels: remoteLabels },
+        }) as never,
+    );
+    vi.mocked(client.setMetadata).mockImplementation(async (request) => {
+      remoteLabels = { ...remoteLabels, ...request.labels };
+      return {} as never;
+    });
 
     await applyTailorDB(client, planResult, "create-update");
 
