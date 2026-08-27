@@ -16,6 +16,7 @@ import {
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { logger } from "#/cli/shared/logger";
+import { withSpan } from "#/cli/telemetry/index";
 import { resourceTrn, writeMetadataLabels } from "../label";
 import { executeMigrations, updateMigrationLabel, type MigrationContext } from "./migration";
 import {
@@ -355,18 +356,22 @@ export async function applyTailorDB(
         const attemptedTables = new Set<string>();
         try {
           // Pre-migration phase: Create/update tables with breaking fields as optional
-          await executeSingleMigrationPrePhase(
-            client,
-            changeSet,
-            migration,
-            migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTables,
-            attemptedTables,
+          await withSpan("apply.tailorDB.migration.prePhase", () =>
+            executeSingleMigrationPrePhase(
+              client,
+              changeSet,
+              migration,
+              migrationContext.tailorDBInputs,
+              migrationContext.executorUsedTables,
+              attemptedTables,
+            ),
           );
 
           // Script execution (only if migrate.ts exists for this migration)
           if (migration.hasScript && migrationCtx) {
-            await executeMigrations(migrationCtx, [migration]);
+            await withSpan("apply.tailorDB.migration.script", () =>
+              executeMigrations(migrationCtx, [migration]),
+            );
           }
         } catch (error) {
           await rollbackSingleMigrationAfterFailure(
@@ -381,13 +386,15 @@ export async function applyTailorDB(
         }
 
         try {
-          await executeSingleMigrationPostPhase(
-            client,
-            changeSet,
-            migration,
-            migrationContext.tailorDBInputs,
-            migrationContext.executorUsedTables,
-            attemptedTables,
+          await withSpan("apply.tailorDB.migration.postPhase", () =>
+            executeSingleMigrationPostPhase(
+              client,
+              changeSet,
+              migration,
+              migrationContext.tailorDBInputs,
+              migrationContext.executorUsedTables,
+              attemptedTables,
+            ),
           );
         } catch (error) {
           await rollbackSingleMigrationAfterFailure(

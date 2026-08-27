@@ -62,27 +62,42 @@ export async function applyDeploymentPlans(
     }
   };
 
+  const step = (
+    name: string,
+    apply: (deployment: PlannedDeployment) => Promise<unknown>,
+  ): Promise<void> => withSpan(name, () => forEachDeployment(apply));
+
   await withSpan("apply.preflight", async () => {
     await forEachDeployment((d) => preflightTailorDB(client, d.tailorDB));
   });
 
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
-      await forEachDeployment((d) =>
+      await step("apply.secretManager.createUpdate", (d) =>
         applySecretManager(applyClient, d.secretManager, "create-update", d.application),
       );
-      await forEachDeployment((d) =>
+      await step("apply.functionRegistry.createUpdate", (d) =>
         applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
       );
-      await forEachDeployment((d) =>
+      await step("apply.staticWebsite.createUpdate", (d) =>
         applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
       );
-      await forEachDeployment((d) => applyAIGateway(applyClient, d.aiGateway, "create-update"));
-      await forEachDeployment((d) => applyIdP(applyClient, d.idp, "create-update"));
-      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-prerequisites"));
-      await forEachDeployment((d) => applyTailorDB(applyClient, d.tailorDB, "create-update"));
-      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "create-update-dependents"));
-      await forEachDeployment((d) => applyPipeline(applyClient, d.pipeline, "create-update"));
+      await step("apply.aiGateway.createUpdate", (d) =>
+        applyAIGateway(applyClient, d.aiGateway, "create-update"),
+      );
+      await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
+      await step("apply.auth.createUpdatePrerequisites", (d) =>
+        applyAuth(applyClient, d.auth, "create-update-prerequisites"),
+      );
+      await step("apply.tailorDB.createUpdate", (d) =>
+        applyTailorDB(applyClient, d.tailorDB, "create-update"),
+      );
+      await step("apply.auth.createUpdateDependents", (d) =>
+        applyAuth(applyClient, d.auth, "create-update-dependents"),
+      );
+      await step("apply.pipeline.createUpdate", (d) =>
+        applyPipeline(applyClient, d.pipeline, "create-update"),
+      );
     });
 
     await withSpan("apply.deleteSubgraphResources", async () => {
@@ -96,17 +111,21 @@ export async function applyDeploymentPlans(
     });
 
     await withSpan("apply.createUpdateDependentServices", async () => {
-      await forEachDeployment((d) => applyExecutor(applyClient, d.executor, "create-update"));
+      await step("apply.executor.createUpdate", (d) =>
+        applyExecutor(applyClient, d.executor, "create-update"),
+      );
       // Execution policies must exist before workflow job functions that reference
       // them by key, otherwise the runtime rejects the dispatch as an unknown key.
-      await forEachDeployment((d) =>
+      await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
         applyWorkflowJobFunctionExecutionPolicy(
           applyClient,
           d.workflowExecutionPolicy,
           "create-update",
         ),
       );
-      await forEachDeployment((d) => applyWorkflow(applyClient, d.workflow, "create-update"));
+      await step("apply.workflow.createUpdate", (d) =>
+        applyWorkflow(applyClient, d.workflow, "create-update"),
+      );
     });
   });
 
