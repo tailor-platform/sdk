@@ -95,6 +95,7 @@ describe("migration flow: namespaces without pending migrations", () => {
       createTailorDBService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
       getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),

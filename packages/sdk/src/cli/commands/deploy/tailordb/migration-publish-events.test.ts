@@ -98,11 +98,70 @@ import * as migrationModule from "./migration";
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 describe("migration flow: namespace restrictions while migrations run", () => {
-  function createMockClient() {
+  type WrittenSettings = {
+    bulkUpsert?: boolean;
+    publishRecordEvents?: boolean;
+    disableGqlOperations?: {
+      create?: boolean;
+      update?: boolean;
+      delete?: boolean;
+      read?: boolean;
+    };
+  };
+
+  function createMockClient(
+    options: {
+      existingSettings?: Record<string, WrittenSettings>;
+      existingTableNames?: string[];
+    } = {},
+  ) {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
       getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      listTailorDBTypes: vi.fn().mockImplementation(async () => {
+        const tables = snapshotState.tablesByVersion[0] as
+          | Record<
+              string,
+              {
+                settings?: {
+                  bulkUpsert?: boolean;
+                  publishEvents?: boolean;
+                  gqlOperations?: {
+                    create?: boolean;
+                    update?: boolean;
+                    delete?: boolean;
+                    read?: boolean;
+                  };
+                };
+              }
+            >
+          | undefined;
+        const names = options.existingTableNames ?? Object.keys(tables ?? {});
+        const tailordbTypes = names.map((name) => {
+          const snapshotSettings = tables?.[name]?.settings;
+          const operations = snapshotSettings?.gqlOperations;
+          return {
+            name,
+            schema: {
+              settings: {
+                bulkUpsert: snapshotSettings?.bulkUpsert ?? false,
+                publishRecordEvents: snapshotSettings?.publishEvents ?? false,
+                ...(operations && {
+                  disableGqlOperations: {
+                    create: operations.create === false,
+                    update: operations.update === false,
+                    delete: operations.delete === false,
+                    read: operations.read === false,
+                  },
+                }),
+                ...options.existingSettings?.[name],
+              },
+            },
+          };
+        });
+        return { tailordbTypes };
+      }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
@@ -117,6 +176,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     name: string,
     fields: Record<string, { type: string; required: boolean }>,
     settings?: {
+      bulkUpsert?: boolean;
       publishEvents?: boolean;
       gqlOperations?: {
         create?: boolean;
@@ -264,16 +324,6 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     };
   }
-
-  type WrittenSettings = {
-    publishRecordEvents?: boolean;
-    disableGqlOperations?: {
-      create?: boolean;
-      update?: boolean;
-      delete?: boolean;
-      read?: boolean;
-    };
-  };
 
   function typeSettingWrites(client: OperatorClient) {
     const writes: Array<{
@@ -489,7 +539,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   });
 
   test("restores publishing when a migration fails partway", async () => {
-    const client = createMockClient();
+    const client = createMockClient({
+      existingSettings: { Order: { publishRecordEvents: true } },
+    });
     const planResult = createMockPlanResult({ creates: ["Order"], subscribedTables: ["Order"] });
     const table = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
@@ -603,6 +655,123 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       })),
     );
     expect(operationWrites.at(-1)).toBeUndefined();
+  });
+
+  test("restores the exact pre-deploy settings and preserves a disabled read operation", async () => {
+    const originalSettings = {
+      bulkUpsert: true,
+      publishRecordEvents: false,
+      disableGqlOperations: { create: false, update: true, delete: false, read: true },
+    };
+    const client = createMockClient({ existingSettings: { Order: originalSettings } });
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
+    snapshotState.tablesByVersion = {
+      0: {
+        Order: snapshotTable(
+          "Order",
+          { status: { type: "string", required: true } },
+          { bulkUpsert: true },
+        ),
+      },
+      1: {
+        Order: snapshotTable(
+          "Order",
+          {
+            status: { type: "string", required: true },
+            requiredLater: { type: "string", required: true },
+          },
+          { bulkUpsert: true },
+        ),
+      },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        {
+          kind: "field_added",
+          tableName: "Order",
+          fieldName: "requiredLater",
+          after: { type: "string", required: true },
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(new Error("script failed"));
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /script failed/,
+    );
+
+    const writes = typeSettingWrites(client).filter(([name]) => name === "Order");
+    expect(writes.length).toBeGreaterThan(2);
+    for (const [, settings] of writes.slice(0, -1)) {
+      expect(settings).toMatchObject({
+        bulkUpsert: false,
+        publishRecordEvents: false,
+        disableGqlOperations: { create: true, update: true, delete: true, read: true },
+      });
+    }
+    expect(writes.at(-1)?.[1]).toMatchObject(originalSettings);
+  });
+
+  test("does not restrict a historical table that is absent from the workspace", async () => {
+    const client = createMockClient({ existingTableNames: [] });
+    const planResult = createMockPlanResult({ creates: ["Current"] });
+    const current = snapshotTable("Current", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = {
+      0: {
+        Current: current,
+        Historical: snapshotTable("Historical", {
+          value: { type: "string", required: true },
+        }),
+      },
+      1: { Current: current },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { kind: "table_removed", tableName: "Historical" } as any,
+      ]),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(
+      vi
+        .mocked(client.updateTailorDBType)
+        .mock.calls.some(([request]) => request.tailordbType?.name === "Historical"),
+    ).toBe(false);
+  });
+
+  test("continues restoration and preserves the migration error when one table restore fails", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [] });
+    const order = snapshotTable("Order", { value: { type: "string", required: true } });
+    const log = snapshotTable("Log", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = {
+      0: { Order: order, Log: log },
+      1: { Order: order, Log: log },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
+      new Error("original migration failure"),
+    );
+    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+      const settings = request.tailordbType?.schema?.settings;
+      if (request.tailordbType?.name === "Order" && settings?.disableGqlOperations === undefined) {
+        throw new Error("Order restore failed");
+      }
+      return {} as never;
+    });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /original migration failure/,
+    );
+
+    expect(
+      gqlOperationWrites(client)
+        .filter(([name]) => name === "Log")
+        .at(-1)?.[1],
+    ).toBeUndefined();
   });
 
   test("restores the last settled snapshot when a later migration fails", async () => {

@@ -20,6 +20,7 @@ import { resourceTrn, writeMetadataLabels } from "../label";
 import { executeMigrations, updateMigrationLabel, type MigrationContext } from "./migration";
 import {
   applyMigrationRestrictions,
+  captureMigrationRestrictionState,
   deletedResources,
   executeSingleMigrationPostPhase,
   executeSingleMigrationPostPhaseDeletions,
@@ -248,6 +249,13 @@ export async function applyTailorDB(
       deletedResources.reset();
       migrationSnapshotCache.reset();
 
+      const migratingNamespaces = new Set(pendingMigrations.map((m) => m.namespace));
+      const restrictionState = await captureMigrationRestrictionState(
+        client,
+        migrationContext.workspaceId,
+        migratingNamespaces,
+      );
+
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
@@ -264,7 +272,6 @@ export async function applyTailorDB(
       // per-migration phases could enforce a change whose migration has not
       // run. Creates/updates run before the loop so migration scripts see the
       // complete world; deletes are irreversible and stay last (Step 5).
-      const migratingNamespaces = new Set(pendingMigrations.map((m) => m.namespace));
       const isOutsideMigrations = (namespaceName: string | undefined) =>
         namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
       const firstPendingByNamespace = new Map<string, PendingMigration>();
@@ -306,6 +313,7 @@ export async function applyTailorDB(
           // for a name its final state keeps).
           if (pendingDeletedTables.get(namespaceName)?.has(tableName)) continue;
           const input = migrationContext.tailorDBInputs.find((i) => i.namespace === namespaceName);
+          const activeSettings = restrictionState.get(namespaceName)?.get(tableName);
           // Recorded so the pre-phase GQL-permission fallback does not create
           // the type a second time.
           processedTables.created.add(tableName);
@@ -315,6 +323,9 @@ export async function applyTailorDB(
             tailordbType: generateTailorDBTypeManifestFromSnapshot(priorTable, {
               suppressRecordEvents: true,
               suppressGqlMutations: true,
+              gqlReadDisabled: activeSettings
+                ? (activeSettings.disableGqlOperations?.read ?? false)
+                : undefined,
               namespaceGqlOperations: input?.config.gqlOperations,
             }),
           });
@@ -353,12 +364,13 @@ export async function applyTailorDB(
       }
 
       const restorationSnapshots = new Map(preMigrationSnapshots);
+      let migrationFailure: { error: unknown } | undefined;
       try {
-        // Restrictions are restored in `finally`: a committed checkpoint drops
-        // its migration from the next run's pending set.
+        // A committed checkpoint drops its migration from the next run's pending set.
         await applyMigrationRestrictions(
           client,
           preMigrationSnapshots,
+          restrictionState,
           migrationContext.tailorDBInputs,
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,
@@ -373,6 +385,7 @@ export async function applyTailorDB(
               migration,
               migrationContext.tailorDBInputs,
               attemptedTables,
+              restrictionState,
             );
 
             // Script execution (only if migrate.ts exists for this migration)
@@ -386,6 +399,7 @@ export async function applyTailorDB(
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
               attemptedTables,
+              restrictionState,
             );
             throw error;
           }
@@ -397,6 +411,7 @@ export async function applyTailorDB(
               migration,
               migrationContext.tailorDBInputs,
               attemptedTables,
+              restrictionState,
             );
           } catch (error) {
             await rollbackSingleMigrationAfterFailure(
@@ -405,6 +420,7 @@ export async function applyTailorDB(
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
               attemptedTables,
+              restrictionState,
             );
             throw error;
           }
@@ -430,6 +446,7 @@ export async function applyTailorDB(
                   )
                 ).number ?? undefined;
             } catch (readbackError) {
+              restorationSnapshots.delete(migration.namespace);
               logger.warn(
                 `Could not verify migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} after its update failed: ` +
                   `${readbackError instanceof Error ? readbackError.message : String(readbackError)}. ` +
@@ -439,6 +456,7 @@ export async function applyTailorDB(
             }
 
             if (remoteMigrationNumber !== undefined && remoteMigrationNumber > migration.number) {
+              restorationSnapshots.delete(migration.namespace);
               throw new Error(
                 `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} advanced concurrently to ${formatMigrationNumber(remoteMigrationNumber)}. ` +
                   "Leaving the post-migration schema unchanged and aborting this deployment.",
@@ -474,15 +492,27 @@ export async function applyTailorDB(
           logger.newline();
           logger.success(`All data migrations completed successfully.`);
         }
-      } finally {
+      } catch (error) {
+        migrationFailure = { error };
+      }
+      try {
         await restoreMigrationRestrictions(
           client,
           restorationSnapshots,
+          migrationFailure ? restrictionState : undefined,
           migrationContext.tailorDBInputs,
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,
         );
+      } catch (restorationError) {
+        if (!migrationFailure) throw restorationError;
+        logger.warn(
+          `Could not restore every TailorDB table after the migration failed: ${
+            restorationError instanceof Error ? restorationError.message : String(restorationError)
+          }. The original migration error is reported below.`,
+        );
       }
+      if (migrationFailure) throw migrationFailure.error;
 
       // Step 4: Delete remaining GQL permissions that weren't deleted with their tables
       const remainingGqlPermissionDeletes = changeSet.gqlPermission.deletes.filter((del) => {

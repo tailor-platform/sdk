@@ -422,6 +422,20 @@ describe("snapshot-manifest", () => {
       });
     });
 
+    test("suppresses bulk upsert together with GraphQL mutations", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        settings: { bulkUpsert: true },
+      });
+
+      const restricted = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+        suppressGqlMutations: true,
+      });
+      const restored = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      expect(restricted.schema?.settings?.bulkUpsert).toBe(false);
+      expect(restored.schema?.settings?.bulkUpsert).toBe(true);
+    });
+
     test("aggregates field hooks into a table-level hook script", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {

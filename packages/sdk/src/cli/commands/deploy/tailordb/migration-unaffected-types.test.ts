@@ -107,6 +107,7 @@ describe("migration flow: creates of types predating the pending migrations", ()
       createTailorDBService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
       getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),

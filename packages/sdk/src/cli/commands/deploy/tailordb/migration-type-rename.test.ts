@@ -133,6 +133,7 @@ describe("applyTailorDB: type rename migration flow", () => {
         metadata: { labels: { "sdk-migration": "m0000" } },
       }),
       setMetadata: vi.fn().mockResolvedValue({}),
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),

@@ -60,8 +60,10 @@ export interface GenerateManifestOptions {
    * subscribes, so `subscribed` alone cannot silence it while migrations run.
    */
   suppressRecordEvents?: boolean;
-  /** Force GraphQL mutations off while preserving the configured read operation. */
+  /** Force GraphQL writes, including bulk upsert, off while preserving read. */
   suppressGqlMutations?: boolean;
+  /** Override whether the GraphQL read operation is disabled. */
+  gqlReadDisabled?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
     create?: boolean;
@@ -117,7 +119,8 @@ export function generateTailorDBTypeManifestFromSnapshot(
     };
   } = {
     aggregation: snapshotType.settings?.aggregation ?? false,
-    bulkUpsert: snapshotType.settings?.bulkUpsert ?? false,
+    bulkUpsert:
+      options.suppressGqlMutations === true ? false : (snapshotType.settings?.bulkUpsert ?? false),
     draft: false,
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
@@ -135,7 +138,7 @@ export function generateTailorDBTypeManifestFromSnapshot(
       create: options.suppressGqlMutations === true || ops?.create === false,
       update: options.suppressGqlMutations === true || ops?.update === false,
       delete: options.suppressGqlMutations === true || ops?.delete === false,
-      read: ops?.read === false,
+      read: options.gqlReadDisabled ?? ops?.read === false,
     };
   }
 

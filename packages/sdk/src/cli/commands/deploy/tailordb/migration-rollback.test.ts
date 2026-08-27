@@ -134,6 +134,16 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         metadata: { labels: { "sdk-migration": "m0000" } },
       }),
       setMetadata: vi.fn().mockResolvedValue({}),
+      listTailorDBTypes: vi.fn().mockResolvedValue({
+        tailordbTypes: [
+          {
+            name: "GoodsReceipt",
+            schema: {
+              settings: { bulkUpsert: false, publishRecordEvents: false },
+            },
+          },
+        ],
+      }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
@@ -871,13 +881,24 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     });
     const client = createMockClient();
     const planResult = createFieldTypePlanResult(tableNames);
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-ns",
+        config: {},
+        types: snapshots(1).tables,
+      },
+    ];
     setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
-    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
-      new Error("checkpoint response lost"),
-    );
     vi.mocked(client.getMetadata).mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0002" } },
     } as never);
+    let writesAtCheckpointAttempt = 0;
+    vi.mocked(migrationModule.updateMigrationLabel)
+      .mockReset()
+      .mockImplementationOnce(async () => {
+        writesAtCheckpointAttempt = vi.mocked(client.updateTailorDBType).mock.calls.length;
+        throw new Error("checkpoint response lost");
+      });
 
     await withOverriddenSnapshot(
       (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
@@ -889,6 +910,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     );
 
     expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
+    expect(client.updateTailorDBType).toHaveBeenCalledTimes(writesAtCheckpointAttempt);
   });
 
   test("advances the checkpoint before deleting a removed table", async () => {
