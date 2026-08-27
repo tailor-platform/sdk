@@ -357,7 +357,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     expect(operationWrites.at(-1)?.[1]).toBeUndefined();
   });
 
-  test("restores the surviving table when a migration renames it", async () => {
+  test("restricts the old table before a rename and restores the surviving table", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult({
       creates: ["Invoice"],
@@ -385,8 +385,27 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     await applyTailorDB(client, planResult, "create-update");
 
     const writes = publishFlagWrites(client);
+    expect(writes[0]).toEqual(["Bill", false]);
     expect(writes.at(-1)).toEqual(["Invoice", true]);
-    expect(writes.map(([name]) => name)).not.toContain("Bill");
+  });
+
+  test("creates checkpoint tables with restrictions already applied", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: ["Order"], subscribedTables: ["Order"] });
+    const table = snapshotTable("Order", { status: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const firstWrite = typeSettingWrites(client).find(([name]) => name === "Order");
+    expect(firstWrite).toEqual([
+      "Order",
+      expect.objectContaining({
+        publishRecordEvents: false,
+        disableGqlOperations: { create: true, update: true, delete: true, read: false },
+      }),
+    ]);
   });
 
   test("silences a table that declares publishEvents, then restores it", async () => {
@@ -492,6 +511,169 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     // set, so publishing has to come back on before the throw escapes.
     const flags = publishFlagWrites(client).filter(([name]) => name === "Order");
     expect(flags.at(-1)?.[1]).toBe(true);
+    expect(
+      gqlOperationWrites(client)
+        .filter(([name]) => name === "Order")
+        .at(-1)?.[1],
+    ).toBeUndefined();
+  });
+
+  test("restores tables already restricted when applying another restriction fails", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [] });
+    const order = snapshotTable("Order", { status: { type: "string", required: true } });
+    const log = snapshotTable("Log", { message: { type: "string", required: true } });
+    snapshotState.tablesByVersion = {
+      0: { Order: order, Log: log },
+      1: { Order: order, Log: log },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+    let restrictionFailed = false;
+    vi.mocked(client.updateTailorDBType).mockImplementation(async (request) => {
+      if (
+        !restrictionFailed &&
+        request.tailordbType?.name === "Log" &&
+        request.tailordbType.schema?.settings?.publishRecordEvents === false
+      ) {
+        restrictionFailed = true;
+        throw new Error("restriction failed");
+      }
+      return {} as never;
+    });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /restriction failed/,
+    );
+
+    const orderFlags = publishFlagWrites(client)
+      .filter(([name]) => name === "Order")
+      .map(([, flag]) => flag);
+    expect(orderFlags).toEqual([false, false]);
+    expect(
+      gqlOperationWrites(client)
+        .filter(([name]) => name === "Order")
+        .at(-1)?.[1],
+    ).toBeUndefined();
+  });
+
+  test("keeps rollback writes restricted until failure restoration completes", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
+    snapshotState.tablesByVersion = {
+      0: { Order: snapshotTable("Order", { status: { type: "string", required: true } }) },
+      1: {
+        Order: snapshotTable("Order", {
+          status: { type: "string", required: true },
+          requiredLater: { type: "string", required: true },
+        }),
+      },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        {
+          kind: "field_added",
+          tableName: "Order",
+          fieldName: "requiredLater",
+          after: { type: "string", required: true },
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any),
+    ]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(new Error("script failed"));
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /script failed/,
+    );
+
+    const flags = publishFlagWrites(client)
+      .filter(([name]) => name === "Order")
+      .map(([, flag]) => flag);
+    expect(flags.length).toBeGreaterThan(2);
+    expect(flags.slice(0, -1)).toEqual(flags.slice(0, -1).map(() => false));
+    expect(flags.at(-1)).toBe(false);
+    const operationWrites = gqlOperationWrites(client)
+      .filter(([name]) => name === "Order")
+      .map(([, operations]) => operations);
+    expect(operationWrites.slice(0, -1)).toEqual(
+      operationWrites.slice(0, -1).map(() => ({
+        create: true,
+        update: true,
+        delete: true,
+        read: false,
+      })),
+    );
+    expect(operationWrites.at(-1)).toBeUndefined();
+  });
+
+  test("restores the last settled snapshot when a later migration fails", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [] });
+    snapshotState.tablesByVersion = {
+      0: { Order: snapshotTable("Order", { initial: { type: "string", required: true } }) },
+      1: {
+        Order: snapshotTable("Order", {
+          initial: { type: "string", required: true },
+          settled: { type: "string", required: true },
+        }),
+      },
+      2: {
+        Order: snapshotTable("Order", {
+          initial: { type: "string", required: true },
+          settled: { type: "string", required: true },
+          notSettled: { type: "string", required: true },
+        }),
+      },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([], { number: 1 }),
+      mkPendingMigration([], { number: 2 }),
+    ]);
+    vi.mocked(migrationModule.executeMigrations)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("second script failed"));
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /second script failed/,
+    );
+
+    const lastOrderWrite = vi
+      .mocked(client.updateTailorDBType)
+      .mock.calls.map(([request]) => request)
+      .filter((request) => request.tailordbType?.name === "Order")
+      .at(-1);
+    expect(lastOrderWrite?.tailordbType?.schema?.fields).toHaveProperty("settled");
+    expect(lastOrderWrite?.tailordbType?.schema?.fields).not.toHaveProperty("notSettled");
+  });
+
+  test("restores a table that is removed and re-added in the same run", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({ creates: [], updates: ["Order"] });
+    const order = snapshotTable("Order", { status: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: order }, 1: {}, 2: { Order: order } };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration(
+        [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { kind: "table_removed", tableName: "Order" } as any,
+        ],
+        { number: 1 },
+      ),
+      mkPendingMigration(
+        [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { kind: "table_added", tableName: "Order" } as any,
+        ],
+        { number: 2 },
+      ),
+    ]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const flags = publishFlagWrites(client)
+      .filter(([name]) => name === "Order")
+      .map(([, flag]) => flag);
+    expect(flags[0]).toBe(false);
+    expect(flags.at(-1)).toBe(false);
     expect(
       gqlOperationWrites(client)
         .filter(([name]) => name === "Order")

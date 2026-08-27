@@ -278,7 +278,7 @@ export async function applyTailorDB(
         for (const tableName of getDeletedTableNames(migration)) deleted.add(tableName);
         pendingDeletedTables.set(migration.namespace, deleted);
       }
-      const preMigrationTables = new Map<string, SchemaSnapshot["tables"]>();
+      const preMigrationSnapshots = new Map<string, SchemaSnapshot>();
       for (const [namespace, first] of firstPendingByNamespace) {
         const snapshot = reconstructSnapshotFromMigrations(first.migrationsDir, first.number - 1);
         if (!snapshot) {
@@ -286,7 +286,7 @@ export async function applyTailorDB(
             `Cannot reconstruct the schema state before migration ${formatMigrationNumber(first.number)} for namespace "${namespace}"`,
           );
         }
-        preMigrationTables.set(namespace, snapshot.tables);
+        preMigrationSnapshots.set(namespace, snapshot);
       }
 
       try {
@@ -298,7 +298,7 @@ export async function applyTailorDB(
           }
           const tableName = create.request.tailordbType?.name;
           if (!namespaceName || !tableName) continue;
-          const priorTable = preMigrationTables.get(namespaceName)?.[tableName];
+          const priorTable = preMigrationSnapshots.get(namespaceName)?.tables[tableName];
           if (!priorTable) continue;
           // A type some pending migration removes or renames away is created
           // only when its re-adding migration runs; materializing it early
@@ -313,7 +313,8 @@ export async function applyTailorDB(
             workspaceId: create.request.workspaceId,
             namespaceName,
             tailordbType: generateTailorDBTypeManifestFromSnapshot(priorTable, {
-              subscribed: migrationContext.executorUsedTables.has(tableName),
+              suppressRecordEvents: true,
+              suppressGqlMutations: true,
               namespaceGqlOperations: input?.config.gqlOperations,
             }),
           });
@@ -351,16 +352,17 @@ export async function applyTailorDB(
         logger.newline();
       }
 
-      // Restrictions are restored in `finally`: a committed checkpoint drops
-      // its migration from the next run's pending set.
-      await applyMigrationRestrictions(
-        client,
-        pendingMigrations,
-        migrationContext.tailorDBInputs,
-        migrationContext.executorUsedTables,
-        migrationContext.workspaceId,
-      );
+      const restorationSnapshots = new Map(preMigrationSnapshots);
       try {
+        // Restrictions are restored in `finally`: a committed checkpoint drops
+        // its migration from the next run's pending set.
+        await applyMigrationRestrictions(
+          client,
+          preMigrationSnapshots,
+          migrationContext.tailorDBInputs,
+          migrationContext.executorUsedTables,
+          migrationContext.workspaceId,
+        );
         for (const migration of pendingMigrations) {
           const attemptedTables = new Set<string>();
           try {
@@ -383,7 +385,6 @@ export async function applyTailorDB(
               migration,
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
-              migrationContext.executorUsedTables,
               attemptedTables,
             );
             throw error;
@@ -403,11 +404,12 @@ export async function applyTailorDB(
               migration,
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
-              migrationContext.executorUsedTables,
               attemptedTables,
             );
             throw error;
           }
+
+          restorationSnapshots.set(migration.namespace, migrationSnapshotCache.load(migration));
 
           try {
             await updateMigrationLabel(
@@ -475,7 +477,7 @@ export async function applyTailorDB(
       } finally {
         await restoreMigrationRestrictions(
           client,
-          pendingMigrations,
+          restorationSnapshots,
           migrationContext.tailorDBInputs,
           migrationContext.executorUsedTables,
           migrationContext.workspaceId,

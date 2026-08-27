@@ -326,7 +326,6 @@ export async function rollbackSingleMigrationAfterFailure(
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
   attemptedTables: ReadonlySet<string>,
 ): Promise<void> {
   try {
@@ -335,7 +334,6 @@ export async function rollbackSingleMigrationAfterFailure(
       migration,
       workspaceId,
       tailorDBInputs,
-      executorUsedTables,
       attemptedTables,
     );
   } catch (rollbackError) {
@@ -434,14 +432,11 @@ async function rewriteRestrictedTables(
     snapshot: SchemaSnapshot;
     input: TailorDBDeployInput;
     executorUsedTables: ReadonlySet<string>;
-    skip: ReadonlySet<string>;
     restricted: boolean;
   },
 ): Promise<void> {
-  const { workspaceId, namespaceName, snapshot, input, executorUsedTables, skip, restricted } =
-    params;
+  const { workspaceId, namespaceName, snapshot, input, executorUsedTables, restricted } = params;
   for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
-    if (skip.has(tableName)) continue;
     const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
       subscribed: executorUsedTables.has(tableName),
       namespaceGqlOperations: input.config.gqlOperations,
@@ -466,27 +461,6 @@ async function rewriteRestrictedTables(
 }
 
 /**
- * The first and last pending migration per namespace, in application order.
- * @param migrations - Pending migrations in the run
- * @returns First and last migration, keyed by namespace
- */
-function migrationBounds(
-  migrations: ReadonlyArray<PendingMigration>,
-): Map<string, { first: PendingMigration; last: PendingMigration }> {
-  const bounds = new Map<string, { first: PendingMigration; last: PendingMigration }>();
-  for (const migration of migrations) {
-    const seen = bounds.get(migration.namespace);
-    if (!seen) {
-      bounds.set(migration.namespace, { first: migration, last: migration });
-      continue;
-    }
-    if (migration.number < seen.first.number) seen.first = migration;
-    if (migration.number > seen.last.number) seen.last = migration;
-  }
-  return bounds;
-}
-
-/**
  * Stop record event publishing and GraphQL mutations across each migrating namespace.
  *
  * The per-migration phases only rewrite tables some pending diff names, so a
@@ -494,30 +468,27 @@ function migrationBounds(
  * whole namespace unrestricted while its script runs. Restrictions therefore
  * use the schema in place before the namespace's first migration.
  * @param client - Operator client instance
- * @param migrations - Migrations about to be applied
+ * @param snapshots - Schema in place before each namespace's first pending migration
  * @param tailorDBInputs - TailorDB deploy inputs for the run
  * @param executorUsedTables - Tables an enabled executor subscribes to
  * @param workspaceId - Target workspace ID
  */
 export async function applyMigrationRestrictions(
   client: OperatorClient,
-  migrations: ReadonlyArray<PendingMigration>,
+  snapshots: ReadonlyMap<string, SchemaSnapshot>,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
   workspaceId: string,
 ): Promise<void> {
-  for (const [namespaceName, { first }] of migrationBounds(migrations)) {
+  for (const [namespaceName, snapshot] of snapshots) {
     const input = tailorDBInputs.find((entry) => entry.namespace === namespaceName);
     if (!input) continue;
     await rewriteRestrictedTables(client, {
       workspaceId,
       namespaceName,
-      // The state before this namespace's first migration is what that
-      // migration's script runs against.
-      snapshot: migrationSnapshotCache.load(first),
+      snapshot,
       input,
       executorUsedTables,
-      skip: new Set(),
       restricted: true,
     });
   }
@@ -526,40 +497,33 @@ export async function applyMigrationRestrictions(
 /**
  * Restore normal event publishing and GraphQL operations after migrations.
  *
- * Runs on the schema as of each namespace's final migration, which schema
- * verification has already checked reproduces the local definitions.
+ * Uses the latest schema that completed its post-phase in each namespace. If a
+ * later migration fails, this avoids applying schema changes that never settled.
  *
  * Callers must run this even when the migration loop throws because a committed
  * checkpoint drops its migration from the next run's pending set.
  * @param client - Operator client instance
- * @param migrations - Migrations applied in this run
+ * @param snapshots - Latest schema that settled in each migrating namespace
  * @param tailorDBInputs - TailorDB deploy inputs for the run
  * @param executorUsedTables - Tables an enabled executor subscribes to
  * @param workspaceId - Target workspace ID
  */
 export async function restoreMigrationRestrictions(
   client: OperatorClient,
-  migrations: ReadonlyArray<PendingMigration>,
+  snapshots: ReadonlyMap<string, SchemaSnapshot>,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTables: ReadonlySet<string>,
   workspaceId: string,
 ): Promise<void> {
-  for (const [namespaceName, { last }] of migrationBounds(migrations)) {
+  for (const [namespaceName, snapshot] of snapshots) {
     const input = tailorDBInputs.find((entry) => entry.namespace === namespaceName);
     if (!input) continue;
-    const dropped = new Set(
-      migrations
-        .filter((migration) => migration.namespace === namespaceName)
-        .flatMap((migration) => [...getDeletedTableNames(migration)]),
-    );
     await rewriteRestrictedTables(client, {
       workspaceId,
       namespaceName,
-      snapshot: migrationSnapshotCache.load(last),
+      snapshot,
       input,
       executorUsedTables,
-      // A table the migrations dropped has nothing left to restore.
-      skip: dropped,
       restricted: false,
     });
   }
@@ -601,7 +565,6 @@ export async function executeSingleMigrationPostPhaseDeletions(
  * @param migration - The migration whose Pre-phase DDL must be reverted
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
- * @param executorUsedTables - Tables used by executors (drives publishRecordEvents default)
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when rollback attempts complete
  */
@@ -610,7 +573,6 @@ async function rollbackSingleMigrationPrePhase(
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
   attemptedTables: ReadonlySet<string>,
 ): Promise<void> {
   // The baseline migration has no prior checkpoint to revert to.
@@ -650,7 +612,8 @@ async function rollbackSingleMigrationPrePhase(
   for (const { tableName, priorTable } of restoredTables) {
     try {
       const manifest = generateTailorDBTypeManifestFromSnapshot(priorTable, {
-        subscribed: executorUsedTables.has(priorTable.name),
+        suppressRecordEvents: true,
+        suppressGqlMutations: true,
         namespaceGqlOperations: input?.config.gqlOperations,
       });
       await client.updateTailorDBType({
