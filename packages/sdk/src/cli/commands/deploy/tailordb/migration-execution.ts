@@ -340,14 +340,21 @@ export async function executeSingleMigrationPrePhase(
     await client.updateTailorDBType(clonedRequest);
   }
 
-  // GQLPermissions - process once (on the first migration)
-  if (!processedTables.gqlPermissionsProcessed.has(migration.namespace)) {
-    const gqlPermissionCreatesForNamespace = changeSet.gqlPermission.creates.filter(
-      (create) => create.request.namespaceName === migration.namespace,
-    );
-    const gqlPermissionUpdatesForNamespace = changeSet.gqlPermission.updates.filter(
-      (update) => update.request.namespaceName === migration.namespace,
-    );
+  const currentTableNames = new Set(Object.keys(migrationSnapshotCache.load(migration).tables));
+  const permissionKey = (tableName: string) => `${migration.namespace}/${tableName}`;
+  const gqlPermissionCreatesForNamespace = changeSet.gqlPermission.creates.filter(
+    (create) =>
+      create.request.namespaceName === migration.namespace &&
+      currentTableNames.has(create.name) &&
+      !processedTables.gqlPermissionsProcessed.has(permissionKey(create.name)),
+  );
+  const gqlPermissionUpdatesForNamespace = changeSet.gqlPermission.updates.filter(
+    (update) =>
+      update.request.namespaceName === migration.namespace &&
+      currentTableNames.has(update.name) &&
+      !processedTables.gqlPermissionsProcessed.has(permissionKey(update.name)),
+  );
+  if (gqlPermissionCreatesForNamespace.length + gqlPermissionUpdatesForNamespace.length > 0) {
     const gqlPermissionTypeNames = new Set(
       gqlPermissionCreatesForNamespace.map((create) => create.name),
     );
@@ -364,14 +371,21 @@ export async function executeSingleMigrationPrePhase(
     if (missingTypeCreates.length > 0) {
       for (const create of missingTypeCreates) {
         const tableName = create.request.tailordbType?.name;
-        if (tableName) {
-          processedTables.created.add(tableName);
-          attemptedTables.add(tableName);
-        }
-        await client.createTailorDBType(create.request);
+        if (!tableName) continue;
+        const snapshotType = buildSnapshotTypeManifest(
+          migration,
+          tableName,
+          tailorDBInputs,
+          restrictionState,
+        );
+        if (!snapshotType) continue;
+        processedTables.created.add(tableName);
+        attemptedTables.add(tableName);
+        const clonedRequest = structuredClone(create.request);
+        clonedRequest.tailordbType = snapshotType;
+        await client.createTailorDBType(clonedRequest);
       }
     }
-    processedTables.gqlPermissionsProcessed.add(migration.namespace);
     await awaitAllSettledOrThrow([
       ...gqlPermissionCreatesForNamespace.map((create) =>
         client.createTailorDBGQLPermission(create.request),
@@ -380,6 +394,12 @@ export async function executeSingleMigrationPrePhase(
         client.updateTailorDBGQLPermission(update.request),
       ),
     ]);
+    for (const typeName of [
+      ...gqlPermissionCreatesForNamespace.map((create) => create.name),
+      ...gqlPermissionUpdatesForNamespace.map((update) => update.name),
+    ]) {
+      processedTables.gqlPermissionsProcessed.add(permissionKey(typeName));
+    }
   }
 }
 

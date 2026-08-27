@@ -508,11 +508,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("rolls back tables the pre-phase created via missingTypeCreates, not just diff tables", async () => {
+  test("does not create or roll back a permission table absent from the migration snapshot", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
-    // LeakedType is not in this migration's diff, but the pre-phase creates it
-    // through missingTypeCreates because it is a type create with a GQL permission.
     planResult.changeSet.type.creates.push({
       name: "LeakedType",
       request: {
@@ -544,7 +542,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     const deletedNames = deletedTableNames(client);
     expect(deletedNames).toContain("StockReservation");
-    expect(deletedNames).toContain("LeakedType");
+    expect(deletedNames).not.toContain("LeakedType");
   });
 
   test("does not roll back a drifted type the pre-phase never touched", async () => {

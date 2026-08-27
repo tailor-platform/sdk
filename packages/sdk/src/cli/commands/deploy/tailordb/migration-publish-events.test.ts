@@ -458,6 +458,51 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     ]);
   });
 
+  test("does not create a later migration's permission table before that migration", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult({
+      creates: ["Future"],
+      gqlPermissionTypes: ["Future"],
+    });
+    const current = snapshotTable("Current", { value: { type: "string", required: true } });
+    const future = snapshotTable("Future", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = {
+      0: { Current: current },
+      1: { Current: current },
+      2: { Current: current, Future: future },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([], { number: 1 }),
+      mkPendingMigration(
+        [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { kind: "table_added", tableName: "Future" } as any,
+        ],
+        { number: 2 },
+      ),
+    ]);
+    const order: string[] = [];
+    vi.mocked(migrationModule.executeMigrations).mockImplementation(async () => {
+      order.push("script");
+    });
+    vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
+      if (request.tailordbType?.name === "Future") {
+        order.push("create Future");
+      }
+      return {} as never;
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(order).toEqual(["script", "create Future", "script"]);
+    const futureWrite = typeSettingWrites(client).find(([name]) => name === "Future");
+    expect(futureWrite?.[1]).toMatchObject({
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: { create: true, update: true, delete: true, read: false },
+    });
+  });
+
   test("silences a table that declares publishEvents, then restores it", async () => {
     const client = createMockClient();
     // No executor subscribes: `publishEvents: true` publishes on its own, so
@@ -568,6 +613,38 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         .filter(([name]) => name === "Order")
         .at(-1)?.[1],
     ).toBeUndefined();
+  });
+
+  test("restores a not-yet-deleted table when its checkpoint remains uncommitted", async () => {
+    const client = createMockClient({
+      existingSettings: { Retired: { publishRecordEvents: true } },
+    });
+    const planResult = createMockPlanResult({ creates: [] });
+    const keep = snapshotTable("Keep", { value: { type: "string", required: true } });
+    const retired = snapshotTable("Retired", { value: { type: "string", required: true } });
+    snapshotState.tablesByVersion = {
+      0: { Keep: keep, Retired: retired },
+      1: { Keep: keep },
+    };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+      mkPendingMigration([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { kind: "table_removed", tableName: "Retired" } as any,
+      ]),
+    ]);
+    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
+      new Error("checkpoint update failed"),
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /checkpoint update failed/,
+    );
+
+    const retiredWrites = typeSettingWrites(client).filter(([name]) => name === "Retired");
+    expect(retiredWrites.at(-1)?.[1]).toMatchObject({
+      publishRecordEvents: true,
+    });
+    expect(retiredWrites.at(-1)?.[1]?.disableGqlOperations).toBeUndefined();
   });
 
   test("restores tables already restricted when applying another restriction fails", async () => {

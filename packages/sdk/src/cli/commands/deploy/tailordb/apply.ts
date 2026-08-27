@@ -425,7 +425,9 @@ export async function applyTailorDB(
             throw error;
           }
 
-          restorationSnapshots.set(migration.namespace, migrationSnapshotCache.load(migration));
+          const previousRestorationSnapshot = restorationSnapshots.get(migration.namespace);
+          const postMigrationSnapshot = migrationSnapshotCache.load(migration);
+          restorationSnapshots.set(migration.namespace, postMigrationSnapshot);
 
           try {
             await updateMigrationLabel(
@@ -465,6 +467,19 @@ export async function applyTailorDB(
             }
 
             if (remoteMigrationNumber !== migration.number) {
+              const uncommittedDeletedTables = [...getDeletedTableNames(migration)].flatMap(
+                (tableName) => {
+                  const table = previousRestorationSnapshot?.tables[tableName];
+                  return table ? [[tableName, table] as const] : [];
+                },
+              );
+              restorationSnapshots.set(migration.namespace, {
+                ...postMigrationSnapshot,
+                tables: {
+                  ...postMigrationSnapshot.tables,
+                  ...Object.fromEntries(uncommittedDeletedTables),
+                },
+              });
               logger.warn(
                 `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${
                   remoteMigrationNumber === undefined
