@@ -134,7 +134,7 @@ async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter 
       throw parsed.error;
     }
 
-    const adapter = parsed.data as unknown as HttpAdapterConfig;
+    const adapter = parsed.data;
     const methods = collectMethodKeys(adapter);
     rejectAsyncHandlers(adapter, methods, filePath);
 
