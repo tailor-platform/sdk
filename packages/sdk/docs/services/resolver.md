@@ -310,7 +310,7 @@ createResolver({
 
 **Use cases:**
 
-1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it. An executor declared with `disabled: true` never runs, so it does not count
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this resolver

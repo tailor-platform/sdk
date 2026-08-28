@@ -11,7 +11,20 @@ describe("controlplane", async () => {
 
   test("executor applied", async () => {
     const { executors } = await client.listExecutorExecutors({ workspaceId });
-    expect(executors.length).toBe(6);
+    expect(executors.length).toBe(9);
+
+    // A disabled executor is still deployed, trigger and all.
+    expect(
+      executors
+        .filter((e) => e.disabled)
+        .map((e) => e.name)
+        .toSorted(),
+    ).toEqual([
+      "audit-trail-created",
+      "audit-workflow-completed",
+      "idp-user-created",
+      "step-chain-executed",
+    ]);
 
     const salesOrderCreated = executors.find((e) => e.name === "sales-order-created");
     expect(salesOrderCreated).toMatchObject({

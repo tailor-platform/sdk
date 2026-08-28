@@ -15,8 +15,8 @@ describe("controlplane", async () => {
       const { workflows } = await client.listWorkflows({ workspaceId });
       const ownedWorkflows = await filterByMetadataWithName(client, workflows, workflowTrn);
 
-      // There are 3 workflows defined in example/workflows
-      expect(ownedWorkflows.length).toBe(3);
+      // There are 4 workflows defined in example/workflows
+      expect(ownedWorkflows.length).toBe(4);
 
       // Verify order-processing workflow
       const orderProcessing = ownedWorkflows.find((w) => w.name === "order-processing");
@@ -50,6 +50,30 @@ describe("controlplane", async () => {
       expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("validate-order");
       expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("check-inventory");
       expect(Object.keys(sampleWorkflow?.jobFunctions ?? {})).toContain("process-payment");
+
+      // Verify audit-workflow
+      const auditWorkflow = ownedWorkflows.find((w) => w.name === "audit-workflow");
+      expect(auditWorkflow).toBeDefined();
+      expect(auditWorkflow).toMatchObject({
+        name: "audit-workflow",
+        mainJobFunctionName: "record-audit",
+      });
+    });
+
+    test("execution events stay off for a disabled subscriber", async () => {
+      const { workflows } = await client.listWorkflows({ workspaceId });
+      const ownedWorkflows = await filterByMetadataWithName(client, workflows, workflowTrn);
+
+      // The only executor with a workflow execution trigger is disabled, so
+      // nothing needs audit-workflow's execution events.
+      const auditWorkflow = ownedWorkflows.find((w) => w.name === "audit-workflow");
+      expect(auditWorkflow?.publishExecutionEvents).toBe(false);
+
+      // A workflow's jobs carry their own value, driven by job execution
+      // triggers. No executor carries one, disabled or otherwise.
+      const { jobFunctions } = await client.listWorkflowJobFunctions({ workspaceId });
+      const recordAudit = jobFunctions.find((j) => j.name === "record-audit");
+      expect(recordAudit?.publishExecutionEvents).toBe(false);
     });
   });
 
@@ -63,8 +87,8 @@ describe("controlplane", async () => {
       const jobNames = jobFunctions.map((j) => j.name);
       const ownedJobNames = await filterUniqueNamesByMetadata(client, jobNames, jobFunctionTrn);
 
-      // There are exactly 7 job functions used by the 3 workflows
-      expect(ownedJobNames).toHaveLength(7);
+      // There are exactly 8 job functions used by the 4 workflows
+      expect(ownedJobNames).toHaveLength(8);
 
       // Jobs from order-processing workflow
       expect(ownedJobNames).toContain("process-order");
@@ -78,6 +102,9 @@ describe("controlplane", async () => {
       expect(ownedJobNames).toContain("validate-order");
       expect(ownedJobNames).toContain("check-inventory");
       expect(ownedJobNames).toContain("process-payment");
+
+      // Job from audit-workflow
+      expect(ownedJobNames).toContain("record-audit");
     });
 
     test("job function scripts are stored in function registry", async () => {
@@ -106,8 +133,8 @@ describe("controlplane", async () => {
 
       const workflowJobFunctions = functions.filter((f) => f.name.startsWith("workflow--"));
 
-      // There are 7 workflow job functions
-      expect(workflowJobFunctions).toHaveLength(7);
+      // There are 8 workflow job functions
+      expect(workflowJobFunctions).toHaveLength(8);
 
       // Verify specific job functions exist with non-empty content hashes
       const processOrder = workflowJobFunctions.find((f) => f.name === "workflow--process-order");

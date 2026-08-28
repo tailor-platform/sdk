@@ -23,7 +23,11 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { byName } from "#/cli/shared/apply-concurrency";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
-import { assertNoPublishEventsConflict, publishEventsConflict } from "#/cli/shared/publish-events";
+import {
+  assertNoPublishEventsConflict,
+  publishEventsConflict,
+  subscribesToEvents,
+} from "#/cli/shared/publish-events";
 import { createChangeSet } from "../change-set";
 import { areNormalizedEqual } from "../compare";
 import {
@@ -93,6 +97,7 @@ export async function planTailorDB(context: PlanContext) {
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
   const executorUsedTables = new Set(context.executorUsedTailorDBTables ?? []);
   for (const executor of executors) {
+    if (!subscribesToEvents(executor)) continue;
     if (executor.trigger.kind === "tailordb") {
       executorUsedTables.add(executor.trigger.tableName);
     }

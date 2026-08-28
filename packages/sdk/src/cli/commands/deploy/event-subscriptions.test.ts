@@ -3,6 +3,12 @@ import {
   assertRecordableDependencies,
   collectDependentApps,
   collectEventSubscriptions,
+  ownedSubscriptions,
+  subscribedIdps,
+  subscribedResolvers,
+  subscribedResourceKeys,
+  subscribedTailorDBTables,
+  subscribedWorkflows,
 } from "./event-subscriptions";
 
 type TargetSpec = {
@@ -31,6 +37,8 @@ type TargetSpec = {
   externalResolverNamespaces?: string[];
   externalIdps?: string[];
   executors?: Record<string, Record<string, unknown>>;
+  /** Executors declared with `disabled: true`, keyed the same way as `executors`. */
+  disabledExecutors?: Record<string, Record<string, unknown>>;
 };
 
 type Target = Parameters<typeof collectEventSubscriptions>[0][number];
@@ -114,12 +122,16 @@ function target(spec: TargetSpec): Target {
         ...(spec.externalIdps ?? []).map((Name) => ({ Type: "idp", Name })),
       ],
       executorService: {
-        executors: Object.fromEntries(
-          Object.entries(spec.executors ?? {}).map(([name, trigger]) => [
+        executors: Object.fromEntries([
+          ...Object.entries(spec.executors ?? {}).map(([name, trigger]) => [
             `/${name}.ts`,
             { name, trigger },
           ]),
-        ),
+          ...Object.entries(spec.disabledExecutors ?? {}).map(([name, trigger]) => [
+            `/${name}.ts`,
+            { name, trigger, disabled: true },
+          ]),
+        ]),
       },
     },
     workflowBuildResult: {
@@ -371,6 +383,23 @@ describe("collectDependentApps", () => {
   });
   const buyerId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82";
 
+  test("records no dependency for a disabled cross-config subscriber", () => {
+    // The disabled executor holds the flag at false already, so deploying the
+    // owner alone changes nothing and there is nothing to warn about.
+    const subscriptions = collectEventSubscriptions([
+      owner,
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: buyerId,
+        namespace: "buyer",
+        externalTailorDBNamespaces: ["db"],
+        disabledExecutors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
+      }),
+    ]);
+
+    expect(collectDependentApps(subscriptions)).toEqual(new Map());
+  });
+
   test("keys the record by the subscribed resource, not by the owning application", () => {
     // The record lives on the resource whose publishEvents is at stake, so it
     // survives the owner being renamed and goes away with the resource.
@@ -433,6 +462,22 @@ describe("assertRecordableDependencies id requirement", () => {
     expect(() => assertRecordableDependencies(collectEventSubscriptions(idless()), true)).toThrow(
       /resolves without an "id"/,
     );
+  });
+
+  test("accepts an id-less config whose only subscribing executor is disabled", () => {
+    // No record gets written for a disabled subscriber, so there is no missing
+    // name to reject.
+    const subscriptions = collectEventSubscriptions([
+      target({ configPath: "supplier/tailor.config.ts", types: ["Order"] }),
+      target({
+        configPath: "wrapper/tailor.config.ts",
+        namespace: "wrapper",
+        externalTailorDBNamespaces: ["db"],
+        disabledExecutors: { "sync-order": { kind: "tailordb", tableName: "Order" } },
+      }),
+    ]);
+
+    expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
   });
 
   test("accepts it on a run that only reports, where no id is injected yet", () => {
@@ -679,4 +724,144 @@ describe("collectEventSubscriptions and a resolver name the subscriber also decl
   test("owns the subscription itself rather than the peer", () => {
     expect(subscriptions()[0]?.owner.config.path).toBe("buyer/tailor.config.ts");
   });
+});
+
+describe("collectEventSubscriptions and a disabled executor", () => {
+  test.each([
+    {
+      kind: "tailordb",
+      trigger: { kind: "tailordb", tableName: "Order" },
+      owns: { types: ["Order"] },
+    },
+    {
+      kind: "resolverExecuted",
+      trigger: { kind: "resolverExecuted", resolverName: "processOrder" },
+      owns: { resolvers: ["processOrder"] },
+    },
+    {
+      kind: "idpUser",
+      trigger: { kind: "idpUser", idp: "shared-idp" },
+      owns: { idps: ["shared-idp"] },
+    },
+    {
+      kind: "workflowExecution",
+      trigger: { kind: "workflowExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+    },
+    {
+      kind: "workflowJobExecution",
+      trigger: { kind: "workflowJobExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+    },
+  ])("a disabled executor is resolved but publishes nothing ($kind)", ({ trigger, owns }) => {
+    const [subscriber] = [
+      target({
+        configPath: "buyer/tailor.config.ts",
+        ...owns,
+        disabledExecutors: { "sync-it": trigger },
+      }),
+    ];
+    const subscriptions = collectEventSubscriptions([subscriber]);
+
+    // The trigger is still deployed, so the subscription is still resolved.
+    expect(subscriptions.map((subscription) => subscription.executorName)).toEqual(["sync-it"]);
+    expect(subscriptions[0]?.disabled).toBe(true);
+
+    // ...but it contributes nothing to any publishEvents flag.
+    const owned = ownedSubscriptions(subscriptions, subscriber);
+    expect(subscribedTailorDBTables(owned)).toEqual(new Set());
+    expect(subscribedResolvers(owned)).toEqual(new Set());
+    expect(subscribedIdps(owned)).toEqual(new Set());
+    const workflows = subscribedWorkflows(owned);
+    expect(workflows.execution.workflowNames).toEqual(new Set());
+    expect(workflows.jobExecution.workflowNames).toEqual(new Set());
+  });
+
+  test("an enabled executor still subscribes alongside a disabled one", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      types: ["Order", "Invoice"],
+      executors: { "on-order": { kind: "tailordb", tableName: "Order" } },
+      disabledExecutors: { "on-invoice": { kind: "tailordb", tableName: "Invoice" } },
+    });
+    const owned = ownedSubscriptions(collectEventSubscriptions([subscriber]), subscriber);
+
+    expect(subscribedTailorDBTables(owned)).toEqual(new Set(["Order"]));
+  });
+
+  test.each([
+    { kind: "tailordb", trigger: { kind: "tailordb", tableName: "Nonexistent" } },
+    { kind: "workflowExecution", trigger: { kind: "workflowExecution", workflowName: "absent" } },
+  ])(
+    "a disabled executor's trigger still has to name a declared resource ($kind)",
+    ({ trigger }) => {
+      // The trigger is deployed whether or not the executor runs, so a name that
+      // resolves to nothing has to fail here — nothing downstream checks a
+      // workflow trigger's name.
+      expect(() =>
+        collectEventSubscriptions([
+          target({
+            configPath: "buyer/tailor.config.ts",
+            disabledExecutors: { "sync-it": trigger },
+          }),
+        ]),
+      ).toThrow(/which no config in this deploy declares/);
+    },
+  );
+
+  test.each([
+    {
+      kind: "tailordb",
+      trigger: { kind: "tailordb", tableName: "Order" },
+      owns: { types: ["Order"] },
+      key: "tailordb:db:type:Order",
+    },
+    {
+      kind: "resolverExecuted",
+      trigger: { kind: "resolverExecuted", resolverName: "processOrder" },
+      owns: { resolvers: ["processOrder"] },
+      key: "pipeline:pipeline:resolver:processOrder",
+    },
+    {
+      kind: "idpUser",
+      trigger: { kind: "idpUser", idp: "shared-idp" },
+      owns: { idps: ["shared-idp"] },
+      key: "idp:shared-idp",
+    },
+    {
+      kind: "workflowExecution",
+      trigger: { kind: "workflowExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+      key: "workflow:orders",
+    },
+    {
+      kind: "workflowJobExecution",
+      trigger: { kind: "workflowJobExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+      key: "workflow:orders:jobs",
+    },
+  ])(
+    "a disabled-only subscriber leaves the resource key unclaimed ($kind)",
+    ({ trigger, owns, key }) => {
+      // The key is what suppresses the missing-dependent-apps confirmation. A
+      // disabled subscriber turns the resource off, so it has to be asked about.
+      const disabledOnly = target({
+        configPath: "buyer/tailor.config.ts",
+        ...owns,
+        disabledExecutors: { "sync-it": trigger },
+      });
+      expect(
+        subscribedResourceKeys(collectEventSubscriptions([disabledOnly]), disabledOnly),
+      ).toEqual(new Set());
+
+      const enabled = target({
+        configPath: "buyer/tailor.config.ts",
+        ...owns,
+        executors: { "sync-it": trigger },
+      });
+      expect(subscribedResourceKeys(collectEventSubscriptions([enabled]), enabled)).toEqual(
+        new Set([key]),
+      );
+    },
+  );
 });

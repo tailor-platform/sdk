@@ -519,6 +519,7 @@ db.table("User", {
 - When `publishEvents: true`, record creation/update/deletion events are published
 - When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
 - When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
+- An executor declared with `disabled: true` never runs, so it does not count as using the table
 
 **Use cases:**
 
