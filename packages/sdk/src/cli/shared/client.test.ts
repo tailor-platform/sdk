@@ -144,6 +144,13 @@ describe("getConsoleBaseUrl", () => {
     expect(getConsoleBaseUrl()).toBe("https://console.other.tailor.tech");
   });
 
+  test("keeps the final console host with console-next paths when TAILOR_PLATFORM_CONSOLE_URL already points at it", () => {
+    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.tailor.tech");
+
+    expect(getConsoleBaseUrl()).toBe("https://console.tailor.tech");
+  });
+
   test("prefers an explicit consoleUrl config over console-next when TAILOR_CONSOLE_NEXT is enabled", () => {
     vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
 
