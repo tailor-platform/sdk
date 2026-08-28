@@ -6,6 +6,7 @@ import {
   ownedSubscriptions,
   subscribedIdps,
   subscribedResolvers,
+  subscribedResourceKeys,
   subscribedTailorDBTables,
   subscribedWorkflows,
 } from "./event-subscriptions";
@@ -805,6 +806,62 @@ describe("collectEventSubscriptions and a disabled executor", () => {
           }),
         ]),
       ).toThrow(/which no config in this deploy declares/);
+    },
+  );
+
+  test.each([
+    {
+      kind: "tailordb",
+      trigger: { kind: "tailordb", tableName: "Order" },
+      owns: { types: ["Order"] },
+      key: "tailordb:db:type:Order",
+    },
+    {
+      kind: "resolverExecuted",
+      trigger: { kind: "resolverExecuted", resolverName: "processOrder" },
+      owns: { resolvers: ["processOrder"] },
+      key: "pipeline:pipeline:resolver:processOrder",
+    },
+    {
+      kind: "idpUser",
+      trigger: { kind: "idpUser", idp: "shared-idp" },
+      owns: { idps: ["shared-idp"] },
+      key: "idp:shared-idp",
+    },
+    {
+      kind: "workflowExecution",
+      trigger: { kind: "workflowExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+      key: "workflow:orders",
+    },
+    {
+      kind: "workflowJobExecution",
+      trigger: { kind: "workflowJobExecution", workflowName: "orders" },
+      owns: { workflows: ["orders"] },
+      key: "workflow:orders:jobs",
+    },
+  ])(
+    "a disabled-only subscriber leaves the resource key unclaimed ($kind)",
+    ({ trigger, owns, key }) => {
+      // The key is what suppresses the missing-dependent-apps confirmation. A
+      // disabled subscriber turns the resource off, so it has to be asked about.
+      const disabledOnly = target({
+        configPath: "buyer/tailor.config.ts",
+        ...owns,
+        disabledExecutors: { "sync-it": trigger },
+      });
+      expect(
+        subscribedResourceKeys(collectEventSubscriptions([disabledOnly]), disabledOnly),
+      ).toEqual(new Set());
+
+      const enabled = target({
+        configPath: "buyer/tailor.config.ts",
+        ...owns,
+        executors: { "sync-it": trigger },
+      });
+      expect(subscribedResourceKeys(collectEventSubscriptions([enabled]), enabled)).toEqual(
+        new Set([key]),
+      );
     },
   );
 });

@@ -166,8 +166,9 @@ export function collectEventSubscriptions(
 /**
  * Key the resources this run subscribes to among the target's own.
  *
- * A resource with a subscriber in the run resolves to `true` from that subscriber
- * alone, so no absent config can change it.
+ * A resource with a subscriber that runs resolves to `true` from that subscriber
+ * alone, so no absent config can change it. A disabled one resolves nothing, so
+ * the resource does turn off and the records still have to be asked about.
  * @param subscriptions - Subscriptions resolved across the run
  * @param owner - Deployment target being planned
  * @returns Resource keys the run subscribes to
@@ -177,7 +178,9 @@ export function subscribedResourceKeys(
   owner: BuiltDeploymentTarget,
 ): ReadonlySet<string> {
   return new Set(
-    ownedSubscriptions(subscriptions, owner).flatMap((subscription) => subscription.key ?? []),
+    publishingSubscriptions(ownedSubscriptions(subscriptions, owner)).flatMap(
+      (subscription) => subscription.key ?? [],
+    ),
   );
 }
 
