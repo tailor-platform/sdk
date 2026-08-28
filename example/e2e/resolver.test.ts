@@ -77,7 +77,9 @@ describe("controlplane", async () => {
         },
       },
       pipelines: [{ name: "body" }],
-      publishExecutionEvents: true,
+      // The only executor subscribing to this resolver is disabled, so nothing
+      // needs its execution events.
+      publishExecutionEvents: false,
     });
 
     // Verify nested field descriptions in stepChain

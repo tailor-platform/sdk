@@ -27,7 +27,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@ast-grep/napi": "0.45.1",
+    "@ast-grep/napi": "0.45.2",
     "diff": "9.0.0",
     "pathe": "2.0.3",
     "picomatch": "4.0.5",
@@ -41,8 +41,8 @@
     "@types/node": "24.13.3",
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.8.0",
-    "eslint-plugin-zod": "4.9.1",
-    "oxlint": "1.79.0",
+    "eslint-plugin-zod": "4.10.0",
+    "oxlint": "1.80.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",

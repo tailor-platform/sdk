@@ -1,4 +1,8 @@
-import { eventSourceLabel, publishEventsConflict } from "#/cli/shared/publish-events";
+import {
+  eventSourceLabel,
+  publishEventsConflict,
+  subscribesToEvents,
+} from "#/cli/shared/publish-events";
 import { collectApplicationIdpNames, findResolverNamespace } from "./executor";
 import { dependedByAppLabelKey, eventSourceKey } from "./label";
 import {
@@ -52,6 +56,12 @@ export type EventSubscription = {
    * pins the value and leaves nothing for a dependency record to protect.
    */
   pinned: boolean;
+  /**
+   * Whether the executor is disabled. A disabled executor never runs, so it needs
+   * no events published — but its trigger is still deployed, so the subscription
+   * is still resolved to validate the name and to keep the dependency record.
+   */
+  disabled: boolean;
   /** The executor's trigger, narrowed to a kind that names a publishing resource. */
   trigger: PublishingTrigger;
 };
@@ -117,6 +127,7 @@ export function collectEventSubscriptions(
         subscriber,
         executorName: executor.name,
         resource: lookup.resource,
+        disabled: !subscribesToEvents(executor),
         trigger: lookup.trigger,
       };
       if (lookup.declaredBy(subscriber)) {
@@ -155,8 +166,9 @@ export function collectEventSubscriptions(
 /**
  * Key the resources this run subscribes to among the target's own.
  *
- * A resource with a subscriber in the run resolves to `true` from that subscriber
- * alone, so no absent config can change it.
+ * A resource with a subscriber that runs resolves to `true` from that subscriber
+ * alone, so no absent config can change it. A disabled one resolves nothing, so
+ * the resource does turn off and the records still have to be asked about.
  * @param subscriptions - Subscriptions resolved across the run
  * @param owner - Deployment target being planned
  * @returns Resource keys the run subscribes to
@@ -166,7 +178,9 @@ export function subscribedResourceKeys(
   owner: BuiltDeploymentTarget,
 ): ReadonlySet<string> {
   return new Set(
-    ownedSubscriptions(subscriptions, owner).flatMap((subscription) => subscription.key ?? []),
+    publishingSubscriptions(ownedSubscriptions(subscriptions, owner)).flatMap(
+      (subscription) => subscription.key ?? [],
+    ),
   );
 }
 
@@ -186,6 +200,23 @@ export function ownedSubscriptions(
 }
 
 /**
+ * Narrow subscriptions to the ones whose executor actually needs events.
+ *
+ * A disabled executor never runs, so it must not keep publishing enabled on the
+ * resource it names. It stays in the subscription list all the same: its trigger
+ * is still deployed, so the name still has to resolve to a declared resource, and
+ * a cross-config dependency record still has to survive the executor being
+ * disabled and re-enabled.
+ * @param subscriptions - Subscriptions owned by the target being planned
+ * @returns Subscriptions from executors that will run
+ */
+function publishingSubscriptions(
+  subscriptions: ReadonlyArray<EventSubscription>,
+): ReadonlyArray<EventSubscription> {
+  return subscriptions.filter((subscription) => !subscription.disabled);
+}
+
+/**
  * Collect the TailorDB tables subscribed to among the given subscriptions.
  * @param subscriptions - Subscriptions owned by the target being planned
  * @returns Subscribed table names
@@ -194,7 +225,7 @@ export function subscribedTailorDBTables(
   subscriptions: ReadonlyArray<EventSubscription>,
 ): ReadonlySet<string> {
   return new Set(
-    subscriptions.flatMap((subscription) =>
+    publishingSubscriptions(subscriptions).flatMap((subscription) =>
       subscription.trigger.kind === "tailordb" ? [subscription.trigger.tableName] : [],
     ),
   );
@@ -209,7 +240,7 @@ export function subscribedResolvers(
   subscriptions: ReadonlyArray<EventSubscription>,
 ): ReadonlySet<string> {
   return new Set(
-    subscriptions.flatMap((subscription) =>
+    publishingSubscriptions(subscriptions).flatMap((subscription) =>
       subscription.trigger.kind === "resolverExecuted" ? [subscription.trigger.resolverName] : [],
     ),
   );
@@ -224,7 +255,7 @@ export function subscribedIdps(
   subscriptions: ReadonlyArray<EventSubscription>,
 ): ReadonlySet<string> {
   return new Set(
-    subscriptions.flatMap((subscription) =>
+    publishingSubscriptions(subscriptions).flatMap((subscription) =>
       subscription.trigger.kind === "idpUser"
         ? [
             subscribedIdpName(subscription.subscriber.application, subscription.trigger) ?? [],
@@ -245,7 +276,7 @@ export function subscribedWorkflows(subscriptions: ReadonlyArray<EventSubscripti
 } {
   const execution = { workflowNames: new Set<string>() };
   const jobExecution = { workflowNames: new Set<string>() };
-  for (const { trigger } of subscriptions) {
+  for (const { trigger } of publishingSubscriptions(subscriptions)) {
     if (trigger.kind === "workflowExecution") {
       execution.workflowNames.add(trigger.workflowName);
     } else if (trigger.kind === "workflowJobExecution") {
@@ -266,7 +297,9 @@ export function subscribedWorkflows(subscriptions: ReadonlyArray<EventSubscripti
  * A resource that declares `publishEvents` keeps its value either way, so
  * recording a dependency for it would ask about a partial deploy that changes
  * nothing — and `prompt.confirm` rejects outright where it cannot ask, failing a
- * deploy that was never at risk.
+ * deploy that was never at risk. A disabled subscriber is dropped for the same
+ * reason: it holds the flag at `false` already, so the owner deploying alone
+ * changes nothing about it.
  *
  * Records are keyed by resource rather than by application: the resource is what
  * carries them, so a record survives the owner being renamed and disappears with
@@ -278,7 +311,7 @@ export function collectDependentApps(
   subscriptions: ReadonlyArray<EventSubscription>,
 ): DependentAppsByResource {
   const byResource = new Map<string, Map<string, DeployDependencyReason>>();
-  for (const { subscriber, owner, pinned, key } of subscriptions) {
+  for (const { subscriber, owner, pinned, key } of publishingSubscriptions(subscriptions)) {
     if (subscriber.config.path === owner.config.path || pinned || key === undefined) {
       continue;
     }
@@ -690,7 +723,9 @@ export function assertRecordableDependencies(
   subscriptions: ReadonlyArray<EventSubscription>,
   writes: boolean,
 ): void {
-  for (const { subscriber, owner, executorName, resource, pinned } of subscriptions) {
+  for (const { subscriber, owner, executorName, resource, pinned } of publishingSubscriptions(
+    subscriptions,
+  )) {
     if (subscriber.config.path === owner.config.path) continue;
     if (pinned) continue;
     if (!writes) continue;

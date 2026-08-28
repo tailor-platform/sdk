@@ -348,6 +348,19 @@ describe("tailordb migration sync", () => {
     });
   });
 
+  test("leaves publishRecordEvents off for a table only a disabled executor triggers on", async () => {
+    state.executors = {
+      onUser: { disabled: true, trigger: { kind: "tailordb", tableName: "User" } },
+    };
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
+      tailordbType: { name: "User", schema: { settings: { publishRecordEvents: false } } },
+    });
+  });
+
   test.each(["abc", "00", "01"])("rejects invalid migration number format %j", async (input) => {
     const result = await runCommand(syncCommand, [input, "--yes"]);
     expect(result.success).toBe(false);

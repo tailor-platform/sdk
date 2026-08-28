@@ -208,7 +208,7 @@ export default createWorkflow({
 
 Workflows can publish execution lifecycle events for executors. When an executor subscribes to a workflow's events, `deploy` enables publishing automatically. A `workflowExecution*` trigger enables it on the workflow, and a `workflowJobExecution*` trigger enables it on every job that workflow runs. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
 
-Publishing follows the subscription in both directions: removing the last subscribing trigger turns it back off on the next `deploy`.
+Publishing follows the subscription in both directions: removing the last subscribing trigger turns it back off on the next `deploy`, as does disabling the last executor that carries one.
 
 Set `publishEvents` explicitly to pin the value instead. Use `true` to publish workflow-level events with no subscribing executor:
 

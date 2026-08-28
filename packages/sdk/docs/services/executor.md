@@ -44,6 +44,23 @@ export default createExecutor({
 });
 ```
 
+### Disabling an Executor
+
+Set `disabled: true` to deploy an executor without letting it run. The definition stays deployed, and the platform skips dispatching jobs to it.
+
+```typescript
+export default createExecutor({
+  name: "user-welcome-paused",
+  disabled: true,
+  trigger: recordCreatedTrigger({ type: user }),
+  operation: { kind: "function", body: async () => {} },
+});
+```
+
+A disabled executor does not count as a subscriber when `deploy` resolves `publishEvents` on the resource its trigger names. Publishing is not enabled on that resource's behalf, and an explicit `publishEvents: false` on it is not rejected. If the resource was publishing only for this executor, the next `deploy` turns publishing back off — so disabling the last subscriber of a shared table changes that table for every config that reads its events.
+
+The trigger is still deployed, so it must still name a resource the deploy declares; a disabled executor whose trigger names nothing fails the deploy exactly as an enabled one does.
+
 ## Trigger Types
 
 ### Record Triggers
