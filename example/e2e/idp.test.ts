@@ -25,6 +25,14 @@ describe("control plane", async () => {
     });
   });
 
+  test("user events stay off for a disabled subscriber", async () => {
+    const { idpService } = await client.getIdPService({ workspaceId, namespaceName });
+
+    // The only executor with an IdP user trigger is disabled, so nothing needs
+    // this IdP's user events.
+    expect(idpService?.publishUserEvents).toBe(false);
+  });
+
   test("client applied", async () => {
     const { clients } = await client.listIdPClients({
       workspaceId,
