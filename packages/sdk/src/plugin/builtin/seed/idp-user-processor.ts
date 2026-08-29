@@ -114,8 +114,6 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
   `;
 }
 
-// Shared by the listing and truncation scripts; follows the response page
-// token so every page is returned.
 const listIdpUsersFunction = ml /* ts */ `
   async function listUsers(client) {
     let after = undefined;
@@ -167,9 +165,9 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
       const errors = [];
       let deleted = 0;
       let notFound = 0;
-      const users = Array.isArray(input?.users) ? input.users : await listUsers(client);
-      const offset = typeof input?.offset === "number" ? input.offset : 0;
-      const total = typeof input?.total === "number" ? input.total : users.length;
+      const users = Array.isArray(input.users) ? input.users : await listUsers(client);
+      const offset = typeof input.offset === "number" ? input.offset : 0;
+      const total = typeof input.total === "number" ? input.total : users.length;
 
       for (let i = 0; i < users.length; i++) {
         const user = users[i];
