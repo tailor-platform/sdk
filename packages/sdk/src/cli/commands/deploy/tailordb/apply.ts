@@ -84,9 +84,8 @@ async function reconcileMigrationLabels(
       historyId ?? undefined,
     );
     if (remoteState) {
-      const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
       logger.info(
-        `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+        `Migration label for namespace ${namespace} reconciled: ${describeMigrationCheckpoint(currentVersion)} → ${formatMigrationNumber(targetVersion)}.`,
       );
     } else {
       logger.info(
@@ -226,8 +225,8 @@ function includeUndeletedTables(
   };
 }
 
-function describeMigrationCheckpoint(number: number | null): string {
-  return number === null ? "<unset>" : formatMigrationNumber(number);
+function describeMigrationCheckpoint(number: number | null | undefined): string {
+  return number == null ? "<unset>" : formatMigrationNumber(number);
 }
 
 /**
@@ -539,11 +538,7 @@ export async function applyTailorDB(
                 ),
               );
               logger.warn(
-                `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${
-                  remoteMigrationNumber === undefined
-                    ? "<unset>"
-                    : formatMigrationNumber(remoteMigrationNumber)
-                }. ` +
+                `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${describeMigrationCheckpoint(remoteMigrationNumber)}. ` +
                   "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. Repair the checkpoint before retrying.",
               );
               throw error;
