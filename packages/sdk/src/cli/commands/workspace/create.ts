@@ -1,11 +1,11 @@
 import { arg } from "politty";
 import { z } from "zod";
 import {
-  getConsoleBaseUrl,
   getOAuth2ClientId,
   getPlatformBaseUrl,
   initOperatorClient,
   isDefaultPlatform,
+  normalizeBaseUrl,
   type OperatorClient,
   type PlatformClientConfig,
 } from "#/cli/shared/client";
@@ -59,14 +59,17 @@ const validateRegion = async (region: string, client: OperatorClient) => {
 function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
   const hasOAuth2ClientId =
     platformConfig?.oauth2ClientId || process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID;
-  const hasConsoleUrl = platformConfig?.consoleUrl || process.env.TAILOR_PLATFORM_CONSOLE_URL;
+  // getConsoleBaseUrl() also infers a URL from platform_url and applies the
+  // TAILOR_CONSOLE_NEXT rewrite; only an explicitly configured console URL is
+  // persisted here so a new profile never bakes in a runtime-only redirect.
+  const explicitConsoleUrl = platformConfig?.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL;
 
   return {
     ...(isDefaultPlatform(platformConfig)
       ? {}
       : { platform_url: getPlatformBaseUrl(platformConfig) }),
     ...(hasOAuth2ClientId ? { oauth2_client_id: getOAuth2ClientId(platformConfig) } : {}),
-    ...(hasConsoleUrl ? { console_url: getConsoleBaseUrl(platformConfig) } : {}),
+    ...(explicitConsoleUrl ? { console_url: normalizeBaseUrl(explicitConsoleUrl) } : {}),
   };
 }
 

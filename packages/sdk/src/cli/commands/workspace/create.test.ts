@@ -214,6 +214,48 @@ describe("workspace create --permission", () => {
     });
   });
 
+  test("persists the explicit console URL, not a console-next-rewritten one, when the active profile also has a platform_url", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          access_token: "custom-token",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success", "warn");
+
+    await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--profile-name",
+      "bootstrap",
+    ]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.bootstrap).toMatchObject({
+      platform_url: "https://api.dev.tailor.tech",
+      console_url: "https://console.dev.tailor.tech",
+    });
+  });
+
   test("creates no profile when --permission read is passed without --profile-name", async () => {
     // Matches the existing --profile-user behavior: profile-only flags are
     // silently inert when --profile-name is absent. We don't store the flag
