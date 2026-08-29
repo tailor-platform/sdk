@@ -228,7 +228,7 @@ interface IdpScriptRun {
     total?: number;
   };
   indent: string;
-  reportSuccess: (parsed: Record<string, unknown>) => void;
+  reportSuccess?: (parsed: Record<string, unknown>) => void;
 }
 
 async function runIdpScript(
@@ -249,7 +249,7 @@ async function runIdpScript(
   });
 
   const { success, parsed, errors, outcomeUnknown } = parseExecutionResult(result, indent);
-  reportSuccess(parsed);
+  reportSuccess?.(parsed);
   if (!success) {
     for (const error of errors) {
       logger.error(`${indent}${error}`, { mode: "plain" });
@@ -263,6 +263,14 @@ async function runIdpScript(
 // rows to finish within the operator API deadline. Byte-size chunking cannot
 // capture this.
 const IDP_USER_CHUNK_SIZE = 25;
+
+function chunkIdpUsers<T>(rows: T[]): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < rows.length; i += IDP_USER_CHUNK_SIZE) {
+    chunks.push(rows.slice(i, i + IDP_USER_CHUNK_SIZE));
+  }
+  return chunks;
+}
 
 function readCount(result: Record<string, unknown>, key: string): number {
   const value = result[key];
@@ -283,10 +291,7 @@ async function seedIdpUser(
   }
   logger.log(styles.dim(`    Processing ${rows.length} _User records...`));
 
-  const chunks: SeedData[string][] = [];
-  for (let i = 0; i < rows.length; i += IDP_USER_CHUNK_SIZE) {
-    chunks.push(rows.slice(i, i + IDP_USER_CHUNK_SIZE));
-  }
+  const chunks = chunkIdpUsers(rows);
   const logChunkProgress = createChunkProgressLogger(chunks.length);
 
   const reportChunkCounts = (result: Record<string, unknown>) => {
@@ -377,7 +382,6 @@ async function truncateIdpUser(
     scriptCode: scripts.listScriptCode,
     scriptName: "list-idp-user.ts",
     indent: "  ",
-    reportSuccess: () => {},
   });
   if (!listed.success) {
     return false;
@@ -393,10 +397,7 @@ async function truncateIdpUser(
   }
   logger.log(styles.dim(`  Deleting ${users.length} _User records...`));
 
-  const chunks: IdpUserRef[][] = [];
-  for (let i = 0; i < users.length; i += IDP_USER_CHUNK_SIZE) {
-    chunks.push(users.slice(i, i + IDP_USER_CHUNK_SIZE));
-  }
+  const chunks = chunkIdpUsers(users);
   const logChunkProgress = createChunkProgressLogger(chunks.length, "  ");
 
   let success = true;
@@ -409,7 +410,6 @@ async function truncateIdpUser(
       scriptName: "truncate-idp-user.ts",
       arg: { users: chunk, offset: index * IDP_USER_CHUNK_SIZE, total: users.length },
       indent: "  ",
-      reportSuccess: () => {},
     });
     if (run.outcomeUnknown) {
       return false;
