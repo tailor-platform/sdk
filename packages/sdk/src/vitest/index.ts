@@ -85,4 +85,4 @@ export {
 
 export { runWorkflowLocally, type RunWorkflowLocallyOptions } from "./workflow-local";
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";
-export { createKyselyPGlite, type PGliteClient } from "./pglite-kysely";
+export { createKyselyPGlite, type PGliteClient, type Unmigrated } from "./pglite-kysely";

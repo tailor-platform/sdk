@@ -6,6 +6,7 @@
  */
 
 import {
+  type ColumnType,
   CompiledQuery,
   type DatabaseConnection,
   type Dialect,
@@ -91,11 +92,39 @@ class PGliteDriver implements Driver {
   }
 }
 
+type UnmigratedColumn<C> =
+  C extends ColumnType<infer S, infer I, infer U>
+    ? null extends S
+      ? ColumnType<S, I | null, U | null>
+      : C
+    : C;
+
+/**
+ * `DB` as its rows stand before the migration script has run: a column whose
+ * select type admits `null` also accepts `null` on insert and update.
+ *
+ * The generated `db.ts` types a column the migration makes required as
+ * `ColumnType<T | null, T, T>`, so `migrate.ts` cannot write new nulls into
+ * it — and neither can a test that has to stage the rows the script
+ * backfills. Type the PGlite instance with `Unmigrated<Database>` to stage
+ * them; `main` still receives a `Transaction<Database>`.
+ * @example
+ * ```typescript
+ * const db = createKyselyPGlite<Unmigrated<Database>>(new PGlite());
+ * await db.insertInto("User").values({ name: "a", email: null }).execute();
+ * await db.transaction().execute((trx) => main(trx));
+ * ```
+ */
+export type Unmigrated<DB> = {
+  [T in keyof DB]: { [C in keyof DB[T]]: UnmigratedColumn<DB[T][C]> };
+};
+
 /**
  * Create a Kysely instance backed by a PGlite in-memory Postgres, for
  * executing a migration script's queries against real data in tests.
- * Pass the migration's schema as the type argument, e.g.
- * `createKyselyPGlite<Database>(new PGlite())`.
+ * Pass the migration's schema as the type argument — wrapped in
+ * {@link Unmigrated} so the test can stage the rows the script has not yet
+ * backfilled: `createKyselyPGlite<Unmigrated<Database>>(new PGlite())`.
  *
  * PGlite runs full PostgreSQL while TailorDB supports a subset of it, so a
  * statement passing here can still be rejected by the platform; keep a
@@ -104,13 +133,13 @@ class PGliteDriver implements Driver {
  * @returns A Kysely instance that executes queries on the client and closes it on `destroy()`
  * @example
  * ```typescript
- * // migrations/0005/migrate.test.ts
+ * // migrations/0005/migrate.pglite.test.ts
  * import { PGlite } from "@electric-sql/pglite";
- * import { createKyselyPGlite } from "@tailor-platform/sdk/vitest";
+ * import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
  * import type { Database } from "./db";
  * import { main } from "./migrate";
  *
- * const db = createKyselyPGlite<Database>(new PGlite());
+ * const db = createKyselyPGlite<Unmigrated<Database>>(new PGlite());
  * // create tables matching db.ts, insert rows, then:
  * await db.transaction().execute((trx) => main(trx));
  * ```

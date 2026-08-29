@@ -815,18 +815,18 @@ A statement-level test verifies what the script issues, not what it does to data
 npm install -D @electric-sql/pglite
 ```
 
-Create the tables the script touches (matching the shape in the generated `db.ts`), stage rows, then run the script in a transaction:
+Create the tables the script touches (matching the shape in the generated `db.ts`), stage rows, then run the script in a transaction. Type the instance with `Unmigrated<Database>` rather than `Database`: `db.ts` types a column the migration makes required as `T | null` on read but `T` on write, so that `migrate.ts` cannot write new nulls into it — which would also stop the test from staging the null rows the script has to backfill. `Unmigrated` lets those columns take `null` on insert and update; `main` still receives a `Transaction<Database>`.
 
 ```typescript
 // migrations/0005/migrate.pglite.test.ts
 import { PGlite } from "@electric-sql/pglite";
 import { sql } from "@tailor-platform/sdk/kysely";
-import { createKyselyPGlite } from "@tailor-platform/sdk/vitest";
+import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { main } from "./migrate";
 
-const db = createKyselyPGlite<Database>(new PGlite());
+const db = createKyselyPGlite<Unmigrated<Database>>(new PGlite());
 
 beforeAll(async () => {
   await sql`
@@ -844,10 +844,13 @@ afterAll(async () => {
 
 describe("0005 add required email", () => {
   test("backfills null emails and keeps existing ones", async () => {
-    await sql`
-      INSERT INTO "User" ("name", "email")
-      VALUES ('a', NULL), ('b', 'b@example.com')
-    `.execute(db);
+    await db
+      .insertInto("User")
+      .values([
+        { name: "a", email: null },
+        { name: "b", email: "b@example.com" },
+      ])
+      .execute();
 
     await db.transaction().execute((trx) => main(trx));
 
