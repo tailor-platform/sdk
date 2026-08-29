@@ -1,6 +1,7 @@
 import * as path from "pathe";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import {
+  generateIdpListUsersScriptCode,
   generateIdpSeedScriptCode,
   generateIdpTruncateScriptCode,
   processIdpUser,
@@ -26,7 +27,9 @@ export interface SeedIdpUserContext {
   idpNamespace: string;
   /** Server-side script that creates `_User` records from seed rows. */
   seedScriptCode: string;
-  /** Server-side script that deletes all `_User` records. */
+  /** Server-side script that lists every `_User` record to delete. */
+  listScriptCode: string;
+  /** Server-side script that deletes one chunk of listed `_User` records. */
   truncateScriptCode: string;
 }
 
@@ -95,6 +98,7 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
     ? {
         idpNamespace: idpUserMeta.idpNamespace,
         seedScriptCode: generateIdpSeedScriptCode(idpUserMeta.idpNamespace),
+        listScriptCode: generateIdpListUsersScriptCode(idpUserMeta.idpNamespace),
         truncateScriptCode: generateIdpTruncateScriptCode(idpUserMeta.idpNamespace),
       }
     : null;

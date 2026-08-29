@@ -49,6 +49,7 @@ beforeEach(() => {
     distPath: "/seed",
     idpUser: {
       seedScriptCode: "seed-user-code",
+      listScriptCode: "list-user-code",
       truncateScriptCode: "truncate-user-code",
     },
     machineUserName: undefined,
@@ -71,10 +72,7 @@ beforeEach(() => {
     Promise.resolve({
       error: undefined,
       logs: "",
-      result:
-        name === "truncate-idp-user.ts"
-          ? '{"success":true,"deleted":1}'
-          : '{"success":true,"processed":1}',
+      result: idpScriptResult(name, [{ id: "1", name: "Ada" }]),
       success: true,
     }),
   );
@@ -88,6 +86,27 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+
+type IdpUserRef = { id: string; name: string };
+
+/**
+ * Default result for the IdP scripts: the listing returns `users`, each
+ * truncate chunk reports every user in it deleted, and seeding reports one row.
+ * @param name - Script name passed to executeScript
+ * @param users - Users the listing script returns
+ * @param chunk - Users passed to the truncate script, when any
+ * @returns Serialized script result
+ */
+function idpScriptResult(name: string, users: IdpUserRef[], chunk?: unknown[]): string {
+  if (name === "list-idp-user.ts") {
+    return JSON.stringify({ success: true, users, total: users.length });
+  }
+  if (name === "truncate-idp-user.ts") {
+    const total = chunk?.length ?? users.length;
+    return JSON.stringify({ success: true, deleted: total, notFound: 0, total, errors: [] });
+  }
+  return '{"success":true,"processed":1}';
+}
 
 function runApplyCommand(args: string[]) {
   return runCommand(seedApplyCommand, args, {
@@ -146,6 +165,7 @@ describe("seedApplyCommand", () => {
       distPath: "/seed",
       idpUser: {
         seedScriptCode: "seed-user-code",
+        listScriptCode: "list-user-code",
         truncateScriptCode: "truncate-user-code",
       },
       machineUserName: undefined,
@@ -181,10 +201,14 @@ describe("seedApplyCommand", () => {
     });
     expect(sdk.executeScript).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ name: "truncate-idp-user.ts" }),
+      expect.objectContaining({ name: "list-idp-user.ts" }),
     );
     expect(sdk.executeScript).toHaveBeenNthCalledWith(
       2,
+      expect.objectContaining({ name: "truncate-idp-user.ts" }),
+    );
+    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+      3,
       expect.objectContaining({ name: "seed-idp-user.ts" }),
     );
   });
@@ -219,10 +243,14 @@ describe("seedApplyCommand", () => {
     expect(sdk.truncate).not.toHaveBeenCalled();
     expect(sdk.executeScript).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ name: "truncate-idp-user.ts" }),
+      expect.objectContaining({ name: "list-idp-user.ts" }),
     );
     expect(sdk.executeScript).toHaveBeenNthCalledWith(
       2,
+      expect.objectContaining({ name: "truncate-idp-user.ts" }),
+    );
+    expect(sdk.executeScript).toHaveBeenNthCalledWith(
+      3,
       expect.objectContaining({ name: "seed-idp-user.ts" }),
     );
   });
@@ -546,5 +574,156 @@ describe("seedApplyCommand", () => {
         arg: expect.objectContaining({ upsert: true }),
       }),
     );
+  });
+
+  test("deletes listed IdP users in row-count chunks and reports the total", async () => {
+    const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) =>
+        Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: idpScriptResult(name, users, arg?.users),
+          success: true,
+        }),
+    );
+
+    await runApply(["--truncate", "--yes", "_User"]);
+
+    const truncateCalls = sdk.executeScript.mock.calls
+      .map(
+        ([options]) =>
+          options as {
+            name: string;
+            arg?: { users?: IdpUserRef[]; offset?: number; total?: number };
+          },
+      )
+      .filter((options) => options.name === "truncate-idp-user.ts");
+    expect(truncateCalls.map((options) => options.arg?.users)).toEqual([
+      users.slice(0, 25),
+      users.slice(25),
+    ]);
+    expect(truncateCalls.map((options) => options.arg?.offset)).toEqual([0, 25]);
+    expect(truncateCalls.map((options) => options.arg?.total)).toEqual([30, 30]);
+    const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
+    expect(loggedLines.some((line) => line.includes("Split into 2 chunks"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("Chunk 2/2: 5 users"))).toBe(true);
+    expect(loggedLines.some((line) => line.includes("✓ _User: 30 users deleted"))).toBe(true);
+  });
+
+  test("counts users that were already gone as deleted", async () => {
+    const users = [
+      { id: "1", name: "Ada" },
+      { id: "ghost", name: "ghost@example.com" },
+    ];
+    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+      Promise.resolve({
+        error: undefined,
+        logs: "",
+        result:
+          name === "truncate-idp-user.ts"
+            ? JSON.stringify({ success: true, deleted: 1, notFound: 1, total: 2, errors: [] })
+            : idpScriptResult(name, users),
+        success: true,
+      }),
+    );
+
+    await runApply(["--truncate", "--yes", "_User"]);
+
+    const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
+    expect(
+      loggedLines.some((line) => line.includes("✓ _User: 1 users deleted, 1 already deleted")),
+    ).toBe(true);
+  });
+
+  test("skips the delete script when the IdP has no users", async () => {
+    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+      Promise.resolve({
+        error: undefined,
+        logs: "",
+        result: idpScriptResult(name, []),
+        success: true,
+      }),
+    );
+
+    await runApply(["--truncate", "--yes", "_User"]);
+
+    const scriptNames = sdk.executeScript.mock.calls.map(
+      ([options]) => (options as { name: string }).name,
+    );
+    expect(scriptNames).toEqual(["list-idp-user.ts", "seed-idp-user.ts"]);
+  });
+
+  test("fails truncation when the listing script returns no user list", async () => {
+    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+      Promise.resolve({
+        error: undefined,
+        logs: "",
+        result: name === "list-idp-user.ts" ? '{"success":true}' : idpScriptResult(name, []),
+        success: true,
+      }),
+    );
+
+    const result = await runApplyCommand([
+      "--machine-user",
+      "manager",
+      "--truncate",
+      "--yes",
+      "_User",
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toEqual(new Error("IdP user truncation failed."));
+    const scriptNames = sdk.executeScript.mock.calls.map(
+      ([options]) => (options as { name: string }).name,
+    );
+    expect(scriptNames).toEqual(["list-idp-user.ts"]);
+  });
+
+  test("fails truncation and skips seeding when a delete chunk reports errors", async () => {
+    const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
+    let truncateCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name === "truncate-idp-user.ts") {
+          truncateCallCount += 1;
+        }
+        const failing = name === "truncate-idp-user.ts" && truncateCallCount === 1;
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: failing
+            ? JSON.stringify({
+                success: false,
+                deleted: 24,
+                notFound: 0,
+                total: 25,
+                errors: ["User id-3 (user-3): permission denied"],
+              })
+            : idpScriptResult(name, users, arg?.users),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand([
+      "--machine-user",
+      "manager",
+      "--truncate",
+      "--yes",
+      "_User",
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toEqual(new Error("IdP user truncation failed."));
+    expect(truncateCallCount).toBe(2);
+    const scriptNames = sdk.executeScript.mock.calls.map(
+      ([options]) => (options as { name: string }).name,
+    );
+    expect(scriptNames).not.toContain("seed-idp-user.ts");
+    const erroredLines = logger.error.mock.calls.map(([line]) => String(line));
+    expect(
+      erroredLines.some((line) => line.includes("User id-3 (user-3): permission denied")),
+    ).toBe(true);
   });
 });

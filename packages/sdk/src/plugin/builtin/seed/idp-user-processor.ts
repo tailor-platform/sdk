@@ -115,36 +115,63 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
 }
 
 /**
+ * Generates the server-side script that lists every IdP user for truncation.
+ * Follows the response page token so all pages are returned in one result.
+ * @param idpNamespace - The IDP namespace name
+ * @returns Script code string
+ */
+export function generateIdpListUsersScriptCode(idpNamespace: string): string {
+  return ml /* ts */ `
+    export async function main() {
+      const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
+
+      let after = undefined;
+      const users = [];
+      do {
+        const response = await client.users(after ? { after } : undefined);
+        for (const user of response.users || []) {
+          users.push({ id: user.id, name: user.name });
+        }
+        after = response.nextPageToken;
+      } while (after);
+
+      console.log(\`Found \${users.length} IDP users to delete\`);
+
+      return { success: true, users, total: users.length };
+    }
+  `;
+}
+
+/**
  * Generates the server-side IDP truncation script code for testExecScript execution.
- * Lists all users with pagination and deletes each one.
+ * Deletes the users passed in `input.users` (one chunk of the listing produced by
+ * {@link generateIdpListUsersScriptCode}); a user that is already gone counts as deleted.
  * @param idpNamespace - The IDP namespace name
  * @returns Script code string
  */
 export function generateIdpTruncateScriptCode(idpNamespace: string): string {
   return ml /* ts */ `
-    export async function main() {
+    export async function main(input) {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
       const errors = [];
       let deleted = 0;
+      let notFound = 0;
+      const offset = typeof input.offset === "number" ? input.offset : 0;
+      const total = typeof input.total === "number" ? input.total : input.users.length;
 
-      // List all users with pagination
-      let after = undefined;
-      const allUsers = [];
-      do {
-        const response = await client.users(after ? { after } : undefined);
-        allUsers.push(...(response.users || []));
-        after = response.nextPageToken;
-      } while (after);
-
-      console.log(\`Found \${allUsers.length} IDP users to delete\`);
-
-      for (const user of allUsers) {
+      for (let i = 0; i < input.users.length; i++) {
+        const user = input.users[i];
         try {
           await client.deleteUser(user.id);
           deleted++;
-          console.log(\`[_User] Deleted \${deleted}/\${allUsers.length}: \${user.name}\`);
+          console.log(\`[_User] Deleted \${offset + i + 1}/\${total}: \${user.name}\`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
+          if (/not found/i.test(message)) {
+            notFound++;
+            console.log(\`[_User] Already deleted \${offset + i + 1}/\${total}: \${user.name}\`);
+            continue;
+          }
           errors.push(\`User \${user.id} (\${user.name}): \${message}\`);
           console.error(\`[_User] Delete failed for \${user.name}: \${message}\`);
         }
@@ -153,7 +180,8 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
       return {
         success: errors.length === 0,
         deleted,
-        total: allUsers.length,
+        notFound,
+        total: input.users.length,
         errors,
       };
     }
