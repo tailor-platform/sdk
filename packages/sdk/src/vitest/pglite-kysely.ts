@@ -92,22 +92,23 @@ class PGliteDriver implements Driver {
   }
 }
 
+type WritableAs<S, W> = [S] extends [W] ? W : [W] extends [S] ? S : W | Exclude<S, W>;
 type UnmigratedColumn<C> =
   C extends ColumnType<infer S, infer I, infer U>
-    ? null extends S
-      ? ColumnType<S, I | null, U | null>
-      : C
+    ? ColumnType<S, WritableAs<S, I>, WritableAs<S, U>>
     : C;
 
 /**
- * `DB` as its rows stand before the migration script has run: a column whose
- * select type admits `null` also accepts `null` on insert and update.
+ * `DB` as its rows stand before the migration script has run: every column
+ * accepts on insert and update whatever it can still hold on read.
  *
  * The generated `db.ts` types a column the migration makes required as
- * `ColumnType<T | null, T, T>`, so `migrate.ts` cannot write new nulls into
- * it — and neither can a test that has to stage the rows the script
- * backfills. Type the PGlite instance with `Unmigrated<Database>` to stage
- * them; `main` still receives a `Transaction<Database>`.
+ * `ColumnType<T | null, T, T>`, and an enum whose values it narrows as
+ * `ColumnType<Before, After, After>`, so `migrate.ts` cannot write a null
+ * or a removed value into them — and neither can a test that has to stage
+ * the rows the script converts. Type the PGlite instance with
+ * `Unmigrated<Database>` to stage them; `main` still receives a
+ * `Transaction<Database>`.
  * @example
  * ```typescript
  * const db = createKyselyPGlite<Unmigrated<Database>>(new PGlite());

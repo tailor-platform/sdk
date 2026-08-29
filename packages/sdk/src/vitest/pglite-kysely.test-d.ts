@@ -11,7 +11,9 @@ import type { Unmigrated } from "./pglite-kysely";
 
 // Mirrors what the migration generator writes to db.ts: `updatedAt`, `role`,
 // and `holidays` are made required by the migration, so their select slot
-// stays nullable while their write slots do not.
+// stays nullable while their write slots do not; `tier` and `plan` lose the
+// "bronze" value, so their select slot still lists it while their write slots
+// do not.
 interface Database {
   User: {
     id: Generated<string>;
@@ -19,6 +21,13 @@ interface Database {
     updatedAt: ColumnType<Date | null, Date | string, Date | string>;
     role: ColumnType<string | null, string, string>;
     holidays: ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>;
+    tier: ColumnType<"gold" | "silver" | "bronze", "gold" | "silver", "gold" | "silver">;
+    plan: ColumnType<
+      "gold" | "silver" | "bronze" | null,
+      "gold" | "silver" | null,
+      "gold" | "silver" | null
+    >;
+    roles: ColumnType<("admin" | "user" | "guest")[], ("admin" | "user")[], ("admin" | "user")[]>;
     canceledAt: Timestamp | null;
     stamps: ArrayColumnType<Timestamp> | null;
     createdAt: Timestamp;
@@ -42,6 +51,30 @@ describe("Unmigrated", () => {
     >();
   });
 
+  test("adds the removed values back to the write slots of a narrowed enum", () => {
+    expectTypeOf<Staged["User"]["tier"]>().toEqualTypeOf<
+      ColumnType<
+        "gold" | "silver" | "bronze",
+        "gold" | "silver" | "bronze",
+        "gold" | "silver" | "bronze"
+      >
+    >();
+    expectTypeOf<Staged["User"]["plan"]>().toEqualTypeOf<
+      ColumnType<
+        "gold" | "silver" | "bronze" | null,
+        "gold" | "silver" | "bronze" | null,
+        "gold" | "silver" | "bronze" | null
+      >
+    >();
+    expectTypeOf<Staged["User"]["roles"]>().toEqualTypeOf<
+      ColumnType<
+        ("admin" | "user" | "guest")[],
+        ("admin" | "user" | "guest")[],
+        ("admin" | "user" | "guest")[]
+      >
+    >();
+  });
+
   test("leaves every other column as generated", () => {
     expectTypeOf<Staged["User"]["id"]>().toEqualTypeOf<Generated<string>>();
     expectTypeOf<Staged["User"]["name"]>().toEqualTypeOf<string>();
@@ -57,8 +90,17 @@ describe("Unmigrated", () => {
       updatedAt: null,
       role: null,
       holidays: null,
+      tier: "bronze",
+      plan: "bronze",
+      roles: ["guest"],
     });
-    assertType<Updateable<Staged["User"]>>({ updatedAt: null, role: null, holidays: null });
+    assertType<Updateable<Staged["User"]>>({
+      updatedAt: null,
+      role: null,
+      holidays: null,
+      tier: "bronze",
+      plan: "bronze",
+    });
     assertType<Insertable<Database["User"]>>({
       name: "a",
       createdAt: new Date(),
@@ -66,6 +108,18 @@ describe("Unmigrated", () => {
       updatedAt: null,
       role: "admin",
       holidays: [],
+      tier: "gold",
+      roles: ["admin"],
+    });
+    assertType<Insertable<Database["User"]>>({
+      name: "a",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      role: "admin",
+      holidays: [],
+      // @ts-expect-error the strict schema keeps the removed value out of the insert slot
+      tier: "bronze",
+      roles: ["admin"],
     });
   });
 
@@ -77,6 +131,8 @@ describe("Unmigrated", () => {
       updatedAt: null,
       role: null,
       holidays: null,
+      tier: "gold",
+      roles: [],
     });
     assertType<Insertable<Staged["User"]>>({
       name: "a",
@@ -85,6 +141,18 @@ describe("Unmigrated", () => {
       updatedAt: null,
       role: null,
       holidays: null,
+      tier: "gold",
+      roles: [],
+    });
+    assertType<Insertable<Staged["User"]>>({
+      name: "a",
+      createdAt: new Date(),
+      updatedAt: null,
+      role: null,
+      holidays: null,
+      // @ts-expect-error a value the column never held stays rejected
+      tier: "platinum",
+      roles: [],
     });
   });
 
