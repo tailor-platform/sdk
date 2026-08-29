@@ -402,33 +402,33 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
-    test.each([
-      { read: true, disabledRead: false },
-      { read: false, disabledRead: true },
-    ])("suppresses GraphQL mutations while preserving read=$read", ({ read, disabledRead }) => {
-      const snapshotType = createTestSnapshotType("User", {
-        settings: { gqlOperations: { create: true, update: true, delete: true, read } },
-      });
+    test.each([{ read: true }, { read: false }])(
+      "suppresses every GraphQL operation regardless of read=$read",
+      ({ read }) => {
+        const snapshotType = createTestSnapshotType("User", {
+          settings: { gqlOperations: { create: true, update: true, delete: true, read } },
+        });
 
-      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        suppressGqlMutations: true,
-      });
+        const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+          suppressGqlOperations: true,
+        });
 
-      expect(manifest.schema?.settings?.disableGqlOperations).toEqual({
-        create: true,
-        update: true,
-        delete: true,
-        read: disabledRead,
-      });
-    });
+        expect(manifest.schema?.settings?.disableGqlOperations).toEqual({
+          create: true,
+          update: true,
+          delete: true,
+          read: true,
+        });
+      },
+    );
 
-    test("suppresses bulk upsert together with GraphQL mutations", () => {
+    test("suppresses bulk upsert together with GraphQL operations", () => {
       const snapshotType = createTestSnapshotType("User", {
         settings: { bulkUpsert: true },
       });
 
       const restricted = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        suppressGqlMutations: true,
+        suppressGqlOperations: true,
       });
       const restored = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 

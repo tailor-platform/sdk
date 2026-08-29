@@ -365,7 +365,6 @@ export async function applyTailorDB(
           // for a name its final state keeps).
           if (pendingDeletedTables.get(namespaceName)?.has(tableName)) continue;
           const input = migrationContext.tailorDBInputs.find((i) => i.namespace === namespaceName);
-          const activeSettings = restrictionState.get(namespaceName)?.get(tableName);
           // Recorded so the pre-phase GQL-permission fallback does not create
           // the type a second time.
           processedTables.created.add(tableName);
@@ -374,10 +373,7 @@ export async function applyTailorDB(
             namespaceName,
             tailordbType: generateTailorDBTypeManifestFromSnapshot(priorTable, {
               suppressRecordEvents: true,
-              suppressGqlMutations: true,
-              gqlReadDisabled: activeSettings
-                ? (activeSettings.disableGqlOperations?.read ?? false)
-                : undefined,
+              suppressGqlOperations: true,
               namespaceGqlOperations: input?.config.gqlOperations,
             }),
           });
@@ -450,7 +446,6 @@ export async function applyTailorDB(
               migration,
               migrationContext.tailorDBInputs,
               attemptedTables,
-              restrictionState,
             );
 
             // Script execution (only if migrate.ts exists for this migration)
@@ -464,7 +459,6 @@ export async function applyTailorDB(
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
               attemptedTables,
-              restrictionState,
             );
             throw error;
           }
@@ -476,7 +470,6 @@ export async function applyTailorDB(
               migration,
               migrationContext.tailorDBInputs,
               attemptedTables,
-              restrictionState,
             );
           } catch (error) {
             await rollbackSingleMigrationAfterFailure(
@@ -485,7 +478,6 @@ export async function applyTailorDB(
               migrationContext.workspaceId,
               migrationContext.tailorDBInputs,
               attemptedTables,
-              restrictionState,
             );
             throw error;
           }
@@ -585,7 +577,7 @@ export async function applyTailorDB(
           } catch (error) {
             logger.warn(
               `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
-                "The leftover resources remain read-only. Remove them manually before the next deployment; remote schema verification will fail closed until then.",
+                "The leftover resources remain locked. Remove them manually before the next deployment; remote schema verification will fail closed until then.",
             );
             throw error;
           }
