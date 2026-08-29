@@ -10,13 +10,15 @@
  * execution reaches a terminal state. Every resource is labeled with the app's
  * ownership immediately, so a run interrupted before teardown stays
  * attributable, and the next run of the same migration reclaims the leftovers
- * before recreating them.
+ * before recreating them — or, when the interrupted run's execution is still
+ * in flight on the platform, waits for that execution instead of starting the
+ * script a second time.
  */
 
 import * as crypto from "node:crypto";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
-import { isNotFoundError } from "#/cli/shared/client";
+import { fetchAll, isNotFoundError } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -26,6 +28,19 @@ import type { CreateFunctionRegistryRequestSchema } from "@tailor-platform/tailo
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 const CHUNK_SIZE = 64 * 1024;
+
+function scriptContentHash(code: string): string {
+  return crypto.createHash("sha256").update(code, "utf-8").digest("hex");
+}
+
+/** Execution statuses that still have an outcome ahead of them. */
+const UNFINISHED_STATUSES = new Set([
+  WorkflowExecution_Status.PENDING,
+  WorkflowExecution_Status.PENDING_RESUME,
+  WorkflowExecution_Status.PENDING_RETRY,
+  WorkflowExecution_Status.RUNNING,
+  WorkflowExecution_Status.WAITING,
+]);
 
 /** Poll interval while waiting for the migration workflow to finish. */
 const POLL_INTERVAL_MS = 3000;
@@ -84,7 +99,7 @@ async function uploadMigrationFunction(
     name,
     description: "Temporary function for a TailorDB migration",
     sizeBytes: BigInt(buffer.length),
-    contentHash: crypto.createHash("sha256").update(code, "utf-8").digest("hex"),
+    contentHash: scriptContentHash(code),
   };
 
   /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Info header followed by content chunks */
@@ -160,23 +175,93 @@ async function teardown(
   }
 }
 
+interface AdoptedExecution {
+  workflowId: string;
+  result: LongRunningMigrationResult;
+}
+
 /**
- * Remove any leftovers from an earlier interrupted run of this migration.
+ * Deal with the leftovers of an earlier interrupted run of this migration.
  *
  * The resource name is stable per migration and `createFunctionRegistry` is
- * create-only, so a retry would otherwise fail on a name collision. Deleting
- * first makes the create path idempotent across retries.
+ * create-only, so a retry would otherwise fail on a name collision. Leftovers
+ * whose execution already finished are deleted so the create path stays
+ * idempotent. A leftover whose execution is still in flight is adopted
+ * instead: its outcome becomes this run's outcome, because deleting it would
+ * not stop the script and recreating it would run the script twice.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param name - Shared resource name
+ * @param code - Bundled script this run would execute
+ * @param pollInterval - Poll interval in milliseconds
+ * @returns The adopted execution's outcome, or undefined when the create path should run
  */
 async function reclaimLeftovers(
   client: OperatorClient,
   workspaceId: string,
   name: string,
-): Promise<void> {
+  code: string,
+  pollInterval: number,
+): Promise<AdoptedExecution | undefined> {
   const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
-  await teardown(client, workspaceId, name, workflowId);
+  const [execution, ...others] = workflowId
+    ? await findUnfinishedExecutions(client, workspaceId, name)
+    : [];
+  if (!workflowId || !execution) {
+    await teardown(client, workspaceId, name, workflowId);
+    return undefined;
+  }
+
+  if (others.length > 0) {
+    throw new Error(
+      `Migration workflow '${name}' has ${others.length + 1} unfinished executions from earlier runs, so this run cannot tell which one to wait for. ` +
+        "Wait for them to finish, then retry the deployment.",
+    );
+  }
+  if (execution.status === WorkflowExecution_Status.WAITING) {
+    throw new Error(
+      `Migration workflow '${name}' has an execution from an earlier run that is waiting to be resumed and cannot complete on its own. ` +
+        "Resolve or delete that execution, then retry the deployment.",
+    );
+  }
+
+  const { function: leftoverFunction } = await client.getFunctionRegistry({ workspaceId, name });
+  if (leftoverFunction?.contentHash !== scriptContentHash(code)) {
+    throw new Error(
+      `Migration workflow '${name}' is still running a different version of the migration script from an earlier run. ` +
+        "Wait for it to finish, then retry the deployment.",
+    );
+  }
+
+  logger.info(
+    `Migration workflow '${name}' is still running from an earlier deployment; waiting for it instead of starting the script again.`,
+  );
+  const result = await waitForMigrationWorkflow(client, workspaceId, execution.id, pollInterval);
+  return { workflowId, result };
+}
+
+/**
+ * List the executions of this migration's workflow that have not finished.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ * @returns Unfinished executions
+ */
+async function findUnfinishedExecutions(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<WorkflowExecution[]> {
+  const executions = await fetchAll(async (pageToken, pageSize) => {
+    const response = await client.listWorkflowExecutions({
+      workspaceId,
+      workflowName: name,
+      pageToken,
+      pageSize,
+    });
+    return [response.executions, response.nextPageToken];
+  });
+  return executions.filter((execution) => UNFINISHED_STATUSES.has(execution.status));
 }
 
 /**
@@ -216,9 +301,13 @@ export async function executeMigrationAsWorkflow(
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  let workflowId: string | undefined;
+  // A refused reclaim leaves the earlier run's resources untouched: they are
+  // still executing, and teardown would delete them from under that execution.
+  const adopted = await reclaimLeftovers(client, workspaceId, name, code, pollInterval);
+  let workflowId = adopted?.workflowId;
   try {
-    await reclaimLeftovers(client, workspaceId, name);
+    if (adopted) return adopted.result;
+
     await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
 
     const { jobFunction } = await client.createWorkflowJobFunction({
