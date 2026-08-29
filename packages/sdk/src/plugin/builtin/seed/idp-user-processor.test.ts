@@ -10,7 +10,7 @@ import type { GeneratorAuthInput } from "#/plugin/types";
 
 type IdpUserRef = { id: string; name: string };
 
-type ListUsersResult = { success: boolean; users: IdpUserRef[]; total: number };
+type ListUsersResult = { success: boolean; users: IdpUserRef[] };
 
 type TruncateInput = { users: IdpUserRef[]; offset?: number; total?: number };
 
@@ -398,7 +398,6 @@ describe("generateIdpListUsersScriptCode", () => {
         { id: "3", name: "u3" },
         { id: "4", name: "u4" },
       ],
-      total: 4,
     });
     // The loop must request page 2 via `after`; the original bug stopped after
     // page 1 because it read a non-existent `nextToken` response field.

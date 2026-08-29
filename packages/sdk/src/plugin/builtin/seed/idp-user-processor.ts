@@ -137,7 +137,7 @@ export function generateIdpListUsersScriptCode(idpNamespace: string): string {
 
       console.log(\`Found \${users.length} IDP users to delete\`);
 
-      return { success: true, users, total: users.length };
+      return { success: true, users };
     }
   `;
 }

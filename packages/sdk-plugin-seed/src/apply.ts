@@ -420,9 +420,15 @@ async function truncateIdpUser(
       success = false;
     }
   }
-  if (totals.deleted > 0 || totals.notFound > 0) {
-    const notFoundSuffix = totals.notFound > 0 ? `, ${totals.notFound} already deleted` : "";
-    logger.log(styles.success(`  ✓ _User: ${totals.deleted} users deleted${notFoundSuffix}`));
+  const notFoundSuffix = totals.notFound > 0 ? `, ${totals.notFound} already deleted` : "";
+  const summary = `${totals.deleted} users deleted${notFoundSuffix}`;
+  if (success) {
+    logger.log(styles.success(`  ✓ _User: ${summary}`));
+  } else {
+    const failed = users.length - totals.deleted - totals.notFound;
+    logger.warn(`  _User: ${summary}, ${failed} failed; re-run the command to retry.`, {
+      mode: "plain",
+    });
   }
   return success;
 }

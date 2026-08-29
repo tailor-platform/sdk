@@ -99,7 +99,7 @@ type IdpUserRef = { id: string; name: string };
  */
 function idpScriptResult(name: string, users: IdpUserRef[], chunk?: unknown[]): string {
   if (name === "list-idp-user.ts") {
-    return JSON.stringify({ success: true, users, total: users.length });
+    return JSON.stringify({ success: true, users });
   }
   if (name === "truncate-idp-user.ts") {
     const total = chunk?.length ?? users.length;
@@ -725,5 +725,9 @@ describe("seedApplyCommand", () => {
     expect(
       erroredLines.some((line) => line.includes("User id-3 (user-3): permission denied")),
     ).toBe(true);
+    const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
+    expect(loggedLines.some((line) => line.includes("✓ _User"))).toBe(false);
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(warnedLines.some((line) => line.includes("29 users deleted, 1 failed"))).toBe(true);
   });
 });
