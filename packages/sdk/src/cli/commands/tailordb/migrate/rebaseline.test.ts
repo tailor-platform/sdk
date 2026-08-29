@@ -25,6 +25,13 @@ const state = vi.hoisted(() => ({
   listTailorDBGQLPermissions: vi.fn(),
 }));
 
+vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
+  withDeployLock: vi.fn(
+    async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
+      fn({ assertHeld: () => {} }),
+  ),
+}));
+
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));

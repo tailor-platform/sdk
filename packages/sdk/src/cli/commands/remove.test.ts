@@ -72,9 +72,16 @@ const mocks = vi.hoisted(() => {
     applyTailorDB: vi.fn(),
     planWorkflow: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
     applyWorkflow: vi.fn(),
+    withDeployLock: vi.fn(
+      async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
+        fn({ assertHeld: () => {} }),
+    ),
   };
 });
 
+vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
+  withDeployLock: mocks.withDeployLock,
+}));
 vi.mock("#/cli/commands/deploy/aigateway", () => ({
   planAIGateway: mocks.planAIGateway,
   applyAIGateway: mocks.applyAIGateway,

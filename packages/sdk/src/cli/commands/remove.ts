@@ -3,6 +3,7 @@ import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
 import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
 import { warnMissingAppId } from "#/cli/commands/deploy/config-id-injector";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
 import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
@@ -190,7 +191,9 @@ async function execRemove(
  */
 export async function remove(options?: RemoveOptions): Promise<void> {
   const { client, workspaceId, application, config } = await loadOptions(options);
-  await execRemove(client, workspaceId, application, config);
+  await withDeployLock({ client, workspaceId, applications: [application] }, () =>
+    execRemove(client, workspaceId, application, config),
+  );
 }
 
 export const removeCommand = defineAppCommand({
@@ -211,22 +214,26 @@ export const removeCommand = defineAppCommand({
     logger.info(`Planning removal of resources managed by "${application.name}"...`);
     logger.newline();
 
-    const { leftBehind } = await execRemove(client, workspaceId, application, config, async () => {
-      if (!args.yes) {
-        const confirmed = await prompt.confirm({
-          message: "Are you sure you want to remove all resources?",
-          default: false,
-        });
-        if (!confirmed) {
-          throw new Error(ml`
+    const { leftBehind } = await withDeployLock(
+      { client, workspaceId, applications: [application] },
+      () =>
+        execRemove(client, workspaceId, application, config, async () => {
+          if (!args.yes) {
+            const confirmed = await prompt.confirm({
+              message: "Are you sure you want to remove all resources?",
+              default: false,
+            });
+            if (!confirmed) {
+              throw new Error(ml`
         Remove cancelled. No resources were deleted.
         To override, run again and confirm, or use --yes flag.
       `);
-        }
-      } else {
-        logger.success("Removing all resources (--yes flag specified)...");
-      }
-    });
+            }
+          } else {
+            logger.success("Removing all resources (--yes flag specified)...");
+          }
+        }),
+    );
 
     if (leftBehind) {
       logger.warn(ml`

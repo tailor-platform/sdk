@@ -83,7 +83,9 @@ See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-
 
 **Concurrent Deploys:**
 
-Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. Deploys to different workspaces or applications are not affected.
+Only one `deploy` (or `remove`, or `tailordb migration set`/`sync`/`rebaseline`) runs against a given workspace and application at a time, regardless of where it is started from. A second run waits for the first to finish, then proceeds against the updated state; it gives up with an error after 10 minutes, which normally means the other run is still going. A run that was interrupted (for example with Ctrl+C or a crashed CI job) is reclaimed automatically by the next run after about 90 seconds. Dry runs never wait and never block another run. Deploys to different workspaces or applications are not affected.
+
+While a deploy holds this exclusivity, a `sdk-deploy-lock--…` entry appears among the workspace's functions; it is removed when the deploy finishes. Do not delete it while a deploy is running.
 
 **Schema Check:**
 

@@ -289,4 +289,28 @@ describe("applyDeploymentPlans", () => {
     expect(mocks.calls).toContain("workflow:supplier-workflow:create-update");
     expect(mocks.calls).not.toContain("workflow:supplier-workflow:delete");
   });
+
+  test("checks the deploy lock before every phase and stops once it is lost", async () => {
+    mocks.calls.length = 0;
+    const checks: number[] = [];
+    let lost = false;
+    const assertLockHeld = () => {
+      checks.push(mocks.calls.length);
+      if (lost) throw new Error("lock taken over");
+    };
+    mocks.applyApplication.mockImplementationOnce(async (_client, result, phase) => {
+      mocks.calls.push(`application:${(result as { marker: string }).marker}:${String(phase)}`);
+      lost = true;
+    });
+
+    await expect(
+      applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")], assertLockHeld),
+    ).rejects.toThrow("lock taken over");
+
+    // preflight, create-update services, delete subgraph resources, create-update
+    // application, then the check that fails before dependent services.
+    expect(checks).toHaveLength(5);
+    expect(mocks.calls.at(-1)).toBe("application:supplier-application:create-update");
+    expect(mocks.calls).not.toContain("executor:supplier-executor:create-update");
+  });
 });
