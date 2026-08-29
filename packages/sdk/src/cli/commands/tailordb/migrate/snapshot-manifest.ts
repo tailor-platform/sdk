@@ -53,6 +53,15 @@ import type {
 export interface GenerateManifestOptions {
   /** Whether an executor taking part in the same run subscribes to its record events */
   subscribed?: boolean;
+  /**
+   * Force record event publishing off, overriding a declared `publishEvents`.
+   *
+   * A table that declares `publishEvents: true` publishes no matter who
+   * subscribes, so `subscribed` alone cannot silence it while migrations run.
+   */
+  suppressRecordEvents?: boolean;
+  /** Force every GraphQL operation, including bulk upsert, off. */
+  suppressGqlOperations?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
     create?: boolean;
@@ -60,6 +69,23 @@ export interface GenerateManifestOptions {
     delete?: boolean;
     read?: boolean;
   };
+}
+
+/**
+ * Whether a table's manifest enables record event publishing.
+ *
+ * The one place the rule lives: a declared `publishEvents` wins, and an unset
+ * value follows whether an executor in the run subscribes.
+ * @param snapshotType - Table to resolve the flag for
+ * @param subscribed - Whether an executor taking part in the run subscribes
+ * @returns Whether the table publishes record events
+ */
+function publishesRecordEvents(snapshotType: TailorDBSnapshotType, subscribed: boolean): boolean {
+  return resolvePublishEvents({
+    explicit: snapshotType.settings?.publishEvents,
+    subscribed,
+    conflict: publishEventsConflict.tailorDBType(snapshotType.name),
+  });
 }
 
 /**
@@ -91,26 +117,26 @@ export function generateTailorDBTypeManifestFromSnapshot(
     };
   } = {
     aggregation: snapshotType.settings?.aggregation ?? false,
-    bulkUpsert: snapshotType.settings?.bulkUpsert ?? false,
+    bulkUpsert:
+      options.suppressGqlOperations === true ? false : (snapshotType.settings?.bulkUpsert ?? false),
     draft: false,
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
     pluralForm,
-    publishRecordEvents: resolvePublishEvents({
-      explicit: snapshotType.settings?.publishEvents,
-      subscribed: options.subscribed ?? false,
-      conflict: publishEventsConflict.tailorDBType(snapshotType.name),
-    }),
+    publishRecordEvents:
+      options.suppressRecordEvents === true
+        ? false
+        : publishesRecordEvents(snapshotType, options.subscribed ?? false),
   };
 
   // Apply gqlOperations from snapshot settings or namespace default
   const ops = snapshotType.settings?.gqlOperations ?? options.namespaceGqlOperations;
-  if (ops) {
+  if (ops || options.suppressGqlOperations === true) {
     defaultSettings.disableGqlOperations = {
-      create: ops.create === false,
-      update: ops.update === false,
-      delete: ops.delete === false,
-      read: ops.read === false,
+      create: options.suppressGqlOperations === true || ops?.create === false,
+      update: options.suppressGqlOperations === true || ops?.update === false,
+      delete: options.suppressGqlOperations === true || ops?.delete === false,
+      read: options.suppressGqlOperations === true || ops?.read === false,
     };
   }
 

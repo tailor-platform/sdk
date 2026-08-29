@@ -520,6 +520,7 @@ db.table("User", {
 - When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
 - When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
 - An executor declared with `disabled: true` never runs, so it does not count as using the table
+- While a `deploy` applies pending migrations, every table in the migrating namespace is read-only: create, update, delete, and bulk-upsert operations are disabled while the existing read setting is preserved. Record event publishing is also switched off so a migration script's writes do not reach executors from the previous deploy. After success, the configured settings take effect. If a later migration fails, settings from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior settings and leaves its newly created tables restricted until a successful retry. Restoration is skipped if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion also remains read-only for manual recovery
 
 **Use cases:**
 
@@ -563,6 +564,8 @@ db.table("User", {
 #### GraphQL Operations
 
 Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a table. All operations are enabled by default.
+
+While a `deploy` applies pending migrations, every GraphQL operation — `create`, `update`, `delete`, `read`, and bulk upsert — is switched off across the migrating namespace, so nothing reads or writes an intermediate schema. After success, the configured operations take effect. If a later migration fails, operations from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior operations and leaves its newly created tables restricted until a successful retry. Restoration is skipped if the checkpoint number or migration history changed concurrently.
 
 ```typescript
 db.table("Order", {

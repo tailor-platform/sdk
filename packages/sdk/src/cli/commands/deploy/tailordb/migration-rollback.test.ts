@@ -12,6 +12,11 @@ import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
+const remoteCheckpoint = vi.hoisted(() => ({
+  number: 0,
+  historyId: null as string | null,
+}));
+
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("../label");
@@ -43,7 +48,20 @@ vi.mock("./migration", async (importOriginal) => {
     ...original,
     detectPendingMigrations: vi.fn(),
     executeMigrations: vi.fn(),
-    updateMigrationLabel: vi.fn().mockResolvedValue(undefined),
+    updateMigrationLabel: vi
+      .fn()
+      .mockImplementation(
+        async (
+          _client: unknown,
+          _workspaceId: string,
+          _namespace: string,
+          number: number,
+          historyId?: string,
+        ) => {
+          remoteCheckpoint.number = number;
+          remoteCheckpoint.historyId = historyId ?? null;
+        },
+      ),
   };
 });
 
@@ -130,10 +148,27 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   function createMockClient() {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-migration": "m0000" } },
-      }),
+      getMetadata: vi.fn().mockImplementation(async () => ({
+        metadata: {
+          labels: {
+            "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
+            ...(remoteCheckpoint.historyId && {
+              "sdk-migration-history": remoteCheckpoint.historyId,
+            }),
+          },
+        },
+      })),
       setMetadata: vi.fn().mockResolvedValue({}),
+      listTailorDBTypes: vi.fn().mockResolvedValue({
+        tailordbTypes: [
+          {
+            name: "GoodsReceipt",
+            schema: {
+              settings: { bulkUpsert: false, publishRecordEvents: false },
+            },
+          },
+        ],
+      }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
@@ -429,6 +464,14 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    remoteCheckpoint.number = 0;
+    remoteCheckpoint.historyId = null;
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+      },
+    );
     await runTest();
   });
 
@@ -498,11 +541,9 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("rolls back tables the pre-phase created via missingTypeCreates, not just diff tables", async () => {
+  test("does not create or roll back a permission table absent from the migration snapshot", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
-    // LeakedType is not in this migration's diff, but the pre-phase creates it
-    // through missingTypeCreates because it is a type create with a GQL permission.
     planResult.changeSet.type.creates.push({
       name: "LeakedType",
       request: {
@@ -534,7 +575,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     const deletedNames = deletedTableNames(client);
     expect(deletedNames).toContain("StockReservation");
-    expect(deletedNames).toContain("LeakedType");
+    expect(deletedNames).not.toContain("LeakedType");
   });
 
   test("does not roll back a drifted type the pre-phase never touched", async () => {
@@ -871,13 +912,24 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     });
     const client = createMockClient();
     const planResult = createFieldTypePlanResult(tableNames);
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-ns",
+        config: {},
+        types: snapshots(1).tables,
+      },
+    ];
     setPendingMigrations([mkFieldTypeMigration(1, tableNames)]);
-    vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
-      new Error("checkpoint response lost"),
-    );
     vi.mocked(client.getMetadata).mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0002" } },
     } as never);
+    let writesAtCheckpointAttempt = 0;
+    vi.mocked(migrationModule.updateMigrationLabel)
+      .mockReset()
+      .mockImplementationOnce(async () => {
+        writesAtCheckpointAttempt = vi.mocked(client.updateTailorDBType).mock.calls.length;
+        throw new Error("checkpoint response lost");
+      });
 
     await withOverriddenSnapshot(
       (_migrationsDir, maxVersion) => snapshots(maxVersion ?? 0),
@@ -889,6 +941,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     );
 
     expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
+    expect(client.updateTailorDBType).toHaveBeenCalledTimes(writesAtCheckpointAttempt);
   });
 
   test("advances the checkpoint before deleting a removed table", async () => {
@@ -922,9 +975,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     });
     const client = createMockClient();
     const order: string[] = [];
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(async () => {
-      order.push("checkpoint");
-    });
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+        order.push("checkpoint");
+      },
+    );
     vi.mocked(client.deleteTailorDBType).mockImplementation(async () => {
       order.push("delete");
       return {} as never;

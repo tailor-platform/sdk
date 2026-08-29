@@ -12,6 +12,11 @@ import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
+const remoteCheckpoint = vi.hoisted(() => ({
+  number: 0,
+  historyId: null as string | null,
+}));
+
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("../label");
@@ -43,7 +48,20 @@ vi.mock("./migration", async (importOriginal) => {
     ...original,
     detectPendingMigrations: vi.fn(),
     executeMigrations: vi.fn(),
-    updateMigrationLabel: vi.fn().mockResolvedValue(undefined),
+    updateMigrationLabel: vi
+      .fn()
+      .mockImplementation(
+        async (
+          _client: unknown,
+          _workspaceId: string,
+          _namespace: string,
+          number: number,
+          historyId?: string,
+        ) => {
+          remoteCheckpoint.number = number;
+          remoteCheckpoint.historyId = historyId ?? null;
+        },
+      ),
   };
 });
 
@@ -129,10 +147,18 @@ describe("applyTailorDB: type rename migration flow", () => {
   function createMockClient() {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-migration": "m0000" } },
-      }),
+      getMetadata: vi.fn().mockImplementation(async () => ({
+        metadata: {
+          labels: {
+            "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
+            ...(remoteCheckpoint.historyId && {
+              "sdk-migration-history": remoteCheckpoint.historyId,
+            }),
+          },
+        },
+      })),
       setMetadata: vi.fn().mockResolvedValue({}),
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
@@ -327,6 +353,14 @@ describe("applyTailorDB: type rename migration flow", () => {
 
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    remoteCheckpoint.number = 0;
+    remoteCheckpoint.historyId = null;
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+      },
+    );
     await runTest();
   });
 
@@ -344,9 +378,13 @@ describe("applyTailorDB: type rename migration flow", () => {
     vi.mocked(migrationModule.executeMigrations).mockImplementation(async () => {
       order.push("script");
     });
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(async () => {
-      order.push("checkpoint");
-    });
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+        order.push("checkpoint");
+      },
+    );
     vi.mocked(client.deleteTailorDBGQLPermission).mockImplementation(async (req: unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       order.push(`delete-perm:${(req as any)?.typeName}`);

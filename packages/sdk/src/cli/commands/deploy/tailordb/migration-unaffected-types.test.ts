@@ -17,6 +17,11 @@ import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
+const remoteCheckpoint = vi.hoisted(() => ({
+  number: null as number | null,
+  historyId: null as string | null,
+}));
+
 // Mock label.ts to suppress real metadata building
 vi.mock("../label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -52,7 +57,20 @@ vi.mock("./migration", async (importOriginal) => {
     ...original,
     detectPendingMigrations: vi.fn(),
     executeMigrations: vi.fn().mockResolvedValue(undefined),
-    updateMigrationLabel: vi.fn().mockResolvedValue(undefined),
+    updateMigrationLabel: vi
+      .fn()
+      .mockImplementation(
+        async (
+          _client: unknown,
+          _workspaceId: string,
+          _namespace: string,
+          number: number,
+          historyId?: string,
+        ) => {
+          remoteCheckpoint.number = number;
+          remoteCheckpoint.historyId = historyId ?? null;
+        },
+      ),
   };
 });
 
@@ -106,7 +124,19 @@ describe("migration flow: creates of types predating the pending migrations", ()
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      getMetadata: vi.fn().mockImplementation(async () => ({
+        metadata: {
+          labels: {
+            ...(remoteCheckpoint.number !== null && {
+              "sdk-migration": `m${String(remoteCheckpoint.number).padStart(4, "0")}`,
+            }),
+            ...(remoteCheckpoint.historyId && {
+              "sdk-migration-history": remoteCheckpoint.historyId,
+            }),
+          },
+        },
+      })),
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [] }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
@@ -270,6 +300,14 @@ describe("migration flow: creates of types predating the pending migrations", ()
   beforeEach(() => {
     vi.clearAllMocks();
     snapshotState.tablesByVersion = {};
+    remoteCheckpoint.number = null;
+    remoteCheckpoint.historyId = null;
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
+      async (_client, _workspaceId, _namespace, number, historyId) => {
+        remoteCheckpoint.number = number;
+        remoteCheckpoint.historyId = historyId ?? null;
+      },
+    );
   });
 
   test("creates a baseline type no pending diff names, from its snapshot, before the script", async () => {
