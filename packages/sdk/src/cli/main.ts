@@ -25,7 +25,6 @@ import { pluginCommand } from "./commands/plugin";
 import { profileCommand } from "./commands/profile";
 import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
-import { setupCommand } from "./commands/setup";
 import { showCommand } from "./commands/show";
 import { staticwebsiteCommand } from "./commands/staticwebsite";
 import { tailordbCommand } from "./commands/tailordb";
@@ -76,7 +75,8 @@ const commandWithSkills = withSkillCommand(
     description:
       packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
     notes: `CLI plugins (beta): an unknown subcommand is dispatched to an external plugin executable named \`${cliName}-<name>\` (found on your PATH or in node_modules/.bin), similar to \`gh\` extensions.
-Run \`${cliName} plugin list\` to see which plugins are installed and where they resolve from.`,
+Run \`${cliName} plugin list\` to see which plugins are installed and where they resolve from.
+The \`setup\` commands are provided by the @tailor-platform/sdk-plugin-setup CLI plugin.`,
     subCommands: {
       api: apiCommand,
       auth: authCommand,
@@ -98,7 +98,6 @@ Run \`${cliName} plugin list\` to see which plugins are installed and where they
       query: queryCommand,
       remove: removeCommand,
       secret: secretCommand,
-      setup: setupCommand,
       show: showCommand,
       staticwebsite: staticwebsiteCommand,
       tailordb: tailordbCommand,

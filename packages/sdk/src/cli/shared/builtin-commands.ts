@@ -27,7 +27,6 @@ export const BUILTIN_COMMAND_NAMES = [
   "query",
   "remove",
   "secret",
-  "setup",
   "show",
   "skills",
   "staticwebsite",

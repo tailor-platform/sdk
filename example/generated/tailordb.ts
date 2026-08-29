@@ -15,6 +15,14 @@ import {
 
 export interface Namespace {
   "tailordb": {
+    AuditTrail: {
+      id: Generated<string>;
+      action: string;
+      detail: string;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp>;
+    }
+
     Customer: {
       id: Generated<string>;
       name: string;

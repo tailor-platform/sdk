@@ -94,6 +94,68 @@ function deployment(name: string): PlannedDeployment {
 }
 
 describe("applyDeploymentPlans", () => {
+  // The documented span tree in docs/telemetry.md drifted from the emitted spans
+  // once already, so the names and their nesting are pinned here.
+  test("emits a span per apply phase and per service", async () => {
+    const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
+    const { InMemorySpanExporter, SimpleSpanProcessor } =
+      await import("@opentelemetry/sdk-trace-base");
+    const exporter = new InMemorySpanExporter();
+    const provider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    provider.register();
+
+    try {
+      await applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")]);
+
+      const byName = new Map(
+        exporter.getFinishedSpans().map((span) => [span.name, span.parentSpanContext?.spanId]),
+      );
+      const idOf = (name: string) =>
+        exporter
+          .getFinishedSpans()
+          .find((span) => span.name === name)
+          ?.spanContext().spanId;
+
+      expect([...byName.keys()].toSorted()).toEqual(
+        [
+          "apply.cleanup",
+          "apply.createUpdateApplication",
+          "apply.createUpdateDependentServices",
+          "apply.createUpdateServices",
+          "apply.deleteApplication",
+          "apply.deleteDependentServices",
+          "apply.deleteSubgraphResources",
+          "apply.deleteSubgraphServices",
+          "apply.executor.createUpdate",
+          "apply.preflight",
+          "apply.aiGateway.createUpdate",
+          "apply.auth.createUpdateDependents",
+          "apply.auth.createUpdatePrerequisites",
+          "apply.functionRegistry.createUpdate",
+          "apply.idp.createUpdate",
+          "apply.pipeline.createUpdate",
+          "apply.secretManager.createUpdate",
+          "apply.staticWebsite.createUpdate",
+          "apply.tailorDB.createUpdate",
+          "apply.workflow.createUpdate",
+          "apply.workflowExecutionPolicy.createUpdate",
+        ].toSorted(),
+      );
+
+      // Per-service spans hang off their phase, so a slow service is attributable.
+      expect(byName.get("apply.tailorDB.createUpdate")).toBe(idOf("apply.createUpdateServices"));
+      expect(byName.get("apply.executor.createUpdate")).toBe(
+        idOf("apply.createUpdateDependentServices"),
+      );
+    } finally {
+      await provider.shutdown();
+      const { trace } = await import("@opentelemetry/api");
+      trace.disable();
+    }
+  });
+
   test("creates TailorDB and IdP for every app before applying Auth or Applications", async () => {
     mocks.calls.length = 0;
 

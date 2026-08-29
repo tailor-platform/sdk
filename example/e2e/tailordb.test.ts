@@ -68,6 +68,19 @@ describe("controlplane", () => {
     });
   });
 
+  test("record events follow the executors that subscribe to a table", async () => {
+    const { tailordbTypes } = await client.listTailorDBTypes({
+      workspaceId,
+      namespaceName,
+    });
+    const publishes = (name: string) =>
+      tailordbTypes.find((e) => e.name === name)?.schema?.settings?.publishRecordEvents;
+
+    // SalesOrder has an enabled record trigger; AuditTrail's only one is disabled.
+    expect(publishes("SalesOrder")).toBe(true);
+    expect(publishes("AuditTrail")).toBe(false);
+  });
+
   test("permission schema structure", async () => {
     const { tailordbTypes } = await client.listTailorDBTypes({
       workspaceId,

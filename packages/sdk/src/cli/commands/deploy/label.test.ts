@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
@@ -11,7 +12,7 @@ import {
   withMetadataWriteBatch,
   writeMetadataLabels,
 } from "./label";
-import type { MetadataLabelClient } from "./label";
+import type { MetadataLabelBulkClient, MetadataLabelClient } from "./label";
 
 describe("isOwnedByApp", () => {
   test("returns false when labels are undefined", () => {
@@ -202,13 +203,54 @@ describe("withMetadataWriteBatch", () => {
       getMetadata: vi.fn().mockResolvedValue({ metadata: { labels } }),
       setMetadata: vi.fn().mockResolvedValue({}),
       bulkSetMetadata: vi.fn().mockResolvedValue({ results: [] }),
-    };
+    } satisfies MetadataLabelBulkClient;
+  }
+
+  function createStatefulClient(
+    labelsByTrn: Map<string, Record<string, string>>,
+    hooks: {
+      beforeGet?: (trn: string) => void;
+      afterBulkWrite?: (bulkCall: number) => void;
+    },
+  ) {
+    const client = createClient();
+    let bulkCall = 0;
+    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => {
+      hooks.beforeGet?.(trn);
+      return { metadata: { labels: { ...labelsByTrn.get(trn) } } };
+    });
+    client.bulkSetMetadata.mockImplementation(
+      async ({ requests }: Parameters<MetadataLabelBulkClient["bulkSetMetadata"]>[0]) => {
+        if (!requests) throw new Error("BulkSetMetadata test request is missing requests");
+        bulkCall += 1;
+        for (const request of requests) {
+          if (!request.trn || !request.labels) {
+            throw new Error("BulkSetMetadata test entry is missing trn or labels");
+          }
+          labelsByTrn.set(request.trn, { ...request.labels });
+        }
+        hooks.afterBulkWrite?.(bulkCall);
+        return { results: [] };
+      },
+    );
+    return client;
+  }
+
+  async function queueMetadataWrites(client: MetadataLabelClient, count: number): Promise<void> {
+    await Promise.all(
+      Array.from({ length: count }, (_, index) =>
+        writeMetadataLabels(client, {
+          trn: `trn:${String(index).padStart(3, "0")}`,
+          labels: { mine: "value" },
+        }),
+      ),
+    );
   }
 
   test("folds queued changes for one TRN into one bulk request", async () => {
     const client = createClient({ keep: "yes" });
 
-    await withMetadataWriteBatch(client as never, async (batchClient) => {
+    await withMetadataWriteBatch(client, async (batchClient) => {
       await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { first: "value" } });
       await writeMetadataLabels(batchClient, {
         trn: "trn:x",
@@ -232,16 +274,7 @@ describe("withMetadataWriteBatch", () => {
   test("splits more than 100 changed TRNs into valid batches", async () => {
     const client = createClient();
 
-    await withMetadataWriteBatch(client as never, async (batchClient) => {
-      await Promise.all(
-        Array.from({ length: 101 }, (_, index) =>
-          writeMetadataLabels(batchClient, {
-            trn: `trn:${String(index).padStart(3, "0")}`,
-            labels: { mine: "value" },
-          }),
-        ),
-      );
-    });
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 101));
 
     expect(client.getMetadata).toHaveBeenCalledTimes(101);
     expect(client.setMetadata).not.toHaveBeenCalled();
@@ -251,10 +284,171 @@ describe("withMetadataWriteBatch", () => {
     ]);
   });
 
+  test("preserves a concurrent label written between bulk chunks", async () => {
+    const labelsByTrn = new Map<string, Record<string, string>>();
+    const client = createStatefulClient(labelsByTrn, {
+      afterBulkWrite(bulkCall) {
+        if (bulkCall === 1) {
+          labelsByTrn.set("trn:100", {
+            ...labelsByTrn.get("trn:100"),
+            external: "value",
+          });
+        }
+      },
+    });
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 101));
+
+    expect(labelsByTrn.get("trn:100")).toEqual({ external: "value", mine: "value" });
+  });
+
+  test("rereads changes collected across multiple read waves", async () => {
+    const labelsByTrn = new Map<string, Record<string, string>>(
+      Array.from({ length: 201 }, (_, index) => {
+        const trn = `trn:${String(index).padStart(3, "0")}`;
+        const labels: Record<string, string> = index % 100 === 0 ? {} : { mine: "value" };
+        return [trn, labels] as const;
+      }),
+    );
+    const client = createStatefulClient(labelsByTrn, {
+      beforeGet(trn) {
+        if (trn === "trn:200") {
+          labelsByTrn.set("trn:000", {
+            ...labelsByTrn.get("trn:000"),
+            external: "value",
+          });
+        }
+      },
+    });
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 201));
+
+    expect(labelsByTrn.get("trn:000")).toEqual({ external: "value", mine: "value" });
+    expect(client.getMetadata).toHaveBeenCalledTimes(204);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+    expect(client.bulkSetMetadata.mock.calls[0]?.[0].requests).toHaveLength(3);
+  });
+
+  test("does not bulk-write candidates that become no-ops during reread", async () => {
+    const labelsByTrn = new Map<string, Record<string, string>>(
+      Array.from({ length: 101 }, (_, index) => {
+        const labels: Record<string, string> = index === 0 ? {} : { mine: "value" };
+        return [`trn:${String(index).padStart(3, "0")}`, labels] as const;
+      }),
+    );
+    const client = createStatefulClient(labelsByTrn, {
+      beforeGet(trn) {
+        if (trn === "trn:100") {
+          labelsByTrn.set("trn:000", { mine: "value" });
+        }
+      },
+    });
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 101));
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(102);
+    expect(client.bulkSetMetadata).not.toHaveBeenCalled();
+  });
+
+  test("packs changed TRNs across read waves", async () => {
+    const client = createClient();
+    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => ({
+      metadata: {
+        labels: Number(trn.slice(-3)) % 3 === 0 ? {} : { mine: "value" },
+      },
+    }));
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 301));
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(401);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(2);
+    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests.length)).toEqual([
+      100, 1,
+    ]);
+  });
+
+  test("keeps later metadata reads in parallel when a batch is nearly full", async () => {
+    const client = createClient();
+    const probe = createConcurrencyProbe();
+    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => {
+      const index = Number(trn.slice(-3));
+      if (index >= 100) {
+        await probe.run();
+      }
+      return {
+        metadata: { labels: index < 99 ? {} : { mine: "value" } },
+      };
+    });
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 200));
+
+    expect(probe.maxInFlight()).toBe(100);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+    expect(client.bulkSetMetadata.mock.calls[0]?.[0].requests).toHaveLength(99);
+  });
+
+  test("rereads overflow candidates after an earlier bulk", async () => {
+    const labelsByTrn = new Map<string, Record<string, string>>(
+      Array.from({ length: 201 }, (_, index) => {
+        const labels: Record<string, string> = index === 99 ? { mine: "value" } : {};
+        return [`trn:${String(index).padStart(3, "0")}`, labels] as const;
+      }),
+    );
+    const client = createStatefulClient(labelsByTrn, {
+      afterBulkWrite(bulkCall) {
+        if (bulkCall === 1) {
+          labelsByTrn.set("trn:101", {
+            ...labelsByTrn.get("trn:101"),
+            external: "value",
+          });
+        }
+      },
+    });
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 201));
+
+    expect(labelsByTrn.get("trn:101")).toEqual({ external: "value", mine: "value" });
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(2);
+    expect(client.bulkSetMetadata.mock.calls.map(([request]) => request.requests.length)).toEqual([
+      100, 100,
+    ]);
+  });
+
+  test("does not reread changes that only appear in the final read wave", async () => {
+    const client = createClient();
+    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => ({
+      metadata: {
+        labels: Number(trn.slice(-3)) < 100 ? { mine: "value" } : {},
+      },
+    }));
+
+    await withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 200));
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(200);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+    expect(client.bulkSetMetadata.mock.calls[0]?.[0].requests).toHaveLength(100);
+  });
+
+  test("leaves completed bulk chunks applied when a later metadata read fails", async () => {
+    const client = createClient();
+    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => {
+      if (trn === "trn:100") throw new Error("later read failed");
+      return { metadata: { labels: {} } };
+    });
+
+    await expect(
+      withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 201)),
+    ).rejects.toThrow("later read failed");
+
+    expect(client.getMetadata).toHaveBeenCalledTimes(200);
+    expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
+    expect(client.bulkSetMetadata.mock.calls[0]?.[0].requests).toHaveLength(100);
+  });
+
   test("does not bulk-write queued changes that already hold", async () => {
     const client = createClient({ mine: "value" });
 
-    await withMetadataWriteBatch(client as never, async (batchClient) => {
+    await withMetadataWriteBatch(client, async (batchClient) => {
       await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
     });
 
@@ -266,7 +460,7 @@ describe("withMetadataWriteBatch", () => {
     const client = createClient();
 
     await expect(
-      withMetadataWriteBatch(client as never, async (batchClient) => {
+      withMetadataWriteBatch(client, async (batchClient) => {
         await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
         throw new Error("apply failed");
       }),
@@ -303,7 +497,7 @@ describe("withMetadataWriteBatch", () => {
     });
     let lateWrite!: Promise<void>;
 
-    const result = withMetadataWriteBatch(client as never, async (batchClient) => {
+    const result = withMetadataWriteBatch(client, async (batchClient) => {
       await writeMetadataLabels(batchClient, {
         trn: "trn:early",
         labels: { mine: "early" },
@@ -349,7 +543,7 @@ describe("withMetadataWriteBatch", () => {
     client.bulkSetMetadata.mockRejectedValueOnce(flushError);
 
     await expect(
-      withMetadataWriteBatch(client as never, async (batchClient) => {
+      withMetadataWriteBatch(client, async (batchClient) => {
         await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
         throw applyError;
       }),
@@ -367,7 +561,7 @@ describe("withMetadataWriteBatch", () => {
     client.getMetadata.mockRejectedValueOnce(new Error("metadata read failed"));
 
     await expect(
-      withMetadataWriteBatch(client as never, async (batchClient) => {
+      withMetadataWriteBatch(client, async (batchClient) => {
         await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
       }),
     ).rejects.toThrow("metadata read failed");
@@ -375,23 +569,15 @@ describe("withMetadataWriteBatch", () => {
     expect(client.bulkSetMetadata).not.toHaveBeenCalled();
   });
 
-  test("stops after the first failed bulk chunk", async () => {
+  test("stops reading and writing after the first failed bulk chunk", async () => {
     const client = createClient();
     client.bulkSetMetadata.mockRejectedValueOnce(new Error("bulk write failed"));
 
     await expect(
-      withMetadataWriteBatch(client as never, async (batchClient) => {
-        await Promise.all(
-          Array.from({ length: 101 }, (_, index) =>
-            writeMetadataLabels(batchClient, {
-              trn: `trn:${String(index).padStart(3, "0")}`,
-              labels: { mine: "value" },
-            }),
-          ),
-        );
-      }),
+      withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 101)),
     ).rejects.toThrow("bulk write failed");
 
+    expect(client.getMetadata).toHaveBeenCalledTimes(100);
     expect(client.bulkSetMetadata).toHaveBeenCalledTimes(1);
     expect(client.bulkSetMetadata.mock.calls[0]?.[0].requests).toHaveLength(100);
   });

@@ -1,5 +1,54 @@
 # @tailor-platform/sdk
 
+## 2.7.0
+
+### Minor Changes
+
+- [#2181](https://github.com/tailor-platform/sdk/pull/2181) [`8f48d23`](https://github.com/tailor-platform/sdk/commit/8f48d2349b4e618aaad88691ff6b1540d6a09228) Thanks [@dqn](https://github.com/dqn)! - Trace each service's apply step and each TailorDB migration phase when OTLP tracing is enabled. `deploy` now emits `apply.<service>.createUpdate` spans under `apply.createUpdateServices` and `apply.createUpdateDependentServices`, plus `apply.tailorDB.migration.prePhase` and `.postPhase` per pending migration and `.script` for each migration that carries a `migrate.ts`, so a slow deploy can be attributed to a service or to a migration script rather than to a whole phase.
+
+- [#2168](https://github.com/tailor-platform/sdk/pull/2168) [`aef699b`](https://github.com/tailor-platform/sdk/commit/aef699b36f5b0957747f34a327b0e19f1e47ba3a) Thanks [@dqn](https://github.com/dqn)! - Move the `tailor setup` commands into the optional `@tailor-platform/sdk-plugin-setup` CLI plugin.
+  
+  `setup` generates GitHub repository automation, which not every project uses, but its workflow templates and its `@croct/json5-parser` / `json5` dependencies shipped with the SDK for everyone. Splitting it out follows the same CLI plugin mechanism as `tailor tailordb erd`.
+  
+  To keep using `tailor setup <command>`, install the plugin next to the SDK:
+  
+  ```bash
+  npm install -D @tailor-platform/sdk-plugin-setup
+  ```
+  
+  The commands, options, generated files, and the `.github/tailor.lock` format are unchanged.
+
+- [#2167](https://github.com/tailor-platform/sdk/pull/2167) [`4c74e1b`](https://github.com/tailor-platform/sdk/commit/4c74e1b00df35316779a02ab3ed8fd0c3bf63e69) Thanks [@dqn](https://github.com/dqn)! - Run TailorDB migration scripts as workflow jobs so they are no longer bound by the 60-second script execution limit.
+  
+  A data migration that previously failed with `deadline_exceeded` — losing its logs along with any record of how far it got — now runs to completion. `tailor deploy` waits for it and reports its logs as before. This applies to every migration; no flag or migration-file change is required.
+
+### Patch Changes
+
+- [#2170](https://github.com/tailor-platform/sdk/pull/2170) [`2f79d38`](https://github.com/tailor-platform/sdk/commit/2f79d38b55f47dd4b0854ebff6c86bc7b33c01ad) Thanks [@dqn](https://github.com/dqn)! - Keep the generated Kysely table types and migration types in agreement on which array columns need `ArrayColumnType`, so a future column type cannot pick up an array form that Kysely can read through in one and not the other.
+
+- [#2145](https://github.com/tailor-platform/sdk/pull/2145) [`293a0c3`](https://github.com/tailor-platform/sdk/commit/293a0c35b10b40b9d61f781fcc5d8bc96f54301e) Thanks [@dqn](https://github.com/dqn)! - Generate `Date`-based migration types for `date` columns, matching the values returned by the function runtime and the existing generated table types. Reading a `date` column in `migrate.ts` now yields a `Date` instead of a `string`, while writes accept either. Migration scripts can also read and write `date` and `datetime` array columns. Existing migration scripts that treat selected `date` values as strings must be updated.
+
+- [#2163](https://github.com/tailor-platform/sdk/pull/2163) [`58bfd7f`](https://github.com/tailor-platform/sdk/commit/58bfd7f165ef3fb57faa76f2813cb7d903db5b2b) Thanks [@toiroakr](https://github.com/toiroakr)! - Fail `deploy` with a clear error when a resolver, executor, or workflow job references a Node-only global (`process`, `Buffer`, `require`, etc.) that the Tailor Platform runtime never defines, instead of deploying successfully and only failing with a `ReferenceError` at runtime. Use `defineConfig({ env })` and the `env` argument passed into the body function to read configuration values.
+
+- [#2156](https://github.com/tailor-platform/sdk/pull/2156) [`e36bc5d`](https://github.com/tailor-platform/sdk/commit/e36bc5de9e3d08e1ea291896a6937a4c0bb34118) Thanks [@dqn](https://github.com/dqn)! - - Speed up deployments by reducing metadata API calls.
+  - Stop CLI wait commands when a function execution is canceled and report the cancellation as a failure.
+
+- [#2162](https://github.com/tailor-platform/sdk/pull/2162) [`1c1b989`](https://github.com/tailor-platform/sdk/commit/1c1b9899cb8bf99525b27c8b53dd99b0972d7648) Thanks [@dqn](https://github.com/dqn)! - Reduce the chance that deploy metadata writes overwrite labels changed by another client.
+
+- [#2177](https://github.com/tailor-platform/sdk/pull/2177) [`dd5bf5a`](https://github.com/tailor-platform/sdk/commit/dd5bf5a2fe6599364d9e25de39dd1e1763b47f3a) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove unused internal `.brand()` calls from config schemas. This is invisible to users: the generated public types were already unaffected by these calls.
+
+- [#2152](https://github.com/tailor-platform/sdk/pull/2152) [`fa17d16`](https://github.com/tailor-platform/sdk/commit/fa17d1675c38047e3f700cb66851588bab27f74f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.2.5
+
+- [#2153](https://github.com/tailor-platform/sdk/pull/2153) [`07ac5d0`](https://github.com/tailor-platform/sdk/commit/07ac5d019a14143438bf1072fe2bf7a7e9f6980c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/prompts to v8.6.0
+
+- [#2006](https://github.com/tailor-platform/sdk/pull/2006) [`1aca9f2`](https://github.com/tailor-platform/sdk/commit/1aca9f283b19f6ca392c8f53d725d7375e580dc4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#2155](https://github.com/tailor-platform/sdk/pull/2155) [`3535006`](https://github.com/tailor-platform/sdk/commit/35350069b4055ce5996b92b0a0a5d153be5ad0d9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/core to v12
+
+- [#2165](https://github.com/tailor-platform/sdk/pull/2165) [`f9bb880`](https://github.com/tailor-platform/sdk/commit/f9bb880eb8d7eb218c3d44cf2874f928cb4b1c2e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @0no-co/graphql.web to v1.3.4
+
+- [#2173](https://github.com/tailor-platform/sdk/pull/2173) [`4090591`](https://github.com/tailor-platform/sdk/commit/409059124a4dda81312e1982ae17f0b6430238c5) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @electric-sql/pglite to v0.5.6
+
 ## 2.6.0
 
 ### Minor Changes

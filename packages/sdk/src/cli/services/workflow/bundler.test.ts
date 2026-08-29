@@ -75,6 +75,68 @@ export const mainJob = createWorkflowJob({
     }
   });
 
+  test("rejects a job that references process.env", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-forbidden-global-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => (process.env.SOME_FLAG === "1" ? 1 : 0),
+});
+`,
+    );
+
+    try {
+      await expect(
+        bundleWorkflowJobs(
+          [{ name: "main-job", exportName: "mainJob", sourceFile }],
+          ["main-job"],
+          {},
+          { modules: new Map() },
+          tmpDir,
+        ),
+      ).rejects.toThrow(/references a global unavailable in the Tailor Platform runtime: process/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("bundles a job that uses Web Standard globals", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-web-standard-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => {
+    const res = await fetch(new URL("https://example.com"));
+    return res.status;
+  },
+});
+`,
+    );
+
+    try {
+      const result = await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        ["main-job"],
+        {},
+        { modules: new Map() },
+        tmpDir,
+      );
+      expect(result.bundledCode.get("main-job")).toBeDefined();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   describe("job start binding resolution", () => {
     let tmpDir: string | undefined;
 

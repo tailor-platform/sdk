@@ -11,10 +11,14 @@ await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 export { arg, defineCommand, runCommand, runMain } from "politty";
 export { logger, styles, type LogMode, type LogOptions, type OutOptions } from "./shared/logger";
 export { defineAppCommand } from "./shared/command";
+export { logBetaWarning } from "./shared/beta";
+export { prompt } from "./shared/prompt";
+export { workspaceNameSchema } from "./shared/workspace-name";
 export {
   createCommonArgs,
   workspaceArgs,
   configArg,
+  confirmationArgs,
   deploymentArgs,
   loadEnvFiles,
   type CommonArgsType,
@@ -22,9 +26,11 @@ export {
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
 export type { BundledScripts } from "./commands/deploy/function-registry";
+export { ensureConfigId } from "./commands/deploy/config-id-injector";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
+export { extractOwnedNamespaces } from "./shared/config";
 export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
 export { generateUserTypes } from "./shared/type-generator";
 export {

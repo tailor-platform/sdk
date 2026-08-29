@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-seed",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Tailor CLI plugin providing the `tailor seed` commands (TailorDB and IdP seed data)",
   "license": "MIT",
   "repository": {
@@ -38,12 +38,12 @@
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/shared": "workspace:^",
     "@types/node": "24.13.3",
-    "eslint-plugin-zod": "4.9.1",
-    "oxlint": "1.78.0",
+    "eslint-plugin-zod": "4.10.0",
+    "oxlint": "1.80.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   },
   "peerDependencies": {
     "@tailor-platform/sdk": "workspace:^"

@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.1
+
+### Patch Changes
+
+- [#2153](https://github.com/tailor-platform/sdk/pull/2153) [`07ac5d0`](https://github.com/tailor-platform/sdk/commit/07ac5d019a14143438bf1072fe2bf7a7e9f6980c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/prompts to v8.6.0
+
 ## 0.8.0
 
 ### Minor Changes

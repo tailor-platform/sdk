@@ -1,3 +1,4 @@
+import { COLUMN_TYPE_ALIASES, mapFieldTypeToColumnType } from "#/utils/field-column-type";
 import multiline from "#/utils/multiline";
 import {
   type KyselyFieldConfig,
@@ -86,37 +87,15 @@ function getBaseType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = { Timestamp: false, Serial: false };
 
-  let type: string;
-  switch (fieldType) {
-    case "uuid":
-    case "string":
-    case "decimal":
-      type = "string";
-      break;
-    case "integer":
-    case "float":
-      type = "number";
-      break;
-    case "date":
-    case "datetime":
-      usedUtilityTypes.Timestamp = true;
-      type = "Timestamp";
-      break;
-    case "bool":
-    case "boolean":
-      type = "boolean";
-      break;
-    case "enum":
-      type = getEnumType(fieldConfig);
-      break;
-    case "nested": {
-      const nestedResult = getNestedType(fieldConfig);
-      return nestedResult;
-    }
-    default:
-      type = "string";
-      break;
+  if (fieldType === "enum") {
+    return { type: getEnumType(fieldConfig), usedUtilityTypes };
   }
+  if (fieldType === "nested") {
+    return getNestedType(fieldConfig);
+  }
+
+  const type = mapFieldTypeToColumnType(fieldType);
+  usedUtilityTypes.Timestamp = type === "Timestamp";
 
   return { type, usedUtilityTypes };
 }
@@ -133,12 +112,10 @@ function generateFieldType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const isArray = fieldConfig.array === true;
   const isNullable = fieldConfig.required !== true;
 
-  // Types that use ColumnType internally (Timestamp, ObjectColumnType) cannot be
-  // directly wrapped with [] for arrays, because Kysely only resolves ColumnType at
-  // the top-level table property. Use ArrayColumnType/ObjectArrayColumnType to keep
-  // the ColumnType at the top level with arrays inside.
-  const columnTypeBaseTypes = new Set(["Timestamp"]);
-  const isColumnTypeBase = columnTypeBaseTypes.has(baseTypeResult.type);
+  // A ColumnType-shaped alias and ObjectColumnType cannot be wrapped with [] for
+  // arrays, because Kysely only resolves ColumnType at the top-level table
+  // property. Use ArrayColumnType to keep the ColumnType at the top level.
+  const isColumnTypeBase = COLUMN_TYPE_ALIASES.has(baseTypeResult.type);
 
   let finalType = baseTypeResult.type;
   if (isArray) {

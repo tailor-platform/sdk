@@ -40,36 +40,56 @@ The `deploy` command emits the following span tree:
 
 ```
 deploy
+├── config.preflight
 ├── build
 │   ├── build.loadConfig
 │   ├── build.generateUserTypes
 │   └── build.loadApplication
+├── plan.metadataLookup
+├── plan.validateTailorDBTypeNames
+├── plan.detectSdkVersionChange
 ├── plan
 │   ├── plan.functionRegistry
 │   ├── plan.tailorDB
 │   ├── plan.staticWebsite
+│   ├── plan.aiGateway
 │   ├── plan.idp
 │   ├── plan.auth
 │   ├── plan.pipeline
 │   ├── plan.application
 │   ├── plan.executor
-│   └── plan.workflow
+│   ├── plan.workflow
+│   ├── plan.workflowExecutionPolicy
+│   └── plan.secretManager
 ├── confirm
+├── apply.preflight
 ├── apply.createUpdateServices
+│   ├── apply.secretManager.createUpdate
 │   ├── apply.functionRegistry.createUpdate
 │   ├── apply.staticWebsite.createUpdate
+│   ├── apply.aiGateway.createUpdate
 │   ├── apply.idp.createUpdate
-│   ├── apply.auth.createUpdate
+│   ├── apply.auth.createUpdatePrerequisites
 │   ├── apply.tailorDB.createUpdate
+│   │   ├── apply.tailorDB.migration.prePhase
+│   │   ├── apply.tailorDB.migration.script
+│   │   └── apply.tailorDB.migration.postPhase
+│   ├── apply.auth.createUpdateDependents
 │   └── apply.pipeline.createUpdate
 ├── apply.deleteSubgraphResources
 ├── apply.createUpdateApplication
 ├── apply.createUpdateDependentServices
+│   ├── apply.executor.createUpdate
+│   ├── apply.workflowExecutionPolicy.createUpdate
+│   └── apply.workflow.createUpdate
 ├── apply.deleteDependentServices
 ├── apply.deleteApplication
 ├── apply.deleteSubgraphServices
 └── apply.cleanup
 ```
+
+The pre/post migration spans repeat once per pending migration; the script span
+appears only for migrations that carry a `migrate.ts`.
 
 Individual RPC calls are also traced as `rpc.*` child spans (e.g., `rpc.CreateApplication`) via the Connect-RPC interceptor.
 
@@ -110,6 +130,30 @@ curl -s "http://localhost:16686/api/traces?service=tailor&limit=2" | jq '
   }]
 '
 ```
+
+### Measuring the schema/executor window
+
+A deploy applies TailorDB schema changes before it updates executors, so an
+executor registered by the previous deploy can fire against a table whose shape
+has already changed. The window opens when `apply.tailorDB.createUpdate` starts
+mutating schema and closes when `apply.executor.createUpdate` ends:
+
+```bash
+curl -s "http://localhost:16686/api/traces?service=tailor&limit=1" | jq '
+  [.data[0].spans[]
+   | select(.operationName
+            | test("^apply\\.(tailorDB\\.createUpdate|executor\\.createUpdate)$"))]
+  | if length == 0 then "no schema/executor spans in this trace"
+    else {
+      window_ms: (((map(.startTime + .duration) | max) - (map(.startTime) | min)) / 1000),
+      spans: (sort_by(.startTime) | map({operationName, duration_ms: (.duration / 1000 | round)}))
+    } end
+'
+```
+
+Migration scripts run user code against live data, so
+`apply.tailorDB.migration.script` usually dominates the window and is unbounded
+in principle — a large backfill widens it arbitrarily.
 
 ## Architecture
 

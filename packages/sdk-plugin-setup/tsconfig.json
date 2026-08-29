@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "types": ["node"],
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "tsdown.config.ts",
+    "vitest.config.ts",
+    "scripts/**/*.d.mts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

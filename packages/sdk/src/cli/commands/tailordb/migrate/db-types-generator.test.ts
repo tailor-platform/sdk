@@ -133,7 +133,7 @@ describe("db-types-generator", () => {
           price: { type: "float", required: true },
           discount: { type: "number", required: false },
         },
-        expectedContains: ["quantity: number;", "price: number;", "discount: number | null;"],
+        expectedContains: ["quantity: number;", "price: number;", "discount: string | null;"],
       },
       {
         testName: "generates types with boolean fields",
@@ -154,7 +154,7 @@ describe("db-types-generator", () => {
         expectedContains: ["externalId: string;", "referenceId: string | null;"],
       },
       {
-        testName: "generates types with date strings and datetime Timestamps",
+        testName: "generates Timestamps for date and datetime alike",
         tableName: "Event",
         fields: {
           eventDate: { type: "date", required: true },
@@ -163,10 +163,24 @@ describe("db-types-generator", () => {
         },
         expectedContains: [
           "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
-          "eventDate: string;",
+          "eventDate: Timestamp;",
           "startTime: Timestamp;",
           "endTime: Timestamp | null;",
         ],
+      },
+      {
+        testName: "generates string types for nested fields",
+        tableName: "Profile",
+        fields: {
+          details: {
+            type: "nested",
+            required: true,
+            fields: {
+              displayName: { type: "string", required: true },
+            },
+          },
+        },
+        expectedContains: ["details: string;"],
       },
     ])("$testName", async ({ tableName, fields, expectedContains }) => {
       const snapshot = createMockSnapshot({ [tableName]: { fields } });
@@ -195,9 +209,180 @@ describe("db-types-generator", () => {
       expect(content).toContain("tags: string[];");
       expect(content).toContain("scores: number[] | null;");
     });
+
+    test("keeps the ColumnType outermost for timestamp arrays", async () => {
+      const snapshot = createMockSnapshot({
+        Document: {
+          fields: {
+            holidays: { type: "date", required: true, array: true },
+            reminders: { type: "datetime", required: false, array: true },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot);
+
+      expect(content).toContain("holidays: ArrayColumnType<Timestamp>;");
+      expect(content).toContain("reminders: ArrayColumnType<Timestamp> | null;");
+      expect(content).toContain("type ArrayColumnType");
+      expect(content).not.toContain("Timestamp[]");
+    });
+
+    test("omits the Timestamp alias when only cleared timestamp fields need dates", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            eventDate: { type: "date", required: false },
+            holidays: { type: "date", required: false, array: true },
+            label: { type: "string", required: false },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "eventDate",
+          tempFieldName: "eventDateTmp",
+          before: { type: "date", required: false },
+          after: { type: "string", required: false },
+        },
+        {
+          tableName: "Event",
+          fieldName: "holidays",
+          tempFieldName: "holidaysTmp",
+          before: { type: "date", required: false, array: true },
+          after: { type: "string", required: false, array: true },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "eventDate: ColumnType<Date | null, Date | string | null, Date | string | null>;",
+      );
+      expect(content).toContain(
+        "holidays: ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>;",
+      );
+      expect(content).not.toContain("type Timestamp =");
+    });
+
+    test("omits the Timestamp alias for an enum value named Timestamp", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            kind: {
+              type: "enum",
+              required: true,
+              allowedValues: [{ value: "Timestamp" }, { value: "Other" }],
+            },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot);
+
+      expect(content).toContain('kind: "Timestamp" | "Other";');
+      expect(content).not.toContain("type Timestamp =");
+    });
+
+    test("omits the ArrayColumnType import for an enum value naming it", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            kind: {
+              type: "enum",
+              required: true,
+              allowedValues: [{ value: "ArrayColumnType<Timestamp>" }, { value: "Other" }],
+            },
+          },
+        },
+      });
+
+      const { content } = await generateContent(snapshot);
+
+      expect(content).toContain('kind: "ArrayColumnType<Timestamp>" | "Other";');
+      expect(content).not.toContain("type ArrayColumnType");
+    });
   });
 
   describe("writeDbTypesFile with enum fields", () => {
+    test("generates a clearable enum field for expand-contract", async () => {
+      const snapshot = createMockSnapshot({
+        Event: {
+          fields: {
+            kind: {
+              type: "enum",
+              required: true,
+              allowedValues: [{ value: "MEETING" }, { value: "REMINDER" }],
+            },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "kind",
+          tempFieldName: "kindTmp",
+          before: {
+            type: "enum",
+            required: true,
+            allowedValues: [{ value: "MEETING" }, { value: "REMINDER" }],
+          },
+          after: { type: "integer", required: true },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain("kind: ColumnType<string | null, string | null, string | null>;");
+    });
+
+    test("expands the Timestamp alias into the slots of a clearable datetime field", async () => {
+      const snapshot = createMockSnapshot({
+        Event: { fields: { startsAt: { type: "datetime", required: true } } },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "startsAt",
+          tempFieldName: "startsAtTmp",
+          before: { type: "datetime", required: true },
+          after: { type: "string", required: true },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "startsAt: ColumnType<Date | null, Date | string | null, Date | string | null>;",
+      );
+    });
+
+    test("expands the Timestamp alias into the slots of a clearable datetime array field", async () => {
+      const snapshot = createMockSnapshot({
+        Event: { fields: { startsAt: { type: "datetime", required: true, array: true } } },
+      });
+      createMigrationDir(testDir, 1);
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, undefined, [
+        {
+          tableName: "Event",
+          fieldName: "startsAt",
+          tempFieldName: "startsAtTmp",
+          before: { type: "datetime", required: true, array: true },
+          after: { type: "string", required: true, array: true },
+        },
+      ]);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "startsAt: ColumnType<Date[] | null, (Date | string)[] | null, (Date | string)[] | null>;",
+      );
+    });
+
     test("generates types with enum fields and allowed values", async () => {
       const snapshot = createMockSnapshot({
         User: {
@@ -348,6 +533,7 @@ describe("db-types-generator", () => {
         User: {
           fields: {
             birthDate: { type: "date", required: true },
+            holidays: { type: "date", required: true, array: true },
           },
         },
       });
@@ -362,6 +548,13 @@ describe("db-types-generator", () => {
             before: { type: "date", required: false },
             after: { type: "date", required: true },
           },
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "holidays",
+            before: { type: "date", required: false, array: true },
+            after: { type: "date", required: true, array: true },
+          },
         ],
         hasBreakingChanges: true,
         requiresMigrationScript: true,
@@ -370,7 +563,12 @@ describe("db-types-generator", () => {
       const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
       const content = fs.readFileSync(filePath, "utf-8");
 
-      expect(content).toContain("birthDate: ColumnType<string | null, string, string>;");
+      expect(content).toContain(
+        "birthDate: ColumnType<Date | null, Date | string, Date | string>;",
+      );
+      expect(content).toContain(
+        "holidays: ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>;",
+      );
     });
 
     test("generates ColumnType for added required fields", async () => {
