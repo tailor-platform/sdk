@@ -114,29 +114,36 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
   `;
 }
 
+// Shared by the listing and truncation scripts; follows the response page
+// token so every page is returned.
+const listIdpUsersFunction = ml /* ts */ `
+  async function listUsers(client) {
+    let after = undefined;
+    const users = [];
+    do {
+      const response = await client.users(after ? { after } : undefined);
+      for (const user of response.users || []) {
+        users.push({ id: user.id, name: user.name });
+      }
+      after = response.nextPageToken;
+    } while (after);
+    console.log(\`Found \${users.length} IDP users to delete\`);
+    return users;
+  }
+`;
+
 /**
  * Generates the server-side script that lists every IdP user for truncation.
- * Follows the response page token so all pages are returned in one result.
  * @param idpNamespace - The IDP namespace name
  * @returns Script code string
  */
 export function generateIdpListUsersScriptCode(idpNamespace: string): string {
   return ml /* ts */ `
+    ${listIdpUsersFunction}
+
     export async function main() {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
-
-      let after = undefined;
-      const users = [];
-      do {
-        const response = await client.users(after ? { after } : undefined);
-        for (const user of response.users || []) {
-          users.push({ id: user.id, name: user.name });
-        }
-        after = response.nextPageToken;
-      } while (after);
-
-      console.log(\`Found \${users.length} IDP users to delete\`);
-
+      const users = await listUsers(client);
       return { success: true, users };
     }
   `;
@@ -145,29 +152,34 @@ export function generateIdpListUsersScriptCode(idpNamespace: string): string {
 /**
  * Generates the server-side IDP truncation script code for testExecScript execution.
  * Deletes the users passed in `input.users` (one chunk of the listing produced by
- * {@link generateIdpListUsersScriptCode}); a user that is already gone counts as deleted.
+ * {@link generateIdpListUsersScriptCode}), or every user when no chunk is passed so
+ * older seed plugins that call it without input keep working. A user that is already
+ * gone counts as deleted.
  * @param idpNamespace - The IDP namespace name
  * @returns Script code string
  */
 export function generateIdpTruncateScriptCode(idpNamespace: string): string {
   return ml /* ts */ `
+    ${listIdpUsersFunction}
+
     export async function main(input) {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
       const errors = [];
       let deleted = 0;
       let notFound = 0;
-      const offset = typeof input.offset === "number" ? input.offset : 0;
-      const total = typeof input.total === "number" ? input.total : input.users.length;
+      const users = Array.isArray(input?.users) ? input.users : await listUsers(client);
+      const offset = typeof input?.offset === "number" ? input.offset : 0;
+      const total = typeof input?.total === "number" ? input.total : users.length;
 
-      for (let i = 0; i < input.users.length; i++) {
-        const user = input.users[i];
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
         try {
           await client.deleteUser(user.id);
           deleted++;
           console.log(\`[_User] Deleted \${offset + i + 1}/\${total}: \${user.name}\`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          if (/not found/i.test(message)) {
+          if (/user not found/i.test(message)) {
             notFound++;
             console.log(\`[_User] Already deleted \${offset + i + 1}/\${total}: \${user.name}\`);
             continue;
@@ -181,7 +193,7 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
         success: errors.length === 0,
         deleted,
         notFound,
-        total: input.users.length,
+        total: users.length,
         errors,
       };
     }

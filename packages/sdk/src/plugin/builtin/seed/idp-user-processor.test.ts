@@ -12,7 +12,7 @@ type IdpUserRef = { id: string; name: string };
 
 type ListUsersResult = { success: boolean; users: IdpUserRef[] };
 
-type TruncateInput = { users: IdpUserRef[]; offset?: number; total?: number };
+type TruncateInput = { users?: IdpUserRef[]; offset?: number; total?: number };
 
 type TruncateResult = {
   success: boolean;
@@ -351,6 +351,48 @@ describe("generateIdpSeedScriptCode", () => {
   });
 });
 
+/**
+ * Install a fake `tailor.idp.Client` whose `users()` returns two pages (ids 1-2,
+ * then 3-4) and whose `deleteUser()` records the ids it receives.
+ * @returns The recorded `users()` requests and deleted ids
+ */
+function installPagedClient(): {
+  requests: Array<{ after?: string } | undefined>;
+  deleted: string[];
+} {
+  const requests: Array<{ after?: string } | undefined> = [];
+  const deleted: string[] = [];
+  const firstPage: IdpUserPage = {
+    users: [
+      { id: "1", name: "u1" },
+      { id: "2", name: "u2" },
+    ],
+    nextPageToken: "page2",
+  };
+  const secondPage: IdpUserPage = {
+    users: [
+      { id: "3", name: "u3" },
+      { id: "4", name: "u4" },
+    ],
+    nextPageToken: null,
+  };
+  (globalThis as { tailor?: unknown }).tailor = {
+    idp: {
+      Client: class {
+        async users(options?: { after?: string }): Promise<IdpUserPage> {
+          requests.push(options);
+          return options?.after === "page2" ? secondPage : firstPage;
+        }
+        async deleteUser(id: string): Promise<boolean> {
+          deleted.push(id);
+          return true;
+        }
+      },
+    },
+  };
+  return { requests, deleted };
+}
+
 describe("generateIdpListUsersScriptCode", () => {
   aroundEach(async (runTest) => {
     await runTest();
@@ -358,32 +400,7 @@ describe("generateIdpListUsersScriptCode", () => {
   });
 
   test("lists every user across all pages, following the response page token", async () => {
-    const requests: Array<{ after?: string } | undefined> = [];
-    const firstPage: IdpUserPage = {
-      users: [
-        { id: "1", name: "u1" },
-        { id: "2", name: "u2" },
-      ],
-      nextPageToken: "page2",
-    };
-    const secondPage: IdpUserPage = {
-      users: [
-        { id: "3", name: "u3" },
-        { id: "4", name: "u4" },
-      ],
-      nextPageToken: null,
-    };
-
-    (globalThis as { tailor?: unknown }).tailor = {
-      idp: {
-        Client: class {
-          async users(options?: { after?: string }): Promise<IdpUserPage> {
-            requests.push(options);
-            return options?.after === "page2" ? secondPage : firstPage;
-          }
-        },
-      },
-    };
+    const { requests } = installPagedClient();
 
     const main = await loadGeneratedMain<undefined, ListUsersResult>(
       generateIdpListUsersScriptCode("test-ns"),
@@ -452,6 +469,20 @@ describe("generateIdpTruncateScriptCode", () => {
     expect(result).toEqual({ success: true, deleted: 2, notFound: 0, total: 2, errors: [] });
   });
 
+  test("lists and deletes every user itself when called without a chunk", async () => {
+    const { requests, deleted } = installPagedClient();
+
+    const main = await loadGeneratedMain<Record<string, never>, TruncateResult>(
+      generateIdpTruncateScriptCode("test-ns"),
+    );
+    // Seed plugins released before the listing script send an empty input.
+    const result = await main({});
+
+    expect(requests).toEqual([undefined, { after: "page2" }]);
+    expect(deleted).toEqual(["1", "2", "3", "4"]);
+    expect(result).toEqual({ success: true, deleted: 4, notFound: 0, total: 4, errors: [] });
+  });
+
   test("treats a listed user that is gone by delete time as already deleted", async () => {
     installDeleteClient(async (id) => {
       if (id === "ghost") {
@@ -480,6 +511,12 @@ describe("generateIdpTruncateScriptCode", () => {
       if (id === "2") {
         throw new Error("deleteUser failed: permission denied");
       }
+      if (id === "3") {
+        // Same gRPC code text as a missing user, but the user was not deleted.
+        throw new Error(
+          "deleteUser failed: code: 'Some requested entity was not found', message: \"namespace not found: test-ns\"",
+        );
+      }
       return true;
     });
 
@@ -494,7 +531,10 @@ describe("generateIdpTruncateScriptCode", () => {
       ],
     });
 
-    expect(result).toMatchObject({ success: false, deleted: 2, notFound: 0, total: 3 });
-    expect(result.errors).toEqual(["User 2 (u2): deleteUser failed: permission denied"]);
+    expect(result).toMatchObject({ success: false, deleted: 1, notFound: 0, total: 3 });
+    expect(result.errors).toEqual([
+      "User 2 (u2): deleteUser failed: permission denied",
+      "User 3 (u3): deleteUser failed: code: 'Some requested entity was not found', message: \"namespace not found: test-ns\"",
+    ]);
   });
 });

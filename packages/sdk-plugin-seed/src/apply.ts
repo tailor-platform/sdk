@@ -377,6 +377,14 @@ async function truncateIdpUser(
 ): Promise<boolean> {
   logger.info("Truncating _User via tailor.idp.Client...", { mode: "plain" });
 
+  // Only an older @tailor-platform/sdk omits the listing script.
+  if (!scripts.listScriptCode) {
+    throw new Error(
+      "The installed @tailor-platform/sdk does not provide the IdP user listing script. " +
+        "Update it to the version @tailor-platform/sdk-plugin-seed requires.",
+    );
+  }
+
   const listed = await runIdpScript({
     execution,
     scriptCode: scripts.listScriptCode,

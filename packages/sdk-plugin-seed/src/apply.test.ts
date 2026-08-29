@@ -680,6 +680,31 @@ describe("seedApplyCommand", () => {
     expect(scriptNames).toEqual(["list-idp-user.ts"]);
   });
 
+  test("rejects an @tailor-platform/sdk that lacks the IdP user listing script", async () => {
+    sdk.loadSeedContext.mockResolvedValueOnce({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: {
+        seedScriptCode: "seed-user-code",
+        truncateScriptCode: "truncate-user-code",
+      },
+      machineUserName: undefined,
+      namespaces: [],
+    });
+
+    const result = await runApplyCommand([
+      "--machine-user",
+      "manager",
+      "--truncate",
+      "--yes",
+      "_User",
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(String(result.error)).toContain("does not provide the IdP user listing script");
+    expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
   test("fails truncation and skips seeding when a delete chunk reports errors", async () => {
     const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
     let truncateCallCount = 0;
@@ -695,8 +720,8 @@ describe("seedApplyCommand", () => {
           result: failing
             ? JSON.stringify({
                 success: false,
-                deleted: 24,
-                notFound: 0,
+                deleted: 22,
+                notFound: 2,
                 total: 25,
                 errors: ["User id-3 (user-3): permission denied"],
               })
@@ -728,6 +753,8 @@ describe("seedApplyCommand", () => {
     const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
     expect(loggedLines.some((line) => line.includes("✓ _User"))).toBe(false);
     const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
-    expect(warnedLines.some((line) => line.includes("29 users deleted, 1 failed"))).toBe(true);
+    expect(
+      warnedLines.some((line) => line.includes("27 users deleted, 2 already deleted, 1 failed")),
+    ).toBe(true);
   });
 });
