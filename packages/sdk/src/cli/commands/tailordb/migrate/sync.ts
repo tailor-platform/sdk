@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
+import { fenceClient } from "#/cli/commands/deploy/deploy-lock-fence";
 import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
@@ -256,15 +257,16 @@ async function sync(options: SyncOptions): Promise<void> {
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
-  const client = await initOperatorClient(accessToken);
+  const operator = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
 
   await withDeployLock(
-    { client, workspaceId, applications: [{ name: config.name, id: config.id }] },
+    { client: operator, workspaceId, applications: [{ name: config.name, id: config.id }] },
     async (lock) => {
+      const client = fenceClient(operator, lock);
       const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
       const current = await fetchRemoteMigrationNumber(client, trn);
       const remoteTypes = await fetchRemoteTypes(client, workspaceId, target.namespace);

@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
+import { fenceClient } from "#/cli/commands/deploy/deploy-lock-fence";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
@@ -182,15 +183,16 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   const initialLocalFileState = captureFileState(localSourceFiles());
 
   const accessToken = await loadAccessToken({ profile: options.profile });
-  const client = await initOperatorClient(accessToken);
+  const operator = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
 
   await withDeployLock(
-    { client, workspaceId, applications: [{ name: config.name, id: config.id }] },
+    { client: operator, workspaceId, applications: [{ name: config.name, id: config.id }] },
     async (lock) => {
+      const client = fenceClient(operator, lock);
       const remoteContextArgs = [
         "--config",
         config.path,

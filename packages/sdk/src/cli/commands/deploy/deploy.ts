@@ -30,6 +30,7 @@ import {
 } from "./confirm";
 import { fetchMissingDependentApps } from "./dependency-records";
 import { type DeployLock, withDeployLock } from "./deploy-lock";
+import { fenceClient } from "./deploy-lock-fence";
 import {
   buildDeploymentTargets,
   loadDeployConfig,
@@ -762,7 +763,9 @@ async function deployInternal(
         return undefined;
       }
 
-      await applyDeploymentPlans(client, workspaceId, deployments, () => lock.assertHeld());
+      await applyDeploymentPlans(fenceClient(client, lock), workspaceId, deployments, () =>
+        lock.assertHeld(),
+      );
 
       if (!internalContext?.suppressResultOutput) {
         if (logger.jsonMode) {

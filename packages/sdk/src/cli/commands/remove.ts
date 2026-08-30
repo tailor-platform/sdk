@@ -4,6 +4,7 @@ import { applyApplication, planApplication } from "#/cli/commands/deploy/applica
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
 import { warnMissingAppId } from "#/cli/commands/deploy/config-id-injector";
 import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
+import { fenceClient } from "#/cli/commands/deploy/deploy-lock-fence";
 import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
@@ -194,7 +195,9 @@ async function execRemove(
 export async function remove(options?: RemoveOptions): Promise<void> {
   const { client, workspaceId, application, config } = await loadOptions(options);
   await withDeployLock({ client, workspaceId, applications: [application] }, (lock) =>
-    execRemove(client, workspaceId, application, config, undefined, () => lock.assertHeld()),
+    execRemove(fenceClient(client, lock), workspaceId, application, config, undefined, () =>
+      lock.assertHeld(),
+    ),
   );
 }
 
@@ -220,7 +223,7 @@ export const removeCommand = defineAppCommand({
       { client, workspaceId, applications: [application] },
       (lock) =>
         execRemove(
-          client,
+          fenceClient(client, lock),
           workspaceId,
           application,
           config,
