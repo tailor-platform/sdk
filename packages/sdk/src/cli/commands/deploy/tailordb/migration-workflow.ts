@@ -172,7 +172,7 @@ async function teardown(
 }
 
 interface AdoptedExecution {
-  workflowId: string;
+  workflowId: string | undefined;
   result: LongRunningMigrationResult;
 }
 
@@ -182,9 +182,12 @@ interface AdoptedExecution {
  * schema its script is running against.
  */
 export class MigrationExecutionInFlightError extends Error {
-  constructor(message: string) {
+  readonly namespace: string;
+
+  constructor(namespace: string, message: string) {
     super(message);
     this.name = "MigrationExecutionInFlightError";
+    this.namespace = namespace;
   }
 }
 
@@ -199,6 +202,7 @@ export class MigrationExecutionInFlightError extends Error {
  * not stop the script and recreating it would run the script twice.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace the migration belongs to
  * @param name - Shared resource name
  * @param code - Bundled script this run would execute
  * @param pollInterval - Poll interval in milliseconds
@@ -207,21 +211,25 @@ export class MigrationExecutionInFlightError extends Error {
 async function reclaimLeftovers(
   client: OperatorClient,
   workspaceId: string,
+  namespace: string,
   name: string,
   code: string,
   pollInterval: number,
 ): Promise<AdoptedExecution | undefined> {
-  const workflowId = await findMigrationWorkflowId(client, workspaceId, name);
-  const [execution, ...others] = workflowId
-    ? await findUnfinishedExecutions(client, workspaceId, name)
-    : [];
-  if (!workflowId || !execution) {
+  // Executions outlive their workflow resource: a run whose start response was
+  // lost tears the workflow down while the execution keeps running.
+  const [workflowId, [execution, ...others]] = await Promise.all([
+    findMigrationWorkflowId(client, workspaceId, name),
+    findUnfinishedExecutions(client, workspaceId, name),
+  ]);
+  if (!execution) {
     await teardown(client, workspaceId, name, workflowId);
     return undefined;
   }
 
   if (others.length > 0) {
     throw new MigrationExecutionInFlightError(
+      namespace,
       `Migration workflow '${name}' has ${others.length + 1} unfinished executions from earlier runs, so this run cannot tell which one to wait for. ` +
         "Wait for them to finish, then retry the deployment.",
     );
@@ -231,6 +239,7 @@ async function reclaimLeftovers(
     execution.status === WorkflowExecution_Status.PENDING_RESUME
   ) {
     throw new MigrationExecutionInFlightError(
+      namespace,
       `Migration workflow '${name}' has an execution from an earlier run that is waiting to be resumed and cannot complete on its own. ` +
         "Resolve or delete that execution, then retry the deployment.",
     );
@@ -239,6 +248,7 @@ async function reclaimLeftovers(
   const leftover = await getOrNull(() => client.getFunctionRegistry({ workspaceId, name }));
   if (leftover?.function?.contentHash !== computeContentHash(code)) {
     throw new MigrationExecutionInFlightError(
+      namespace,
       `Migration workflow '${name}' is still running from an earlier run, but its script could not be confirmed to match the current migrate.ts. ` +
         "Wait for it to finish, then retry the deployment.",
     );
@@ -312,7 +322,7 @@ export async function executeMigrationAsWorkflow(
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  const adopted = await reclaimLeftovers(client, workspaceId, name, code, pollInterval);
+  const adopted = await reclaimLeftovers(client, workspaceId, namespace, name, code, pollInterval);
   let workflowId = adopted?.workflowId;
   try {
     if (adopted) return adopted.result;

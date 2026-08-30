@@ -640,12 +640,14 @@ export async function applyTailorDB(
       }
 
       if (migrationFailure?.error instanceof MigrationExecutionInFlightError) {
-        // The earlier run's script is still writing to these tables; the retry
-        // that adopts or reruns it restores them.
+        // The earlier run's script is still writing to this namespace; the retry
+        // that adopts or reruns it restores it. Other namespaces are restored now.
+        const running = migrationFailure.error.namespace;
         logger.warn(
-          "Leaving TailorDB tables restricted until the running migration finishes and the deployment is retried.",
+          `Leaving TailorDB tables in namespace '${running}' restricted until the running migration finishes and the deployment is retried.`,
         );
-        throw migrationFailure.error;
+        restorationSnapshots.delete(running);
+        restorationSettings.delete(running);
       }
 
       try {

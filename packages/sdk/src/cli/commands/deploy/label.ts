@@ -1,6 +1,7 @@
 import { getOrNull } from "#/cli/shared/client";
 import { toError } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
+import { DeployLockLostError } from "./deploy-lock-error";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   BulkSetMetadataRequestSchema,
@@ -571,6 +572,8 @@ export async function withMetadataWriteBatch<TClient extends MetadataLabelBulkCl
   try {
     result = await apply(batchClient);
   } catch (applyError) {
+    // Another deploy owns the resources now; its labels must not be overwritten.
+    if (applyError instanceof DeployLockLostError) throw applyError;
     try {
       await batch.flush();
     } catch (flushError) {

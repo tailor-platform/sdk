@@ -170,8 +170,9 @@ describe("executeMigrationAsWorkflow", () => {
 
     expect(result.success).toBe(true);
     expect(calls).toEqual([
-      // No leftovers, so the reclaim sweep only probes for a stale workflow.
+      // No leftovers, so the reclaim sweep only probes for stale resources.
       "getWorkflowByName",
+      "listWorkflowExecutions",
       "deleteWorkflowJobFunction",
       "deleteFunctionRegistry",
       "createFunctionRegistry",
@@ -334,6 +335,22 @@ describe("executeMigrationAsWorkflow", () => {
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining("still running from an earlier deployment"),
     );
+  });
+
+  test("adopts a still-running execution even after its workflow resource is gone", async () => {
+    const { client, raw, calls } = createMockClient({
+      leftoverExecutions: [{ id: "exec-orphan", status: WorkflowExecution_Status.RUNNING }],
+      statuses: [WorkflowExecution_Status.SUCCESS],
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    expect(raw.getWorkflowExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ executionId: "exec-orphan" }),
+    );
+    expect(calls).not.toContain("startWorkflow");
+    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
   });
 
   test("reports the adopted execution's failure as this run's outcome", async () => {

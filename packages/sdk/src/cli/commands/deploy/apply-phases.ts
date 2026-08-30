@@ -135,6 +135,8 @@ export async function applyDeploymentPlans(
         applyWorkflow(applyClient, d.workflow, "create-update"),
       );
     });
+    // The batch flushes its labels right after this callback returns.
+    assertLockHeld();
   });
 
   await phase("apply.deleteDependentServices", async () => {

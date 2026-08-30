@@ -507,7 +507,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
-      new MigrationExecutionInFlightError("still running from an earlier run"),
+      new MigrationExecutionInFlightError("testdb", "still running from an earlier run"),
     );
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
@@ -521,7 +521,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(deletedTableNames(client)).not.toContain("StockReservation");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("Leaving TailorDB tables restricted"),
+      expect.stringContaining("Leaving TailorDB tables in namespace 'testdb' restricted"),
     );
     warn.mockRestore();
   });

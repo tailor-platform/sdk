@@ -292,19 +292,24 @@ describe("withDeployLock", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  test("treats a lease that could not be refreshed as lost", async () => {
-    const { client, raw } = createRegistry();
+  test("still releases a lock whose heartbeats failed for longer than a lease", async () => {
+    // Failed refreshes are not a takeover: skipping the release here would
+    // leave the entry behind for the next deploy to wait a whole lease on.
+    const { client, raw, entries } = createRegistry();
 
     await lock(client, async (held) => {
       raw.getFunctionRegistry.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
-      await vi.advanceTimersByTimeAsync(timing.leaseMs - timing.heartbeatIntervalMs);
+      await vi.advanceTimersByTimeAsync(timing.leaseMs * 2);
       expect(() => held.assertHeld()).not.toThrow();
-      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs * 2);
-      expect(() => held.assertHeld()).toThrow("took over the deploy lock");
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('The deploy lock of "my-app" could not be refreshed'),
-      );
+      raw.getFunctionRegistry.mockImplementation(async ({ name }: { name: string }) => {
+        const entry = entries.get(name);
+        if (!entry) throw new ConnectError("not found", Code.NotFound);
+        return { function: { name, description: entry.description } };
+      });
     });
+
+    expect(entries.has(lockName)).toBe(false);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   test("refreshes a lock already held while waiting for another application's lock", async () => {
