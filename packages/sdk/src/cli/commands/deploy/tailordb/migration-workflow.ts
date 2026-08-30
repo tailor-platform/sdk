@@ -17,6 +17,7 @@
 
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
+import { classifyWorkflowExecutionStatus } from "#/cli/commands/workflow/status";
 import { fetchAllTolerant, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { computeContentHash } from "../function-registry";
@@ -28,15 +29,6 @@ import type { CreateFunctionRegistryRequestSchema } from "@tailor-platform/tailo
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 const CHUNK_SIZE = 64 * 1024;
-
-/** Execution statuses that still have an outcome ahead of them. */
-const UNFINISHED_STATUSES = new Set([
-  WorkflowExecution_Status.PENDING,
-  WorkflowExecution_Status.PENDING_RESUME,
-  WorkflowExecution_Status.PENDING_RETRY,
-  WorkflowExecution_Status.RUNNING,
-  WorkflowExecution_Status.WAITING,
-]);
 
 /** Poll interval while waiting for the migration workflow to finish. */
 const POLL_INTERVAL_MS = 3000;
@@ -234,10 +226,7 @@ async function reclaimLeftovers(
         "Wait for them to finish, then retry the deployment.",
     );
   }
-  if (
-    execution.status === WorkflowExecution_Status.WAITING ||
-    execution.status === WorkflowExecution_Status.PENDING_RESUME
-  ) {
+  if (classifyWorkflowExecutionStatus(execution).statusClass === "suspended") {
     throw new MigrationExecutionInFlightError(
       namespace,
       `Migration workflow '${name}' has an execution from an earlier run that is waiting to be resumed and cannot complete on its own. ` +
@@ -284,7 +273,10 @@ async function findUnfinishedExecutions(
     });
     return [response.executions, response.nextPageToken];
   });
-  return executions.filter((execution) => UNFINISHED_STATUSES.has(execution.status));
+  return executions.filter((execution) => {
+    const { statusClass } = classifyWorkflowExecutionStatus(execution);
+    return statusClass !== "success" && statusClass !== "failure";
+  });
 }
 
 /**

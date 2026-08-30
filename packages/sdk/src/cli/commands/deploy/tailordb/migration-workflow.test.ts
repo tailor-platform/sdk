@@ -1,6 +1,9 @@
 import * as crypto from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import {
+  WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
@@ -47,7 +50,11 @@ interface MockClientOptions {
   /** Workflow left behind by an earlier interrupted run of the same migration. */
   leftoverWorkflowId?: string;
   /** Executions of the leftover workflow, as the platform lists them. */
-  leftoverExecutions?: { id: string; status: WorkflowExecution_Status }[];
+  leftoverExecutions?: {
+    id: string;
+    status: WorkflowExecution_Status;
+    jobExecutions?: { status: WorkflowJobExecution_Status }[];
+  }[];
   /** Content hash of the leftover function; defaults to the hash of the bundled code. */
   leftoverContentHash?: string;
   /** The leftover function is already gone. */
@@ -88,7 +95,7 @@ function createMockClient(options: MockClientOptions = {}) {
       }
       const all = (options.leftoverExecutions ?? []).map((execution) => ({
         ...execution,
-        jobExecutions: [],
+        jobExecutions: execution.jobExecutions ?? [],
       }));
       if (!options.paginateLeftoverExecutions) {
         return Promise.resolve({ executions: all, nextPageToken: "" });
@@ -442,6 +449,39 @@ describe("executeMigrationAsWorkflow", () => {
 
     await expect(run(client)).rejects.toThrow("waiting to be resumed");
     expect(calls).not.toContain("deleteWorkflow");
+  });
+
+  test("refuses when only a job of the leftover execution is waiting", async () => {
+    const { client, calls } = createMockClient({
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [
+        {
+          id: "exec-a",
+          status: WorkflowExecution_Status.RUNNING,
+          jobExecutions: [{ status: WorkflowJobExecution_Status.WAITING }],
+        },
+      ],
+    });
+
+    await expect(run(client)).rejects.toThrow("waiting to be resumed");
+    expect(calls).not.toContain("deleteWorkflow");
+  });
+
+  test("waits on a leftover execution in a status it does not recognise", async () => {
+    // An unknown status is not proof the script finished; deleting the
+    // workflow and starting the script again would risk running it twice.
+    const { client, raw } = createMockClient({
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [{ id: "exec-a", status: WorkflowExecution_Status.UNSPECIFIED }],
+      statuses: [WorkflowExecution_Status.SUCCESS],
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    expect(raw.getWorkflowExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ executionId: "exec-a" }),
+    );
   });
 
   test("labels every temporary resource immediately rather than via the deploy batch", async () => {

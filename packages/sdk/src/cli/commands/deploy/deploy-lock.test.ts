@@ -87,7 +87,7 @@ function holderDescription(overrides: Partial<{ token: string; heartbeat: number
   });
 }
 
-const app = { name: "my-app", id: "app-1" };
+const app = { name: "my-app" };
 const lockName = deployLockResourceName(app);
 const timing = {
   pollIntervalMs: 1_000,
@@ -407,6 +407,23 @@ describe("withDeployLock", () => {
     );
   });
 
+  test("holds the name-based lock alongside the id-based one", async () => {
+    const withId = { name: "my-app", id: "app-1" };
+    const { client, entries } = createRegistry();
+
+    await withDeployLock(
+      { client, workspaceId: "ws-1", applications: [withId], timing },
+      async () => {
+        // A checkout whose config has no id yet locks by name only; it must
+        // still contend with this deploy.
+        expect(entries.has(deployLockResourceName({ name: "my-app" }))).toBe(true);
+        expect(entries.has(deployLockResourceName(withId))).toBe(true);
+      },
+    );
+
+    expect(entries.size).toBe(0);
+  });
+
   test("locks every application once, in resource-name order, and releases all of them", async () => {
     const { client, entries, calls } = createRegistry();
     const apps = [
@@ -414,7 +431,14 @@ describe("withDeployLock", () => {
       { name: "alpha", id: "id-a" },
       { name: "alpha-renamed", id: "id-a" },
     ];
-    const expectedNames = [...new Set(apps.map(deployLockResourceName))].toSorted();
+    const expectedNames = [
+      ...new Set(
+        apps.flatMap((entry) => [
+          deployLockResourceName({ name: entry.name }),
+          deployLockResourceName(entry),
+        ]),
+      ),
+    ].toSorted();
 
     await withDeployLock({ client, workspaceId: "ws-1", applications: apps, timing }, async () => {
       expect([...entries.keys()].toSorted()).toEqual(expectedNames);
@@ -431,7 +455,14 @@ describe("withDeployLock", () => {
       { name: "alpha", id: "id-a" },
       { name: "beta", id: "id-b" },
     ];
-    const [first, second] = [...new Set(apps.map(deployLockResourceName))].toSorted();
+    const [first, second] = [
+      ...new Set(
+        apps.flatMap((entry) => [
+          deployLockResourceName({ name: entry.name }),
+          deployLockResourceName(entry),
+        ]),
+      ),
+    ].toSorted();
     const { client, entries } = createRegistry({
       [second!]: { description: holderDescription() },
     });

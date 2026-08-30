@@ -93,6 +93,16 @@ function deployLockIdentity(application: DeployLockApplication): string {
 }
 
 /**
+ * The identities one application must hold: its id, and always its name, so
+ * a config that has not been given an id yet contends with one that has.
+ * @param application - Application being deployed
+ * @returns Lock identities to acquire
+ */
+function deployLockAliases(application: DeployLockApplication): DeployLockApplication[] {
+  return application.id ? [{ name: application.name }, application] : [application];
+}
+
+/**
  * Build the function registry name of an application's deploy lock.
  * @param application - Application being deployed
  * @returns Lock resource name
@@ -317,7 +327,7 @@ async function releaseLock(
 }
 
 /**
- * Run a deploy-time critical section while holding every application's lock.
+ * Run a deploy-time critical section while holding every application's locks.
  *
  * Locks are acquired in resource-name order under one shared deadline; when
  * any acquisition fails the ones already held are released again. A heartbeat
@@ -341,7 +351,9 @@ export async function withDeployLock<T>(
 
   const applications = [
     ...new Map(
-      options.applications.map((application) => [deployLockResourceName(application), application]),
+      options.applications
+        .flatMap(deployLockAliases)
+        .map((alias) => [deployLockResourceName(alias), alias] as const),
     ),
   ]
     .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
