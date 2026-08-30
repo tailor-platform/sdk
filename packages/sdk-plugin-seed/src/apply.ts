@@ -436,6 +436,7 @@ async function truncateIdpUser(
       throw error;
     }
     if (run.outcomeUnknown) {
+      warnInterruptedChunk();
       return false;
     }
     totals.deleted += readCount(run.parsed, "deleted");

@@ -652,6 +652,51 @@ describe("seedApplyCommand", () => {
     ).toBe(true);
   });
 
+  test("reports confirmed progress when an IdP truncate chunk has an unknown outcome", async () => {
+    const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
+    let truncateCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name === "truncate-idp-user.ts") {
+          truncateCallCount += 1;
+          if (truncateCallCount > 1) {
+            return Promise.resolve({
+              error: "execution failed",
+              logs: "",
+              result: "",
+              success: false,
+            });
+          }
+        }
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: idpScriptResult(name, users, arg?.users),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand([
+      "--machine-user",
+      "manager",
+      "--truncate",
+      "--yes",
+      "_User",
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(truncateCallCount).toBe(2);
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(
+      warnedLines.some(
+        (line) =>
+          line.includes("25/30 users confirmed deleted before the failure") &&
+          line.includes("re-run the same command to retry safely"),
+      ),
+    ).toBe(true);
+  });
+
   test("counts users that were already gone as deleted", async () => {
     const users = [
       { id: "1", name: "Ada" },
