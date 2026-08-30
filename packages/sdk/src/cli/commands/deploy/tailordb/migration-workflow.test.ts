@@ -82,6 +82,10 @@ function createMockClient(options: MockClientOptions = {}) {
     }),
     listWorkflowExecutions: vi.fn(({ pageToken }: { pageToken: string }) => {
       calls.push("listWorkflowExecutions");
+      // The platform rejects the listing when the workflow itself is missing.
+      if (options.leftoverWorkflowId === undefined) {
+        return Promise.reject(new ConnectError("workflow not found", Code.NotFound));
+      }
       const all = (options.leftoverExecutions ?? []).map((execution) => ({
         ...execution,
         jobExecutions: [],
@@ -335,22 +339,6 @@ describe("executeMigrationAsWorkflow", () => {
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining("still running from an earlier deployment"),
     );
-  });
-
-  test("adopts a still-running execution even after its workflow resource is gone", async () => {
-    const { client, raw, calls } = createMockClient({
-      leftoverExecutions: [{ id: "exec-orphan", status: WorkflowExecution_Status.RUNNING }],
-      statuses: [WorkflowExecution_Status.SUCCESS],
-    });
-
-    const result = await run(client);
-
-    expect(result.success).toBe(true);
-    expect(raw.getWorkflowExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ executionId: "exec-orphan" }),
-    );
-    expect(calls).not.toContain("startWorkflow");
-    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
   });
 
   test("reports the adopted execution's failure as this run's outcome", async () => {

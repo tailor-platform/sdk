@@ -17,7 +17,7 @@
 
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
-import { fetchAll, getOrNull, isNotFoundError } from "#/cli/shared/client";
+import { fetchAllTolerant, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { computeContentHash } from "../function-registry";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
@@ -263,6 +263,8 @@ async function reclaimLeftovers(
 
 /**
  * List the executions of this migration's workflow that have not finished.
+ * The platform reports a missing workflow as NotFound, which means no
+ * executions.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param name - Shared resource name
@@ -273,7 +275,7 @@ async function findUnfinishedExecutions(
   workspaceId: string,
   name: string,
 ): Promise<WorkflowExecution[]> {
-  const executions = await fetchAll(async (pageToken, pageSize) => {
+  const executions = await fetchAllTolerant(async (pageToken, pageSize) => {
     const response = await client.listWorkflowExecutions({
       workspaceId,
       workflowName: name,
