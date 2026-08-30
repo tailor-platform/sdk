@@ -195,11 +195,13 @@ async function acquireLock(
       if (!isAlreadyExistsError(error)) throw error;
     }
 
+    // The entry can be gone again by the time it is read (released, reclaimed,
+    // or not yet visible); that still counts as a poll, not a free retry.
     const current = await observeLock(client, workspaceId, name);
-    if (!current) continue;
-
     const now = Date.now();
-    if (observed?.key !== current.key) {
+    if (!current) {
+      observed = undefined;
+    } else if (observed?.key !== current.key) {
       observed = { key: current.key, since: now };
     } else if (now - observed.since >= timing.leaseMs) {
       logger.info(
@@ -210,7 +212,7 @@ async function acquireLock(
       continue;
     }
 
-    if (!announced) {
+    if (current && !announced) {
       logger.info(
         `Another deploy of "${application.name}" is in progress (${describeHolder(current.record)}); waiting for it to finish.`,
       );
@@ -218,7 +220,7 @@ async function acquireLock(
     }
     if (now >= deadline) {
       throw new Error(
-        `Timed out waiting for another deploy of "${application.name}" to finish (${describeHolder(current.record)}). ` +
+        `Timed out waiting for another deploy of "${application.name}" to finish (${describeHolder(current?.record)}). ` +
           "Retry once it completes; a deploy that stopped without releasing its lock is reclaimed automatically " +
           `after about ${Math.round(timing.leaseMs / 1000)} seconds.`,
       );
@@ -367,8 +369,11 @@ export async function withDeployLock<T>(
   const stop = async () => {
     clearInterval(timer);
     // A heartbeat still in flight would read the entry after release deleted
-    // it and misreport a takeover.
-    await heartbeatInFlight;
+    // it and misreport a takeover; a hung one must not hold the release up.
+    await Promise.race([
+      heartbeatInFlight,
+      new Promise((resolve) => setTimeout(resolve, timing.heartbeatIntervalMs).unref()),
+    ]);
     await releaseAll();
   };
 

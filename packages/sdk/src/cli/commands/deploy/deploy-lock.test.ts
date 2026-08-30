@@ -316,6 +316,26 @@ describe("withDeployLock", () => {
     await expect(pending).resolves.toBe("done");
   });
 
+  test("keeps polling and gives up when the entry is reported held but never readable", async () => {
+    const { client, raw } = createRegistry();
+    raw.createFunctionRegistry.mockRejectedValue(new ConnectError("exists", Code.AlreadyExists));
+    raw.getFunctionRegistry.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+    const outcome = lock(client, async () => "done").then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    await vi.advanceTimersByTimeAsync(timing.waitTimeoutMs + timing.pollIntervalMs);
+
+    const error = await outcome;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("Timed out waiting");
+    // One create and one read per poll interval, not a hot loop.
+    expect(raw.getFunctionRegistry.mock.calls.length).toBeLessThanOrEqual(
+      timing.waitTimeoutMs / timing.pollIntervalMs + 2,
+    );
+  });
+
   test("surfaces create failures other than a held lock", async () => {
     const { client, raw } = createRegistry();
     raw.createFunctionRegistry.mockRejectedValueOnce(
