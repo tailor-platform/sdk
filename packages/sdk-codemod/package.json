@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-codemod",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Codemod runner for Tailor Platform SDK upgrades",
   "license": "MIT",
   "repository": {

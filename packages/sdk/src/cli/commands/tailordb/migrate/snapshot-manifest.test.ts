@@ -402,6 +402,40 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.settings?.disableGqlOperations?.delete).toBe(true);
     });
 
+    test.each([{ read: true }, { read: false }])(
+      "suppresses every GraphQL operation regardless of read=$read",
+      ({ read }) => {
+        const snapshotType = createTestSnapshotType("User", {
+          settings: { gqlOperations: { create: true, update: true, delete: true, read } },
+        });
+
+        const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+          suppressGqlOperations: true,
+        });
+
+        expect(manifest.schema?.settings?.disableGqlOperations).toEqual({
+          create: true,
+          update: true,
+          delete: true,
+          read: true,
+        });
+      },
+    );
+
+    test("suppresses bulk upsert together with GraphQL operations", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        settings: { bulkUpsert: true },
+      });
+
+      const restricted = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+        suppressGqlOperations: true,
+      });
+      const restored = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      expect(restricted.schema?.settings?.bulkUpsert).toBe(false);
+      expect(restored.schema?.settings?.bulkUpsert).toBe(true);
+    });
+
     test("aggregates field hooks into a table-level hook script", () => {
       const snapshotType = createTestSnapshotType("User", {
         fields: {

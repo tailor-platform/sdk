@@ -14,6 +14,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import type {
   FieldDiffChange,
@@ -21,9 +22,68 @@ import type {
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { TailorDBDeployInput } from "#/cli/commands/tailordb/migrate/schema-checks";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { TailorDBChangeSet } from "./plan";
 import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+
+type MigrationTableSettings = {
+  bulkUpsert: boolean;
+  publishRecordEvents: boolean;
+  disableGqlOperations?: {
+    create: boolean;
+    update: boolean;
+    delete: boolean;
+    read: boolean;
+  };
+  tailordbType?: MessageInitShape<typeof TailorDBTypeSchema>;
+};
+
+export type MigrationRestrictionState = Map<string, Map<string, MigrationTableSettings>>;
+
+/**
+ * Capture the settings and table names active immediately before migration writes.
+ * @param client - Operator client instance
+ * @param workspaceId - Target workspace ID
+ * @param namespaceNames - Migrating namespaces to inspect
+ * @returns Settings keyed by namespace and table name
+ */
+export async function captureMigrationRestrictionState(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceNames: ReadonlySet<string>,
+): Promise<MigrationRestrictionState> {
+  const state: MigrationRestrictionState = new Map();
+  for (const namespaceName of namespaceNames) {
+    const types = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [tailordbTypes, nextPageToken];
+    });
+    const settingsByTable = new Map<string, MigrationTableSettings>();
+    for (const type of types) {
+      const settings = type.schema?.settings;
+      if (!type.name) continue;
+      settingsByTable.set(type.name, {
+        bulkUpsert: settings?.bulkUpsert ?? false,
+        publishRecordEvents: settings?.publishRecordEvents ?? false,
+        ...(settings?.disableGqlOperations && {
+          disableGqlOperations: {
+            create: settings.disableGqlOperations.create,
+            update: settings.disableGqlOperations.update,
+            delete: settings.disableGqlOperations.delete,
+            read: settings.disableGqlOperations.read,
+          },
+        }),
+        tailordbType: structuredClone(type),
+      });
+    }
+    state.set(namespaceName, settingsByTable);
+  }
+  return state;
+}
 
 /**
  * Get the set of table names affected by a migration
@@ -108,7 +168,6 @@ function buildSnapshotTypeManifest(
   migration: PendingMigration,
   tableName: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
   typeChanges?: Map<string, FieldDiffChange>,
 ): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
   const snapshot = migrationSnapshotCache.load(migration);
@@ -123,7 +182,12 @@ function buildSnapshotTypeManifest(
     ? createPreMigrationSnapshotType(snapshotType, typeChanges, typeScriptsChange)
     : snapshotType;
   return generateTailorDBTypeManifestFromSnapshot(manifestSnapshotType, {
-    subscribed: executorUsedTables.has(snapshotType.name),
+    // A migration script's own record writes would publish from a shape that is
+    // mid-migration, to executors still registered from the previous deploy.
+    // `restoreMigrationRestrictions` turns it back on once they have settled.
+    // Overrides a declared `publishEvents: true`, which `subscribed` cannot.
+    suppressRecordEvents: true,
+    suppressGqlOperations: true,
     namespaceGqlOperations: input?.config.gqlOperations,
   });
 }
@@ -153,7 +217,6 @@ async function awaitAllSettledOrThrow(
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
- * @param executorUsedTables - Tables used by executors (drives publishRecordEvents default)
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when pre-migration phase completes
  */
@@ -162,7 +225,6 @@ export async function executeSingleMigrationPrePhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
   attemptedTables: Set<string>,
 ): Promise<void> {
   // Build pre-migration changes maps for this single migration. Includes both
@@ -184,7 +246,6 @@ export async function executeSingleMigrationPrePhase(
       migration,
       tableName,
       tailorDBInputs,
-      executorUsedTables,
       typeChanges,
     );
     if (!snapshotType) continue;
@@ -215,7 +276,6 @@ export async function executeSingleMigrationPrePhase(
       migration,
       tableName,
       tailorDBInputs,
-      executorUsedTables,
       typeChanges,
     );
     if (!snapshotType) continue;
@@ -246,7 +306,6 @@ export async function executeSingleMigrationPrePhase(
       migration,
       tableName,
       tailorDBInputs,
-      executorUsedTables,
       typeChanges,
     );
     if (!snapshotType) continue;
@@ -267,14 +326,21 @@ export async function executeSingleMigrationPrePhase(
     await client.updateTailorDBType(clonedRequest);
   }
 
-  // GQLPermissions - process once (on the first migration)
-  if (!processedTables.gqlPermissionsProcessed.has(migration.namespace)) {
-    const gqlPermissionCreatesForNamespace = changeSet.gqlPermission.creates.filter(
-      (create) => create.request.namespaceName === migration.namespace,
-    );
-    const gqlPermissionUpdatesForNamespace = changeSet.gqlPermission.updates.filter(
-      (update) => update.request.namespaceName === migration.namespace,
-    );
+  const currentTableNames = new Set(Object.keys(migrationSnapshotCache.load(migration).tables));
+  const permissionKey = (tableName: string) => `${migration.namespace}/${tableName}`;
+  const gqlPermissionCreatesForNamespace = changeSet.gqlPermission.creates.filter(
+    (create) =>
+      create.request.namespaceName === migration.namespace &&
+      currentTableNames.has(create.name) &&
+      !processedTables.gqlPermissionsProcessed.has(permissionKey(create.name)),
+  );
+  const gqlPermissionUpdatesForNamespace = changeSet.gqlPermission.updates.filter(
+    (update) =>
+      update.request.namespaceName === migration.namespace &&
+      currentTableNames.has(update.name) &&
+      !processedTables.gqlPermissionsProcessed.has(permissionKey(update.name)),
+  );
+  if (gqlPermissionCreatesForNamespace.length + gqlPermissionUpdatesForNamespace.length > 0) {
     const gqlPermissionTypeNames = new Set(
       gqlPermissionCreatesForNamespace.map((create) => create.name),
     );
@@ -291,14 +357,16 @@ export async function executeSingleMigrationPrePhase(
     if (missingTypeCreates.length > 0) {
       for (const create of missingTypeCreates) {
         const tableName = create.request.tailordbType?.name;
-        if (tableName) {
-          processedTables.created.add(tableName);
-          attemptedTables.add(tableName);
-        }
-        await client.createTailorDBType(create.request);
+        if (!tableName) continue;
+        const snapshotType = buildSnapshotTypeManifest(migration, tableName, tailorDBInputs);
+        if (!snapshotType) continue;
+        processedTables.created.add(tableName);
+        attemptedTables.add(tableName);
+        const clonedRequest = structuredClone(create.request);
+        clonedRequest.tailordbType = snapshotType;
+        await client.createTailorDBType(clonedRequest);
       }
     }
-    processedTables.gqlPermissionsProcessed.add(migration.namespace);
     await awaitAllSettledOrThrow([
       ...gqlPermissionCreatesForNamespace.map((create) =>
         client.createTailorDBGQLPermission(create.request),
@@ -307,6 +375,12 @@ export async function executeSingleMigrationPrePhase(
         client.updateTailorDBGQLPermission(update.request),
       ),
     ]);
+    for (const typeName of [
+      ...gqlPermissionCreatesForNamespace.map((create) => create.name),
+      ...gqlPermissionUpdatesForNamespace.map((update) => update.name),
+    ]) {
+      processedTables.gqlPermissionsProcessed.add(permissionKey(typeName));
+    }
   }
 }
 
@@ -327,7 +401,6 @@ export async function rollbackSingleMigrationAfterFailure(
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
   attemptedTables: ReadonlySet<string>,
 ): Promise<void> {
   try {
@@ -336,7 +409,6 @@ export async function rollbackSingleMigrationAfterFailure(
       migration,
       workspaceId,
       tailorDBInputs,
-      executorUsedTables,
       attemptedTables,
     );
   } catch (rollbackError) {
@@ -353,7 +425,6 @@ export async function rollbackSingleMigrationAfterFailure(
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
- * @param executorUsedTables - Tables used by executors (drives publishRecordEvents default)
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when post-migration phase completes
  */
@@ -362,7 +433,6 @@ export async function executeSingleMigrationPostPhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
   attemptedTables: Set<string>,
 ): Promise<void> {
   // Re-use the pre-migration changes maps to know which tables were touched in
@@ -386,12 +456,7 @@ export async function executeSingleMigrationPostPhase(
       if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
       }
-      const snapshotType = buildSnapshotTypeManifest(
-        migration,
-        tableName,
-        tailorDBInputs,
-        executorUsedTables,
-      );
+      const snapshotType = buildSnapshotTypeManifest(migration, tableName, tailorDBInputs);
       if (!snapshotType) continue;
       attemptedTables.add(tableName);
       await client.updateTailorDBType({
@@ -407,12 +472,7 @@ export async function executeSingleMigrationPostPhase(
       if (!tableName || !affectedTables.has(tableName) || !adjustedTypes.has(tableName)) {
         continue;
       }
-      const snapshotType = buildSnapshotTypeManifest(
-        migration,
-        tableName,
-        tailorDBInputs,
-        executorUsedTables,
-      );
+      const snapshotType = buildSnapshotTypeManifest(migration, tableName, tailorDBInputs);
       if (!snapshotType) continue;
       attemptedTables.add(tableName);
       await client.updateTailorDBType({
@@ -427,6 +487,226 @@ export async function executeSingleMigrationPostPhase(
       "Ensure all existing records have values for fields being changed to required.",
     ]);
   }
+}
+
+/**
+ * Rewrite tables that can publish records or accept GraphQL mutations, with
+ * migration restrictions applied or removed from the given snapshot.
+ *
+ * Writes the snapshot's schema rather than the config's, so this never enforces
+ * a change whose migration has not run — the same reason the per-migration
+ * phases build from a checkpoint.
+ * @param client - Operator client instance
+ * @param params - Namespace, snapshot, subscriber set, and direction
+ */
+type RewriteRestrictedTablesParams = {
+  workspaceId: string;
+  namespaceName: string;
+  snapshot: SchemaSnapshot;
+  input: TailorDBDeployInput;
+  executorUsedTables: ReadonlySet<string>;
+  settingsState?: ReadonlyMap<string, MigrationTableSettings>;
+  restricted: boolean;
+  continueOnError?: boolean;
+};
+
+function acceptsMigrationWrites(settings: MigrationTableSettings): boolean {
+  const operations = settings.disableGqlOperations;
+  return (
+    settings.publishRecordEvents ||
+    settings.bulkUpsert ||
+    operations?.create !== true ||
+    operations.update !== true ||
+    operations.delete !== true
+  );
+}
+
+async function rewriteRestrictedTables(
+  client: OperatorClient,
+  params: RewriteRestrictedTablesParams,
+): Promise<void> {
+  const {
+    workspaceId,
+    namespaceName,
+    snapshot,
+    input,
+    executorUsedTables,
+    settingsState,
+    restricted,
+    continueOnError = false,
+  } = params;
+  let firstError: Error | undefined;
+  const tableNames = new Set([...Object.keys(snapshot.tables), ...(settingsState?.keys() ?? [])]);
+  for (const tableName of tableNames) {
+    try {
+      const snapshotType = snapshot.tables[tableName];
+      const activeSettings = settingsState?.get(tableName);
+      if (settingsState && !activeSettings) continue;
+      if (restricted && (!activeSettings || !acceptsMigrationWrites(activeSettings))) continue;
+      const tailordbType = snapshotType
+        ? restricted
+          ? generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+              suppressRecordEvents: true,
+              suppressGqlOperations: true,
+              namespaceGqlOperations: input.config.gqlOperations,
+            })
+          : generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+              subscribed: executorUsedTables.has(tableName),
+              namespaceGqlOperations: input.config.gqlOperations,
+            })
+        : activeSettings?.tailordbType
+          ? structuredClone(activeSettings.tailordbType)
+          : undefined;
+      if (!tailordbType?.schema) continue;
+      tailordbType.schema.settings ??= {};
+      const settings = tailordbType.schema.settings;
+      if (restricted) {
+        settings.bulkUpsert = false;
+        settings.publishRecordEvents = false;
+        settings.disableGqlOperations = {
+          create: true,
+          update: true,
+          delete: true,
+          read: true,
+        };
+      }
+      if (!restricted && activeSettings) {
+        settings.bulkUpsert = activeSettings.bulkUpsert;
+        settings.publishRecordEvents = activeSettings.publishRecordEvents;
+        settings.disableGqlOperations = activeSettings.disableGqlOperations
+          ? { ...activeSettings.disableGqlOperations }
+          : undefined;
+      }
+      await client.updateTailorDBType({ workspaceId, namespaceName, tailordbType });
+    } catch (error) {
+      if (!continueOnError) throw error;
+      firstError ??= error instanceof Error ? error : new Error(String(error), { cause: error });
+    }
+  }
+  if (firstError !== undefined) throw firstError;
+}
+
+/**
+ * Resolve the settings represented by a committed migration snapshot.
+ *
+ * Intermediate snapshots may intentionally conflict with executors from the
+ * final deployment. They still need restorable settings if a later migration
+ * fails, so explicit snapshot values win without re-running that final-state
+ * conflict check.
+ * @param snapshot - Committed schema snapshot
+ * @param input - TailorDB deploy input for the namespace
+ * @param executorUsedTables - Tables an enabled executor in this deploy subscribes to
+ * @returns Settings keyed by table name
+ */
+export function resolveMigrationSnapshotSettings(
+  snapshot: SchemaSnapshot,
+  input: TailorDBDeployInput,
+  executorUsedTables: ReadonlySet<string>,
+): Map<string, MigrationTableSettings> {
+  const settingsByTable = new Map<string, MigrationTableSettings>();
+  for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
+    const settings = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+      subscribed: false,
+      namespaceGqlOperations: input.config.gqlOperations,
+    }).schema?.settings;
+    if (!settings) continue;
+    settingsByTable.set(tableName, {
+      bulkUpsert: settings.bulkUpsert ?? false,
+      publishRecordEvents:
+        snapshotType.settings?.publishEvents ?? executorUsedTables.has(tableName),
+      ...(settings.disableGqlOperations && {
+        disableGqlOperations: {
+          create: settings.disableGqlOperations.create ?? false,
+          update: settings.disableGqlOperations.update ?? false,
+          delete: settings.disableGqlOperations.delete ?? false,
+          read: settings.disableGqlOperations.read ?? false,
+        },
+      }),
+    });
+  }
+  return settingsByTable;
+}
+
+/**
+ * Stop record event publishing and GraphQL mutations across each migrating namespace.
+ *
+ * The per-migration phases only rewrite tables some pending diff names, so a
+ * data-only migration — an empty diff carrying only a script — would leave the
+ * whole namespace unrestricted while its script runs. Restrictions therefore
+ * use the schema in place before the namespace's first migration.
+ * @param client - Operator client instance
+ * @param snapshots - Schema in place before each namespace's first pending migration
+ * @param restrictionState - Settings and tables active before migration writes
+ * @param tailorDBInputs - TailorDB deploy inputs for the run
+ * @param executorUsedTables - Tables an enabled executor subscribes to
+ * @param workspaceId - Target workspace ID
+ */
+export async function applyMigrationRestrictions(
+  client: OperatorClient,
+  snapshots: ReadonlyMap<string, SchemaSnapshot>,
+  restrictionState: MigrationRestrictionState,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTables: ReadonlySet<string>,
+  workspaceId: string,
+): Promise<void> {
+  for (const [namespaceName, snapshot] of snapshots) {
+    const input = tailorDBInputs.find((entry) => entry.namespace === namespaceName);
+    if (!input) continue;
+    await rewriteRestrictedTables(client, {
+      workspaceId,
+      namespaceName,
+      snapshot,
+      input,
+      executorUsedTables,
+      settingsState: restrictionState.get(namespaceName) ?? new Map(),
+      restricted: true,
+    });
+  }
+}
+
+/**
+ * Restore normal event publishing and GraphQL operations after migrations.
+ *
+ * Uses the latest schema that completed its post-phase in each namespace. If a
+ * later migration fails, this avoids applying schema changes that never settled.
+ *
+ * Callers must run this even when the migration loop throws because a committed
+ * checkpoint drops its migration from the next run's pending set.
+ * @param client - Operator client instance
+ * @param snapshots - Latest schema that settled in each migrating namespace
+ * @param settingsToRestore - Settings for the latest confirmed checkpoint, including exact active settings for snapshot-external tables
+ * @param tailorDBInputs - TailorDB deploy inputs for the run
+ * @param executorUsedTables - Tables an enabled executor subscribes to
+ * @param workspaceId - Target workspace ID
+ */
+export async function restoreMigrationRestrictions(
+  client: OperatorClient,
+  snapshots: ReadonlyMap<string, SchemaSnapshot>,
+  settingsToRestore: MigrationRestrictionState | undefined,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTables: ReadonlySet<string>,
+  workspaceId: string,
+): Promise<void> {
+  let firstError: Error | undefined;
+  for (const [namespaceName, snapshot] of snapshots) {
+    const input = tailorDBInputs.find((entry) => entry.namespace === namespaceName);
+    if (!input) continue;
+    try {
+      await rewriteRestrictedTables(client, {
+        workspaceId,
+        namespaceName,
+        snapshot,
+        input,
+        executorUsedTables,
+        settingsState: settingsToRestore?.get(namespaceName),
+        restricted: false,
+        continueOnError: true,
+      });
+    } catch (error) {
+      firstError ??= error instanceof Error ? error : new Error(String(error), { cause: error });
+    }
+  }
+  if (firstError !== undefined) throw firstError;
 }
 
 export async function executeSingleMigrationPostPhaseDeletions(
@@ -465,7 +745,6 @@ export async function executeSingleMigrationPostPhaseDeletions(
  * @param migration - The migration whose Pre-phase DDL must be reverted
  * @param workspaceId - Workspace ID
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
- * @param executorUsedTables - Tables used by executors (drives publishRecordEvents default)
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @returns {Promise<void>} Promise that resolves when rollback attempts complete
  */
@@ -474,7 +753,6 @@ async function rollbackSingleMigrationPrePhase(
   migration: PendingMigration,
   workspaceId: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
   attemptedTables: ReadonlySet<string>,
 ): Promise<void> {
   // The baseline migration has no prior checkpoint to revert to.
@@ -514,7 +792,8 @@ async function rollbackSingleMigrationPrePhase(
   for (const { tableName, priorTable } of restoredTables) {
     try {
       const manifest = generateTailorDBTypeManifestFromSnapshot(priorTable, {
-        subscribed: executorUsedTables.has(priorTable.name),
+        suppressRecordEvents: true,
+        suppressGqlOperations: true,
         namespaceGqlOperations: input?.config.gqlOperations,
       });
       await client.updateTailorDBType({

@@ -5,6 +5,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { parseBoolean } from "#/cli/shared/parse-boolean";
 
 export const openCommand = defineAppCommand({
   name: "open",
@@ -19,7 +20,10 @@ export const openCommand = defineAppCommand({
     });
     const { config } = await loadConfig(args.config);
     const applicationName = config.name;
-    const consolePath = `/workspaces/${workspaceId}/applications/${encodeURIComponent(applicationName)}/overview`;
+    const consolePath =
+      parseBoolean(process.env.TAILOR_CONSOLE_NEXT) === true
+        ? `/workspaces/${workspaceId}/services/applications/${encodeURIComponent(applicationName)}`
+        : `/workspaces/${workspaceId}/applications/${encodeURIComponent(applicationName)}/overview`;
     const consoleBaseUrl = await loadConsoleBaseUrl({
       profile: args.profile,
       ...(args["workspace-id"] !== undefined ? { allowMissingProfile: true } : {}),

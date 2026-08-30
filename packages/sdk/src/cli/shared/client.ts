@@ -13,6 +13,7 @@ import {
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
+import { parseBoolean } from "./parse-boolean";
 import { userAgent } from "./user-agent";
 import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
@@ -91,15 +92,29 @@ function inferConsoleBaseUrl(platformBaseUrl: string) {
   return defaultConsoleBaseUrl;
 }
 
+/**
+ * Redirect an inferred console URL to the console-next host when
+ * `TAILOR_CONSOLE_NEXT` is enabled. An explicitly configured console URL
+ * (`consoleUrl` / `TAILOR_PLATFORM_CONSOLE_URL`) is never rewritten.
+ * @param consoleBaseUrl - Inferred console base URL
+ * @returns The console-next base URL, or the input unchanged
+ */
+function applyConsoleNext(consoleBaseUrl: string): string {
+  if (parseBoolean(process.env.TAILOR_CONSOLE_NEXT) !== true) return consoleBaseUrl;
+  const url = new URL(consoleBaseUrl);
+  url.hostname = url.hostname.replace(/^console\./, "console-next.");
+  return normalizeBaseUrl(url.toString());
+}
+
 export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
   if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
   if (config.platformUrl) {
     const inferredUrl = inferConsoleBaseUrl(config.platformUrl);
-    if (inferredUrl !== defaultConsoleBaseUrl) return inferredUrl;
+    if (inferredUrl !== defaultConsoleBaseUrl) return applyConsoleNext(inferredUrl);
   }
   if (process.env.TAILOR_PLATFORM_CONSOLE_URL)
     return normalizeBaseUrl(process.env.TAILOR_PLATFORM_CONSOLE_URL);
-  return inferConsoleBaseUrl(getPlatformBaseUrl(config));
+  return applyConsoleNext(inferConsoleBaseUrl(getPlatformBaseUrl(config)));
 }
 
 /**
