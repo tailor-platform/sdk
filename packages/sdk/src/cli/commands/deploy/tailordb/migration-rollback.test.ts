@@ -4,6 +4,7 @@
  */
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { MigrationExecutionInFlightError } from "./migration-workflow";
 import { applyTailorDB, captureMigrationFileState } from "./index";
 import type { SchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
@@ -453,6 +454,25 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(deletedTableNames(client)).toContain("StockReservation");
 
     // The checkpoint must stay at the prior migration.
+    expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
+  test("leaves the pre-phase schema in place when an earlier run's script is still executing", async () => {
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      new MigrationExecutionInFlightError("still running from an earlier run"),
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "still running from an earlier run",
+    );
+
+    // The running script depends on this schema; rolling it back would break the
+    // execution the user was just told to wait for.
+    expect(deletedTableNames(client)).not.toContain("StockReservation");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 

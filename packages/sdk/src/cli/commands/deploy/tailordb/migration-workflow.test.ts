@@ -4,7 +4,11 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { writeMetadataLabelsDirect } from "../label";
-import { executeMigrationAsWorkflow, migrationWorkflowResourceName } from "./migration-workflow";
+import {
+  executeMigrationAsWorkflow,
+  MigrationExecutionInFlightError,
+  migrationWorkflowResourceName,
+} from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
@@ -46,6 +50,10 @@ interface MockClientOptions {
   leftoverExecutions?: { id: string; status: WorkflowExecution_Status }[];
   /** Content hash of the leftover function; defaults to the hash of the bundled code. */
   leftoverContentHash?: string;
+  /** The leftover function is already gone. */
+  leftoverFunctionMissing?: boolean;
+  /** Return the leftover executions one per page. */
+  paginateLeftoverExecutions?: boolean;
 }
 
 const bundledCode = "// bundled";
@@ -72,21 +80,28 @@ function createMockClient(options: MockClientOptions = {}) {
       }
       return Promise.resolve({ workflow: { id: options.leftoverWorkflowId } });
     }),
-    listWorkflowExecutions: vi.fn(() => {
+    listWorkflowExecutions: vi.fn(({ pageToken }: { pageToken: string }) => {
       calls.push("listWorkflowExecutions");
+      const all = (options.leftoverExecutions ?? []).map((execution) => ({
+        ...execution,
+        jobExecutions: [],
+      }));
+      if (!options.paginateLeftoverExecutions) {
+        return Promise.resolve({ executions: all, nextPageToken: "" });
+      }
+      const index = pageToken ? Number(pageToken) : 0;
+      const next = index + 1 < all.length ? String(index + 1) : "";
+      return Promise.resolve({ executions: all.slice(index, index + 1), nextPageToken: next });
+    }),
+    getFunctionRegistry: vi.fn(() => {
+      calls.push("getFunctionRegistry");
+      if (options.leftoverFunctionMissing) {
+        return Promise.reject(new ConnectError("not found", Code.NotFound));
+      }
       return Promise.resolve({
-        executions: (options.leftoverExecutions ?? []).map((execution) => ({
-          ...execution,
-          jobExecutions: [],
-        })),
-        nextPageToken: "",
+        function: { contentHash: options.leftoverContentHash ?? bundledCodeHash },
       });
     }),
-    getFunctionRegistry: vi.fn(() =>
-      record("getFunctionRegistry", {
-        function: { contentHash: options.leftoverContentHash ?? bundledCodeHash },
-      }),
-    ),
     createFunctionRegistry: vi.fn(() => record("createFunctionRegistry", {})),
     createWorkflowJobFunction: vi.fn(() =>
       record("createWorkflowJobFunction", { jobFunction: { version: 1n } }),
@@ -357,12 +372,45 @@ describe("executeMigrationAsWorkflow", () => {
       leftoverContentHash: "other-hash",
     });
 
-    await expect(run(client)).rejects.toThrow("different version of the migration script");
+    await expect(run(client)).rejects.toThrow(
+      "could not be confirmed to match the current migrate.ts",
+    );
 
     // The earlier run's resources stay in place: deleting them would not stop
     // the execution that still uses them.
     expect(calls).not.toContain("deleteWorkflow");
     expect(calls).not.toContain("deleteFunctionRegistry");
+  });
+
+  test("refuses when the leftover function is gone, without touching the workflow", async () => {
+    const { client, calls } = createMockClient({
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }],
+      leftoverFunctionMissing: true,
+    });
+
+    await expect(run(client)).rejects.toThrow(MigrationExecutionInFlightError);
+    expect(calls).not.toContain("deleteWorkflow");
+  });
+
+  test("pages through the leftover workflow's executions before deciding", async () => {
+    const { client, raw, calls } = createMockClient({
+      leftoverWorkflowId: "stale-wf",
+      leftoverExecutions: [
+        { id: "exec-done", status: WorkflowExecution_Status.SUCCESS },
+        { id: "exec-live", status: WorkflowExecution_Status.RUNNING },
+      ],
+      paginateLeftoverExecutions: true,
+      statuses: [WorkflowExecution_Status.SUCCESS],
+    });
+
+    const result = await run(client);
+
+    expect(result.success).toBe(true);
+    expect(calls.filter((call) => call === "listWorkflowExecutions")).toHaveLength(2);
+    expect(raw.getWorkflowExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ executionId: "exec-live" }),
+    );
   });
 
   test("refuses when several executions of the leftover are still unfinished", async () => {

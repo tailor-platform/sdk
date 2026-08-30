@@ -15,11 +15,11 @@
  * script a second time.
  */
 
-import * as crypto from "node:crypto";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
-import { fetchAll, isNotFoundError } from "#/cli/shared/client";
+import { fetchAll, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { computeContentHash } from "../function-registry";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -28,10 +28,6 @@ import type { CreateFunctionRegistryRequestSchema } from "@tailor-platform/tailo
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 const CHUNK_SIZE = 64 * 1024;
-
-function scriptContentHash(code: string): string {
-  return crypto.createHash("sha256").update(code, "utf-8").digest("hex");
-}
 
 /** Execution statuses that still have an outcome ahead of them. */
 const UNFINISHED_STATUSES = new Set([
@@ -99,7 +95,7 @@ async function uploadMigrationFunction(
     name,
     description: "Temporary function for a TailorDB migration",
     sizeBytes: BigInt(buffer.length),
-    contentHash: scriptContentHash(code),
+    contentHash: computeContentHash(code),
   };
 
   /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Info header followed by content chunks */
@@ -181,6 +177,18 @@ interface AdoptedExecution {
 }
 
 /**
+ * An earlier run's execution of this migration is still in flight and cannot
+ * be adopted. The earlier run's resources must stay untouched, including the
+ * schema its script is running against.
+ */
+export class MigrationExecutionInFlightError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MigrationExecutionInFlightError";
+  }
+}
+
+/**
  * Deal with the leftovers of an earlier interrupted run of this migration.
  *
  * The resource name is stable per migration and `createFunctionRegistry` is
@@ -213,22 +221,22 @@ async function reclaimLeftovers(
   }
 
   if (others.length > 0) {
-    throw new Error(
+    throw new MigrationExecutionInFlightError(
       `Migration workflow '${name}' has ${others.length + 1} unfinished executions from earlier runs, so this run cannot tell which one to wait for. ` +
         "Wait for them to finish, then retry the deployment.",
     );
   }
   if (execution.status === WorkflowExecution_Status.WAITING) {
-    throw new Error(
+    throw new MigrationExecutionInFlightError(
       `Migration workflow '${name}' has an execution from an earlier run that is waiting to be resumed and cannot complete on its own. ` +
         "Resolve or delete that execution, then retry the deployment.",
     );
   }
 
-  const { function: leftoverFunction } = await client.getFunctionRegistry({ workspaceId, name });
-  if (leftoverFunction?.contentHash !== scriptContentHash(code)) {
-    throw new Error(
-      `Migration workflow '${name}' is still running a different version of the migration script from an earlier run. ` +
+  const leftover = await getOrNull(() => client.getFunctionRegistry({ workspaceId, name }));
+  if (leftover?.function?.contentHash !== computeContentHash(code)) {
+    throw new MigrationExecutionInFlightError(
+      `Migration workflow '${name}' is still running from an earlier run, but its script could not be confirmed to match the current migrate.ts. ` +
         "Wait for it to finish, then retry the deployment.",
     );
   }
@@ -301,8 +309,6 @@ export async function executeMigrationAsWorkflow(
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
-  // A refused reclaim leaves the earlier run's resources untouched: they are
-  // still executing, and teardown would delete them from under that execution.
   const adopted = await reclaimLeftovers(client, workspaceId, name, code, pollInterval);
   let workflowId = adopted?.workflowId;
   try {

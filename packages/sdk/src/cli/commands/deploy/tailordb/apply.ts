@@ -34,6 +34,7 @@ import {
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
 } from "./migration-validation";
+import { MigrationExecutionInFlightError } from "./migration-workflow";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
@@ -374,6 +375,8 @@ export async function applyTailorDB(
             );
           }
         } catch (error) {
+          // The earlier run's script is still executing against this schema.
+          if (error instanceof MigrationExecutionInFlightError) throw error;
           await rollbackSingleMigrationAfterFailure(
             client,
             migration,

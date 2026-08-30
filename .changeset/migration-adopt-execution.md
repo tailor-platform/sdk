@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-A `tailor deploy` interrupted while a migration script was still running now waits for that script's outcome on the next run instead of executing the script a second time.
+When a `tailor deploy` is interrupted while a migration script is still running, a deploy started while that script is still running now waits for its outcome instead of executing the script a second time.
