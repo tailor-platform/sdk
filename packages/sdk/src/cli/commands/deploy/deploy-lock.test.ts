@@ -1,7 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { bypassConcurrencyLimit } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
-import { deployLockResourceName, withDeployLock } from "./deploy-lock";
+import { deployLockNamePrefix, deployLockResourceName, withDeployLock } from "./deploy-lock";
+import { DeployLockLostError } from "./deploy-lock-error";
 import type { OperatorClient } from "#/cli/shared/client";
 
 vi.mock("#/cli/shared/logger", () => ({
@@ -26,6 +28,10 @@ interface StreamInfo {
   description: string;
 }
 
+interface ListRequest {
+  filter?: { condition?: { value?: { kind?: { value?: unknown } } } };
+}
+
 async function readInfo(stream: AsyncIterable<unknown>): Promise<StreamInfo> {
   let info: StreamInfo | undefined;
   for await (const message of stream) {
@@ -37,10 +43,16 @@ async function readInfo(stream: AsyncIterable<unknown>): Promise<StreamInfo> {
 }
 
 function record(description: string) {
-  return JSON.parse(description) as { token: string; heartbeat: number; application: string };
+  return JSON.parse(description) as {
+    state: "held" | "released";
+    token?: string;
+    heartbeat?: number;
+    application: string;
+  };
 }
 
-// In-memory function registry with the create-only semantics the lock relies on.
+// In-memory function registry with the create-only semantics the lock relies
+// on and the name filter it lists generations with.
 function createRegistry(initial: Record<string, Entry> = {}) {
   const entries = new Map<string, Entry>(Object.entries(initial));
   const calls: string[] = [];
@@ -67,6 +79,16 @@ function createRegistry(initial: Record<string, Entry> = {}) {
       if (!entry) throw new ConnectError("not found", Code.NotFound);
       return { function: { name, description: entry.description } };
     }),
+    listFunctionRegistries: vi.fn(async (request: ListRequest) => {
+      const needle = String(request.filter?.condition?.value?.kind?.value ?? "");
+      calls.push(`list:${needle}`);
+      return {
+        functions: [...entries]
+          .filter(([name]) => name.includes(needle))
+          .map(([name, entry]) => ({ name, description: entry.description })),
+        nextPageToken: "",
+      };
+    }),
     deleteFunctionRegistry: vi.fn(async ({ name }: { name: string }) => {
       calls.push(`delete:${name}`);
       if (!entries.delete(name)) throw new ConnectError("not found", Code.NotFound);
@@ -77,9 +99,10 @@ function createRegistry(initial: Record<string, Entry> = {}) {
   return { client: client as unknown as OperatorClient, raw: client, entries, calls };
 }
 
-function holderDescription(overrides: Partial<{ token: string; heartbeat: number }> = {}) {
+function heldDescription(overrides: Partial<{ token: string; heartbeat: number }> = {}) {
   return JSON.stringify({
-    v: 1,
+    v: 2,
+    state: "held",
     token: overrides.token ?? "other-token",
     application: "my-app",
     holder: { host: "ci-runner", pid: 42, startedAt: "2026-08-29T00:00:00.000Z" },
@@ -87,8 +110,11 @@ function holderDescription(overrides: Partial<{ token: string; heartbeat: number
   });
 }
 
+const releasedDescription = JSON.stringify({ v: 2, state: "released", application: "my-app" });
+
 const app = { name: "my-app" };
-const lockName = deployLockResourceName(app);
+const prefix = deployLockNamePrefix(app);
+const gen = (generation: number) => deployLockResourceName(app, generation);
 const timing = {
   pollIntervalMs: 1_000,
   waitTimeoutMs: 60_000,
@@ -100,20 +126,27 @@ function lock<T>(client: OperatorClient, fn: (lock: { assertHeld(): void }) => P
   return withDeployLock({ client, workspaceId: "ws-1", applications: [app], timing }, fn);
 }
 
+function generations(entries: Map<string, Entry>): string[] {
+  return [...entries.keys()]
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => `${name.slice(prefix.length)}:${record(entries.get(name)!.description).state}`)
+    .toSorted();
+}
+
 describe("deployLockResourceName", () => {
   test("is keyed by the application id when one is declared", () => {
-    expect(deployLockResourceName({ name: "old-name", id: "app-1" })).toBe(
-      deployLockResourceName({ name: "new-name", id: "app-1" }),
+    expect(deployLockNamePrefix({ name: "old-name", id: "app-1" })).toBe(
+      deployLockNamePrefix({ name: "new-name", id: "app-1" }),
     );
-    expect(deployLockResourceName({ name: "my-app", id: "app-1" })).not.toBe(
-      deployLockResourceName({ name: "my-app", id: "app-2" }),
+    expect(deployLockNamePrefix({ name: "my-app", id: "app-1" })).not.toBe(
+      deployLockNamePrefix({ name: "my-app", id: "app-2" }),
     );
   });
 
-  test("falls back to the name and stays a fixed-length identifier", () => {
-    const name = deployLockResourceName({ name: "My App with spaces / and more characters" });
-    expect(name).toMatch(/^sdk-deploy-lock--[0-9a-f]{16}$/);
-    expect(name).not.toBe(deployLockResourceName({ name: "another" }));
+  test("falls back to the name and appends a zero-padded generation", () => {
+    const name = deployLockResourceName({ name: "My App with spaces / and more characters" }, 7);
+    expect(name).toMatch(/^sdk-deploy-lock--[0-9a-f]{16}--000007$/);
+    expect(name).not.toBe(deployLockResourceName({ name: "another" }, 7));
   });
 });
 
@@ -128,21 +161,44 @@ describe("withDeployLock", () => {
     }
   });
 
-  test("creates the lock entry around the critical section and deletes it afterwards", async () => {
-    const { client, raw, entries, calls } = createRegistry();
+  test("creates the first generation around the critical section and leaves it released", async () => {
+    const { client, raw, entries } = createRegistry();
 
     const result = await lock(client, async () => {
-      const entry = entries.get(lockName);
-      expect(entry).toBeDefined();
-      expect(record(entry!.description).application).toBe("my-app");
+      expect(generations(entries)).toEqual(["000001:held"]);
+      expect(record(entries.get(gen(1))!.description).application).toBe("my-app");
       return "done";
     });
 
     expect(result).toBe("done");
-    expect(entries.has(lockName)).toBe(false);
-    expect(calls).toEqual([`create:${lockName}`, `get:${lockName}`, `delete:${lockName}`]);
-    // The entry must stay unlabeled so a deploy does not plan its own lock for deletion.
+    expect(generations(entries)).toEqual(["000001:released"]);
+    // The released record identifies nothing about the run that held it.
+    expect(record(entries.get(gen(1))!.description).token).toBeUndefined();
+    // The entries must stay unlabeled so a deploy does not plan its own lock for deletion.
     expect(raw.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("lock RPCs bypass the apply concurrency limiter", async () => {
+    const { client, raw } = createRegistry();
+
+    await lock(client, async () => "done");
+
+    for (const call of raw.listFunctionRegistries.mock.calls) {
+      const options = (call as unknown[])[1] as {
+        contextValues: { get(key: typeof bypassConcurrencyLimit): boolean };
+      };
+      expect(options.contextValues.get(bypassConcurrencyLimit)).toBe(true);
+    }
+  });
+
+  test("takes the next generation after a released one and removes the superseded entry", async () => {
+    const { client, entries } = createRegistry({ [gen(1)]: { description: releasedDescription } });
+
+    await lock(client, async () => {
+      expect(generations(entries)).toEqual(["000002:held"]);
+    });
+
+    expect(generations(entries)).toEqual(["000002:released"]);
   });
 
   test("releases the lock and rethrows when the critical section fails", async () => {
@@ -154,34 +210,32 @@ describe("withDeployLock", () => {
       }),
     ).rejects.toThrow("apply failed");
 
-    expect(entries.has(lockName)).toBe(false);
+    expect(generations(entries)).toEqual(["000001:released"]);
   });
 
   test("waits for a live holder and proceeds once it releases", async () => {
-    const { client, entries } = createRegistry({
-      [lockName]: { description: holderDescription() },
-    });
+    const { client, entries } = createRegistry({ [gen(1)]: { description: heldDescription() } });
     const fn = vi.fn(async () => "done");
     const pending = lock(client, fn);
 
-    // The holder keeps heartbeating, then releases.
     await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 3);
-    entries.set(lockName, { description: holderDescription({ heartbeat: 1 }) });
+    entries.set(gen(1), { description: heldDescription({ heartbeat: 1 }) });
     await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 3);
     expect(fn).not.toHaveBeenCalled();
-    entries.delete(lockName);
+    entries.set(gen(1), { description: releasedDescription });
     await vi.advanceTimersByTimeAsync(timing.pollIntervalMs);
 
     await expect(pending).resolves.toBe("done");
+    expect(generations(entries)).toEqual(["000002:released"]);
     expect(logger.info).toHaveBeenCalledTimes(1);
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('Another deploy of "my-app" is in progress'),
     );
   });
 
-  test("reclaims a lock whose record stayed unchanged for a whole lease", async () => {
+  test("reclaims a holder whose record stayed unchanged for a whole lease", async () => {
     const { client, entries, calls } = createRegistry({
-      [lockName]: { description: holderDescription({ token: "dead" }) },
+      [gen(1)]: { description: heldDescription({ token: "dead" }) },
     });
     const fn = vi.fn(async () => "done");
     const pending = lock(client, fn);
@@ -191,75 +245,60 @@ describe("withDeployLock", () => {
     await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 2);
 
     await expect(pending).resolves.toBe("done");
-    expect(calls).toContain(`delete:${lockName}`);
+    // The stale generation is never deleted before the next one exists.
+    expect(calls.indexOf(`create:${gen(2)}`)).toBeLessThan(calls.indexOf(`delete:${gen(1)}`));
+    expect(generations(entries)).toEqual(["000002:released"]);
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('Reclaiming the deploy lock of "my-app"'),
     );
-    expect(entries.has(lockName)).toBe(false);
   });
 
-  test("does not reclaim a lock whose heartbeat keeps changing", async () => {
+  test("does not reclaim a holder whose heartbeat keeps changing", async () => {
     const { client, entries, calls } = createRegistry({
-      [lockName]: { description: holderDescription() },
+      [gen(1)]: { description: heldDescription() },
     });
     const pending = lock(client, async () => "done");
 
     for (let heartbeat = 1; heartbeat <= 4; heartbeat++) {
       await vi.advanceTimersByTimeAsync(timing.leaseMs / 2);
-      entries.set(lockName, { description: holderDescription({ heartbeat }) });
+      entries.set(gen(1), { description: heldDescription({ heartbeat }) });
     }
-    expect(calls).not.toContain(`delete:${lockName}`);
+    expect(calls).not.toContain(`create:${gen(2)}`);
 
-    entries.delete(lockName);
+    entries.set(gen(1), { description: releasedDescription });
     await vi.advanceTimersByTimeAsync(timing.pollIntervalMs);
     await expect(pending).resolves.toBe("done");
   });
 
-  test("gives up with the holder's identity after the wait timeout", async () => {
-    const { client, entries, calls } = createRegistry({
-      [lockName]: { description: holderDescription() },
+  test("lets exactly one of two reclaimers take an abandoned lock", async () => {
+    const { client, entries } = createRegistry({
+      [gen(1)]: { description: heldDescription({ token: "dead" }) },
     });
-    let heartbeat = 0;
-    const pending = lock(client, async () => "done");
-    // Collect the rejection immediately so the timer loop cannot leave it unhandled.
-    const outcome = pending.then(
-      () => undefined,
-      (error: unknown) => error,
+    const events: string[] = [];
+    const contender = (label: string) =>
+      lock(client, async () => {
+        events.push(`${label}:start ${generations(entries).join(",")}`);
+        await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 2);
+        events.push(`${label}:end`);
+      });
+    const a = contender("a");
+    const b = contender("b");
+
+    await vi.advanceTimersByTimeAsync(timing.leaseMs + timing.pollIntervalMs * 10);
+    await Promise.all([a, b]);
+
+    // One took generation 2 while the other waited for it and then took 3.
+    expect(events.map((event) => event.split(" ")[0])).toEqual(
+      expect.arrayContaining(["a:start", "a:end", "b:start", "b:end"]),
     );
-
-    for (let elapsed = 0; elapsed <= timing.waitTimeoutMs; elapsed += timing.pollIntervalMs) {
-      heartbeat += 1;
-      entries.set(lockName, { description: holderDescription({ heartbeat }) });
-      await vi.advanceTimersByTimeAsync(timing.pollIntervalMs);
-    }
-
-    const error = await outcome;
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain('Timed out waiting for another deploy of "my-app"');
-    expect((error as Error).message).toContain("started 2026-08-29T00:00:00.000Z on ci-runner");
-    expect(calls).not.toContain(`delete:${lockName}`);
+    const starts = events.filter((event) => event.includes(":start"));
+    expect(events.indexOf(events.find((e) => e.endsWith(":end"))!)).toBeLessThan(
+      events.indexOf(starts[1]!),
+    );
+    expect(generations(entries)).toEqual(["000003:released"]);
   });
 
-  test("treats an unreadable record as a holder and reclaims it once it stops changing", async () => {
-    // A newer SDK may write a record this version cannot parse; it is still a
-    // live holder as long as its description keeps changing.
-    const { client, entries, calls } = createRegistry({
-      [lockName]: { description: '{"v":2,"beat":0}' },
-    });
-    const pending = lock(client, async () => "done");
-
-    await vi.advanceTimersByTimeAsync(timing.leaseMs / 2);
-    entries.set(lockName, { description: '{"v":2,"beat":1}' });
-    await vi.advanceTimersByTimeAsync(timing.leaseMs / 2);
-    expect(calls).not.toContain(`delete:${lockName}`);
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("holder record unreadable"));
-
-    await vi.advanceTimersByTimeAsync(timing.leaseMs);
-    await expect(pending).resolves.toBe("done");
-    expect(calls).toContain(`delete:${lockName}`);
-  });
-
-  test("serializes two contenders for the same lock", async () => {
+  test("serializes two contenders for a free lock", async () => {
     const { client } = createRegistry();
     const events: string[] = [];
     const first = lock(client, async () => {
@@ -271,92 +310,53 @@ describe("withDeployLock", () => {
       events.push("second:start");
     });
 
-    await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 5);
+    await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 6);
     await Promise.all([first, second]);
 
     expect(events).toEqual(["first:start", "first:end", "second:start"]);
   });
 
-  test("keeps the lock through a transient heartbeat failure", async () => {
-    const { client, raw, entries } = createRegistry();
-    raw.getFunctionRegistry.mockRejectedValueOnce(
-      new ConnectError("unavailable", Code.Unavailable),
-    );
-
-    await lock(client, async (held) => {
-      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs * 2);
-      expect(() => held.assertHeld()).not.toThrow();
-      expect(record(entries.get(lockName)!.description).heartbeat).toBe(1);
+  test("treats an unreadable record as a holder and reclaims it once it stops changing", async () => {
+    const { client, entries, calls } = createRegistry({
+      [gen(1)]: { description: '{"v":3,"beat":0}' },
     });
+    const pending = lock(client, async () => "done");
 
-    expect(logger.warn).not.toHaveBeenCalled();
-  });
+    await vi.advanceTimersByTimeAsync(timing.leaseMs / 2);
+    entries.set(gen(1), { description: '{"v":3,"beat":1}' });
+    await vi.advanceTimersByTimeAsync(timing.leaseMs / 2);
+    expect(calls).not.toContain(`create:${gen(2)}`);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("holder record unreadable"));
 
-  test("still releases a lock whose heartbeats failed for longer than a lease", async () => {
-    // Failed refreshes are not a takeover: skipping the release here would
-    // leave the entry behind for the next deploy to wait a whole lease on.
-    const { client, raw, entries } = createRegistry();
-
-    await lock(client, async (held) => {
-      raw.getFunctionRegistry.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
-      await vi.advanceTimersByTimeAsync(timing.leaseMs * 2);
-      expect(() => held.assertHeld()).not.toThrow();
-      raw.getFunctionRegistry.mockImplementation(async ({ name }: { name: string }) => {
-        const entry = entries.get(name);
-        if (!entry) throw new ConnectError("not found", Code.NotFound);
-        return { function: { name, description: entry.description } };
-      });
-    });
-
-    expect(entries.has(lockName)).toBe(false);
-    expect(logger.warn).not.toHaveBeenCalled();
-  });
-
-  test("refreshes a lock already held while waiting for another application's lock", async () => {
-    const other = { name: "other-app", id: "app-2" };
-    const [firstName] = [lockName, deployLockResourceName(other)].toSorted();
-    const waitingOn = firstName === lockName ? other : app;
-    const waitingOnName = deployLockResourceName(waitingOn);
-    const { client, entries } = createRegistry({
-      [waitingOnName]: { description: holderDescription() },
-    });
-    const pending = withDeployLock(
-      { client, workspaceId: "ws-1", applications: [app, other], timing },
-      async () => "done",
-    );
-
-    for (let beat = 1; beat <= 4; beat++) {
-      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs);
-      entries.set(waitingOnName, { description: holderDescription({ heartbeat: beat }) });
-    }
-    expect(record(entries.get(firstName!)!.description).heartbeat).toBeGreaterThan(0);
-
-    entries.delete(waitingOnName);
-    await vi.advanceTimersByTimeAsync(timing.pollIntervalMs);
+    await vi.advanceTimersByTimeAsync(timing.leaseMs);
     await expect(pending).resolves.toBe("done");
+    expect(generations(entries)).toEqual(["000002:released"]);
   });
 
-  test("keeps polling and gives up when the entry is reported held but never readable", async () => {
-    const { client, raw } = createRegistry();
-    raw.createFunctionRegistry.mockRejectedValue(new ConnectError("exists", Code.AlreadyExists));
-    raw.getFunctionRegistry.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+  test("gives up with the holder's identity after the wait timeout", async () => {
+    const { client, entries, calls } = createRegistry({
+      [gen(1)]: { description: heldDescription() },
+    });
+    let heartbeat = 0;
     const outcome = lock(client, async () => "done").then(
       () => undefined,
       (error: unknown) => error,
     );
 
-    await vi.advanceTimersByTimeAsync(timing.waitTimeoutMs + timing.pollIntervalMs);
+    for (let elapsed = 0; elapsed <= timing.waitTimeoutMs; elapsed += timing.pollIntervalMs) {
+      heartbeat += 1;
+      entries.set(gen(1), { description: heldDescription({ heartbeat }) });
+      await vi.advanceTimersByTimeAsync(timing.pollIntervalMs);
+    }
 
     const error = await outcome;
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain("Timed out waiting");
-    // One create and one read per poll interval, not a hot loop.
-    expect(raw.getFunctionRegistry.mock.calls.length).toBeLessThanOrEqual(
-      timing.waitTimeoutMs / timing.pollIntervalMs + 2,
-    );
+    expect((error as Error).message).toContain('Timed out waiting for another deploy of "my-app"');
+    expect((error as Error).message).toContain("started 2026-08-29T00:00:00.000Z on ci-runner");
+    expect(calls).not.toContain(`create:${gen(2)}`);
   });
 
-  test("surfaces create failures other than a held lock", async () => {
+  test("surfaces create failures other than a taken generation", async () => {
     const { client, raw } = createRegistry();
     raw.createFunctionRegistry.mockRejectedValueOnce(
       new ConnectError("permission denied", Code.PermissionDenied),
@@ -369,35 +369,69 @@ describe("withDeployLock", () => {
     const { client, entries } = createRegistry();
 
     await lock(client, async () => {
-      const token = record(entries.get(lockName)!.description).token;
+      const token = record(entries.get(gen(1))!.description).token;
       await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs * 2);
-      const refreshed = record(entries.get(lockName)!.description);
+      const refreshed = record(entries.get(gen(1))!.description);
       expect(refreshed.token).toBe(token);
       expect(refreshed.heartbeat).toBe(2);
     });
   });
 
-  test("reports a takeover through assertHeld and leaves the new holder's entry alone", async () => {
+  test("stops once a higher generation appears and still releases its own", async () => {
     const { client, entries } = createRegistry();
 
     await lock(client, async (held) => {
       held.assertHeld();
-      entries.set(lockName, { description: holderDescription({ token: "new-holder" }) });
+      entries.set(gen(2), { description: heldDescription({ token: "new-holder" }) });
       await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs);
-      expect(() => held.assertHeld()).toThrow(
-        'Another deploy of "my-app" took over the deploy lock while this one was running',
-      );
+      expect(() => held.assertHeld()).toThrow(DeployLockLostError);
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('The deploy lock of "my-app" was taken over by another deploy'),
+        expect.stringContaining('The deploy lock of "my-app" was taken over'),
       );
     });
 
-    expect(record(entries.get(lockName)!.description).token).toBe("new-holder");
+    // Its own generation is marked released; the new holder's is untouched.
+    expect(generations(entries)).toEqual(["000001:released", "000002:held"]);
+    expect(record(entries.get(gen(2))!.description).token).toBe("new-holder");
+  });
+
+  test("stops when its lease ran out without a confirmed refresh, but still releases", async () => {
+    const { client, raw, entries } = createRegistry();
+
+    await lock(client, async (held) => {
+      raw.listFunctionRegistries.mockRejectedValue(
+        new ConnectError("unavailable", Code.Unavailable),
+      );
+      await vi.advanceTimersByTimeAsync(timing.leaseMs - timing.heartbeatIntervalMs);
+      expect(() => held.assertHeld()).not.toThrow();
+      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs * 2);
+      expect(() => held.assertHeld()).toThrow(DeployLockLostError);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("could not be refreshed for over 10 seconds"),
+      );
+    });
+
+    expect(generations(entries)).toEqual(["000001:released"]);
+  });
+
+  test("keeps the lock through a transient heartbeat failure", async () => {
+    const { client, raw, entries } = createRegistry();
+
+    await lock(client, async (held) => {
+      raw.listFunctionRegistries.mockRejectedValueOnce(
+        new ConnectError("unavailable", Code.Unavailable),
+      );
+      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs * 2);
+      expect(() => held.assertHeld()).not.toThrow();
+      expect(record(entries.get(gen(1))!.description).heartbeat).toBe(1);
+    });
+
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   test("warns instead of failing when the lock cannot be released", async () => {
     const { client, raw } = createRegistry();
-    raw.deleteFunctionRegistry.mockRejectedValueOnce(
+    raw.updateFunctionRegistry.mockRejectedValueOnce(
       new ConnectError("unavailable", Code.Unavailable),
     );
 
@@ -416,15 +450,17 @@ describe("withDeployLock", () => {
       async () => {
         // A checkout whose config has no id yet locks by name only; it must
         // still contend with this deploy.
-        expect(entries.has(deployLockResourceName({ name: "my-app" }))).toBe(true);
-        expect(entries.has(deployLockResourceName(withId))).toBe(true);
+        expect(entries.has(deployLockResourceName({ name: "my-app" }, 1))).toBe(true);
+        expect(entries.has(deployLockResourceName(withId, 1))).toBe(true);
       },
     );
 
-    expect(entries.size).toBe(0);
+    for (const entry of entries.values()) {
+      expect(record(entry.description).state).toBe("released");
+    }
   });
 
-  test("locks every application once, in resource-name order, and releases all of them", async () => {
+  test("locks every application once, in name order, and releases all of them", async () => {
     const { client, entries, calls } = createRegistry();
     const apps = [
       { name: "zeta", id: "id-z" },
@@ -434,8 +470,8 @@ describe("withDeployLock", () => {
     const expectedNames = [
       ...new Set(
         apps.flatMap((entry) => [
-          deployLockResourceName({ name: entry.name }),
-          deployLockResourceName(entry),
+          deployLockResourceName({ name: entry.name }, 1),
+          deployLockResourceName(entry, 1),
         ]),
       ),
     ].toSorted();
@@ -447,7 +483,9 @@ describe("withDeployLock", () => {
     expect(calls.filter((call) => call.startsWith("create:"))).toEqual(
       expectedNames.map((name) => `create:${name}`),
     );
-    expect(entries.size).toBe(0);
+    for (const entry of entries.values()) {
+      expect(record(entry.description).state).toBe("released");
+    }
   });
 
   test("releases the locks already held when a later acquisition fails", async () => {
@@ -458,20 +496,19 @@ describe("withDeployLock", () => {
     const [first, second] = [
       ...new Set(
         apps.flatMap((entry) => [
-          deployLockResourceName({ name: entry.name }),
-          deployLockResourceName(entry),
+          deployLockNamePrefix({ name: entry.name }),
+          deployLockNamePrefix(entry),
         ]),
       ),
     ].toSorted();
     const { client, entries } = createRegistry({
-      [second!]: { description: holderDescription() },
+      [`${second!}000001`]: { description: heldDescription() },
     });
     const shortWait = { ...timing, waitTimeoutMs: timing.pollIntervalMs * 2 };
-    const pending = withDeployLock(
+    const outcome = withDeployLock(
       { client, workspaceId: "ws-1", applications: apps, timing: shortWait },
       async () => "done",
-    );
-    const outcome = pending.then(
+    ).then(
       () => undefined,
       (error: unknown) => error,
     );
@@ -481,7 +518,7 @@ describe("withDeployLock", () => {
     const error = await outcome;
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain("Timed out waiting");
-    expect(entries.has(first!)).toBe(false);
-    expect(entries.has(second!)).toBe(true);
+    expect(record(entries.get(`${first!}000001`)!.description).state).toBe("released");
+    expect(record(entries.get(`${second!}000001`)!.description).state).toBe("held");
   });
 });

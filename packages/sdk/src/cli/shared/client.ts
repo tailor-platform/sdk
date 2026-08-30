@@ -6,6 +6,7 @@ import {
   Code,
   ConnectError,
   createClient,
+  createContextKey,
   type Interceptor,
   type Transport,
   type UnaryResponse,
@@ -288,12 +289,20 @@ export function retryInterceptor(): Interceptor {
 export function concurrencyLimitInterceptor(): Interceptor {
   const limit = createApplyLimiter();
   return (next) => async (req) => {
-    if (req.stream) {
+    if (req.stream || req.contextValues.get(bypassConcurrencyLimit)) {
       return await next(req);
     }
     return await limit(() => next(req));
   };
 }
+
+/**
+ * Call-level opt-out from the concurrency limiter, for the few calls that must
+ * not queue behind a deploy's own RPC burst (the deploy lock heartbeat).
+ */
+export const bypassConcurrencyLimit = createContextKey(false, {
+  description: "skip the apply concurrency limiter for this call",
+});
 
 /**
  * Human-readable name for the Connect status code of an error, for diagnostics.

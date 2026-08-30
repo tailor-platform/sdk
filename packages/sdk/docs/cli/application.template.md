@@ -85,7 +85,7 @@ See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-
 
 Only one `deploy` (or `remove`, or `tailordb migration set`/`sync`/`rebaseline`) runs against a given workspace and application at a time, regardless of where it is started from. A second run waits for the first to finish, then proceeds against the updated state; it gives up with an error after 10 minutes, which normally means the other run is still going. A run that was interrupted (for example with Ctrl+C or a crashed CI job) is reclaimed automatically by the next run after about 90 seconds. Dry runs never wait and never block another run. Deploys to different workspaces or applications are not affected.
 
-While a deploy holds this exclusivity, a `sdk-deploy-lock--…` entry appears among the workspace's functions; it is removed when the deploy finishes. Do not delete it while a deploy is running.
+This exclusivity is recorded in `sdk-deploy-lock--…` entries among the workspace's functions: one per application (two while the application has both a name and an id) that stays behind after the first deploy and marks the last run, plus a short-lived one while a run is in progress. Do not delete them while a deploy is running.
 
 **Schema Check:**
 

@@ -1,12 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
+import { Code, ConnectError, createContextValues, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
   closeConnectionPool,
+  bypassConcurrencyLimit,
   concurrencyLimitInterceptor,
   createTransport,
   errorHandlingInterceptor,
@@ -630,8 +631,46 @@ describe("concurrencyLimitInterceptor", () => {
     }
   });
 
-  const unaryReq = { stream: false } as unknown as UnaryRequest;
-  const streamReq = { stream: true } as unknown as UnaryRequest;
+  const unaryReq = {
+    stream: false,
+    contextValues: createContextValues(),
+  } as unknown as UnaryRequest;
+  const streamReq = {
+    stream: true,
+    contextValues: createContextValues(),
+  } as unknown as UnaryRequest;
+
+  test("lets a call that opts out of the limiter through while the cap is saturated", async () => {
+    process.env.TAILOR_APPLY_CONCURRENCY = "1";
+    const bypassReq = {
+      stream: false,
+      contextValues: createContextValues().set(bypassConcurrencyLimit, true),
+    } as unknown as UnaryRequest;
+
+    let releaseUnary: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => {
+      releaseUnary = resolve;
+    });
+    const next = vi.fn(async (req: UnaryRequest) => {
+      if (req === unaryReq) await blocked;
+      return { stream: false, message: {} };
+    });
+    const handler = concurrencyLimitInterceptor()(next as never);
+
+    const saturating = handler(unaryReq);
+    await expect(handler(bypassReq)).resolves.toBeDefined();
+    // A second ordinary call is still queued behind the saturated cap.
+    let queuedDone = false;
+    const queued = handler(unaryReq).then(() => {
+      queuedDone = true;
+    });
+    await Promise.resolve();
+    expect(queuedDone).toBe(false);
+
+    releaseUnary();
+    await Promise.all([saturating, queued]);
+    expect(queuedDone).toBe(true);
+  });
 
   test("bounds the number of concurrent in-flight unary RPCs to the cap", async () => {
     process.env.TAILOR_APPLY_CONCURRENCY = "2";
