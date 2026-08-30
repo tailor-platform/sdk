@@ -611,6 +611,47 @@ describe("seedApplyCommand", () => {
     expect(loggedLines.some((line) => line.includes("✓ _User: 30 users deleted"))).toBe(true);
   });
 
+  test("reports confirmed progress before rethrowing an IdP truncate transport error", async () => {
+    const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
+    const transportError = new Error("[deadline_exceeded] context deadline exceeded");
+    let truncateCallCount = 0;
+    sdk.executeScript.mockImplementation(
+      ({ name, arg }: { name: string; arg?: { users?: unknown[] } }) => {
+        if (name === "truncate-idp-user.ts") {
+          truncateCallCount += 1;
+          if (truncateCallCount > 1) {
+            return Promise.reject(transportError);
+          }
+        }
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: idpScriptResult(name, users, arg?.users),
+          success: true,
+        });
+      },
+    );
+
+    const result = await runApplyCommand([
+      "--machine-user",
+      "manager",
+      "--truncate",
+      "--yes",
+      "_User",
+    ]);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toBe(transportError);
+    const warnedLines = logger.warn.mock.calls.map(([line]) => String(line));
+    expect(
+      warnedLines.some(
+        (line) =>
+          line.includes("25/30 users confirmed deleted before the failure") &&
+          line.includes("re-run the same command to retry safely"),
+      ),
+    ).toBe(true);
+  });
+
   test("counts users that were already gone as deleted", async () => {
     const users = [
       { id: "1", name: "Ada" },

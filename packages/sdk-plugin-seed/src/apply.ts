@@ -410,15 +410,31 @@ async function truncateIdpUser(
 
   let success = true;
   const totals = { deleted: 0, notFound: 0 };
+  const warnInterruptedChunk = () => {
+    const confirmed = totals.deleted + totals.notFound;
+    logger.warn(
+      `  _User: ${confirmed}/${users.length} users confirmed deleted before the failure ` +
+        `(${totals.deleted} deleted, ${totals.notFound} already deleted). ` +
+        "The interrupted chunk may still have been applied server-side; " +
+        "re-run the same command to retry safely.",
+      { mode: "plain" },
+    );
+  };
   for (const [index, chunk] of chunks.entries()) {
     logChunkProgress(index, `${chunk.length} users`);
-    const run = await runIdpScript({
-      execution,
-      scriptCode: scripts.truncateScriptCode,
-      scriptName: "truncate-idp-user.ts",
-      arg: { users: chunk, offset: index * IDP_USER_CHUNK_SIZE, total: users.length },
-      indent: "  ",
-    });
+    let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
+    try {
+      run = await runIdpScript({
+        execution,
+        scriptCode: scripts.truncateScriptCode,
+        scriptName: "truncate-idp-user.ts",
+        arg: { users: chunk, offset: index * IDP_USER_CHUNK_SIZE, total: users.length },
+        indent: "  ",
+      });
+    } catch (error) {
+      warnInterruptedChunk();
+      throw error;
+    }
     if (run.outcomeUnknown) {
       return false;
     }
