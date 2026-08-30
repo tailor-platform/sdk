@@ -1,37 +1,44 @@
 /**
  * Application-level deploy lock
  *
- * The operator API has no conditional writes, so two deploys of the same
- * application interleave freely: each plans against a snapshot the other is
- * changing, and shared writes (metadata labels, migration checkpoints,
- * temporary migration resources) are last-writer-wins. Create-only RPCs are
- * the one atomic primitive, so the lock is a function registry entry created
- * with `CreateFunctionRegistry`: the holder's identity lives in the entry's
- * description, a heartbeat keeps changing it, and a waiter that sees the
- * description unchanged for a whole lease reclaims the entry as abandoned.
+ * The operator API's only atomic primitive is a create-only RPC, so the lock
+ * is a function registry entry created with `CreateFunctionRegistry`. The
+ * holder's record lives in the entry's description and a heartbeat keeps
+ * changing it; a waiter that sees the description unchanged for a whole lease
+ * reclaims the entry as abandoned.
  */
 
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { z } from "zod";
 import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { computeContentHash, uploadFunctionScript } from "./function-registry";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { MessageInitShape } from "@bufbuild/protobuf";
-import type {
-  CreateFunctionRegistryRequestSchema,
-  UpdateFunctionRegistryRequestSchema,
-} from "@tailor-platform/tailor-proto/function_registry_pb";
 
 // The entry deliberately carries no SDK ownership labels: a labeled entry that
 // is not part of the desired set is deleted by `planFunctionRegistry`.
 const LOCK_NAME_PREFIX = "sdk-deploy-lock--";
 const LOCK_SCRIPT = "export {};\n";
+const LOCK_SCRIPT_HASH = computeContentHash(LOCK_SCRIPT);
 
 const POLL_INTERVAL_MS = 5_000;
 const WAIT_TIMEOUT_MS = 10 * 60_000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const LEASE_MS = 90_000;
+
+// strip unknown keys
+const LockRecordSchema = z.object({
+  v: z.literal(1),
+  token: z.string(),
+  application: z.string(),
+  // strip unknown keys
+  holder: z.object({ host: z.string(), pid: z.number(), startedAt: z.string() }),
+  heartbeat: z.number(),
+});
+
+type LockRecord = z.infer<typeof LockRecordSchema>;
 
 export interface DeployLockApplication {
   name: string;
@@ -57,19 +64,20 @@ export interface DeployLock {
   assertHeld(): void;
 }
 
-interface LockRecord {
-  v: 1;
-  token: string;
-  application: string;
-  holder: { host: string; pid: number; startedAt: string };
-  heartbeat: number;
-}
-
 interface HeldLock {
   application: DeployLockApplication;
   name: string;
   record: LockRecord;
   lost: boolean;
+}
+
+/**
+ * What a waiter can see of the current lock entry. `key` changes whenever the
+ * holder heartbeats, whether or not the record is one this SDK can read.
+ */
+interface LockObservation {
+  key: string;
+  record: LockRecord | undefined;
 }
 
 /**
@@ -100,48 +108,17 @@ function isAlreadyExistsError(error: unknown): boolean {
   return error instanceof ConnectError && error.code === Code.AlreadyExists;
 }
 
-function parseLockRecord(description: string | undefined): LockRecord | undefined {
-  if (!description) return undefined;
+function parseLockRecord(description: string): LockRecord | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(description);
   } catch {
     return undefined;
   }
-  if (typeof parsed !== "object" || parsed === null) return undefined;
-  const record = parsed as Record<string, unknown>;
-  const holder = record.holder as Record<string, unknown> | null | undefined;
-  if (
-    record.v !== 1 ||
-    typeof record.token !== "string" ||
-    typeof record.application !== "string" ||
-    typeof record.heartbeat !== "number" ||
-    typeof holder !== "object" ||
-    holder === null ||
-    typeof holder.host !== "string" ||
-    typeof holder.pid !== "number" ||
-    typeof holder.startedAt !== "string"
-  ) {
-    return undefined;
-  }
-  return {
-    v: 1,
-    token: record.token,
-    application: record.application,
-    heartbeat: record.heartbeat,
-    holder: { host: holder.host, pid: holder.pid, startedAt: holder.startedAt },
-  };
+  const result = LockRecordSchema.safeParse(parsed);
+  return result.success ? result.data : undefined;
 }
 
-/**
- * Write the lock entry, either creating it (which fails when another deploy
- * holds the lock) or refreshing the holder's record.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param name - Lock resource name
- * @param record - Holder record to store in the entry's description
- * @param mode - Whether to create the entry or update the existing one
- */
 async function writeLockEntry(
   client: OperatorClient,
   workspaceId: string,
@@ -149,48 +126,37 @@ async function writeLockEntry(
   record: LockRecord,
   mode: "create" | "update",
 ): Promise<void> {
-  const buffer = Buffer.from(LOCK_SCRIPT, "utf-8");
-  const info = {
+  await uploadFunctionScript(
+    client,
     workspaceId,
-    name,
-    description: JSON.stringify(record),
-    sizeBytes: BigInt(buffer.length),
-    contentHash: crypto.createHash("sha256").update(LOCK_SCRIPT, "utf-8").digest("hex"),
-  };
-
-  if (mode === "create") {
-    /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Info header followed by the script */
-    async function* createStream(): AsyncIterable<
-      MessageInitShape<typeof CreateFunctionRegistryRequestSchema>
-    > {
-      yield { payload: { case: "info" as const, value: info } };
-      yield { payload: { case: "chunk" as const, value: buffer } };
-    }
-    await client.createFunctionRegistry(createStream());
-  } else {
-    /** @yields {MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>} Info header followed by the script */
-    async function* updateStream(): AsyncIterable<
-      MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>
-    > {
-      yield { payload: { case: "info" as const, value: info } };
-      yield { payload: { case: "chunk" as const, value: buffer } };
-    }
-    await client.updateFunctionRegistry(updateStream());
-  }
+    {
+      name,
+      scriptContent: LOCK_SCRIPT,
+      contentHash: LOCK_SCRIPT_HASH,
+      description: JSON.stringify(record),
+    },
+    mode === "create",
+  );
 }
 
-async function readLockRecord(
+async function observeLock(
   client: OperatorClient,
   workspaceId: string,
   name: string,
-): Promise<{ exists: boolean; record: LockRecord | undefined }> {
+): Promise<LockObservation | undefined> {
   const response = await getOrNull(() => client.getFunctionRegistry({ workspaceId, name }));
-  if (!response?.function) return { exists: false, record: undefined };
-  return { exists: true, record: parseLockRecord(response.function.description) };
+  if (!response?.function) return undefined;
+  const description = response.function.description;
+  const record = parseLockRecord(description);
+  return {
+    key: record ? `${record.token}:${record.heartbeat}` : `opaque:${description}`,
+    record,
+  };
 }
 
-function describeHolder(record: LockRecord): string {
-  return `started ${record.holder.startedAt} on ${record.holder.host}`;
+function describeHolder(record: LockRecord | undefined): string {
+  if (!record) return "holder record unreadable";
+  return `started ${record.holder.startedAt} on ${record.holder.host}, pid ${record.holder.pid}`;
 }
 
 /**
@@ -219,7 +185,7 @@ async function acquireLock(
     heartbeat: 0,
   };
 
-  let observed: { token: string; heartbeat: number; since: number } | undefined;
+  let observed: { key: string; since: number } | undefined;
   let announced = false;
   for (;;) {
     try {
@@ -229,27 +195,17 @@ async function acquireLock(
       if (!isAlreadyExistsError(error)) throw error;
     }
 
-    const current = await readLockRecord(client, workspaceId, name);
-    if (!current.exists) continue;
-    if (!current.record) {
-      throw new Error(
-        `Function '${name}' occupies the deploy lock slot of "${application.name}" but was not written by the SDK. ` +
-          "Delete that function from the workspace and retry.",
-      );
-    }
+    const current = await observeLock(client, workspaceId, name);
+    if (!current) continue;
 
     const now = Date.now();
-    if (
-      !observed ||
-      observed.token !== current.record.token ||
-      observed.heartbeat !== current.record.heartbeat
-    ) {
-      observed = { token: current.record.token, heartbeat: current.record.heartbeat, since: now };
+    if (observed?.key !== current.key) {
+      observed = { key: current.key, since: now };
     } else if (now - observed.since >= timing.leaseMs) {
       logger.info(
         `Reclaiming the deploy lock of "${application.name}" left behind by a deploy that stopped (${describeHolder(current.record)}).`,
       );
-      await reclaimLock(client, workspaceId, name, observed);
+      await reclaimLock(client, workspaceId, name, observed.key);
       observed = undefined;
       continue;
     }
@@ -277,23 +233,16 @@ async function acquireLock(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param name - Lock resource name
- * @param stale - Token and heartbeat observed as unchanged for a whole lease
+ * @param staleKey - Observation key that stayed unchanged for a whole lease
  */
 async function reclaimLock(
   client: OperatorClient,
   workspaceId: string,
   name: string,
-  stale: { token: string; heartbeat: number },
+  staleKey: string,
 ): Promise<void> {
-  const latest = await readLockRecord(client, workspaceId, name);
-  if (
-    !latest.exists ||
-    !latest.record ||
-    latest.record.token !== stale.token ||
-    latest.record.heartbeat !== stale.heartbeat
-  ) {
-    return;
-  }
+  const latest = await observeLock(client, workspaceId, name);
+  if (latest?.key !== staleKey) return;
   try {
     await client.deleteFunctionRegistry({ workspaceId, name });
   } catch (error) {
@@ -316,8 +265,8 @@ async function heartbeat(
 ): Promise<void> {
   if (held.lost) return;
   try {
-    const current = await readLockRecord(client, workspaceId, held.name);
-    if (!current.exists || current.record?.token !== held.record.token) {
+    const current = await observeLock(client, workspaceId, held.name);
+    if (current?.record?.token !== held.record.token) {
       held.lost = true;
       logger.warn(
         `The deploy lock of "${held.application.name}" was taken over by another deploy after this one ` +
@@ -349,8 +298,8 @@ async function releaseLock(
 ): Promise<void> {
   if (held.lost) return;
   try {
-    const current = await readLockRecord(client, workspaceId, held.name);
-    if (!current.exists || current.record?.token !== held.record.token) return;
+    const current = await observeLock(client, workspaceId, held.name);
+    if (current?.record?.token !== held.record.token) return;
     await client.deleteFunctionRegistry({ workspaceId, name: held.name });
   } catch (error) {
     if (isNotFoundError(error)) return;
@@ -400,16 +349,8 @@ export async function withDeployLock<T>(
     }
   };
 
-  const deadline = Date.now() + timing.waitTimeoutMs;
-  try {
-    for (const application of applications) {
-      held.push(await acquireLock(client, workspaceId, application, deadline, timing));
-    }
-  } catch (error) {
-    await releaseAll();
-    throw error;
-  }
-
+  // Heartbeats start before the first acquisition, so a lock held while
+  // waiting for another application's lock is refreshed too.
   let heartbeatInFlight: Promise<void> | undefined;
   const timer = setInterval(() => {
     if (heartbeatInFlight) return;
@@ -422,6 +363,24 @@ export async function withDeployLock<T>(
     });
   }, timing.heartbeatIntervalMs);
   timer.unref();
+
+  const stop = async () => {
+    clearInterval(timer);
+    // A heartbeat still in flight would read the entry after release deleted
+    // it and misreport a takeover.
+    await heartbeatInFlight;
+    await releaseAll();
+  };
+
+  const deadline = Date.now() + timing.waitTimeoutMs;
+  try {
+    for (const application of applications) {
+      held.push(await acquireLock(client, workspaceId, application, deadline, timing));
+    }
+  } catch (error) {
+    await stop();
+    throw error;
+  }
 
   const lock: DeployLock = {
     assertHeld: () => {
@@ -437,10 +396,6 @@ export async function withDeployLock<T>(
   try {
     return await fn(lock);
   } finally {
-    clearInterval(timer);
-    // A heartbeat still in flight would read the entry after release deleted
-    // it and misreport a takeover.
-    await heartbeatInFlight;
-    await releaseAll();
+    await stop();
   }
 }

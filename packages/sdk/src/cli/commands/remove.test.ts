@@ -1,5 +1,6 @@
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { removeCommand } from "./remove";
@@ -181,6 +182,13 @@ describe("remove command", () => {
 
     await runCommand(removeCommand, ["--yes"]);
 
+    expect(vi.mocked(withDeployLock)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "workspace-id",
+        applications: [{ name: "my-app", id: "app-id" }],
+      }),
+      expect.any(Function),
+    );
     expect(logger.log).toHaveBeenCalledWith(
       expect.stringContaining("Workflow execution policies:\n  - premium"),
     );

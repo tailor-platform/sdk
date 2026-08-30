@@ -702,7 +702,7 @@ async function deployInternal(
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    const planAndApply = async (lock?: DeployLock): Promise<undefined> => {
+    const planAndApply = async (lock: DeployLock): Promise<undefined> => {
       const planTargets = targets.map((target) => ({
         ...target,
         application: adjustApplicationForMigrationTest(target.application, internalContext),
@@ -762,7 +762,7 @@ async function deployInternal(
         return undefined;
       }
 
-      await applyDeploymentPlans(client, workspaceId, deployments, () => lock?.assertHeld());
+      await applyDeploymentPlans(client, workspaceId, deployments, () => lock.assertHeld());
 
       if (!internalContext?.suppressResultOutput) {
         if (logger.jsonMode) {
@@ -775,7 +775,7 @@ async function deployInternal(
       return undefined;
     };
 
-    if (dryRun) return await planAndApply();
+    if (dryRun) return await planAndApply({ assertHeld: () => {} });
     return await withDeployLock(
       {
         client,

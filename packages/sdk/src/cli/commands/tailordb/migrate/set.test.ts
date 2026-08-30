@@ -4,6 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
@@ -53,6 +54,8 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+      name: "my-app",
+      id: "app-1",
       db,
     },
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
@@ -96,6 +99,10 @@ describe("tailordb migration set", () => {
     const result = await runCommand(setCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
+    expect(vi.mocked(withDeployLock)).toHaveBeenCalledWith(
+      expect.objectContaining({ applications: [{ name: "my-app", id: "app-1" }] }),
+      expect.any(Function),
+    );
     expect(state.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },

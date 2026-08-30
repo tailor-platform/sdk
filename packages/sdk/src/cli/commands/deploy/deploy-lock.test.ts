@@ -240,15 +240,80 @@ describe("withDeployLock", () => {
     expect(calls).not.toContain(`delete:${lockName}`);
   });
 
-  test("fails immediately when the lock slot holds a function the SDK did not write", async () => {
-    const { client, calls } = createRegistry({
-      [lockName]: { description: "a user function" },
+  test("treats an unreadable record as a holder and reclaims it once it stops changing", async () => {
+    // A newer SDK may write a record this version cannot parse; it is still a
+    // live holder as long as its description keeps changing.
+    const { client, entries, calls } = createRegistry({
+      [lockName]: { description: '{"v":2,"beat":0}' },
+    });
+    const pending = lock(client, async () => "done");
+
+    await vi.advanceTimersByTimeAsync(timing.leaseMs / 2);
+    entries.set(lockName, { description: '{"v":2,"beat":1}' });
+    await vi.advanceTimersByTimeAsync(timing.leaseMs / 2);
+    expect(calls).not.toContain(`delete:${lockName}`);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("holder record unreadable"));
+
+    await vi.advanceTimersByTimeAsync(timing.leaseMs);
+    await expect(pending).resolves.toBe("done");
+    expect(calls).toContain(`delete:${lockName}`);
+  });
+
+  test("serializes two contenders for the same lock", async () => {
+    const { client } = createRegistry();
+    const events: string[] = [];
+    const first = lock(client, async () => {
+      events.push("first:start");
+      await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 3);
+      events.push("first:end");
+    });
+    const second = lock(client, async () => {
+      events.push("second:start");
     });
 
-    await expect(lock(client, async () => "done")).rejects.toThrow(
-      `Function '${lockName}' occupies the deploy lock slot of "my-app" but was not written by the SDK`,
+    await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 5);
+    await Promise.all([first, second]);
+
+    expect(events).toEqual(["first:start", "first:end", "second:start"]);
+  });
+
+  test("keeps the lock through a transient heartbeat failure", async () => {
+    const { client, raw, entries } = createRegistry();
+    raw.getFunctionRegistry.mockRejectedValueOnce(
+      new ConnectError("unavailable", Code.Unavailable),
     );
-    expect(calls).not.toContain(`delete:${lockName}`);
+
+    await lock(client, async (held) => {
+      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs * 2);
+      expect(() => held.assertHeld()).not.toThrow();
+      expect(record(entries.get(lockName)!.description).heartbeat).toBe(1);
+    });
+
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test("refreshes a lock already held while waiting for another application's lock", async () => {
+    const other = { name: "other-app", id: "app-2" };
+    const [firstName] = [lockName, deployLockResourceName(other)].toSorted();
+    const waitingOn = firstName === lockName ? other : app;
+    const waitingOnName = deployLockResourceName(waitingOn);
+    const { client, entries } = createRegistry({
+      [waitingOnName]: { description: holderDescription() },
+    });
+    const pending = withDeployLock(
+      { client, workspaceId: "ws-1", applications: [app, other], timing },
+      async () => "done",
+    );
+
+    for (let beat = 1; beat <= 4; beat++) {
+      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs);
+      entries.set(waitingOnName, { description: holderDescription({ heartbeat: beat }) });
+    }
+    expect(record(entries.get(firstName!)!.description).heartbeat).toBeGreaterThan(0);
+
+    entries.delete(waitingOnName);
+    await vi.advanceTimersByTimeAsync(timing.pollIntervalMs);
+    await expect(pending).resolves.toBe("done");
   });
 
   test("surfaces create failures other than a held lock", async () => {
@@ -328,16 +393,23 @@ describe("withDeployLock", () => {
     ];
     const [first, second] = [...new Set(apps.map(deployLockResourceName))].toSorted();
     const { client, entries } = createRegistry({
-      [second!]: { description: "a user function" },
+      [second!]: { description: holderDescription() },
     });
+    const shortWait = { ...timing, waitTimeoutMs: timing.pollIntervalMs * 2 };
+    const pending = withDeployLock(
+      { client, workspaceId: "ws-1", applications: apps, timing: shortWait },
+      async () => "done",
+    );
+    const outcome = pending.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
 
-    await expect(
-      withDeployLock(
-        { client, workspaceId: "ws-1", applications: apps, timing },
-        async () => "done",
-      ),
-    ).rejects.toThrow("was not written by the SDK");
+    await vi.advanceTimersByTimeAsync(timing.pollIntervalMs * 4);
 
+    const error = await outcome;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("Timed out waiting");
     expect(entries.has(first!)).toBe(false);
     expect(entries.has(second!)).toBe(true);
   });
