@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 2.8.0
+
+### Minor Changes
+
+- [#2192](https://github.com/tailor-platform/sdk/pull/2192) [`28cc1a4`](https://github.com/tailor-platform/sdk/commit/28cc1a43098fb2fc6ad8cec7b7b4ba2b75e1fcaf) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `TAILOR_CONSOLE_NEXT` environment variable to open the new Tailor Platform Console UI from `tailor open` and `tailor auth-connection open`. Setting `TAILOR_CONSOLE_NEXT=1` alone is enough: it redirects the console host from `console.` to `console-next.` and switches to the new UI's URL paths (`/workspaces/{workspaceId}/services/applications/{applicationName}` instead of `/workspaces/{workspaceId}/applications/{applicationName}/overview`, and `/workspaces/{workspaceId}/services/auth-connections` instead of `/workspaces/{workspaceId}/settings/connections`). An explicitly configured console URL (`TAILOR_PLATFORM_CONSOLE_URL` or a profile's `console_url`) is never rewritten.
+
+### Patch Changes
+
+- [#2178](https://github.com/tailor-platform/sdk/pull/2178) [`42e0265`](https://github.com/tailor-platform/sdk/commit/42e026556c870db41f504d1b961feeda66ca5cc5) Thanks [@dqn](https://github.com/dqn)! - Stop counting an executor declared with `disabled: true` as a subscriber when `deploy` resolves `publishEvents`. Such an executor never runs, so it no longer keeps event publishing enabled on the TailorDB table, resolver, IdP, or workflow its trigger names, and no longer rejects an explicit `publishEvents: false` on that resource. Its trigger is still deployed, so the resource it names still has to be declared by the deploy.
+
+- [#2185](https://github.com/tailor-platform/sdk/pull/2185) [`df35aba`](https://github.com/tailor-platform/sdk/commit/df35aba48d5730b265858fad21235c3d319b66ab) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @electric-sql/pglite to v0.5.7
+
+- [#2194](https://github.com/tailor-platform/sdk/pull/2194) [`3298c69`](https://github.com/tailor-platform/sdk/commit/3298c69cd0a3eb2ed6df2b33bcf0bf79175cb759) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#2183](https://github.com/tailor-platform/sdk/pull/2183) [`3f68a09`](https://github.com/tailor-platform/sdk/commit/3f68a09681e4c8a166cb8d7262dd991d4342eb1b) Thanks [@dqn](https://github.com/dqn)! - Lock migrating TailorDB namespaces and stop publishing their record events while migrations run. `deploy` disables every GraphQL operation — create, update, delete, read, and bulk upsert — on the affected tables. A successful migration applies the configured settings. If a later migration fails, settings from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior settings and leaves its newly created tables restricted until a successful retry. Restoration rechecks the checkpoint number and history so it does not overwrite a concurrent deployment; if ownership cannot be verified, or a committed table deletion fails, the affected tables remain locked for manual recovery.
+
 ## 2.7.0
 
 ### Minor Changes
