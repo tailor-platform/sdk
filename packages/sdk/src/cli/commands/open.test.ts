@@ -32,7 +32,13 @@ describe("open --json", () => {
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
     vi.mocked(open).mockResolvedValue({} as ChildProcess);
-    await runTest();
+    vi.stubEnv("TAILOR_CONSOLE_NEXT", undefined);
+
+    try {
+      await runTest();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test.each([
@@ -93,6 +99,43 @@ describe("open --json", () => {
     expect(loadConsoleBaseUrl).toHaveBeenCalledWith({
       profile: "missing",
       allowMissingProfile: true,
+    });
+  });
+});
+
+describe("open with TAILOR_CONSOLE_NEXT", () => {
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
+    vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        name: "my-app",
+      },
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    vi.mocked(open).mockResolvedValue({} as ChildProcess);
+    vi.stubEnv("TAILOR_CONSOLE_NEXT", "1");
+
+    try {
+      await runTest();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test("opens the new console UI's URL path when TAILOR_CONSOLE_NEXT is enabled", async () => {
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(openCommand, []);
+
+    expect(JSON.parse(stdout.output)).toEqual({
+      consoleUrl:
+        "https://console.tailor.tech/workspaces/12345678-1234-4abc-8def-123456789012/services/applications/my-app",
+      workspaceId: "12345678-1234-4abc-8def-123456789012",
+      applicationName: "my-app",
+      opened: true,
     });
   });
 });
