@@ -264,7 +264,7 @@ async function sync(options: SyncOptions): Promise<void> {
 
   await withDeployLock(
     { client, workspaceId, applications: [{ name: config.name, id: config.id }] },
-    async () => {
+    async (lock) => {
       const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
       const current = await fetchRemoteMigrationNumber(client, trn);
       const remoteTypes = await fetchRemoteTypes(client, workspaceId, target.namespace);
@@ -379,6 +379,7 @@ async function sync(options: SyncOptions): Promise<void> {
       const createManifests = creates.map((tableName) => manifestFor(tableName));
       const updateManifests = updates.map((tableName) => manifestFor(tableName));
 
+      lock.assertHeld();
       try {
         await Promise.all([
           ...createManifests.map((tailordbType) =>
@@ -429,6 +430,7 @@ async function sync(options: SyncOptions): Promise<void> {
         ),
       );
 
+      lock.assertHeld();
       await writeMetadataLabels(client, {
         trn,
         labels: {

@@ -426,10 +426,13 @@ describe("executeMigrationAsWorkflow", () => {
     expect(calls).not.toContain("deleteWorkflow");
   });
 
-  test("refuses when the leftover execution is waiting to be resumed", async () => {
+  test.each([
+    ["WAITING", WorkflowExecution_Status.WAITING],
+    ["PENDING_RESUME", WorkflowExecution_Status.PENDING_RESUME],
+  ])("refuses when the leftover execution is %s for a resume", async (_label, status) => {
     const { client, calls } = createMockClient({
       leftoverWorkflowId: "stale-wf",
-      leftoverExecutions: [{ id: "exec-a", status: WorkflowExecution_Status.WAITING }],
+      leftoverExecutions: [{ id: "exec-a", status }],
     });
 
     await expect(run(client)).rejects.toThrow("waiting to be resumed");

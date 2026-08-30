@@ -68,6 +68,8 @@ interface HeldLock {
   application: DeployLockApplication;
   name: string;
   record: LockRecord;
+  /** When the entry was last confirmed to carry this holder's record. */
+  refreshedAt: number;
   lost: boolean;
 }
 
@@ -190,7 +192,7 @@ async function acquireLock(
   for (;;) {
     try {
       await writeLockEntry(client, workspaceId, name, record, "create");
-      return { application, name, record, lost: false };
+      return { application, name, record, refreshedAt: Date.now(), lost: false };
     } catch (error) {
       if (!isAlreadyExistsError(error)) throw error;
     }
@@ -278,10 +280,18 @@ async function heartbeat(
     }
     held.record = { ...held.record, heartbeat: held.record.heartbeat + 1 };
     await writeLockEntry(client, workspaceId, held.name, held.record, "update");
+    held.refreshedAt = Date.now();
   } catch (error) {
     logger.debug(
       `deploy lock: heartbeat for "${held.application.name}" failed: ${error instanceof Error ? error.message : String(error)}`,
     );
+    if (Date.now() - held.refreshedAt >= leaseMs) {
+      held.lost = true;
+      logger.warn(
+        `The deploy lock of "${held.application.name}" could not be refreshed for over ${Math.round(leaseMs / 1000)} seconds, ` +
+          "so another deploy may have taken it over. Stopping before the next apply phase.",
+      );
+    }
   }
 }
 
@@ -389,7 +399,10 @@ export async function withDeployLock<T>(
 
   const lock: DeployLock = {
     assertHeld: () => {
-      const lost = held.find((entry) => entry.lost);
+      // A lease that ran out without a confirmed refresh may already belong to
+      // another deploy, whether or not a heartbeat has noticed yet.
+      const now = Date.now();
+      const lost = held.find((entry) => entry.lost || now - entry.refreshedAt >= timing.leaseMs);
       if (!lost) return;
       throw new Error(
         `Another deploy of "${lost.application.name}" took over the deploy lock while this one was running; ` +

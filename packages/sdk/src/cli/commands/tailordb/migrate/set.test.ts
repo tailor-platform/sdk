@@ -17,10 +17,11 @@ const state = vi.hoisted(() => ({
   setMetadata: vi.fn(),
 }));
 
+const assertHeld = vi.hoisted(() => vi.fn());
 vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
   withDeployLock: vi.fn(
     async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
-      fn({ assertHeld: () => {} }),
+      fn({ assertHeld }),
   ),
 }));
 
@@ -103,6 +104,7 @@ describe("tailordb migration set", () => {
       expect.objectContaining({ applications: [{ name: "my-app", id: "app-1" }] }),
       expect.any(Function),
     );
+    expect(assertHeld).toHaveBeenCalled();
     expect(state.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },

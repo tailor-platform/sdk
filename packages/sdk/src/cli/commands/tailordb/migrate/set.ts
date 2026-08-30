@@ -69,7 +69,7 @@ async function set(options: SetOptions): Promise<void> {
 
   await withDeployLock(
     { client, workspaceId, applications: [{ name: config.name, id: config.id }] },
-    async () => {
+    async (lock) => {
       // 6. Get current migration state
       const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
       const currentState = await fetchRemoteMigrationState(client, trn);
@@ -119,6 +119,7 @@ async function set(options: SetOptions): Promise<void> {
       }
 
       // 9. Update migration label
+      lock.assertHeld();
       await writeMetadataLabels(client, {
         trn,
         labels: {

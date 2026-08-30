@@ -226,7 +226,10 @@ async function reclaimLeftovers(
         "Wait for them to finish, then retry the deployment.",
     );
   }
-  if (execution.status === WorkflowExecution_Status.WAITING) {
+  if (
+    execution.status === WorkflowExecution_Status.WAITING ||
+    execution.status === WorkflowExecution_Status.PENDING_RESUME
+  ) {
     throw new MigrationExecutionInFlightError(
       `Migration workflow '${name}' has an execution from an earlier run that is waiting to be resumed and cannot complete on its own. ` +
         "Resolve or delete that execution, then retry the deployment.",

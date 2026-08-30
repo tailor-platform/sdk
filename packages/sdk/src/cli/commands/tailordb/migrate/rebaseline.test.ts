@@ -26,10 +26,11 @@ const state = vi.hoisted(() => ({
   listTailorDBGQLPermissions: vi.fn(),
 }));
 
+const assertHeld = vi.hoisted(() => vi.fn());
 vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
   withDeployLock: vi.fn(
     async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
-      fn({ assertHeld: () => {} }),
+      fn({ assertHeld }),
   ),
 }));
 
@@ -192,6 +193,7 @@ describe("tailordb migration rebaseline", () => {
       expect.objectContaining({ applications: [{ name: "my-app", id: "app-1" }] }),
       expect.any(Function),
     );
+    expect(assertHeld).toHaveBeenCalled();
 
     expect(result.success).toBe(true);
     expect(migrationDirectories()).toEqual(["0000", "2026", "fixtures"]);

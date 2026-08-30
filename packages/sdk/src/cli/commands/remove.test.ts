@@ -73,9 +73,10 @@ const mocks = vi.hoisted(() => {
     applyTailorDB: vi.fn(),
     planWorkflow: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
     applyWorkflow: vi.fn(),
+    assertHeld: vi.fn(),
     withDeployLock: vi.fn(
       async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
-        fn({ assertHeld: () => {} }),
+        fn({ assertHeld: mocks.assertHeld }),
     ),
   };
 });
@@ -188,6 +189,9 @@ describe("remove command", () => {
         applications: [{ name: "my-app", id: "app-id" }],
       }),
       expect.any(Function),
+    );
+    expect(mocks.assertHeld.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.applyWorkflow.mock.invocationCallOrder[0]!,
     );
     expect(logger.log).toHaveBeenCalledWith(
       expect.stringContaining("Workflow execution policies:\n  - premium"),

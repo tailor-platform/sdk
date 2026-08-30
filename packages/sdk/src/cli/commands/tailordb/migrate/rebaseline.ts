@@ -190,7 +190,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
 
   await withDeployLock(
     { client, workspaceId, applications: [{ name: config.name, id: config.id }] },
-    async () => {
+    async (lock) => {
       const remoteContextArgs = [
         "--config",
         config.path,
@@ -308,6 +308,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
         replacedHistoryId: currentHistoryId,
         replacedLatestMigration: latestMigration,
       };
+      lock.assertHeld();
       await activateBaseline(
         target.migrationsDir,
         latestSnapshot,

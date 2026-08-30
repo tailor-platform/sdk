@@ -34,10 +34,11 @@ const state = vi.hoisted(() => ({
   setMetadata: vi.fn(),
 }));
 
+const assertHeld = vi.hoisted(() => vi.fn());
 vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
   withDeployLock: vi.fn(
     async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
-      fn({ assertHeld: () => {} }),
+      fn({ assertHeld }),
   ),
 }));
 
@@ -179,6 +180,7 @@ describe("tailordb migration sync", () => {
       expect.objectContaining({ applications: [{ name: "my-app", id: "app-1" }] }),
       expect.any(Function),
     );
+    expect(assertHeld).toHaveBeenCalled();
     // Snapshot at 0001 contains User (existing → update) and Post (new → create);
     // remote-only Stale is deleted.
     expect(state.createTailorDBType).toHaveBeenCalledTimes(1);

@@ -292,6 +292,21 @@ describe("withDeployLock", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  test("treats a lease that could not be refreshed as lost", async () => {
+    const { client, raw } = createRegistry();
+
+    await lock(client, async (held) => {
+      raw.getFunctionRegistry.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+      await vi.advanceTimersByTimeAsync(timing.leaseMs - timing.heartbeatIntervalMs);
+      expect(() => held.assertHeld()).not.toThrow();
+      await vi.advanceTimersByTimeAsync(timing.heartbeatIntervalMs * 2);
+      expect(() => held.assertHeld()).toThrow("took over the deploy lock");
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('The deploy lock of "my-app" could not be refreshed'),
+      );
+    });
+  });
+
   test("refreshes a lock already held while waiting for another application's lock", async () => {
     const other = { name: "other-app", id: "app-2" };
     const [firstName] = [lockName, deployLockResourceName(other)].toSorted();

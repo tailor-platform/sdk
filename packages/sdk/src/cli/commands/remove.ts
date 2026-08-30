@@ -64,6 +64,7 @@ async function execRemove(
   application: Application,
   config: LoadedConfig,
   confirm?: () => Promise<void>,
+  assertLockHeld: () => void = () => {},
 ) {
   // Plan all resources with forRemoval=true
   const ctx: PlanContext = {
@@ -164,6 +165,7 @@ async function execRemove(
   }
 
   // Apply deletions in reverse order of dependencies
+  assertLockHeld();
   await applyWorkflow(client, plans.workflow, "delete");
   await applyWorkflowJobFunctionExecutionPolicy(client, plans.workflowExecutionPolicy, "delete");
   await applyExecutor(client, plans.executor, "delete");
@@ -191,8 +193,8 @@ async function execRemove(
  */
 export async function remove(options?: RemoveOptions): Promise<void> {
   const { client, workspaceId, application, config } = await loadOptions(options);
-  await withDeployLock({ client, workspaceId, applications: [application] }, () =>
-    execRemove(client, workspaceId, application, config),
+  await withDeployLock({ client, workspaceId, applications: [application] }, (lock) =>
+    execRemove(client, workspaceId, application, config, undefined, () => lock.assertHeld()),
   );
 }
 
@@ -216,23 +218,30 @@ export const removeCommand = defineAppCommand({
 
     const { leftBehind } = await withDeployLock(
       { client, workspaceId, applications: [application] },
-      () =>
-        execRemove(client, workspaceId, application, config, async () => {
-          if (!args.yes) {
-            const confirmed = await prompt.confirm({
-              message: "Are you sure you want to remove all resources?",
-              default: false,
-            });
-            if (!confirmed) {
-              throw new Error(ml`
+      (lock) =>
+        execRemove(
+          client,
+          workspaceId,
+          application,
+          config,
+          async () => {
+            if (!args.yes) {
+              const confirmed = await prompt.confirm({
+                message: "Are you sure you want to remove all resources?",
+                default: false,
+              });
+              if (!confirmed) {
+                throw new Error(ml`
         Remove cancelled. No resources were deleted.
         To override, run again and confirm, or use --yes flag.
       `);
+              }
+            } else {
+              logger.success("Removing all resources (--yes flag specified)...");
             }
-          } else {
-            logger.success("Removing all resources (--yes flag specified)...");
-          }
-        }),
+          },
+          () => lock.assertHeld(),
+        ),
     );
 
     if (leftBehind) {
