@@ -73,9 +73,8 @@ const testAppName = `migration-e2e-${testRunId}`;
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 const tailordbName = `testdb-${testRunId}`;
 
-// A deploy killed by this timeout mid data migration cannot roll back, leaving remote
-// state that fails every later deploy closed with schema drift — so give the CLI
-// generous headroom over the typical duration, and keep test timeouts above it.
+// Keep the test timeout above the CLI timeout: a deploy killed mid data migration
+// cannot roll back, and the leftover remote schema fails all later deploys closed.
 const DEPLOY_CLI_TIMEOUT_MS = 300000;
 const DEPLOY_TEST_TIMEOUT_MS = 360000;
 
