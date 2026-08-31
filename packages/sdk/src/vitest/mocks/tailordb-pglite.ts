@@ -120,12 +120,8 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
         `mockTailordbWithPGlite: no PGlite instance registered for namespace "${namespace}"`,
       );
     }
-    let lock = locks.get(pglite);
-    if (!lock) {
-      lock = new TransactionLock();
-      locks.set(pglite, lock);
-    }
-    const heldLock = lock;
+    const lock = locks.get(pglite) ?? new TransactionLock();
+    locks.set(pglite, lock);
 
     const record: CreatedClient = { namespace, ended: false };
     createdClients.push(record);
@@ -141,11 +137,11 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
         throw new Error("mockTailordbWithPGlite: query after end() on this client");
       }
       if (BEGIN_PATTERN.test(query)) {
-        await heldLock.acquire(self);
+        await lock.acquire(self);
         try {
           return await run(query, params);
         } catch (error) {
-          heldLock.release(self);
+          lock.release(self);
           throw error;
         }
       }
@@ -153,17 +149,17 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
         try {
           return await run(query, params);
         } finally {
-          heldLock.release(self);
+          lock.release(self);
         }
       }
-      if (heldLock.holds(self)) {
+      if (lock.holds(self)) {
         return await run(query, params);
       }
-      await heldLock.acquire(self);
+      await lock.acquire(self);
       try {
         return await run(query, params);
       } finally {
-        heldLock.release(self);
+        lock.release(self);
       }
     };
 
