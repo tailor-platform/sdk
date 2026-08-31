@@ -12,6 +12,12 @@ export type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never
   ? I
   : never;
 
+export type IsUnion<T, U extends T = T> = T extends unknown
+  ? [U] extends [T]
+    ? false
+    : true
+  : never;
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export type DeepWritable<T> = T extends Date | RegExp | Function
   ? T

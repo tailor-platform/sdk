@@ -26,6 +26,7 @@ import type { InferredAttributes } from "#/runtime/types";
 import type {
   output,
   InferFieldsOutput,
+  IsUnion,
   TypeLevelError,
   UnionToIntersection,
 } from "#/types/helpers";
@@ -229,12 +230,22 @@ type AllExtensionKeys<Ext> = Ext extends unknown ? keyof Ext : never;
 // a non-record shape by mistake. Checked ahead of PluginFieldConflict, since
 // `keyof` on a non-record shape (e.g. `keyof string`) would otherwise produce
 // nonsense candidate keys for the collision check.
+// `Id extends string` (not `keyof Config & string`) deliberately: a mapped
+// type's key variable, used inside a nested conditional branch and then
+// intersected with `string`, does not structurally satisfy a `keyof Config &
+// string`-constrained type parameter under `skipLibCheck: false` (verified
+// against a standalone consumer — TS2344 on both call sites otherwise, even
+// for code that never calls .plugin()). `Config[Id & keyof Config]` recovers
+// the same indexed-access result without that constraint.
 type PluginFieldExtensionShapeError<
   Fields extends Record<string, TailorAnyDBField>,
   Config extends Record<string, unknown>,
-  Id extends keyof Config & string,
+  Id extends string,
 > =
-  PluginFieldExtensionFor<Fields, Id, Config[Id]> extends Record<string, TailorAnyDBField>
+  PluginFieldExtensionFor<Fields, Id, Config[Id & keyof Config]> extends Record<
+    string,
+    TailorAnyDBField
+  >
     ? false
     : true;
 // True when the fields plugin `Id` would inject collide with an existing
@@ -243,13 +254,31 @@ type PluginFieldExtensionShapeError<
 type PluginFieldConflict<
   Fields extends Record<string, TailorAnyDBField>,
   Config extends Record<string, unknown>,
-  Id extends keyof Config & string,
+  Id extends string,
 > = [
-  AllExtensionKeys<PluginFieldExtensionFor<Fields, Id, Config[Id]>> &
+  AllExtensionKeys<PluginFieldExtensionFor<Fields, Id, Config[Id & keyof Config]>> &
     (keyof Fields | AllExtensionKeys<PluginFieldExtensionsUnion<Fields, Omit<Config, Id>>>),
 ] extends [never]
   ? false
   : true;
+// Rejects a property on the caller's config literal for plugin `Id` that
+// isn't part of its registered PluginConfigs shape. `Config` is captured by
+// a `const` type parameter from the argument itself, so intersecting the
+// success branch with `PluginConfigs<...>[Id]` alone would not trigger
+// TypeScript's excess-property check — that check only fires when an object
+// literal is validated directly against a target type, not after its shape
+// has already been inferred through a generic parameter.
+type PluginConfigExcessProps<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+  Id extends string,
+> = Record<
+  Exclude<
+    keyof Config[Id & keyof Config],
+    keyof PluginConfigs<keyof Fields & string>[Id & keyof PluginConfigs<keyof Fields & string>]
+  >,
+  never
+>;
 type PluginExtendedFields<
   Fields extends Record<string, TailorAnyDBField>,
   Config extends Record<string, unknown>,
@@ -274,11 +303,19 @@ type PluginConfigGuard<
     ? unknown
     : {
         [K in keyof Config]: K extends keyof PluginConfigs<keyof Fields & string>
-          ? PluginFieldExtensionShapeError<Fields, Config, K & string> extends true
-            ? TypeLevelError<"PluginFieldExtensions entry must be a Record<string, TailorAnyDBField>">
-            : PluginFieldConflict<Fields, Config, K & string> extends true
-              ? TypeLevelError<"plugin field extension conflicts with an existing field or another plugin's field">
-              : PluginConfigs<keyof Fields & string>[K]
+          ? // A union config (e.g. from a ternary passed directly as a plugin's
+            // value) distributes through PluginFieldExtensionFor's conditional
+            // and silently collapses the injected field to `never` once
+            // intersected back together — reject it here instead, before it
+            // can produce that confusing downstream error.
+            IsUnion<Config[K]> extends true
+            ? TypeLevelError<"plugin config must be a single object literal, not a union — assign the config to a variable first if it comes from a conditional expression">
+            : PluginFieldExtensionShapeError<Fields, Config, K & string> extends true
+              ? TypeLevelError<"PluginFieldExtensions entry must be a Record<string, TailorAnyDBField>">
+              : PluginFieldConflict<Fields, Config, K & string> extends true
+                ? TypeLevelError<"plugin field extension conflicts with an existing field or another plugin's field">
+                : PluginConfigs<keyof Fields & string>[K] &
+                    PluginConfigExcessProps<Fields, Config, K & string>
           : TypeLevelError<"unknown plugin id">;
       };
 type DBFieldDescriptionFn<

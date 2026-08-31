@@ -632,6 +632,11 @@ merged into the table's existing fields, not a replacement for them. A field nam
 with an existing field, or with a field injected by another plugin attached in the same
 `.plugin()` call, is a type error at the call site.
 
+This collision check only sees fields the table already has at the point `.plugin()` is called, so
+call order matters when a table also uses `.files()`: attach plugins before calling `.files()` so a
+file key that reuses an injected field's name is caught. Calling `.files()` first does not see the
+field a later `.plugin()` call injects.
+
 This only affects the table's static type. The corresponding field exists on the table's
 generated schema, and on the table object's own `fields`, only after `tailor generate` actually
 applies `extends.fields`. Before that, reading an injected field directly off the table
@@ -647,12 +652,12 @@ import { db, type Plugin, type TailorDBField } from "@tailor-platform/sdk";
 const lifecyclePlugin: Plugin<
   LifecycleTableConfig,
   LifecyclePluginConfig,
-  { status: TailorDBField<{ type: "enum"; array: false }, string> }
+  { status: TailorDBField<{ type: "enum"; array: false }, "PENDING" | "APPROVED" | "REJECTED"> }
 > = {
   id: "@example/lifecycle",
   description: "Derives a status field from a transitions map",
   onTableLoaded(context) {
-    return { extends: { fields: { status: db.enum(["APPROVED", "REJECTED"]) } } };
+    return { extends: { fields: { status: db.enum(["PENDING", "APPROVED", "REJECTED"]) } } };
   },
 };
 ```

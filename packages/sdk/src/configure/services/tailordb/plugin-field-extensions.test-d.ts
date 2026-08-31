@@ -26,6 +26,8 @@ declare module "@tailor-platform/sdk" {
   }
 }
 
+declare const cond: boolean;
+
 describe(".plugin() field injection", () => {
   test("injects a field typed from the literal per-call config, without `as const`", () => {
     const table = db
@@ -97,5 +99,38 @@ describe(".plugin() field injection", () => {
     const table = db.table("Order", { name: db.string() });
     // @ts-expect-error "test/bad-shape"'s PluginFieldExtensions entry is `string`, not a field record
     table.plugin({ "test/bad-shape": {} });
+  });
+
+  test("an unknown property on a registered plugin's config is a type error", () => {
+    const table = db.table("Order", { name: db.string() });
+    table.plugin({
+      "test/status": {
+        values: ["PENDING", "APPROVED"],
+        // @ts-expect-error typo is not part of PluginConfigs["test/status"]
+        typo: true,
+      },
+    });
+  });
+
+  test("a config value that is itself a union (e.g. from a ternary) is a type error", () => {
+    const table = db.table("Order", { name: db.string() });
+    table.plugin({
+      // @ts-expect-error a union config would otherwise silently collapse status to never
+      "test/status": cond
+        ? ({ values: ["PENDING", "APPROVED"] } as const)
+        : ({ values: ["DRAFT", "PUBLISHED"] } as const),
+    });
+  });
+
+  test("a union nested inside a single config property still distributes correctly", () => {
+    const table = db.table("Order", { name: db.string() }).plugin({
+      "test/status": { values: cond ? (["PENDING", "APPROVED"] as const) : (["DRAFT"] as const) },
+    });
+
+    expectTypeOf<output<typeof table>>().toEqualTypeOf<{
+      id: string;
+      name: string;
+      status: "PENDING" | "APPROVED" | "DRAFT";
+    }>();
   });
 });
