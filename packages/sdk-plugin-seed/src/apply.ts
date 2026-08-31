@@ -21,7 +21,12 @@ import { z } from "zod";
 import { selectEntities } from "./entities";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { topologicalSort } from "./topo-sort";
-import type { OperatorClient, ScriptExecutionResult, SeedData } from "@tailor-platform/sdk/cli";
+import type {
+  OperatorClient,
+  ScriptExecutionResult,
+  SeedData,
+  SeedIdpUserContext,
+} from "@tailor-platform/sdk/cli";
 
 interface SeedExecutionContext {
   operatorClient: OperatorClient;
@@ -115,13 +120,16 @@ interface SeedResult {
   processed: Record<string, number>;
 }
 
-function createChunkProgressLogger(total: number): (index: number, details: string) => void {
+function createChunkProgressLogger(
+  total: number,
+  indent = "    ",
+): (index: number, details: string) => void {
   if (total > 1) {
-    logger.log(styles.dim(`    Split into ${total} chunks`));
+    logger.log(styles.dim(`${indent}Split into ${total} chunks`));
   }
   return (index, details) => {
     if (total > 1) {
-      logger.log(styles.dim(`    Chunk ${index + 1}/${total}: ${details}`));
+      logger.log(styles.dim(`${indent}Chunk ${index + 1}/${total}: ${details}`));
     }
   };
 }
@@ -207,13 +215,20 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   return { success, processed: processedTotals };
 }
 
+type IdpUserRef = { id: string; name: string };
+
 interface IdpScriptRun {
   execution: SeedExecutionContext;
   scriptCode: string;
   scriptName: string;
-  arg?: { users: SeedData[string]; upsert?: boolean; offset?: number; total?: number };
+  arg?: {
+    users: SeedData[string] | IdpUserRef[];
+    upsert?: boolean;
+    offset?: number;
+    total?: number;
+  };
   indent: string;
-  reportSuccess: (parsed: Record<string, unknown>) => void;
+  reportSuccess?: (parsed: Record<string, unknown>) => void;
 }
 
 async function runIdpScript(
@@ -234,7 +249,7 @@ async function runIdpScript(
   });
 
   const { success, parsed, errors, outcomeUnknown } = parseExecutionResult(result, indent);
-  reportSuccess(parsed);
+  reportSuccess?.(parsed);
   if (!success) {
     for (const error of errors) {
       logger.error(`${indent}${error}`, { mode: "plain" });
@@ -243,10 +258,19 @@ async function runIdpScript(
   return { success, parsed, outcomeUnknown };
 }
 
-// The generated seed script upserts IdP users one call at a time (seconds per
-// row), so each TestExecScript request must carry few enough rows to finish
-// within the operator API deadline. Byte-size chunking cannot capture this.
+// The generated IdP scripts upsert or delete users one call at a time (about a
+// second or more per row), so each TestExecScript request must carry few enough
+// rows to finish within the operator API deadline. Byte-size chunking cannot
+// capture this.
 const IDP_USER_CHUNK_SIZE = 25;
+
+function chunkIdpUsers<T>(rows: T[]): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < rows.length; i += IDP_USER_CHUNK_SIZE) {
+    chunks.push(rows.slice(i, i + IDP_USER_CHUNK_SIZE));
+  }
+  return chunks;
+}
 
 function readCount(result: Record<string, unknown>, key: string): number {
   const value = result[key];
@@ -267,10 +291,7 @@ async function seedIdpUser(
   }
   logger.log(styles.dim(`    Processing ${rows.length} _User records...`));
 
-  const chunks: SeedData[string][] = [];
-  for (let i = 0; i < rows.length; i += IDP_USER_CHUNK_SIZE) {
-    chunks.push(rows.slice(i, i + IDP_USER_CHUNK_SIZE));
-  }
+  const chunks = chunkIdpUsers(rows);
   const logChunkProgress = createChunkProgressLogger(chunks.length);
 
   const reportChunkCounts = (result: Record<string, unknown>) => {
@@ -334,23 +355,106 @@ async function seedIdpUser(
   return { success, processed: totals.processed };
 }
 
+function isIdpUserRef(user: unknown): user is IdpUserRef {
+  return (
+    typeof user === "object" &&
+    user !== null &&
+    typeof (user as { id?: unknown }).id === "string" &&
+    typeof (user as { name?: unknown }).name === "string"
+  );
+}
+
+function readListedUsers(parsed: Record<string, unknown>): IdpUserRef[] | undefined {
+  if (!Array.isArray(parsed.users) || !parsed.users.every(isIdpUserRef)) {
+    return undefined;
+  }
+  return parsed.users;
+}
+
 async function truncateIdpUser(
   execution: SeedExecutionContext,
-  scriptCode: string,
+  scripts: Pick<SeedIdpUserContext, "listScriptCode" | "truncateScriptCode">,
 ): Promise<boolean> {
   logger.info("Truncating _User via tailor.idp.Client...", { mode: "plain" });
 
-  const { success } = await runIdpScript({
+  // Only an older @tailor-platform/sdk omits the listing script.
+  if (!scripts.listScriptCode) {
+    throw new Error(
+      "The installed @tailor-platform/sdk does not provide the IdP user listing script. " +
+        "Update it to the version @tailor-platform/sdk-plugin-seed requires.",
+    );
+  }
+
+  const listed = await runIdpScript({
     execution,
-    scriptCode,
-    scriptName: "truncate-idp-user.ts",
+    scriptCode: scripts.listScriptCode,
+    scriptName: "list-idp-user.ts",
     indent: "  ",
-    reportSuccess: (result) => {
-      if (typeof result.deleted === "number") {
-        logger.log(styles.success(`  ✓ _User: ${result.deleted} users deleted`));
-      }
-    },
   });
+  if (!listed.success) {
+    return false;
+  }
+  const users = readListedUsers(listed.parsed);
+  if (!users) {
+    logger.error("  list-idp-user.ts returned no user list.", { mode: "plain" });
+    return false;
+  }
+  if (users.length === 0) {
+    logger.log(styles.dim("  No _User records to delete"));
+    return true;
+  }
+  logger.log(styles.dim(`  Deleting ${users.length} _User records...`));
+
+  const chunks = chunkIdpUsers(users);
+  const logChunkProgress = createChunkProgressLogger(chunks.length, "  ");
+
+  let success = true;
+  const totals = { deleted: 0, notFound: 0 };
+  const warnInterruptedChunk = () => {
+    const confirmed = totals.deleted + totals.notFound;
+    logger.warn(
+      `  _User: ${confirmed}/${users.length} users confirmed deleted before the failure ` +
+        `(${totals.deleted} deleted, ${totals.notFound} already deleted). ` +
+        "The interrupted chunk may still have been applied server-side; " +
+        "re-run the same command to retry safely.",
+      { mode: "plain" },
+    );
+  };
+  for (const [index, chunk] of chunks.entries()) {
+    logChunkProgress(index, `${chunk.length} users`);
+    let run: { success: boolean; parsed: Record<string, unknown>; outcomeUnknown: boolean };
+    try {
+      run = await runIdpScript({
+        execution,
+        scriptCode: scripts.truncateScriptCode,
+        scriptName: "truncate-idp-user.ts",
+        arg: { users: chunk, offset: index * IDP_USER_CHUNK_SIZE, total: users.length },
+        indent: "  ",
+      });
+    } catch (error) {
+      warnInterruptedChunk();
+      throw error;
+    }
+    if (run.outcomeUnknown) {
+      warnInterruptedChunk();
+      return false;
+    }
+    totals.deleted += readCount(run.parsed, "deleted");
+    totals.notFound += readCount(run.parsed, "notFound");
+    if (!run.success) {
+      success = false;
+    }
+  }
+  const notFoundSuffix = totals.notFound > 0 ? `, ${totals.notFound} already deleted` : "";
+  const summary = `${totals.deleted} users deleted${notFoundSuffix}`;
+  if (success) {
+    logger.log(styles.success(`  ✓ _User: ${summary}`));
+  } else {
+    const failed = users.length - totals.deleted - totals.notFound;
+    logger.warn(`  _User: ${summary}, ${failed} failed; re-run the command to retry.`, {
+      mode: "plain",
+    });
+  }
   return success;
 }
 
@@ -492,7 +596,7 @@ export const seedApplyCommand = defineAppCommand({
         !args.namespace &&
         (args.entities.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
       if (shouldTruncateUser && context.idpUser) {
-        const truncated = await truncateIdpUser(execution, context.idpUser.truncateScriptCode);
+        const truncated = await truncateIdpUser(execution, context.idpUser);
         if (!truncated) {
           throw new Error("IdP user truncation failed.");
         }

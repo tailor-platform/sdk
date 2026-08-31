@@ -165,6 +165,7 @@ describe("loadSeedContext", () => {
     expect(context.idpUser).not.toBeNull();
     expect(context.idpUser?.idpNamespace).toBe("main-idp");
     expect(context.idpUser?.seedScriptCode).toContain('namespace: "main-idp"');
+    expect(context.idpUser?.listScriptCode).toContain('namespace: "main-idp"');
     expect(context.idpUser?.truncateScriptCode).toContain('namespace: "main-idp"');
   });
 
