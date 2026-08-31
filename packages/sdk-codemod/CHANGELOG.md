@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.3
+
+### Patch Changes
+
+- [#2205](https://github.com/tailor-platform/sdk/pull/2205) [`1cff028`](https://github.com/tailor-platform/sdk/commit/1cff028c263be7b42e58e3dbc5278f444df802aa) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
 ## 0.8.2
 
 ### Patch Changes
