@@ -26,8 +26,9 @@ export type ExecutorService = {
   readonly pluginExecutors: ReadonlyArray<PluginExecutor>;
   /**
    * Loads executor files once and resolves to the executor record loaded so
-   * far, or undefined when nothing is loaded yet. Plugin executors appear
-   * only in calls made after loadPluginExecutorFiles() has completed.
+   * far. Resolves to undefined only when the config declares no files and no
+   * plugin executor has been loaded yet; plugin executors appear in calls
+   * made after loadPluginExecutorFiles() has completed.
    */
   loadExecutors: () => Promise<Record<string, Executor> | undefined>;
   loadPluginExecutorFiles: (filePaths: string[]) => Promise<void>;
