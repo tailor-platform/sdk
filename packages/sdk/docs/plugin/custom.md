@@ -614,6 +614,8 @@ includes every state that appears anywhere in `transitions` — both a `from` st
 never produces (like the initial `"PENDING"` below) and every `to` state:
 
 ```typescript
+import { db } from "@tailor-platform/sdk";
+
 const approvalRequest = db.table("ApprovalRequest", { title: db.string() }).plugin({
   "@example/lifecycle": {
     transitions: {
