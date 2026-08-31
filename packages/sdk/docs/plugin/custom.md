@@ -596,15 +596,22 @@ declare module "@tailor-platform/sdk" {
 
   interface PluginFieldExtensions<Fields extends string, Config> {
     "@example/lifecycle": Config extends {
-      transitions: infer T extends Record<string, { to: string }>;
+      transitions: infer T extends Record<string, { from: readonly string[]; to: string }>;
     }
-      ? { status: TailorDBField<{ type: "enum"; array: false }, T[keyof T]["to"]> }
+      ? {
+          status: TailorDBField<
+            { type: "enum"; array: false },
+            T[keyof T]["from"][number] | T[keyof T]["to"]
+          >;
+        }
       : never;
   }
 }
 ```
 
-With this in place, the table returned by `.plugin()` already has the derived field:
+With this in place, the table returned by `.plugin()` already has the derived field. The status enum
+includes every state that appears anywhere in `transitions` — both a `from` state that a transition
+never produces (like the initial `"PENDING"` below) and every `to` state:
 
 ```typescript
 const approvalRequest = db.table("ApprovalRequest", { title: db.string() }).plugin({
@@ -615,7 +622,7 @@ const approvalRequest = db.table("ApprovalRequest", { title: db.string() }).plug
     },
   },
 });
-// approvalRequest's type now includes status: "APPROVED" | "REJECTED"
+// approvalRequest's type now includes status: "PENDING" | "APPROVED" | "REJECTED"
 ```
 
 The type registered in `PluginFieldExtensions` must describe only the fields being added — it is
