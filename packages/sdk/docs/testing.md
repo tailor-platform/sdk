@@ -24,6 +24,7 @@ For anonymous direct calls:
 Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
 - `mockTailordb` — TailorDB query stubs and call recording
+- `mockTailordbWithPGlite` — TailorDB backed by a real in-memory Postgres (PGlite)
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
 - `runWorkflowLocally` — local full-chain workflow runner
 - `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`, `mockLogger` — corresponding platform API mocks
@@ -63,7 +64,7 @@ export default defineConfig({
 
 ### Acquiring mocks with `using`
 
-Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`, `mockLogger`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
+Each mock controller (`mockTailordb`, `mockTailordbWithPGlite`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`, `mockLogger`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
 import { mockTailordb } from "@tailor-platform/sdk/vitest";

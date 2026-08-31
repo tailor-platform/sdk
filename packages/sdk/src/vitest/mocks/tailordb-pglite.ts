@@ -59,10 +59,10 @@ const END_PATTERN = /^\s*(?:commit\b|rollback\b(?!(?:\s+(?:work|transaction))?\s
 
 function toQueryObjectResult(result: PGliteQueryResult) {
   return {
-    // The client contract only checks whether the command is a DML verb, so
-    // any of the three works when an older PGlite omits the tag.
+    // getDB's Kysely dialect only membership-tests the tag against the DML
+    // verbs, so any of the three works when an older PGlite omits it.
     command: result.command ?? (result.affectedRows ? "UPDATE" : "SELECT"),
-    rowCount: result.rowCount ?? result.affectedRows ?? result.rows.length,
+    rowCount: result.rowCount ?? (result.affectedRows || result.rows.length),
     rows: result.rows,
   };
 }
@@ -150,6 +150,11 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
     const queryObject = async (query: string, params?: unknown[]) => {
       if (record.ended) throwEnded();
       if (BEGIN_PATTERN.test(query)) {
+        if (lock.holds(self)) {
+          throw new Error(
+            "mockTailordbWithPGlite: transaction already open on this client — run nested statements on the transaction callback's trx",
+          );
+        }
         await acquire();
         try {
           return await run(query, params);
@@ -159,6 +164,16 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
         }
       }
       if (END_PATTERN.test(query)) {
+        if (lock.holds(self)) {
+          try {
+            return await run(query, params);
+          } finally {
+            lock.release(self);
+          }
+        }
+        // A commit/rollback from a client with no open transaction must not
+        // land inside another client's — wait until the instance is free.
+        await acquire();
         try {
           return await run(query, params);
         } finally {
@@ -228,6 +243,14 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
     /** Clear recorded queries and clients while keeping the mock installed. */
     clear(): void {
       Client.mockClear();
+      executedQueries.length = 0;
+      createdClients.length = 0;
+    },
+
+    /** Reset recorded state and restore the default client behavior. */
+    reset(): void {
+      Client.mockReset();
+      Client.mockImplementation(defaultClient);
       executedQueries.length = 0;
       createdClients.length = 0;
     },

@@ -342,6 +342,65 @@ describe("mockTailordbWithPGlite", () => {
     expect(fake.queries.map((q) => q.query)).toEqual(["begin", "commit"]);
   });
 
+  test("a commit or rollback from a non-holder waits for the open transaction", async () => {
+    const fake = createFakePGlite();
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+    const root = tailordbRoot();
+    const c1 = new root.Client({ namespace: "main" });
+    const c2 = new root.Client({ namespace: "main" });
+
+    await c1.queryObject("begin", []);
+    const stray = c2.queryObject("rollback", []);
+    await tick();
+    expect(fake.queries.map((q) => q.query)).toEqual(["begin"]);
+
+    await c1.queryObject("commit", []);
+    await stray;
+    expect(fake.queries.map((q) => q.query)).toEqual(["begin", "commit", "rollback"]);
+  });
+
+  test("a second begin while holding the transaction fails instead of hanging", async () => {
+    const fake = createFakePGlite();
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+    const root = tailordbRoot();
+    const client = new root.Client({ namespace: "main" });
+
+    await client.queryObject("begin", []);
+    await expect(client.queryObject("begin", [])).rejects.toThrow(/transaction already open/);
+    await client.queryObject("commit", []);
+  });
+
+  test("reports rows.length as rowCount when a legacy client sends affectedRows 0 on select", async () => {
+    const fake = createFakePGlite(() => ({
+      rows: [{ id: "a" }, { id: "b" }],
+      command: undefined,
+      rowCount: undefined,
+      affectedRows: 0,
+    }));
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+    const root = tailordbRoot();
+    const client = new root.Client({ namespace: "main" });
+
+    const result = await client.queryObject("select 1", []);
+    expect(result.rowCount).toBe(2);
+  });
+
+  test("reset() drops recorded state and restores the default client behavior", async () => {
+    const fake = createFakePGlite();
+    using mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+
+    await getDB("main").selectFrom("User").selectAll().execute();
+    mock.Client.mockImplementation(function () {
+      throw new Error("overridden");
+    });
+    mock.reset();
+
+    expect(mock.executedQueries).toEqual([]);
+    expect(mock.createdClients).toEqual([]);
+    await getDB("main").selectFrom("User").selectAll().execute();
+    expect(mock.executedQueries).toHaveLength(1);
+  });
+
   test("createTransaction on the raw client drives begin/commit through the same lock", async () => {
     const fake = createFakePGlite();
     using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
