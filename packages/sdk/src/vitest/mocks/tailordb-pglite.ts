@@ -53,7 +53,9 @@ class TransactionLock {
 }
 
 const BEGIN_PATTERN = /^\s*(?:begin|start\s+transaction)\b/i;
-const END_PATTERN = /^\s*(?:commit|rollback)\b/i;
+// `rollback to savepoint` stays inside the transaction, so it must not
+// release the lock.
+const END_PATTERN = /^\s*(?:commit\b|rollback\b(?!\s+to\b))/i;
 
 function toQueryObjectResult(result: PGliteQueryResult) {
   return {
@@ -166,6 +168,7 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
     this.connect = async (): Promise<void> => {};
     this.end = async (): Promise<void> => {
       record.ended = true;
+      lock.release(self);
     };
     this.queryObject = queryObject;
     this.createTransaction = (name: string) => {

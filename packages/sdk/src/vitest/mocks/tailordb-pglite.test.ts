@@ -287,6 +287,42 @@ describe("mockTailordbWithPGlite", () => {
     }
   });
 
+  test("rollback to a savepoint does not release the transaction lock", async () => {
+    const fake = createFakePGlite();
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+    const root = tailordbRoot();
+    const c1 = new root.Client({ namespace: "main" });
+    const c2 = new root.Client({ namespace: "main" });
+
+    await c1.queryObject("begin", []);
+    await c1.queryObject("rollback to savepoint s1", []);
+
+    let done = false;
+    const pending = c2.queryObject("select 1", []).then(() => {
+      done = true;
+    });
+    await tick();
+    expect(done).toBe(false);
+
+    await c1.queryObject("commit", []);
+    await pending;
+    expect(done).toBe(true);
+  });
+
+  test("end() releases a lock left held by an open transaction", async () => {
+    const fake = createFakePGlite();
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+    const root = tailordbRoot();
+    const c1 = new root.Client({ namespace: "main" });
+    const c2 = new root.Client({ namespace: "main" });
+
+    await c1.queryObject("begin", []);
+    await c1.end();
+
+    await c2.queryObject("select 1", []);
+    expect(fake.queries.map((q) => q.query)).toEqual(["begin", "select 1"]);
+  });
+
   test("createTransaction on the raw client drives begin/commit through the same lock", async () => {
     const fake = createFakePGlite();
     using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
