@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.2.6
+
+### Patch Changes
+
+- [#2205](https://github.com/tailor-platform/sdk/pull/2205) [`1cff028`](https://github.com/tailor-platform/sdk/commit/1cff028c263be7b42e58e3dbc5278f444df802aa) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#2197](https://github.com/tailor-platform/sdk/pull/2197) [`ee2bd7d`](https://github.com/tailor-platform/sdk/commit/ee2bd7dcc9cf88be47c1a5bcbe3dca0d5122c13a) Thanks [@dqn](https://github.com/dqn)! - Fix `tailor seed apply --truncate` failing to delete IdP `_User` records. Deletion now runs in chunks of 25 users per request so large user counts no longer hit `deadline_exceeded`, and a user that is listed but already gone by the time it is deleted counts as deleted instead of failing every run.
+  
+  `SeedIdpUserContext` from `@tailor-platform/sdk/cli` gains a required `listScriptCode` field carrying the server-side script that lists the `_User` records to delete; `truncateScriptCode` now deletes the chunk of users passed as input, and keeps listing and deleting every user when called without input.
+- Updated dependencies [[`6bd5286`](https://github.com/tailor-platform/sdk/commit/6bd5286aa3ea1d3dc3b56c7eac3a17f7a64ba7df), [`bfb06bf`](https://github.com/tailor-platform/sdk/commit/bfb06bfda619f9312e33092d2dadfb5ca88594cd), [`1cff028`](https://github.com/tailor-platform/sdk/commit/1cff028c263be7b42e58e3dbc5278f444df802aa), [`ee2bd7d`](https://github.com/tailor-platform/sdk/commit/ee2bd7dcc9cf88be47c1a5bcbe3dca0d5122c13a)]:
+  - @tailor-platform/sdk@2.9.0
+
 ## 0.2.5
 
 ### Patch Changes

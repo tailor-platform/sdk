@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.2.1
+
+### Patch Changes
+
+- [#2205](https://github.com/tailor-platform/sdk/pull/2205) [`1cff028`](https://github.com/tailor-platform/sdk/commit/1cff028c263be7b42e58e3dbc5278f444df802aa) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+- Updated dependencies [[`6bd5286`](https://github.com/tailor-platform/sdk/commit/6bd5286aa3ea1d3dc3b56c7eac3a17f7a64ba7df), [`bfb06bf`](https://github.com/tailor-platform/sdk/commit/bfb06bfda619f9312e33092d2dadfb5ca88594cd), [`1cff028`](https://github.com/tailor-platform/sdk/commit/1cff028c263be7b42e58e3dbc5278f444df802aa), [`ee2bd7d`](https://github.com/tailor-platform/sdk/commit/ee2bd7dcc9cf88be47c1a5bcbe3dca0d5122c13a)]:
+  - @tailor-platform/sdk@2.9.0
+
 ## 0.2.0
 
 ### Minor Changes
