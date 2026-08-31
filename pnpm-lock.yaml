@@ -28,8 +28,8 @@ importers:
         specifier: 4.10.0
         version: 4.10.0(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.80.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.4.3)
       knip:
-        specifier: 6.32.2
-        version: 6.32.2
+        specifier: 6.32.3
+        version: 6.32.3
       lefthook:
         specifier: 2.1.10
         version: 2.1.10
@@ -3432,8 +3432,8 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  knip@6.32.2:
-    resolution: {integrity: sha512-WXTXbmocrw7gqm1A1TQvFN0OgJ7hUSU6E1g6SPRIzzHFogUBhXByc7cYeOFVtJ2uODg7DP4VbESYBYnfbtBYsg==}
+  knip@6.32.3:
+    resolution: {integrity: sha512-wOJ1Av8PwKqFO0wU7F64vzIcUjxhrieA3Tc2lmeK9C9prpxq+TeG2ewNH5tCaBVZwXNPp6lJkrr+IhZ20iqkMA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -6392,7 +6392,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  knip@6.32.2:
+  knip@6.32.3:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.5)
       formatly: 0.3.0
