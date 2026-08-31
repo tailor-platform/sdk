@@ -116,6 +116,16 @@ describe("mockTailordbWithPGlite", () => {
     expect(() => getDB("sub").selectFrom("Item")).toThrow(/no PGlite instance registered.*"sub"/);
   });
 
+  test("does not resolve namespaces through the prototype chain", () => {
+    const fake = createFakePGlite();
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+
+    const root = tailordbRoot();
+    expect(() => new root.Client({ namespace: "toString" })).toThrow(
+      /no PGlite instance registered.*"toString"/,
+    );
+  });
+
   test("serializes transactions from different getDB instances on one shared instance", async () => {
     const fake = createFakePGlite();
     using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });

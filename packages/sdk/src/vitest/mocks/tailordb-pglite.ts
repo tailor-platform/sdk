@@ -116,7 +116,10 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
     config?: { namespace?: string },
   ) {
     const namespace = config?.namespace;
-    const pglite = namespace === undefined ? undefined : options.namespaces[namespace];
+    const pglite =
+      namespace !== undefined && Object.hasOwn(options.namespaces, namespace)
+        ? options.namespaces[namespace]
+        : undefined;
     if (namespace === undefined || !pglite) {
       throw new Error(
         `mockTailordbWithPGlite: no PGlite instance registered for namespace "${namespace}"`,
