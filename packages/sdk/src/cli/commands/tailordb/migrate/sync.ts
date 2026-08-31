@@ -147,9 +147,7 @@ async function assertMigrationsReproduceLocalTypes(
 
   // Mirror loadApplication: plugin-generated executor files must be loaded
   // too, or publishRecordEvents would be applied as false for the tables
-  // their record triggers depend on. Read the executors getter rather than
-  // the loadExecutors() result — the latter is undefined for plugin-only
-  // executor configurations.
+  // their record triggers depend on.
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
     pluginManager,
     application.tailorDBServices,
