@@ -296,6 +296,8 @@ describe("mockTailordbWithPGlite", () => {
 
     await c1.queryObject("begin", []);
     await c1.queryObject("rollback to savepoint s1", []);
+    await c1.queryObject("rollback transaction to savepoint s1", []);
+    await c1.queryObject("rollback work to s1", []);
 
     let done = false;
     const pending = c2.queryObject("select 1", []).then(() => {

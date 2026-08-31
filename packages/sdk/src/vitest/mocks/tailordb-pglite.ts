@@ -55,7 +55,7 @@ class TransactionLock {
 const BEGIN_PATTERN = /^\s*(?:begin|start\s+transaction)\b/i;
 // `rollback to savepoint` stays inside the transaction, so it must not
 // release the lock.
-const END_PATTERN = /^\s*(?:commit\b|rollback\b(?!\s+to\b))/i;
+const END_PATTERN = /^\s*(?:commit\b|rollback\b(?!(?:\s+(?:work|transaction))?\s+to\b))/i;
 
 function toQueryObjectResult(result: PGliteQueryResult) {
   return {
