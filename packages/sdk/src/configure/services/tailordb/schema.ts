@@ -255,9 +255,14 @@ type PluginFieldConflict<
   Fields extends Record<string, TailorAnyDBField>,
   Config extends Record<string, unknown>,
   Id extends string,
+  FileKeys extends string,
 > = [
   AllExtensionKeys<PluginFieldExtensionFor<Fields, Id, Config[Id & keyof Config]>> &
-    (keyof Fields | AllExtensionKeys<PluginFieldExtensionsUnion<Fields, Omit<Config, Id>>>),
+    (
+      | keyof Fields
+      | FileKeys
+      | AllExtensionKeys<PluginFieldExtensionsUnion<Fields, Omit<Config, Id>>>
+    ),
 ] extends [never]
   ? false
   : true;
@@ -298,6 +303,7 @@ type PluginExtendedFields<
 type PluginConfigGuard<
   Fields extends Record<string, TailorAnyDBField>,
   Config extends Record<string, unknown>,
+  FileKeys extends string,
 > =
   IsAny<Fields> extends true
     ? unknown
@@ -312,8 +318,8 @@ type PluginConfigGuard<
             ? TypeLevelError<"plugin config must be a single object literal, not a union — assign the config to a variable first if it comes from a conditional expression">
             : PluginFieldExtensionShapeError<Fields, Config, K & string> extends true
               ? TypeLevelError<"PluginFieldExtensions entry must be a Record<string, TailorAnyDBField>">
-              : PluginFieldConflict<Fields, Config, K & string> extends true
-                ? TypeLevelError<"plugin field extension conflicts with an existing field or another plugin's field">
+              : PluginFieldConflict<Fields, Config, K & string, FileKeys> extends true
+                ? TypeLevelError<"plugin field extension conflicts with an existing field, a file key declared via .files(), or another plugin's field">
                 : PluginConfigs<keyof Fields & string>[K] &
                     PluginConfigExcessProps<Fields, Config, K & string>
           : TypeLevelError<"unknown plugin id">;
@@ -615,6 +621,7 @@ export interface TailorDBType<
   User extends object = InferredAttributes,
   // oxlint-disable-next-line no-explicit-any
   Defined extends DefinedDBTypeMetadata = any,
+  FileKeys extends string = never,
 > extends TailorDBTypeBase<Fields, User> {
   _description?: string;
 
@@ -625,7 +632,7 @@ export interface TailorDBType<
       TypeHook<Fields>,
       ".hooks() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "hooks">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "hooks">, FileKeys>;
   validate(
     fn: DBTypeDuplicateInputGuard<
       Defined,
@@ -633,7 +640,7 @@ export interface TailorDBType<
       TypeValidateFn<Fields>,
       ".validate() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "validate">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "validate">, FileKeys>;
   features(
     features: DBTypeDuplicateInputGuard<
       Defined,
@@ -641,15 +648,15 @@ export interface TailorDBType<
       Omit<TypeFeatures, "pluralForm">,
       ".features() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "features">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "features">, FileKeys>;
   indexes(
     ...indexes: DBTypeDuplicateRestGuard<
       Defined,
       "indexes",
-      IndexDef<TailorDBType<Fields, User, Defined>>[],
+      IndexDef<TailorDBType<Fields, User, Defined, FileKeys>>[],
       ".indexes() has already been set"
     >
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "indexes">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "indexes">, FileKeys>;
   files<const F extends string>(
     files: DBTypeDuplicateInputGuard<
       Defined,
@@ -657,7 +664,7 @@ export interface TailorDBType<
       Record<F, string> & FileKeyConflictError<Fields, User>,
       ".files() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "files">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "files">, FileKeys | F>;
   permission<
     U extends object = User,
     P extends TailorTypePermission<U, output<TailorDBType<Fields, User, Defined>>> =
@@ -669,7 +676,7 @@ export interface TailorDBType<
       P,
       ".permission() has already been set"
     >,
-  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "permission">>;
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "permission">, FileKeys>;
   gqlPermission<
     U extends object = User,
     P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
@@ -680,7 +687,7 @@ export interface TailorDBType<
       P,
       ".gqlPermission() has already been set"
     >,
-  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "gqlPermission">>;
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "gqlPermission">, FileKeys>;
   description(
     description: DBTypeDuplicateInputGuard<
       Defined,
@@ -688,7 +695,7 @@ export interface TailorDBType<
       string,
       ".description() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "description">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "description">, FileKeys>;
   pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
@@ -700,8 +707,8 @@ export interface TailorDBType<
   };
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
   plugin<const Config extends Record<string, unknown>>(
-    config: Config & PluginConfigGuard<Fields, Config>,
-  ): TailorDBType<PluginExtendedFields<Fields, Config>, User, Defined>;
+    config: Config & PluginConfigGuard<Fields, Config, FileKeys>,
+  ): TailorDBType<PluginExtendedFields<Fields, Config>, User, Defined, FileKeys>;
 }
 
 export type TailorDBInstance<
@@ -710,7 +717,8 @@ export type TailorDBInstance<
   User extends object = InferredAttributes,
   // oxlint-disable-next-line no-explicit-any
   Defined extends DefinedDBTypeMetadata = any,
-> = TailorDBType<Fields, User, Defined>;
+  FileKeys extends string = never,
+> = TailorDBType<Fields, User, Defined, FileKeys>;
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -1287,10 +1295,15 @@ function createTailorDBType<
 
     files<const F extends string>(
       files: Record<F, string> & FileKeyConflictError<Fields, User>,
-    ): TypeAfter<"files"> {
+    ): TailorDBType<Fields, User, WithDBTypeMetadata<DefinedDBTypeMetadata, "files">, F> {
       return runMethodOnce("files", () => {
         _files = files;
-        return this as TypeAfter<"files">;
+        return this as TailorDBType<
+          Fields,
+          User,
+          WithDBTypeMetadata<DefinedDBTypeMetadata, "files">,
+          F
+        >;
       });
     },
 
@@ -1363,7 +1376,7 @@ function createTailorDBType<
     },
 
     plugin<const Config extends Record<string, unknown>>(
-      config: Config & PluginConfigGuard<Fields, Config>,
+      config: Config & PluginConfigGuard<Fields, Config, never>,
     ): TypeAfterPlugin<Config> {
       for (const [pluginId, pluginConfig] of Object.entries(config)) {
         _plugins.push({ pluginId, config: pluginConfig });

@@ -133,4 +133,16 @@ describe(".plugin() field injection", () => {
       status: "PENDING" | "APPROVED" | "DRAFT";
     }>();
   });
+
+  test("colliding with a file key declared via .files() is a type error, regardless of call order", () => {
+    const filesFirst = db.table("Order", { name: db.string() }).files({ status: "receipt" });
+    // @ts-expect-error status collides with the file key declared via .files()
+    filesFirst.plugin({ "test/status": { values: ["PENDING", "APPROVED"] } });
+
+    const pluginFirst = db
+      .table("Order", { name: db.string() })
+      .plugin({ "test/status": { values: ["PENDING", "APPROVED"] } });
+    // @ts-expect-error status collides with the field the plugin injects
+    pluginFirst.files({ status: "receipt" });
+  });
 });

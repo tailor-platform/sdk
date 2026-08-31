@@ -629,14 +629,10 @@ const approvalRequest = db.table("ApprovalRequest", { title: db.string() }).plug
 
 The type registered in `PluginFieldExtensions` must describe only the fields being added — it is
 merged into the table's existing fields, not a replacement for them. A field name that collides
-with an existing field, or with a field injected by another plugin attached in the same
-`.plugin()` call, is a type error at the call site.
-
-This collision check only sees fields the table already has at the point `.plugin()` is called, so
-call order matters when a table also uses `.files()`: attach plugins before calling `.files()` so a
-file key that reuses an injected field's name is caught at the `.plugin()` call site. Calling
-`.files()` first does not see the field a later `.plugin()` call injects, so the same collision
-is only caught once `tailor generate` runs, as a runtime error rather than a type error.
+with an existing field, with a file key declared via `.files()`, or with a field injected by
+another plugin attached in the same `.plugin()` call, is a type error at the call site — regardless
+of whether `.files()` or `.plugin()` was called first. `tailor generate` also rejects the same
+collision at runtime, as a backstop for any case a table's static type doesn't otherwise catch.
 
 This only affects the table's static type. The corresponding field exists on the table's
 generated schema, and on the table object's own `fields`, only after `tailor generate` actually
