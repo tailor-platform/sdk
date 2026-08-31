@@ -2218,9 +2218,12 @@ describe("TailorDBField clone tests", () => {
     const table = db.table("Order", { name: db.string() });
 
     expect(() =>
-      // Simulates a field a plugin injects into the table's static type via
-      // PluginFieldExtensions — it isn't in `fields` until `tailor generate` runs.
-      table.pickFields(["status" as never]),
+      table.pickFields([
+        // Simulates a field a plugin injects into the table's static type via
+        // PluginFieldExtensions — it isn't in `fields` until `tailor generate` runs.
+        // @ts-expect-error "status" is not a real field on this table
+        "status",
+      ]),
     ).toThrow('pickFields(): field "status" does not exist on this table yet.');
   });
 
