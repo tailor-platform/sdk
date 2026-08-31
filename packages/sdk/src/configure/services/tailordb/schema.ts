@@ -233,14 +233,10 @@ type PluginFieldExtensionShapeError<
   Fields extends Record<string, TailorAnyDBField>,
   Config extends Record<string, unknown>,
   Id extends keyof Config & string,
-> = Id extends keyof PluginFieldExtensions<keyof Fields & string, Config[Id]>
-  ? PluginFieldExtensions<keyof Fields & string, Config[Id]>[Id] extends Record<
-      string,
-      TailorAnyDBField
-    >
+> =
+  PluginFieldExtensionFor<Fields, Id, Config[Id]> extends Record<string, TailorAnyDBField>
     ? false
-    : true
-  : false;
+    : true;
 // True when the fields plugin `Id` would inject collide with an existing
 // field, or with a field injected by another plugin id attached in the same
 // .plugin() call.
