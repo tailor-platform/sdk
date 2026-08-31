@@ -634,8 +634,9 @@ with an existing field, or with a field injected by another plugin attached in t
 
 This collision check only sees fields the table already has at the point `.plugin()` is called, so
 call order matters when a table also uses `.files()`: attach plugins before calling `.files()` so a
-file key that reuses an injected field's name is caught. Calling `.files()` first does not see the
-field a later `.plugin()` call injects.
+file key that reuses an injected field's name is caught at the `.plugin()` call site. Calling
+`.files()` first does not see the field a later `.plugin()` call injects, so the same collision
+is only caught once `tailor generate` runs, as a runtime error rather than a type error.
 
 This only affects the table's static type. The corresponding field exists on the table's
 generated schema, and on the table object's own `fields`, only after `tailor generate` actually

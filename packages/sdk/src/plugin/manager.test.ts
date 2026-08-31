@@ -86,6 +86,19 @@ describe("PluginManager", () => {
     expect(extended.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
   });
 
+  test("rejects an extended field name that collides with an existing .files() key", () => {
+    const manager = new PluginManager();
+    const original = db.table("Order", { name: db.string() }).files({ status: "receipt" });
+
+    expect(() =>
+      manager.extendTable({
+        originalTable: original,
+        extendFields: { status: db.string() },
+        pluginId: "extender",
+      }),
+    ).toThrow("attempted to add fields that collide with file keys already declared via .files()");
+  });
+
   test("requires per-table config when tableConfigRequired is true", async () => {
     const plugin: Plugin = {
       id: "requires-config",
