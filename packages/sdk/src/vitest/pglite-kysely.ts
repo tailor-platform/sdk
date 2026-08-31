@@ -19,6 +19,18 @@ import {
   type TransactionSettings,
 } from "kysely";
 
+/** Result of a {@link PGliteClient.query} call. */
+export interface PGliteQueryResult {
+  /** Rows returned by the statement. */
+  rows: unknown[];
+  /** Number of rows an INSERT/UPDATE/DELETE touched. */
+  affectedRows?: number;
+  /** Postgres command tag of the statement (`"SELECT"`, `"INSERT"`, ...). */
+  command?: string;
+  /** Row count reported alongside the command tag. */
+  rowCount?: number;
+}
+
 /**
  * The subset of a `@electric-sql/pglite` `PGlite` instance used by
  * {@link createKyselyPGlite}. Any client with a compatible `query`/`close`
@@ -26,7 +38,7 @@ import {
  */
 export interface PGliteClient {
   /** Run a single SQL statement with positional (`$1`, `$2`, ...) parameters. */
-  query(query: string, params?: unknown[]): Promise<{ rows: unknown[]; affectedRows?: number }>;
+  query(query: string, params?: unknown[]): Promise<PGliteQueryResult>;
   /** Release the underlying database. Called by `db.destroy()`. */
   close(): Promise<void>;
 }

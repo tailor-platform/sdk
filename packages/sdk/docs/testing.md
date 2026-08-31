@@ -144,6 +144,68 @@ Within one `mockTailordb()` instance, use either `onQuery()` matchers or a direc
 
 Pass `{ onUnhandled: "error" }` to make an unmatched query fail instead of returning an empty result.
 
+#### Real SQL execution with PGlite (`mockTailordbWithPGlite`)
+
+Instead of staging responses, back TailorDB with [`@electric-sql/pglite`](https://pglite.dev/) — an in-memory PostgreSQL (install it as a devDependency) — so the queries a resolver, executor, or workflow job issues through `getDB()` execute against real data. `getDB(namespace)` needs no test-side swap: acquire the mock, and each namespace you list resolves to its PGlite instance.
+
+Create the tables the test touches with `CREATE TABLE` statements matching the generated Kysely types — `text` for string and enum fields, `timestamptz` for date/datetime, `jsonb` for nested objects. The schema only has to match what your code reads and writes, not TailorDB's storage; relations are not enforced.
+
+```typescript
+import { PGlite } from "@electric-sql/pglite";
+import { mockTailordbWithPGlite } from "@tailor-platform/sdk/vitest";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import { getDB } from "../generated/db";
+import resolver from "./upsertUsers";
+
+const pglite = new PGlite();
+
+beforeAll(async () => {
+  await pglite.exec(`
+    CREATE TABLE "User" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "name" text NOT NULL,
+      "email" text NOT NULL,
+      "age" integer NOT NULL
+    );
+  `);
+});
+
+afterAll(async () => {
+  await pglite.close();
+});
+
+test("upserts against real rows", async () => {
+  using _db = mockTailordbWithPGlite({ namespaces: { "main-db": pglite } });
+  const db = getDB("main-db");
+  await db
+    .insertInto("User")
+    .values({ name: "Existing", email: "exists@example.com", age: 40 })
+    .execute();
+
+  const result = await resolver.body({
+    input: {
+      users: [
+        { name: "Newcomer", email: "new@example.com", age: 22 },
+        { name: "Existing", email: "exists@example.com", age: 41 },
+      ],
+    },
+    caller: null,
+    invoker: null,
+    env: { appName: "Resolver Template", version: 1 },
+  });
+
+  expect(result).toEqual({ created: 1, updated: 1 });
+  const rows = await db.selectFrom("User").selectAll().orderBy("email", "asc").execute();
+  expect(rows.map((row) => row.age)).toEqual([41, 22]);
+});
+```
+
+- The PGlite instance is yours: the mock never closes it, so close it in `afterAll`. Reuse one instance across a suite — creating one per test is slow.
+- Pass the same instance under several namespaces to drive them against one shared database.
+- Seed through `getDB` itself. When a column type rejects a value the test must stage (e.g. a `.serial()` field), seed that table through `createKyselyPGlite<Unmigrated<...>>(pglite)` instead — see [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally).
+- Transactions on a shared instance are serialized: while one is open, queries from other `getDB` instances wait. Do not use `test.concurrent` with a shared instance, and do not query the same instance through a second `getDB` from inside a transaction — that waits on itself.
+- PGlite runs full PostgreSQL while TailorDB supports a subset of it, and TailorDB hooks, validations, and permissions do not run here — a test passing on PGlite can still behave differently on the platform. Keep [`mockTailordb`](#tailordb-mock) or [`createKyselyMock`](#kysely-layer-mock-createkyselymock) tests for query shape and error paths, and E2E tests for platform behavior.
+
 ### Workflow Mock
 
 Workflow job `.start()` calls use the platform workflow runtime. Acquire `mockWorkflow()` when you want to provide start responses with `setJobHandler` / `enqueueResult` or assert on `startedJobs`. If no response is configured, the mock throws so missing job mocks fail loudly. Use `job(definition)` or `workflow(definition)` to get a stable, fully typed Vitest mock for one definition:
@@ -592,7 +654,7 @@ describe("upsertUsers resolver", () => {
 });
 ```
 
-Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer.
+Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer, or [`mockTailordbWithPGlite`](#real-sql-execution-with-pglite-mocktailordbwithpglite) to execute the queries against a real in-memory Postgres.
 
 TailorDB migration scripts (`migrate.ts`) are unit-tested the same way: the generated `db.ts` exports the `Database` interface to type the mock, and `tailor tailordb migration script <N> --with-test` scaffolds a ready-to-fill test. To execute a migration script against real rows in an in-memory Postgres, use `createKyselyPGlite` with `@electric-sql/pglite`. See [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally).
 
