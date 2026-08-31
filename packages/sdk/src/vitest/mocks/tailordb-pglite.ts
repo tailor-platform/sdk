@@ -134,12 +134,23 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
       return toQueryObjectResult(await pglite.query(query, params ?? []));
     };
 
-    const queryObject = async (query: string, params?: unknown[]) => {
+    const throwEnded = (): never => {
+      throw new Error("mockTailordbWithPGlite: query after end() on this client");
+    };
+    // Rechecked after every acquire: end() can resolve while the query is
+    // still waiting for the lock.
+    const acquire = async () => {
+      await lock.acquire(self);
       if (record.ended) {
-        throw new Error("mockTailordbWithPGlite: query after end() on this client");
+        lock.release(self);
+        throwEnded();
       }
+    };
+
+    const queryObject = async (query: string, params?: unknown[]) => {
+      if (record.ended) throwEnded();
       if (BEGIN_PATTERN.test(query)) {
-        await lock.acquire(self);
+        await acquire();
         try {
           return await run(query, params);
         } catch (error) {
@@ -157,7 +168,7 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
       if (lock.holds(self)) {
         return await run(query, params);
       }
-      await lock.acquire(self);
+      await acquire();
       try {
         return await run(query, params);
       } finally {
@@ -168,7 +179,13 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
     this.connect = async (): Promise<void> => {};
     this.end = async (): Promise<void> => {
       record.ended = true;
-      lock.release(self);
+      if (lock.holds(self)) {
+        try {
+          await run("rollback");
+        } finally {
+          lock.release(self);
+        }
+      }
     };
     this.queryObject = queryObject;
     this.createTransaction = (name: string) => {

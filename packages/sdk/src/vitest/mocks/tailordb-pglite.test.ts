@@ -311,7 +311,7 @@ describe("mockTailordbWithPGlite", () => {
     expect(done).toBe(true);
   });
 
-  test("end() releases a lock left held by an open transaction", async () => {
+  test("end() rolls back an open transaction before releasing the lock", async () => {
     const fake = createFakePGlite();
     using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
     const root = tailordbRoot();
@@ -322,7 +322,24 @@ describe("mockTailordbWithPGlite", () => {
     await c1.end();
 
     await c2.queryObject("select 1", []);
-    expect(fake.queries.map((q) => q.query)).toEqual(["begin", "select 1"]);
+    expect(fake.queries.map((q) => q.query)).toEqual(["begin", "rollback", "select 1"]);
+  });
+
+  test("a query queued behind a transaction does not run when its client ends meanwhile", async () => {
+    const fake = createFakePGlite();
+    using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+    const root = tailordbRoot();
+    const c1 = new root.Client({ namespace: "main" });
+    const c2 = new root.Client({ namespace: "main" });
+
+    await c1.queryObject("begin", []);
+    const queued = c2.queryObject("select 1", []);
+    await tick();
+    await c2.end();
+    await c1.queryObject("commit", []);
+
+    await expect(queued).rejects.toThrow(/end\(\)/);
+    expect(fake.queries.map((q) => q.query)).toEqual(["begin", "commit"]);
   });
 
   test("createTransaction on the raw client drives begin/commit through the same lock", async () => {
