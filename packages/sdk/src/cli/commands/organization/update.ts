@@ -5,8 +5,8 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 // strip unknown keys
@@ -25,21 +25,18 @@ export type UpdateOrganizationOptions = z.input<typeof updateOrganizationOptions
 export async function updateOrganization(
   options: UpdateOrganizationOptions,
 ): Promise<OrganizationInfo> {
-  const result = updateOrganizationOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(updateOrganizationOptionsSchema, options);
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.updateOrganization({
-    organizationId: result.data.organizationId,
-    organizationName: result.data.name,
+    organizationId: validated.organizationId,
+    organizationName: validated.name,
   });
 
   if (!response.organization) {
-    throw new Error(`Failed to update organization "${result.data.organizationId}".`);
+    throw new Error(`Failed to update organization "${validated.organizationId}".`);
   }
 
   return organizationInfo(response.organization);

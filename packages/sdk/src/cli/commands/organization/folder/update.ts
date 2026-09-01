@@ -5,8 +5,8 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { folderInfo, type FolderInfo } from "../transform";
 
 // strip unknown keys
@@ -24,22 +24,19 @@ export type UpdateFolderOptions = z.input<typeof updateFolderOptionsSchema>;
  * @returns Updated folder details
  */
 export async function updateFolder(options: UpdateFolderOptions): Promise<FolderInfo> {
-  const result = updateFolderOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(updateFolderOptionsSchema, options);
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.updateOrganizationFolder({
-    organizationId: result.data.organizationId,
-    folderId: result.data.folderId,
-    folderName: result.data.name,
+    organizationId: validated.organizationId,
+    folderId: validated.folderId,
+    folderName: validated.name,
   });
 
   if (!response.folder) {
-    throw new Error(`Failed to update folder "${result.data.folderId}".`);
+    throw new Error(`Failed to update folder "${validated.folderId}".`);
   }
 
   return folderInfo(response.folder);

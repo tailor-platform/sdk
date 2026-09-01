@@ -4,7 +4,7 @@ import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { assertDefined } from "#/utils/assert";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { userInfo, type UserInfo } from "./transform";
 
 // strip unknown keys
@@ -18,21 +18,18 @@ const listUsersOptionsSchema = z.object({
 export type ListUsersOptions = z.input<typeof listUsersOptionsSchema>;
 
 async function loadOptions(options: ListUsersOptions) {
-  const result = listUsersOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(listUsersOptionsSchema, options);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
-    profile: result.data.profile,
-    workspaceId: result.data.workspaceId,
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    order: result.data.order,
-    limit: result.data.limit,
+    order: validated.order,
+    limit: validated.limit,
   };
 }
 

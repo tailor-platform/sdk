@@ -4,9 +4,9 @@ import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
 const removeUserOptionsSchema = z.object({
@@ -18,20 +18,17 @@ const removeUserOptionsSchema = z.object({
 export type RemoveUserOptions = z.input<typeof removeUserOptionsSchema>;
 
 async function loadOptions(options: RemoveUserOptions) {
-  const result = removeUserOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(removeUserOptionsSchema, options);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
-    profile: result.data.profile,
-    workspaceId: result.data.workspaceId,
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    email: result.data.email,
+    email: validated.email,
   };
 }
 
