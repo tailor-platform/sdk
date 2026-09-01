@@ -22,7 +22,7 @@ describe("test environment isolation", () => {
 
   // Guards the wiring on machines without TAILOR_* variables (including CI),
   // where the runtime assertion below cannot detect a removed registration.
-  test("every project except e2e registers the env isolation setup file", () => {
+  test("every non-e2e project registers the env isolation setup file", () => {
     const projects = vitestConfig.test?.projects ?? [];
     const projectTests = projects.flatMap((project) =>
       typeof project === "object" && "test" in project && project.test ? [project.test] : [],
@@ -30,7 +30,7 @@ describe("test environment isolation", () => {
 
     expect(projectTests.length).toBeGreaterThan(0);
     for (const projectTest of projectTests) {
-      if (projectTest.name === "e2e") continue;
+      if (String(projectTest.name).startsWith("e2e")) continue;
       expect(projectTest.setupFiles, `project "${String(projectTest.name)}"`).toContain(
         "./vitest.setup.ts",
       );

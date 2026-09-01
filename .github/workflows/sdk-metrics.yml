@@ -47,13 +47,16 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Run SDK coverage shard
-        run: pnpm exec vitest run --coverage --coverage.reporter=lcovonly --shard="${SHARD}/4"
+        # The subprocess-driven "e2e" project is invisible to V8 coverage and
+        # runs in sdk-e2e.yml; "e2e-coverage" and every other project stay in.
+        run: pnpm exec vitest run --coverage --coverage.reporter=lcovonly --project '!e2e' --shard="${SHARD}/4"
         working-directory: packages/sdk
         env:
           SHARD: ${{ matrix.shard }}
           GITHUB_RUN_ID: ${{ github.run_id }}-${{ matrix.shard }}
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          TAILOR_PLATFORM_WORKSPACE_REGION: us-west
 
       - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

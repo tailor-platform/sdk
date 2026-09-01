@@ -2,6 +2,10 @@ name: "SDK E2E Test"
 
 on:
   pull_request:
+  # The coverage workflow no longer runs the subprocess-driven e2e suite, so
+  # cover merge commits on main here.
+  push:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -62,7 +66,7 @@ jobs:
 
       - name: Run SDK e2e tests
         working-directory: packages/sdk
-        run: pnpm run test --project e2e
+        run: pnpm run test:e2e
         env:
           TAILOR_PLATFORM_E2E_RUN_ID: ${{ github.run_id }}-sdk
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
