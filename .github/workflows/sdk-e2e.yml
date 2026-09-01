@@ -46,6 +46,10 @@ jobs:
   sdk-e2e:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
+    concurrency:
+      group: sdk-e2e-main-sdk-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     name: SDK package e2e
     permissions:
@@ -85,6 +89,10 @@ jobs:
   template-workflow-e2e:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
+    concurrency:
+      group: sdk-e2e-main-template-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     name: Template workflow e2e
     permissions:
