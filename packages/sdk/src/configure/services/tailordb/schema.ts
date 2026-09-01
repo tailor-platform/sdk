@@ -21,9 +21,15 @@ import type {
   PrecompiledScriptExprKey,
   PrecompiledScriptExprMap,
 } from "#/parser/service/tailordb/types";
-import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
+import type { PluginAttachment, PluginConfigs, PluginFieldExtensions } from "#/plugin/types";
 import type { InferredAttributes } from "#/runtime/types";
-import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
+import type {
+  output,
+  InferFieldsOutput,
+  IsUnion,
+  TypeLevelError,
+  UnionToIntersection,
+} from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type {
@@ -202,6 +208,122 @@ type FileKeyConflictError<
     TypeLevelError<"file keys cannot use existing field names">
   >
 >;
+// A plugin id with no PluginFieldExtensions entry contributes no keys — using
+// Record<never, never> (rather than Record<string, never>) keeps its `keyof`
+// empty so it can't spuriously collide with every existing field.
+type PluginFieldExtensionFor<
+  Fields extends Record<string, TailorAnyDBField>,
+  Id extends string,
+  IdConfig,
+> = Id extends keyof PluginFieldExtensions<keyof Fields & string, IdConfig>
+  ? PluginFieldExtensions<keyof Fields & string, IdConfig>[Id]
+  : Record<never, never>;
+type PluginFieldExtensionsUnion<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+> = {
+  [Id in keyof Config & string]: PluginFieldExtensionFor<Fields, Id, Config[Id]>;
+}[keyof Config & string];
+type AllExtensionKeys<Ext> = Ext extends unknown ? keyof Ext : never;
+// True when plugin `Id` has a PluginFieldExtensions entry whose type does not
+// extend Record<string, TailorAnyDBField> — e.g. a plugin author registered
+// a non-record shape by mistake. Checked ahead of PluginFieldConflict, since
+// `keyof` on a non-record shape (e.g. `keyof string`) would otherwise produce
+// nonsense candidate keys for the collision check.
+// `Id extends string` (not `keyof Config & string`) deliberately: a mapped
+// type's key variable, used inside a nested conditional branch and then
+// intersected with `string`, does not structurally satisfy a `keyof Config &
+// string`-constrained type parameter under `skipLibCheck: false` (verified
+// against a standalone consumer — TS2344 on both call sites otherwise, even
+// for code that never calls .plugin()). `Config[Id & keyof Config]` recovers
+// the same indexed-access result without that constraint.
+type PluginFieldExtensionShapeError<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+  Id extends string,
+> =
+  PluginFieldExtensionFor<Fields, Id, Config[Id & keyof Config]> extends Record<
+    string,
+    TailorAnyDBField
+  >
+    ? false
+    : true;
+// True when the fields plugin `Id` would inject collide with an existing
+// field, or with a field injected by another plugin id attached in the same
+// .plugin() call.
+type PluginFieldConflict<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+  Id extends string,
+  FileKeys extends string,
+> = [
+  AllExtensionKeys<PluginFieldExtensionFor<Fields, Id, Config[Id & keyof Config]>> &
+    (
+      | keyof Fields
+      | FileKeys
+      | AllExtensionKeys<PluginFieldExtensionsUnion<Fields, Omit<Config, Id>>>
+    ),
+] extends [never]
+  ? false
+  : true;
+// Rejects a property on the caller's config literal for plugin `Id` that
+// isn't part of its registered PluginConfigs shape. `Config` is captured by
+// a `const` type parameter from the argument itself, so intersecting the
+// success branch with `PluginConfigs<...>[Id]` alone would not trigger
+// TypeScript's excess-property check — that check only fires when an object
+// literal is validated directly against a target type, not after its shape
+// has already been inferred through a generic parameter.
+type PluginConfigExcessProps<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+  Id extends string,
+> = Record<
+  Exclude<
+    keyof Config[Id & keyof Config],
+    keyof PluginConfigs<keyof Fields & string>[Id & keyof PluginConfigs<keyof Fields & string>]
+  >,
+  never
+>;
+type PluginExtendedFields<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+> =
+  IsAny<Fields> extends true
+    ? Fields
+    : // For `Config = {}`, PluginFieldExtensionsUnion is `never`, and
+      // UnionToIntersection<never> is `unknown` (not `never`), so this
+      // correctly reduces to `Fields` — see the "empty config" test.
+      Fields & UnionToIntersection<PluginFieldExtensionsUnion<Fields, Config>>;
+// Validates each key of the passed config object against PluginConfigs and
+// flags field-extension conflicts (see PluginFieldConflict above), keeping
+// type errors localized to the offending plugin id instead of requiring
+// every registered plugin id to be present (as a `P extends keyof
+// PluginConfigs<...>` generic would need, defeating inference of which
+// plugin ids were actually passed).
+type PluginConfigGuard<
+  Fields extends Record<string, TailorAnyDBField>,
+  Config extends Record<string, unknown>,
+  FileKeys extends string,
+> =
+  IsAny<Fields> extends true
+    ? unknown
+    : {
+        [K in keyof Config]: K extends keyof PluginConfigs<keyof Fields & string>
+          ? // A union config (e.g. from a ternary passed directly as a plugin's
+            // value) distributes through PluginFieldExtensionFor's conditional
+            // and silently collapses the injected field to `never` once
+            // intersected back together — reject it here instead, before it
+            // can produce that confusing downstream error.
+            IsUnion<Config[K]> extends true
+            ? TypeLevelError<"plugin config must be a single object literal, not a union — assign the config to a variable first if it comes from a conditional expression">
+            : PluginFieldExtensionShapeError<Fields, Config, K & string> extends true
+              ? TypeLevelError<"PluginFieldExtensions entry must be a Record<string, TailorAnyDBField>">
+              : PluginFieldConflict<Fields, Config, K & string, FileKeys> extends true
+                ? TypeLevelError<"plugin field extension conflicts with an existing field, a file key declared via .files(), or another plugin's field">
+                : PluginConfigs<keyof Fields & string>[K] &
+                    PluginConfigExcessProps<Fields, Config, K & string>
+          : TypeLevelError<"unknown plugin id">;
+      };
 type DBFieldDescriptionFn<
   Defined extends DefinedDBFieldMetadata,
   Output,
@@ -499,6 +621,7 @@ export interface TailorDBType<
   User extends object = InferredAttributes,
   // oxlint-disable-next-line no-explicit-any
   Defined extends DefinedDBTypeMetadata = any,
+  FileKeys extends string = never,
 > extends TailorDBTypeBase<Fields, User> {
   _description?: string;
 
@@ -509,7 +632,7 @@ export interface TailorDBType<
       TypeHook<Fields>,
       ".hooks() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "hooks">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "hooks">, FileKeys>;
   validate(
     fn: DBTypeDuplicateInputGuard<
       Defined,
@@ -517,7 +640,7 @@ export interface TailorDBType<
       TypeValidateFn<Fields>,
       ".validate() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "validate">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "validate">, FileKeys>;
   features(
     features: DBTypeDuplicateInputGuard<
       Defined,
@@ -525,15 +648,15 @@ export interface TailorDBType<
       Omit<TypeFeatures, "pluralForm">,
       ".features() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "features">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "features">, FileKeys>;
   indexes(
     ...indexes: DBTypeDuplicateRestGuard<
       Defined,
       "indexes",
-      IndexDef<TailorDBType<Fields, User, Defined>>[],
+      IndexDef<TailorDBType<Fields, User, Defined, FileKeys>>[],
       ".indexes() has already been set"
     >
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "indexes">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "indexes">, FileKeys>;
   files<const F extends string>(
     files: DBTypeDuplicateInputGuard<
       Defined,
@@ -541,7 +664,7 @@ export interface TailorDBType<
       Record<F, string> & FileKeyConflictError<Fields, User>,
       ".files() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "files">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "files">, FileKeys | F>;
   permission<
     U extends object = User,
     P extends TailorTypePermission<U, output<TailorDBType<Fields, User, Defined>>> =
@@ -553,7 +676,7 @@ export interface TailorDBType<
       P,
       ".permission() has already been set"
     >,
-  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "permission">>;
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "permission">, FileKeys>;
   gqlPermission<
     U extends object = User,
     P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
@@ -564,7 +687,7 @@ export interface TailorDBType<
       P,
       ".gqlPermission() has already been set"
     >,
-  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "gqlPermission">>;
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "gqlPermission">, FileKeys>;
   description(
     description: DBTypeDuplicateInputGuard<
       Defined,
@@ -572,7 +695,7 @@ export interface TailorDBType<
       string,
       ".description() has already been set"
     >,
-  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "description">>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "description">, FileKeys>;
   pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
@@ -583,9 +706,9 @@ export interface TailorDBType<
       : never;
   };
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
-  plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
-    [K in P]: PluginConfigs<keyof Fields & string>[K];
-  }): TailorDBType<Fields, User, Defined>;
+  plugin<const Config extends Record<string, unknown>>(
+    config: Config & PluginConfigGuard<Fields, Config, FileKeys>,
+  ): TailorDBType<PluginExtendedFields<Fields, Config>, User, Defined, FileKeys>;
 }
 
 export type TailorDBInstance<
@@ -594,7 +717,8 @@ export type TailorDBInstance<
   User extends object = InferredAttributes,
   // oxlint-disable-next-line no-explicit-any
   Defined extends DefinedDBTypeMetadata = any,
-> = TailorDBType<Fields, User, Defined>;
+  FileKeys extends string = never,
+> = TailorDBType<Fields, User, Defined, FileKeys>;
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -1091,6 +1215,11 @@ function createTailorDBType<
     NextUser extends object,
     Key extends keyof DefinedDBTypeMetadata,
   > = TailorDBType<Fields, NextUser, WithDBTypeMetadata<DefinedDBTypeMetadata, Key>>;
+  type TypeAfterPlugin<Config extends Record<string, unknown>> = TailorDBType<
+    PluginExtendedFields<Fields, Config>,
+    User,
+    DefinedDBTypeMetadata
+  >;
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -1166,10 +1295,15 @@ function createTailorDBType<
 
     files<const F extends string>(
       files: Record<F, string> & FileKeyConflictError<Fields, User>,
-    ): TypeAfter<"files"> {
+    ): TailorDBType<Fields, User, WithDBTypeMetadata<DefinedDBTypeMetadata, "files">, F> {
       return runMethodOnce("files", () => {
         _files = files;
-        return this as TypeAfter<"files">;
+        return this as TailorDBType<
+          Fields,
+          User,
+          WithDBTypeMetadata<DefinedDBTypeMetadata, "files">,
+          F
+        >;
       });
     },
 
@@ -1207,7 +1341,15 @@ function createTailorDBType<
     pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
       const result = {} as Record<K, TailorAnyDBField>;
       for (const key of keys) {
-        const field = this.fields[key] as TailorAnyDBField;
+        const field = this.fields[key] as TailorAnyDBField | undefined;
+        if (!field) {
+          // A plugin-injected field is only added to `fields` after `tailor
+          // generate` runs — see the "Injecting fields into the attached
+          // table's type" section of the plugin docs.
+          throw new Error(
+            `pickFields(): field "${String(key)}" does not exist on this table yet. If it comes from a plugin's .plugin() call, it is only added to the table after \`tailor generate\` runs.`,
+          );
+        }
         if (options) {
           result[key] = field.clone(options);
         } else {
@@ -1233,13 +1375,13 @@ function createTailorDBType<
       return _plugins;
     },
 
-    plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
-      [K in P]: PluginConfigs<keyof Fields & string>[K];
-    }): TailorDBType<Fields, User, AnyBuilderMethod> {
+    plugin<const Config extends Record<string, unknown>>(
+      config: Config & PluginConfigGuard<Fields, Config, never>,
+    ): TypeAfterPlugin<Config> {
       for (const [pluginId, pluginConfig] of Object.entries(config)) {
         _plugins.push({ pluginId, config: pluginConfig });
       }
-      return this;
+      return this as unknown as TypeAfterPlugin<Config>;
     },
   };
 

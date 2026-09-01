@@ -24,8 +24,14 @@ export type PluginConfig = {
     | ((
         context: import("#/plugin/types").PluginTableProcessContext<unknown, unknown>,
       ) =>
-        | import("#/plugin/types").TablePluginOutput
-        | Promise<import("#/plugin/types").TablePluginOutput>)
+        | import("#/plugin/types").TablePluginOutput<
+            Record<string, import("#/configure/services/tailordb/types").TailorAnyDBField>
+          >
+        | Promise<
+            import("#/plugin/types").TablePluginOutput<
+              Record<string, import("#/configure/services/tailordb/types").TailorAnyDBField>
+            >
+          >)
     | undefined;
   onNamespaceLoaded?:
     | ((

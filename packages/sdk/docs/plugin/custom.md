@@ -575,6 +575,90 @@ declare module "@tailor-platform/sdk" {
 }
 ```
 
+### Injecting fields into the attached table's type (declaration merging)
+
+A plugin that adds fields to a table via `onTableLoaded`'s `extends.fields` (see
+[onTableLoaded](#ontableloaded) above) can also make those fields show up on the table's own
+static type right away, computed from the literal per-table config passed to `.plugin()`. Provide
+a declaration merge for the `PluginFieldExtensions` interface, keyed by the same `id` used in
+`PluginConfigs`:
+
+```typescript
+// your-plugin/types.d.ts (shipped with your plugin package)
+import type { TailorDBField } from "@tailor-platform/sdk";
+
+declare module "@tailor-platform/sdk" {
+  interface PluginConfigs<Fields extends string> {
+    "@example/lifecycle": {
+      transitions: Record<string, { from: readonly string[]; to: string }>;
+    };
+  }
+
+  interface PluginFieldExtensions<Fields extends string, Config> {
+    "@example/lifecycle": Config extends {
+      transitions: infer T extends Record<string, { from: readonly string[]; to: string }>;
+    }
+      ? {
+          status: TailorDBField<
+            { type: "enum"; array: false },
+            T[keyof T]["from"][number] | T[keyof T]["to"]
+          >;
+        }
+      : never;
+  }
+}
+```
+
+With this in place, the table returned by `.plugin()` already has the derived field. The status enum
+includes every state that appears anywhere in `transitions` — both a `from` state that a transition
+never produces (like the initial `"PENDING"` below) and every `to` state:
+
+```typescript
+import { db } from "@tailor-platform/sdk";
+
+const approvalRequest = db.table("ApprovalRequest", { title: db.string() }).plugin({
+  "@example/lifecycle": {
+    transitions: {
+      approve: { from: ["PENDING"], to: "APPROVED" },
+      reject: { from: ["PENDING"], to: "REJECTED" },
+    },
+  },
+});
+// approvalRequest's type now includes status: "PENDING" | "APPROVED" | "REJECTED"
+```
+
+The type registered in `PluginFieldExtensions` must describe only the fields being added — it is
+merged into the table's existing fields, not a replacement for them. A field name that collides
+with an existing field, with a file key declared via `.files()`, or with a field injected by
+another plugin attached in the same `.plugin()` call, is a type error at the call site — regardless
+of whether `.files()` or `.plugin()` was called first. `tailor generate` also rejects the same
+collision at runtime, as a backstop for any case a table's static type doesn't otherwise catch.
+
+This only affects the table's static type. The corresponding field exists on the table's
+generated schema, and on the table object's own `fields`, only after `tailor generate` actually
+applies `extends.fields`. Before that, reading an injected field directly off the table
+(`table.fields.status`) returns `undefined`, and `pickFields(["status"])` throws — call these only
+with the table's originally declared fields, not ones a plugin injects.
+
+To keep the declared type and the runtime implementation in sync, give `Plugin`'s optional third
+type parameter the same shape and use it inside `onTableLoaded`:
+
+```typescript
+import { db, type Plugin, type TailorDBField } from "@tailor-platform/sdk";
+
+const lifecyclePlugin: Plugin<
+  LifecycleTableConfig,
+  LifecyclePluginConfig,
+  { status: TailorDBField<{ type: "enum"; array: false }, "PENDING" | "APPROVED" | "REJECTED"> }
+> = {
+  id: "@example/lifecycle",
+  description: "Derives a status field from a transitions map",
+  onTableLoaded(context) {
+    return { extends: { fields: { status: db.enum(["PENDING", "APPROVED", "REJECTED"]) } } };
+  },
+};
+```
+
 ### Resolving plugin-level config from a `Plugin[]` array (declaration merging)
 
 `PluginConfig` is already available inside your own plugin's hooks via `context.pluginConfig`.

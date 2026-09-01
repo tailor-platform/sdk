@@ -147,6 +147,19 @@ export interface PluginConfigs<Fields extends string = string> {
 }
 
 /**
+ * Registry mapping a plugin's `id` literal to the fields it injects into the
+ * attached table's static type, computed from the literal per-call config
+ * passed to `.plugin()`. Extend this interface via declaration merging, keyed
+ * by the same `id` used in {@link PluginConfigs}. The value must be a
+ * `Record<string, TailorAnyDBField>` of the fields to add — it is merged
+ * into the table's existing fields, not a replacement for them.
+ */
+// oxlint-disable-next-line no-unused-vars, no-empty-object-type
+export interface PluginFieldExtensions<Fields extends string = string, Config = unknown> {
+  // Extend this interface via declaration merging to add typed field injections
+}
+
+/**
  * Registry mapping a plugin's `id` literal to its plugin-level config type.
  * Extend via declaration merging, keyed by the `id` string, from the
  * owning plugin's own module.
@@ -281,8 +294,8 @@ export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorWithFile
   | PluginGeneratedExecutorLegacy;
 
-interface PluginExtends {
-  fields?: Record<string, TailorAnyDBField>;
+interface PluginExtends<FieldExtension extends Record<string, TailorAnyDBField>> {
+  fields?: FieldExtension;
 }
 
 export interface PluginOutput {
@@ -291,8 +304,10 @@ export interface PluginOutput {
   executors?: PluginGeneratedExecutor[];
 }
 
-export interface TablePluginOutput extends PluginOutput {
-  extends?: PluginExtends;
+export interface TablePluginOutput<
+  FieldExtension extends Record<string, TailorAnyDBField> = Record<string, TailorAnyDBField>,
+> extends PluginOutput {
+  extends?: PluginExtends<FieldExtension>;
 }
 
 export type NamespacePluginOutput = PluginOutput;
@@ -301,8 +316,13 @@ export type NamespacePluginOutput = PluginOutput;
  * Plugin interface that all plugins must implement.
  * @template TableConfig - Type for per-table configuration passed via .plugin() method
  * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
+ * @template FieldExtension - Type of the fields injected into the attached table via `extends.fields`. Should match the corresponding {@link PluginFieldExtensions} entry.
  */
-export interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
+export interface Plugin<
+  TableConfig = unknown,
+  PluginConfig = unknown,
+  FieldExtension extends Record<string, TailorAnyDBField> = Record<string, TailorAnyDBField>,
+> {
   readonly id: string;
   readonly description: string;
   readonly importPath?: string;
@@ -311,7 +331,7 @@ export interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
 
   onTableLoaded?(
     context: PluginTableProcessContext<TableConfig, PluginConfig>,
-  ): TablePluginOutput | Promise<TablePluginOutput>;
+  ): TablePluginOutput<FieldExtension> | Promise<TablePluginOutput<FieldExtension>>;
 
   onNamespaceLoaded?(
     context: PluginNamespaceProcessContext<PluginConfig>,

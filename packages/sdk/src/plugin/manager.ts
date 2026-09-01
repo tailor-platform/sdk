@@ -516,13 +516,21 @@ export class PluginManager {
   extendTable(params: ExtendTableParams): TailorAnyDBType {
     const { originalTable, extendFields, pluginId } = params;
     const existingFieldNames = Object.keys(originalTable.fields);
+    const existingFileNames = Object.keys(originalTable.metadata.files);
     const newFieldNames = Object.keys(extendFields);
     const duplicateFields = newFieldNames.filter((name) => existingFieldNames.includes(name));
+    const duplicateFiles = newFieldNames.filter((name) => existingFileNames.includes(name));
 
     if (duplicateFields.length > 0) {
       throw new Error(
         `Plugin "${pluginId}" attempted to add fields that already exist in table "${originalTable.name}": ${duplicateFields.join(", ")}. ` +
           `extendFields cannot overwrite existing fields.`,
+      );
+    }
+
+    if (duplicateFiles.length > 0) {
+      throw new Error(
+        `Plugin "${pluginId}" attempted to add fields that collide with file keys already declared via .files() on table "${originalTable.name}": ${duplicateFiles.join(", ")}.`,
       );
     }
 

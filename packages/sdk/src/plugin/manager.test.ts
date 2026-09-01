@@ -66,12 +66,13 @@ describe("PluginManager", () => {
 
   test("preserves pluralForm and plugin attachments when extending tables", () => {
     const manager = new PluginManager();
-    const original = db
-      .table(["Person", "People"], {
-        name: db.string(),
-      })
-      // PluginConfigs is open; use cast to attach plugin config in tests.
-      .plugin({ "test-plugin": { enabled: true } });
+    const original = db.table(["Person", "People"], {
+      name: db.string(),
+    });
+    // "test-plugin" has no PluginConfigs entry, which .plugin() now rejects at
+    // the type level; the runtime call is still valid for this test's purpose.
+    // @ts-expect-error "test-plugin" is not a registered plugin id
+    original.plugin({ "test-plugin": { enabled: true } });
 
     const extended = manager.extendTable({
       originalTable: original,
@@ -83,6 +84,19 @@ describe("PluginManager", () => {
 
     expect(extended.metadata.settings?.pluralForm).toBe("People");
     expect(extended.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
+  });
+
+  test("rejects an extended field name that collides with an existing .files() key", () => {
+    const manager = new PluginManager();
+    const original = db.table("Order", { name: db.string() }).files({ status: "receipt" });
+
+    expect(() =>
+      manager.extendTable({
+        originalTable: original,
+        extendFields: { status: db.string() },
+        pluginId: "extender",
+      }),
+    ).toThrow("attempted to add fields that collide with file keys already declared via .files()");
   });
 
   test("requires per-table config when tableConfigRequired is true", async () => {
