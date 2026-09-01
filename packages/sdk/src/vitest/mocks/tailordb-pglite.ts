@@ -68,11 +68,11 @@ function toQueryObjectResult(result: PGliteQueryResult) {
 }
 
 /**
- * Acquire a disposable mock that backs `tailordb.Client` with PGlite, so
- * resolver/executor/workflow code calling the generated `getDB(namespace)`
- * runs unchanged and its queries execute as real SQL on an in-memory
- * Postgres. Restored on dispose; the PGlite instances are borrowed, never
- * closed — close them yourself (e.g. in `afterAll`).
+ * Acquire a disposable mock that backs the generated `getDB(namespace)` with
+ * PGlite, so resolver/executor/workflow code runs unchanged and its queries
+ * execute as real SQL on an in-memory Postgres. Restored on dispose; the
+ * PGlite instances are borrowed, never closed — close them yourself (e.g. in
+ * `afterAll`).
  *
  * Create the tables a test needs up front with `CREATE TABLE` statements
  * matching the generated Kysely types. PGlite runs full PostgreSQL while
