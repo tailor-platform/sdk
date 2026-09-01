@@ -24,6 +24,12 @@ export type ExecutorService = {
   readonly config: ExecutorServiceConfig;
   readonly executors: Record<string, Executor>;
   readonly pluginExecutors: ReadonlyArray<PluginExecutor>;
+  /**
+   * Loads executor files once and resolves to the executor record loaded so
+   * far. Resolves to undefined only when the config declares no files and no
+   * plugin executor has been loaded yet; plugin executors appear in calls
+   * made after loadPluginExecutorFiles() has completed.
+   */
   loadExecutors: () => Promise<Record<string, Executor> | undefined>;
   loadPluginExecutorFiles: (filePaths: string[]) => Promise<void>;
 };
@@ -98,7 +104,11 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
           return executors;
         })();
       }
-      return loadPromise;
+      const loaded = await loadPromise;
+      // Files are loaded only once, but plugin executors registered by
+      // loadPluginExecutorFiles() after that first load must reach callers
+      // that re-invoke loadExecutors(), such as deployment planning.
+      return loaded ?? (Object.keys(executors).length > 0 ? executors : undefined);
     },
     loadPluginExecutorFiles: async (filePaths: string[]) => {
       if (filePaths.length === 0) return;
