@@ -363,6 +363,38 @@ export const user = db.table("User", {
     );
   });
 
+  test("accepts a plugin-generated table that is a structural copy of a builder", async () => {
+    const plugin: Plugin = {
+      id: "clone-plugin",
+      description: "returns a spread copy of a builder table",
+      importPath: "@example/clone",
+      onNamespaceLoaded: () => ({
+        tables: {
+          auditLog: {
+            ...db
+              .table("ClonedAuditLog", {
+                message: db.string(),
+              })
+              .permission(unsafeAllowAllTypePermission)
+              .gqlPermission(unsafeAllowAllGqlPermission),
+          },
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await service.processNamespacePlugins();
+    expect(Object.hasOwn(service.types, "ClonedAuditLog")).toBe(true);
+  });
+
   test("loads valid attachment plugin-generated and -extended tables", async () => {
     const typeFile = writeTypeFile(
       "with-valid-plugin.ts",

@@ -3,7 +3,10 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
+import {
+  pickTailorDBTypeSchemaKeys,
+  stripTailorDBTypeBuilderHelpers,
+} from "#/parser/service/tailordb/builder-helpers";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import {
   findMissingPermissionConfig,
@@ -95,7 +98,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   // malformed table fails with the offending plugin named instead of crashing
   // (or silently passing) during permission normalization.
   const parsePluginTable = (table: unknown, origin: string): TailorDBTypeSchemaOutput => {
-    const result = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(table));
+    const result = TailorDBTypeSchema.safeParse(pickTailorDBTypeSchemaKeys(table));
     if (!result.success) {
       const issues = result.error.issues
         .map((issue) => `  - ${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`)
