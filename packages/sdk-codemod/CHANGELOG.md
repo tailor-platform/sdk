@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.4
+
+### Patch Changes
+
+- [#2190](https://github.com/tailor-platform/sdk/pull/2190) [`b358644`](https://github.com/tailor-platform/sdk/commit/b35864405973390a40b4ca202ce1d887689d6603) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency picomatch to v4.0.7
+
 ## 0.8.3
 
 ### Patch Changes
