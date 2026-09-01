@@ -299,7 +299,7 @@ export const user = db.table("User", {
 
     using _logger = silenceLogger("error", "log");
     await expect(service.loadTypes()).rejects.toThrow(
-      /TailorDB table "User".*extended by plugin\(s\) "extend-plugin".*failed schema validation/s,
+      /TailorDB table "User".*extended by plugin "extend-plugin".*failed schema validation/s,
     );
   });
 

@@ -215,7 +215,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         ? undefined
         : parsePluginTable(
             extendedTable,
-            `"${rawTable.name}" extended by plugin(s) ${extendingPluginIds.map((id) => `"${id}"`).join(", ")}`,
+            `"${rawTable.name}" extended by ${extendingPluginIds.length === 1 ? "plugin" : "plugins"} ${extendingPluginIds.map((id) => `"${id}"`).join(", ")}`,
           );
     const parsedGeneratedTables = generatedTables.map((generatedTable) => ({
       ...generatedTable,
