@@ -303,6 +303,66 @@ export const user = db.table("User", {
     );
   });
 
+  test("rejects a null namespace plugin-generated table without crashing", async () => {
+    const plugin: Plugin = {
+      id: "namespace-plugin",
+      description: "namespace generator",
+      importPath: "@example/namespace",
+      onNamespaceLoaded: () => ({
+        tables: {
+          auditLog: null as unknown as ReturnType<typeof db.table>,
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await expect(service.processNamespacePlugins()).rejects.toThrow(
+      /TailorDB table generated as "auditLog" by plugin "namespace-plugin".*failed schema validation/s,
+    );
+  });
+
+  test("rejects a null attachment plugin-generated table without crashing", async () => {
+    const typeFile = writeTypeFile(
+      "with-null-generating-plugin.ts",
+      `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission).plugin({ "null-plugin": {} });
+`,
+    );
+    const plugin: Plugin = {
+      id: "null-plugin",
+      description: "generates a null table",
+      importPath: "@example/null",
+      onTableLoaded: () => ({
+        tables: {
+          audit: null as unknown as ReturnType<typeof db.table>,
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await expect(service.loadTypes()).rejects.toThrow(
+      /TailorDB table generated as "audit" by plugin "null-plugin".*failed schema validation/s,
+    );
+  });
+
   test("loads valid attachment plugin-generated and -extended tables", async () => {
     const typeFile = writeTypeFile(
       "with-valid-plugin.ts",

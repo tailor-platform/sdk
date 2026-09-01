@@ -113,6 +113,9 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     return `${namePart}generated as "${kind}" by plugin "${pluginId}"`;
   };
 
+  const pluginTableName = (table: unknown): unknown =>
+    typeof table === "object" && table !== null && "name" in table ? table.name : undefined;
+
   const doParseTypes = (): void => {
     const allTypes = createRawTypesByName();
     for (const fileTypes of Object.values(rawTypes)) {
@@ -376,7 +379,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           kind,
           table: parsePluginTable(
             generatedTable,
-            describeGeneratedTable(generatedTable.name, kind, pluginId),
+            describeGeneratedTable(pluginTableName(generatedTable), kind, pluginId),
           ),
         })),
       );

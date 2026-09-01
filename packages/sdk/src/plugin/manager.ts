@@ -306,7 +306,7 @@ export class PluginManager {
           `plugin "${plugin.id}" missing importPath`,
         );
         for (const [kind, table] of Object.entries(output.tables)) {
-          const tableKey = `${pluginId}:${kind}:${table.name}`;
+          const tableKey = `${pluginId}:${kind}:${rawPluginTableName(table)}`;
           if (this.namespaceGeneratedTableKeys.has(tableKey)) {
             continue;
           }
@@ -381,15 +381,16 @@ export class PluginManager {
 
       const plugin = this.getPlugin(attachment.pluginId);
       for (const [kind, table] of Object.entries(output.tables ?? {})) {
+        const tableName = rawPluginTableName(table);
         generatedTables.push({
-          tableName: table.name,
+          tableName,
           table,
           kind,
           pluginId: attachment.pluginId,
           pluginImportPath: this.getPluginImportPath(attachment.pluginId) ?? "",
           pluginConfig: plugin?.pluginConfig,
         });
-        events.push({ kind: "generated", tableName: table.name, pluginId: attachment.pluginId });
+        events.push({ kind: "generated", tableName, pluginId: attachment.pluginId });
       }
     }
 
@@ -598,6 +599,18 @@ export interface ExtendTableParams {
   extendFields: Record<string, unknown>;
   /** The ID of the plugin extending the table */
   pluginId: string;
+}
+
+/**
+ * Read the name off raw plugin table output without assuming it is a valid
+ * table object; the caller validates the value itself later.
+ * @param table - Raw table value returned by a plugin hook
+ * @returns The table name, or an empty string when the value has no string name
+ */
+function rawPluginTableName(table: unknown): string {
+  const name =
+    typeof table === "object" && table !== null && "name" in table ? table.name : undefined;
+  return typeof name === "string" ? name : "";
 }
 
 /**
