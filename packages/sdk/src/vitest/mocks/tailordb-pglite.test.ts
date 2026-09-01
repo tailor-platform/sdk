@@ -411,6 +411,22 @@ describe("mockTailordbWithPGlite", () => {
     expect(mock.executedQueries).toHaveLength(1);
   });
 
+  test.each(["clear", "reset"] as const)(
+    "%s() rejects an open transaction instead of stranding its lock",
+    async (method) => {
+      const fake = createFakePGlite();
+      using mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+      const root = tailordbRoot();
+      const client = new root.Client({ namespace: "main" });
+
+      await client.queryObject("begin", []);
+      expect(() => mock[method]()).toThrow(/transaction is open/);
+      expect(mock.executedQueries).toHaveLength(1);
+      expect(mock.createdClients).toHaveLength(1);
+      await client.end();
+    },
+  );
+
   test("createTransaction on the raw client drives begin/commit through the same lock", async () => {
     const fake = createFakePGlite();
     using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });

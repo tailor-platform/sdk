@@ -109,6 +109,15 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
   const executedQueries: ExecutedPGliteQuery[] = [];
   const createdClients: CreatedClient[] = [];
   const locks = new Map<PGliteClient, TransactionLock>();
+  const activeTransactions = new Set<CreatedClient>();
+
+  const assertNoOpenTransaction = (method: "clear" | "reset") => {
+    if (activeTransactions.size > 0) {
+      throw new Error(
+        `mockTailordbWithPGlite: ${method}() cannot run while a transaction is open; commit, roll back, or end() its client first`,
+      );
+    }
+  };
 
   const defaultClient = function (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,7 +169,9 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
         }
         await acquire();
         try {
-          return await run(query, params);
+          const result = await run(query, params);
+          activeTransactions.add(record);
+          return result;
         } catch (error) {
           lock.release(self);
           throw error;
@@ -171,6 +182,7 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
           try {
             return await run(query, params);
           } finally {
+            activeTransactions.delete(record);
             lock.release(self);
           }
         }
@@ -201,6 +213,7 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
         try {
           await run("rollback");
         } finally {
+          activeTransactions.delete(record);
           lock.release(self);
         }
       }
@@ -243,15 +256,23 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
       return createdClients;
     },
 
-    /** Clear recorded queries and clients while keeping the mock installed. */
+    /**
+     * Clear recorded queries and clients while keeping the mock installed.
+     * Throws if a transaction is open.
+     */
     clear(): void {
+      assertNoOpenTransaction("clear");
       Client.mockClear();
       executedQueries.length = 0;
       createdClients.length = 0;
     },
 
-    /** Reset recorded state and restore the default client behavior. */
+    /**
+     * Reset recorded state and restore the default client behavior.
+     * Throws if a transaction is open.
+     */
     reset(): void {
+      assertNoOpenTransaction("reset");
       Client.mockReset();
       Client.mockImplementation(defaultClient);
       executedQueries.length = 0;
