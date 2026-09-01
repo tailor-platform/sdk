@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 2.10.0
+
+### Minor Changes
+
+- [#2169](https://github.com/tailor-platform/sdk/pull/2169) [`e7fa784`](https://github.com/tailor-platform/sdk/commit/e7fa784f82d3bac09322789a6aadc56deaf24ba6) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `PluginFieldExtensions`, a new interface exported from `@tailor-platform/sdk` alongside `PluginConfigs`. A TailorDB plugin author declares it via the same `declare module "@tailor-platform/sdk"` declaration merging used for `PluginConfigs` (see the plugin docs), keyed by the plugin's `id`, to make the fields it injects at generation time show up on the attached table's own static type immediately — computed from the literal per-table config passed to `.plugin()`, without a separate hand-written declaration. `Plugin` gains an optional third type parameter so `onTableLoaded`'s `extends.fields` return type can be checked against the declared field extension. `.plugin()` now reports a type error at the call site when an injected field name collides with an existing field or with a field injected by another plugin attached in the same call — including previously-unregistered plugin ids passed to `.plugin()`, an unknown property on a registered plugin's config, or a config value that is itself a union (e.g. from a ternary), all of which used to be silently accepted or silently produce a wrong inferred type. The custom plugin API is still beta, so this tightening ships as part of the minor release rather than a major one; register the plugin id via `PluginConfigs` (see `docs/plugin/custom.md`) if it starts failing to type-check. `TailorDBType` also gains a fourth, defaulted type parameter tracking the literal keys declared via `.files()`, so `.plugin()` now reports a type error at the call site when an injected field name collides with a file key regardless of whether `.files()` or `.plugin()` was called first — previously only one call order was caught. `tailor generate` also throws on the same collision at runtime as a backstop.
+
+### Patch Changes
+
+- [#2209](https://github.com/tailor-platform/sdk/pull/2209) [`3ca6d5e`](https://github.com/tailor-platform/sdk/commit/3ca6d5e2c6e4550f6b3cd0e93e86c6a33695c197) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update secretlint monorepo to v13.0.5
+
 ## 2.9.0
 
 ### Minor Changes
