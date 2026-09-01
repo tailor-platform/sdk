@@ -784,6 +784,48 @@ describe("db-types-generator", () => {
       expect(content).toContain("ColumnType<");
       expect(content).toContain("[]");
     });
+
+    test("writes never to the write slots when every enum value is removed", async () => {
+      const fields: Record<string, SnapshotFieldConfig> = {
+        requiredStatus: { type: "enum", required: true, allowedValues: [{ value: "A" }] },
+        optionalStatus: { type: "enum", required: false, allowedValues: [{ value: "A" }] },
+        requiredRoles: {
+          type: "enum",
+          required: true,
+          array: true,
+          allowedValues: [{ value: "A" }],
+        },
+        optionalRoles: {
+          type: "enum",
+          required: false,
+          array: true,
+          allowedValues: [{ value: "A" }],
+        },
+      };
+      const snapshot = createMockSnapshot({ User: { fields } });
+      const diff = createMockMigrationDiff({
+        changes: Object.entries(fields).map(([fieldName, config]) => ({
+          kind: "field_modified" as const,
+          tableName: "User",
+          fieldName,
+          before: config,
+          after: { ...config, allowedValues: [] },
+        })),
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain('requiredStatus: ColumnType<"A", never, never>;');
+      expect(content).toContain(
+        'optionalStatus: ColumnType<("A") | null, (never) | null, (never) | null>;',
+      );
+      expect(content).toContain('requiredRoles: ColumnType<("A")[], (never)[], (never)[]>;');
+      expect(content).toContain(
+        'optionalRoles: ColumnType<("A")[] | null, (never)[] | null, (never)[] | null>;',
+      );
+    });
   });
 
   describe("writeDbTypesFile file location", () => {
