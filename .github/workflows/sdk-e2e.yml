@@ -8,7 +8,9 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Per-SHA groups on push: the ref-wide group has a single pending slot, so a
+  # later push would replace a queued run and leave its commit unverified.
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: false
 
 permissions: {}
