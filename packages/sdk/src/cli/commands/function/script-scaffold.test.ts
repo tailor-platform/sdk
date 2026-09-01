@@ -80,6 +80,7 @@ describe("generateScriptDbTypes", () => {
     expect(content).toContain("createdAt: Generated<Timestamp>;");
     expect(content).toContain("updatedAt: Generated<Timestamp>;");
     expect(content).toContain("ObjectColumnType<{");
+    expect(content).toContain("type ObjectColumnType");
     expect(content).toContain("id: Generated<string>;");
   });
 
