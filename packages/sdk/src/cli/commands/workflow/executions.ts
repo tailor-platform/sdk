@@ -14,11 +14,11 @@ import {
   toPageDirection,
   workspaceArgs,
 } from "#/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import { styles, logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { waitArgs } from "./args";
 import { type WorkflowWaitUntil } from "./status";
 import {
@@ -118,13 +118,9 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
   options?: ListWorkflowExecutionsTypedOptions<W>,
 ): Promise<WorkflowExecutionInfo[]> {
   const workflowName = options?.workflow?.name;
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options?.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options?.workspaceId,
-    profile: options?.profile,
   });
 
   const filters: ReturnType<typeof create<typeof FilterSchema>>[] = [];
@@ -176,13 +172,9 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
 export async function getWorkflowExecution(
   options: GetWorkflowExecutionOptions,
 ): Promise<GetWorkflowExecutionResult> {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   async function fetchFunctionExecution(

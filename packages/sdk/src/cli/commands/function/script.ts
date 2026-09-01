@@ -1,11 +1,10 @@
+import * as fs from "node:fs";
 /**
  * `tailor function script` command
  *
  * Scaffolds a one-off script that `tailor function run` executes on the
  * Tailor Platform server without deploying.
  */
-
-import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -15,13 +14,12 @@ import {
   type NormalizedSchemaSnapshot,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { workspaceArgs, configArg, DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { extractAllNamespaces, extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import {
   KyselyGeneratorID,
@@ -148,11 +146,9 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
     } else {
       let snapshot: NormalizedSchemaSnapshot;
       if (args.remote) {
-        const accessToken = await loadAccessToken({ profile: args.profile });
-        const client = await initOperatorClient(accessToken);
-        const workspaceId = await loadWorkspaceId({
-          workspaceId: args["workspace-id"],
+        const { client, workspaceId } = await loadOperatorWorkspaceContext({
           profile: args.profile,
+          workspaceId: args["workspace-id"],
         });
         resolvedWorkspaceId = workspaceId;
 

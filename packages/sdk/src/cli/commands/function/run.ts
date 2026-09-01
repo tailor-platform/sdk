@@ -1,11 +1,10 @@
+import * as fs from "node:fs";
 /**
  * `tailor function run` command
  *
  * Bundles and executes a function on the Tailor Platform server
  * without deploying (applying) the application.
  */
-
-import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
@@ -18,11 +17,12 @@ import {
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { loadMachineUserName } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { executeScript } from "#/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { assertDefined } from "#/utils/assert";
@@ -119,13 +119,9 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
       authConfig: config.auth,
     });
 
-    const accessToken = await loadAccessToken({
+    const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
     });
 
     const machineUser = await resolveMachineUser({

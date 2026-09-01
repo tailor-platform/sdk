@@ -1,10 +1,9 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
@@ -24,11 +23,9 @@ async function loadOptions(options: RemoveUserOptions) {
     throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: result.data.profile,
+    workspaceId: result.data.workspaceId,
   });
 
   return {

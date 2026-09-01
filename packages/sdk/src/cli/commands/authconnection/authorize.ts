@@ -3,11 +3,11 @@ import * as http from "node:http";
 import open from "open";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
-import { fetchAll, initOperatorClient } from "#/cli/shared/client";
+import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { connectionNameArgs } from "./args";
 
@@ -62,13 +62,9 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const accessToken = await loadAccessToken({
+    const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
     });
 
     // Find the connection to get its provider URL and client ID

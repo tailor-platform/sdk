@@ -2,10 +2,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { statusLabels } from "./status";
 
 export const domainListCommand = defineAppCommand({
@@ -19,13 +18,9 @@ export const domainListCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    const accessToken = await loadAccessToken({
+    const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
     });
 
     try {

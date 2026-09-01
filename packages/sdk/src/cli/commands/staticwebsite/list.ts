@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 
 export interface StaticWebsiteInfo {
   workspaceId: string;
@@ -28,13 +28,9 @@ type StaticWebsiteListOptions = {
 async function listStaticWebsites(
   options?: StaticWebsiteListOptions,
 ): Promise<StaticWebsiteInfo[]> {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options?.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options?.workspaceId,
-    profile: options?.profile,
   });
 
   const pageDirection = toPageDirection(options?.order);

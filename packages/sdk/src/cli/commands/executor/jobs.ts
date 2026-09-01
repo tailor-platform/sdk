@@ -23,12 +23,12 @@ import {
   toPageDirection,
   workspaceArgs,
 } from "#/cli/shared/args";
-import { fetchAll, fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { fetchAll, fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { spinner } from "#/cli/shared/spinner";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import { getWorkflowExecution } from "../workflow/executions";
@@ -136,13 +136,9 @@ export async function listExecutorJobs<E extends ExecutorLike>(
   options: ListExecutorJobsTypedOptions<E>,
 ): Promise<ExecutorJobListInfo[]> {
   const executorName = options.executor.name;
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   const filters: ReturnType<typeof create<typeof FilterSchema>>[] = [];
@@ -198,13 +194,9 @@ export async function getExecutorJob<E extends ExecutorLike>(
   options: GetExecutorJobTypedOptions<E>,
 ): Promise<ExecutorJobDetailInfo> {
   const executorName = options.executor.name;
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   try {
@@ -258,13 +250,9 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   options: WatchExecutorJobTypedOptions<E>,
 ): Promise<WatchExecutorJobResult> {
   const executorName = options.executor.name;
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   const interval = options.interval ?? 3000;
