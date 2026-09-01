@@ -83,6 +83,17 @@ export {
   type QueryMatcher,
 } from "./mock";
 
+export {
+  mockTailordbWithPGlite,
+  type ExecutedPGliteQuery,
+  type MockTailordbPGliteOptions,
+} from "./mocks/tailordb-pglite";
+
 export { runWorkflowLocally, type RunWorkflowLocallyOptions } from "./workflow-local";
 export { createKyselyMock, type KyselyMock, type ExecutedQuery } from "./mock-kysely";
-export { createKyselyPGlite, type PGliteClient, type Unmigrated } from "./pglite-kysely";
+export {
+  createKyselyPGlite,
+  type PGliteClient,
+  type PGliteQueryResult,
+  type Unmigrated,
+} from "./pglite-kysely";
