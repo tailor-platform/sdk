@@ -371,6 +371,7 @@ function mapToTsType(fieldType: string): {
 }
 
 function formatEnumUnion(values: string[]): string {
+  if (values.length === 0) return "never";
   return values.map((v) => `"${v}"`).join(" | ");
 }
 
