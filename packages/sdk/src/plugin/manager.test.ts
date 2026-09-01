@@ -1,9 +1,22 @@
 import { describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/index";
+import { getRawPluginTableName } from "#/plugin/guards";
 import { PluginManager } from "#/plugin/manager";
 import type { Plugin } from "#/plugin/types";
 
 const orderType = () => db.table("Order", { name: db.string() });
+
+describe("getRawPluginTableName", () => {
+  test.each([
+    [{ name: "AuditLog" }, "AuditLog"],
+    [{ name: "" }, ""],
+    [{ name: 1 }, undefined],
+    [null, undefined],
+    ["AuditLog", undefined],
+  ])("reads a string name from %j", (table, expected) => {
+    expect(getRawPluginTableName(table)).toBe(expected);
+  });
+});
 
 describe("PluginManager", () => {
   test("collects namespace plugin-generated tables", async () => {

@@ -9,6 +9,17 @@ import type {
 } from "./types";
 
 /**
+ * Reads a table name without assuming plugin output is a valid table object.
+ * @param table - Raw table value returned by a plugin hook.
+ * @returns The table name when it is a string; otherwise, undefined.
+ */
+export function getRawPluginTableName(table: unknown): string | undefined {
+  const name =
+    typeof table === "object" && table !== null && "name" in table ? table.name : undefined;
+  return typeof name === "string" ? name : undefined;
+}
+
+/**
  * Collects the generation-time dependency kinds a plugin requires.
  * @param plugin - The plugin object to inspect.
  * @param plugin.onTailorDBReady - Hook for TailorDB readiness.

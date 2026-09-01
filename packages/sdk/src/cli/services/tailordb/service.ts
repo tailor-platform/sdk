@@ -12,6 +12,7 @@ import {
   findMissingPermissionConfig,
   findOmittedPermitRules,
 } from "#/parser/service/tailordb/permission";
+import { getRawPluginTableName } from "#/plugin/guards";
 import { assertDefined } from "#/utils/assert";
 import { isSdkBranded } from "#/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
@@ -115,9 +116,6 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     const namePart = typeof name === "string" && name.length > 0 ? `"${name}" ` : "";
     return `${namePart}generated as "${kind}" by plugin "${pluginId}"`;
   };
-
-  const pluginTableName = (table: unknown): unknown =>
-    typeof table === "object" && table !== null && "name" in table ? table.name : undefined;
 
   const doParseTypes = (): void => {
     const allTypes = createRawTypesByName();
@@ -382,7 +380,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           kind,
           table: parsePluginTable(
             generatedTable,
-            describeGeneratedTable(pluginTableName(generatedTable), kind, pluginId),
+            describeGeneratedTable(getRawPluginTableName(generatedTable), kind, pluginId),
           ),
         })),
       );
