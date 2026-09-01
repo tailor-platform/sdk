@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { transformPackageScripts } from "../../../../src/package-json-scripts";
 import type { LlmReviewFinding } from "../../../../src/types";
 
 // Match the generated seed runner invocation, anchored on `node` plus the
@@ -115,29 +116,7 @@ function transformSourceText(source: string): string | null {
 }
 
 function transformPackageJson(source: string): string | null {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(source) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-
-  const scripts = parsed.scripts;
-  if (typeof scripts !== "object" || scripts == null || Array.isArray(scripts)) return null;
-
-  let modified = false;
-  for (const [name, value] of Object.entries(scripts as Record<string, unknown>)) {
-    if (typeof value !== "string") continue;
-    const updated = rewrite(value);
-    if (updated !== value) {
-      (scripts as Record<string, string>)[name] = updated;
-      modified = true;
-    }
-  }
-
-  if (!modified) return null;
-  const trailing = source.endsWith("\n") ? "\n" : "";
-  return JSON.stringify(parsed, null, 2) + trailing;
+  return transformPackageScripts(source, rewrite);
 }
 
 /**
