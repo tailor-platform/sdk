@@ -1,5 +1,25 @@
 # @tailor-platform/sdk
 
+## 2.11.0
+
+### Minor Changes
+
+- [#2213](https://github.com/tailor-platform/sdk/pull/2213) [`1bb2fc5`](https://github.com/tailor-platform/sdk/commit/1bb2fc576cd9e3d939d1d98097f571bdd6f829fc) Thanks [@dqn](https://github.com/dqn)! - Add `mockTailordbWithPGlite` to `@tailor-platform/sdk/vitest`: back `getDB(namespace)` with an in-memory PostgreSQL (`@electric-sql/pglite`), so resolver/executor/workflow tests execute their queries against real data instead of staged responses
+
+### Patch Changes
+
+- [#2219](https://github.com/tailor-platform/sdk/pull/2219) [`40e5368`](https://github.com/tailor-platform/sdk/commit/40e5368224dfa7027a2728b4a0dc832d25c123b2) Thanks [@dqn](https://github.com/dqn)! - Fix `tailordb migration generate` emitting invalid TypeScript in `db.ts` when a migration removes every allowed value from an enum field; the write slots are now typed as `never`.
+
+- [#2215](https://github.com/tailor-platform/sdk/pull/2215) [`74ff2c6`](https://github.com/tailor-platform/sdk/commit/74ff2c60c704bb60a7c3f251c1e961888e3be9f8) Thanks [@dqn](https://github.com/dqn)! - Fix deploy planning dropping plugin-generated executors when the project defines no executor files of its own, which could omit them from deployment or delete an already-deployed one
+
+- [#2220](https://github.com/tailor-platform/sdk/pull/2220) [`dd98efe`](https://github.com/tailor-platform/sdk/commit/dd98efeaeb3e25d8188be227b4282cc23b7b9c68) Thanks [@dqn](https://github.com/dqn)! - Validate plugin-generated and plugin-extended TailorDB tables against the table schema. A malformed table emitted by a plugin now fails the build with an error naming the plugin and table instead of crashing or passing through unvalidated.
+
+- [#2206](https://github.com/tailor-platform/sdk/pull/2206) [`77f8960`](https://github.com/tailor-platform/sdk/commit/77f8960c2f7797fd1e0fc322f29df735111d5fea) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.5
+
+- [#2207](https://github.com/tailor-platform/sdk/pull/2207) [`4308d19`](https://github.com/tailor-platform/sdk/commit/4308d19ae4e5d5c14ade295f4b170831bc4e7a38) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.2.6
+
+- [#2228](https://github.com/tailor-platform/sdk/pull/2228) [`ea43882`](https://github.com/tailor-platform/sdk/commit/ea43882f4838b779ea177615208f1a578a1618c3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.52.0
+
 ## 2.10.0
 
 ### Minor Changes
