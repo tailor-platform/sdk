@@ -41,7 +41,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install-deps
+      - uses: $/.github/actions/install-deps
 
       # install-deps also builds this plugin; kept as a safety net since `tailor
       # tailordb erd` dispatches to this plugin's bin.
@@ -84,7 +84,7 @@ jobs:
 
       # install-deps builds the SDK once, so the `tailor` CLI bin resolves.
       - name: Install deps
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       # install-deps also builds this plugin; kept as a safety net since `tailor
       # tailordb erd` dispatches to this plugin's bin.

@@ -66,10 +66,10 @@ jobs:
           persist-credentials: "false"
 
       - name: Install aqua
-        uses: ./.github/actions/install-aqua
+        uses: $/.github/actions/install-aqua
 
       - name: Install deps
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       - name: Login as machine user
         if: runner.os != 'Windows'

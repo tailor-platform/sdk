@@ -61,7 +61,7 @@ jobs:
 
       - name: Install Deps
         if: steps.filter.outputs.changeset == 'true'
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       - name: Validate changeset packages
         if: steps.filter.outputs.changeset == 'true'
