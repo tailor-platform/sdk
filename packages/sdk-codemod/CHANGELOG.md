@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.5
+
+### Patch Changes
+
+- [#2225](https://github.com/tailor-platform/sdk/pull/2225) [`4a295de`](https://github.com/tailor-platform/sdk/commit/4a295dee514408339bf511129d01cffe3a42da2d) Thanks [@dqn](https://github.com/dqn)! - Keep package script migrations consistent across codemods.
+
 ## 0.8.4
 
 ### Patch Changes
