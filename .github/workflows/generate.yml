@@ -56,7 +56,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       - name: Run generate
         run: pnpm -r run generate
@@ -112,7 +112,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       - name: Run generate
         run: pnpm -r run generate
