@@ -14,7 +14,7 @@
     "eslint-plugin-zod": "4.10.0",
     "oxlint": "1.80.0",
     "oxlint-tsgolint": "7.0.2001",
-    "tsx": "4.23.12",
+    "tsx": "4.23.13",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
   },
