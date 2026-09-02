@@ -1,10 +1,11 @@
-import * as fs from "node:fs";
 /**
  * `tailor function script` command
  *
  * Scaffolds a one-off script that `tailor function run` executes on the
  * Tailor Platform server without deploying.
  */
+
+import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";

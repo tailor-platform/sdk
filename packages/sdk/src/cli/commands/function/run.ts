@@ -1,10 +1,11 @@
-import * as fs from "node:fs";
 /**
  * `tailor function run` command
  *
  * Bundles and executes a function on the Tailor Platform server
  * without deploying (applying) the application.
  */
+
+import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
