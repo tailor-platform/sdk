@@ -148,6 +148,17 @@ type ExplicitMachineUser = {
   value: string;
 };
 
+export type AuthStatus = {
+  authenticated: boolean;
+  identity: string | null;
+  identitySource: "environment" | "profile" | "default" | "none";
+  profile: string | null;
+  workspaceId: string | null;
+  permission: "read" | "write";
+  platformUrl: string;
+  tokenStatus: "environment" | "valid" | "refreshable" | "expired" | "missing";
+};
+
 function platformConfigPath() {
   if (!xdgConfig) {
     throw new Error("User home directory not found");
@@ -706,6 +717,75 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   }
   const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
   return (await fetchLatestToken(pfConfig, user, fromProfile)).accessToken;
+}
+
+/**
+ * Resolve authentication metadata without returning token values.
+ * @param opts - Profile options
+ * @returns Authentication status for the active environment and profile
+ */
+export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<AuthStatus> {
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  const envToken = process.env.TAILOR_PLATFORM_TOKEN ?? process.env.TAILOR_TOKEN;
+  if (envToken && !process.env.TAILOR_PLATFORM_TOKEN) {
+    logger.warn("TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.");
+  }
+
+  if (envToken) {
+    const config = await readPlatformConfig().catch(() => undefined);
+    const profileEntry = profile ? config?.profiles[profile] : undefined;
+    const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+    return {
+      authenticated: true,
+      identity: null,
+      identitySource: "environment",
+      profile: profile ?? null,
+      workspaceId: process.env.TAILOR_PLATFORM_WORKSPACE_ID ?? profileEntry?.workspace_id ?? null,
+      permission: profileEntry?.readonly === true ? "read" : "write",
+      platformUrl: getPlatformBaseUrl(platformConfig),
+      tokenStatus: "environment",
+    };
+  }
+
+  const config = await readPlatformConfig();
+  const profileEntry = profile ? config.profiles[profile] : undefined;
+  if (profile && !profileEntry) {
+    throw new Error(`Profile "${profile}" not found`);
+  }
+
+  const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  const workspaceId =
+    process.env.TAILOR_PLATFORM_WORKSPACE_ID ?? profileEntry?.workspace_id ?? null;
+
+  const identity = profileEntry?.user ?? config.current_user;
+  const identitySource = profileEntry?.user ? "profile" : identity ? "default" : "none";
+  let tokenStatus: AuthStatus["tokenStatus"] = "missing";
+  if (identity) {
+    const { userKey, userEntry } = findUserEntry(config, identity, platformConfig);
+    if (userEntry) {
+      const tokens = await resolveTokens(userEntry, userKey, identity).catch(() => undefined);
+      if (tokens) {
+        const expired = new Date(userEntry.token_expires_at) <= new Date();
+        if (!expired) {
+          tokenStatus = "valid";
+        } else {
+          tokenStatus = tokens.refreshToken ? "refreshable" : "expired";
+        }
+      }
+    }
+  }
+
+  return {
+    authenticated: tokenStatus === "valid" || tokenStatus === "refreshable",
+    identity: identity ?? null,
+    identitySource,
+    profile: profile ?? null,
+    workspaceId,
+    permission: profileEntry?.readonly === true ? "read" : "write",
+    platformUrl,
+    tokenStatus,
+  };
 }
 
 /**

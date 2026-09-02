@@ -66,9 +66,28 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                     | Description                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------- |
-| [`auth token`](#auth-token) | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
+| Command                       | Description                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------- |
+| [`auth status`](#auth-status) | Show the active Tailor Platform authentication status without printing tokens.        |
+| [`auth token`](#auth-token)   | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
+
+### auth status
+
+Show the active Tailor Platform authentication status without printing tokens.
+
+**Usage**
+
+```
+tailor auth status [options]
+```
+
+**Options**
+
+| Option                | Alias | Description       | Required | Default | Env                       |
+| --------------------- | ----- | ----------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 ### auth token
 
