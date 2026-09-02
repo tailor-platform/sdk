@@ -19,6 +19,7 @@ import {
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
@@ -120,11 +121,7 @@ export async function createValidatedWorkspaceWithClient(
 export function validateCreateWorkspaceOptions(
   options: CreateWorkspaceOptions,
 ): ValidatedCreateWorkspaceOptions {
-  const result = createWorkspaceOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
-  return result.data;
+  return parseOptions(createWorkspaceOptionsSchema, options);
 }
 
 export { validateWorkspaceName } from "#/cli/shared/workspace-name";

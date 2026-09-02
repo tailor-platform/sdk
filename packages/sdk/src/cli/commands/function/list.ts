@@ -6,7 +6,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { assertDefined } from "#/utils/assert";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 // strip unknown keys
@@ -20,21 +20,18 @@ const listFunctionRegistriesOptionsSchema = z.object({
 export type ListFunctionRegistriesOptions = z.input<typeof listFunctionRegistriesOptionsSchema>;
 
 async function loadOptions(options: ListFunctionRegistriesOptions) {
-  const result = listFunctionRegistriesOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(listFunctionRegistriesOptionsSchema, options);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
-    profile: result.data.profile,
-    workspaceId: result.data.workspaceId,
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    order: result.data.order,
-    limit: result.data.limit,
+    order: validated.order,
+    limit: validated.limit,
   };
 }
 

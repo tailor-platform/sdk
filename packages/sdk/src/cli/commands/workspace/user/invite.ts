@@ -4,8 +4,8 @@ import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { stringToRole, validRoles } from "./transform";
 
 // strip unknown keys
@@ -19,21 +19,18 @@ const inviteUserOptionsSchema = z.object({
 export type InviteUserOptions = z.input<typeof inviteUserOptionsSchema>;
 
 async function loadOptions(options: InviteUserOptions) {
-  const result = inviteUserOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(inviteUserOptionsSchema, options);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
-    profile: result.data.profile,
-    workspaceId: result.data.workspaceId,
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    email: result.data.email,
-    role: stringToRole(result.data.role),
+    email: validated.email,
+    role: stringToRole(validated.role),
   };
 }
 

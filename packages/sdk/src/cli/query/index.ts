@@ -24,6 +24,7 @@ import { getEditorCommand, openInEditor } from "../shared/editor";
 import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { parseBoolean } from "../shared/parse-boolean";
+import { parseOptions } from "../shared/parse-options";
 import { executeScript } from "../shared/script-executor";
 import { resolveTableNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
@@ -138,18 +139,12 @@ async function getNamespaceFromSqlQuery(
 }
 
 async function loadOptions(options: QueryBaseOptions) {
-  const result = queryBaseOptionsSchema.safeParse(options);
-
-  if (!result.success) {
-    throw new Error(
-      assertDefined(result.error.issues[0], "validation error missing issues").message,
-    );
-  }
+  const validated = parseOptions(queryBaseOptionsSchema, options);
 
   const machineUser = await loadMachineUserName({
-    machineUser: result.data.machineUser,
-    machineUserSource: result.data.machineUserSource,
-    profile: result.data.profile,
+    machineUser: validated.machineUser,
+    machineUserSource: validated.machineUserSource,
+    profile: validated.profile,
   });
   if (!machineUser) {
     throw new Error(
@@ -158,12 +153,12 @@ async function loadOptions(options: QueryBaseOptions) {
   }
 
   const accessToken = await loadAccessToken({
-    profile: result.data.profile,
+    profile: validated.profile,
   });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+    workspaceId: validated.workspaceId,
+    profile: validated.profile,
   });
   const { config } = await loadConfig(options.configPath);
   const namespaces = extractAllNamespaces(config);
@@ -187,7 +182,7 @@ async function loadOptions(options: QueryBaseOptions) {
   }
 
   return {
-    engine: result.data.engine,
+    engine: validated.engine,
     client,
     workspaceId,
     config,
@@ -370,15 +365,10 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  const result = queryOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(
-      assertDefined(result.error.issues[0], "validation error missing issues").message,
-    );
-  }
+  const validated = parseOptions(queryOptionsSchema, options);
 
-  const executor = await prepareQueryExecutor(result.data);
-  return await executor(result.data.query);
+  const executor = await prepareQueryExecutor(validated);
+  return await executor(validated.query);
 }
 
 async function prepareQueryExecutor(

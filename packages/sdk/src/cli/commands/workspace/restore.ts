@@ -5,9 +5,9 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
 const restoreWorkspaceOptionsSchema = z.object({
@@ -17,17 +17,14 @@ const restoreWorkspaceOptionsSchema = z.object({
 export type RestoreWorkspaceOptions = z.input<typeof restoreWorkspaceOptionsSchema>;
 
 async function loadOptions(options: RestoreWorkspaceOptions) {
-  const result = restoreWorkspaceOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(restoreWorkspaceOptionsSchema, options);
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   return {
     client,
-    workspaceId: result.data.workspaceId,
+    workspaceId: validated.workspaceId,
   };
 }
 

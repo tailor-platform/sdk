@@ -5,7 +5,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { assertDefined } from "#/utils/assert";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { appHealthInfo, type AppHealthInfo } from "./transform";
 
 // strip unknown keys
@@ -18,20 +18,17 @@ const healthOptionsSchema = z.object({
 export type HealthOptions = z.input<typeof healthOptionsSchema>;
 
 async function loadOptions(options: HealthOptions) {
-  const result = healthOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(healthOptionsSchema, options);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
-    profile: result.data.profile,
-    workspaceId: result.data.workspaceId,
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    name: result.data.name,
+    name: validated.name,
   };
 }
 
