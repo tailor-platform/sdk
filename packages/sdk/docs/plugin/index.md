@@ -102,6 +102,11 @@ Plugins can generate:
 - **Field Extensions**: Additional fields added to the source table
 - **Output Files**: TypeScript code and other files via generation-time hooks
 
+Tables produced by definition-time hooks are validated before registration. This includes
+generated tables and source tables after field extensions are applied. Malformed output stops
+the build with an error that identifies the plugin and relevant table output, without partially
+registering tables from that processing step.
+
 Generated files are placed under `.tailor/<plugin-id>/` (the plugin ID is sanitized,
 e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 

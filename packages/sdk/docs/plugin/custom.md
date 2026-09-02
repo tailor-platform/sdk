@@ -83,6 +83,13 @@ interface Plugin<TableConfig = unknown, PluginConfig = unknown> {
 | `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                       |
 | `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source table                      |
 
+Tables in `tables` are validated as complete TailorDB table definitions before registration.
+Fields in `extends.fields` are validated as part of the resulting source table. You can return a
+table builder directly or a structural copy such as `{ ...db.table(...) }`; a copy is accepted as
+long as it retains valid table schema properties. Malformed output stops the build with an error
+that identifies the plugin and relevant table output, without partially registering tables from
+that source table's plugin processing.
+
 **Use cases**:
 
 - Generate derived tables (e.g., archive tables, history tables) from user-defined tables
@@ -114,6 +121,10 @@ onTableLoaded(context) {
 **Returns** (`PluginOutput`):
 
 Same as `TablePluginOutput` but without `extends` (namespace plugins cannot extend a source table).
+
+Tables in `tables` undergo the same validation and support structural copies. If any returned
+table is malformed, the build stops before namespace-generated tables are registered and the
+error identifies the plugin and relevant table output.
 
 **Use cases**:
 

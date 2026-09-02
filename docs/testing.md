@@ -2,17 +2,20 @@
 
 ## Test Projects
 
-Vitest is configured with two projects (see [`packages/sdk/vitest.config.ts`](../packages/sdk/vitest.config.ts)):
+Vitest is configured with several projects (see [`packages/sdk/vitest.config.ts`](../packages/sdk/vitest.config.ts)):
 
-- **unit** — Files matching `**/?(*.)+(spec|test).ts` (excludes `e2e/`, `dist/`)
-- **e2e** — Files in `e2e/**/*.test.ts` (120-second timeout)
+- **unit / unit-core / unit-plugin** — Unit tests under `src/**` and `scripts/**`, split by isolation needs; the `unit*` glob selects all three
+- **integration** — Deploy fixture integration tests
+- **e2e** — Subprocess-driven e2e files in `e2e/**` (120-second test timeout); excluded from coverage CI because subprocess execution does not contribute coverage data
+- **e2e-coverage** — `e2e/deploy.test.ts`, which exercises `deploy()` in-process; the coverage CI job runs it, and `--project=e2e*` selects both e2e projects
+- **scripts** — Tests for repository scripts
 
 ```bash
 # All tests
 pnpm test
 
 # In packages/sdk/:
-pnpm test                      # All (unit + e2e)
+pnpm test                      # All projects
 pnpm test:unit                 # Unit only
 pnpm test:e2e                  # E2E only (requires deployed workspace)
 pnpm test path/to/file.test.ts # Single file
@@ -23,7 +26,7 @@ pnpm test -t "pattern"         # Pattern match
 
 E2E tests require a deployed workspace. The `globalSetup` provisions a workspace before tests run.
 
-Located in `packages/sdk/e2e/`. CI runs these in the `deploy.yml` workflow on Linux and Windows (PowerShell + CMD).
+Located in `packages/sdk/e2e/`. CI runs these in the `sdk-e2e.yml` workflow (pull requests and pushes to main); `sdk-metrics.yml` additionally runs the `e2e-coverage` project under coverage.
 
 ## Conventions
 

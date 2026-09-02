@@ -74,6 +74,20 @@ export default createExecutor({
     await expect(service.loadExecutors()).rejects.toThrow(/Duplicate executor name "duplicate"/);
   });
 
+  test("exposes plugin executors to later loadExecutors() calls in a plugin-only configuration", async () => {
+    const pluginFile = writeExecutor("plugin.ts", executorSource("plugin-executor"));
+
+    const service = createExecutorService({ config: { files: [] }, baseDir: process.cwd() });
+    // Deployment planning calls loadExecutors() again after the application
+    // has loaded plugin-generated executor files; the plugin executor must be
+    // visible in that second result or the plan omits it.
+    await expect(service.loadExecutors()).resolves.toBeUndefined();
+    await service.loadPluginExecutorFiles([pluginFile]);
+
+    const executors = await service.loadExecutors();
+    expect(Object.values(executors ?? {}).map((e) => e.name)).toEqual(["plugin-executor"]);
+  });
+
   test("rejects a plugin-generated executor whose name collides with a user-defined one", async () => {
     const fileA = writeExecutor("a.ts", executorSource("shared-name"));
     const pluginFile = writeExecutor("plugin.ts", executorSource("shared-name"));

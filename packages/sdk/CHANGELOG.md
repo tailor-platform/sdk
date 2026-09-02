@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 2.11.0
+
+### Minor Changes
+
+- [#2213](https://github.com/tailor-platform/sdk/pull/2213) [`1bb2fc5`](https://github.com/tailor-platform/sdk/commit/1bb2fc576cd9e3d939d1d98097f571bdd6f829fc) Thanks [@dqn](https://github.com/dqn)! - Add `mockTailordbWithPGlite` to `@tailor-platform/sdk/vitest`: back `getDB(namespace)` with an in-memory PostgreSQL (`@electric-sql/pglite`), so resolver/executor/workflow tests execute their queries against real data instead of staged responses
+
+### Patch Changes
+
+- [#2219](https://github.com/tailor-platform/sdk/pull/2219) [`40e5368`](https://github.com/tailor-platform/sdk/commit/40e5368224dfa7027a2728b4a0dc832d25c123b2) Thanks [@dqn](https://github.com/dqn)! - Fix `tailordb migration generate` emitting invalid TypeScript in `db.ts` when a migration removes every allowed value from an enum field; the write slots are now typed as `never`.
+
+- [#2215](https://github.com/tailor-platform/sdk/pull/2215) [`74ff2c6`](https://github.com/tailor-platform/sdk/commit/74ff2c60c704bb60a7c3f251c1e961888e3be9f8) Thanks [@dqn](https://github.com/dqn)! - Fix deploy planning dropping plugin-generated executors when the project defines no executor files of its own, which could omit them from deployment or delete an already-deployed one
+
+- [#2220](https://github.com/tailor-platform/sdk/pull/2220) [`dd98efe`](https://github.com/tailor-platform/sdk/commit/dd98efeaeb3e25d8188be227b4282cc23b7b9c68) Thanks [@dqn](https://github.com/dqn)! - Validate plugin-generated and plugin-extended TailorDB tables against the table schema. A malformed table emitted by a plugin now fails the build with an error naming the plugin and table instead of crashing or passing through unvalidated.
+
+- [#2206](https://github.com/tailor-platform/sdk/pull/2206) [`77f8960`](https://github.com/tailor-platform/sdk/commit/77f8960c2f7797fd1e0fc322f29df735111d5fea) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.5
+
+- [#2207](https://github.com/tailor-platform/sdk/pull/2207) [`4308d19`](https://github.com/tailor-platform/sdk/commit/4308d19ae4e5d5c14ade295f4b170831bc4e7a38) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.2.6
+
+- [#2228](https://github.com/tailor-platform/sdk/pull/2228) [`ea43882`](https://github.com/tailor-platform/sdk/commit/ea43882f4838b779ea177615208f1a578a1618c3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.52.0
+
+## 2.10.0
+
+### Minor Changes
+
+- [#2169](https://github.com/tailor-platform/sdk/pull/2169) [`e7fa784`](https://github.com/tailor-platform/sdk/commit/e7fa784f82d3bac09322789a6aadc56deaf24ba6) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `PluginFieldExtensions`, a new interface exported from `@tailor-platform/sdk` alongside `PluginConfigs`. A TailorDB plugin author declares it via the same `declare module "@tailor-platform/sdk"` declaration merging used for `PluginConfigs` (see the plugin docs), keyed by the plugin's `id`, to make the fields it injects at generation time show up on the attached table's own static type immediately — computed from the literal per-table config passed to `.plugin()`, without a separate hand-written declaration. `Plugin` gains an optional third type parameter so `onTableLoaded`'s `extends.fields` return type can be checked against the declared field extension. `.plugin()` now reports a type error at the call site when an injected field name collides with an existing field or with a field injected by another plugin attached in the same call — including previously-unregistered plugin ids passed to `.plugin()`, an unknown property on a registered plugin's config, or a config value that is itself a union (e.g. from a ternary), all of which used to be silently accepted or silently produce a wrong inferred type. The custom plugin API is still beta, so this tightening ships as part of the minor release rather than a major one; register the plugin id via `PluginConfigs` (see `docs/plugin/custom.md`) if it starts failing to type-check. `TailorDBType` also gains a fourth, defaulted type parameter tracking the literal keys declared via `.files()`, so `.plugin()` now reports a type error at the call site when an injected field name collides with a file key regardless of whether `.files()` or `.plugin()` was called first — previously only one call order was caught. `tailor generate` also throws on the same collision at runtime as a backstop.
+
+### Patch Changes
+
+- [#2209](https://github.com/tailor-platform/sdk/pull/2209) [`3ca6d5e`](https://github.com/tailor-platform/sdk/commit/3ca6d5e2c6e4550f6b3cd0e93e86c6a33695c197) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update secretlint monorepo to v13.0.5
+
 ## 2.9.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 import { globSync, readFileSync } from "node:fs";
 import * as path from "node:path";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 type PackageExport = {
   import?: string;
@@ -35,6 +35,13 @@ const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, t
     ),
   };
 });
+
+// E2e files whose measured V8 coverage contribution justifies running them in
+// the coverage CI job ("e2e-coverage" project below): deploy.test.ts calls
+// deploy() in-process. The other e2e files drive the CLI through subprocesses,
+// which V8 coverage cannot observe, so they run only in the behavioral e2e
+// workflow ("e2e" project).
+const e2eCoverageTestIncludes = ["e2e/deploy.test.ts"];
 
 // Shared with the "integration" project definition below.
 const integrationTestIncludes = [
@@ -151,9 +158,23 @@ export default defineConfig({
         test: {
           name: "e2e",
           include: ["e2e/**/*.test.ts"],
+          exclude: [...configDefaults.exclude, ...e2eCoverageTestIncludes],
           testTimeout: 120000,
           hookTimeout: 300000,
           globalSetup: ["e2e/globalSetup.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          // Type tests already run in "unit-core"; disable so `--project 'e2e*'`
+          // does not compile them a second time.
+          name: "e2e-coverage",
+          include: e2eCoverageTestIncludes,
+          testTimeout: 120000,
+          hookTimeout: 300000,
+          globalSetup: ["e2e/globalSetup.ts"],
+          typecheck: { enabled: false },
         },
       },
       {
