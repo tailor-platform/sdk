@@ -135,27 +135,12 @@ describe("WorkflowOperationSchema", () => {
   test("rejects unknown options", () => {
     expect.hasAssertions();
 
-    const error = expectParseFailure(
+    expectUnknownKeyRejected(
       WorkflowOperationSchema.safeParse({
         kind: "workflow",
         workflowName: "my-workflow",
         unknownOption: true,
       }),
-    );
-
-    expect(error.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "invalid_union",
-          errors: expect.arrayContaining([
-            expect.arrayContaining([
-              expect.objectContaining({
-                code: "unrecognized_keys",
-              }),
-            ]),
-          ]),
-        }),
-      ]),
     );
   });
 
