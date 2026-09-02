@@ -6,4 +6,4 @@
 "@tailor-platform/sdk-plugin-tailordb-erd": patch
 ---
 
-Upgrade the internal zod dependency to v4.5.4
+Upgrade zod dependency to v4.5.4
