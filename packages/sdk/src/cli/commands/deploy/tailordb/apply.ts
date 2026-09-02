@@ -38,6 +38,7 @@ import {
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
 } from "./migration-validation";
+import { MigrationExecutionInFlightError } from "./migration-workflow";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
@@ -459,6 +460,8 @@ export async function applyTailorDB(
               );
             }
           } catch (error) {
+            // The earlier run's script is still executing against this schema.
+            if (error instanceof MigrationExecutionInFlightError) throw error;
             await rollbackSingleMigrationAfterFailure(
               client,
               migration,
@@ -634,6 +637,17 @@ export async function applyTailorDB(
             migrationFailure = { error: ownershipError };
           }
         }
+      }
+
+      if (migrationFailure?.error instanceof MigrationExecutionInFlightError) {
+        // The earlier run's script is still writing to this namespace; the retry
+        // that adopts or reruns it restores it. Other namespaces are restored now.
+        const running = migrationFailure.error.namespace;
+        logger.warn(
+          `Leaving TailorDB tables in namespace '${running}' restricted until the running migration finishes and the deployment is retried.`,
+        );
+        restorationSnapshots.delete(running);
+        restorationSettings.delete(running);
       }
 
       try {

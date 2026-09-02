@@ -1,6 +1,8 @@
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
+import { fenceClient } from "#/cli/commands/deploy/deploy-lock-fence";
 import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
@@ -60,72 +62,79 @@ async function set(options: SetOptions): Promise<void> {
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
-  const client = await initOperatorClient(accessToken);
+  const operator = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
 
-  // 6. Get current migration state
-  const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
-  const currentState = await fetchRemoteMigrationState(client, trn);
-  const current = currentState.number;
-  const currentMigration = current ?? 0;
-  const currentHistoryId = currentState.historyIdInvalid
-    ? "<invalid>"
-    : (currentState.historyId ?? "<unset>");
-  const newHistoryId = historyId ?? "<unset>";
+  await withDeployLock(
+    { client: operator, workspaceId, applications: [{ name: config.name, id: config.id }] },
+    async (lock) => {
+      const client = fenceClient(operator, lock);
+      // 6. Get current migration state
+      const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
+      const currentState = await fetchRemoteMigrationState(client, trn);
+      const current = currentState.number;
+      const currentMigration = current ?? 0;
+      const currentHistoryId = currentState.historyIdInvalid
+        ? "<invalid>"
+        : (currentState.historyId ?? "<unset>");
+      const newHistoryId = historyId ?? "<unset>";
 
-  // 7. Display warning and confirmation
-  logger.newline();
-  logger.warn("This operation will change TailorDB migration state metadata.");
-  logger.log(`Namespace: ${styles.bold(targetNamespace)}`);
-  logger.log(
-    `Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
-  );
-  logger.log(`New migration: ${styles.bold(formatMigrationNumber(migrationNumber))}`);
-  logger.log(`Current migration history ID: ${styles.bold(currentHistoryId)}`);
-  logger.log(`New migration history ID: ${styles.bold(newHistoryId)}`);
-  logger.newline();
+      // 7. Display warning and confirmation
+      logger.newline();
+      logger.warn("This operation will change TailorDB migration state metadata.");
+      logger.log(`Namespace: ${styles.bold(targetNamespace)}`);
+      logger.log(
+        `Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
+      );
+      logger.log(`New migration: ${styles.bold(formatMigrationNumber(migrationNumber))}`);
+      logger.log(`Current migration history ID: ${styles.bold(currentHistoryId)}`);
+      logger.log(`New migration history ID: ${styles.bold(newHistoryId)}`);
+      logger.newline();
 
-  if (migrationNumber < currentMigration) {
-    logger.warn(
-      `Setting migration number backwards (${formatMigrationNumber(currentMigration)} → ${formatMigrationNumber(migrationNumber)}) will cause previous migrations to be re-executed on next apply.`,
-    );
-    logger.newline();
-  } else if (migrationNumber > currentMigration) {
-    logger.warn(
-      `Setting migration number forwards (${formatMigrationNumber(currentMigration)} → ${formatMigrationNumber(migrationNumber)}) will skip migrations ${formatMigrationNumber(currentMigration + 1)} to ${formatMigrationNumber(migrationNumber)}.`,
-    );
-    logger.newline();
-  }
+      if (migrationNumber < currentMigration) {
+        logger.warn(
+          `Setting migration number backwards (${formatMigrationNumber(currentMigration)} → ${formatMigrationNumber(migrationNumber)}) will cause previous migrations to be re-executed on next apply.`,
+        );
+        logger.newline();
+      } else if (migrationNumber > currentMigration) {
+        logger.warn(
+          `Setting migration number forwards (${formatMigrationNumber(currentMigration)} → ${formatMigrationNumber(migrationNumber)}) will skip migrations ${formatMigrationNumber(currentMigration + 1)} to ${formatMigrationNumber(migrationNumber)}.`,
+        );
+        logger.newline();
+      }
 
-  // 8. Confirmation prompt (unless --yes flag)
-  if (!options.yes) {
-    const confirmation = await prompt.confirm({
-      message: "Continue with migration checkpoint and history ID update?",
-      default: false,
-    });
+      // 8. Confirmation prompt (unless --yes flag)
+      if (!options.yes) {
+        const confirmation = await prompt.confirm({
+          message: "Continue with migration checkpoint and history ID update?",
+          default: false,
+        });
 
-    if (!confirmation) {
-      logger.info("Operation cancelled.");
-      return;
-    }
-    logger.newline();
-  }
+        if (!confirmation) {
+          logger.info("Operation cancelled.");
+          return;
+        }
+        logger.newline();
+      }
 
-  // 9. Update migration label
-  await writeMetadataLabels(client, {
-    trn,
-    labels: {
-      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
-      ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+      // 9. Update migration label
+      lock.assertHeld();
+      await writeMetadataLabels(client, {
+        trn,
+        labels: {
+          [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
+          ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+        },
+        remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
+      });
+
+      logger.success(
+        `Migration checkpoint set to ${styles.bold(formatMigrationNumber(migrationNumber))} for namespace ${styles.bold(targetNamespace)}`,
+      );
     },
-    remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
-  });
-
-  logger.success(
-    `Migration checkpoint set to ${styles.bold(formatMigrationNumber(migrationNumber))} for namespace ${styles.bold(targetNamespace)}`,
   );
 }
 

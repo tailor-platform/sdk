@@ -4,6 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
@@ -31,6 +32,14 @@ const state = vi.hoisted(() => ({
   deleteTailorDBGQLPermission: vi.fn(),
   getMetadata: vi.fn(),
   setMetadata: vi.fn(),
+}));
+
+const assertHeld = vi.hoisted(() => vi.fn());
+vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
+  withDeployLock: vi.fn(
+    async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
+      fn({ assertHeld }),
+  ),
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
@@ -90,6 +99,8 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+      name: "my-app",
+      id: "app-1",
       db,
     },
     plugins: [],
@@ -165,6 +176,11 @@ describe("tailordb migration sync", () => {
     const result = await runCommand(syncCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(true);
+    expect(vi.mocked(withDeployLock)).toHaveBeenCalledWith(
+      expect.objectContaining({ applications: [{ name: "my-app", id: "app-1" }] }),
+      expect.any(Function),
+    );
+    expect(assertHeld).toHaveBeenCalled();
     // Snapshot at 0001 contains User (existing → update) and Post (new → create);
     // remote-only Stale is deleted.
     expect(state.createTailorDBType).toHaveBeenCalledTimes(1);

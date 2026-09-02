@@ -29,6 +29,8 @@ import {
   type MissingDependentApp,
 } from "./confirm";
 import { fetchMissingDependentApps } from "./dependency-records";
+import { type DeployLock, withDeployLock } from "./deploy-lock";
+import { fenceClient } from "./deploy-lock-fence";
 import {
   buildDeploymentTargets,
   loadDeployConfig,
@@ -701,76 +703,93 @@ async function deployInternal(
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    const planTargets = targets.map((target) => ({
-      ...target,
-      application: adjustApplicationForMigrationTest(target.application, internalContext),
-    }));
-    const metadataClient = await withSpan("plan.metadataLookup", () =>
-      createMetadataLookupClient({
+    const planAndApply = async (lock: DeployLock): Promise<undefined> => {
+      const planTargets = targets.map((target) => ({
+        ...target,
+        application: adjustApplicationForMigrationTest(target.application, internalContext),
+      }));
+      const metadataClient = await withSpan("plan.metadataLookup", () =>
+        createMetadataLookupClient({
+          client,
+          workspaceId,
+          applications: planTargets.map(({ application }) => application),
+        }),
+      );
+      const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
+      const deployments = await planDeploymentTargets({
+        targets: planTargets,
+        runInputs,
+        client: metadataClient,
+        workspaceId,
+        noSchemaCheck: options?.noSchemaCheck,
+        migrationTestBaselines: internalContext?.migrationTestBaselines,
+        migrationTestSnapshots: internalContext?.migrationTestSnapshots,
+      });
+
+      const yes = options?.yes ?? false;
+
+      dropCrossDeploymentManagedDeletes(deployments);
+
+      // Phase 1b: Confirm
+      const missingDependentApps = (
+        await Promise.all(
+          planTargets.map((target) =>
+            fetchMissingDependentApps({
+              client: metadataClient,
+              workspaceId,
+              application: target.application,
+              runAppIds: runInputs.runAppIds ?? new Set<string>(),
+              subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
+              jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
+            }),
+          ),
+        )
+      ).flat();
+
+      await withSpan("confirm", async () => {
+        await confirmDeploymentPlans({ deployments, yes, dryRun, missingDependentApps });
+      });
+
+      const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
+
+      if (options?.noValidate) {
+        logger.warn("Client-side validation skipped (--no-validate).");
+      } else {
+        await validateDeploymentPlans(deployments);
+      }
+
+      if (dryRun) {
+        logger.info("Dry run enabled. No changes applied.");
+        return undefined;
+      }
+
+      await applyDeploymentPlans(fenceClient(client, lock), workspaceId, deployments, () =>
+        lock.assertHeld(),
+      );
+
+      if (!internalContext?.suppressResultOutput) {
+        if (logger.jsonMode) {
+          logger.out({ summary: planSummary, status: "applied" });
+        } else {
+          logger.success("Successfully applied changes.");
+        }
+      }
+
+      return undefined;
+    };
+
+    if (dryRun) return await planAndApply({ assertHeld: () => {} });
+    return await withDeployLock(
+      {
         client,
         workspaceId,
-        applications: planTargets.map(({ application }) => application),
-      }),
+        applications: targets.map(({ application }) => ({
+          name: application.name,
+          id: application.id,
+        })),
+      },
+      planAndApply,
     );
-    const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
-    const deployments = await planDeploymentTargets({
-      targets: planTargets,
-      runInputs,
-      client: metadataClient,
-      workspaceId,
-      noSchemaCheck: options?.noSchemaCheck,
-      migrationTestBaselines: internalContext?.migrationTestBaselines,
-      migrationTestSnapshots: internalContext?.migrationTestSnapshots,
-    });
-
-    const yes = options?.yes ?? false;
-
-    dropCrossDeploymentManagedDeletes(deployments);
-
-    // Phase 1b: Confirm
-    const missingDependentApps = (
-      await Promise.all(
-        planTargets.map((target) =>
-          fetchMissingDependentApps({
-            client: metadataClient,
-            workspaceId,
-            application: target.application,
-            runAppIds: runInputs.runAppIds ?? new Set<string>(),
-            subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
-            jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
-          }),
-        ),
-      )
-    ).flat();
-
-    await withSpan("confirm", async () => {
-      await confirmDeploymentPlans({ deployments, yes, dryRun, missingDependentApps });
-    });
-
-    const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
-
-    if (options?.noValidate) {
-      logger.warn("Client-side validation skipped (--no-validate).");
-    } else {
-      await validateDeploymentPlans(deployments);
-    }
-
-    if (dryRun) {
-      logger.info("Dry run enabled. No changes applied.");
-      return undefined;
-    }
-
-    await applyDeploymentPlans(client, workspaceId, deployments);
-
-    if (!internalContext?.suppressResultOutput) {
-      if (logger.jsonMode) {
-        logger.out({ summary: planSummary, status: "applied" });
-      } else {
-        logger.success("Successfully applied changes.");
-      }
-    }
-
-    return undefined;
   });
 }
 

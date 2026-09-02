@@ -55,7 +55,7 @@ type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, Delet
  * @param content - Script content to hash
  * @returns Hex-encoded SHA-256 hash
  */
-function computeContentHash(content: string): string {
+export function computeContentHash(content: string): string {
   return crypto.createHash("sha256").update(content, "utf-8").digest("hex");
 }
 
@@ -411,7 +411,7 @@ export async function planFunctionRegistry(
  * @param entry - Function entry to upload
  * @param isCreate - Whether this is a create (true) or update (false)
  */
-async function uploadFunctionScript(
+export async function uploadFunctionScript(
   client: OperatorClient,
   workspaceId: string,
   entry: FunctionEntry,

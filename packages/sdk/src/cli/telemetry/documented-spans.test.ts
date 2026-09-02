@@ -21,8 +21,10 @@ function emittedSpanNames(): Set<string> {
         continue;
       }
       if (!entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) continue;
-      // `step()` in apply-phases.ts opens a span too, so both spellings count.
-      for (const match of readFileSync(full, "utf8").matchAll(/(?:withSpan|step)\("([^"]+)"/g)) {
+      // `phase()` and `step()` in apply-phases.ts open spans too, so all spellings count.
+      for (const match of readFileSync(full, "utf8").matchAll(
+        /(?:withSpan|phase|step)\("([^"]+)"/g,
+      )) {
         names.add(match[1]!);
       }
     }

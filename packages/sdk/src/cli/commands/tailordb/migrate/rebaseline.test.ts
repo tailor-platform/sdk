@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
@@ -23,6 +24,14 @@ const state = vi.hoisted(() => ({
   setMetadata: vi.fn(),
   listTailorDBTypes: vi.fn(),
   listTailorDBGQLPermissions: vi.fn(),
+}));
+
+const assertHeld = vi.hoisted(() => vi.fn());
+vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
+  withDeployLock: vi.fn(
+    async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
+      fn({ assertHeld }),
+  ),
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
@@ -71,6 +80,8 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+      name: "my-app",
+      id: "app-1",
       db,
     },
     plugins: [],
@@ -178,6 +189,11 @@ describe("tailordb migration rebaseline", () => {
     fs.writeFileSync(path.join(state.migrationsDir, "9999"), "not a migration directory");
 
     const result = await runCommand(rebaselineCommand, ["--yes"]);
+    expect(vi.mocked(withDeployLock)).toHaveBeenCalledWith(
+      expect.objectContaining({ applications: [{ name: "my-app", id: "app-1" }] }),
+      expect.any(Function),
+    );
+    expect(assertHeld).toHaveBeenCalled();
 
     expect(result.success).toBe(true);
     expect(migrationDirectories()).toEqual(["0000", "2026", "fixtures"]);

@@ -1,5 +1,6 @@
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { removeCommand } from "./remove";
@@ -72,9 +73,17 @@ const mocks = vi.hoisted(() => {
     applyTailorDB: vi.fn(),
     planWorkflow: vi.fn(async () => ({ changeSet: changeSet(), ...ownership() })),
     applyWorkflow: vi.fn(),
+    assertHeld: vi.fn(),
+    withDeployLock: vi.fn(
+      async (_options: unknown, fn: (lock: { assertHeld(): void }) => Promise<unknown>) =>
+        fn({ assertHeld: mocks.assertHeld }),
+    ),
   };
 });
 
+vi.mock("#/cli/commands/deploy/deploy-lock", () => ({
+  withDeployLock: mocks.withDeployLock,
+}));
 vi.mock("#/cli/commands/deploy/aigateway", () => ({
   planAIGateway: mocks.planAIGateway,
   applyAIGateway: mocks.applyAIGateway,
@@ -174,6 +183,16 @@ describe("remove command", () => {
 
     await runCommand(removeCommand, ["--yes"]);
 
+    expect(vi.mocked(withDeployLock)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "workspace-id",
+        applications: [{ name: "my-app", id: "app-id" }],
+      }),
+      expect.any(Function),
+    );
+    expect(mocks.assertHeld.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.applyWorkflow.mock.invocationCallOrder[0]!,
+    );
     expect(logger.log).toHaveBeenCalledWith(
       expect.stringContaining("Workflow execution policies:\n  - premium"),
     );

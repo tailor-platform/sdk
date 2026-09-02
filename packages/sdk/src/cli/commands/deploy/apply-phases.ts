@@ -48,11 +48,13 @@ export function deploymentPlanResults(deployment: PlannedDeployment): PlanResult
  * @param client - Operator client instance
  * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
+ * @param assertLockHeld - Called before every phase; throws to stop the apply once the deploy lock was taken over
  */
 export async function applyDeploymentPlans(
   client: OperatorClient,
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
+  assertLockHeld: () => void = () => {},
 ): Promise<void> {
   const forEachDeployment = async (
     apply: (deployment: PlannedDeployment) => Promise<unknown>,
@@ -67,12 +69,18 @@ export async function applyDeploymentPlans(
     apply: (deployment: PlannedDeployment) => Promise<unknown>,
   ): Promise<void> => withSpan(name, () => forEachDeployment(apply));
 
-  await withSpan("apply.preflight", async () => {
+  const phase = <T>(name: string, run: () => Promise<T>): Promise<T> =>
+    withSpan(name, () => {
+      assertLockHeld();
+      return run();
+    });
+
+  await phase("apply.preflight", async () => {
     await forEachDeployment((d) => preflightTailorDB(client, d.tailorDB));
   });
 
   await withMetadataWriteBatch(client, async (applyClient) => {
-    await withSpan("apply.createUpdateServices", async () => {
+    await phase("apply.createUpdateServices", async () => {
       await step("apply.secretManager.createUpdate", (d) =>
         applySecretManager(applyClient, d.secretManager, "create-update", d.application),
       );
@@ -100,17 +108,17 @@ export async function applyDeploymentPlans(
       );
     });
 
-    await withSpan("apply.deleteSubgraphResources", async () => {
+    await phase("apply.deleteSubgraphResources", async () => {
       await forEachDeployment((d) => applyPipeline(applyClient, d.pipeline, "delete-resources"));
       await forEachDeployment((d) => applyAuth(applyClient, d.auth, "delete-resources"));
       await forEachDeployment((d) => applyIdP(applyClient, d.idp, "delete-resources"));
     });
 
-    await withSpan("apply.createUpdateApplication", async () => {
+    await phase("apply.createUpdateApplication", async () => {
       await forEachDeployment((d) => applyApplication(applyClient, d.app, "create-update"));
     });
 
-    await withSpan("apply.createUpdateDependentServices", async () => {
+    await phase("apply.createUpdateDependentServices", async () => {
       await step("apply.executor.createUpdate", (d) =>
         applyExecutor(applyClient, d.executor, "create-update"),
       );
@@ -127,9 +135,11 @@ export async function applyDeploymentPlans(
         applyWorkflow(applyClient, d.workflow, "create-update"),
       );
     });
+    // The batch flushes its labels right after this callback returns.
+    assertLockHeld();
   });
 
-  await withSpan("apply.deleteDependentServices", async () => {
+  await phase("apply.deleteDependentServices", async () => {
     await forEachDeployment((d) => applyWorkflow(client, d.workflow, "delete"));
     await forEachDeployment((d) =>
       applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "delete"),
@@ -142,18 +152,18 @@ export async function applyDeploymentPlans(
     );
   });
 
-  await withSpan("apply.deleteApplication", async () => {
+  await phase("apply.deleteApplication", async () => {
     await forEachDeployment((d) => applyApplication(client, d.app, "delete"));
   });
 
-  await withSpan("apply.deleteSubgraphServices", async () => {
+  await phase("apply.deleteSubgraphServices", async () => {
     await forEachDeployment((d) => applyPipeline(client, d.pipeline, "delete-services"));
     await forEachDeployment((d) => applyAuth(client, d.auth, "delete-services"));
     await forEachDeployment((d) => applyIdP(client, d.idp, "delete-services"));
     await forEachDeployment((d) => applyTailorDB(client, d.tailorDB, "delete-services"));
   });
 
-  await withSpan("apply.cleanup", async () => {
+  await phase("apply.cleanup", async () => {
     await forEachDeployment((d) =>
       applyFunctionRegistry(client, workspaceId, d.functionRegistry, "delete"),
     );

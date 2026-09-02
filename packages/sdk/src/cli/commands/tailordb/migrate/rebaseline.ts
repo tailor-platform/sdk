@@ -3,6 +3,8 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
+import { withDeployLock } from "#/cli/commands/deploy/deploy-lock";
+import { fenceClient } from "#/cli/commands/deploy/deploy-lock-fence";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
@@ -181,144 +183,159 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   const initialLocalFileState = captureFileState(localSourceFiles());
 
   const accessToken = await loadAccessToken({ profile: options.profile });
-  const client = await initOperatorClient(accessToken);
+  const operator = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
-  const remoteContextArgs = [
-    "--config",
-    config.path,
-    "--workspace-id",
-    workspaceId,
-    ...(options.profile ? ["--profile", options.profile] : []),
-  ];
-  const setBaselineCommand = formatNextAction({
-    command: "tailor",
-    args: [
-      "tailordb",
-      "migration",
-      "set",
-      "0",
-      "--namespace",
-      target.namespace,
-      ...remoteContextArgs,
-    ],
-  });
-  const deployCommand = formatNextAction({
-    command: "tailor",
-    args: ["deploy", ...remoteContextArgs],
-  });
 
-  const assertConnectedWorkspaceReady = async (
-    expectedHistoryId: string | null,
-    phase: "initial" | "confirmation",
-  ): Promise<void> => {
-    const remoteState = await fetchRemoteMigrationState(
-      client,
-      resourceTrn(workspaceId, "tailordb", target.namespace),
-    );
-    const remoteMigration = remoteState.number;
-    if (remoteMigration !== latestMigration) {
-      const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);
-      throw new Error(
-        `The connected workspace must be at the latest migration ${formatMigrationNumber(latestMigration)} before re-baselining; current checkpoint is ${actual}.`,
-      );
-    }
-    if (remoteState.historyIdInvalid) {
-      throw new Error(
-        "Refusing to re-baseline: the connected workspace has an invalid migration history marker.",
-      );
-    }
-    if (remoteState.historyId !== expectedHistoryId) {
-      throw new Error(
-        phase === "confirmation"
-          ? "The connected workspace migration history changed while waiting for confirmation. Run the command again."
-          : "Refusing to re-baseline: the connected workspace does not match the local migration history.",
-      );
-    }
+  await withDeployLock(
+    { client: operator, workspaceId, applications: [{ name: config.name, id: config.id }] },
+    async (lock) => {
+      const client = fenceClient(operator, lock);
+      const remoteContextArgs = [
+        "--config",
+        config.path,
+        "--workspace-id",
+        workspaceId,
+        ...(options.profile ? ["--profile", options.profile] : []),
+      ];
+      const setBaselineCommand = formatNextAction({
+        command: "tailor",
+        args: [
+          "tailordb",
+          "migration",
+          "set",
+          "0",
+          "--namespace",
+          target.namespace,
+          ...remoteContextArgs,
+        ],
+      });
+      const deployCommand = formatNextAction({
+        command: "tailor",
+        args: ["deploy", ...remoteContextArgs],
+      });
 
-    const remoteResults = await verifyRemoteSchema(client, workspaceId, [target], config, [
-      toTailorDBDeployInput(targetService),
-    ]);
-    const remoteResult = remoteResults[0];
-    if (
-      !remoteResult ||
-      remoteResult.remoteMigrationNumber !== latestMigration ||
-      remoteResult.hasDrift ||
-      remoteResult.checkpointMissingLocal
-    ) {
-      if (remoteResult?.hasDrift) {
-        logger.error("Remote schema drift detected:");
-        logger.log(formatRemoteVerificationResults(remoteResults));
+      const assertConnectedWorkspaceReady = async (
+        expectedHistoryId: string | null,
+        phase: "initial" | "confirmation",
+      ): Promise<void> => {
+        const remoteState = await fetchRemoteMigrationState(
+          client,
+          resourceTrn(workspaceId, "tailordb", target.namespace),
+        );
+        const remoteMigration = remoteState.number;
+        if (remoteMigration !== latestMigration) {
+          const actual =
+            remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);
+          throw new Error(
+            `The connected workspace must be at the latest migration ${formatMigrationNumber(latestMigration)} before re-baselining; current checkpoint is ${actual}.`,
+          );
+        }
+        if (remoteState.historyIdInvalid) {
+          throw new Error(
+            "Refusing to re-baseline: the connected workspace has an invalid migration history marker.",
+          );
+        }
+        if (remoteState.historyId !== expectedHistoryId) {
+          throw new Error(
+            phase === "confirmation"
+              ? "The connected workspace migration history changed while waiting for confirmation. Run the command again."
+              : "Refusing to re-baseline: the connected workspace does not match the local migration history.",
+          );
+        }
+
+        const remoteResults = await verifyRemoteSchema(client, workspaceId, [target], config, [
+          toTailorDBDeployInput(targetService),
+        ]);
+        const remoteResult = remoteResults[0];
+        if (
+          !remoteResult ||
+          remoteResult.remoteMigrationNumber !== latestMigration ||
+          remoteResult.hasDrift ||
+          remoteResult.checkpointMissingLocal
+        ) {
+          if (remoteResult?.hasDrift) {
+            logger.error("Remote schema drift detected:");
+            logger.log(formatRemoteVerificationResults(remoteResults));
+          }
+          throw new Error(
+            "Refusing to re-baseline: the connected workspace remote schema must match the latest migration.",
+          );
+        }
+      };
+
+      await assertConnectedWorkspaceReady(currentHistoryId, "initial");
+
+      logger.newline();
+      logger.warn(`This will replace the migration history for ${styles.bold(target.namespace)}.`);
+      logger.log(`  Latest migration: ${formatMigrationNumber(latestMigration)}`);
+      logger.log("  New history: 0000/schema.json only");
+      logger.log("  migrate.ts and db.ts files will disappear from the working tree.");
+      logger.log(
+        "  Committed migration files will remain in Git history. Preserve any uncommitted files before continuing.",
+      );
+      logger.log("  Every other environment must already be at the latest migration.");
+      logger.log("  The connected workspace checkpoint will be reset to 0000.");
+      logger.newline();
+
+      if (!options.yes) {
+        const confirmed = await prompt.confirm({
+          message:
+            "Re-baseline this migration history and reset the connected workspace checkpoint?",
+          default: false,
+        });
+        if (!confirmed) {
+          logger.info("Operation cancelled.");
+          return;
+        }
       }
-      throw new Error(
-        "Refusing to re-baseline: the connected workspace remote schema must match the latest migration.",
+
+      assertValidMigrationFiles(target.migrationsDir, target.namespace);
+      const currentFileState = captureMigrationFileState([target])[target.namespace];
+      if (currentFileState !== initialFileState) {
+        throw new Error(
+          "Migration files changed while waiting for confirmation. Run the command again.",
+        );
+      }
+      if (captureFileState(localSourceFiles()) !== initialLocalFileState) {
+        throw new Error("Local TailorDB table or config files changed. Run the command again.");
+      }
+      assertLocalTypesReady();
+      await assertConnectedWorkspaceReady(currentHistoryId, "confirmation");
+
+      const rebaselineMarker: RebaselineMarker = {
+        historyId: createMigrationHistoryId(),
+        replacedHistoryId: currentHistoryId,
+        replacedLatestMigration: latestMigration,
+      };
+      lock.assertHeld();
+      await activateBaseline(
+        target.migrationsDir,
+        latestSnapshot,
+        target.namespace,
+        rebaselineMarker,
       );
-    }
-  };
+      try {
+        await updateMigrationLabel(
+          client,
+          workspaceId,
+          target.namespace,
+          0,
+          rebaselineMarker.historyId,
+        );
+      } catch (error) {
+        throw new Error(
+          `The local migration history was re-baselined, but the connected workspace checkpoint could not be updated. Run ${setBaselineCommand}, or run ${deployCommand} with schema checks enabled after resolving the connection error.`,
+          { cause: error },
+        );
+      }
 
-  await assertConnectedWorkspaceReady(currentHistoryId, "initial");
-
-  logger.newline();
-  logger.warn(`This will replace the migration history for ${styles.bold(target.namespace)}.`);
-  logger.log(`  Latest migration: ${formatMigrationNumber(latestMigration)}`);
-  logger.log("  New history: 0000/schema.json only");
-  logger.log("  migrate.ts and db.ts files will disappear from the working tree.");
-  logger.log(
-    "  Committed migration files will remain in Git history. Preserve any uncommitted files before continuing.",
-  );
-  logger.log("  Every other environment must already be at the latest migration.");
-  logger.log("  The connected workspace checkpoint will be reset to 0000.");
-  logger.newline();
-
-  if (!options.yes) {
-    const confirmed = await prompt.confirm({
-      message: "Re-baseline this migration history and reset the connected workspace checkpoint?",
-      default: false,
-    });
-    if (!confirmed) {
-      logger.info("Operation cancelled.");
-      return;
-    }
-  }
-
-  assertValidMigrationFiles(target.migrationsDir, target.namespace);
-  const currentFileState = captureMigrationFileState([target])[target.namespace];
-  if (currentFileState !== initialFileState) {
-    throw new Error(
-      "Migration files changed while waiting for confirmation. Run the command again.",
-    );
-  }
-  if (captureFileState(localSourceFiles()) !== initialLocalFileState) {
-    throw new Error("Local TailorDB table or config files changed. Run the command again.");
-  }
-  assertLocalTypesReady();
-  await assertConnectedWorkspaceReady(currentHistoryId, "confirmation");
-
-  const rebaselineMarker: RebaselineMarker = {
-    historyId: createMigrationHistoryId(),
-    replacedHistoryId: currentHistoryId,
-    replacedLatestMigration: latestMigration,
-  };
-  await activateBaseline(target.migrationsDir, latestSnapshot, target.namespace, rebaselineMarker);
-  try {
-    await updateMigrationLabel(
-      client,
-      workspaceId,
-      target.namespace,
-      0,
-      rebaselineMarker.historyId,
-    );
-  } catch (error) {
-    throw new Error(
-      `The local migration history was re-baselined, but the connected workspace checkpoint could not be updated. Run ${setBaselineCommand}, or run ${deployCommand} with schema checks enabled after resolving the connection error.`,
-      { cause: error },
-    );
-  }
-
-  logger.success(
-    `Re-baselined ${styles.bold(target.namespace)} and reset the connected workspace checkpoint to 0000.`,
+      logger.success(
+        `Re-baselined ${styles.bold(target.namespace)} and reset the connected workspace checkpoint to 0000.`,
+      );
+    },
   );
 }
 
