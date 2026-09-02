@@ -73,10 +73,16 @@ const testAppName = `migration-e2e-${testRunId}`;
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 const tailordbName = `testdb-${testRunId}`;
 
-// Keep the test timeout above the CLI timeout: a deploy killed mid data migration
-// cannot roll back, and the leftover remote schema fails all later deploys closed.
+// Keep each test timeout above the summed timeouts of the CLI calls it makes: a deploy
+// killed mid data migration cannot roll back, and the leftover remote schema fails all
+// later deploys closed.
+const CLI_TEST_TIMEOUT_MARGIN_MS = 60000;
+const GENERATE_CLI_TIMEOUT_MS = 120000;
 const DEPLOY_CLI_TIMEOUT_MS = 300000;
-const DEPLOY_TEST_TIMEOUT_MS = 360000;
+const GENERATE_TEST_TIMEOUT_MS = GENERATE_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
+const DEPLOY_TEST_TIMEOUT_MS = DEPLOY_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
+const GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS =
+  GENERATE_CLI_TIMEOUT_MS + DEPLOY_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
 
 /**
  * Run the generate CLI command via subprocess
@@ -96,7 +102,7 @@ function runGenerateCli(configPath: string, cwd: string): void {
         NODE_OPTIONS: "--experimental-vm-modules",
       },
       encoding: "utf-8",
-      timeout: 120000, // 120 second timeout (increased from 60s)
+      timeout: GENERATE_CLI_TIMEOUT_MS,
     });
     // Success - output captured but not logged to keep test output clean
   } catch (error: unknown) {
@@ -489,26 +495,30 @@ export async function main(db: Kysely<any>): Promise<void> {
      *
      * Creates initial table definition and generates 0000/schema.json
      */
-    test("generates initial schema migration", async () => {
-      // Create config with migrations enabled
-      const configPath = createConfig();
+    test(
+      "generates initial schema migration",
+      async () => {
+        // Create config with migrations enabled
+        const configPath = createConfig();
 
-      // Generate migration via CLI
-      runGenerateCli(configPath, tempDir);
+        // Generate migration via CLI
+        runGenerateCli(configPath, tempDir);
 
-      // Verify initial schema was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(1);
-      expect(files[0]!.type).toBe("schema");
-      expect(files[0]!.number).toBe(INITIAL_SCHEMA_NUMBER);
+        // Verify initial schema was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(1);
+        expect(files[0]!.type).toBe("schema");
+        expect(files[0]!.number).toBe(INITIAL_SCHEMA_NUMBER);
 
-      // Verify snapshot content
-      const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
-      expect(snapshot).not.toBeNull();
-      expect(snapshot!.tables.User).toBeDefined();
-      expect(snapshot!.tables.User!.fields.name).toBeDefined();
-      expect(snapshot!.tables.User!.fields.email).toBeDefined();
-    }, 60000);
+        // Verify snapshot content
+        const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
+        expect(snapshot).not.toBeNull();
+        expect(snapshot!.tables.User).toBeDefined();
+        expect(snapshot!.tables.User!.fields.name).toBeDefined();
+        expect(snapshot!.tables.User!.fields.email).toBeDefined();
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 1b: Apply initial migration
@@ -540,9 +550,11 @@ export async function main(db: Kysely<any>): Promise<void> {
     /**
      * Scenario 2: Non-breaking change (adding optional field)
      */
-    test("detects non-breaking change when adding optional field", async () => {
-      // Update table to add optional field
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "detects non-breaking change when adding optional field",
+      async () => {
+        // Update table to add optional field
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -554,24 +566,26 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      // Generate migration via CLI
-      runGenerateCli(configPath, tempDir);
+        // Generate migration via CLI
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(2);
-      expect(files[1]!.type).toBe("diff");
-      expect(files[1]!.number).toBe(1);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(2);
+        expect(files[1]!.type).toBe("diff");
+        expect(files[1]!.number).toBe(1);
 
-      // Verify diff content
-      const diffPath = getMigrationFilePath(migrationsDir, 1, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(false);
-      expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
-    }, 60000);
+        // Verify diff content
+        const diffPath = getMigrationFilePath(migrationsDir, 1, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.changes.length).toBe(1);
+        expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     test(
       "rehearses the pending migration in a designated workspace",
@@ -633,9 +647,11 @@ export type user = typeof user;
     /**
      * Scenario 3: Breaking change (adding required field)
      */
-    test("detects breaking change when adding required field", async () => {
-      // Update table to add required field (breaking change)
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "detects breaking change when adding required field",
+      async () => {
+        // Update table to add required field (breaking change)
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -648,31 +664,33 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      // Generate migration (with yes flag to skip confirmation)
-      runGenerateCli(configPath, tempDir);
+        // Generate migration (with yes flag to skip confirmation)
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(3);
-      expect(files[2]!.type).toBe("diff");
-      expect(files[2]!.number).toBe(2);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(3);
+        expect(files[2]!.type).toBe("diff");
+        expect(files[2]!.number).toBe(2);
 
-      // Verify diff shows breaking change
-      const diffPath = getMigrationFilePath(migrationsDir, 2, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges.length).toBeGreaterThan(0);
-      expect(diff.breakingChanges[0]!.reason).toBe("Required field added");
+        // Verify diff shows breaking change
+        const diffPath = getMigrationFilePath(migrationsDir, 2, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges.length).toBeGreaterThan(0);
+        expect(diff.breakingChanges[0]!.reason).toBe("Required field added");
 
-      // Verify requiresMigrationScript is true
-      expect(diff.requiresMigrationScript).toBe(true);
+        // Verify requiresMigrationScript is true
+        expect(diff.requiresMigrationScript).toBe(true);
 
-      // Verify migration script file was created
-      const migratePath = getMigrationFilePath(migrationsDir, 2, "migrate");
-      expect(fs.existsSync(migratePath)).toBe(true);
-    }, 60000);
+        // Verify migration script file was created
+        const migratePath = getMigrationFilePath(migrationsDir, 2, "migrate");
+        expect(fs.existsSync(migratePath)).toBe(true);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 3b: Apply breaking change migration
@@ -701,20 +719,24 @@ export type user = typeof user;
     /**
      * Scenario 4: No changes detected
      */
-    test("reports no changes when schema is unchanged", async () => {
-      const configPath = createConfig();
+    test(
+      "reports no changes when schema is unchanged",
+      async () => {
+        const configPath = createConfig();
 
-      // Get current file count
-      const filesBefore = getMigrationFiles(migrationsDir);
-      const countBefore = filesBefore.length;
+        // Get current file count
+        const filesBefore = getMigrationFiles(migrationsDir);
+        const countBefore = filesBefore.length;
 
-      // Generate migration (should detect no changes)
-      runGenerateCli(configPath, tempDir);
+        // Generate migration (should detect no changes)
+        runGenerateCli(configPath, tempDir);
 
-      // Verify no new file was created
-      const filesAfter = getMigrationFiles(migrationsDir);
-      expect(filesAfter.length).toBe(countBefore);
-    }, 60000);
+        // Verify no new file was created
+        const filesAfter = getMigrationFiles(migrationsDir);
+        expect(filesAfter.length).toBe(countBefore);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("Type Addition (Non-breaking)", () => {
@@ -723,31 +745,35 @@ export type user = typeof user;
      *
      * Adds a new Post table to the schema
      */
-    test("detects table addition as non-breaking change", async () => {
-      // Copy Post table fixture
-      const srcPost = path.join(FIXTURE_DIR, "tailordb", "post.ts");
-      const destPost = path.join(tempDir, "tailordb", "post.ts");
-      fs.copyFileSync(srcPost, destPost);
+    test(
+      "detects table addition as non-breaking change",
+      async () => {
+        // Copy Post table fixture
+        const srcPost = path.join(FIXTURE_DIR, "tailordb", "post.ts");
+        const destPost = path.join(tempDir, "tailordb", "post.ts");
+        fs.copyFileSync(srcPost, destPost);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      // Generate migration
-      runGenerateCli(configPath, tempDir);
+        // Generate migration
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(4);
-      expect(files[3]!.type).toBe("diff");
-      expect(files[3]!.number).toBe(3);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(4);
+        expect(files[3]!.type).toBe("diff");
+        expect(files[3]!.number).toBe(3);
 
-      // Verify diff content
-      const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(false);
-      expect(diff.changes.some((c) => c.kind === "table_added" && c.tableName === "Post")).toBe(
-        true,
-      );
-    }, 60000);
+        // Verify diff content
+        const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.changes.some((c) => c.kind === "table_added" && c.tableName === "Post")).toBe(
+          true,
+        );
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 6b: Apply table addition
@@ -773,9 +799,11 @@ export type user = typeof user;
      *
      * Removes requiredField from User table
      */
-    test("detects field removal as non-breaking change", async () => {
-      // Update User table to remove requiredField
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "detects field removal as non-breaking change",
+      async () => {
+        // Update User table to remove requiredField
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -787,25 +815,27 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      runGenerateCli(configPath, tempDir);
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(5);
-      expect(files[4]!.type).toBe("diff");
-      expect(files[4]!.number).toBe(4);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(5);
+        expect(files[4]!.type).toBe("diff");
+        expect(files[4]!.number).toBe(4);
 
-      // Verify diff shows field removal as non-breaking change
-      const diffPath = getMigrationFilePath(migrationsDir, 4, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(false);
-      expect(
-        diff.changes.some((c) => c.kind === "field_removed" && c.fieldName === "requiredField"),
-      ).toBe(true);
-      expect(diff.requiresMigrationScript).toBe(false);
-    }, 60000);
+        // Verify diff shows field removal as non-breaking change
+        const diffPath = getMigrationFilePath(migrationsDir, 4, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(
+          diff.changes.some((c) => c.kind === "field_removed" && c.fieldName === "requiredField"),
+        ).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(false);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 7b: Apply field removal (non-breaking change)
@@ -830,8 +860,10 @@ export type user = typeof user;
      * Scenario 8: A failing migrate.ts must roll back its Pre-phase DDL, leaving
      * the remote schema and checkpoint at the prior migration so a retry works.
      */
-    test("generates the breaking migration whose script will fail", async () => {
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "generates the breaking migration whose script will fail",
+      async () => {
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -844,19 +876,21 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
-      runGenerateCli(configPath, tempDir);
+        const configPath = createConfig();
+        runGenerateCli(configPath, tempDir);
 
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(6);
-      expect(files[5]!.number).toBe(5);
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(6);
+        expect(files[5]!.number).toBe(5);
 
-      const diffPath = getMigrationFilePath(migrationsDir, 5, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.requiresMigrationScript).toBe(true);
-      expect(fs.existsSync(getMigrationFilePath(migrationsDir, 5, "migrate"))).toBe(true);
-    }, 60000);
+        const diffPath = getMigrationFilePath(migrationsDir, 5, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(true);
+        expect(fs.existsSync(getMigrationFilePath(migrationsDir, 5, "migrate"))).toBe(true);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     test(
       "rolls back the pre-migration DDL when migrate.ts fails",
@@ -1001,7 +1035,7 @@ export async function main(trx: Transaction): Promise<void> {
         runDeployCli(configPath, workspaceId, tempDir);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(6);
       },
-      DEPLOY_TEST_TIMEOUT_MS,
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
     );
 
     test(
@@ -1076,7 +1110,7 @@ export type user = typeof user;
         runDeployCli(configPath, workspaceId, tempDir);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(7);
       },
-      DEPLOY_TEST_TIMEOUT_MS,
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
     );
 
     test(
@@ -1178,7 +1212,7 @@ export async function main(trx: Transaction): Promise<void> {
         runDeployCli(configPath, workspaceId, tempDir);
         expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
       },
-      DEPLOY_TEST_TIMEOUT_MS,
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
     );
   });
 });
