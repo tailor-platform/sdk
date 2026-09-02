@@ -6,18 +6,16 @@ export type LogLevelEnumInput = LogLevelEnum;
 export type AppConfigParsed = {
   name: string;
   id?: string | undefined;
-  env?:
-    | {
-        [x: string]:
-          | string
-          | number
-          | boolean
-          | {
-              value: string | number;
-              allowSecretReason: string;
-            };
-      }
-    | undefined;
+  env?: {
+    [x: string]:
+      | string
+      | number
+      | boolean
+      | {
+          value: string | number;
+          allowSecretReason: string;
+        };
+  };
   cors?: string[] | undefined;
   allowedIpAddresses?: string[] | undefined;
   disableIntrospection?: boolean | undefined;
