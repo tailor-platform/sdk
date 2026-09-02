@@ -2,11 +2,10 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
@@ -25,11 +24,9 @@ async function loadOptions(options: GetFunctionRegistryOptions) {
     throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
   }
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: result.data.profile,
+    workspaceId: result.data.workspaceId,
   });
 
   return {

@@ -3,10 +3,9 @@ import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_reso
 import { arg } from "politty";
 import { z } from "zod";
 import { durationArg, parseDuration, workspaceArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
@@ -89,13 +88,9 @@ export interface TriggerExecutorResult {
 async function triggerExecutorByName(
   options: TriggerExecutorByNameOptions,
 ): Promise<TriggerExecutorResult> {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   try {
@@ -207,13 +202,9 @@ The \`--logs\` option displays logs from the downstream execution when available
     const jsonOutput = logger.jsonMode || args.json;
     await assertWritable({ profile: args.profile });
     // Validate trigger type before processing
-    const accessToken = await loadAccessToken({
+    const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
     });
 
     const { executor } = await client.getExecutorExecutor({

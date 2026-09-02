@@ -9,11 +9,12 @@ import {
   resolveMachineUserInputSource,
   type MachineUserInputSource,
 } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
+import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { loadMachineUserName } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
@@ -184,13 +185,9 @@ export async function startWorkflowByName(
     );
   }
 
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   const authNamespace = await resolveApplicationAuthNamespace({
@@ -220,13 +217,9 @@ export async function startWorkflowByName(
 export async function startWorkflow<W extends WorkflowLike>(
   options: StartWorkflowTypedOptions<W>,
 ): Promise<StartWorkflowResultWithWait> {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
   const authNamespace = await resolveApplicationAuthNamespace({
     client,

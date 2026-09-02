@@ -8,12 +8,11 @@ import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatNextAction } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { PluginManager } from "#/plugin/manager";
@@ -180,11 +179,9 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   assertLocalTypesReady();
   const initialLocalFileState = captureFileState(localSourceFiles());
 
-  const accessToken = await loadAccessToken({ profile: options.profile });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: options.workspaceId,
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
+    workspaceId: options.workspaceId,
   });
   const remoteContextArgs = [
     "--config",

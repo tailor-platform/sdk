@@ -20,11 +20,11 @@ import {
 } from "#/cli/commands/deploy/workflow-execution-policy";
 import { type Application, defineApplication } from "#/cli/services/application";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
-import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
@@ -38,13 +38,9 @@ export interface RemoveOptions {
 }
 
 async function loadOptions(options?: RemoveOptions) {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options?.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options?.workspaceId,
-    profile: options?.profile,
   });
   const { config } = await loadConfig(options?.configPath);
   const application = defineApplication({ config });
