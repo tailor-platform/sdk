@@ -9,7 +9,15 @@ import {
 } from "#/configure/services/tailordb/index";
 import { PluginManager } from "#/plugin/manager";
 import { createTailorDBService } from "./service";
+import type { TailorTypePermission } from "#/configure/services/tailordb/permission";
 import type { Plugin } from "#/plugin/types";
+
+const malformedTypePermission = {
+  create: [{ conditions: [[null, "=", "loggedin"]], permit: true }],
+  read: [{ conditions: [], permit: true }],
+  update: [{ conditions: [], permit: true }],
+  delete: [{ conditions: [], permit: true }],
+} as unknown as TailorTypePermission;
 
 describe("createTailorDBService.loadTypes", () => {
   let tmpDir: string | undefined;
@@ -189,6 +197,244 @@ export const user = db.table("User", {
     await expect(service.processNamespacePlugins()).rejects.toThrow(
       /TailorDB table "AuditLogNoPermission".* has no \.permission\(\) configured/,
     );
+  });
+
+  test("rejects a namespace plugin-generated table that fails schema validation", async () => {
+    const plugin: Plugin = {
+      id: "namespace-plugin",
+      description: "namespace generator",
+      importPath: "@example/namespace",
+      onNamespaceLoaded: () => ({
+        tables: {
+          auditLog: db
+            .table("BadAuditLog", {
+              message: db.string(),
+            })
+            .permission(malformedTypePermission)
+            .gqlPermission(unsafeAllowAllGqlPermission),
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await expect(service.processNamespacePlugins()).rejects.toThrow(
+      /TailorDB table "BadAuditLog".*generated as "auditLog" by plugin "namespace-plugin".*failed schema validation/s,
+    );
+  });
+
+  test("rejects an attachment plugin-generated table that fails schema validation", async () => {
+    const typeFile = writeTypeFile(
+      "with-generating-plugin.ts",
+      `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission).plugin({ "gen-plugin": {} });
+`,
+    );
+    const plugin: Plugin = {
+      id: "gen-plugin",
+      description: "generates a malformed table",
+      importPath: "@example/gen",
+      onTableLoaded: () => ({
+        tables: {
+          audit: db
+            .table("BadGenerated", {
+              message: db.string(),
+            })
+            .permission(malformedTypePermission)
+            .gqlPermission(unsafeAllowAllGqlPermission),
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await expect(service.loadTypes()).rejects.toThrow(
+      /TailorDB table "BadGenerated".*generated as "audit" by plugin "gen-plugin".*failed schema validation/s,
+    );
+  });
+
+  test("rejects a plugin-extended table that fails schema validation", async () => {
+    const typeFile = writeTypeFile(
+      "with-extending-plugin.ts",
+      `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission).plugin({ "extend-plugin": {} });
+`,
+    );
+    const plugin: Plugin = {
+      id: "extend-plugin",
+      description: "extends with a malformed field",
+      importPath: "@example/extend",
+      onTableLoaded: () => ({
+        extends: {
+          fields: { bad: { type: "bogus" } as unknown as ReturnType<typeof db.string> },
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await expect(service.loadTypes()).rejects.toThrow(
+      /TailorDB table "User".*extended by plugin "extend-plugin".*failed schema validation/s,
+    );
+  });
+
+  test("rejects a null namespace plugin-generated table without crashing", async () => {
+    const plugin: Plugin = {
+      id: "namespace-plugin",
+      description: "namespace generator",
+      importPath: "@example/namespace",
+      onNamespaceLoaded: () => ({
+        tables: {
+          auditLog: null as unknown as ReturnType<typeof db.table>,
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await expect(service.processNamespacePlugins()).rejects.toThrow(
+      /TailorDB table generated as "auditLog" by plugin "namespace-plugin".*failed schema validation/s,
+    );
+  });
+
+  test("rejects a null attachment plugin-generated table without crashing", async () => {
+    const typeFile = writeTypeFile(
+      "with-null-generating-plugin.ts",
+      `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission).plugin({ "null-plugin": {} });
+`,
+    );
+    const plugin: Plugin = {
+      id: "null-plugin",
+      description: "generates a null table",
+      importPath: "@example/null",
+      onTableLoaded: () => ({
+        tables: {
+          audit: null as unknown as ReturnType<typeof db.table>,
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await expect(service.loadTypes()).rejects.toThrow(
+      /TailorDB table generated as "audit" by plugin "null-plugin".*failed schema validation/s,
+    );
+  });
+
+  test("accepts a plugin-generated table that is a structural copy of a builder", async () => {
+    const plugin: Plugin = {
+      id: "clone-plugin",
+      description: "returns a spread copy of a builder table",
+      importPath: "@example/clone",
+      onNamespaceLoaded: () => ({
+        tables: {
+          auditLog: {
+            ...db
+              .table("ClonedAuditLog", {
+                message: db.string(),
+              })
+              .permission(unsafeAllowAllTypePermission)
+              .gqlPermission(unsafeAllowAllGqlPermission),
+          },
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await service.processNamespacePlugins();
+    expect(Object.hasOwn(service.types, "ClonedAuditLog")).toBe(true);
+  });
+
+  test("loads valid attachment plugin-generated and -extended tables", async () => {
+    const typeFile = writeTypeFile(
+      "with-valid-plugin.ts",
+      `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission).plugin({ "valid-plugin": {} });
+`,
+    );
+    const plugin: Plugin = {
+      id: "valid-plugin",
+      description: "extends and generates valid tables",
+      importPath: "@example/valid",
+      onTableLoaded: () => ({
+        extends: {
+          fields: { addedField: db.string() },
+        },
+        tables: {
+          audit: db
+            .table("GeneratedAudit", {
+              message: db.string(),
+            })
+            .permission(unsafeAllowAllTypePermission)
+            .gqlPermission(unsafeAllowAllGqlPermission),
+        },
+      }),
+    };
+    const pluginManager = new PluginManager([plugin]);
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+      pluginManager,
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    const types = await service.loadTypes();
+    expect(Object.hasOwn(types ?? {}, "GeneratedAudit")).toBe(true);
+    expect(Object.hasOwn(types?.["User"]?.fields ?? {}, "addedField")).toBe(true);
   });
 
   test("rejects a type with no .permission() configured", async () => {
