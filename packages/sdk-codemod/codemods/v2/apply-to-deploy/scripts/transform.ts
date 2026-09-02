@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 // Match `tailor-sdk apply` plus the optional `@version` suffix that
 // package-manager run commands can add (`npx tailor-sdk@latest apply`,
@@ -34,30 +35,7 @@ function transformSourceText(source: string): string | null {
 }
 
 function transformPackageJson(source: string): string | null {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(source) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-
-  let modified = false;
-  const scripts = parsed.scripts;
-  if (typeof scripts === "object" && scripts != null && !Array.isArray(scripts)) {
-    for (const [name, value] of Object.entries(scripts as Record<string, unknown>)) {
-      if (typeof value !== "string") continue;
-      if (!value.includes("tailor-sdk")) continue;
-      const updated = replaceApply(value);
-      if (updated !== value) {
-        (scripts as Record<string, string>)[name] = updated;
-        modified = true;
-      }
-    }
-  }
-
-  if (!modified) return null;
-  const trailing = source.endsWith("\n") ? "\n" : "";
-  return JSON.stringify(parsed, null, 2) + trailing;
+  return transformPackageScripts(source, replaceApply);
 }
 
 /**

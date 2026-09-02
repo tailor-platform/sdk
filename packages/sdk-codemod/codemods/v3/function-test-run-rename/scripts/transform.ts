@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 // Match `function test-run` only as part of a tailor CLI invocation
 // (`tailor`, the v1 `tailor-sdk` binary, or their Windows launcher forms) so
@@ -23,29 +24,7 @@ function transformText(source: string): string | null {
 }
 
 function transformPackageJson(source: string): string | null {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(source) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-
-  let modified = false;
-  const scripts = parsed.scripts;
-  if (typeof scripts === "object" && scripts != null && !Array.isArray(scripts)) {
-    for (const [name, value] of Object.entries(scripts as Record<string, unknown>)) {
-      if (typeof value !== "string") continue;
-      const updated = replaceCommand(value);
-      if (updated !== value) {
-        (scripts as Record<string, string>)[name] = updated;
-        modified = true;
-      }
-    }
-  }
-
-  if (!modified) return null;
-  const trailing = source.endsWith("\n") ? "\n" : "";
-  return JSON.stringify(parsed, null, 2) + trailing;
+  return transformPackageScripts(source, replaceCommand);
 }
 
 /**
