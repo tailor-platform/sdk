@@ -139,11 +139,7 @@ async function getNamespaceFromSqlQuery(
 }
 
 async function loadOptions(options: QueryBaseOptions) {
-  const validated = parseOptions(
-    queryBaseOptionsSchema,
-    options,
-    "validation error missing issues",
-  );
+  const validated = parseOptions(queryBaseOptionsSchema, options);
 
   const machineUser = await loadMachineUserName({
     machineUser: validated.machineUser,
@@ -369,7 +365,7 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  const validated = parseOptions(queryOptionsSchema, options, "validation error missing issues");
+  const validated = parseOptions(queryOptionsSchema, options);
 
   const executor = await prepareQueryExecutor(validated);
   return await executor(validated.query);

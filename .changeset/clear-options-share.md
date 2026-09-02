@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Keep CLI option validation errors consistent across commands.
+Report every invalid CLI option in one validation error instead of only the first.

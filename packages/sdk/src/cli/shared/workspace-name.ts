@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { assertDefined } from "#/utils/assert";
+import { formatIssues } from "#/cli/shared/parse-options";
 
 /**
  * Validates a workspace name against the platform's naming rules: 3-63
@@ -23,7 +23,5 @@ export const workspaceNameSchema = z
  */
 export function validateWorkspaceName(name: string): true | string {
   const result = workspaceNameSchema.safeParse(name);
-  return result.success
-    ? true
-    : assertDefined(result.error.issues[0], "Zod returned no issues").message;
+  return result.success ? true : formatIssues(result.error.issues);
 }

@@ -1,14 +1,16 @@
-import { assertDefined } from "#/utils/assert";
 import type { z } from "zod";
+
+export function formatIssues(issues: z.ZodError["issues"]): string {
+  return issues.map((issue) => issue.message).join("; ") || "Invalid options";
+}
 
 export function parseOptions<Schema extends z.ZodType>(
   schema: Schema,
   options: z.input<Schema>,
-  missingIssueMessage = "Zod returned no issues",
 ): z.output<Schema> {
   const result = schema.safeParse(options);
   if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], missingIssueMessage).message);
+    throw new Error(formatIssues(result.error.issues));
   }
   return result.data;
 }
