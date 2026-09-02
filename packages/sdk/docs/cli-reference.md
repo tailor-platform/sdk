@@ -231,6 +231,7 @@ Commands for authentication and user management.
 | [login](./cli/user.md#login)                     | Login to Tailor Platform.                                                             |
 | [logout](./cli/user.md#logout)                   | Logout from Tailor Platform.                                                          |
 | [auth](./cli/user.md#auth)                       | Authentication helpers for scripts and plugins.                                       |
+| [auth status](./cli/user.md#auth-status)         | Show the active Tailor Platform authentication status without printing tokens.        |
 | [auth token](./cli/user.md#auth-token)           | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
 | [user](./cli/user.md#user)                       | Manage Tailor Platform users.                                                         |
 | [user current](./cli/user.md#user-current)       | Show current user.                                                                    |
