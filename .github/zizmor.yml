@@ -1,0 +1,5 @@
+rules:
+  # actionlint (rhysd/actionlint) doesn't understand the `$/...` syntax yet:
+  # https://github.com/rhysd/actionlint/issues/711
+  self-repository:
+    disable: true

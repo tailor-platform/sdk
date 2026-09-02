@@ -31,7 +31,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Check licenses
         uses: tailor-platform/actions/check-licenses@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1

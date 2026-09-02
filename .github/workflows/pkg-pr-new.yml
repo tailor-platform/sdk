@@ -38,7 +38,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       # Non-compact pkg.pr.new URLs are deterministic from the full head SHA,
       # so they can be computed BEFORE publishing. An unpublished package makes

@@ -64,7 +64,7 @@ jobs:
       - name: Determine changeset requirement
         if: steps.existing.outputs.found == 'false'
         id: changeset_check
-        uses: $/.github/actions/skip-changeset-check
+        uses: ./.github/actions/skip-changeset-check
         with:
           before-lockfile: /tmp/renovate-base-lock.yaml
 

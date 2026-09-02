@@ -41,7 +41,7 @@ jobs:
           persist-credentials: false
 
       - name: Install aqua
-        uses: $/.github/actions/install-aqua
+        uses: ./.github/actions/install-aqua
 
       - name: Run ghalint workflows
         run: ghalint run
@@ -67,10 +67,10 @@ jobs:
           persist-credentials: false
 
       - name: Install aqua
-        uses: $/.github/actions/install-aqua
+        uses: ./.github/actions/install-aqua
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Run actionlint tests
         run: pnpm --filter @tailor-platform/sdk-plugin-setup exec vitest run src/workflow-lint.test.ts

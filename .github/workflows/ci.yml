@@ -29,10 +29,10 @@ jobs:
           persist-credentials: false
 
       - name: Install aqua
-        uses: $/.github/actions/install-aqua
+        uses: ./.github/actions/install-aqua
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       # Install deps builds the SDK once so the CLI bin links resolve; build
       # the remaining packages here before downstream checks.
@@ -162,10 +162,10 @@ jobs:
           persist-credentials: false
 
       - name: Install aqua
-        uses: $/.github/actions/install-aqua
+        uses: ./.github/actions/install-aqua
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Apply lint fix
         run: pnpm run lint:fix

@@ -61,7 +61,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
         with:
           node-version: ${{ matrix.node }}
 
@@ -87,7 +87,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Build packages
         run: pnpm -r --filter '!@tailor-platform/sdk' run build

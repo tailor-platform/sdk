@@ -111,7 +111,7 @@ jobs:
       - name: Determine changeset requirement
         if: steps.diff.outputs.changed == 'true'
         id: changeset_check
-        uses: $/.github/actions/skip-changeset-check
+        uses: ./.github/actions/skip-changeset-check
         with:
           before-lockfile: /tmp/lockfile-before-fix.yaml
 

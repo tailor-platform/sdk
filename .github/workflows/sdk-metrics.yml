@@ -38,7 +38,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Login as machine user
         run: pnpm tailor login --machine-user
@@ -80,7 +80,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Login as machine user
         run: pnpm tailor login --machine-user
@@ -107,7 +107,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Measure bundle size
         run: pnpm --filter @tailor-platform/sdk measure:bundle
@@ -132,7 +132,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Run type check performance
         run: pnpm --filter @tailor-platform/sdk perf:typecheck
@@ -159,7 +159,7 @@ jobs:
           persist-credentials: false
 
       - name: Install deps
-        uses: $/.github/actions/install-deps
+        uses: ./.github/actions/install-deps
 
       - name: Run runtime performance
         run: pnpm --filter @tailor-platform/sdk perf:runtime
