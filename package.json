@@ -61,7 +61,7 @@
     "oxlint": "1.80.0",
     "pkg-pr-new": "0.0.88",
     "publint": "0.3.24",
-    "tsx": "4.23.12",
+    "tsx": "4.23.13",
     "typescript": "6.0.3"
   },
   "engines": {
