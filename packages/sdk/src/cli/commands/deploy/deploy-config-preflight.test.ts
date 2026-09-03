@@ -70,16 +70,9 @@ describe("multi-config deploy preflight", () => {
     const { firstPrepared, secondPrepared } = deferConfigPreparation();
     const loadError = new Error("config loading stopped build");
     mocks.loadConfig.mockRejectedValue(loadError);
-    const providedConfig = {
-      config: { id: undefined, name: firstConfigPath, path: firstConfigPath },
-      plugins: [],
-    } as unknown as NonNullable<
-      Parameters<typeof buildDeploymentTargets>[0]["loadedConfigs"]
-    >[number];
 
     const targets = buildDeploymentTargets({
       configPaths: [firstConfigPath, secondConfigPath],
-      loadedConfigs: [providedConfig],
       dryRun: false,
       buildOnly: false,
       noCache: false,
@@ -96,5 +89,28 @@ describe("multi-config deploy preflight", () => {
     secondPrepared.resolve();
     await expect(targetError).resolves.toBe(loadError);
     expect(mocks.loadConfig).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects incomplete preloaded config batches", async () => {
+    mocks.ensureConfigIdForDeploy.mockResolvedValue(undefined);
+    mocks.loadConfig.mockRejectedValue(new Error("unexpected config load"));
+    const providedConfig = {
+      config: { id: undefined, name: firstConfigPath, path: firstConfigPath },
+      plugins: [],
+    } as unknown as NonNullable<
+      Parameters<typeof buildDeploymentTargets>[0]["loadedConfigs"]
+    >[number];
+
+    await expect(
+      buildDeploymentTargets({
+        configPaths: [firstConfigPath, secondConfigPath],
+        loadedConfigs: [providedConfig],
+        dryRun: false,
+        buildOnly: false,
+        noCache: false,
+        packageVersion: "test",
+        cacheDir: "cache",
+      }),
+    ).rejects.toThrow("loadedConfigs must contain exactly one entry for every configPath");
   });
 });

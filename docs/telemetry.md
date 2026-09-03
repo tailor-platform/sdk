@@ -41,8 +41,9 @@ The `deploy` command emits the following span tree:
 ```
 deploy
 ├── config.preflight
+│   ├── build.prepareConfig
+│   └── build.loadConfig
 ├── build
-│   ├── build.loadConfig
 │   ├── build.generateUserTypes
 │   └── build.loadApplication
 ├── plan.metadataLookup
@@ -87,6 +88,9 @@ deploy
 ├── apply.deleteSubgraphServices
 └── apply.cleanup
 ```
+
+With `--build-only`, `config.preflight` is omitted and the config preparation
+and loading spans run under `build` instead.
 
 The pre/post migration spans repeat once per pending migration; the script span
 appears only for migrations that carry a `migrate.ts`.

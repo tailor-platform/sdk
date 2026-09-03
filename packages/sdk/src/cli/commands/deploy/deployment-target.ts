@@ -179,17 +179,19 @@ export async function buildDeploymentTargets(
     buildTarget,
     ...targetParams
   } = params;
-  let loadedConfigs = providedLoadedConfigs;
   if (
-    buildTarget === undefined &&
-    configPaths.some((_, index) => loadedConfigs?.[index] === undefined)
+    providedLoadedConfigs !== undefined &&
+    (providedLoadedConfigs.length !== configPaths.length ||
+      configPaths.some((_, index) => providedLoadedConfigs[index] === undefined))
   ) {
+    throw new Error("loadedConfigs must contain exactly one entry for every configPath");
+  }
+  if (buildTarget === undefined && providedLoadedConfigs === undefined) {
     await prepareDeployConfigs({
       configPaths,
       dryRun: params.dryRun,
       buildOnly: params.buildOnly,
     });
-    loadedConfigs = undefined;
   }
   const build = buildTarget ?? buildDeploymentTarget;
 
@@ -198,7 +200,7 @@ export async function buildDeploymentTargets(
       build({
         ...targetParams,
         configPath,
-        loadedConfig: loadedConfigs?.[index],
+        loadedConfig: providedLoadedConfigs?.[index],
       }),
     ),
   );
