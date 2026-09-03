@@ -70,10 +70,16 @@ describe("multi-config deploy preflight", () => {
     const { firstPrepared, secondPrepared } = deferConfigPreparation();
     const loadError = new Error("config loading stopped build");
     mocks.loadConfig.mockRejectedValue(loadError);
+    const providedConfig = {
+      config: { id: undefined, name: firstConfigPath, path: firstConfigPath },
+      plugins: [],
+    } as unknown as NonNullable<
+      Parameters<typeof buildDeploymentTargets>[0]["loadedConfigs"]
+    >[number];
 
     const targets = buildDeploymentTargets({
       configPaths: [firstConfigPath, secondConfigPath],
-      loadedConfigs: [],
+      loadedConfigs: [providedConfig],
       dryRun: false,
       buildOnly: false,
       noCache: false,

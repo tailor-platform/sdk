@@ -179,15 +179,17 @@ export async function buildDeploymentTargets(
     buildTarget,
     ...targetParams
   } = params;
-  const needsConfigPreparation =
+  let loadedConfigs = providedLoadedConfigs;
+  if (
     buildTarget === undefined &&
-    configPaths.some((_, index) => providedLoadedConfigs?.[index] === undefined);
-  if (needsConfigPreparation) {
+    configPaths.some((_, index) => loadedConfigs?.[index] === undefined)
+  ) {
     await prepareDeployConfigs({
       configPaths,
       dryRun: params.dryRun,
       buildOnly: params.buildOnly,
     });
+    loadedConfigs = undefined;
   }
   const build = buildTarget ?? buildDeploymentTarget;
 
@@ -196,7 +198,7 @@ export async function buildDeploymentTargets(
       build({
         ...targetParams,
         configPath,
-        loadedConfig: providedLoadedConfigs?.[index],
+        loadedConfig: loadedConfigs?.[index],
       }),
     ),
   );
