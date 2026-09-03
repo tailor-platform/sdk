@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.12.0
+
+### Minor Changes
+
+- [#2247](https://github.com/tailor-platform/sdk/pull/2247) [`b7b0f3f`](https://github.com/tailor-platform/sdk/commit/b7b0f3fe22a57dcda3b544cb652f5fc984c899e3) Thanks [@dqn](https://github.com/dqn)! - Enable deprecation diagnostics in newly scaffolded projects so their lint command flags APIs annotated as deprecated.
+
 ## 2.11.0
 
 ## 2.10.0

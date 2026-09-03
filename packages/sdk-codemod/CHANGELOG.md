@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.6
+
+### Patch Changes
+
+- [#2229](https://github.com/tailor-platform/sdk/pull/2229) [`f13dbac`](https://github.com/tailor-platform/sdk/commit/f13dbacb0c13fddaed0fb7ea99e541237e8b1218) Thanks [@renovate](https://github.com/apps/renovate)! - Upgrade zod dependency to v4.5.4
+
 ## 0.8.5
 
 ### Patch Changes
