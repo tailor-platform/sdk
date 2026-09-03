@@ -31,12 +31,14 @@ function expectParseFailure<T>(
 
 function expectUnknownKeyRejected<T>(
   result: { success: true; data: T } | { success: false; error: { issues: unknown[] } },
+  key: string,
 ) {
   const error = expectParseFailure(result);
   expect(error.issues).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         code: "unrecognized_keys",
+        keys: expect.arrayContaining([key]),
       }),
     ]),
   );
@@ -52,6 +54,7 @@ describe("FunctionOperationSchema", () => {
         body: () => {},
         unknownOption: true,
       }),
+      "unknownOption",
     );
   });
 });
@@ -81,6 +84,7 @@ describe("GqlOperationSchema", () => {
         query: "query { users { id } }",
         unknownOption: true,
       }),
+      "unknownOption",
     );
   });
 });
@@ -135,27 +139,13 @@ describe("WorkflowOperationSchema", () => {
   test("rejects unknown options", () => {
     expect.hasAssertions();
 
-    const error = expectParseFailure(
+    expectUnknownKeyRejected(
       WorkflowOperationSchema.safeParse({
         kind: "workflow",
         workflowName: "my-workflow",
         unknownOption: true,
       }),
-    );
-
-    expect(error.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "invalid_union",
-          errors: expect.arrayContaining([
-            expect.arrayContaining([
-              expect.objectContaining({
-                code: "unrecognized_keys",
-              }),
-            ]),
-          ]),
-        }),
-      ]),
+      "unknownOption",
     );
   });
 
