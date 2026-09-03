@@ -40,17 +40,11 @@ export const listCommand = defineAppCommand({
     }
 
     const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
-    if (jsonOutput) {
-      logger.out(patInfos);
-      return;
-    }
-
-    logger.out(
-      patInfos.map(({ createdAt, lastUsedAt, ...rest }) => ({
-        ...rest,
-        createdAt: humanizeRelativeTime(createdAt),
-        lastUsedAt: lastUsedAt === null ? "never" : humanizeRelativeTime(lastUsedAt),
-      })),
-    );
+    logger.out(patInfos, {
+      display: {
+        scopes: (value) => (value as string[]).join("/"),
+        lastUsedAt: (value) => (value === null ? "never" : humanizeRelativeTime(value as Date)),
+      },
+    });
   },
 });

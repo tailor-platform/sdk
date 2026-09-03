@@ -4,7 +4,6 @@ import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
-import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
 
@@ -66,7 +65,7 @@ describe("user pat list", () => {
     });
   });
 
-  test("reports usage timestamps, and a never-used token as never", async () => {
+  test("renders scopes, usage timestamps, and a never-used token as never", async () => {
     const createdAt = new Date("2026-01-02T03:04:05Z");
     const lastUsedAt = new Date("2026-03-04T05:06:07Z");
     vi.mocked(readPlatformConfig).mockResolvedValue(baseConfig);
@@ -75,7 +74,7 @@ describe("user pat list", () => {
         personalAccessTokens: [
           {
             name: "used",
-            scopes: [PATScope.PAT_SCOPE_READ],
+            scopes: [PATScope.PAT_SCOPE_READ, PATScope.PAT_SCOPE_WRITE],
             createdAt: timestampFromDate(createdAt),
             lastUsedAt: timestampFromDate(lastUsedAt),
           },
@@ -88,14 +87,29 @@ describe("user pat list", () => {
         nextPageToken: "",
       }),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-    using outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    const chunks: string[] = [];
+    using _stdout = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      chunks.push(String(chunk));
+      return true;
+    });
 
     const result = await runCommand(listCommand, []);
 
     expect(result.success).toBe(true);
-    expect(outSpy).toHaveBeenCalledWith([
-      expect.objectContaining({ name: "used", lastUsedAt: expect.stringContaining("ago") }),
-      expect.objectContaining({ name: "unused", lastUsedAt: "never" }),
+    const rows = chunks
+      .join("")
+      .split("\n")
+      .filter((line) => line.startsWith("\u2502"))
+      .map((line) =>
+        line
+          .split("\u2502")
+          .slice(1, -1)
+          .map((cell) => cell.trim()),
+      );
+    expect(rows).toEqual([
+      ["name", "scopes", "createdAt", "lastUsedAt"],
+      ["used", "read/write", expect.stringContaining("ago"), expect.stringContaining("ago")],
+      ["unused", "read", expect.stringContaining("ago"), "never"],
     ]);
   });
 
@@ -115,13 +129,18 @@ describe("user pat list", () => {
       }),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
     using _json = jsonMode();
-    using outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const result = await runCommand(listCommand, []);
 
     expect(result.success).toBe(true);
-    expect(outSpy).toHaveBeenCalledWith([
-      expect.objectContaining({ name: "unused", createdAt, lastUsedAt: null }),
+    expect(JSON.parse(logSpy.mock.calls[0]?.[0] as string)).toEqual([
+      {
+        name: "unused",
+        scopes: ["read"],
+        createdAt: createdAt.toISOString(),
+        lastUsedAt: null,
+      },
     ]);
   });
 });
