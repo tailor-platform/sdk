@@ -1300,7 +1300,7 @@ describe("template-generator", () => {
 
     test("writes null for removed values when an emptied enum also becomes optional", async () => {
       const before = { type: "enum" as const, required: true, allowedValues: [{ value: "A" }] };
-      const after = { type: "enum" as const, required: false, allowedValues: [] };
+      const after = { type: "enum" as const, required: false };
       const snapshot = createTestSnapshot({
         Task: { name: "Task", pluralForm: "Tasks", fields: { kind: before } },
       });

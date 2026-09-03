@@ -74,16 +74,12 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         ).add(change.fieldName);
       }
 
-      // Check if this is an enum value change
-      if (
-        before.type === "enum" &&
-        after.type === "enum" &&
-        before.allowedValues &&
-        after.allowedValues
-      ) {
+      // Check if this is an enum value change. Snapshots omit allowedValues
+      // when an enum has no values left, so a missing list is an empty one.
+      if (before.type === "enum" && after.type === "enum") {
         // Check if there are any differences in allowed values
-        const beforeValues = before.allowedValues.map((v) => v.value);
-        const afterValues = after.allowedValues.map((v) => v.value);
+        const beforeValues = (before.allowedValues ?? []).map((v) => v.value);
+        const afterValues = (after.allowedValues ?? []).map((v) => v.value);
         const beforeSet = new Set(beforeValues);
         const afterSet = new Set(afterValues);
         const hasChanges =
@@ -374,7 +370,6 @@ function mapToTsType(fieldType: string): {
 }
 
 function formatEnumUnion(values: string[]): string {
-  if (values.length === 0) return "never";
   return values.map((v) => `"${v}"`).join(" | ");
 }
 

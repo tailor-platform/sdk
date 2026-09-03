@@ -217,24 +217,25 @@ export function applyPreMigrationFieldAdjustments(
       field.unique = false;
     }
 
-    if (before.allowedValues && after.allowedValues) {
-      const afterValues = new Set(after.allowedValues.map((v) => v.value));
-      const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
-      if (removedValues.length > 0) {
-        const valueMap = new Map<string, string>();
-        for (const v of before.allowedValues) {
+    // Snapshots omit allowedValues when an enum has no values left.
+    const beforeAllowed = before.allowedValues ?? [];
+    const afterAllowed = after.allowedValues ?? [];
+    const afterValues = new Set(afterAllowed.map((v) => v.value));
+    const removedValues = beforeAllowed.filter((v) => !afterValues.has(v.value));
+    if (removedValues.length > 0) {
+      const valueMap = new Map<string, string>();
+      for (const v of beforeAllowed) {
+        valueMap.set(v.value, v.description ?? "");
+      }
+      for (const v of afterAllowed) {
+        if (!valueMap.has(v.value)) {
           valueMap.set(v.value, v.description ?? "");
         }
-        for (const v of after.allowedValues) {
-          if (!valueMap.has(v.value)) {
-            valueMap.set(v.value, v.description ?? "");
-          }
-        }
-        field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
-          value,
-          description,
-        }));
       }
+      field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
+        value,
+        description,
+      }));
     }
   }
 }

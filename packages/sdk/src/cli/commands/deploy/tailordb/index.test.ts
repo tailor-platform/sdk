@@ -1387,6 +1387,28 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.age!.unique).toBe(false);
   });
 
+  test("keeps the previous enum values when the target drops every value", () => {
+    const fields: Record<string, ProtoField> = {
+      kind: { type: "enum", required: false, allowedValues: [] },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "kind",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "kind",
+          before: { type: "enum", required: true, allowedValues: [{ value: "A" }] },
+          after: { type: "enum", required: false },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.kind!.allowedValues).toEqual([{ value: "A", description: "" }]);
+  });
+
   test("keeps previous field and type hooks before manifest scripts are aggregated", () => {
     const previousAge: SnapshotFieldConfig = {
       type: "integer",

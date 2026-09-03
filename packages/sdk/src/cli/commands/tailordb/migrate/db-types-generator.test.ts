@@ -785,7 +785,7 @@ describe("db-types-generator", () => {
       expect(content).toContain("[]");
     });
 
-    test("writes never to the write slots when every enum value is removed", async () => {
+    test("renders the write slots for an enum whose every value is removed", async () => {
       const fields: Record<string, SnapshotFieldConfig> = {
         requiredStatus: { type: "enum", required: true, allowedValues: [{ value: "A" }] },
         optionalStatus: { type: "enum", required: false, allowedValues: [{ value: "A" }] },
@@ -804,13 +804,15 @@ describe("db-types-generator", () => {
       };
       const snapshot = createMockSnapshot({ User: { fields } });
       const diff = createMockMigrationDiff({
-        changes: Object.entries(fields).map(([fieldName, config]) => ({
-          kind: "field_modified" as const,
-          tableName: "User",
-          fieldName,
-          before: config,
-          after: { ...config, allowedValues: [] },
-        })),
+        changes: Object.entries(fields).map(
+          ([fieldName, { allowedValues: _removed, ...emptied }]) => ({
+            kind: "field_modified" as const,
+            tableName: "User",
+            fieldName,
+            before: fields[fieldName]!,
+            after: emptied,
+          }),
+        ),
         hasBreakingChanges: true,
         requiresMigrationScript: true,
       });
@@ -890,8 +892,8 @@ describe("db-types-generator", () => {
       const after: Record<string, SnapshotFieldConfig> = {
         kind: { type: "enum", required: false, allowedValues: [{ value: "B" }] },
         tags: { type: "enum", required: false, array: true, allowedValues: [{ value: "B" }] },
-        legacyKind: { type: "enum", required: false, allowedValues: [] },
-        legacyTags: { type: "enum", required: false, array: true, allowedValues: [] },
+        legacyKind: { type: "enum", required: false },
+        legacyTags: { type: "enum", required: false, array: true },
       };
       const snapshot = createMockSnapshot({ User: { fields: before } });
       const diff = createMockMigrationDiff({
