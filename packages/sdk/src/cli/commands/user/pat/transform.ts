@@ -1,4 +1,5 @@
 import { PATScope } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { formatTimestamp } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { PersonalAccessToken } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -6,6 +7,9 @@ import type { PersonalAccessToken } from "@tailor-platform/tailor-proto/auth_res
 export interface PersonalAccessTokenInfo {
   name: string;
   scopes: string[];
+  createdAt: Date | null;
+  /** `null` until the token has been used to authenticate. */
+  lastUsedAt: Date | null;
 }
 
 function patScopeToString(scope: PATScope): string {
@@ -28,6 +32,8 @@ export function transformPersonalAccessToken(pat: PersonalAccessToken): Personal
   return {
     name: pat.name,
     scopes: pat.scopes.map(patScopeToString),
+    createdAt: formatTimestamp(pat.createdAt),
+    lastUsedAt: formatTimestamp(pat.lastUsedAt),
   };
 }
 
