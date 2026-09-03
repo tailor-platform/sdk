@@ -163,7 +163,7 @@ describe("planStaticWebsite", () => {
       conflicts: 0,
     },
     {
-      name: "marks website updated when config matches but ownership metadata is missing",
+      name: "updates unmanaged website",
       website: {
         name: "site-a",
         description: "Marketing site",
@@ -175,7 +175,7 @@ describe("planStaticWebsite", () => {
       conflicts: 0,
     },
     {
-      name: "marks website updated when config matches but resource is owned by another app",
+      name: "updates website owned by another app",
       website: {
         name: "site-a",
         description: "Marketing site",

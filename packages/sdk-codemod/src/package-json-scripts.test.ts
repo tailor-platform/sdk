@@ -10,12 +10,15 @@ describe("transformPackageScripts", () => {
     );
   });
 
-  test.each([undefined, null, "old-command", [], 1])(
-    "returns null for a non-object scripts value: %j",
-    (scripts) => {
-      expect(transformPackageScripts(JSON.stringify({ scripts }), renameOldCommand)).toBe(null);
-    },
-  );
+  test.each([
+    { name: "undefined", scripts: undefined },
+    { name: "null", scripts: null },
+    { name: "string", scripts: "old-command" },
+    { name: "array", scripts: [] },
+    { name: "number", scripts: 1 },
+  ])("returns null for a non-object scripts value: $name", ({ scripts }) => {
+    expect(transformPackageScripts(JSON.stringify({ scripts }), renameOldCommand)).toBe(null);
+  });
 
   test("skips non-string script values", () => {
     const source = JSON.stringify({
