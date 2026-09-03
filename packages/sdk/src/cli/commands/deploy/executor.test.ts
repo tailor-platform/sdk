@@ -508,6 +508,7 @@ describe("planExecutor", () => {
       if (eventConfig?.case !== "event") {
         throw new Error("expected event trigger config");
       }
+      // oxlint-disable-next-line typescript/no-deprecated -- Verify planning against a legacy remote response.
       eventConfig.value.eventType = "";
 
       const client = createMockClient([

@@ -1,8 +1,7 @@
 /**
- * Script execution service for TestExecScript API
+ * Script execution service
  *
- * Provides a reusable utility for executing scripts via the TestExecScript API
- * with polling for completion status.
+ * Provides a reusable utility for executing scripts and polling for completion.
  */
 
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
@@ -114,10 +113,10 @@ export async function waitForExecution(
 }
 
 /**
- * Execute a script via TestExecScript API and wait for completion
+ * Execute a script and wait for completion
  *
  * This function:
- * 1. Calls testExecScript API to start execution
+ * 1. Starts the script execution
  * 2. Polls getFunctionExecution until completion
  * 3. Returns structured result with success/failure status
  * @param {ScriptExecutionOptions} options - Execution options
@@ -129,7 +128,7 @@ export async function executeScript<T extends Jsonifiable = Jsonifiable>(
   const { client, workspaceId, name, code, arg, invoker, pollInterval } = options;
 
   // Execute the script
-  const response = await client.testExecScript({
+  const response = await client.execScript({
     workspaceId,
     name,
     code,

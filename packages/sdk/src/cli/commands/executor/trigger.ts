@@ -38,7 +38,7 @@ const headerArg = z
   .superRefine((val, ctx) => {
     if (!val.includes(":")) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message: `Invalid header format: '${val}'. Expected format: 'Key: Value'`,
       });
     }

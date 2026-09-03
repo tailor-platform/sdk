@@ -118,7 +118,7 @@ async function startWorkflowCore(
           ? options.arg
           : JSON.stringify(options.arg);
 
-    const { executionId } = await client.testStartWorkflow({
+    const { executionId } = await client.startWorkflow({
       workspaceId,
       workflowId: workflow.id,
       authInvoker: invoker,

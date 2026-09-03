@@ -16,7 +16,7 @@ function createGraphQLClient(): GraphQLClient {
 describe("resolver", () => {
   const graphQLClient = createGraphQLClient();
 
-  describe.sequential("incrementAge", () => {
+  describe("incrementAge", { concurrent: false }, () => {
     const uuid = randomUUID();
     const testEmail = `alice-${uuid}@example.com`;
 

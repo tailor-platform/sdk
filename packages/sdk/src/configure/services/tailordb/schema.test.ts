@@ -257,6 +257,7 @@ describe("TailorDBField RelationConfig option field tests", () => {
     const userField = db.uuid().relation({
       type: "oneToOne",
       toward: {
+        // oxlint-disable-next-line typescript/no-deprecated -- Verify the documented compatibility spelling.
         type: User,
         key: "id",
       },
@@ -523,7 +524,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error hooks() cannot be called after hooks() has already been called
       hooked.hooks({ update: ({ input }) => ({ name: input.name }) });
-    }).toThrowError(".hooks() has already been set");
+    }).toThrow(".hooks() has already been set");
 
     const validated = db
       .table("ValidatedUser", { name: db.string() })
@@ -538,7 +539,7 @@ describe("TailorDBType type error message tests", () => {
       validated.validate(({ newRecord }, issues) => {
         if (!(newRecord.name.length > 1)) issues("name", "too short");
       });
-    }).toThrowError(".validate() has already been set");
+    }).toThrow(".validate() has already been set");
 
     const featured = db.table("FeaturedUser", { name: db.string() }).features({
       aggregation: true,
@@ -549,7 +550,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error features() cannot be called after features() has already been called
       featured.features({ bulkUpsert: true });
-    }).toThrowError(".features() has already been set");
+    }).toThrow(".features() has already been set");
 
     const indexed = db.table("IndexedUser", { name: db.string() }).indexes({
       fields: ["id", "name"],
@@ -569,7 +570,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error indexes() cannot be called after indexes() has already been called
       indexed.indexes({ fields: ["id", "name"] });
-    }).toThrowError(".indexes() has already been set");
+    }).toThrow(".indexes() has already been set");
 
     const permitted = db.table("PermittedUser", { name: db.string() }).permission({
       create: [],
@@ -589,7 +590,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error permission() cannot be called after permission() has already been called
       permitted.permission(duplicatePermission);
-    }).toThrowError(".permission() has already been set");
+    }).toThrow(".permission() has already been set");
 
     const gqlPermitted = db.table("GqlPermittedUser", { name: db.string() }).gqlPermission([]);
     expectTypeOf<Parameters<typeof gqlPermitted.gqlPermission>[0]>().toEqualTypeOf<
@@ -598,7 +599,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error gqlPermission() cannot be called after gqlPermission() has already been called
       gqlPermitted.gqlPermission([]);
-    }).toThrowError(".gqlPermission() has already been set");
+    }).toThrow(".gqlPermission() has already been set");
 
     const withFiles = db.table("UserWithFiles", { name: db.string() }).files({
       avatar: "profile image",
@@ -609,7 +610,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error files() cannot be called after files() has already been called
       withFiles.files({ document: "user document" });
-    }).toThrowError(".files() has already been set");
+    }).toThrow(".files() has already been set");
 
     const described = db.table("DescribedUser", { name: db.string() }).description("first");
     expectTypeOf<Parameters<typeof described.description>[0]>().toEqualTypeOf<
@@ -618,7 +619,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error description() cannot be called after description() has already been called
       described.description("second");
-    }).toThrowError(".description() has already been set");
+    }).toThrow(".description() has already been set");
 
     const describedInTypeCall = db.table("DescribedInTypeCallUser", "first", {
       name: db.string(),
@@ -629,7 +630,7 @@ describe("TailorDBType type error message tests", () => {
     expect(() => {
       // @ts-expect-error description() cannot be called after the type description has already been set
       describedInTypeCall.description("second");
-    }).toThrowError(".description() has already been set");
+    }).toThrow(".description() has already been set");
 
     const describedAfterHooks = db
       .table("DescribedAfterHooksUser", { name: db.string() })
@@ -660,14 +661,14 @@ describe("TailorDBType type error message tests", () => {
     alias.files({ avatar: "profile image" });
     expect(() => {
       alias.files({ document: "user document" });
-    }).toThrowError(".files() has already been set");
+    }).toThrow(".files() has already been set");
 
     const erased: TailorDBType = db
       .table("RuntimeErasedFilesUser", { name: db.string() })
       .files({ avatar: "profile image" });
     expect(() => {
       erased.files({ document: "user document" });
-    }).toThrowError(".files() has already been set");
+    }).toThrow(".files() has already been set");
   });
 
   test("failed duplicate-guarded calls can be retried", () => {
@@ -676,7 +677,7 @@ describe("TailorDBType type error message tests", () => {
     retryable.hooks({ create: ({ input }) => ({ name: input.name }) });
     expect(() => {
       retryable.hooks({ update: ({ input }) => ({ name: input.name ?? "" }) });
-    }).toThrowError(".hooks() has already been set");
+    }).toThrow(".hooks() has already been set");
   });
 });
 
@@ -1158,7 +1159,7 @@ describe("TailorDBType plural form tests", () => {
   });
 
   test("error when plural form is same as name (when explicitly specified in tuple format)", () => {
-    expect(() => db.table(["Data", "Data"], {})).toThrowError(
+    expect(() => db.table(["Data", "Data"], {})).toThrow(
       "The name and the plural form must be different. name=Data",
     );
   });
@@ -2322,8 +2323,8 @@ describe("TailorDBField clone tests", () => {
     const arrayClone = array.clone.bind(array) as (options?: FieldOptions) => unknown;
     const expectedError = "Cannot change the array option on a field with custom validation";
 
-    expect(() => scalarClone({ array: true })).toThrowError(expectedError);
-    expect(() => arrayClone({ array: false })).toThrowError(expectedError);
+    expect(() => scalarClone({ array: true })).toThrow(expectedError);
+    expect(() => arrayClone({ array: false })).toThrow(expectedError);
   });
 
   test("clones serial config correctly", () => {

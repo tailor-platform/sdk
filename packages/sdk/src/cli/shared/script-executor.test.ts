@@ -12,7 +12,7 @@ import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb
 // Mock client factory
 function createMockClient(overrides: Partial<OperatorClient> = {}): OperatorClient {
   return {
-    testExecScript: vi.fn(),
+    execScript: vi.fn(),
     getFunctionExecution: vi.fn(),
     ...overrides,
   } as unknown as OperatorClient;
@@ -177,10 +177,10 @@ describe("executeScript", () => {
 
   function createExecScriptMockClient(
     execResult: { execution: { status: FunctionExecution_Status; logs: string; result: string } },
-    testExecScriptResponse: { executionId: string; result?: string } = { executionId: "exec-123" },
+    execScriptResponse: { executionId: string; result?: string } = { executionId: "exec-123" },
   ) {
     return createMockClient({
-      testExecScript: vi.fn().mockResolvedValue(testExecScriptResponse),
+      execScript: vi.fn().mockResolvedValue(execScriptResponse),
       getFunctionExecution: vi.fn().mockResolvedValue(execResult),
     });
   }
@@ -208,7 +208,7 @@ describe("executeScript", () => {
     expect(result.result).toBe('{"data":"test"}');
     expect(result.error).toBeUndefined();
 
-    expect(client.testExecScript).toHaveBeenCalledWith({
+    expect(client.execScript).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       name: "test-script.js",
       code: "export function main() { return { success: true }; }",
@@ -228,12 +228,12 @@ describe("executeScript", () => {
       invoker: mockAuthInvoker,
     });
 
-    expect(client.testExecScript).toHaveBeenCalledWith(expect.objectContaining({ arg: "{}" }));
+    expect(client.execScript).toHaveBeenCalledWith(expect.objectContaining({ arg: "{}" }));
   });
 
   test("accepts options typed as the bare ScriptExecutionOptions", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
+      execScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
       getFunctionExecution: vi.fn().mockResolvedValue({
         execution: { status: FunctionExecution_Status.SUCCESS, logs: "", result: "" },
       }),
@@ -314,7 +314,7 @@ describe("executeScript", () => {
       .mockResolvedValueOnce(execution(FunctionExecution_Status.SUCCESS, "", ""));
 
     const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
+      execScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
       getFunctionExecution,
     });
 
@@ -380,9 +380,9 @@ describe("executeScript", () => {
     expect(result.error).toBe("execution failed");
   });
 
-  test("propagates testExecScript errors", async () => {
+  test("propagates execScript errors", async () => {
     const client = createMockClient({
-      testExecScript: vi.fn().mockRejectedValue(new Error("API error")),
+      execScript: vi.fn().mockRejectedValue(new Error("API error")),
     });
 
     await expect(

@@ -1,7 +1,7 @@
 /**
  * Migration script bundler for TailorDB migrations
  *
- * Bundles migration scripts to be executed via TestExecScript API
+ * Bundles migration scripts for server-side execution
  */
 
 import * as fs from "node:fs";

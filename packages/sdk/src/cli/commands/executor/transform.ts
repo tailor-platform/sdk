@@ -170,16 +170,25 @@ function formatTriggerType(executor: ExecutorExecutor): string {
       if (typedTrigger) {
         return typedTrigger;
       }
-      if (!config.value.eventType) {
+      const legacyConfig = readLegacyEventTriggerConfig(config.value);
+      if (!legacyConfig.eventType) {
         return executorTriggerTypeToString(executor.triggerType);
       }
-      return formatEventTrigger(config.value.eventType, config.value.condition?.expr);
+      return formatEventTrigger(legacyConfig.eventType, legacyConfig.condition);
     }
     case "incomingWebhook":
       return "webhook";
     default:
       return executorTriggerTypeToString(executor.triggerType);
   }
+}
+
+function readLegacyEventTriggerConfig(config: ExecutorTriggerEventConfig): {
+  eventType: string;
+  condition?: string;
+} {
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing resources can still contain the legacy event fields.
+  return { eventType: config.eventType, condition: config.condition?.expr };
 }
 
 /**
@@ -246,9 +255,10 @@ function formatTriggerConfig(executor: ExecutorExecutor): Record<string, unknown
 function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<string, unknown> {
   const typedConfig = config.typedConfig;
   if (typedConfig.case === undefined) {
+    const legacyConfig = readLegacyEventTriggerConfig(config);
     return {
-      eventType: config.eventType,
-      condition: config.condition?.expr || "",
+      eventType: legacyConfig.eventType,
+      condition: legacyConfig.condition || "",
     };
   }
 

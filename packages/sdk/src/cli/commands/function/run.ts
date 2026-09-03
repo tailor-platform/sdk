@@ -211,7 +211,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
       logger.info(`Bundled as ${styles.bold(scriptName)}`);
     }
 
-    // 5. Execute via TestExecScript
+    // 5. Execute the bundled script
     const invoker = create(AuthInvokerSchema, {
       namespace: authNamespace,
       machineUserName: machineUser.name,

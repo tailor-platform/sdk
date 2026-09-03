@@ -137,6 +137,7 @@ const resolve: PlatformWorkflowAPI["resolve"] = (...args) => api().resolve(...ar
 export const workflow = {
   startWorkflow,
   resumeWorkflowExecution,
+  // oxlint-disable-next-line typescript/no-deprecated -- Keep the deprecated runtime export wired for backward compatibility.
   execJobFunction,
   wait,
   resolve,

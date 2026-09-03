@@ -38,7 +38,7 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
 }
 
 /**
- * Generates the server-side IDP seed script code for testExecScript execution.
+ * Generates the server-side IDP seed script code.
  * Uses the global tailor.idp.Client - no bundling required.
  * @param idpNamespace - The IDP namespace name
  * @returns Script code string
@@ -148,7 +148,7 @@ export function generateIdpListUsersScriptCode(idpNamespace: string): string {
 }
 
 /**
- * Generates the server-side IDP truncation script code for testExecScript execution.
+ * Generates the server-side IDP truncation script code.
  * Deletes the users passed in `input.users` (one chunk of the listing produced by
  * {@link generateIdpListUsersScriptCode}), or every user when no chunk is passed so
  * older seed plugins that call it without input keep working. A user that is already

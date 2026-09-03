@@ -58,7 +58,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "executor/list.ts",
   "executor/webhook.ts",
   // Function (read-only / local execution). `function/run.ts` is exempt
-  // because it runs under a machine user via `testExecScript` whose own
+  // because it runs under a machine user via `execScript` whose own
   // permissions gate any application-data effects.
   "function/index.ts",
   "function/bundle.ts",
