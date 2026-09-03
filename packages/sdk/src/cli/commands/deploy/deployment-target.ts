@@ -13,6 +13,16 @@ import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector"
 
 type LoadedDeployConfig = Awaited<ReturnType<typeof loadConfig>>;
 
+type LoadDeployConfigParams = {
+  configPath: string | undefined;
+  dryRun: boolean;
+  buildOnly: boolean;
+};
+
+type LoadDeployConfigsParams = Omit<LoadDeployConfigParams, "configPath"> & {
+  configPaths: ReadonlyArray<string | undefined>;
+};
+
 type BuildDeploymentTargetParams = {
   configPath: string | undefined;
   loadedConfig?: LoadedDeployConfig;
@@ -61,7 +71,7 @@ async function buildDeploymentTarget(
 ): Promise<BuiltDeploymentTarget> {
   const { configPath, loadedConfig, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
   const { config, plugins } =
-    loadedConfig ?? (await loadDeployConfig({ configPath, dryRun, buildOnly }));
+    loadedConfig ?? (await loadPreparedDeployConfig({ configPath, dryRun, buildOnly }));
 
   const configDir = path.dirname(config.path);
   const lockfilePath =
@@ -114,20 +124,36 @@ async function buildDeploymentTarget(
   };
 }
 
-export async function loadDeployConfig(params: {
-  configPath: string | undefined;
-  dryRun: boolean;
-  buildOnly: boolean;
-}): Promise<LoadedDeployConfig> {
-  const { configPath, dryRun, buildOnly } = params;
+function resolveExistingConfigPath(configPath: string | undefined): string | undefined {
+  const foundPath = loadConfigPath(configPath);
+  if (!foundPath) return undefined;
+
+  const resolvedPath = path.resolve(process.cwd(), foundPath);
+  return fs.existsSync(resolvedPath) ? resolvedPath : undefined;
+}
+
+async function prepareDeployConfigs(params: LoadDeployConfigsParams): Promise<void> {
+  const { configPaths, dryRun, buildOnly } = params;
+  const resolvedPaths = new Set(
+    configPaths
+      .map(resolveExistingConfigPath)
+      .filter((configPath): configPath is string => configPath !== undefined),
+  );
+
+  await Promise.all(
+    [...resolvedPaths].map((configPath) =>
+      withSpan("build.prepareConfig", () =>
+        ensureConfigIdForDeploy({ configPath, dryRun, buildOnly }),
+      ),
+    ),
+  );
+}
+
+async function loadPreparedDeployConfig(
+  params: LoadDeployConfigParams,
+): Promise<LoadedDeployConfig> {
   return withSpan("build.loadConfig", async () => {
-    const foundPath = loadConfigPath(configPath);
-    if (foundPath) {
-      const resolvedPath = path.resolve(process.cwd(), foundPath);
-      if (fs.existsSync(resolvedPath)) {
-        await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
-      }
-    }
+    const { configPath, buildOnly } = params;
     const loaded = await loadConfig(configPath);
     // build-only never reaches the platform, so ownership does not apply.
     if (!buildOnly) warnMissingAppId(loaded.config.id);
@@ -135,22 +161,46 @@ export async function loadDeployConfig(params: {
   });
 }
 
+export async function loadDeployConfigs(
+  params: LoadDeployConfigsParams,
+): Promise<LoadedDeployConfig[]> {
+  await prepareDeployConfigs(params);
+  return Promise.all(
+    params.configPaths.map((configPath) => loadPreparedDeployConfig({ ...params, configPath })),
+  );
+}
+
 export async function buildDeploymentTargets(
   params: BuildDeploymentTargetsParams,
 ): Promise<BuiltDeploymentTarget[]> {
   const {
     configPaths,
-    loadedConfigs,
-    buildTarget = buildDeploymentTarget,
+    loadedConfigs: providedLoadedConfigs,
+    buildTarget,
     ...targetParams
   } = params;
+  if (
+    providedLoadedConfigs !== undefined &&
+    (providedLoadedConfigs.length !== configPaths.length ||
+      configPaths.some((_, index) => providedLoadedConfigs[index] === undefined))
+  ) {
+    throw new Error("loadedConfigs must contain exactly one entry for every configPath");
+  }
+  if (buildTarget === undefined && providedLoadedConfigs === undefined) {
+    await prepareDeployConfigs({
+      configPaths,
+      dryRun: params.dryRun,
+      buildOnly: params.buildOnly,
+    });
+  }
+  const build = buildTarget ?? buildDeploymentTarget;
 
   return Promise.all(
     configPaths.map((configPath, index) =>
-      buildTarget({
+      build({
         ...targetParams,
         configPath,
-        loadedConfig: loadedConfigs?.[index],
+        loadedConfig: providedLoadedConfigs?.[index],
       }),
     ),
   );
