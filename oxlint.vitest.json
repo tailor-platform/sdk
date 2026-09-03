@@ -38,6 +38,7 @@
     "vitest/no-disabled-tests": "error",
     "vitest/no-focused-tests": "error",
     "vitest/no-standalone-expect": "error",
+    "vitest/prefer-called-with": "error",
     "vitest/prefer-snapshot-hint": "error",
     "vitest/require-awaited-expect-poll": "error",
     "vitest/require-local-test-context-for-concurrent-snapshots": "error",

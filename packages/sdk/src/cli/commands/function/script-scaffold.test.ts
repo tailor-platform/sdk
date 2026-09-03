@@ -384,8 +384,11 @@ describe("verifyScriptSchemaSnapshot", () => {
     await expect(
       verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } }, remoteDerived)),
     ).resolves.toBeUndefined();
-    expect(loadTailorDBNamespaces).toHaveBeenCalled();
-    expect(fetchRemoteSchemaSnapshot).toHaveBeenCalled();
+    expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
+      configPath: "tailor.config.ts",
+      namespaces: ["tailordb"],
+    });
+    expect(fetchRemoteSchemaSnapshot).toHaveBeenCalledWith(client, "ws-1", "tailordb");
   });
 
   test("rejects when the local table definitions drifted", async () => {
