@@ -51,18 +51,9 @@ export function kyselyTypePlugin(
 
         if (typeMetadataList.length === 0) continue;
 
-        const usedUtilityTypes = typeMetadataList.reduce(
-          (acc, type) => ({
-            Timestamp: acc.Timestamp || type.usedUtilityTypes.Timestamp,
-            Serial: acc.Serial || type.usedUtilityTypes.Serial,
-          }),
-          { Timestamp: false, Serial: false },
-        );
-
         allNamespaceData.push({
           namespace: ns.namespace,
           types: typeMetadataList,
-          usedUtilityTypes,
         });
       }
 

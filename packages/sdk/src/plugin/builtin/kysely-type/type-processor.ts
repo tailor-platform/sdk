@@ -4,15 +4,27 @@ import {
   type KyselyFieldConfig,
   type KyselyNamespaceMetadata,
   type KyselyTypeMetadata,
+  type UsedUtilityTypes,
 } from "./types";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
-
-type UsedUtilityTypes = { Timestamp: boolean; Serial: boolean };
 
 type FieldTypeResult = {
   type: string;
   usedUtilityTypes: UsedUtilityTypes;
 };
+
+function emptyUsedUtilityTypes(): UsedUtilityTypes {
+  return { Timestamp: false, Serial: false, ObjectColumnType: false, ArrayColumnType: false };
+}
+
+function mergeUsedUtilityTypes(a: UsedUtilityTypes, b: UsedUtilityTypes): UsedUtilityTypes {
+  return {
+    Timestamp: a.Timestamp || b.Timestamp,
+    Serial: a.Serial || b.Serial,
+    ObjectColumnType: a.ObjectColumnType || b.ObjectColumnType,
+    ArrayColumnType: a.ArrayColumnType || b.ArrayColumnType,
+  };
+}
 
 /**
  * Get the enum type definition.
@@ -43,7 +55,7 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   if (!fields || typeof fields !== "object") {
     return {
       type: "string",
-      usedUtilityTypes: { Timestamp: false, Serial: false },
+      usedUtilityTypes: emptyUsedUtilityTypes(),
     };
   }
 
@@ -57,11 +69,8 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   });
 
   const aggregatedUtilityTypes = fieldResults.reduce(
-    (acc, result) => ({
-      Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
-      Serial: acc.Serial || result.usedUtilityTypes.Serial,
-    }),
-    { Timestamp: false, Serial: false },
+    (acc, result) => mergeUsedUtilityTypes(acc, result.usedUtilityTypes),
+    emptyUsedUtilityTypes(),
   );
 
   const fieldTypes = fieldResults.map((r) => r.fieldType);
@@ -73,7 +82,10 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
       config.hooks?.create || config.default !== undefined || config.optionalOnCreate === true,
   );
   if (aggregatedUtilityTypes.Timestamp || hasOptionalFields || hasGeneratedFields) {
-    return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
+    return {
+      type: `ObjectColumnType<${obj}>`,
+      usedUtilityTypes: { ...aggregatedUtilityTypes, ObjectColumnType: true },
+    };
   }
   return { type: obj, usedUtilityTypes: aggregatedUtilityTypes };
 }
@@ -85,7 +97,7 @@ function getNestedType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
  */
 function getBaseType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   const fieldType = fieldConfig.type;
-  const usedUtilityTypes = { Timestamp: false, Serial: false };
+  const usedUtilityTypes = emptyUsedUtilityTypes();
 
   if (fieldType === "enum") {
     return { type: getEnumType(fieldConfig), usedUtilityTypes };
@@ -121,6 +133,7 @@ function generateFieldType(fieldConfig: KyselyFieldConfig): FieldTypeResult {
   if (isArray) {
     if (isColumnTypeBase || finalType.startsWith("ObjectColumnType<")) {
       finalType = `ArrayColumnType<${baseTypeResult.type}>`;
+      usedUtilityTypes.ArrayColumnType = true;
     } else {
       const needsParens = fieldConfig.type === "enum";
       finalType = needsParens ? `(${baseTypeResult.type})[]` : `${baseTypeResult.type}[]`;
@@ -171,12 +184,8 @@ function generateTableInterface(
   ];
 
   const aggregatedUtilityTypes = fieldResults.reduce(
-    (acc, result) => ({
-      Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
-
-      Serial: acc.Serial || result.usedUtilityTypes.Serial,
-    }),
-    { Timestamp: false, Serial: false },
+    (acc, result) => mergeUsedUtilityTypes(acc, result.usedUtilityTypes),
+    emptyUsedUtilityTypes(),
   );
 
   const typeDef = multiline /* ts */ `
@@ -235,28 +244,21 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   }
 
   // Aggregate used utility types from all namespaces
-  const globalUsedUtilityTypes = namespaceData.reduce(
-    (acc, ns) => ({
-      Timestamp: acc.Timestamp || ns.usedUtilityTypes.Timestamp,
-      Serial: acc.Serial || ns.usedUtilityTypes.Serial,
-    }),
-    { Timestamp: false, Serial: false },
-  );
+  const globalUsedUtilityTypes = namespaceData
+    .flatMap((ns) => ns.types)
+    .reduce(
+      (acc, type) => mergeUsedUtilityTypes(acc, type.usedUtilityTypes),
+      emptyUsedUtilityTypes(),
+    );
 
   const utilityTypeImports: string[] = ["type Generated"];
   if (globalUsedUtilityTypes.Timestamp) {
     utilityTypeImports.push("type Timestamp");
   }
-  const hasObjectColumnType = namespaceData.some((ns) =>
-    ns.types.some((t) => t.typeDef.includes("ObjectColumnType<")),
-  );
-  if (hasObjectColumnType) {
+  if (globalUsedUtilityTypes.ObjectColumnType) {
     utilityTypeImports.push("type ObjectColumnType");
   }
-  const hasArrayColumnType = namespaceData.some((ns) =>
-    ns.types.some((t) => t.typeDef.includes("ArrayColumnType<")),
-  );
-  if (hasArrayColumnType) {
+  if (globalUsedUtilityTypes.ArrayColumnType) {
     utilityTypeImports.push("type ArrayColumnType");
   }
   if (globalUsedUtilityTypes.Serial) {

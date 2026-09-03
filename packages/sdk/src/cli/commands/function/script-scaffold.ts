@@ -61,16 +61,7 @@ export function generateScriptDbTypes(snapshot: SchemaSnapshot): string {
   const types = Object.values(snapshot.tables).map((table) =>
     processKyselyFields(table.name, table.fields),
   );
-  const usedUtilityTypes = types.reduce(
-    (acc, type) => ({
-      Timestamp: acc.Timestamp || type.usedUtilityTypes.Timestamp,
-      Serial: acc.Serial || type.usedUtilityTypes.Serial,
-    }),
-    { Timestamp: false, Serial: false },
-  );
-  const body = generateUnifiedKyselyTypes([
-    { namespace: snapshot.namespace, types, usedUtilityTypes },
-  ]);
+  const body = generateUnifiedKyselyTypes([{ namespace: snapshot.namespace, types }]);
   return `${GENERATED_DB_TYPES_HEADER}\n\n${body}`;
 }
 

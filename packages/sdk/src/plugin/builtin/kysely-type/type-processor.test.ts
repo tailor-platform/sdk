@@ -324,20 +324,32 @@ describe("Kysely TypeProcessor", () => {
       {
         name: "basic types only",
         type: db.table("User", { name: db.string(), age: db.int() }),
-        timestamp: false,
-        serial: false,
+        expected: {
+          Timestamp: false,
+          Serial: false,
+          ObjectColumnType: false,
+          ArrayColumnType: false,
+        },
       },
       {
         name: "Timestamp",
         type: db.table("User", { name: db.string(), ...db.fields.timestamps() }),
-        timestamp: true,
-        serial: false,
+        expected: {
+          Timestamp: true,
+          Serial: false,
+          ObjectColumnType: false,
+          ArrayColumnType: false,
+        },
       },
       {
         name: "Serial",
         type: db.table("Invoice", { invoiceNumber: db.string().serial({ start: 1000 }) }),
-        timestamp: false,
-        serial: true,
+        expected: {
+          Timestamp: false,
+          Serial: true,
+          ObjectColumnType: false,
+          ArrayColumnType: false,
+        },
       },
       {
         name: "both",
@@ -345,14 +357,61 @@ describe("Kysely TypeProcessor", () => {
           orderNumber: db.string().serial({ start: 1000 }),
           ...db.fields.timestamps(),
         }),
-        timestamp: true,
-        serial: true,
+        expected: {
+          Timestamp: true,
+          Serial: true,
+          ObjectColumnType: false,
+          ArrayColumnType: false,
+        },
       },
-    ])("should correctly track used utility types - $name", async ({ type, timestamp, serial }) => {
+      {
+        name: "ObjectColumnType",
+        type: db.table("User", {
+          profile: db.object({ nickname: db.string({ optional: true }) }),
+        }),
+        expected: {
+          Timestamp: false,
+          Serial: false,
+          ObjectColumnType: true,
+          ArrayColumnType: false,
+        },
+      },
+      {
+        name: "ArrayColumnType",
+        type: db.table("Event", { eventDates: db.datetime({ array: true }) }),
+        expected: {
+          Timestamp: true,
+          Serial: false,
+          ObjectColumnType: false,
+          ArrayColumnType: true,
+        },
+      },
+      {
+        name: "ArrayColumnType wrapping ObjectColumnType",
+        type: db.table("Profile", {
+          metadata: db.object({ created: db.datetime() }, { array: true }),
+        }),
+        expected: { Timestamp: true, Serial: false, ObjectColumnType: true, ArrayColumnType: true },
+      },
+      {
+        name: "enum values naming the wrappers",
+        type: db.table("Status", {
+          kind: db.enum([
+            { value: "ObjectColumnType<Timestamp>" },
+            { value: "ArrayColumnType<Timestamp>" },
+          ]),
+        }),
+        expected: {
+          Timestamp: false,
+          Serial: false,
+          ObjectColumnType: false,
+          ArrayColumnType: false,
+        },
+      },
+    ])("should correctly track used utility types - $name", async ({ type, expected }) => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.usedUtilityTypes.Timestamp).toBe(timestamp);
-      expect(result.usedUtilityTypes.Serial).toBe(serial);
+      expect(result.usedUtilityTypes).toEqual(expected);
     });
   });
 });
