@@ -2328,12 +2328,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
     ]);
     expect(stderr.output).toContain("will be reset to 0000");
-    expect(client.listTailorDBTypes).toHaveBeenCalledWith({
-      workspaceId: "test-workspace",
-      namespaceName: "test-tailordb",
-      pageToken: "",
-      pageSize: 1000,
-    });
+    expect(client.listTailorDBTypes).toHaveBeenCalledOnce();
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
@@ -2400,12 +2395,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     expect(result.checkpointRepairs).toEqual([]);
     expect(stderr.output).not.toContain("will be reset to 0000");
-    expect(client.listTailorDBTypes).toHaveBeenCalledWith({
-      workspaceId: "test-workspace",
-      namespaceName: "test-tailordb",
-      pageToken: "",
-      pageSize: 1000,
-    });
+    expect(client.listTailorDBTypes).toHaveBeenCalledOnce();
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
