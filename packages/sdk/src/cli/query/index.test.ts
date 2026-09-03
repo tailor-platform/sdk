@@ -283,10 +283,11 @@ describe("query", () => {
       query: "SELECT 1; SELECT 2",
     });
 
-    expect(executeScript).toHaveBeenCalled();
-    const call = vi.mocked(executeScript).mock.calls[0]![0];
-    const arg = call.arg as unknown as { queries: string[] };
-    expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
+    expect(executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        arg: expect.objectContaining({ queries: ["SELECT 1; ", "SELECT 2"] }),
+      }),
+    );
   });
 
   test("does not split semicolons inside string literals", async () => {

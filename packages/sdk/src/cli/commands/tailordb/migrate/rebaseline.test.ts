@@ -544,7 +544,7 @@ describe("tailordb migration rebaseline", () => {
 
     expect(result.success).toBe(true);
     expect(migrationDirectories()).toEqual(["0000"]);
-    expect(state.setMetadata).toHaveBeenCalled();
+    expect(state.setMetadata).toHaveBeenCalledTimes(1);
   });
 
   test("keeps the activated baseline when the checkpoint update fails", async () => {

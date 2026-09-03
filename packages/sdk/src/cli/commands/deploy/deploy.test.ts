@@ -782,14 +782,14 @@ describe("printPlanResults", () => {
   test("routes dry-run output to stdout via logger.out", () => {
     printPlanResults(emptyResults(), { dryRun: true });
 
-    expect(outSpy).toHaveBeenCalled();
+    expect(outSpy).toHaveBeenCalledOnce();
     expect(logSpy).not.toHaveBeenCalled();
   });
 
   test("routes apply output to stderr via logger.log", () => {
     printPlanResults(emptyResults(), { dryRun: false });
 
-    expect(logSpy).toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledOnce();
     expect(outSpy).not.toHaveBeenCalled();
   });
 
@@ -916,7 +916,7 @@ describe("printPlanResults", () => {
     printPlanResults(emptyResults(), { dryRun: false });
 
     expect(outSpy).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledOnce();
   });
 });
 

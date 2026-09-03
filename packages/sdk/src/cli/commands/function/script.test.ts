@@ -175,9 +175,16 @@ describe("function script", () => {
     );
     expect(snapshot.source).toBe("remote");
     expect(loadTailorDBNamespaces).not.toHaveBeenCalled();
-    expect(loadAccessToken).toHaveBeenCalled();
-    expect(loadWorkspaceId).toHaveBeenCalled();
-    expect(fetchRemoteSchemaSnapshot).toHaveBeenCalled();
+    expect(loadAccessToken).toHaveBeenCalledWith({ profile: undefined });
+    expect(loadWorkspaceId).toHaveBeenCalledWith({
+      workspaceId: undefined,
+      profile: undefined,
+    });
+    expect(fetchRemoteSchemaSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "12345678-1234-4abc-8def-123456789012",
+      "tailordb",
+    );
   });
 
   test("uses script-scoped remote types instead of kyselyTypePlugin with --remote", async () => {
@@ -459,7 +466,10 @@ describe("function script", () => {
       fs.readFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "utf-8"),
     );
     expect(snapshot.source).toBe("local");
-    expect(loadTailorDBNamespaces).toHaveBeenCalled();
+    expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
+      configPath: "tailor.config.ts",
+      namespaces: ["tailordb"],
+    });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
   });
 

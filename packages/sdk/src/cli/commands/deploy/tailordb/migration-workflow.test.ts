@@ -245,7 +245,10 @@ describe("executeMigrationAsWorkflow", () => {
     await expect(run(client)).rejects.toThrow("createWorkflow failed");
 
     expect(raw.deleteWorkflow).not.toHaveBeenCalled();
-    expect(raw.deleteWorkflowJobFunction).toHaveBeenCalled();
+    expect(raw.deleteWorkflowJobFunction).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      jobFunctionName: "tailordb-migration--tailordb--0003",
+    });
   });
 
   test("reclaims an interrupted run's leftovers before recreating them", async () => {

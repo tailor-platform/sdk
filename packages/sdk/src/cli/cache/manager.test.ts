@@ -211,7 +211,9 @@ describe("createCacheManager", () => {
       makeManager({ enabled: true, sdkVersion: "2.0.0" });
 
       expectBundleExists(false);
-      expect(logger.debug).toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Cache invalidated: SDK version changed from 1.0.0 to 2.0.0",
+      );
     });
 
     test("cache is cleaned when lockfileHash differs", async () => {
