@@ -13,6 +13,16 @@ import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector"
 
 type LoadedDeployConfig = Awaited<ReturnType<typeof loadConfig>>;
 
+type LoadDeployConfigParams = {
+  configPath: string | undefined;
+  dryRun: boolean;
+  buildOnly: boolean;
+};
+
+type LoadDeployConfigsParams = Omit<LoadDeployConfigParams, "configPath"> & {
+  configPaths: ReadonlyArray<string | undefined>;
+};
+
 type BuildDeploymentTargetParams = {
   configPath: string | undefined;
   loadedConfig?: LoadedDeployConfig;
@@ -114,25 +124,55 @@ async function buildDeploymentTarget(
   };
 }
 
-export async function loadDeployConfig(params: {
-  configPath: string | undefined;
-  dryRun: boolean;
-  buildOnly: boolean;
-}): Promise<LoadedDeployConfig> {
-  const { configPath, dryRun, buildOnly } = params;
+function resolveExistingConfigPath(configPath: string | undefined): string | undefined {
+  const foundPath = loadConfigPath(configPath);
+  if (!foundPath) return undefined;
+
+  const resolvedPath = path.resolve(process.cwd(), foundPath);
+  return fs.existsSync(resolvedPath) ? resolvedPath : undefined;
+}
+
+async function prepareDeployConfigs(params: LoadDeployConfigsParams): Promise<void> {
+  const { configPaths, dryRun, buildOnly } = params;
+  const resolvedPaths = new Set(
+    configPaths
+      .map(resolveExistingConfigPath)
+      .filter((configPath): configPath is string => configPath !== undefined),
+  );
+
+  await Promise.all(
+    [...resolvedPaths].map((configPath) =>
+      ensureConfigIdForDeploy({ configPath, dryRun, buildOnly }),
+    ),
+  );
+}
+
+async function loadPreparedDeployConfig(
+  params: LoadDeployConfigParams,
+): Promise<LoadedDeployConfig> {
+  const { configPath, buildOnly } = params;
+  const loaded = await loadConfig(configPath);
+  // build-only never reaches the platform, so ownership does not apply.
+  if (!buildOnly) warnMissingAppId(loaded.config.id);
+  return loaded;
+}
+
+async function loadDeployConfig(params: LoadDeployConfigParams): Promise<LoadedDeployConfig> {
   return withSpan("build.loadConfig", async () => {
-    const foundPath = loadConfigPath(configPath);
-    if (foundPath) {
-      const resolvedPath = path.resolve(process.cwd(), foundPath);
-      if (fs.existsSync(resolvedPath)) {
-        await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
-      }
-    }
-    const loaded = await loadConfig(configPath);
-    // build-only never reaches the platform, so ownership does not apply.
-    if (!buildOnly) warnMissingAppId(loaded.config.id);
-    return loaded;
+    await prepareDeployConfigs({ ...params, configPaths: [params.configPath] });
+    return loadPreparedDeployConfig(params);
   });
+}
+
+export async function loadDeployConfigs(
+  params: LoadDeployConfigsParams,
+): Promise<LoadedDeployConfig[]> {
+  await prepareDeployConfigs(params);
+  return Promise.all(
+    params.configPaths.map((configPath) =>
+      withSpan("build.loadConfig", () => loadPreparedDeployConfig({ ...params, configPath })),
+    ),
+  );
 }
 
 export async function buildDeploymentTargets(
