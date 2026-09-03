@@ -283,7 +283,7 @@ describe("query", () => {
       query: "SELECT 1; SELECT 2",
     });
 
-    expect(executeScript).toHaveBeenCalledWith(
+    expect(executeScript).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         arg: expect.objectContaining({ queries: ["SELECT 1; ", "SELECT 2"] }),
       }),

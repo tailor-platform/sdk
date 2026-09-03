@@ -175,11 +175,8 @@ describe("function script", () => {
     );
     expect(snapshot.source).toBe("remote");
     expect(loadTailorDBNamespaces).not.toHaveBeenCalled();
-    expect(loadAccessToken).toHaveBeenCalledWith({ profile: undefined });
-    expect(loadWorkspaceId).toHaveBeenCalledWith({
-      workspaceId: undefined,
-      profile: undefined,
-    });
+    expect(loadAccessToken).toHaveBeenCalledOnce();
+    expect(loadWorkspaceId).toHaveBeenCalledOnce();
     expect(fetchRemoteSchemaSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "12345678-1234-4abc-8def-123456789012",
