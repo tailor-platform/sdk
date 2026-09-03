@@ -142,7 +142,9 @@ async function prepareDeployConfigs(params: LoadDeployConfigsParams): Promise<vo
 
   await Promise.all(
     [...resolvedPaths].map((configPath) =>
-      ensureConfigIdForDeploy({ configPath, dryRun, buildOnly }),
+      withSpan("build.prepareConfig", () =>
+        ensureConfigIdForDeploy({ configPath, dryRun, buildOnly }),
+      ),
     ),
   );
 }
@@ -180,14 +182,24 @@ export async function buildDeploymentTargets(
 ): Promise<BuiltDeploymentTarget[]> {
   const {
     configPaths,
-    loadedConfigs,
-    buildTarget = buildDeploymentTarget,
+    loadedConfigs: providedLoadedConfigs,
+    buildTarget,
     ...targetParams
   } = params;
+  const loadedConfigs =
+    providedLoadedConfigs ??
+    (buildTarget === undefined
+      ? await loadDeployConfigs({
+          configPaths,
+          dryRun: params.dryRun,
+          buildOnly: params.buildOnly,
+        })
+      : undefined);
+  const build = buildTarget ?? buildDeploymentTarget;
 
   return Promise.all(
     configPaths.map((configPath, index) =>
-      buildTarget({
+      build({
         ...targetParams,
         configPath,
         loadedConfig: loadedConfigs?.[index],
