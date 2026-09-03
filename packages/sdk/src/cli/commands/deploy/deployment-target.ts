@@ -71,7 +71,7 @@ async function buildDeploymentTarget(
 ): Promise<BuiltDeploymentTarget> {
   const { configPath, loadedConfig, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
   const { config, plugins } =
-    loadedConfig ?? (await loadDeployConfig({ configPath, dryRun, buildOnly }));
+    loadedConfig ?? (await loadPreparedDeployConfig({ configPath, dryRun, buildOnly }));
 
   const configDir = path.dirname(config.path);
   const lockfilePath =
@@ -152,17 +152,12 @@ async function prepareDeployConfigs(params: LoadDeployConfigsParams): Promise<vo
 async function loadPreparedDeployConfig(
   params: LoadDeployConfigParams,
 ): Promise<LoadedDeployConfig> {
-  const { configPath, buildOnly } = params;
-  const loaded = await loadConfig(configPath);
-  // build-only never reaches the platform, so ownership does not apply.
-  if (!buildOnly) warnMissingAppId(loaded.config.id);
-  return loaded;
-}
-
-async function loadDeployConfig(params: LoadDeployConfigParams): Promise<LoadedDeployConfig> {
   return withSpan("build.loadConfig", async () => {
-    await prepareDeployConfigs({ ...params, configPaths: [params.configPath] });
-    return loadPreparedDeployConfig(params);
+    const { configPath, buildOnly } = params;
+    const loaded = await loadConfig(configPath);
+    // build-only never reaches the platform, so ownership does not apply.
+    if (!buildOnly) warnMissingAppId(loaded.config.id);
+    return loaded;
   });
 }
 
@@ -171,9 +166,7 @@ export async function loadDeployConfigs(
 ): Promise<LoadedDeployConfig[]> {
   await prepareDeployConfigs(params);
   return Promise.all(
-    params.configPaths.map((configPath) =>
-      withSpan("build.loadConfig", () => loadPreparedDeployConfig({ ...params, configPath })),
-    ),
+    params.configPaths.map((configPath) => loadPreparedDeployConfig({ ...params, configPath })),
   );
 }
 
@@ -186,15 +179,16 @@ export async function buildDeploymentTargets(
     buildTarget,
     ...targetParams
   } = params;
-  const loadedConfigs =
-    providedLoadedConfigs ??
-    (buildTarget === undefined
-      ? await loadDeployConfigs({
-          configPaths,
-          dryRun: params.dryRun,
-          buildOnly: params.buildOnly,
-        })
-      : undefined);
+  const needsConfigPreparation =
+    buildTarget === undefined &&
+    configPaths.some((_, index) => providedLoadedConfigs?.[index] === undefined);
+  if (needsConfigPreparation) {
+    await prepareDeployConfigs({
+      configPaths,
+      dryRun: params.dryRun,
+      buildOnly: params.buildOnly,
+    });
+  }
   const build = buildTarget ?? buildDeploymentTarget;
 
   return Promise.all(
@@ -202,7 +196,7 @@ export async function buildDeploymentTargets(
       build({
         ...targetParams,
         configPath,
-        loadedConfig: loadedConfigs?.[index],
+        loadedConfig: providedLoadedConfigs?.[index],
       }),
     ),
   );

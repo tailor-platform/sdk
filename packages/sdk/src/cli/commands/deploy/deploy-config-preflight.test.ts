@@ -73,6 +73,7 @@ describe("multi-config deploy preflight", () => {
 
     const targets = buildDeploymentTargets({
       configPaths: [firstConfigPath, secondConfigPath],
+      loadedConfigs: [],
       dryRun: false,
       buildOnly: false,
       noCache: false,
