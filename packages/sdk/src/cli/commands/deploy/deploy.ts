@@ -672,7 +672,7 @@ async function deployInternal(
 
       const targets = await buildDeploymentTargets({
         configPaths,
-        loadedConfigs: preflightConfigs,
+        loadedConfigs: buildOnly ? undefined : preflightConfigs,
         dryRun,
         buildOnly,
         noCache,
