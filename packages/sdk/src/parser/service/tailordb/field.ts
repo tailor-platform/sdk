@@ -262,6 +262,13 @@ export function parseFieldConfig(
     );
   }
 
+  if (fieldType === "enum" && (metadata.allowedValues ?? []).length === 0) {
+    const location = context
+      ? ` "${context.fieldPath.join(".")}" on table "${context.tableName}"`
+      : "";
+    throw new Error(`Enum field${location} must define at least one allowed value`);
+  }
+
   const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
   return {
     type: fieldType,
