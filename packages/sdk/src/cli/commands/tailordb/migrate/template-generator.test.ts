@@ -29,13 +29,12 @@ function getTypeScriptDiagnostics(
   filePath: string,
 ): readonly { code: number; messageText: string }[] {
   const program = ts.createProgram([filePath], {
-    baseUrl: packageRoot,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     noEmit: true,
     paths: {
-      "@tailor-platform/sdk": ["src/configure/index.ts"],
-      "@tailor-platform/sdk/kysely": ["src/kysely/index.ts"],
+      "@tailor-platform/sdk": [path.join(packageRoot, "src/configure/index.ts")],
+      "@tailor-platform/sdk/kysely": [path.join(packageRoot, "src/kysely/index.ts")],
     },
     skipLibCheck: true,
     strict: true,

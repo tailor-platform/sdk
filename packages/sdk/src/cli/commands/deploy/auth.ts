@@ -903,7 +903,6 @@ function protoUserProfileConfig(
     : undefined;
 
   return {
-    provider: "TAILORDB",
     providerType: UserProfileProviderConfig_UserProfileProviderType.TAILORDB,
     config: {
       config: {

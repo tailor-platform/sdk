@@ -81,7 +81,7 @@ function createGqlEntry(): string {
 }
 
 /**
- * Bundle a query executor script for TestExecScript.
+ * Bundle a query executor script for server-side execution.
  * @param engine - Query engine type
  * @param baseDir - Directory to resolve the bundler's tsconfig against
  * @returns Bundled code

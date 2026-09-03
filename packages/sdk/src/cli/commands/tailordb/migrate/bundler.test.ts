@@ -99,7 +99,7 @@ describe("migration-bundler", () => {
       expect(result.bundledCode).toContain("execute");
     });
 
-    test("exports main function for TestExecScript", async () => {
+    test("exports the server-side entry point", async () => {
       const scriptPath = writeMigration("  // Migration");
       const result = await bundleMigrationScript(scriptPath, "tailordb", 1);
 

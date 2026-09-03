@@ -150,20 +150,20 @@ const fieldArg = z.string().transform((val, ctx): ParsedField => {
   const eq = val.indexOf("=");
   if (eq < 0) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: `Invalid field format: '${val}'. Expected format: 'key=value' or 'a.b.c=value'`,
     });
     return z.NEVER;
   }
   const key = val.slice(0, eq);
   if (key.length === 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Field key cannot be empty" });
+    ctx.addIssue({ code: "custom", message: "Field key cannot be empty" });
     return z.NEVER;
   }
   const segments = key.split(".");
   if (segments.some((seg) => seg.length === 0)) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: `Invalid field key: '${key}'. Dotted segments cannot be empty`,
     });
     return z.NEVER;
@@ -171,7 +171,7 @@ const fieldArg = z.string().transform((val, ctx): ParsedField => {
   const forbidden = segments.find((seg) => FORBIDDEN_SEGMENTS.has(seg));
   if (forbidden) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       message: `Invalid field key: '${key}'. Segment '${forbidden}' is not allowed.`,
     });
     return z.NEVER;

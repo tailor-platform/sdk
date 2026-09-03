@@ -36,7 +36,7 @@ export async function resumeWorkflow(
   });
 
   try {
-    const { executionId } = await client.testResumeWorkflow({
+    const { executionId } = await client.resumeWorkflowExecution({
       workspaceId,
       executionId: options.executionId,
     });

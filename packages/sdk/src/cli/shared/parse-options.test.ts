@@ -15,7 +15,7 @@ describe("parseOptions", () => {
   test("throws a single validation issue message as-is", () => {
     const schema = z.strictObject({ value: z.string().min(1, "value is required") });
 
-    expect(() => parseOptions(schema, { value: "" })).toThrowError(new Error("value is required"));
+    expect(() => parseOptions(schema, { value: "" })).toThrow(new Error("value is required"));
   });
 
   test("throws every validation issue message", () => {
@@ -24,7 +24,7 @@ describe("parseOptions", () => {
       second: z.string().min(1, "second issue"),
     });
 
-    expect(() => parseOptions(schema, { first: "", second: "" })).toThrowError(
+    expect(() => parseOptions(schema, { first: "", second: "" })).toThrow(
       new Error("first issue; second issue"),
     );
   });

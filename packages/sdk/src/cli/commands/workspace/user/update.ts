@@ -12,7 +12,7 @@ import { stringToRole, validRoles } from "./transform";
 const updateUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  email: z.string().email({ message: "email must be a valid email address" }),
+  email: z.email({ message: "email must be a valid email address" }),
   role: z.enum(validRoles, { message: `role must be one of: ${validRoles.join(", ")}` }),
 });
 

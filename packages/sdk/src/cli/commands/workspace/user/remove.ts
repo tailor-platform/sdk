@@ -12,7 +12,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 const removeUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  email: z.string().email({ message: "email must be a valid email address" }),
+  email: z.email({ message: "email must be a valid email address" }),
 });
 
 export type RemoveUserOptions = z.input<typeof removeUserOptionsSchema>;

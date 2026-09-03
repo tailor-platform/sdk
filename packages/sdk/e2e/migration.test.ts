@@ -233,7 +233,7 @@ function tryDeployCli(
   }
 }
 
-describe.sequential("E2E: TailorDB Migrations", () => {
+describe("E2E: TailorDB Migrations", { concurrent: false }, () => {
   let workspaceId: string;
   let client: OperatorClient;
   let tempDir: string;

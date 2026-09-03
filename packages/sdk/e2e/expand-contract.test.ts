@@ -41,7 +41,7 @@ const tailordbName = `expanddb-${testRunId}`;
 const FIRST_ID = "40000000-0000-4000-8000-000000000001";
 const SECOND_ID = "40000000-0000-4000-8000-000000000002";
 
-describe.sequential("E2E: TailorDB expand-contract field type change", () => {
+describe("E2E: TailorDB expand-contract field type change", { concurrent: false }, () => {
   let workspaceId: string;
   let client: OperatorClient;
   let tempDir: string;

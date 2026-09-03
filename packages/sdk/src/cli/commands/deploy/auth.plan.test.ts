@@ -6,6 +6,7 @@ import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
   TenantProviderConfigSchema,
+  UserProfileProviderConfig_UserProfileProviderType,
   UserProfileProviderConfigSchema,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
@@ -343,7 +344,9 @@ describe("planAuth", () => {
     const retainedClient = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       machineUsers: [managerMachineUserRemote],
-      userProfileConfig: { provider: "TAILORDB" },
+      userProfileConfig: {
+        providerType: UserProfileProviderConfig_UserProfileProviderType.TAILORDB,
+      },
     });
     const retainedTarget = await planAuth(createContext(retainedClient, strippedApplication));
 

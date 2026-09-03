@@ -36,7 +36,7 @@ describe("incrementUserAge resolver", () => {
       invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
-    await expect(result).rejects.toThrowError(/no result/i);
+    await expect(result).rejects.toThrow(/no result/i);
     expect(db.executedQueries).toHaveLength(3);
   });
 });
