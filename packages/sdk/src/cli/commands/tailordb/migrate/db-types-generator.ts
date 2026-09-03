@@ -25,6 +25,8 @@ interface EnumValueChange {
   beforeValues: string[];
   /** Allowed values after the change */
   afterValues: string[];
+  /** Whether the field is required after the change */
+  afterRequired: boolean;
 }
 
 /**
@@ -97,6 +99,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           ).set(change.fieldName, {
             beforeValues,
             afterValues,
+            afterRequired: after.required,
           });
         }
       }
@@ -375,24 +378,36 @@ function formatEnumUnion(values: string[]): string {
   return values.map((v) => `"${v}"`).join(" | ");
 }
 
+function formatEnumSlot(values: string[], array: boolean, nullable: boolean): string {
+  if (values.length === 0) {
+    if (!array) return nullable ? "null" : "never";
+    return nullable ? "never[] | null" : "never[]";
+  }
+  const union = formatEnumUnion(values);
+  if (array) return nullable ? `(${union})[] | null` : `(${union})[]`;
+  return nullable ? `(${union}) | null` : union;
+}
+
+/**
+ * Column type for an enum field whose allowed values change.
+ *
+ * Rows still hold the old values (and null, if either side is optional) until
+ * the migration script rewrites them, so the select slot is the union of both
+ * states; the write slots only accept what the post-migration schema does.
+ * @param enumValueChange - Allowed values before and after, and post-migration required-ness
+ * @param config - Field configuration in the pre-migration snapshot
+ * @returns {string} Generated column type
+ */
 function generateEnumChangeColumnType(
   enumValueChange: EnumValueChange,
   config: SnapshotFieldConfig,
 ): string {
+  const array = config.array ?? false;
   const allValues = [...new Set([...enumValueChange.beforeValues, ...enumValueChange.afterValues])];
-  const selectType = formatEnumUnion(allValues);
-  const afterType = formatEnumUnion(enumValueChange.afterValues);
-
-  if (config.array && !config.required) {
-    return `ColumnType<(${selectType})[] | null, (${afterType})[] | null, (${afterType})[] | null>`;
-  }
-  if (config.array) {
-    return `ColumnType<(${selectType})[], (${afterType})[], (${afterType})[]>`;
-  }
-  if (!config.required) {
-    return `ColumnType<(${selectType}) | null, (${afterType}) | null, (${afterType}) | null>`;
-  }
-  return `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
+  const writeNullable = !enumValueChange.afterRequired;
+  const selectType = formatEnumSlot(allValues, array, !config.required || writeNullable);
+  const writeType = formatEnumSlot(enumValueChange.afterValues, array, writeNullable);
+  return `ColumnType<${selectType}, ${writeType}, ${writeType}>`;
 }
 
 /**

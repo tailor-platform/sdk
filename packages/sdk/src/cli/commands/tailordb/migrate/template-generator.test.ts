@@ -1251,6 +1251,76 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("removed enum values");
     });
 
+    test("rejects the null placeholder when an enum value change also makes the field required", async () => {
+      const before = {
+        type: "enum" as const,
+        required: false,
+        allowedValues: [{ value: "DRAFT" }, { value: "ACTIVE" }],
+      };
+      const after = {
+        type: "enum" as const,
+        required: true,
+        allowedValues: [{ value: "ACTIVE" }, { value: "ARCHIVED" }],
+      };
+      const snapshot = createTestSnapshot({
+        Task: { name: "Task", pluralForm: "Tasks", fields: { status: before } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          { kind: "field_modified", tableName: "Task", fieldName: "status", before, after },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { tableName: "Task", fieldName: "status", reason: "Enum values removed: DRAFT" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain("status: null, // TODO: Set appropriate default value");
+      expect(scriptContent).toContain('.set({ status: "ACTIVE" })');
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([
+        expect.objectContaining({
+          code: 2322,
+          messageText: expect.stringContaining("Type 'null' is not assignable to type"),
+        }),
+      ]);
+
+      await fs.writeFile(
+        result.migrateFilePath!,
+        scriptContent.replace(
+          "status: null, // TODO: Set appropriate default value",
+          'status: "ACTIVE",',
+        ),
+      );
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
+    test("writes null for removed values when an emptied enum also becomes optional", async () => {
+      const before = { type: "enum" as const, required: true, allowedValues: [{ value: "A" }] };
+      const after = { type: "enum" as const, required: false, allowedValues: [] };
+      const snapshot = createTestSnapshot({
+        Task: { name: "Task", pluralForm: "Tasks", fields: { kind: before } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [{ kind: "field_modified", tableName: "Task", fieldName: "kind", before, after }],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { tableName: "Task", fieldName: "kind", reason: "Enum values removed: A" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain(".set({ kind: null })");
+      expect(scriptContent).not.toContain("NEW_VALUE");
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
     test("should throw error if diff file already exists", async () => {
       const diff = createMockMigrationDiff();
 

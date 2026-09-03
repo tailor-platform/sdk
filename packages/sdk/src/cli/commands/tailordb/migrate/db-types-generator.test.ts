@@ -818,12 +818,105 @@ describe("db-types-generator", () => {
       const { content } = await generateContent(snapshot, 1, diff);
 
       expect(content).toContain('requiredStatus: ColumnType<"A", never, never>;');
+      expect(content).toContain('optionalStatus: ColumnType<("A") | null, null, null>;');
+      expect(content).toContain('requiredRoles: ColumnType<("A")[], never[], never[]>;');
       expect(content).toContain(
-        'optionalStatus: ColumnType<("A") | null, (never) | null, (never) | null>;',
+        'optionalRoles: ColumnType<("A")[] | null, never[] | null, never[] | null>;',
       );
-      expect(content).toContain('requiredRoles: ColumnType<("A")[], (never)[], (never)[]>;');
+    });
+
+    test("keeps the write slots non-null when an enum value change also makes the field required", async () => {
+      const before: Record<string, SnapshotFieldConfig> = {
+        status: {
+          type: "enum",
+          required: false,
+          allowedValues: [{ value: "DRAFT" }, { value: "ACTIVE" }],
+        },
+        roles: {
+          type: "enum",
+          required: false,
+          array: true,
+          allowedValues: [{ value: "A" }, { value: "B" }],
+        },
+      };
+      const after: Record<string, SnapshotFieldConfig> = {
+        status: {
+          type: "enum",
+          required: true,
+          allowedValues: [{ value: "ACTIVE" }, { value: "ARCHIVED" }],
+        },
+        roles: {
+          type: "enum",
+          required: true,
+          array: true,
+          allowedValues: [{ value: "B" }, { value: "C" }],
+        },
+      };
+      const snapshot = createMockSnapshot({ User: { fields: before } });
+      const diff = createMockMigrationDiff({
+        changes: Object.keys(before).map((fieldName) => ({
+          kind: "field_modified" as const,
+          tableName: "User",
+          fieldName,
+          before: before[fieldName]!,
+          after: after[fieldName]!,
+        })),
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
       expect(content).toContain(
-        'optionalRoles: ColumnType<("A")[] | null, (never)[] | null, (never)[] | null>;',
+        'status: ColumnType<("DRAFT" | "ACTIVE" | "ARCHIVED") | null, "ACTIVE" | "ARCHIVED", "ACTIVE" | "ARCHIVED">;',
+      );
+      expect(content).toContain(
+        'roles: ColumnType<("A" | "B" | "C")[] | null, ("B" | "C")[], ("B" | "C")[]>;',
+      );
+    });
+
+    test("lets the write slots accept null when an enum value change also makes the field optional", async () => {
+      const before: Record<string, SnapshotFieldConfig> = {
+        kind: { type: "enum", required: true, allowedValues: [{ value: "A" }, { value: "B" }] },
+        tags: {
+          type: "enum",
+          required: true,
+          array: true,
+          allowedValues: [{ value: "A" }, { value: "B" }],
+        },
+        legacyKind: { type: "enum", required: true, allowedValues: [{ value: "A" }] },
+        legacyTags: { type: "enum", required: true, array: true, allowedValues: [{ value: "A" }] },
+      };
+      const after: Record<string, SnapshotFieldConfig> = {
+        kind: { type: "enum", required: false, allowedValues: [{ value: "B" }] },
+        tags: { type: "enum", required: false, array: true, allowedValues: [{ value: "B" }] },
+        legacyKind: { type: "enum", required: false, allowedValues: [] },
+        legacyTags: { type: "enum", required: false, array: true, allowedValues: [] },
+      };
+      const snapshot = createMockSnapshot({ User: { fields: before } });
+      const diff = createMockMigrationDiff({
+        changes: Object.keys(before).map((fieldName) => ({
+          kind: "field_modified" as const,
+          tableName: "User",
+          fieldName,
+          before: before[fieldName]!,
+          after: after[fieldName]!,
+        })),
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const { content } = await generateContent(snapshot, 1, diff);
+
+      expect(content).toContain(
+        'kind: ColumnType<("A" | "B") | null, ("B") | null, ("B") | null>;',
+      );
+      expect(content).toContain(
+        'tags: ColumnType<("A" | "B")[] | null, ("B")[] | null, ("B")[] | null>;',
+      );
+      expect(content).toContain('legacyKind: ColumnType<("A") | null, null, null>;');
+      expect(content).toContain(
+        'legacyTags: ColumnType<("A")[] | null, never[] | null, never[] | null>;',
       );
     });
   });
