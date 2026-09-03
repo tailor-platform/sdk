@@ -246,7 +246,9 @@ describe("parseFieldConfig enum allowed values", () => {
 
     expect(() =>
       parseFieldConfig(schema.Task!.fields.status!, { tableName: "Task", fieldPath: ["status"] }),
-    ).toThrow(/^Enum field "status" on table "Task" must define at least one allowed value$/);
+    ).toThrow(
+      /^Field "status" on table "Task": enum fields must define at least one allowed value$/,
+    );
   });
 
   test("throws without a location when no context is given", () => {
@@ -255,7 +257,7 @@ describe("parseFieldConfig enum allowed values", () => {
     const schema = toSchemaOutputs({ Task: type });
 
     expect(() => parseFieldConfig(schema.Task!.fields.status!)).toThrow(
-      /^Enum field must define at least one allowed value$/,
+      /^enum fields must define at least one allowed value$/,
     );
   });
 
@@ -267,7 +269,7 @@ describe("parseFieldConfig enum allowed values", () => {
     const schema = toSchemaOutputs({ Task: type });
 
     expect(() => parseTypes(schema, "default")).toThrow(
-      /^Enum field "detail.kind" on table "Task" must define at least one allowed value$/,
+      /^Field "detail.kind" on table "Task": enum fields must define at least one allowed value$/,
     );
   });
 
