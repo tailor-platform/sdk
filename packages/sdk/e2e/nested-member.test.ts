@@ -242,7 +242,7 @@ export async function main(trx: Transaction): Promise<void> {
       getMigrationFilePath(migrationsDir, migrationNumber, "migrate"),
       "utf-8",
     );
-    expect(script).toContain('renameNestedMember(address, ["zip"], "zipCode")');
+    expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
   }, 300000);
 
   test("copies the renamed member with the generated script", async () => {

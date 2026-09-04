@@ -550,12 +550,14 @@ function generateNestedMemberRenameCopyScript(change: FieldModifiedChange): stri
   const summary = renames
     .map((rename) => `${rename.previousPath.join(".")} → ${rename.path.join(".")}`)
     .join(", ");
+  // A fixed local name keeps the generated code valid for any field name.
   const steps = renames
     .map(
       (rename) =>
-        `        ${fieldName} = renameNestedMember(${fieldName}, [${rename.previousPath.map((segment) => JSON.stringify(segment)).join(", ")}], ${JSON.stringify(rename.path[rename.path.length - 1])});`,
+        `        value = renameNestedMember(value, [${rename.previousPath.map((segment) => JSON.stringify(segment)).join(", ")}], ${JSON.stringify(rename.path[rename.path.length - 1])});`,
     )
     .join("\n");
+  const column = JSON.stringify(fieldName);
 
   return `  // Copy renamed members inside ${tableName}.${fieldName}: ${summary}.
   // The old members stay on the schema until the post-migration phase drops
@@ -565,7 +567,7 @@ function generateNestedMemberRenameCopyScript(change: FieldModifiedChange): stri
     while (true) {
       let query = trx
         .selectFrom("${tableName}")
-        .select(["id", "${fieldName}"])
+        .select(["id", ${column}])
         .orderBy("id", "asc")
         .limit(100);
       if (lastId) {
@@ -575,11 +577,11 @@ function generateNestedMemberRenameCopyScript(change: FieldModifiedChange): stri
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        let ${fieldName}: unknown = row.${fieldName};
+        let value: unknown = row[${column}];
 ${steps}
         await trx
           .updateTable("${tableName}")
-          .set({ ${fieldName}: ${fieldName} as never })
+          .set({ [${column}]: value as never })
           .where("id", "=", row.id)
           .execute();
       }

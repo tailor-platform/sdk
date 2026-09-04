@@ -599,7 +599,7 @@ describe("tailordb migration generate nested member rename preflight", () => {
     expect(diff.requiresMigrationScript).toBe(true);
     expect(diff.warnings).toEqual([]);
     const script = fs.readFileSync(path.join(entry.migrationsDir, "0001", "migrate.ts"), "utf-8");
-    expect(script).toContain('renameNestedMember(address, ["zip"], "zipCode")');
+    expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
   });
 
   test("keeps the removal warning with --drop Table.field.member", async () => {
