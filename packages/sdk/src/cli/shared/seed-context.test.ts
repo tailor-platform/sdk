@@ -136,6 +136,7 @@ describe("loadSeedContext", () => {
         dependencies: { User: [], Order: ["User"] },
         selfRefTypes: ["Order"],
         requiredFields: { User: [], Order: ["user", "parent"] },
+        omitFields: { User: [], Order: [] },
       },
     ]);
   });

@@ -49,6 +49,8 @@ export interface SeedNamespaceConfig {
   selfRefTypes: string[];
   /** Field names a seed row must supply per table, enforced with `--upsert`. */
   requiredFields: Record<string, string[]>;
+  /** Field names the platform assigns rather than the seed row, per table. */
+  omitFields: Record<string, string[]>;
 }
 
 /**
@@ -64,6 +66,7 @@ export function buildSeedNamespaceConfigs(
     const dependencies: Record<string, string[]> = {};
     const selfRefTypes: string[] = [];
     const requiredFields: Record<string, string[]> = {};
+    const omitFields: Record<string, string[]> = {};
 
     for (const [tableName, type] of Object.entries(ns.tables)) {
       const typeInfo = processSeedTypeInfo(type, ns.namespace);
@@ -78,6 +81,7 @@ export function buildSeedNamespaceConfigs(
         `source info missing for table: ${tableName}`,
       );
       const linesDb = processLinesDb(type, source);
+      omitFields[typeInfo.name] = linesDb.omitFields;
       requiredFields[typeInfo.name] = Object.entries(type.fields)
         .filter(
           ([fieldName, field]) =>
@@ -94,6 +98,7 @@ export function buildSeedNamespaceConfigs(
       dependencies,
       selfRefTypes,
       requiredFields,
+      omitFields,
     };
   });
 }
