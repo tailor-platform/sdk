@@ -1,6 +1,6 @@
 import { collectNestedMemberChanges, type NestedMemberChange } from "./nested-members";
 import { isRenameCompatible } from "./rename-detection";
-import type { MigrationDiff, WarningChangeInfo } from "./diff-calculator";
+import type { FieldModifiedChange, MigrationDiff, WarningChangeInfo } from "./diff-calculator";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
 export const FIELD_REMOVED_WARNING_REASON =
@@ -38,19 +38,13 @@ function isSibling(a: NestedMemberChange, b: NestedMemberChange): boolean {
  * Nested renames are not detected: the Pre-phase cannot keep a removed member
  * alongside its replacement, so no copy script can be scaffolded. A compatible
  * member added at the same level is named in the warning as a hint instead.
- * @param {string} tableName - Table containing the nested field
- * @param {string} fieldName - Top-level nested field name
- * @param {SnapshotFieldConfig} before - Field configuration before the change
- * @param {SnapshotFieldConfig} after - Field configuration after the change
+ * @param {FieldModifiedChange} change - Modification of the top-level nested field
  * @returns {WarningChangeInfo[]} One warning per removed member, keyed by dotted member path
  */
 export function collectNestedMemberRemovalWarnings(
-  tableName: string,
-  fieldName: string,
-  before: SnapshotFieldConfig,
-  after: SnapshotFieldConfig,
+  change: FieldModifiedChange,
 ): WarningChangeInfo[] {
-  const changes = collectNestedMemberChanges(before, after);
+  const changes = collectNestedMemberChanges(change.before, change.after);
   const warnings: WarningChangeInfo[] = [];
   for (const removed of changes) {
     if (removed.kind !== "removed") continue;
@@ -68,8 +62,8 @@ export function collectNestedMemberRemovalWarnings(
           "so keep the old member until a migration script has copied its values and remove it in a later migration"
         : "";
     warnings.push({
-      tableName,
-      fieldName: [fieldName, ...removed.path].join("."),
+      tableName: change.tableName,
+      fieldName: [change.fieldName, ...removed.path].join("."),
       reason: `${NESTED_MEMBER_REMOVED_WARNING_REASON}${hint}`,
     });
   }
@@ -94,14 +88,7 @@ export function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInf
     } else if (change.kind === "table_removed") {
       warnings.push({ tableName: change.tableName, reason: TABLE_REMOVED_WARNING_REASON });
     } else if (change.kind === "field_modified") {
-      warnings.push(
-        ...collectNestedMemberRemovalWarnings(
-          change.tableName,
-          change.fieldName,
-          change.before,
-          change.after,
-        ),
-      );
+      warnings.push(...collectNestedMemberRemovalWarnings(change));
     }
   }
   return warnings;

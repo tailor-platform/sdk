@@ -22,7 +22,7 @@ export type NestedMemberChange =
  * `modified` only when its own configuration (everything except its members)
  * differs. A member present on one side only is reported once, without
  * descending into its members. Removed members come first, then added, then
- * the rest in `after` order.
+ * the rest in `before` order.
  * @param {SnapshotFieldConfig} before - Field configuration before the change
  * @param {SnapshotFieldConfig} after - Field configuration after the change
  * @returns {NestedMemberChange[]} Member changes with paths relative to the field (may be empty)

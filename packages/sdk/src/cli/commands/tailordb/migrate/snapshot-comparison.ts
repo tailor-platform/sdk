@@ -266,14 +266,7 @@ function addChange(
 
   // A removed nested member is data loss regardless of any breaking change on the field.
   if (change.kind === "field_modified") {
-    ctx.warnings.push(
-      ...collectNestedMemberRemovalWarnings(
-        change.tableName,
-        change.fieldName,
-        change.before,
-        change.after,
-      ),
-    );
+    ctx.warnings.push(...collectNestedMemberRemovalWarnings(change));
   }
 
   const breakingChanges = getBreakingFieldChanges(
