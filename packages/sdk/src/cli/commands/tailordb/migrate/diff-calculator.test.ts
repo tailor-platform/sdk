@@ -123,6 +123,54 @@ describe("diff-calculator", () => {
         expected: ["~ age: type: integer → float"],
       },
       {
+        name: "modified nested members",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: {
+                zip: { type: "string", required: false },
+                geo: {
+                  type: "nested",
+                  required: false,
+                  fields: { lat: { type: "string", required: false } },
+                },
+              },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: {
+                zipCode: { type: "string", required: false },
+                geo: {
+                  type: "nested",
+                  required: false,
+                  fields: { lat: { type: "string", required: true } },
+                },
+              },
+            },
+          },
+        ],
+        expected: ["~ address: members: -zip, +zipCode, ~geo.lat"],
+      },
+      {
+        name: "modified field without a rendered detail",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "email",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false, description: "Primary email" },
+          },
+        ],
+        expected: ["~ email: configuration changed"],
+      },
+      {
         name: "type addition",
         changes: [{ kind: "table_added", tableName: "NewType", after: snapshotType("NewType") }],
         expected: ["+ [Table] NewType (new table)"],

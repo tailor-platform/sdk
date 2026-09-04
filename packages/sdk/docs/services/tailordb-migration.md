@@ -115,7 +115,7 @@ A typical change cycle:
 
 ### Warnings and optional migration scripts
 
-Some non-breaking changes can still cause data loss — most notably removing a field (`field_removed`) or removing a table (`table_removed`). `migration generate` reports these as **warnings**:
+Some non-breaking changes can still cause data loss — most notably removing a field (`field_removed`), removing a table (`table_removed`), or removing a member inside a nested field (reported on the nested field's `field_modified` change). `migration generate` reports these as **warnings**:
 
 ```
 Warning: data loss possible:
@@ -164,7 +164,15 @@ During deploy, the pre-migration phase keeps the old field and adds the new fiel
 
 If you decline the prompt (or confirm the removal with `--drop`), the change stays a plain removal + addition with the usual data-loss warning.
 
-Renaming a member inside a **nested field** is not detected, and it is quieter: `User.address.zip` → `zipCode` becomes a single `field_modified` on `address` with no breaking change, no warning, and no generated script, so the member's values are not carried over. Copy them with a custom `tailordb migration script` if they must survive.
+Renaming a member inside a **nested field** is not detected as a rename: `User.address.zip` → `zipCode` becomes a single `field_modified` on `address`, so no `field_renamed` change is recorded and no copy script is generated. The removed member is reported as a data-loss warning instead, which `migration validate --strict` picks up like any other warning; when a compatible member was added at the same level, the warning names it as a possible rename target:
+
+```
+Warning: data loss possible:
+
+  - User.address.zip: Nested member removed (existing values will no longer be accessible through the schema). Possibly renamed to zipCode: nested renames are not detected, so keep the old member until a migration script has copied its values and remove it in a later migration
+```
+
+The pre-migration phase does not keep a removed nested member alongside its replacement, so carry the values over in two steps: add the new member while the old one still exists and copy the values with a custom `tailordb migration script` in that migration, then remove the old member in a later migration.
 
 ### Renaming a table
 

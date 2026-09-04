@@ -34,7 +34,11 @@ import {
   type SnapshotSettings,
   type TailorDBSnapshotType,
 } from "./snapshot-types";
-import { FIELD_REMOVED_WARNING_REASON, TABLE_REMOVED_WARNING_REASON } from "./snapshot-warnings";
+import {
+  collectNestedMemberRemovalWarnings,
+  FIELD_REMOVED_WARNING_REASON,
+  TABLE_REMOVED_WARNING_REASON,
+} from "./snapshot-warnings";
 import type { ExpandContractPlan } from "./expand-contract";
 
 // ============================================================================
@@ -259,6 +263,18 @@ function addChange(
   ctx.changes.push(change);
 
   if (!change.fieldName) return;
+
+  // A removed nested member is data loss regardless of any breaking change on the field.
+  if (change.kind === "field_modified") {
+    ctx.warnings.push(
+      ...collectNestedMemberRemovalWarnings(
+        change.tableName,
+        change.fieldName,
+        change.before,
+        change.after,
+      ),
+    );
+  }
 
   const breakingChanges = getBreakingFieldChanges(
     change.tableName,
