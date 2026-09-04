@@ -23,7 +23,7 @@ export const switchCommand = defineAppCommand({
   }),
   run: async (args) => {
     const config = await readPlatformConfig();
-    const activeProfileName = args.profile;
+    const activeProfileName = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
     const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
     if (activeProfileName && !activeProfileEntry) {
       throw new Error(`Profile "${activeProfileName}" not found`);

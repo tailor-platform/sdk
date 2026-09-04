@@ -91,7 +91,7 @@ describe("user switch", () => {
     expect(config.current_user).toBe("u@example.com");
   });
 
-  test("updates the active profile user when switching users", async () => {
+  test("an empty explicit profile falls back to the environment profile", async () => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -126,7 +126,7 @@ describe("user switch", () => {
       current_user: null,
     });
 
-    const result = await runCommand(switchCommand, ["other@example.com"]);
+    const result = await runCommand(switchCommand, ["other@example.com", "--profile", ""]);
 
     expect(result.success).toBe(true);
     const updatedConfig = await readPlatformConfig();

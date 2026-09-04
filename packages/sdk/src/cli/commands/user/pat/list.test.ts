@@ -33,7 +33,7 @@ describe("user pat list", () => {
     vi.unstubAllEnvs();
   });
 
-  test("uses the active profile platform when loading the current user's token", async () => {
+  test("an empty explicit profile falls back to the environment profile", async () => {
     const config = {
       version: 3,
       min_sdk_version: "2.0.0",
@@ -51,7 +51,7 @@ describe("user pat list", () => {
     vi.mocked(readPlatformConfig).mockResolvedValue(config);
     using _json = jsonMode();
 
-    const result = await runCommand(listCommand, []);
+    const result = await runCommand(listCommand, ["--profile", ""]);
 
     expect(result.success).toBe(true);
     expect(fetchLatestToken).toHaveBeenCalledWith(config, "u@example.com", {

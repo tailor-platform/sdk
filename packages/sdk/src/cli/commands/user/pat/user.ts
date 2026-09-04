@@ -16,6 +16,7 @@ function resolvePatUser(config: PlatformConfig, activeProfile?: string): string 
 
 export async function createPatOperatorClient(activeProfile?: string) {
   const config = await readPlatformConfig();
+  activeProfile ||= process.env.TAILOR_PLATFORM_PROFILE;
   const profileEntry = activeProfile ? config.profiles[activeProfile] : undefined;
   if (activeProfile && !profileEntry) {
     throw new Error(`Profile "${activeProfile}" not found`);

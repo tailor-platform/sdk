@@ -171,7 +171,7 @@ describe("user list", () => {
     expect(stderr.output).not.toContain("u@example.com (current)");
   });
 
-  test("marks the active profile user as current in text mode", async () => {
+  test("an empty explicit profile falls back to the environment profile", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
       version: 2,
@@ -202,7 +202,7 @@ describe("user list", () => {
 
     using stderr = captureStderr();
 
-    await runCommand(userCommand, []);
+    await runCommand(userCommand, ["list", "--profile", ""]);
 
     expect(stderr.output).toContain("profile@example.com [https://api.dev.tailor.tech] (current)");
     expect(stderr.output).toContain("default@example.com");

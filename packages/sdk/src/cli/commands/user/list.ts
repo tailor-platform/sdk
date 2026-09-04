@@ -53,7 +53,8 @@ export const listCommand = defineAppCommand({
   run: async (args) => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;
-    const currentUserKey = activeCurrentUserKey(config, args.profile);
+    const activeProfile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
+    const currentUserKey = activeCurrentUserKey(config, activeProfile);
 
     const users = Object.keys(config.users);
     if (users.length === 0) {

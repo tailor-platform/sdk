@@ -68,7 +68,7 @@ describe("user current", () => {
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
   });
 
-  test("shows the active profile user instead of the global current user", async () => {
+  test("an empty explicit profile falls back to the environment profile", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
       version: 2,
@@ -99,7 +99,7 @@ describe("user current", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await runCommand(currentCommand, []);
+    await runCommand(currentCommand, ["--profile", ""]);
 
     expect(JSON.parse(stdout.output)).toEqual({ user: "profile@example.com" });
   });
