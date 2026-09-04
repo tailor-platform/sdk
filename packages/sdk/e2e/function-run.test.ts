@@ -2,7 +2,7 @@
  * E2E tests for `function run` CLI command
  *
  * Verifies that the function run command correctly bundles and executes
- * different function types on the Tailor Platform server via TestExecScript API.
+ * different function types on the Tailor Platform server.
  *
  * Uses internal APIs directly (detectFunctionType, bundleForRun, executeScript)
  * instead of spawning CLI subprocesses. The deploy step still uses subprocess
@@ -115,7 +115,7 @@ async function runFunction(
   return { ...result, scriptName, functionType: detected.type, functionName: detected.name };
 }
 
-describe.sequential("E2E: function run", () => {
+describe("E2E: function run", { concurrent: false }, () => {
   // Setup creates a workspace and deploys the example config; both are slow
   // enough that this needs the same budget as the other deploying suites.
   aroundAll(async (runSuite) => {

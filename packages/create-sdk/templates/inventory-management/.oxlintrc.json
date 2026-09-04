@@ -39,6 +39,7 @@
     "no-array-constructor": "error",
     "@typescript-eslint/no-empty-object-type": "error",
     "@typescript-eslint/no-explicit-any": "error",
+    "typescript/no-deprecated": "error",
     "@typescript-eslint/no-misused-promises": "error",
     "@typescript-eslint/no-namespace": "error",
     "@typescript-eslint/no-require-imports": "error",

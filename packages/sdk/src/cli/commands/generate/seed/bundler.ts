@@ -1,7 +1,7 @@
 /**
  * Seed script bundler for TailorDB seed data
  *
- * Bundles seed scripts to be executed via TestExecScript API
+ * Bundles seed scripts for server-side execution
  */
 
 import * as fs from "node:fs";
@@ -154,7 +154,7 @@ function generateSeedScriptContent(namespace: string): string {
  * 1. Defines getDB() function inline
  * 2. Processes data in batches using Kysely
  * 3. Reports progress via console.log
- * 4. Exports as main() for TestExecScript
+ * 4. Exports main() as the server-side entry point
  * @param namespace - TailorDB namespace
  * @param tableNames - List of table names to include in the seed
  * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses

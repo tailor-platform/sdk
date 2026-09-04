@@ -465,6 +465,18 @@ export declare type PersonalAccessToken = Message<"tailor.v1.PersonalAccessToken
    * @generated from field: repeated tailor.v1.PATScope scopes = 2;
    */
   scopes: PATScope[];
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 3;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * Unset until the token is first used. Updated at most once per hour.
+   *
+   * @generated from field: optional google.protobuf.Timestamp last_used_at = 4;
+   */
+  lastUsedAt?: Timestamp;
 };
 
 /**

@@ -4,11 +4,10 @@ import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations } from "./config";
 import { fetchRemoteMigrationState } from "./remote-state";
 import {
@@ -118,13 +117,9 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     }));
   }
 
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   const rows: MigrationStatusRow[] = [];

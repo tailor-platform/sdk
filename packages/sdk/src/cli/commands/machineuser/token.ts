@@ -5,11 +5,12 @@ import {
   resolveMachineUserInputSource,
   type MachineUserInputSource,
 } from "#/cli/shared/args";
-import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
+import { fetchMachineUserToken } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { loadMachineUserName } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 
 export interface GetMachineUserTokenOptions {
   name?: string;
@@ -43,13 +44,9 @@ async function getMachineUserTokenInternal(
     );
   }
 
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   // Get application

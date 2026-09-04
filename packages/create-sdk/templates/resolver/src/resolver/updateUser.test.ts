@@ -36,6 +36,6 @@ describe("decrementUserAge resolver", () => {
 
     expect(dbOperations.transaction).toHaveBeenCalledTimes(1);
     expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith("test@example.com", true);
-    await expect(result).rejects.toThrowError("User not found");
+    await expect(result).rejects.toThrow("User not found");
   });
 });

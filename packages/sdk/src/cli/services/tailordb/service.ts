@@ -3,12 +3,16 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { importUserModule } from "#/cli/shared/user-modules";
-import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
+import {
+  pickTailorDBTypeSchemaKeys,
+  stripTailorDBTypeBuilderHelpers,
+} from "#/parser/service/tailordb/builder-helpers";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import {
   findMissingPermissionConfig,
   findOmittedPermitRules,
 } from "#/parser/service/tailordb/permission";
+import { getRawPluginTableName } from "#/plugin/guards";
 import { assertDefined } from "#/utils/assert";
 import { isSdkBranded } from "#/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
@@ -88,6 +92,29 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       tableName
     ] = type;
     typeSourceInfo[tableName] = sourceInfo;
+  };
+
+  // Plugin-emitted tables are runtime values the schema has never seen, unlike
+  // user tables which are parsed in loadTypeFile; validate them here so a
+  // malformed table fails with the offending plugin named instead of crashing
+  // (or silently passing) during permission normalization.
+  const parsePluginTable = (table: unknown, origin: string): TailorDBTypeSchemaOutput => {
+    const result = TailorDBTypeSchema.safeParse(pickTailorDBTypeSchemaKeys(table));
+    if (!result.success) {
+      const issues = result.error.issues
+        .map((issue) => `  - ${issue.path.map(String).join(".") || "(root)"}: ${issue.message}`)
+        .join("\n");
+      throw new Error(
+        `TailorDB table ${origin} in TailorDB service "${namespace}" failed schema validation:\n${issues}`,
+        { cause: result.error },
+      );
+    }
+    return result.data;
+  };
+
+  const describeGeneratedTable = (name: unknown, kind: string, pluginId: string): string => {
+    const namePart = typeof name === "string" && name.length > 0 ? `"${name}" ` : "";
+    return `${namePart}generated as "${kind}" by plugin "${pluginId}"`;
   };
 
   const doParseTypes = (): void => {
@@ -176,13 +203,37 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         namespace,
       });
 
-    if (extendedTable) {
+    // Validate every plugin output before registering any of it, so a failure
+    // does not leave partially registered state behind.
+    const extendingPluginIds = [
+      ...new Set(events.filter((ev) => ev.kind === "extended").map((ev) => ev.pluginId)),
+    ];
+    const parsedExtendedTable =
+      extendedTable === undefined
+        ? undefined
+        : parsePluginTable(
+            extendedTable,
+            `"${rawTable.name}" extended by ${extendingPluginIds.length === 1 ? "plugin" : "plugins"} ${extendingPluginIds.map((id) => `"${id}"`).join(", ")}`,
+          );
+    const parsedGeneratedTables = generatedTables.map((generatedTable) => ({
+      ...generatedTable,
+      table: parsePluginTable(
+        generatedTable.table,
+        describeGeneratedTable(
+          generatedTable.tableName,
+          generatedTable.kind,
+          generatedTable.pluginId,
+        ),
+      ),
+    }));
+
+    if (parsedExtendedTable) {
       assertDefined(
         rawTypes[sourceFilePath],
         `raw table entry missing for file: ${sourceFilePath}`,
-      )[rawTable.name] = extendedTable;
+      )[rawTable.name] = parsedExtendedTable;
     }
-    for (const generatedTable of generatedTables) {
+    for (const generatedTable of parsedGeneratedTables) {
       // Plugin-generated tables don't have a source file.
       // Generators that need to import these tables should generate their own type files.
       const sourceInfo: TypeSourceInfoEntry = {
@@ -320,6 +371,20 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         return { pluginId, config, output: result.output };
       });
 
+      // Validate every generated table before mutating rawTypes/typeSourceInfo,
+      // so a failure does not leave partially registered state behind.
+      const parsedGeneratedTables = successfulResults.flatMap(({ pluginId, config, output }) =>
+        Object.entries(output.tables ?? {}).map(([kind, generatedTable]) => ({
+          pluginId,
+          config,
+          kind,
+          table: parsePluginTable(
+            generatedTable,
+            describeGeneratedTable(getRawPluginTableName(generatedTable), kind, pluginId),
+          ),
+        })),
+      );
+
       const hasPreviousGeneratedTables = Object.hasOwn(rawTypes, pluginGeneratedKey);
       const previousGeneratedTables = rawTypes[pluginGeneratedKey];
       const previousGeneratedTableKeys = previousGeneratedTables
@@ -333,36 +398,26 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       }
       rawTypes[pluginGeneratedKey] = createRawTypesByName();
 
-      let hasGeneratedTables = false;
-      for (const { pluginId, config, output } of successfulResults) {
-        // Add generated tables to rawTypes
-        for (const [kind, generatedTable] of Object.entries(output.tables ?? {})) {
-          const sourceInfo: TypeSourceInfoEntry = {
-            exportName: generatedTable.name,
-            pluginId,
-            pluginImportPath: pluginManager.getPluginImportPath(pluginId) ?? "",
-            originalFilePath: "",
-            originalExportName: "",
-            generatedTableKind: kind,
-            pluginConfig: config,
-            namespace,
-          };
-          registerRawType(
-            pluginGeneratedKey,
-            generatedTable.name,
-            generatedTable as TailorDBTypeSchemaOutput,
-            sourceInfo,
-          );
-          hasGeneratedTables = true;
+      for (const { pluginId, config, kind, table } of parsedGeneratedTables) {
+        const sourceInfo: TypeSourceInfoEntry = {
+          exportName: table.name,
+          pluginId,
+          pluginImportPath: pluginManager.getPluginImportPath(pluginId) ?? "",
+          originalFilePath: "",
+          originalExportName: "",
+          generatedTableKind: kind,
+          pluginConfig: config,
+          namespace,
+        };
+        registerRawType(pluginGeneratedKey, table.name, table, sourceInfo);
 
-          logger.log(
-            `  Generated: ${styles.success(generatedTable.name)} by namespace plugin ${styles.info(pluginId)}`,
-          );
-        }
+        logger.log(
+          `  Generated: ${styles.success(table.name)} by namespace plugin ${styles.info(pluginId)}`,
+        );
       }
 
       // Re-parse tables to include namespace plugin tables
-      if (hasGeneratedTables || hadPreviousGeneratedTables) {
+      if (parsedGeneratedTables.length > 0 || hadPreviousGeneratedTables) {
         doParseTypes();
         validateRequiredPermissions();
       }

@@ -702,7 +702,7 @@ describe("errorHandlingInterceptor", () => {
     const req = {
       stream: false,
       service: OperatorService,
-      method: OperatorService.method.testExecScript,
+      method: OperatorService.method.execScript,
       header: new Headers(),
       message: {
         workspaceId: "workspace-id",

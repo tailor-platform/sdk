@@ -35,6 +35,7 @@
     "typescript/await-thenable": "error",
     "typescript/no-array-delete": "off",
     "typescript/no-base-to-string": "off",
+    "typescript/no-deprecated": "error",
     "typescript/no-duplicate-type-constituents": "off",
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",

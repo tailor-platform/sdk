@@ -5,7 +5,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 // strip unknown keys
@@ -21,20 +21,17 @@ export type GetOrganizationOptions = z.input<typeof getOrganizationOptionsSchema
  * @returns Organization details
  */
 export async function getOrganization(options: GetOrganizationOptions): Promise<OrganizationInfo> {
-  const result = getOrganizationOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(getOrganizationOptionsSchema, options);
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   const response = await client.getOrganization({
-    organizationId: result.data.organizationId,
+    organizationId: validated.organizationId,
   });
 
   if (!response.organization) {
-    throw new Error(`Organization "${result.data.organizationId}" not found.`);
+    throw new Error(`Organization "${validated.organizationId}" not found.`);
   }
 
   return organizationInfo(response.organization);

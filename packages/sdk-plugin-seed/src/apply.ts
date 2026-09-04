@@ -259,9 +259,9 @@ async function runIdpScript(
 }
 
 // The generated IdP scripts upsert or delete users one call at a time (about a
-// second or more per row), so each TestExecScript request must carry few enough
-// rows to finish within the operator API deadline. Byte-size chunking cannot
-// capture this.
+// second or more per row), so each script execution must carry few enough rows
+// to finish within the operator API deadline. Byte-size chunking cannot capture
+// this.
 const IDP_USER_CHUNK_SIZE = 25;
 
 function chunkIdpUsers<T>(rows: T[]): T[][] {

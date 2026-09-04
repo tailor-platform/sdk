@@ -32,7 +32,7 @@ jobs:
           persist-credentials: "false"
 
       - name: Install deps
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       - name: Login as machine user
         run: pnpm tailor login --machine-user

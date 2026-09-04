@@ -267,5 +267,49 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(content).toContain("type Generated,");
       expect(content).not.toContain("type Serial");
     });
+
+    test("imports ObjectColumnType and ArrayColumnType when the wrappers are emitted", async () => {
+      const type = db.table("Profile", {
+        metadata: db.object({ created: db.datetime(), version: db.int() }, { array: true }),
+      });
+
+      const result = await runOnTailorDBReady([
+        {
+          namespace: "test",
+          tables: { Profile: parseTailorDBType(toSchemaOutput(type)) },
+        },
+      ]);
+
+      const content = result.files[0]!.content;
+
+      expect(content).toContain("ArrayColumnType<ObjectColumnType<");
+      expect(content).toContain("type ObjectColumnType");
+      expect(content).toContain("type ArrayColumnType");
+    });
+
+    test("omits wrapper imports for enum values naming them", async () => {
+      const type = db.table("Status", {
+        kind: db.enum([
+          { value: "ObjectColumnType<Timestamp>" },
+          { value: "ArrayColumnType<Timestamp>" },
+        ]),
+      });
+
+      const result = await runOnTailorDBReady([
+        {
+          namespace: "test",
+          tables: { Status: parseTailorDBType(toSchemaOutput(type)) },
+        },
+      ]);
+
+      const content = result.files[0]!.content;
+
+      expect(content).toContain(
+        'kind: "ObjectColumnType<Timestamp>" | "ArrayColumnType<Timestamp>";',
+      );
+      expect(content).not.toContain("type ObjectColumnType");
+      expect(content).not.toContain("type ArrayColumnType");
+      expect(content).not.toContain("type Timestamp");
+    });
   });
 });

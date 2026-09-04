@@ -22,20 +22,21 @@ export interface KyselyFieldConfig {
   fields?: Record<string, KyselyFieldConfig>;
 }
 
+/** Utility types from `@tailor-platform/sdk/kysely` that a generated type actually uses. */
+export interface UsedUtilityTypes {
+  Timestamp: boolean;
+  Serial: boolean;
+  ObjectColumnType: boolean;
+  ArrayColumnType: boolean;
+}
+
 export interface KyselyTypeMetadata {
   name: string;
   typeDef: string;
-  usedUtilityTypes: {
-    Timestamp: boolean;
-    Serial: boolean;
-  };
+  usedUtilityTypes: UsedUtilityTypes;
 }
 
 export interface KyselyNamespaceMetadata {
   namespace: string;
   types: KyselyTypeMetadata[];
-  usedUtilityTypes: {
-    Timestamp: boolean;
-    Serial: boolean;
-  };
 }

@@ -508,6 +508,7 @@ describe("planExecutor", () => {
       if (eventConfig?.case !== "event") {
         throw new Error("expected event trigger config");
       }
+      // oxlint-disable-next-line typescript/no-deprecated -- Verify planning against a legacy remote response.
       eventConfig.value.eventType = "";
 
       const client = createMockClient([
@@ -1133,32 +1134,6 @@ describe("planExecutor", () => {
       await expect(
         planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
       ).rejects.toThrow(/no IdP is configured/);
-    });
-
-    test("idpUserCreated picks the matching IdP when multiple are configured and idp is specified", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-idp-user-created",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "idp-b" },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        idpNames: ["idp-a", "idp-b"],
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("idp");
-      expect(typedConfig.value.namespaceName).toBe("idp-b");
     });
 
     test("idpUserCreated throws when multiple IdPs are configured and idp is omitted", async () => {

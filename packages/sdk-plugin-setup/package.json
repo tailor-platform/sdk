@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-setup",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Tailor CLI plugin providing the `tailor setup` commands (repository automation setup)",
   "license": "MIT",
   "repository": {
@@ -34,7 +34,7 @@
     "pathe": "2.0.3",
     "pkg-types": "2.3.1",
     "politty": "0.11.9",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",

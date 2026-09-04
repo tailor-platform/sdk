@@ -2,10 +2,9 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
 import { parseDuration, workspaceArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { waitForExecution, type WaitOptions } from "./start";
@@ -31,17 +30,13 @@ export interface ResumeWorkflowResultWithWait {
 export async function resumeWorkflow(
   options: ResumeWorkflowOptions,
 ): Promise<ResumeWorkflowResultWithWait> {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   try {
-    const { executionId } = await client.testResumeWorkflow({
+    const { executionId } = await client.resumeWorkflowExecution({
       workspaceId,
       executionId: options.executionId,
     });

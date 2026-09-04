@@ -113,7 +113,7 @@ describe("planAIGateway", () => {
       expected: { creates: 0, updates: 1, unchanged: 0, conflicts: 0, unmanaged: 0 },
     },
     {
-      name: "marks gateway updated when config matches but ownership metadata is missing",
+      name: "updates unmanaged gateway",
       gateways: [
         {
           name: "gateway-a",
@@ -124,7 +124,7 @@ describe("planAIGateway", () => {
       expected: { creates: 0, updates: 1, unchanged: 0, conflicts: 0, unmanaged: 1 },
     },
     {
-      name: "marks gateway updated when config matches but resource is owned by another app",
+      name: "updates gateway owned by another app",
       gateways: [
         {
           name: "gateway-a",

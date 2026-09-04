@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.2.2
+
+### Patch Changes
+
+- [#2229](https://github.com/tailor-platform/sdk/pull/2229) [`f13dbac`](https://github.com/tailor-platform/sdk/commit/f13dbacb0c13fddaed0fb7ea99e541237e8b1218) Thanks [@renovate](https://github.com/apps/renovate)! - Upgrade zod dependency to v4.5.4
+- Updated dependencies [[`eff7f82`](https://github.com/tailor-platform/sdk/commit/eff7f82b0678de494eef1fede8d2946961fd0d58), [`fae1d2d`](https://github.com/tailor-platform/sdk/commit/fae1d2dbf3bf2c6f1adf889032ac398a3a716d6d), [`ba386f0`](https://github.com/tailor-platform/sdk/commit/ba386f01931c4c597a31ba3dd9116bafd2e2b2d5), [`03a3a39`](https://github.com/tailor-platform/sdk/commit/03a3a3982d0b82d5180f779da505294029c1d392), [`a305420`](https://github.com/tailor-platform/sdk/commit/a305420cf7dd7de0192b2e8ae6d5be26f8a4bc36), [`f13dbac`](https://github.com/tailor-platform/sdk/commit/f13dbacb0c13fddaed0fb7ea99e541237e8b1218), [`9f6c7da`](https://github.com/tailor-platform/sdk/commit/9f6c7dab03bca204e954ce1fa2a372925dcd4a9b), [`e648f59`](https://github.com/tailor-platform/sdk/commit/e648f59b2e823bcd9119373cd4135173accf3f36)]:
+  - @tailor-platform/sdk@2.12.0
+
 ## 0.2.1
 
 ### Patch Changes

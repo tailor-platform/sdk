@@ -73,6 +73,17 @@ const testAppName = `migration-e2e-${testRunId}`;
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 const tailordbName = `testdb-${testRunId}`;
 
+// Keep each test timeout above the summed timeouts of the CLI calls it makes: a deploy
+// killed mid data migration cannot roll back, and the leftover remote schema fails all
+// later deploys closed.
+const CLI_TEST_TIMEOUT_MARGIN_MS = 60000;
+const GENERATE_CLI_TIMEOUT_MS = 120000;
+const DEPLOY_CLI_TIMEOUT_MS = 300000;
+const GENERATE_TEST_TIMEOUT_MS = GENERATE_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
+const DEPLOY_TEST_TIMEOUT_MS = DEPLOY_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
+const GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS =
+  GENERATE_CLI_TIMEOUT_MS + DEPLOY_CLI_TIMEOUT_MS + CLI_TEST_TIMEOUT_MARGIN_MS;
+
 /**
  * Run the generate CLI command via subprocess
  * @param {string} configPath - Path to the config file
@@ -91,7 +102,7 @@ function runGenerateCli(configPath: string, cwd: string): void {
         NODE_OPTIONS: "--experimental-vm-modules",
       },
       encoding: "utf-8",
-      timeout: 120000, // 120 second timeout (increased from 60s)
+      timeout: GENERATE_CLI_TIMEOUT_MS,
     });
     // Success - output captured but not logged to keep test output clean
   } catch (error: unknown) {
@@ -122,7 +133,7 @@ function runDeployCli(configPath: string, workspaceId: string, cwd: string): voi
         NODE_OPTIONS: "--experimental-vm-modules",
       },
       encoding: "utf-8",
-      timeout: 120000, // 120 second timeout for deploy operations
+      timeout: DEPLOY_CLI_TIMEOUT_MS,
     });
     // Success - output captured but not logged to keep test output clean
   } catch (error: unknown) {
@@ -175,7 +186,7 @@ function runMigrationTestCli(
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
       encoding: "utf-8",
-      timeout: 240000,
+      timeout: DEPLOY_CLI_TIMEOUT_MS,
     },
   );
 }
@@ -204,11 +215,15 @@ function tryDeployCli(
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
         encoding: "utf-8",
-        timeout: 120000,
+        timeout: DEPLOY_CLI_TIMEOUT_MS,
       },
     );
     return { ok: true, output: out };
   } catch (error: unknown) {
+    // A timeout means the deploy was killed, not that it failed — surface it directly.
+    if (error && typeof error === "object" && (error as { code?: string }).code === "ETIMEDOUT") {
+      throw error;
+    }
     let output = "";
     if (error && typeof error === "object") {
       const e = error as { stdout?: Buffer | string; stderr?: Buffer | string };
@@ -218,7 +233,7 @@ function tryDeployCli(
   }
 }
 
-describe.sequential("E2E: TailorDB Migrations", () => {
+describe("E2E: TailorDB Migrations", { concurrent: false }, () => {
   let workspaceId: string;
   let client: OperatorClient;
   let tempDir: string;
@@ -480,56 +495,66 @@ export async function main(db: Kysely<any>): Promise<void> {
      *
      * Creates initial table definition and generates 0000/schema.json
      */
-    test("generates initial schema migration", async () => {
-      // Create config with migrations enabled
-      const configPath = createConfig();
+    test(
+      "generates initial schema migration",
+      async () => {
+        // Create config with migrations enabled
+        const configPath = createConfig();
 
-      // Generate migration via CLI
-      runGenerateCli(configPath, tempDir);
+        // Generate migration via CLI
+        runGenerateCli(configPath, tempDir);
 
-      // Verify initial schema was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(1);
-      expect(files[0]!.type).toBe("schema");
-      expect(files[0]!.number).toBe(INITIAL_SCHEMA_NUMBER);
+        // Verify initial schema was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(1);
+        expect(files[0]!.type).toBe("schema");
+        expect(files[0]!.number).toBe(INITIAL_SCHEMA_NUMBER);
 
-      // Verify snapshot content
-      const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
-      expect(snapshot).not.toBeNull();
-      expect(snapshot!.tables.User).toBeDefined();
-      expect(snapshot!.tables.User!.fields.name).toBeDefined();
-      expect(snapshot!.tables.User!.fields.email).toBeDefined();
-    }, 60000);
+        // Verify snapshot content
+        const snapshot = reconstructSnapshotFromMigrations(migrationsDir);
+        expect(snapshot).not.toBeNull();
+        expect(snapshot!.tables.User).toBeDefined();
+        expect(snapshot!.tables.User!.fields.name).toBeDefined();
+        expect(snapshot!.tables.User!.fields.email).toBeDefined();
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 1b: Apply initial migration
      */
-    test("applies initial migration to workspace", async () => {
-      const configPath = createConfig();
+    test(
+      "applies initial migration to workspace",
+      async () => {
+        const configPath = createConfig();
 
-      runDeployCli(configPath, workspaceId, tempDir);
+        runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: TailorDB service should exist
-      const services = await listTailorDBServiceNames();
-      expect(services).toContain(tailordbName);
+        // Verify: TailorDB service should exist
+        const services = await listTailorDBServiceNames();
+        expect(services).toContain(tailordbName);
 
-      // Verify: User table should exist with expected fields
-      const types = await listTailorDBTypeNames(tailordbName);
-      expect(types).toContain("User");
+        // Verify: User table should exist with expected fields
+        const types = await listTailorDBTypeNames(tailordbName);
+        expect(types).toContain("User");
 
-      const fields = await getTailorDBTypeFields(tailordbName, "User");
-      expect(fields).toContain("name");
-      expect(fields).toContain("email");
-    }, 120000);
+        const fields = await getTailorDBTypeFields(tailordbName, "User");
+        expect(fields).toContain("name");
+        expect(fields).toContain("email");
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("Optional Field Addition (Non-breaking)", () => {
     /**
      * Scenario 2: Non-breaking change (adding optional field)
      */
-    test("detects non-breaking change when adding optional field", async () => {
-      // Update table to add optional field
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "detects non-breaking change when adding optional field",
+      async () => {
+        // Update table to add optional field
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -541,80 +566,92 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      // Generate migration via CLI
-      runGenerateCli(configPath, tempDir);
+        // Generate migration via CLI
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(2);
-      expect(files[1]!.type).toBe("diff");
-      expect(files[1]!.number).toBe(1);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(2);
+        expect(files[1]!.type).toBe("diff");
+        expect(files[1]!.number).toBe(1);
 
-      // Verify diff content
-      const diffPath = getMigrationFilePath(migrationsDir, 1, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(false);
-      expect(diff.changes.length).toBe(1);
-      expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
-    }, 60000);
+        // Verify diff content
+        const diffPath = getMigrationFilePath(migrationsDir, 1, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.changes.length).toBe(1);
+        expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
-    test("rehearses the pending migration in a designated workspace", async () => {
-      const configPath = createConfig();
-      const sourceWorkspace = (await client.getWorkspace({ workspaceId })).workspace!;
-      const targetResponse = await client.createWorkspace({
-        workspaceName: `${testWorkspaceName}-migration-target`,
-        workspaceRegion: sourceWorkspace.region,
-        deleteProtection: false,
-        organizationId: sourceWorkspace.organizationId,
-        folderId: sourceWorkspace.folderId,
-      });
-      const targetWorkspaceId = targetResponse.workspace!.id;
-      trackWorkspace(targetWorkspaceId);
+    test(
+      "rehearses the pending migration in a designated workspace",
+      async () => {
+        const configPath = createConfig();
+        const sourceWorkspace = (await client.getWorkspace({ workspaceId })).workspace!;
+        const targetResponse = await client.createWorkspace({
+          workspaceName: `${testWorkspaceName}-migration-target`,
+          workspaceRegion: sourceWorkspace.region,
+          deleteProtection: false,
+          organizationId: sourceWorkspace.organizationId,
+          folderId: sourceWorkspace.folderId,
+        });
+        const targetWorkspaceId = targetResponse.workspace!.id;
+        trackWorkspace(targetWorkspaceId);
 
-      runMigrationTestCli(
-        configPath,
-        workspaceId,
-        targetWorkspaceId,
-        path.join(tempDir, "assert-migration.ts"),
-        tempDir,
-      );
+        runMigrationTestCli(
+          configPath,
+          workspaceId,
+          targetWorkspaceId,
+          path.join(tempDir, "assert-migration.ts"),
+          tempDir,
+        );
 
-      const targetType = await client.getTailorDBType({
-        workspaceId: targetWorkspaceId,
-        namespaceName: tailordbName,
-        tailordbTypeName: "User",
-      });
-      expect(Object.keys(targetType.tailordbType?.schema?.fields ?? {})).toContain("phone");
+        const targetType = await client.getTailorDBType({
+          workspaceId: targetWorkspaceId,
+          namespaceName: tailordbName,
+          tailordbTypeName: "User",
+        });
+        expect(Object.keys(targetType.tailordbType?.schema?.fields ?? {})).toContain("phone");
 
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(targetWorkspaceId, "tailordb", tailordbName),
-      });
-      expect(parseMigrationLabelNumber(metadata?.labels[MIGRATION_LABEL_KEY] ?? "")).toBe(1);
-    }, 240000);
+        const { metadata } = await client.getMetadata({
+          trn: resourceTrn(targetWorkspaceId, "tailordb", tailordbName),
+        });
+        expect(parseMigrationLabelNumber(metadata?.labels[MIGRATION_LABEL_KEY] ?? "")).toBe(1);
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 2b: Apply non-breaking change
      */
-    test("applies non-breaking migration to workspace", async () => {
-      const configPath = createConfig();
+    test(
+      "applies non-breaking migration to workspace",
+      async () => {
+        const configPath = createConfig();
 
-      runDeployCli(configPath, workspaceId, tempDir);
+        runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: phone field should be added to User table
-      const fields = await getTailorDBTypeFields(tailordbName, "User");
-      expect(fields).toContain("phone");
-    }, 120000);
+        // Verify: phone field should be added to User table
+        const fields = await getTailorDBTypeFields(tailordbName, "User");
+        expect(fields).toContain("phone");
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("Required Field Addition (Breaking)", () => {
     /**
      * Scenario 3: Breaking change (adding required field)
      */
-    test("detects breaking change when adding required field", async () => {
-      // Update table to add required field (breaking change)
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "detects breaking change when adding required field",
+      async () => {
+        // Update table to add required field (breaking change)
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -627,69 +664,79 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      // Generate migration (with yes flag to skip confirmation)
-      runGenerateCli(configPath, tempDir);
+        // Generate migration (with yes flag to skip confirmation)
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(3);
-      expect(files[2]!.type).toBe("diff");
-      expect(files[2]!.number).toBe(2);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(3);
+        expect(files[2]!.type).toBe("diff");
+        expect(files[2]!.number).toBe(2);
 
-      // Verify diff shows breaking change
-      const diffPath = getMigrationFilePath(migrationsDir, 2, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.breakingChanges.length).toBeGreaterThan(0);
-      expect(diff.breakingChanges[0]!.reason).toBe("Required field added");
+        // Verify diff shows breaking change
+        const diffPath = getMigrationFilePath(migrationsDir, 2, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges.length).toBeGreaterThan(0);
+        expect(diff.breakingChanges[0]!.reason).toBe("Required field added");
 
-      // Verify requiresMigrationScript is true
-      expect(diff.requiresMigrationScript).toBe(true);
+        // Verify requiresMigrationScript is true
+        expect(diff.requiresMigrationScript).toBe(true);
 
-      // Verify migration script file was created
-      const migratePath = getMigrationFilePath(migrationsDir, 2, "migrate");
-      expect(fs.existsSync(migratePath)).toBe(true);
-    }, 60000);
+        // Verify migration script file was created
+        const migratePath = getMigrationFilePath(migrationsDir, 2, "migrate");
+        expect(fs.existsSync(migratePath)).toBe(true);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 3b: Apply breaking change migration
      */
-    test("applies breaking change migration to workspace", async () => {
-      // Edit migration script to set default values for required field
-      editMigrationScript(2, {
-        requiredField: '"default"', // String value needs quotes
-      });
+    test(
+      "applies breaking change migration to workspace",
+      async () => {
+        // Edit migration script to set default values for required field
+        editMigrationScript(2, {
+          requiredField: '"default"', // String value needs quotes
+        });
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      runDeployCli(configPath, workspaceId, tempDir);
+        runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: requiredField should be added to User table
-      const fields = await getTailorDBTypeFields(tailordbName, "User");
-      expect(fields).toContain("requiredField");
-    }, 120000);
+        // Verify: requiredField should be added to User table
+        const fields = await getTailorDBTypeFields(tailordbName, "User");
+        expect(fields).toContain("requiredField");
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("Stability and Verification", () => {
     /**
      * Scenario 4: No changes detected
      */
-    test("reports no changes when schema is unchanged", async () => {
-      const configPath = createConfig();
+    test(
+      "reports no changes when schema is unchanged",
+      async () => {
+        const configPath = createConfig();
 
-      // Get current file count
-      const filesBefore = getMigrationFiles(migrationsDir);
-      const countBefore = filesBefore.length;
+        // Get current file count
+        const filesBefore = getMigrationFiles(migrationsDir);
+        const countBefore = filesBefore.length;
 
-      // Generate migration (should detect no changes)
-      runGenerateCli(configPath, tempDir);
+        // Generate migration (should detect no changes)
+        runGenerateCli(configPath, tempDir);
 
-      // Verify no new file was created
-      const filesAfter = getMigrationFiles(migrationsDir);
-      expect(filesAfter.length).toBe(countBefore);
-    }, 60000);
+        // Verify no new file was created
+        const filesAfter = getMigrationFiles(migrationsDir);
+        expect(filesAfter.length).toBe(countBefore);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("Type Addition (Non-breaking)", () => {
@@ -698,44 +745,52 @@ export type user = typeof user;
      *
      * Adds a new Post table to the schema
      */
-    test("detects table addition as non-breaking change", async () => {
-      // Copy Post table fixture
-      const srcPost = path.join(FIXTURE_DIR, "tailordb", "post.ts");
-      const destPost = path.join(tempDir, "tailordb", "post.ts");
-      fs.copyFileSync(srcPost, destPost);
+    test(
+      "detects table addition as non-breaking change",
+      async () => {
+        // Copy Post table fixture
+        const srcPost = path.join(FIXTURE_DIR, "tailordb", "post.ts");
+        const destPost = path.join(tempDir, "tailordb", "post.ts");
+        fs.copyFileSync(srcPost, destPost);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      // Generate migration
-      runGenerateCli(configPath, tempDir);
+        // Generate migration
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(4);
-      expect(files[3]!.type).toBe("diff");
-      expect(files[3]!.number).toBe(3);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(4);
+        expect(files[3]!.type).toBe("diff");
+        expect(files[3]!.number).toBe(3);
 
-      // Verify diff content
-      const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(false);
-      expect(diff.changes.some((c) => c.kind === "table_added" && c.tableName === "Post")).toBe(
-        true,
-      );
-    }, 60000);
+        // Verify diff content
+        const diffPath = getMigrationFilePath(migrationsDir, 3, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.changes.some((c) => c.kind === "table_added" && c.tableName === "Post")).toBe(
+          true,
+        );
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 6b: Apply table addition
      */
-    test("applies table addition to workspace", async () => {
-      const configPath = createConfig();
+    test(
+      "applies table addition to workspace",
+      async () => {
+        const configPath = createConfig();
 
-      runDeployCli(configPath, workspaceId, tempDir);
+        runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: Post table should be added
-      const types = await listTailorDBTypeNames(tailordbName);
-      expect(types).toContain("Post");
-    }, 120000);
+        // Verify: Post table should be added
+        const types = await listTailorDBTypeNames(tailordbName);
+        expect(types).toContain("Post");
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("Field Removal (Non-breaking)", () => {
@@ -744,9 +799,11 @@ export type user = typeof user;
      *
      * Removes requiredField from User table
      */
-    test("detects field removal as non-breaking change", async () => {
-      // Update User table to remove requiredField
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "detects field removal as non-breaking change",
+      async () => {
+        // Update User table to remove requiredField
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -758,38 +815,44 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
+        const configPath = createConfig();
 
-      runGenerateCli(configPath, tempDir);
+        runGenerateCli(configPath, tempDir);
 
-      // Verify diff was created
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(5);
-      expect(files[4]!.type).toBe("diff");
-      expect(files[4]!.number).toBe(4);
+        // Verify diff was created
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(5);
+        expect(files[4]!.type).toBe("diff");
+        expect(files[4]!.number).toBe(4);
 
-      // Verify diff shows field removal as non-breaking change
-      const diffPath = getMigrationFilePath(migrationsDir, 4, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(false);
-      expect(
-        diff.changes.some((c) => c.kind === "field_removed" && c.fieldName === "requiredField"),
-      ).toBe(true);
-      expect(diff.requiresMigrationScript).toBe(false);
-    }, 60000);
+        // Verify diff shows field removal as non-breaking change
+        const diffPath = getMigrationFilePath(migrationsDir, 4, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(
+          diff.changes.some((c) => c.kind === "field_removed" && c.fieldName === "requiredField"),
+        ).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(false);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
     /**
      * Scenario 7b: Apply field removal (non-breaking change)
      */
-    test("applies field removal to workspace", async () => {
-      const configPath = createConfig();
+    test(
+      "applies field removal to workspace",
+      async () => {
+        const configPath = createConfig();
 
-      runDeployCli(configPath, workspaceId, tempDir);
+        runDeployCli(configPath, workspaceId, tempDir);
 
-      // Verify: requiredField should be removed from User table
-      const fields = await getTailorDBTypeFields(tailordbName, "User");
-      expect(fields).not.toContain("requiredField");
-    }, 120000);
+        // Verify: requiredField should be removed from User table
+        const fields = await getTailorDBTypeFields(tailordbName, "User");
+        expect(fields).not.toContain("requiredField");
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("Migration Rollback on Failure", () => {
@@ -797,8 +860,10 @@ export type user = typeof user;
      * Scenario 8: A failing migrate.ts must roll back its Pre-phase DDL, leaving
      * the remote schema and checkpoint at the prior migration so a retry works.
      */
-    test("generates the breaking migration whose script will fail", async () => {
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "generates the breaking migration whose script will fail",
+      async () => {
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -811,81 +876,93 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
-      runGenerateCli(configPath, tempDir);
+        const configPath = createConfig();
+        runGenerateCli(configPath, tempDir);
 
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(6);
-      expect(files[5]!.number).toBe(5);
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(6);
+        expect(files[5]!.number).toBe(5);
 
-      const diffPath = getMigrationFilePath(migrationsDir, 5, "diff");
-      const diff = loadDiff(diffPath);
-      expect(diff.hasBreakingChanges).toBe(true);
-      expect(diff.requiresMigrationScript).toBe(true);
-      expect(fs.existsSync(getMigrationFilePath(migrationsDir, 5, "migrate"))).toBe(true);
-    }, 60000);
+        const diffPath = getMigrationFilePath(migrationsDir, 5, "diff");
+        const diff = loadDiff(diffPath);
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(true);
+        expect(fs.existsSync(getMigrationFilePath(migrationsDir, 5, "migrate"))).toBe(true);
+      },
+      GENERATE_TEST_TIMEOUT_MS,
+    );
 
-    test("rolls back the pre-migration DDL when migrate.ts fails", async () => {
-      // Make the data migration deterministically fail.
-      overwriteMigrationScript(
-        5,
-        `export async function main(): Promise<void> {
+    test(
+      "rolls back the pre-migration DDL when migrate.ts fails",
+      async () => {
+        // Make the data migration deterministically fail.
+        overwriteMigrationScript(
+          5,
+          `export async function main(): Promise<void> {
   throw new Error("simulated migration failure for rollback e2e");
 }
 `,
-      );
+        );
 
-      const checkpointBefore = await getMigrationCheckpoint(tailordbName);
-      expect(checkpointBefore).toBe(4);
+        const checkpointBefore = await getMigrationCheckpoint(tailordbName);
+        expect(checkpointBefore).toBe(4);
 
-      const configPath = createConfig();
-      const result = tryDeployCli(configPath, workspaceId, tempDir);
+        const configPath = createConfig();
+        const result = tryDeployCli(configPath, workspaceId, tempDir);
 
-      // The deploy must fail for the injected reason, not an unrelated error.
-      expect(result.ok).toBe(false);
-      expect(result.output).toContain("simulated migration failure for rollback e2e");
+        // The deploy must fail for the injected reason, not an unrelated error.
+        expect(result.ok).toBe(false);
+        expect(result.output).toContain("simulated migration failure for rollback e2e");
 
-      // Rollback restored User to its checkpoint-4 schema: the new field is gone,
-      // prior fields remain.
-      const fields = await getTailorDBTypeFields(tailordbName, "User");
-      expect(fields).not.toContain("loyaltyTier");
-      expect(fields).toEqual(expect.arrayContaining(["name", "email", "role", "phone"]));
+        // Rollback restored User to its checkpoint-4 schema: the new field is gone,
+        // prior fields remain.
+        const fields = await getTailorDBTypeFields(tailordbName, "User");
+        expect(fields).not.toContain("loyaltyTier");
+        expect(fields).toEqual(expect.arrayContaining(["name", "email", "role", "phone"]));
 
-      const checkpointAfter = await getMigrationCheckpoint(tailordbName);
-      expect(checkpointAfter).toBe(4);
-    }, 120000);
+        const checkpointAfter = await getMigrationCheckpoint(tailordbName);
+        expect(checkpointAfter).toBe(4);
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
 
-    test("a retry succeeds once migrate.ts is fixed (workspace was recoverable)", async () => {
-      // Provide a working data migration that backfills the new required field.
-      overwriteMigrationScript(
-        5,
-        `export async function main(trx: any): Promise<void> {
+    test(
+      "a retry succeeds once migrate.ts is fixed (workspace was recoverable)",
+      async () => {
+        // Provide a working data migration that backfills the new required field.
+        overwriteMigrationScript(
+          5,
+          `export async function main(trx: any): Promise<void> {
   await trx
     .updateTable("User")
     .set({ loyaltyTier: "bronze" })
     .execute();
 }
 `,
-      );
+        );
 
-      const configPath = createConfig();
-      // No drift error: the failed deploy left a consistent baseline at checkpoint 4.
-      runDeployCli(configPath, workspaceId, tempDir);
+        const configPath = createConfig();
+        // No drift error: the failed deploy left a consistent baseline at checkpoint 4.
+        runDeployCli(configPath, workspaceId, tempDir);
 
-      const fields = await getTailorDBTypeFields(tailordbName, "User");
-      expect(fields).toContain("loyaltyTier");
+        const fields = await getTailorDBTypeFields(tailordbName, "User");
+        expect(fields).toContain("loyaltyTier");
 
-      const checkpointAfter = await getMigrationCheckpoint(tailordbName);
-      expect(checkpointAfter).toBe(5);
-    }, 120000);
+        const checkpointAfter = await getMigrationCheckpoint(tailordbName);
+        expect(checkpointAfter).toBe(5);
+      },
+      DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 
   describe("In-place Field Type Changes", () => {
     const firstRowId = "10000000-0000-4000-8000-000000000001";
     const secondRowId = "10000000-0000-4000-8000-000000000002";
 
-    test("seeds representative values under the source field types", async () => {
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "seeds representative values under the source field types",
+      async () => {
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -906,16 +983,16 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
-      runGenerateCli(configPath, tempDir);
+        const configPath = createConfig();
+        runGenerateCli(configPath, tempDir);
 
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(7);
-      expect(files[6]!.number).toBe(6);
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(7);
+        expect(files[6]!.number).toBe(6);
 
-      overwriteMigrationScript(
-        6,
-        `import type { Transaction } from "./db";
+        overwriteMigrationScript(
+          6,
+          `import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
   await trx
@@ -953,14 +1030,18 @@ export async function main(trx: Transaction): Promise<void> {
     .execute();
 }
 `,
-      );
+        );
 
-      runDeployCli(configPath, workspaceId, tempDir);
-      expect(await getMigrationCheckpoint(tailordbName)).toBe(6);
-    }, 120000);
+        runDeployCli(configPath, workspaceId, tempDir);
+        expect(await getMigrationCheckpoint(tailordbName)).toBe(6);
+      },
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
+    );
 
-    test("generates one phased migration for verified type pairs", async () => {
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "generates one phased migration for verified type pairs",
+      async () => {
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -981,57 +1062,61 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
-      runGenerateCli(configPath, tempDir);
+        const configPath = createConfig();
+        runGenerateCli(configPath, tempDir);
 
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(8);
-      expect(files[7]!.number).toBe(7);
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(8);
+        expect(files[7]!.number).toBe(7);
 
-      const diff = loadDiff(getMigrationFilePath(migrationsDir, 7, "diff"));
-      expect(diff.changes).toHaveLength(8);
-      expect(diff.changes).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceUuid" }),
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceEnum" }),
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceDecimal" }),
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceInteger" }),
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedUuid" }),
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedEnum" }),
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedDecimal" }),
-          expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedInteger" }),
-        ]),
-      );
-      expect(diff.breakingChanges.every((change) => !change.unsupported)).toBe(true);
+        const diff = loadDiff(getMigrationFilePath(migrationsDir, 7, "diff"));
+        expect(diff.changes).toHaveLength(8);
+        expect(diff.changes).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceUuid" }),
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceEnum" }),
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceDecimal" }),
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "sourceInteger" }),
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedUuid" }),
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedEnum" }),
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedDecimal" }),
+            expect.objectContaining({ kind: "field_type_modified", fieldName: "indexedInteger" }),
+          ]),
+        );
+        expect(diff.breakingChanges.every((change) => !change.unsupported)).toBe(true);
 
-      const migratePath = getMigrationFilePath(migrationsDir, 7, "migrate");
-      const generatedScript = fs.readFileSync(migratePath, "utf-8");
-      const reviewedScript = generatedScript
-        .replaceAll(
-          `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.\n`,
-          "",
-        )
-        .replaceAll("const normalizedValue: never", "const normalizedValue");
-      const defaultNormalization = `        const sourceValue = row.sourceUuid;
+        const migratePath = getMigrationFilePath(migrationsDir, 7, "migrate");
+        const generatedScript = fs.readFileSync(migratePath, "utf-8");
+        const reviewedScript = generatedScript
+          .replaceAll(
+            `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.\n`,
+            "",
+          )
+          .replaceAll("const normalizedValue: never", "const normalizedValue");
+        const defaultNormalization = `        const sourceValue = row.sourceUuid;
         if (sourceValue === null) continue;
         const normalizedValue = sourceValue;`;
-      const exercisedNormalization = `        const sourceValue = row.sourceUuid;
+        const exercisedNormalization = `        const sourceValue = row.sourceUuid;
         if (sourceValue === null) continue;
         const normalizedValue =
           sourceValue === "20000000-0000-4000-8000-000000000001"
             ? "20000000-0000-4000-8000-000000000011"
             : sourceValue;`;
-      const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
-      expect(editedScript).not.toBe(reviewedScript);
-      expect(editedScript).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
-      fs.writeFileSync(migratePath, editedScript);
+        const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
+        expect(editedScript).not.toBe(reviewedScript);
+        expect(editedScript).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+        fs.writeFileSync(migratePath, editedScript);
 
-      runDeployCli(configPath, workspaceId, tempDir);
-      expect(await getMigrationCheckpoint(tailordbName)).toBe(7);
-    }, 120000);
+        runDeployCli(configPath, workspaceId, tempDir);
+        expect(await getMigrationCheckpoint(tailordbName)).toBe(7);
+      },
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
+    );
 
-    test("reads, updates, and deletes source rows after the type changes", async () => {
-      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+    test(
+      "reads, updates, and deletes source rows after the type changes",
+      async () => {
+        updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -1053,16 +1138,16 @@ export const user = db.table("User", {
 export type user = typeof user;
 `);
 
-      const configPath = createConfig();
-      runGenerateCli(configPath, tempDir);
+        const configPath = createConfig();
+        runGenerateCli(configPath, tempDir);
 
-      const files = getMigrationFiles(migrationsDir);
-      expect(files.length).toBe(9);
-      expect(files[8]!.number).toBe(8);
+        const files = getMigrationFiles(migrationsDir);
+        expect(files.length).toBe(9);
+        expect(files[8]!.number).toBe(8);
 
-      overwriteMigrationScript(
-        8,
-        `import type { Transaction } from "./db";
+        overwriteMigrationScript(
+          8,
+          `import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
   const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
@@ -1122,10 +1207,12 @@ export async function main(trx: Transaction): Promise<void> {
   }
 }
 `,
-      );
+        );
 
-      runDeployCli(configPath, workspaceId, tempDir);
-      expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
-    }, 120000);
+        runDeployCli(configPath, workspaceId, tempDir);
+        expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
+      },
+      GENERATE_AND_DEPLOY_TEST_TIMEOUT_MS,
+    );
   });
 });

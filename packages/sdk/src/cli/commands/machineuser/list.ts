@@ -2,11 +2,11 @@ import { toJson } from "@bufbuild/protobuf";
 import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
 import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import type { MachineUser } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
@@ -53,13 +53,9 @@ export async function listMachineUsers(
   options?: ListMachineUsersOptions,
 ): Promise<MachineUserInfo[]> {
   // Load and validate options
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options?.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options?.workspaceId,
-    profile: options?.profile,
   });
 
   // Get application

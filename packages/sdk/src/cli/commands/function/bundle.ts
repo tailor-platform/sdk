@@ -1,7 +1,7 @@
 /**
  * Bundler for the function run command
  *
- * Bundles a single function file for execution via the TestExecScript API.
+ * Bundles a single function file for server-side execution.
  * Generates an entry file based on the detected function type and bundles
  * with rolldown, following the same patterns as the existing bundlers.
  */
@@ -69,7 +69,7 @@ interface BundleForRunResult {
 }
 
 /**
- * Bundle a function file for `function run` execution via the TestExecScript API.
+ * Bundle a function file for `function run` execution.
  * @param options - Bundle options
  * @returns Bundled code and script name
  */
@@ -216,7 +216,7 @@ function generateEntry(options: GenerateEntryOptions): string {
 
     case "workflow-job": {
       // Mirrors the production workflow bundler (services/workflow/bundler.ts).
-      // Note: user context is not available in TestExecScript for workflow jobs.
+      // Note: user context is not available when executing workflow jobs this way.
       // The production workflow bundler's user mapping is being fixed in fix/workflow-user.
       const exportName = assertDefined(detected.exportName, "workflow job export name missing");
       const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);

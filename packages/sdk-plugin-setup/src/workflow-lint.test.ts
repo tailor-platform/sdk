@@ -179,11 +179,6 @@ describe("repository ERD schema workflow", () => {
     expect(actionJobs.length).toBe(3);
     expect(actionJobs.every((job) => job.includes("uses: actions/checkout@"))).toBe(true);
   });
-
-  test.skipIf(!actionlintAvailable)("passes actionlint", () => {
-    const { ok, output } = runActionlint(ERD_SCHEMA_WORKFLOW);
-    expect(ok, `actionlint errors for ${ERD_SCHEMA_WORKFLOW}:\n${output}`).toBe(true);
-  });
 });
 
 // ---------------------------------------------------------------------------

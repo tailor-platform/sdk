@@ -2,11 +2,10 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
 import { deploymentArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
 import { type OAuth2ClientCredentials, toOAuth2ClientCredentials } from "./transform";
 
@@ -25,13 +24,9 @@ export interface GetOAuth2ClientOptions {
 export async function getOAuth2Client(
   options: GetOAuth2ClientOptions,
 ): Promise<OAuth2ClientCredentials> {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   const { config } = await loadConfig(options.configPath);

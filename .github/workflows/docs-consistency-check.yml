@@ -37,9 +37,12 @@ jobs:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@833fb0f8c9f6686b33d963a8bae0a94f4936ab2a # v1.0.211
+        uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Allow PRs opened by the tailor-bobbin GitHub App to run this check
+          # (the action refuses non-human actors by default)
+          allowed_bots: "tailor-bobbin"
           prompt: |
             # Documentation Quality & Consistency Check
 
@@ -231,9 +234,12 @@ jobs:
 
       - name: Fix Recommended Actions heading with Claude
         if: always() && steps.validate-heading.outputs.needs_fix == 'true'
-        uses: anthropics/claude-code-action@833fb0f8c9f6686b33d963a8bae0a94f4936ab2a # v1.0.211
+        uses: anthropics/claude-code-action@8251c103ac8c1d761882c86aba1412c7f583c844 # v1.0.213
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Allow PRs opened by the tailor-bobbin GitHub App to run this check
+          # (the action refuses non-human actors by default)
+          allowed_bots: "tailor-bobbin"
           prompt: |
             The file `${{ env.REVIEW_BODY_FILE }}` is missing a
             `### ✅ Recommended Actions` or `### ❌ Recommended Actions`

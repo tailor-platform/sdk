@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { orderArg, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { userInfo, type UserInfo } from "./transform";
 
 // strip unknown keys
@@ -18,23 +18,18 @@ const listUsersOptionsSchema = z.object({
 export type ListUsersOptions = z.input<typeof listUsersOptionsSchema>;
 
 async function loadOptions(options: ListUsersOptions) {
-  const result = listUsersOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(listUsersOptionsSchema, options);
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    order: result.data.order,
-    limit: result.data.limit,
+    order: validated.order,
+    limit: validated.limit,
   };
 }
 

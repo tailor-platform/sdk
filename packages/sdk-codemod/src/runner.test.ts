@@ -681,6 +681,23 @@ describe("runCodemods", () => {
 
   describe("legacy pattern warnings", () => {
     const partialTransformPath = path.join(os.tmpdir(), "transform-partial.ts");
+    const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
+    if (!renameBin) throw new Error("rename-bin codemod missing");
+
+    async function runWarningCase({
+      fileName,
+      source,
+      codemod,
+    }: {
+      fileName: string;
+      source: string;
+      codemod: CodemodPackage;
+    }) {
+      const { tmpDir: dir } = await createTestProject(fileName, source);
+      tmpDir = dir;
+      const result = await runCodemods([{ codemod, scriptPath: codemod.scriptPath }], dir, true);
+      return { dir, result };
+    }
 
     aroundEach(async (runTest) => {
       await fs.promises.writeFile(
@@ -695,31 +712,18 @@ describe("runCodemods", () => {
     });
 
     test("warns when legacy patterns remain after a partial migration", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "README.md"),
-        "Run `tailor crash-report list`.\nRun tailor login --machineuser.\n",
-        "utf-8",
-      );
-
       using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod(
-              "test/partial",
-              partialTransformPath,
-              ["**/*.md"],
-              ["tailor crash-report", "--machineuser"],
-            ),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { dir, result } = await runWarningCase({
+        fileName: "README.md",
+        source: "Run `tailor crash-report list`.\nRun tailor login --machineuser.\n",
+        codemod: makeCodemod(
+          "test/partial",
+          partialTransformPath,
+          ["**/*.md"],
+          ["tailor crash-report", "--machineuser"],
+        ),
+      });
 
       expect(result.filesModified).toEqual([path.join(dir, "README.md")]);
       expect(result.warnings).toEqual([
@@ -728,86 +732,48 @@ describe("runCodemods", () => {
     });
 
     test("ignores source comments, strings, and identifier substrings for legacy warnings", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "createContext.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "createContext.ts",
+        source: [
           "// Matches SDK's unauthenticatedTailorUser.id",
           'const note = "TailorUser";',
           "const unauthenticatedTailorUserId = caller?.id;",
         ].join("\n"),
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod(
-              "test/principal",
-              partialTransformPath,
-              ["**/*.ts"],
-              ["TailorUser", "unauthenticatedTailorUser"],
-            ),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod(
+          "test/principal",
+          partialTransformPath,
+          ["**/*.ts"],
+          ["TailorUser", "unauthenticatedTailorUser"],
+        ),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("ignores JSX text for legacy warnings in JavaScript files", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "docs.js"),
-        "export const docs = <p>package tailor-sdk is installed</p>;",
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", undefined, ["**/*.js"], ["tailor-sdk"]),
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "docs.js",
+        source: "export const docs = <p>package tailor-sdk is installed</p>;",
+        codemod: makeCodemod("test/rename-bin", undefined, ["**/*.js"], ["tailor-sdk"]),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("keeps legacy warnings for source identifiers", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "resolver.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "resolver.ts",
+        source: [
           'import type { TailorUser } from "@tailor-platform/sdk";',
           "const fallback = unauthenticatedTailorUser;",
         ].join("\n"),
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod(
-              "test/principal",
-              partialTransformPath,
-              ["**/*.ts"],
-              ["TailorUser", "unauthenticatedTailorUser"],
-            ),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod(
+          "test/principal",
+          partialTransformPath,
+          ["**/*.ts"],
+          ["TailorUser", "unauthenticatedTailorUser"],
+        ),
+      });
 
       expect(result.warnings).toEqual([
         "resolver.ts: contains TailorUser, unauthenticatedTailorUser but was not migrated automatically (rule: test/principal). Manual migration may be needed.",
@@ -815,33 +781,20 @@ describe("runCodemods", () => {
     });
 
     test("keeps legacy warnings for process.env bracket keys in source files", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "env.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "env.ts",
+        source: [
           'const platformUrl = process.env["PLATFORM_URL"];',
           "const logLevel = process.env[`LOG_LEVEL`];",
           'const unrelated = "LOG_LEVEL";',
         ].join("\n"),
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod(
-              "test/env",
-              partialTransformPath,
-              ["**/*.ts"],
-              ["PLATFORM_URL", "LOG_LEVEL"],
-            ),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod(
+          "test/env",
+          partialTransformPath,
+          ["**/*.ts"],
+          ["PLATFORM_URL", "LOG_LEVEL"],
+        ),
+      });
 
       expect(result.warnings).toEqual([
         "env.ts: contains PLATFORM_URL, LOG_LEVEL but was not migrated automatically (rule: test/env). Manual migration may be needed.",
@@ -849,30 +802,17 @@ describe("runCodemods", () => {
     });
 
     test("keeps opt-in legacy warnings for source string fragments", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "env.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "env.ts",
+        source: [
           'import { execSync } from "node:child_process";',
           'execSync("PLATFORM_URL=https://api.test LOG_LEVEL=DEBUG tailor-sdk login");',
           "// PLATFORM_URL in a comment stays ignored.",
         ].join("\n"),
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: ["PLATFORM_URL", "LOG_LEVEL"],
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: ["PLATFORM_URL", "LOG_LEVEL"],
+        }),
+      });
 
       expect(result.warnings).toEqual([
         "env.ts: contains PLATFORM_URL, LOG_LEVEL but was not migrated automatically (rule: test/env). Manual migration may be needed.",
@@ -880,167 +820,86 @@ describe("runCodemods", () => {
     });
 
     test("keeps source string residual checks inside each literal", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: [
           'const packageName = "tailor-sdk";',
           'const command = "deploy";',
           'spawn("tailor", ["--arg", "tailor-sdk deploy", "deploy"]);',
           'spawn("npx", ["@tailor-platform/sdk", "--arg", "tailor-sdk deploy", "deploy"]);',
         ].join("\n"),
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: [/tailor-sdk(?=\s+deploy)/],
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: [/tailor-sdk(?=\s+deploy)/],
+        }),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("keeps generic source string residual checks out of comments", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "env.ts"),
-        "// PLATFORM_URL is documented here\nconst value = 1;",
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: ["PLATFORM_URL"],
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "env.ts",
+        source: "// PLATFORM_URL is documented here\nconst value = 1;",
+        codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: ["PLATFORM_URL"],
+        }),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("keeps escaped quoted Tailor values out of rename-bin residual warnings", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        'const command = "tailor --arg \\"tailor-sdk deploy\\" deploy";',
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: 'const command = "tailor --arg \\"tailor-sdk deploy\\" deploy";',
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("keeps split Tailor option values out of rename-bin residual warnings", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        'spawn("tailor", ["tailordb", "migration", "generate", "--name", "tailor-sdk deploy"]);',
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source:
+          'spawn("tailor", ["tailordb", "migration", "generate", "--name", "tailor-sdk deploy"]);',
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("keeps shim and path Tailor option values out of rename-bin residual warnings", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: [
           'spawn("tailor.cmd", ["--arg", "tailor-sdk deploy", "deploy"]);',
           'spawn("./node_modules/.bin/tailor", ["--arg", "tailor-sdk deploy", "deploy"]);',
         ].join("\n"),
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("warns for split argv rename-bin residuals", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: [
           'spawn("tailor-sdk", ["apply"]);',
           'spawn("tailor-sdk", ["crash-report", "list"]);',
           'spawn("npx", ["-p", "@tailor-platform/sdk", "tailor-sdk", "crash-report"]);',
         ].join("\n"),
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1048,27 +907,13 @@ describe("runCodemods", () => {
     });
 
     test("warns for variable-backed rename-bin source residuals", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        ['const bin = "tailor-sdk";', 'spawn(bin, ["deploy"]);'].join("\n"),
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: ['const bin = "tailor-sdk";', 'spawn(bin, ["deploy"]);'].join("\n"),
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1076,29 +921,16 @@ describe("runCodemods", () => {
     });
 
     test("warns for source comment and JSX rename-bin residuals", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.tsx"),
-        ["// tailor-sdk apply", "const docs = <code>tailor-sdk crash-report list</code>;"].join(
-          "\n",
-        ),
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.tsx"], [], {
-              sourceTextLegacyPatterns: renameBin?.sourceTextLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.tsx",
+        source: [
+          "// tailor-sdk apply",
+          "const docs = <code>tailor-sdk crash-report list</code>;",
+        ].join("\n"),
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.tsx"], [], {
+          sourceTextLegacyPatterns: renameBin.sourceTextLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.tsx: contains");
@@ -1106,30 +938,16 @@ describe("runCodemods", () => {
     });
 
     test("warns for quoted shell rename-bin residuals", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: [
           'const note = "unrelated";',
           "const command = 'bash -lc \"tailor-sdk crash-report list\"';",
         ].join("\n"),
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1137,27 +955,13 @@ describe("runCodemods", () => {
     });
 
     test("warns for quoted legacy CLI residuals", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        "const message = 'Run \"tailor-sdk crash-report list\" manually';",
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: "const message = 'Run \"tailor-sdk crash-report list\" manually';",
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1165,11 +969,9 @@ describe("runCodemods", () => {
     });
 
     test("warns for source command residuals with shadowed aliases", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        [
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: [
           'const bin = "tailor-sdk";',
           'spawn(bin, ["apply"]);',
           "function shadow() {",
@@ -1177,22 +979,10 @@ describe("runCodemods", () => {
           "  return bin;",
           "}",
         ].join("\n"),
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1200,29 +990,16 @@ describe("runCodemods", () => {
     });
 
     test("warns for source command residuals before later fragments", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        ["const command = `${runner} tailor-sdk ${subcommand}`;", 'const later = "deploy";'].join(
-          "\n",
-        ),
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: [
+          "const command = `${runner} tailor-sdk ${subcommand}`;",
+          'const later = "deploy";',
+        ].join("\n"),
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1230,53 +1007,25 @@ describe("runCodemods", () => {
     });
 
     test("keeps multiple-spaced Tailor option values out of rename-bin residual warnings", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        'const command = "tailor --name   tailor-sdk deploy";',
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: 'const command = "tailor --name   tailor-sdk deploy";',
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toEqual([]);
     });
 
     test("warns for dynamic template rename-bin residuals", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        "const command = `${runner} tailor-sdk ${subcommand}`;",
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: "const command = `${runner} tailor-sdk ${subcommand}`;",
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1284,27 +1033,13 @@ describe("runCodemods", () => {
     });
 
     test("warns for dynamic package flag rename-bin residuals", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "commands.ts"),
-        "const command = `npx -p ${pkg} tailor-sdk login`;",
-        "utf-8",
-      );
-      const renameBin = allCodemods.find((codemod) => codemod.id === "v2/rename-bin");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: renameBin?.sourceStringLegacyPatterns,
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: "const command = `npx -p ${pkg} tailor-sdk login`;",
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
 
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
@@ -1312,26 +1047,13 @@ describe("runCodemods", () => {
     });
 
     test("keeps source string residual checks in non-Tailor option values", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "env.ts"),
-        'spawn("node", ["-e", "process.env.LOG_LEVEL"]);',
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: ["LOG_LEVEL"],
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "env.ts",
+        source: 'spawn("node", ["-e", "process.env.LOG_LEVEL"]);',
+        codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: ["LOG_LEVEL"],
+        }),
+      });
 
       expect(result.warnings).toEqual([
         "env.ts: contains LOG_LEVEL but was not migrated automatically (rule: test/env). Manual migration may be needed.",
@@ -1339,26 +1061,13 @@ describe("runCodemods", () => {
     });
 
     test("keeps non-rename-bin source string residual checks in Tailor option values", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-warning-source-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(
-        path.join(dir, "env.ts"),
-        'spawn("tailor", ["--arg", "LOG_LEVEL=debug", "deploy"]);',
-        "utf-8",
-      );
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
-              sourceStringLegacyPatterns: ["LOG_LEVEL"],
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
+      const { result } = await runWarningCase({
+        fileName: "env.ts",
+        source: 'spawn("tailor", ["--arg", "LOG_LEVEL=debug", "deploy"]);',
+        codemod: makeCodemod("test/env", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: ["LOG_LEVEL"],
+        }),
+      });
 
       expect(result.warnings).toEqual([
         "env.ts: contains LOG_LEVEL but was not migrated automatically (rule: test/env). Manual migration may be needed.",
@@ -2180,56 +1889,6 @@ describe("runCodemods", () => {
       expect(result.warnings).toEqual([
         "both.ts: contains executeScript + JSON.stringify but was not migrated automatically (rule: test/and-group). Manual migration may be needed.",
       ]);
-    });
-
-    test("flags files matching a suspicious pattern for LLM review", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(path.join(dir, "a.ts"), "executeScript({ arg: payload });\n");
-      await fs.promises.writeFile(path.join(dir, "b.ts"), "const x = 1;\n");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
-              suspiciousPatterns: ["executeScript"],
-              prompt: "Rewrite remaining executeScript usages by hand.",
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
-
-      expect(result.llmReviews).toEqual([
-        {
-          codemodId: "test/llm",
-          prompt: "Rewrite remaining executeScript usages by hand.",
-          files: ["a.ts"],
-        },
-      ]);
-    });
-
-    test("does not flag for LLM review without a prompt", async () => {
-      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-noprompt-test-"));
-      tmpDir = dir;
-      await fs.promises.writeFile(path.join(dir, "a.ts"), "executeScript({ arg: payload });\n");
-
-      const result = await runCodemods(
-        [
-          {
-            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
-              suspiciousPatterns: ["executeScript"],
-            }),
-            scriptPath: partialTransformPath,
-          },
-        ],
-        dir,
-        true,
-      );
-
-      expect(result.llmReviews).toEqual([]);
     });
   });
 });

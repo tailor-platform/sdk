@@ -37,8 +37,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // (including Create*/Update*/Delete*) and must guard.
   "api/inspect.ts",
   "api/list.ts",
-  // Auth token retrieval (may refresh via the OAuth server and persist tokens
-  // locally, but mutates no workspace/platform state)
+  // Authentication helpers (token retrieval may refresh via the OAuth server
+  // and persist tokens locally, but neither command mutates platform state)
+  "auth/status.ts",
   "auth/token.ts",
   // Auth connections (read-only)
   "authconnection/index.ts",
@@ -57,7 +58,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "executor/list.ts",
   "executor/webhook.ts",
   // Function (read-only / local execution). `function/run.ts` is exempt
-  // because it runs under a machine user via `testExecScript` whose own
+  // because it runs under a machine user via `execScript` whose own
   // permissions gate any application-data effects.
   "function/index.ts",
   "function/bundle.ts",

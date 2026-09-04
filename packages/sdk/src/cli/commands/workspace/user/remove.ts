@@ -1,40 +1,34 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 
 // strip unknown keys
 const removeUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  email: z.string().email({ message: "email must be a valid email address" }),
+  email: z.email({ message: "email must be a valid email address" }),
 });
 
 export type RemoveUserOptions = z.input<typeof removeUserOptionsSchema>;
 
 async function loadOptions(options: RemoveUserOptions) {
-  const result = removeUserOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(removeUserOptionsSchema, options);
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    email: result.data.email,
+    email: validated.email,
   };
 }
 

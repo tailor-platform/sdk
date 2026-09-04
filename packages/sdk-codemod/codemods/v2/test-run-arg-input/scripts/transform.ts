@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 const COMMAND_PATTERN = /\btailor-sdk\s+function\s+test-run\b/;
 
@@ -142,29 +143,7 @@ function transformShellLikeText(source: string): string | null {
 }
 
 function transformPackageJson(source: string): string | null {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(source) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-  const scripts = parsed.scripts;
-  if (typeof scripts !== "object" || scripts == null || Array.isArray(scripts)) return null;
-
-  let modified = false;
-  for (const [name, value] of Object.entries(scripts as Record<string, unknown>)) {
-    if (typeof value !== "string") continue;
-    if (!COMMAND_PATTERN.test(value)) continue;
-    const updated = transformShellLikeText(value);
-    if (updated != null) {
-      (scripts as Record<string, string>)[name] = updated;
-      modified = true;
-    }
-  }
-  if (!modified) return null;
-
-  const trailing = source.endsWith("\n") ? "\n" : "";
-  return JSON.stringify(parsed, null, 2) + trailing;
+  return transformPackageScripts(source, transformShellLikeText);
 }
 
 /**

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
@@ -39,18 +40,11 @@ export const listCommand = defineAppCommand({
     }
 
     const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
-    if (jsonOutput) {
-      logger.out(patInfos);
-      return;
-    }
-
-    // Text format: aligned list "name: scope1/scope2"
-    const maxNameLength = Math.max(...pats.map((pat) => pat.name.length));
-
-    pats.forEach((pat) => {
-      const info = transformPersonalAccessToken(pat);
-      const paddedName = info.name.padStart(maxNameLength);
-      logger.log(`${paddedName}: ${info.scopes.join("/")}`);
+    logger.out(patInfos, {
+      display: {
+        scopes: (value) => (value as string[]).join("/"),
+        lastUsedAt: (value) => (value === null ? "never" : humanizeRelativeTime(value as Date)),
+      },
     });
   },
 });

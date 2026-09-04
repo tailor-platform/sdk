@@ -3,9 +3,9 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { initOperatorClient } from "#/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { type initOperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { spinner } from "#/cli/shared/spinner";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 import {
@@ -279,13 +279,9 @@ export async function waitForWorkflowExecution(
 export async function waitForWorkflowExecutionById(
   options: WaitWorkflowExecutionOptions,
 ): Promise<WorkflowWaitResult> {
-  const accessToken = await loadAccessToken({
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
-    profile: options.profile,
   });
 
   return await waitForWorkflowExecution({

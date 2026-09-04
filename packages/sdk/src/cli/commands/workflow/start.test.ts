@@ -31,7 +31,7 @@ vi.mock("./get", () => ({
 describe("startWorkflow", () => {
   let getApplicationMock: ReturnType<typeof vi.fn>;
   let getWorkflowExecutionMock: ReturnType<typeof vi.fn>;
-  let testStartWorkflowMock: ReturnType<typeof vi.fn>;
+  let startWorkflowMock: ReturnType<typeof vi.fn>;
 
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
@@ -50,7 +50,7 @@ describe("startWorkflow", () => {
         authNamespace: "auth-ns",
       },
     });
-    testStartWorkflowMock = vi.fn().mockResolvedValue({
+    startWorkflowMock = vi.fn().mockResolvedValue({
       executionId: "execution-1",
     });
     getWorkflowExecutionMock = vi.fn().mockResolvedValue({
@@ -65,7 +65,7 @@ describe("startWorkflow", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       getApplication: getApplicationMock,
       getWorkflowExecution: getWorkflowExecutionMock,
-      testStartWorkflow: testStartWorkflowMock,
+      startWorkflow: startWorkflowMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
     vi.mocked(resolveWorkflow).mockImplementation(async (_client, _workspaceId, workflowName) => {
@@ -92,7 +92,7 @@ describe("startWorkflow", () => {
       workspaceId: "workspace-1",
       applicationName: "my-app",
     });
-    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+    expect(startWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: "id:typed-workflow",
         authInvoker: expect.objectContaining({
@@ -124,7 +124,7 @@ describe("startWorkflow", () => {
       invoker: "typed-user",
     });
 
-    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+    expect(startWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowId: "id:typed-workflow",
         authInvoker: expect.objectContaining({
@@ -151,7 +151,7 @@ describe("startWorkflow", () => {
         invoker: "typed-user",
       }),
     ).rejects.toThrow("my-app does not have an auth configuration");
-    expect(testStartWorkflowMock).not.toHaveBeenCalled();
+    expect(startWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("start command with jsonMode emits only parseable JSON to stdout", async () => {
@@ -204,7 +204,7 @@ describe("startWorkflow", () => {
       machineUserSource: undefined,
       profile: undefined,
     });
-    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+    expect(startWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
         authInvoker: expect.objectContaining({ machineUserName: "profile-bot" }),
       }),

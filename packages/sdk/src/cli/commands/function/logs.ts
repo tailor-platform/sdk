@@ -3,9 +3,8 @@ import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_r
 import { arg } from "politty";
 import { z } from "zod";
 import { pagedLogArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
-import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { fetchPaged, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
 import {
@@ -13,6 +12,7 @@ import {
   scriptNameToRegistryName,
 } from "#/cli/shared/function-script-download";
 import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
 
@@ -304,13 +304,9 @@ Stack traces are mapped only when the execution includes a content hash for the 
     }),
   }),
   run: async (args) => {
-    const accessToken = await loadAccessToken({
+    const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
-      profile: args.profile,
     });
 
     if (args.executionId) {

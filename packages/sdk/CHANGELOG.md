@@ -1,5 +1,47 @@
 # @tailor-platform/sdk
 
+## 2.12.0
+
+### Minor Changes
+
+- [#2214](https://github.com/tailor-platform/sdk/pull/2214) [`eff7f82`](https://github.com/tailor-platform/sdk/commit/eff7f82b0678de494eef1fede8d2946961fd0d58) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Add `tailor auth status` for inspecting profile-aware authentication metadata without exposing token values.
+
+- [#2245](https://github.com/tailor-platform/sdk/pull/2245) [`a305420`](https://github.com/tailor-platform/sdk/commit/a305420cf7dd7de0192b2e8ae6d5be26f8a4bc36) Thanks [@jackchuka](https://github.com/jackchuka)! - Show when each personal access token was created and last used in `tailor user pat list`, so unused tokens are easy to spot. Tokens that have never authenticated report `never`.
+
+### Patch Changes
+
+- [#2223](https://github.com/tailor-platform/sdk/pull/2223) [`fae1d2d`](https://github.com/tailor-platform/sdk/commit/fae1d2dbf3bf2c6f1adf889032ac398a3a716d6d) Thanks [@dqn](https://github.com/dqn)! - Keep CLI workspace initialization behavior consistent across commands.
+
+- [#2226](https://github.com/tailor-platform/sdk/pull/2226) [`ba386f0`](https://github.com/tailor-platform/sdk/commit/ba386f01931c4c597a31ba3dd9116bafd2e2b2d5) Thanks [@dqn](https://github.com/dqn)! - Report every invalid CLI option in one validation error instead of only the first.
+
+- [#2231](https://github.com/tailor-platform/sdk/pull/2231) [`03a3a39`](https://github.com/tailor-platform/sdk/commit/03a3a3982d0b82d5180f779da505294029c1d392) Thanks [@dqn](https://github.com/dqn)! - Fix generated Kysely types importing `ObjectColumnType` / `ArrayColumnType` they never use when an enum allowed value contains the wrapper name
+
+- [#2229](https://github.com/tailor-platform/sdk/pull/2229) [`f13dbac`](https://github.com/tailor-platform/sdk/commit/f13dbacb0c13fddaed0fb7ea99e541237e8b1218) Thanks [@renovate](https://github.com/apps/renovate)! - Upgrade zod dependency to v4.5.4
+
+- [#2234](https://github.com/tailor-platform/sdk/pull/2234) [`9f6c7da`](https://github.com/tailor-platform/sdk/commit/9f6c7dab03bca204e954ce1fa2a372925dcd4a9b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsx to v4.23.13
+
+- [#2236](https://github.com/tailor-platform/sdk/pull/2236) [`e648f59`](https://github.com/tailor-platform/sdk/commit/e648f59b2e823bcd9119373cd4135173accf3f36) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency open to v11.0.2
+
+## 2.11.0
+
+### Minor Changes
+
+- [#2213](https://github.com/tailor-platform/sdk/pull/2213) [`1bb2fc5`](https://github.com/tailor-platform/sdk/commit/1bb2fc576cd9e3d939d1d98097f571bdd6f829fc) Thanks [@dqn](https://github.com/dqn)! - Add `mockTailordbWithPGlite` to `@tailor-platform/sdk/vitest`: back `getDB(namespace)` with an in-memory PostgreSQL (`@electric-sql/pglite`), so resolver/executor/workflow tests execute their queries against real data instead of staged responses
+
+### Patch Changes
+
+- [#2219](https://github.com/tailor-platform/sdk/pull/2219) [`40e5368`](https://github.com/tailor-platform/sdk/commit/40e5368224dfa7027a2728b4a0dc832d25c123b2) Thanks [@dqn](https://github.com/dqn)! - Fix `tailordb migration generate` emitting invalid TypeScript in `db.ts` when a migration removes every allowed value from an enum field; the write slots are now typed as `never`.
+
+- [#2215](https://github.com/tailor-platform/sdk/pull/2215) [`74ff2c6`](https://github.com/tailor-platform/sdk/commit/74ff2c60c704bb60a7c3f251c1e961888e3be9f8) Thanks [@dqn](https://github.com/dqn)! - Fix deploy planning dropping plugin-generated executors when the project defines no executor files of its own, which could omit them from deployment or delete an already-deployed one
+
+- [#2220](https://github.com/tailor-platform/sdk/pull/2220) [`dd98efe`](https://github.com/tailor-platform/sdk/commit/dd98efeaeb3e25d8188be227b4282cc23b7b9c68) Thanks [@dqn](https://github.com/dqn)! - Validate plugin-generated and plugin-extended TailorDB tables against the table schema. A malformed table emitted by a plugin now fails the build with an error naming the plugin and table instead of crashing or passing through unvalidated.
+
+- [#2206](https://github.com/tailor-platform/sdk/pull/2206) [`77f8960`](https://github.com/tailor-platform/sdk/commit/77f8960c2f7797fd1e0fc322f29df735111d5fea) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.5
+
+- [#2207](https://github.com/tailor-platform/sdk/pull/2207) [`4308d19`](https://github.com/tailor-platform/sdk/commit/4308d19ae4e5d5c14ade295f4b170831bc4e7a38) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.2.6
+
+- [#2228](https://github.com/tailor-platform/sdk/pull/2228) [`ea43882`](https://github.com/tailor-platform/sdk/commit/ea43882f4838b779ea177615208f1a578a1618c3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.52.0
+
 ## 2.10.0
 
 ### Minor Changes

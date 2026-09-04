@@ -6,9 +6,9 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
 
 // strip unknown keys
@@ -20,17 +20,14 @@ export type DeleteWorkspaceOptions = z.input<typeof deleteWorkspaceOptionsSchema
 
 async function loadOptions(options: DeleteWorkspaceOptions) {
   // Validate options with zod schema
-  const result = deleteWorkspaceOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(deleteWorkspaceOptionsSchema, options);
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
   return {
     client,
-    workspaceId: result.data.workspaceId,
+    workspaceId: validated.workspaceId,
   };
 }
 

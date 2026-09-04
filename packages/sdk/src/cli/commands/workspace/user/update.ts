@@ -1,42 +1,36 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
-import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
 import { stringToRole, validRoles } from "./transform";
 
 // strip unknown keys
 const updateUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  email: z.string().email({ message: "email must be a valid email address" }),
+  email: z.email({ message: "email must be a valid email address" }),
   role: z.enum(validRoles, { message: `role must be one of: ${validRoles.join(", ")}` }),
 });
 
 export type UpdateUserOptions = z.input<typeof updateUserOptionsSchema>;
 
 async function loadOptions(options: UpdateUserOptions) {
-  const result = updateUserOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
+  const validated = parseOptions(updateUserOptionsSchema, options);
 
-  const accessToken = await loadAccessToken({ profile: result.data.profile });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: result.data.workspaceId,
-    profile: result.data.profile,
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
   });
 
   return {
     client,
     workspaceId,
-    email: result.data.email,
-    role: stringToRole(result.data.role),
+    email: validated.email,
+    role: stringToRole(validated.role),
   };
 }
 

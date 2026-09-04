@@ -2,9 +2,15 @@ name: "SDK E2E Test"
 
 on:
   pull_request:
+  # The coverage workflow no longer runs the subprocess-driven e2e suite, so
+  # cover merge commits on main here.
+  push:
+    branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Per-SHA groups on push: the ref-wide group has a single pending slot, so a
+  # later push would replace a queued run and leave its commit unverified.
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: false
 
 permissions: {}
@@ -40,6 +46,10 @@ jobs:
   sdk-e2e:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
+    concurrency:
+      group: sdk-e2e-main-sdk-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     name: SDK package e2e
     permissions:
@@ -52,7 +62,7 @@ jobs:
           persist-credentials: "false"
 
       - name: Install deps
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       - name: Login as machine user
         run: pnpm tailor login --machine-user
@@ -62,7 +72,7 @@ jobs:
 
       - name: Run SDK e2e tests
         working-directory: packages/sdk
-        run: pnpm run test --project e2e
+        run: pnpm run test:e2e
         env:
           TAILOR_PLATFORM_E2E_RUN_ID: ${{ github.run_id }}-sdk
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
@@ -79,6 +89,10 @@ jobs:
   template-workflow-e2e:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
+    concurrency:
+      group: sdk-e2e-main-template-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     name: Template workflow e2e
     permissions:
@@ -91,7 +105,7 @@ jobs:
           persist-credentials: "false"
 
       - name: Install deps
-        uses: ./.github/actions/install-deps
+        uses: $/.github/actions/install-deps
 
       - name: Login as machine user
         run: pnpm tailor login --machine-user

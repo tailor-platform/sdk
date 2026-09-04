@@ -31,7 +31,7 @@ import {
 import { fetchMissingDependentApps } from "./dependency-records";
 import {
   buildDeploymentTargets,
-  loadDeployConfig,
+  loadDeployConfigs,
   parseDeployConfigPaths,
   type BuiltDeploymentTarget,
 } from "./deployment-target";
@@ -638,9 +638,7 @@ async function deployInternal(
     const preflightConfigs = buildOnly
       ? []
       : await withSpan("config.preflight", () =>
-          Promise.all(
-            configPaths.map((configPath) => loadDeployConfig({ configPath, dryRun, buildOnly })),
-          ),
+          loadDeployConfigs({ configPaths, dryRun, buildOnly }),
         );
     const resolvedConfigPaths = preflightConfigs.map(({ config }) => config.path);
     const workspaceContextTargets = preflightConfigs.map(({ config }) => ({
@@ -674,7 +672,7 @@ async function deployInternal(
 
       const targets = await buildDeploymentTargets({
         configPaths,
-        loadedConfigs: preflightConfigs,
+        loadedConfigs: buildOnly ? undefined : preflightConfigs,
         dryRun,
         buildOnly,
         noCache,
