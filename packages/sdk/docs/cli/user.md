@@ -135,8 +135,14 @@ Show current user.
 **Usage**
 
 ```
-tailor user current
+tailor user current [options]
 ```
+
+**Options**
+
+| Option                | Alias | Description       | Required | Default | Env                       |
+| --------------------- | ----- | ----------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -147,8 +153,14 @@ List all users.
 **Usage**
 
 ```
-tailor user list
+tailor user list [options]
 ```
+
+**Options**
+
+| Option                | Alias | Description       | Required | Default | Env                       |
+| --------------------- | ----- | ----------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -191,9 +203,10 @@ tailor user pat create [options] <name>
 
 **Options**
 
-| Option    | Alias | Description                                 | Required | Default |
-| --------- | ----- | ------------------------------------------- | -------- | ------- |
-| `--write` | `-W`  | Grant write permission (default: read-only) | No       | `false` |
+| Option                | Alias | Description                                 | Required | Default | Env                       |
+| --------------------- | ----- | ------------------------------------------- | -------- | ------- | ------------------------- |
+| `--write`             | `-W`  | Grant write permission (default: read-only) | No       | `false` | -                         |
+| `--profile <PROFILE>` | `-p`  | Workspace profile                           | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -204,7 +217,7 @@ Delete a personal access token.
 **Usage**
 
 ```
-tailor user pat delete <name>
+tailor user pat delete [options] <name>
 ```
 
 **Arguments**
@@ -212,6 +225,12 @@ tailor user pat delete <name>
 | Argument | Description | Required |
 | -------- | ----------- | -------- |
 | `name`   | Token name  | Yes      |
+
+**Options**
+
+| Option                | Alias | Description       | Required | Default | Env                       |
+| --------------------- | ----- | ----------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -227,10 +246,11 @@ tailor user pat list [options]
 
 **Options**
 
-| Option            | Alias | Description                                              | Required | Default  |
-| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
-| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
-| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
+| Option                | Alias | Description                                              | Required | Default  | Env                       |
+| --------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------- |
+| `--order <ORDER>`     | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                         |
+| `--limit <LIMIT>`     | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                         |
+| `--profile <PROFILE>` | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -252,9 +272,10 @@ tailor user pat update [options] <name>
 
 **Options**
 
-| Option    | Alias | Description                                                | Required | Default |
-| --------- | ----- | ---------------------------------------------------------- | -------- | ------- |
-| `--write` | `-W`  | Grant write permission (if not specified, keeps read-only) | No       | `false` |
+| Option                | Alias | Description                                                | Required | Default | Env                       |
+| --------------------- | ----- | ---------------------------------------------------------- | -------- | ------- | ------------------------- |
+| `--write`             | `-W`  | Grant write permission (if not specified, keeps read-only) | No       | `false` | -                         |
+| `--profile <PROFILE>` | `-p`  | Workspace profile                                          | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -265,7 +286,7 @@ Set current user.
 **Usage**
 
 ```
-tailor user switch <user>
+tailor user switch [options] <user>
 ```
 
 **Arguments**
@@ -273,6 +294,12 @@ tailor user switch <user>
 | Argument | Description                                  | Required |
 | -------- | -------------------------------------------- | -------- |
 | `user`   | User email address or machine user client ID | Yes      |
+
+**Options**
+
+| Option                | Alias | Description       | Required | Default | Env                       |
+| --------------------- | ----- | ----------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 When no subcommand is provided, defaults to `list`.

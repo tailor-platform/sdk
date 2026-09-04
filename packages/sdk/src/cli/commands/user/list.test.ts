@@ -171,7 +171,10 @@ describe("user list", () => {
     expect(stderr.output).not.toContain("u@example.com (current)");
   });
 
-  test("marks the active profile user as current in text mode", async () => {
+  test.each([
+    ["uses the environment profile when --profile is omitted", ["list"]],
+    ["an empty explicit profile falls back to the environment profile", ["list", "--profile", ""]],
+  ])("%s", async (_name, args) => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
       version: 2,
@@ -202,10 +205,60 @@ describe("user list", () => {
 
     using stderr = captureStderr();
 
-    await runCommand(userCommand, []);
+    await runCommand(userCommand, args);
 
     expect(stderr.output).toContain("profile@example.com [https://api.dev.tailor.tech] (current)");
     expect(stderr.output).toContain("default@example.com");
     expect(stderr.output).not.toContain("default@example.com (current)");
+  });
+
+  test("prefers an explicit profile when marking the current user", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "dev@example.com": {
+          storage: "file",
+          access_token: "dev-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+        "prod@example.com": {
+          storage: "file",
+          access_token: "prod-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: { user: "dev@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        prod: {
+          user: "prod@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+        },
+      },
+      current_user: null,
+    });
+    using stderr = captureStderr();
+
+    const result = await runCommand(userCommand, ["list", "--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("prod@example.com (current)");
+    expect(stderr.output).not.toContain("dev@example.com (current)");
+  });
+
+  test("rejects an unknown explicit profile", async () => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+
+    const result = await runCommand(userCommand, ["list", "--profile", "missing"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toEqual(new Error('Profile "missing" not found'));
   });
 });

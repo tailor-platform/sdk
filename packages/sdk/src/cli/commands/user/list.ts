@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
@@ -16,14 +17,15 @@ type UserListInfo = {
   current: boolean;
 };
 
-function activeCurrentUserKey(config: PlatformConfig): string | null {
-  const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
+function activeCurrentUserKey(config: PlatformConfig, activeProfile?: string): string | null {
   if (!activeProfile) {
     if (!config.current_user) return null;
     return resolveUserTokenKey(config, config.current_user);
   }
   const profile = config.profiles[activeProfile];
-  if (!profile) return null;
+  if (!profile) {
+    throw new Error(`Profile "${activeProfile}" not found`);
+  }
   return resolveUserTokenKey(config, profile.user, platformConfigFromProfile(profile));
 }
 
@@ -47,10 +49,12 @@ function formatUserListInfo(info: UserListInfo): string {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
-  args: z.strictObject({}),
-  run: async () => {
+  args: z.strictObject({ profile: workspaceArgs.profile }),
+  run: async (args) => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;
+    const activeProfile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
+    const currentUserKey = activeCurrentUserKey(config, activeProfile);
 
     const users = Object.keys(config.users);
     if (users.length === 0) {
@@ -64,7 +68,6 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const currentUserKey = activeCurrentUserKey(config);
     const userInfos = users.map((user) => toUserListInfo(user, currentUserKey));
     if (jsonOutput) {
       logger.out([...new Set(userInfos.map((userInfo) => userInfo.user))]);

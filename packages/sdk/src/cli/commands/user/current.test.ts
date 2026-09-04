@@ -68,7 +68,10 @@ describe("user current", () => {
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
   });
 
-  test("shows the active profile user instead of the global current user", async () => {
+  test.each([
+    ["uses the environment profile when --profile is omitted", []],
+    ["an empty explicit profile falls back to the environment profile", ["--profile", ""]],
+  ])("%s", async (_name, args) => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
       version: 2,
@@ -99,8 +102,42 @@ describe("user current", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await runCommand(currentCommand, []);
+    await runCommand(currentCommand, args);
 
     expect(JSON.parse(stdout.output)).toEqual({ user: "profile@example.com" });
+  });
+
+  test("prefers an explicit profile over TAILOR_PLATFORM_PROFILE", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "flag@example.com": {
+          storage: "file",
+          access_token: "flag-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: { user: "env@example.com", workspace_id: validUUID },
+        prod: { user: "flag@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+    using stdout = captureStdout();
+    using _json = jsonMode();
+
+    const result = await runCommand(currentCommand, ["--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toEqual({ user: "flag@example.com" });
+  });
+
+  test("rejects a missing explicit profile", async () => {
+    const result = await runCommand(currentCommand, ["--profile", "missing"]);
+
+    expect(result.success).toBe(false);
+    expect((result as { error?: Error }).error?.message).toBe('Profile "missing" not found');
   });
 });

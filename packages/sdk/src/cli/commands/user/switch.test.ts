@@ -91,7 +91,13 @@ describe("user switch", () => {
     expect(config.current_user).toBe("u@example.com");
   });
 
-  test("updates the active profile user when switching users", async () => {
+  test.each([
+    ["uses the environment profile when --profile is omitted", ["other@example.com"]],
+    [
+      "an empty explicit profile falls back to the environment profile",
+      ["other@example.com", "--profile", ""],
+    ],
+  ])("%s", async (_name, args) => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -126,12 +132,39 @@ describe("user switch", () => {
       current_user: null,
     });
 
-    const result = await runCommand(switchCommand, ["other@example.com"]);
+    const result = await runCommand(switchCommand, args);
 
     expect(result.success).toBe(true);
     const updatedConfig = await readPlatformConfig();
     expect(updatedConfig.profiles.dev?.user).toBe("other@example.com");
     expect(updatedConfig.current_user).toBeNull();
+  });
+
+  test("updates the explicitly selected profile instead of the environment profile", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "other@example.com": {
+          storage: "file",
+          access_token: "other-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: { user: "dev@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        prod: { user: "prod@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+      },
+      current_user: null,
+    });
+
+    const result = await runCommand(switchCommand, ["other@example.com", "--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.profiles.prod?.user).toBe("other@example.com");
+    expect(config.profiles.dev?.user).toBe("dev@example.com");
   });
 
   test("rejects scoped token keys as current user values", async () => {

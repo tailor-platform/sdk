@@ -3,7 +3,7 @@ import { PATScope } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
+import { loadAccessToken } from "#/cli/shared/context";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
 
@@ -14,32 +14,14 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 
 vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
-  fetchLatestToken: vi.fn(),
-  readPlatformConfig: vi.fn(),
+  loadAccessToken: vi.fn(),
 }));
-
-const baseConfig = {
-  version: 3,
-  min_sdk_version: "2.0.0",
-  users: {},
-  profiles: {
-    dev: {
-      user: "u@example.com",
-      workspace_id: "12345678-1234-4abc-8def-123456789012",
-      platform_url: "https://api.dev.tailor.tech",
-    },
-  },
-  current_user: null,
-} satisfies Awaited<ReturnType<typeof readPlatformConfig>>;
 
 describe("user pat list", () => {
   aroundEach(async (runTest) => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     vi.clearAllMocks();
-    vi.mocked(fetchLatestToken).mockResolvedValue({
-      accessToken: "scoped-token",
-      user: "u@example.com",
-    });
+    vi.mocked(loadAccessToken).mockResolvedValue("scoped-token");
     vi.mocked(initOperatorClient).mockResolvedValue({
       listPersonalAccessTokens: vi.fn().mockResolvedValue({
         personalAccessTokens: [],
@@ -50,25 +32,42 @@ describe("user pat list", () => {
     vi.unstubAllEnvs();
   });
 
-  test("uses the active profile platform when loading the current user's token", async () => {
-    vi.mocked(readPlatformConfig).mockResolvedValue(baseConfig);
+  test("an empty explicit profile falls back to the environment profile", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    using _json = jsonMode();
+
+    const result = await runCommand(listCommand, ["--profile", ""]);
+
+    expect(result.success).toBe(true);
+    expect(loadAccessToken).toHaveBeenCalledWith({ profile: "" });
+    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token");
+  });
+
+  test("uses the environment profile when --profile is omitted", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     using _json = jsonMode();
 
     const result = await runCommand(listCommand, []);
 
     expect(result.success).toBe(true);
-    expect(fetchLatestToken).toHaveBeenCalledWith(baseConfig, "u@example.com", {
-      platformUrl: "https://api.dev.tailor.tech",
-    });
-    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token", {
-      platformUrl: "https://api.dev.tailor.tech",
-    });
+    expect(loadAccessToken).toHaveBeenCalledWith({ profile: "dev" });
+    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token");
+  });
+
+  test("prefers an explicit profile over TAILOR_PLATFORM_PROFILE", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    using _json = jsonMode();
+
+    const result = await runCommand(listCommand, ["--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    expect(loadAccessToken).toHaveBeenCalledWith({ profile: "prod" });
+    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token");
   });
 
   test("renders scopes, usage timestamps, and a never-used token as never", async () => {
     const createdAt = new Date("2026-01-02T03:04:05Z");
     const lastUsedAt = new Date("2026-03-04T05:06:07Z");
-    vi.mocked(readPlatformConfig).mockResolvedValue(baseConfig);
     vi.mocked(initOperatorClient).mockResolvedValue({
       listPersonalAccessTokens: vi.fn().mockResolvedValue({
         personalAccessTokens: [
@@ -115,7 +114,6 @@ describe("user pat list", () => {
 
   test("keeps usage timestamps as dates in JSON mode", async () => {
     const createdAt = new Date("2026-01-02T03:04:05Z");
-    vi.mocked(readPlatformConfig).mockResolvedValue(baseConfig);
     vi.mocked(initOperatorClient).mockResolvedValue({
       listPersonalAccessTokens: vi.fn().mockResolvedValue({
         personalAccessTokens: [

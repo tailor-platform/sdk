@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
@@ -11,10 +12,10 @@ import ml from "#/utils/multiline";
 export const currentCommand = defineAppCommand({
   name: "current",
   description: "Show current user.",
-  args: z.strictObject({}),
-  run: async () => {
+  args: z.strictObject({ profile: workspaceArgs.profile }),
+  run: async (args) => {
     const config = await readPlatformConfig();
-    const profile = process.env.TAILOR_PLATFORM_PROFILE;
+    const profile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
     const profileEntry = profile ? config.profiles[profile] : undefined;
     if (profile && !profileEntry) {
       throw new Error(`Profile "${profile}" not found`);
