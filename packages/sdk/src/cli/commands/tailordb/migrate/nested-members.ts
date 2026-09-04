@@ -45,7 +45,7 @@ function collectMemberChanges(
 
   for (const [name, beforeMember] of Object.entries(beforeMembers)) {
     const path = [...parentPath, name];
-    const afterMember = afterMembers[name];
+    const afterMember = Object.hasOwn(afterMembers, name) ? afterMembers[name] : undefined;
     if (!afterMember) {
       removed.push({ kind: "removed", path, before: beforeMember });
       continue;
@@ -57,7 +57,7 @@ function collectMemberChanges(
   }
 
   for (const [name, afterMember] of Object.entries(afterMembers)) {
-    if (!beforeMembers[name]) {
+    if (!Object.hasOwn(beforeMembers, name)) {
       added.push({ kind: "added", path: [...parentPath, name], after: afterMember });
     }
   }
@@ -66,9 +66,20 @@ function collectMemberChanges(
 }
 
 function ownConfigDiffers(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
-  const { fields: _beforeFields, ...beforeOwn } = before;
-  const { fields: _afterFields, ...afterOwn } = after;
-  return stableStringify(beforeOwn) !== stableStringify(afterOwn);
+  return (
+    stableStringify(comparableOwnConfig(before)) !== stableStringify(comparableOwnConfig(after))
+  );
+}
+
+// Own configuration as the diff engine compares it: no members, enum values in value order.
+function comparableOwnConfig(config: SnapshotFieldConfig): Omit<SnapshotFieldConfig, "fields"> {
+  const { fields: _fields, allowedValues, ...own } = config;
+  return {
+    ...own,
+    ...(allowedValues && {
+      allowedValues: allowedValues.toSorted((a, b) => a.value.localeCompare(b.value)),
+    }),
+  };
 }
 
 /**

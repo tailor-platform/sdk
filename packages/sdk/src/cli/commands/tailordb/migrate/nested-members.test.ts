@@ -60,6 +60,29 @@ describe("collectNestedMemberChanges", () => {
     ]);
   });
 
+  test("detects removal of a member named like an inherited object property", () => {
+    const changes = collectNestedMemberChanges(
+      nested({ constructor: str, toString: str }),
+      nested({ toString: str }),
+    );
+
+    expect(changes).toEqual([{ kind: "removed", path: ["constructor"], before: str }]);
+  });
+
+  test("ignores enum value order when deciding whether a member is modified", () => {
+    const status = (values: string[]): SnapshotFieldConfig => ({
+      type: "enum",
+      required: false,
+      allowedValues: values.map((value) => ({ value })),
+    });
+    const changes = collectNestedMemberChanges(
+      nested({ status: status(["A", "B"]), zip: str }),
+      nested({ status: status(["B", "A"]) }),
+    );
+
+    expect(changes).toEqual([{ kind: "removed", path: ["zip"], before: str }]);
+  });
+
   test("treats a field without nested members as having none", () => {
     expect(collectNestedMemberChanges(str, nested({ zip: str }))).toEqual([
       { kind: "added", path: ["zip"], after: str },
