@@ -13,7 +13,7 @@ const NESTED_MEMBER_REMOVED_WARNING_REASON =
 /**
  * Whether an added nested member could carry the removed member's values. The
  * Pre-phase never relaxes nested member constraints, so unlike a top-level
- * rename the requiredness must match as well.
+ * rename the requiredness and decimal scale must match as well.
  * @param {SnapshotFieldConfig} before - Removed member's configuration
  * @param {SnapshotFieldConfig} after - Added member's configuration
  * @returns {boolean} True if the pair looks like a rename
@@ -22,7 +22,11 @@ function isNestedMemberRenameCompatible(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
 ): boolean {
-  return before.required === after.required && isRenameCompatible(before, after);
+  return (
+    before.required === after.required &&
+    (before.scale ?? null) === (after.scale ?? null) &&
+    isRenameCompatible(before, after)
+  );
 }
 
 function isSibling(a: NestedMemberChange, b: NestedMemberChange): boolean {
@@ -35,9 +39,9 @@ function isSibling(a: NestedMemberChange, b: NestedMemberChange): boolean {
 /**
  * Data-loss warnings for members removed inside a nested field.
  *
- * Nested renames are not detected: the Pre-phase cannot keep a removed member
- * alongside its replacement, so no copy script can be scaffolded. A compatible
- * member added at the same level is named in the warning as a hint instead.
+ * Nested renames are not detected and no copy script is scaffolded; the
+ * Pre-phase keeps the removed member readable, and a compatible member added
+ * at the same level is named in the warning as a hint for a hand-written copy.
  * @param {FieldModifiedChange} change - Modification of the top-level nested field
  * @returns {WarningChangeInfo[]} One warning per removed member, keyed by dotted member path
  */
@@ -59,7 +63,7 @@ export function collectNestedMemberRemovalWarnings(
     const hint =
       renameTargets.length > 0
         ? `. Possibly renamed to ${renameTargets.join(", ")}: nested renames are not detected, ` +
-          "so keep the old member until a migration script has copied its values and remove it in a later migration"
+          "so copy its values with a migration script if it was renamed"
         : "";
     warnings.push({
       tableName: change.tableName,

@@ -83,6 +83,15 @@ describe("collectNestedMemberChanges", () => {
     expect(changes).toEqual([{ kind: "removed", path: ["zip"], before: str }]);
   });
 
+  test("treats an absent boolean modifier and an explicit false as the same configuration", () => {
+    const changes = collectNestedMemberChanges(
+      nested({ zip: { type: "string", required: false, index: false }, city: str }),
+      nested({ zip: str }),
+    );
+
+    expect(changes).toEqual([{ kind: "removed", path: ["city"], before: str }]);
+  });
+
   test("treats a field without nested members as having none", () => {
     expect(collectNestedMemberChanges(str, nested({ zip: str }))).toEqual([
       { kind: "added", path: ["zip"], after: str },

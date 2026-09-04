@@ -9,7 +9,6 @@
  * `field_renamed` / `table_renamed` change instead.
  */
 
-import { stableStringify } from "./nested-members";
 import {
   SNAPSHOT_FIELD_BOOLEAN_PROPS,
   type NormalizedSchemaSnapshot,
@@ -356,6 +355,25 @@ function retargetSelfReferences(
     ...(field.foreignKeyType === previousTableName && { foreignKeyType: tableName }),
     ...(nested && { fields: nested }),
   };
+}
+
+/**
+ * JSON serialization with recursively sorted object keys, for deep equality.
+ * @param {unknown} value - Value to serialize
+ * @returns {string} Canonical JSON representation
+ */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .toSorted(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function isTypeRenameFieldCompatible(

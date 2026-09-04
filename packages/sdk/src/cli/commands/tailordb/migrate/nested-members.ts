@@ -4,10 +4,12 @@
  * The diff engine compares nested fields wholesale: any member change surfaces
  * as one `field_modified` on the top-level field. This module walks the member
  * structures so the diff display can name the changed members and removed
- * members can be surfaced as data-loss warnings.
+ * members can be surfaced as data-loss warnings. It also owns the field
+ * configuration comparison that the diff engine and the member walk share.
  */
 
-import type { SnapshotFieldConfig } from "./snapshot-types";
+import { assertDefined } from "#/utils/assert";
+import { SNAPSHOT_FIELD_BOOLEAN_PROPS, type SnapshotFieldConfig } from "./snapshot-types";
 
 /** A change to one member inside a nested field. */
 export type NestedMemberChange =
@@ -51,7 +53,7 @@ function collectMemberChanges(
       continue;
     }
     rest.push(...collectMemberChanges(beforeMember.fields ?? {}, afterMember.fields ?? {}, path));
-    if (ownConfigDiffers(beforeMember, afterMember)) {
+    if (areOwnFieldConfigsDifferent(beforeMember, afterMember)) {
       rest.push({ kind: "modified", path, before: beforeMember, after: afterMember });
     }
   }
@@ -65,38 +67,72 @@ function collectMemberChanges(
   return [...removed, ...added, ...rest];
 }
 
-function ownConfigDiffers(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
-  return (
-    stableStringify(comparableOwnConfig(before)) !== stableStringify(comparableOwnConfig(after))
-  );
-}
-
-// Own configuration as the diff engine compares it: no members, enum values in value order.
-function comparableOwnConfig(config: SnapshotFieldConfig): Omit<SnapshotFieldConfig, "fields"> {
-  const { fields: _fields, allowedValues, ...own } = config;
-  return {
-    ...own,
-    ...(allowedValues && {
-      allowedValues: allowedValues.toSorted((a, b) => a.value.localeCompare(b.value)),
-    }),
-  };
-}
-
 /**
- * JSON serialization with recursively sorted object keys, for deep equality.
- * @param {unknown} value - Value to serialize
- * @returns {string} Canonical JSON representation
+ * Whether two field configurations differ in anything but their nested
+ * members. Optional booleans default to `false`, enum values are compared as a
+ * set, and hooks and validations by their expressions.
+ * @param {SnapshotFieldConfig} oldField - Old field configuration
+ * @param {SnapshotFieldConfig} newField - New field configuration
+ * @returns {boolean} True if the configurations differ
  */
-export function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
+export function areOwnFieldConfigsDifferent(
+  oldField: SnapshotFieldConfig,
+  newField: SnapshotFieldConfig,
+): boolean {
+  if (oldField.type !== newField.type) return true;
+  if (oldField.required !== newField.required) return true;
+
+  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
+    if ((oldField[prop] ?? false) !== (newField[prop] ?? false)) return true;
   }
-  if (typeof value === "object" && value !== null) {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, v]) => v !== undefined)
-      .toSorted(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`);
-    return `{${entries.join(",")}}`;
+
+  if (oldField.foreignKeyType !== newField.foreignKeyType) return true;
+  if (oldField.foreignKeyField !== newField.foreignKeyField) return true;
+
+  if ((oldField.description ?? "") !== (newField.description ?? "")) return true;
+
+  const oldAllowed = oldField.allowedValues ?? [];
+  const newAllowed = newField.allowedValues ?? [];
+  if (oldAllowed.length !== newAllowed.length) return true;
+  const newAllowedMap = new Map(newAllowed.map((v) => [v.value, v.description]));
+  for (const v of oldAllowed) {
+    if (!newAllowedMap.has(v.value)) return true;
+    if ((v.description ?? "") !== (newAllowedMap.get(v.value) ?? "")) return true;
   }
-  return JSON.stringify(value);
+
+  const oldHooks = oldField.hooks;
+  const newHooks = newField.hooks;
+  if (Boolean(oldHooks) !== Boolean(newHooks)) return true;
+  if (oldHooks && newHooks) {
+    if ((oldHooks.create?.expr ?? "") !== (newHooks.create?.expr ?? "")) return true;
+    if ((oldHooks.update?.expr ?? "") !== (newHooks.update?.expr ?? "")) return true;
+  }
+
+  const oldValidate = oldField.validate ?? [];
+  const newValidate = newField.validate ?? [];
+  if (oldValidate.length !== newValidate.length) return true;
+  for (let i = 0; i < oldValidate.length; i++) {
+    const oldV = assertDefined(oldValidate[i], `oldValidate missing index ${i}`);
+    const newV = assertDefined(newValidate[i], `newValidate missing index ${i}`);
+    if ((oldV.script?.expr ?? "") !== (newV.script?.expr ?? "")) return true;
+    if (oldV.errorMessage !== newV.errorMessage) return true;
+  }
+
+  const oldSerial = oldField.serial;
+  const newSerial = newField.serial;
+  if (Boolean(oldSerial) !== Boolean(newSerial)) return true;
+  if (oldSerial && newSerial) {
+    if (oldSerial.start !== newSerial.start) return true;
+    if (oldSerial.maxValue !== newSerial.maxValue) return true;
+    if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
+  }
+
+  if (oldField.scale !== newField.scale) return true;
+
+  if (oldField.default !== newField.default) {
+    if (typeof oldField.default !== typeof newField.default) return true;
+    if (JSON.stringify(oldField.default) !== JSON.stringify(newField.default)) return true;
+  }
+
+  return false;
 }

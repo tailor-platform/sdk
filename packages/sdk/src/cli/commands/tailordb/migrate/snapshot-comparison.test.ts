@@ -431,7 +431,7 @@ describe("snapshot", () => {
         expect(diff.warnings[0]!.fieldName).toBe("address.zip");
         expect(diff.warnings[0]!.reason).toBe(
           `${NESTED_MEMBER_REMOVED}. Possibly renamed to zipCode: nested renames are not detected, ` +
-            "so keep the old member until a migration script has copied its values and remove it in a later migration",
+            "so copy its values with a migration script if it was renamed",
         );
       });
 
@@ -464,6 +464,15 @@ describe("snapshot", () => {
         expect(diff.warnings).toEqual([
           { tableName: "User", fieldName: "address.zip", reason: NESTED_MEMBER_REMOVED },
         ]);
+      });
+
+      test("does not suggest a rename when the added decimal member's scale differs", () => {
+        const diff = compareRawSnapshots(
+          userWithAddress({ amount: { type: "decimal", required: false, scale: 6 } }),
+          userWithAddress({ roundedAmount: { type: "decimal", required: false, scale: 2 } }),
+        );
+
+        expect(diff.warnings[0]!.reason).toBe(NESTED_MEMBER_REMOVED);
       });
 
       test("does not suggest a rename when the added member's type differs", () => {
