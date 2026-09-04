@@ -1,11 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { runCommand } from "politty";
+import { generateHelp, runCommand } from "politty";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
+import { workspaceNameRules } from "#/cli/shared/workspace-name";
 import { createCommand, createWorkspace } from "./create";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-workspace-create-${Date.now()}-${Math.random()}`);
@@ -262,5 +263,12 @@ describe("workspace create --permission", () => {
     // anywhere because no profile was created to attach it to.
     const config = await runCreate("--permission", "read");
     expect(Object.keys(config.profiles)).toHaveLength(0);
+  });
+});
+
+describe("workspace create --help", () => {
+  test("documents the workspace naming rules for --name", () => {
+    const help = generateHelp(createCommand, {}).replace(/\s+/g, " ");
+    expect(help).toContain(`Workspace name (${workspaceNameRules})`);
   });
 });

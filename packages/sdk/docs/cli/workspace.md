@@ -98,17 +98,17 @@ tailor workspace create [options]
 
 **Options**
 
-| Option                                | Alias | Description                                                                                                 | Required | Default   | Env                               |
-| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
-| `--name <NAME>`                       | `-n`  | Workspace name                                                                                              | Yes      | -         | -                                 |
-| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                  | Yes      | -         | -                                 |
-| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                    | No       | `false`   | -                                 |
-| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
-| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                            | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
-| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                     | No       | -         | -                                 |
-| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
+| Option                                | Alias | Description                                                                                                       | Required | Default   | Env                               |
+| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
+| `--name <NAME>`                       | `-n`  | Workspace name (3-63 characters, lowercase letters, numbers, and hyphens only, cannot start or end with a hyphen) | Yes      | -         | -                                 |
+| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                        | Yes      | -         | -                                 |
+| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                          | No       | `false`   | -                                 |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                             | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                            | No       | -         | -                                 |
+| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                                  | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
+| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                           | No       | -         | -                                 |
+| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.       | No       | `"write"` | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

@@ -2,6 +2,14 @@ import { z } from "zod";
 import { formatIssues } from "#/cli/shared/parse-options";
 
 /**
+ * Naming rules a workspace name must satisfy, phrased for CLI help text.
+ * Kept next to {@link workspaceNameSchema} so the guidance users read before
+ * typing a name cannot drift from the validation they hit afterwards.
+ */
+export const workspaceNameRules =
+  "3-63 characters, lowercase letters, numbers, and hyphens only, cannot start or end with a hyphen";
+
+/**
  * Validates a workspace name against the platform's naming rules: 3-63
  * lowercase alphanumeric or hyphen characters, not starting or ending with a
  * hyphen.
