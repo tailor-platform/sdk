@@ -243,4 +243,19 @@ describe("user list", () => {
     expect(stderr.output).toContain("prod@example.com (current)");
     expect(stderr.output).not.toContain("dev@example.com (current)");
   });
+
+  test("rejects an unknown explicit profile", async () => {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+
+    const result = await runCommand(userCommand, ["list", "--profile", "missing"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toEqual(new Error('Profile "missing" not found'));
+  });
 });

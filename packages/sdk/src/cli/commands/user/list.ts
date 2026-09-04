@@ -23,7 +23,9 @@ function activeCurrentUserKey(config: PlatformConfig, activeProfile?: string): s
     return resolveUserTokenKey(config, config.current_user);
   }
   const profile = config.profiles[activeProfile];
-  if (!profile) return null;
+  if (!profile) {
+    throw new Error(`Profile "${activeProfile}" not found`);
+  }
   return resolveUserTokenKey(config, profile.user, platformConfigFromProfile(profile));
 }
 
@@ -51,6 +53,7 @@ export const listCommand = defineAppCommand({
   run: async (args) => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;
+    const currentUserKey = activeCurrentUserKey(config, args.profile);
 
     const users = Object.keys(config.users);
     if (users.length === 0) {
@@ -64,7 +67,6 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const currentUserKey = activeCurrentUserKey(config, args.profile);
     const userInfos = users.map((user) => toUserListInfo(user, currentUserKey));
     if (jsonOutput) {
       logger.out([...new Set(userInfos.map((userInfo) => userInfo.user))]);
