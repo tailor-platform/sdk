@@ -137,6 +137,9 @@ function buildBlockedReplacement(node: ImportLikeNode, message: string): string 
   return throwStmt;
 }
 
+const toFileList = (value: string | string[] | undefined): string[] =>
+  Array.isArray(value) ? value : value ? [value] : [];
+
 /**
  * Vite plugin that blocks Node.js built-in module imports from production code.
  *
@@ -190,7 +193,7 @@ export function createBlockPlugin(): Plugin {
       // per-project setup files run in the host too and would otherwise be
       // transformed as production code, breaking node:* imports inside them.
       const toAbsolutePaths = (value: string | string[] | undefined, baseRoot: string) =>
-        (Array.isArray(value) ? value : value ? [value] : []).map((f) => resolve(baseRoot, f));
+        toFileList(value).map((f) => resolve(baseRoot, f));
       const exemptHostFiles = new Set<string>([
         ...toAbsolutePaths(testConfig?.setupFiles, root),
         ...toAbsolutePaths(testConfig?.globalSetup, root),
@@ -286,9 +289,6 @@ export function createBlockPlugin(): Plugin {
 
 const ENVIRONMENT_NAME = "tailor-runtime";
 
-const toSetupFilesArray = (value: string | string[] | undefined): string[] =>
-  Array.isArray(value) ? value : value ? [value] : [];
-
 /**
  * Vite plugin that resolves the tailor-runtime environment and injects setup files.
  *
@@ -341,7 +341,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
             projectTest.environment = environmentPath;
             usesTailorRuntime = true;
           }
-          const projectSetupFiles = toSetupFilesArray(projectTest.setupFiles);
+          const projectSetupFiles = toFileList(projectTest.setupFiles);
           if (!projectSetupFiles.includes(setupPath)) {
             projectTest.setupFiles = [...projectSetupFiles, setupPath];
           }
@@ -369,7 +369,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
       // array-concat merge sees both sides as arrays (the string form would
       // otherwise be replaced rather than concatenated by some merge paths).
       // Vite then concatenates the user's array with our [setupPath].
-      const rootSetupFiles = toSetupFilesArray(testConfig?.setupFiles);
+      const rootSetupFiles = toFileList(testConfig?.setupFiles);
       if (testConfig && typeof testConfig.setupFiles === "string") {
         testConfig.setupFiles = rootSetupFiles;
       }
