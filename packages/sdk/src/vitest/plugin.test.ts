@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { aroundEach, describe, expect, test } from "vitest";
 import { createBlockPlugin, createEnvironmentPlugin } from "./plugin";
 
@@ -554,6 +554,33 @@ describe("createEnvironmentPlugin", () => {
     expect(setupFilesOf(2)).toEqual(["./a.ts", injected]);
     expect(setupFilesOf(3)).toEqual([injected]);
     expect(userConfig.test.projects[4]).toBe("./packages/*/vitest.config.ts");
+  });
+
+  test("survives Vitest re-running the config for a project whose environment is already rewritten", () => {
+    // Vitest 5 re-executes the root config for inline projects that need
+    // their own Vite server: `projects` is stripped and `environment` is the
+    // absolute path from the first pass.
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    const firstPass = {
+      root: "/proj",
+      test: { projects: [{ test: { environment: "tailor-runtime", name: "unit" } }] },
+    };
+    applyConfig(plugin, firstPass);
+    const project = firstPass.test.projects[0]!.test as {
+      environment: string;
+      setupFiles?: string[];
+    };
+    expect(process.env[ENV_VAR]).toBe(resolve("/proj", "tailor.config.ts"));
+
+    const secondPass = {
+      root: "/proj",
+      test: { environment: project.environment, setupFiles: project.setupFiles },
+    };
+    const merged = applyConfig(plugin, secondPass);
+
+    expect(process.env[ENV_VAR]).toBe(resolve("/proj", "tailor.config.ts"));
+    expect(merged.test?.setupFiles ?? []).toEqual([]);
+    expect(secondPass.test.setupFiles).toEqual([expect.stringMatching(/setup\.mjs$/)]);
   });
 
   test("leaves non-tailor environments untouched", () => {

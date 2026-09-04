@@ -305,6 +305,10 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const environmentPath = resolve(currentDir, "environment.mjs");
   const setupPath = resolve(currentDir, "setup.mjs");
+  // Vitest re-runs the config for inline projects that need their own Vite
+  // server, so a rewritten absolute path still counts as tailor-runtime.
+  const selectsTailorRuntime = (environment: unknown): boolean =>
+    environment === ENVIRONMENT_NAME || environment === environmentPath;
 
   return {
     name: "tailor-runtime-environment",
@@ -319,7 +323,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
 
       // Rewrite environment name to absolute path at top-level
       let usesTailorRuntime = false;
-      if (testConfig?.environment === ENVIRONMENT_NAME) {
+      if (testConfig && selectsTailorRuntime(testConfig.environment)) {
         testConfig.environment = environmentPath;
         usesTailorRuntime = true;
       }
@@ -333,7 +337,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
           const projectTest = (project.test ??= {}) as Record<string, unknown> & {
             setupFiles?: string | string[];
           };
-          if (projectTest.environment === ENVIRONMENT_NAME) {
+          if (selectsTailorRuntime(projectTest.environment)) {
             projectTest.environment = environmentPath;
             usesTailorRuntime = true;
           }
@@ -365,10 +369,14 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
       // array-concat merge sees both sides as arrays (the string form would
       // otherwise be replaced rather than concatenated by some merge paths).
       // Vite then concatenates the user's array with our [setupPath].
+      const rootSetupFiles = toSetupFilesArray(testConfig?.setupFiles);
       if (testConfig && typeof testConfig.setupFiles === "string") {
-        testConfig.setupFiles = [testConfig.setupFiles];
+        testConfig.setupFiles = rootSetupFiles;
       }
 
+      // A re-run for an inline project already carries the setup file added
+      // in the first pass; returning it again would register it twice.
+      if (rootSetupFiles.includes(setupPath)) return {};
       return {
         test: {
           setupFiles: [setupPath],
