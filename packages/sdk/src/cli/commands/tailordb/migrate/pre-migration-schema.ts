@@ -265,20 +265,22 @@ function restoreRemovedNestedMembers(
 ): void {
   for (const change of collectNestedMemberChanges(before, after)) {
     if (change.kind !== "removed") continue;
-    const parent = change.path
-      .slice(0, -1)
-      .reduce<ProtoFieldConfig | undefined>(
-        (current, segment) => current?.fields?.[segment],
-        field,
-      );
-    if (parent?.type !== "nested") continue;
-    parent.fields ??= {};
+    const memberPath = change.path.join(".");
+    const parentMembers = assertDefined(
+      change.path
+        .slice(0, -1)
+        .reduce<ProtoFieldConfig | undefined>(
+          (current, segment) => current?.fields?.[segment],
+          field,
+        )?.fields,
+      `parent of removed nested member "${memberPath}" missing from the Pre-phase field`,
+    );
     const memberName = assertDefined(change.path.at(-1), "removed nested member path is empty");
     const restored = processNestedFieldsFromSnapshot({ [memberName]: change.before });
     defineRecordEntry(
-      parent.fields,
+      parentMembers,
       memberName,
-      assertDefined(restored[memberName], `restored nested member "${memberName}" missing`),
+      assertDefined(restored[memberName], `restored nested member "${memberPath}" missing`),
     );
   }
 }
