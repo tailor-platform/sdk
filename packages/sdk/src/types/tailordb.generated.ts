@@ -97,6 +97,14 @@ export type RawRelationConfig = {
 };
 export type RawRelationConfigInput = RawRelationConfig;
 
+export type TailorDBFieldRaw = {
+  type: string;
+  fields?: Record<string, TailorDBFieldRaw>;
+  metadata: DBFieldMetadata;
+  rawRelation?: RawRelationConfig;
+};
+export type TailorDBFieldRawInput = TailorDBFieldRaw;
+
 export type TailorDBTypeParsedSettingsInput = {
   /** Custom plural form of the table name for GraphQL */
   pluralForm?: string | undefined;
@@ -1012,12 +1020,7 @@ export type RawPermissionsInput = RawPermissions;
 export type TailorDBTypeRawInput = {
   name: string;
   fields: {
-    [x: string]: {
-      type: string;
-      fields?: Record<string, any>;
-      metadata: DBFieldMetadata;
-      rawRelation?: RawRelationConfig;
-    };
+    [x: string]: TailorDBFieldRaw;
   };
   metadata: {
     name: string;
@@ -1048,12 +1051,7 @@ export type TailorDBTypeRawInput = {
 export type TailorDBTypeRaw = {
   name: string;
   fields: {
-    [x: string]: {
-      type: string;
-      fields?: Record<string, any>;
-      metadata: DBFieldMetadata;
-      rawRelation?: RawRelationConfig;
-    };
+    [x: string]: TailorDBFieldRaw;
   };
   metadata: {
     name: string;
