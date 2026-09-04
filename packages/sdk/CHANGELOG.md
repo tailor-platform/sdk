@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 2.13.0
+
+### Minor Changes
+
+- [#2232](https://github.com/tailor-platform/sdk/pull/2232) [`5f3e015`](https://github.com/tailor-platform/sdk/commit/5f3e015954a32b52ac17a3f59dfd91eb4bd75392) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Apply the selected profile consistently to user and personal access token commands
+
+### Patch Changes
+
+- [#2250](https://github.com/tailor-platform/sdk/pull/2250) [`65086db`](https://github.com/tailor-platform/sdk/commit/65086dbd2c780db74d8e113f28d663cb06236c77) Thanks [@dqn](https://github.com/dqn)! - Fix multi-config deploys when one config imports another during automatic app ID generation
+
+- [#2242](https://github.com/tailor-platform/sdk/pull/2242) [`9928f66`](https://github.com/tailor-platform/sdk/commit/9928f668274ec9967ef87aa1fad76e75f5059492) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.9.0
+
+- [#2253](https://github.com/tailor-platform/sdk/pull/2253) [`5f7d334`](https://github.com/tailor-platform/sdk/commit/5f7d334f52d9489b1344ad55b6a45ffdc104421e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency p-limit to v7.3.2
+
 ## 2.12.0
 
 ### Minor Changes

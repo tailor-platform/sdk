@@ -1,5 +1,7 @@
 # @tailor-platform/create-sdk
 
+## 2.13.0
+
 ## 2.12.0
 
 ### Minor Changes
