@@ -172,7 +172,7 @@ Warning: data loss possible:
   - User.address.zip: Nested member removed (existing values will no longer be accessible through the schema). Possibly renamed to zipCode: nested renames are not detected, so copy its values with a migration script if it was renamed
 ```
 
-To carry the values over, add a custom `tailordb migration script` to the migration. The pre-migration phase keeps the removed member on the nested field until the script finishes, exactly like a removed top-level field, so the script can read `zip` and write `zipCode`; nested fields reach the script as JSON values, so the copy reads and rewrites the whole `address` value.
+To carry the values over, add a custom `tailordb migration script` to the migration. The pre-migration phase keeps the removed member on the nested field until the script finishes, exactly like a removed top-level field, so the script can read `zip` and write `zipCode`. Nested fields reach the script as objects, so the copy rewrites the whole `address` value; keep the old member in what you write, because it is still part of the schema until the post-migration phase drops it. Declare the new member as optional: the platform rejects a nested member that is required while existing records lack it, and nested member constraints are not relaxed during the pre-migration phase.
 
 ### Renaming a table
 
