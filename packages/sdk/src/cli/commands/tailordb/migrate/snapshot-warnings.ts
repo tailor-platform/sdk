@@ -50,12 +50,12 @@ export function collectNestedMemberRemovalWarnings(
     if (removed.kind !== "removed") continue;
     const renameTargets = changes
       .filter(
-        (change) =>
-          change.kind === "added" &&
-          isSibling(change, removed) &&
-          isNestedMemberRenameCompatible(removed.before, change.after),
+        (added) =>
+          added.kind === "added" &&
+          isSibling(added, removed) &&
+          isNestedMemberRenameCompatible(removed.before, added.after),
       )
-      .map((change) => change.path.at(-1));
+      .map((added) => added.path.at(-1));
     const hint =
       renameTargets.length > 0
         ? `. Possibly renamed to ${renameTargets.join(", ")}: nested renames are not detected, ` +
@@ -87,7 +87,8 @@ export function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInf
       });
     } else if (change.kind === "table_removed") {
       warnings.push({ tableName: change.tableName, reason: TABLE_REMOVED_WARNING_REASON });
-    } else if (change.kind === "field_modified") {
+    } else if (change.kind === "field_modified" && change.before.type === change.after.type) {
+      // Pre-warning-tier diff.json recorded type changes (now field_type_modified) as field_modified.
       warnings.push(...collectNestedMemberRemovalWarnings(change));
     }
   }

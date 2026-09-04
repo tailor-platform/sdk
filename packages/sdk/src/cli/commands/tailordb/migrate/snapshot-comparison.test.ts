@@ -444,6 +444,17 @@ describe("snapshot", () => {
         expect(diff.warnings[0]!.reason).toContain("Possibly renamed to zipCode, postalCode:");
       });
 
+      test("does not suggest a compatible member added at a different level", () => {
+        const diff = compareRawSnapshots(
+          userWithAddress({ zip: str, geo: { type: "nested", required: false, fields: {} } }),
+          userWithAddress({ geo: { type: "nested", required: false, fields: { zip: str } } }),
+        );
+
+        expect(diff.warnings).toEqual([
+          { tableName: "User", fieldName: "address.zip", reason: NESTED_MEMBER_REMOVED },
+        ]);
+      });
+
       test("does not suggest a rename when the added member's requiredness differs", () => {
         const diff = compareRawSnapshots(
           userWithAddress({ zip: str }),
