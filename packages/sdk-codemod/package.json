@@ -27,7 +27,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@ast-grep/napi": "0.45.2",
+    "@ast-grep/napi": "0.45.3",
     "diff": "9.0.0",
     "pathe": "2.0.3",
     "picomatch": "4.0.7",
