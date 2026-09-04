@@ -1,7 +1,7 @@
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
+import { loadAccessToken } from "#/cli/shared/context";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
 
@@ -13,7 +13,6 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
   loadAccessToken: vi.fn(),
-  loadPlatformClientConfig: vi.fn(),
 }));
 
 describe("user pat list", () => {
@@ -32,32 +31,23 @@ describe("user pat list", () => {
 
   test("an empty explicit profile falls back to the environment profile", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    vi.mocked(loadPlatformClientConfig).mockResolvedValue({
-      platformUrl: "https://api.dev.tailor.tech",
-    });
     using _json = jsonMode();
 
     const result = await runCommand(listCommand, ["--profile", ""]);
 
     expect(result.success).toBe(true);
     expect(loadAccessToken).toHaveBeenCalledWith({ profile: "" });
-    expect(loadPlatformClientConfig).toHaveBeenCalledWith({ profile: "" });
-    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token", {
-      platformUrl: "https://api.dev.tailor.tech",
-    });
+    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token");
   });
 
   test("prefers an explicit profile over TAILOR_PLATFORM_PROFILE", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    vi.mocked(loadPlatformClientConfig).mockResolvedValue({
-      platformUrl: "https://api.prod.tailor.tech",
-    });
     using _json = jsonMode();
 
     const result = await runCommand(listCommand, ["--profile", "prod"]);
 
     expect(result.success).toBe(true);
     expect(loadAccessToken).toHaveBeenCalledWith({ profile: "prod" });
-    expect(loadPlatformClientConfig).toHaveBeenCalledWith({ profile: "prod" });
+    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token");
   });
 });
