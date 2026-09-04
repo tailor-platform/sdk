@@ -9,9 +9,9 @@ This project was bootstrapped with [Create Tailor Platform SDK](https://www.npmj
 1. Create a new workspace:
 
 ```bash
-npx @tailor-platform/sdk login
-npx @tailor-platform/sdk workspace create --name <workspace-name> --region <workspace-region>
-npx @tailor-platform/sdk workspace list
+npx tailor login
+npx tailor workspace create --name <workspace-name> --region <workspace-region>
+npx tailor workspace list
 # For yarn: yarn tailor <command>
 # For pnpm: pnpm tailor <command>
 # For bun: bun tailor <command>
@@ -53,9 +53,10 @@ query {
 
 In the project directory, you can run:
 
-- `deploy`: Deploy the project to Tailor Platform
-- `format`: Format the code using Prettier
-- `format:check`: Check code formatting using Prettier
-- `lint`: Lint the code using ESLint
-- `lint:fix`: Fix linting issues using ESLint
+- `deploy`: Deploy the project to Tailor Platform (`tailor deploy`)
+- `generate`: Generate types for the project (`tailor generate`)
+- `format`: Format the code using oxfmt
+- `format:check`: Check code formatting using oxfmt
+- `lint`: Lint the code using oxlint
+- `lint:fix`: Fix linting issues using oxlint
 - `typecheck`: Run TypeScript type checks
