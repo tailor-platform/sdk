@@ -472,7 +472,7 @@ function generateChangeScripts(
   await trx
     .updateTable("${change.tableName}")
     .set({ ${change.fieldName}: ${replacement} }) // TODO: Set appropriate value
-    .where("${change.fieldName}", "in", [${removedValues.map((v) => `"${v}"`).join(", ")}])
+    .where("${change.fieldName}", "in", [${removedValues.map((v) => JSON.stringify(v)).join(", ")}])
     .execute();`);
     }
   }
