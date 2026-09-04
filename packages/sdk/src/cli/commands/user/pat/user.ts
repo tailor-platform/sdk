@@ -16,13 +16,13 @@ function resolvePatUser(config: PlatformConfig, activeProfile?: string): string 
 
 export async function createPatOperatorClient(activeProfile?: string) {
   const config = await readPlatformConfig();
-  activeProfile ||= process.env.TAILOR_PLATFORM_PROFILE;
-  const profileEntry = activeProfile ? config.profiles[activeProfile] : undefined;
-  if (activeProfile && !profileEntry) {
-    throw new Error(`Profile "${activeProfile}" not found`);
+  const resolvedProfile = activeProfile || process.env.TAILOR_PLATFORM_PROFILE;
+  const profileEntry = resolvedProfile ? config.profiles[resolvedProfile] : undefined;
+  if (resolvedProfile && !profileEntry) {
+    throw new Error(`Profile "${resolvedProfile}" not found`);
   }
   const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-  const user = resolvePatUser(config, activeProfile);
+  const user = resolvePatUser(config, resolvedProfile);
 
   if (!user) {
     throw new Error("No user logged in.\nPlease login first using 'tailor login' command.");
