@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { applyAuth, type planAuth } from "./auth";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -132,11 +132,6 @@ describe("applyAuth phase separation", () => {
     "deleteUserProfileConfig",
     "deleteAuthIDPConfig",
   ] as const;
-
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
 
   test.each([
     { phase: "delete-resources", resourcesCalled: 1, servicesCalled: 0 },

@@ -9,7 +9,6 @@ vi.mock("./user", () => ({ createPatOperatorClient: vi.fn() }));
 
 describe("user pat delete", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.mocked(assertWritable).mockResolvedValue(undefined);
     vi.mocked(createPatOperatorClient).mockResolvedValue({
       deletePersonalAccessToken: vi.fn().mockResolvedValue(undefined),

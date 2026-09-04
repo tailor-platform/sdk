@@ -34,7 +34,6 @@ aroundAll(async (runSuite) => {
 
 describe("user current", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     resetKeyringState();
     writePlatformConfig({
       version: 2,

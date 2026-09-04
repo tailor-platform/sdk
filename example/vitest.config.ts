@@ -13,7 +13,6 @@ export default defineConfig({
     },
     projects: [
       {
-        extends: true,
         test: {
           name: { label: "generator", color: "blue" },
           environment: "tailor-runtime",
@@ -21,7 +20,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: { label: "e2e", color: "green" },
           environment: "node",

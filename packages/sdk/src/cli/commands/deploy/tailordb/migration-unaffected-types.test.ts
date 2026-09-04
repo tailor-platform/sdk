@@ -298,7 +298,6 @@ describe("migration flow: creates of types predating the pending migrations", ()
   }
 
   beforeEach(() => {
-    vi.clearAllMocks();
     snapshotState.tablesByVersion = {};
     remoteCheckpoint.number = null;
     remoteCheckpoint.historyId = null;

@@ -297,7 +297,6 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
   }
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     remoteCheckpoint.number = null;
     remoteCheckpoint.historyId = null;
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(

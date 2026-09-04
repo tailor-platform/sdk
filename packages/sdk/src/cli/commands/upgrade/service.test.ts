@@ -66,7 +66,6 @@ async function setupUpgrade(version: string | null) {
 
 describe("upgrade service", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     await runTest();
     vi.restoreAllMocks();
   });

@@ -276,7 +276,6 @@ describe("migration flow: namespaces without pending migrations", () => {
   }
 
   beforeEach(() => {
-    vi.clearAllMocks();
     remoteCheckpoint.number = null;
     remoteCheckpoint.historyId = null;
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(

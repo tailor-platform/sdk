@@ -60,7 +60,6 @@ afterAll(() => {
 
 describe("profile create with a migrating legacy email user", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     resetKeyringState();
     keyringPasswords.clear();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);

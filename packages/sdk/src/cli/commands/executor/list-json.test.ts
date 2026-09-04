@@ -19,7 +19,6 @@ vi.mock("#/cli/shared/context", () => ({
 
 describe("executor list --json", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
     vi.mocked(initOperatorClient).mockResolvedValue(

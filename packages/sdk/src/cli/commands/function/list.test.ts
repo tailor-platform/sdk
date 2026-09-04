@@ -34,7 +34,6 @@ describe("listFunctionRegistries", () => {
   let listMock: ReturnType<typeof vi.fn>;
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     listMock = vi.fn();

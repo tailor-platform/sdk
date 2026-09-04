@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "politty";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { deleteCommand } from "./delete";
@@ -42,11 +42,6 @@ function mockClient(overrides: Record<string, unknown>) {
 }
 
 describe("organization folder delete", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("deletes the folder after the existence check succeeds", async () => {
     const client = mockClient({});
 

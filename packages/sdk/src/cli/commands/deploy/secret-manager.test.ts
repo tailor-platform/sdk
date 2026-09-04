@@ -166,7 +166,6 @@ describe("applySecretManager phase separation", () => {
   }
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
@@ -260,7 +259,6 @@ describe("applySecretManager phase separation", () => {
 
 describe("planSecretManager hash-based diff", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
     await runTest();
   });
@@ -401,11 +399,6 @@ describe("planSecretManager update-time evidence", () => {
   const secretValue = "my-secret-value";
   const storedEntry = { hash: hashValue(secretValue), updateTime: "100.5" };
 
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("skips update when hash and remote updateTime both match stored evidence", async () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: { "my-vault": { "existing-secret": storedEntry } },
@@ -467,7 +460,6 @@ describe("planSecretManager update-time evidence", () => {
 
 describe("applySecretManager update-time evidence persistence", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
     await runTest();
   });
@@ -540,7 +532,6 @@ describe("applySecretManager update-time evidence persistence", () => {
 
 describe("planSecretManager vault metadata and deletion", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
     await runTest();
   });
@@ -707,7 +698,6 @@ describe("planSecretManager vault metadata and deletion", () => {
 
 describe("applySecretManager metadata update", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
     await runTest();
   });
@@ -783,7 +773,6 @@ describe("applySecretManager metadata update", () => {
 
 describe("applySecretManager state persistence", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
     await runTest();
   });
@@ -941,7 +930,6 @@ describe("applySecretManager state persistence", () => {
 
 describe("planSecretManager ignoreNullishValues", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
     await runTest();
   });
@@ -1011,7 +999,6 @@ describe("planSecretManager ignoreNullishValues", () => {
 
 describe("applySecretManager ignoreNullishValues state persistence", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {

@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
@@ -195,11 +195,6 @@ describe("planExecutor", () => {
       ...overrides,
     };
   }
-
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
 
   describe("rename scenarios", () => {
     test("old executor is deleted when renamed", async () => {

@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { deployCommand } from "#/cli/commands/deploy/index";
 import { commonArgs } from "#/cli/shared/args";
@@ -15,11 +15,6 @@ vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: mocks.assertWrit
 vi.mock("#/cli/telemetry/index", () => ({ initTelemetry: mocks.initTelemetry }));
 
 describe("deployCommand", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("forwards workspace creation options", async () => {
     await runCommand(deployCommand, [
       "--create-workspace",

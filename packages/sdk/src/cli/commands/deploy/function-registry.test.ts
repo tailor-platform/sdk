@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import {
@@ -112,11 +112,6 @@ describe("planFunctionRegistry", () => {
       }),
     } as unknown as OperatorClient;
   }
-
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
 
   describe("pagination", () => {
     test("passes maxPageSize from fetchAll as pageSize", async () => {
@@ -406,11 +401,6 @@ describe("applyFunctionRegistry phase separation", () => {
       resourceOwners: new Set<string>(),
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
   }
-
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
 
   test("create-update phase uploads functions and sets metadata", async () => {
     const client = createMockClientWithSpies();

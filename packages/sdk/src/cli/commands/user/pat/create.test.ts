@@ -9,7 +9,6 @@ vi.mock("./user", () => ({ createPatOperatorClient: vi.fn() }));
 
 describe("user pat create", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.mocked(assertWritable).mockResolvedValue(undefined);
     vi.mocked(createPatOperatorClient).mockResolvedValue({
       createPersonalAccessToken: vi.fn().mockResolvedValue({ accessToken: "token" }),

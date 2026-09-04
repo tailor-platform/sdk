@@ -349,7 +349,6 @@ describe("script command with an existing migrate.ts", () => {
   let testDir: string;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     testDir = makeTestDir("command");
     vi.mocked(loadConfig).mockResolvedValue({

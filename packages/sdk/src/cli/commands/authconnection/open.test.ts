@@ -18,7 +18,6 @@ vi.mock("#/cli/shared/context", () => ({
 
 describe("authconnection open --json", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
     vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
     vi.mocked(open).mockResolvedValue({} as ChildProcess);
@@ -75,7 +74,6 @@ describe("authconnection open --json", () => {
 
 describe("authconnection open with TAILOR_CONSOLE_NEXT", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
     vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
     vi.mocked(open).mockResolvedValue({} as ChildProcess);

@@ -33,7 +33,6 @@ aroundAll(async (runSuite) => {
 
 describe("profile list", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     resetKeyringState();
     writePlatformConfig({
       version: 2,

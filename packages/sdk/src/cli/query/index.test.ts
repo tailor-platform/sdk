@@ -78,8 +78,6 @@ function sqlRowKeys(result: unknown): string[] {
 
 describe("query", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-
     Object.defineProperty(process.stdin, "isTTY", {
       configurable: true,
       value: true,

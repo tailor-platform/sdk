@@ -30,7 +30,6 @@ const providerUrl = "https://idp.example.com";
 const discoveryUrl = `${providerUrl}/.well-known/openid-configuration`;
 
 aroundEach(async (runTest) => {
-  vi.clearAllMocks();
   vi.stubGlobal("fetch", fetchMock);
   listAuthConnectionsMock.mockResolvedValue({
     connections: [

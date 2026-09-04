@@ -1,6 +1,6 @@
 import { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { runCommand } from "politty";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -22,11 +22,6 @@ function mockCustomDomains(customDomains: unknown[]) {
 }
 
 describe("staticwebsite domain list", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("prints formatted domains in JSON mode", async () => {
     mockCustomDomains([
       {
