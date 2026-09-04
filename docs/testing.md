@@ -22,7 +22,7 @@ pnpm test path/to/file.test.ts # Single file
 pnpm test -t "pattern"         # Pattern match
 ```
 
-`-t` matches against the full test name; Vitest 5 joins nested `describe`/`test` names with `>` (e.g. `-t "deploy > skips unchanged resources"`).
+`-t` matches against the full test name; Vitest 5 joins nested `describe`/`test` names with `>` (e.g. `-t "describe name > test name"`).
 
 ## E2E Tests
 
