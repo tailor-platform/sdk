@@ -686,8 +686,9 @@ describe("resolveQueryCommandInput", () => {
 
   test("uses graphql extension for GraphQL editor mode", async () => {
     const { mkdtemp, readFile, writeFile } = await import("node:fs/promises");
-    const { openInEditor } = await import("../shared/editor");
+    const { getEditorCommand, openInEditor } = await import("../shared/editor");
 
+    vi.mocked(getEditorCommand).mockReturnValue("vim");
     vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
     vi.mocked(readFile).mockResolvedValueOnce("query { viewer { id } }");
 

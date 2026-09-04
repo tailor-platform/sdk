@@ -177,13 +177,12 @@ export function createBlockPlugin(): Plugin {
         globalSetup?: string | string[];
         root?: string;
       };
-      const testConfig = (
-        config as typeof config & {
-          test?: HostFileTestConfig & {
-            projects?: { test?: HostFileTestConfig }[];
-          };
-        }
-      ).test;
+      // Read `test` as the user-facing shape rather than Vitest's resolved
+      // config type: this hook may see the config before Vitest fills in
+      // defaults, so every field keeps its fallback.
+      const testConfig = (config as { test?: unknown }).test as
+        | (HostFileTestConfig & { projects?: { test?: HostFileTestConfig }[] })
+        | undefined;
       const root = testConfig?.root ?? config.root;
       // Setup files and global-setup files run in the Vitest host (not the
       // emulated runtime), so they may freely import node:* modules. Collect
@@ -293,8 +292,8 @@ const ENVIRONMENT_NAME = "tailor-runtime";
  * Vitest resolves environments starting with "." or "/" as file paths.
  * This plugin rewrites `environment: "tailor-runtime"` to the absolute path
  * of the bundled environment module, both at the top-level and per-project.
- * It also injects the setup file that removes Vitest-dependent globals
- * (like `performance`) per-test via beforeEach/afterEach hooks.
+ * It also injects the setup file that seeds the SecretManager mock from
+ * `tailor.config.ts`.
  * @param options - Optional configuration
  * @param options.config - Path to tailor.config.ts to load SecretManager values into mock
  * @returns Vite plugin

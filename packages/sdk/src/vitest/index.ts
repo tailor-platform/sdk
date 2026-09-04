@@ -14,11 +14,10 @@ import type { Plugin } from "vitest/config";
  *    Test files are exempt and can use `node:*` freely. Test file patterns are read
  *    from the resolved Vitest config (`test.include`).
  *
- * 2. **Node.js globals removal** (environment + setup) — Only globals available in the
+ * 2. **Node.js globals removal** (environment) — Only globals available in the
  *    Tailor Platform runtime are kept (whitelist: ECMAScript standard, Web Standard APIs
  *    from bootstrap.js, platform mocks). All others (`Buffer`, `global`, `setImmediate`,
- *    `__dirname`, `__filename`, etc.) are removed. `performance` is removed per-test
- *    via beforeEach/afterEach since Vitest needs it during initialization.
+ *    `__dirname`, `__filename`, etc.) are removed.
  *
  * 3. **Platform API mocks** (environment) — All platform APIs are auto-injected with
  *    control objects: `mockTailordb`, `mockWorkflow`, `mockSecretmanager`,

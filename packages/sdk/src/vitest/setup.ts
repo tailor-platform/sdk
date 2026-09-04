@@ -1,65 +1,13 @@
 /**
- * Vitest setup file that removes Node.js globals which Vitest depends on
- * but are not available in the Tailor Platform runtime.
- *
- * These globals cannot be removed in the environment's setup() because
- * Vitest's runner needs them during initialization. By using beforeEach/afterEach,
- * they are only removed during user test code execution.
+ * Vitest setup file that seeds the SecretManager mock from `tailor.config.ts`.
  *
  * This file is auto-injected by tailorRuntime() but only activates when
  * the tailor-runtime environment is active (detected via __tailorRuntimeActive,
  * a flag set by injectMocks() during environment setup).
  */
 import { pathToFileURL } from "node:url";
-import { afterEach, beforeAll, beforeEach } from "vitest";
+import { beforeAll } from "vitest";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
-
-// Globals that Vitest internals depend on but don't exist in the platform runtime.
-// Removed before each test, restored after.
-const BLOCKED_GLOBALS = ["performance"] as const;
-
-type SavedGlobals = Record<string, PropertyDescriptor | undefined>;
-
-/**
- * Reference-counted lifecycle for blocked globals.
- *
- * Concurrent tests in the same Vitest worker (`test.concurrent`) interleave
- * their beforeEach/afterEach hooks: a naive `let saved` shared across hooks
- * would let one test's `afterEach` restore `performance` mid-execution of
- * another test. Reference counting keeps the globals removed for the union
- * of all overlapping test scopes — the property is removed on first entry
- * and restored only when the last test exits.
- * @returns Lifecycle hooks
- */
-export function createBlockedGlobalsLifecycle(): {
-  enter: (globalObj: Record<string, unknown>, keys: readonly string[]) => void;
-  exit: (globalObj: Record<string, unknown>) => void;
-  readonly active: number;
-} {
-  let active = 0;
-  let saved: SavedGlobals = {};
-  return {
-    get active() {
-      return active;
-    },
-    enter(globalObj, keys) {
-      if (active === 0) saved = removeBlockedGlobals(globalObj, keys);
-      active++;
-    },
-    exit(globalObj) {
-      // Defensive guard — in practice every `enter` is paired with `exit`,
-      // but a hook crash could desync the counter.
-      if (active === 0) return;
-      active--;
-      if (active === 0) {
-        restoreBlockedGlobals(globalObj, saved);
-        saved = {};
-      }
-    },
-  };
-}
-
-const lifecycle = createBlockedGlobalsLifecycle();
 
 function isTailorRuntime(): boolean {
   return RUNTIME_FLAG_KEY in globalThis;
@@ -131,58 +79,4 @@ beforeAll(async () => {
     // across tests, so we deliberately do not dispose (which would reset it).
     mockSecretmanager().setSecrets(store);
   }
-});
-
-/**
- * Remove the given globals from `globalObj`, returning the descriptors that
- * were actually deleted so `restoreBlockedGlobals` can put them back.
- *
- * Mirrors environment.ts: non-configurable properties are skipped instead of
- * deleted, so `delete` never throws in strict-mode runtimes that lock them
- * down. Only properties whose deletion actually happened are returned, so the
- * caller restores nothing for the skipped case.
- * @param globalObj - Target object (typically `globalThis`)
- * @param keys - Property names to remove
- * @returns Map of removed descriptors keyed by property name
- */
-export function removeBlockedGlobals(
-  globalObj: Record<string, unknown>,
-  keys: readonly string[],
-): SavedGlobals {
-  const removed: SavedGlobals = {};
-  for (const key of keys) {
-    const descriptor = Object.getOwnPropertyDescriptor(globalObj, key);
-    if (descriptor?.configurable) {
-      removed[key] = descriptor;
-      delete globalObj[key];
-    }
-  }
-  return removed;
-}
-
-/**
- * Restore previously-removed globals onto `globalObj` from a `SavedGlobals`
- * map produced by `removeBlockedGlobals`.
- * @param globalObj - Target object (typically `globalThis`)
- * @param saved - Descriptors to re-define
- */
-export function restoreBlockedGlobals(
-  globalObj: Record<string, unknown>,
-  saved: SavedGlobals,
-): void {
-  for (const [key, descriptor] of Object.entries(saved)) {
-    if (descriptor) {
-      Object.defineProperty(globalObj, key, descriptor);
-    }
-  }
-}
-
-beforeEach(() => {
-  if (!isTailorRuntime()) return;
-  lifecycle.enter(globalThis, BLOCKED_GLOBALS);
-});
-
-afterEach(() => {
-  if (!isTailorRuntime()) return;
-  lifecycle.exit(globalThis);
 });
