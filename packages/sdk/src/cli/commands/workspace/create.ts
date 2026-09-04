@@ -130,9 +130,12 @@ export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
   args: z.strictObject({
-    name: arg(z.string(), {
+    // createWorkspace() re-applies this schema for programmatic callers; here it
+    // fails --name during option parsing, before any Platform request.
+    name: arg(workspaceNameSchema, {
       alias: "n",
-      description: "Workspace name",
+      description:
+        "Workspace name (3-63 characters; lowercase letters, numbers, and hyphens; cannot start or end with a hyphen)",
     }),
     region: arg(z.string(), {
       alias: "r",
