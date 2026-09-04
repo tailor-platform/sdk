@@ -286,6 +286,9 @@ export function createBlockPlugin(): Plugin {
 
 const ENVIRONMENT_NAME = "tailor-runtime";
 
+const toSetupFilesArray = (value: string | string[] | undefined): string[] =>
+  Array.isArray(value) ? value : value ? [value] : [];
+
 /**
  * Vite plugin that resolves the tailor-runtime environment and injects setup files.
  *
@@ -309,7 +312,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
     config(config) {
       const testConfig = config.test as
         | (Record<string, unknown> & {
-            projects?: Record<string, unknown>[];
+            projects?: (string | Record<string, unknown>)[];
             setupFiles?: string | string[];
           })
         | undefined;
@@ -321,13 +324,22 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
         usesTailorRuntime = true;
       }
 
-      // Rewrite in each project config
+      // Rewrite in each inline project config. Since Vitest 5 inline projects
+      // no longer receive the `setupFiles` this hook returns for the root
+      // config, the setup file is added to each project directly.
       if (testConfig?.projects) {
         for (const project of testConfig.projects) {
-          const projectTest = project.test as Record<string, unknown> | undefined;
-          if (projectTest?.environment === ENVIRONMENT_NAME) {
+          if (typeof project === "string") continue;
+          const projectTest = (project.test ??= {}) as Record<string, unknown> & {
+            setupFiles?: string | string[];
+          };
+          if (projectTest.environment === ENVIRONMENT_NAME) {
             projectTest.environment = environmentPath;
             usesTailorRuntime = true;
+          }
+          const projectSetupFiles = toSetupFilesArray(projectTest.setupFiles);
+          if (!projectSetupFiles.includes(setupPath)) {
+            projectTest.setupFiles = [...projectSetupFiles, setupPath];
           }
         }
       }

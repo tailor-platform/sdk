@@ -531,6 +531,31 @@ describe("createEnvironmentPlugin", () => {
     expect(userConfig.test.projects[1]!.test.environment).toBe("node");
   });
 
+  test("adds the setup file to every inline project instead of relying on root inheritance", () => {
+    const plugin = createEnvironmentPlugin();
+    const userConfig = {
+      test: {
+        projects: [
+          { test: { environment: "tailor-runtime", name: "unit" } },
+          { test: { environment: "node", name: "e2e", setupFiles: "./e2e-setup.ts" } },
+          { test: { name: "plain", setupFiles: ["./a.ts"] } },
+          { plugins: [] },
+          "./packages/*/vitest.config.ts",
+        ],
+      },
+    };
+    applyConfig(plugin, userConfig);
+
+    const setupFilesOf = (index: number) =>
+      (userConfig.test.projects[index] as { test?: { setupFiles?: unknown } }).test?.setupFiles;
+    const injected = expect.stringMatching(/setup\.mjs$/);
+    expect(setupFilesOf(0)).toEqual([injected]);
+    expect(setupFilesOf(1)).toEqual(["./e2e-setup.ts", injected]);
+    expect(setupFilesOf(2)).toEqual(["./a.ts", injected]);
+    expect(setupFilesOf(3)).toEqual([injected]);
+    expect(userConfig.test.projects[4]).toBe("./packages/*/vitest.config.ts");
+  });
+
   test("leaves non-tailor environments untouched", () => {
     const plugin = createEnvironmentPlugin();
     const userConfig = { test: { environment: "node" } };
