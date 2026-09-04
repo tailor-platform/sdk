@@ -47,7 +47,10 @@ type DumpArg = { table: string; limit: number; after: string | null };
 function dumpRows(rowsByTable: Record<string, { id: string; [key: string]: unknown }[]>) {
   return ({ arg }: { arg: DumpArg }) => {
     const all = rowsByTable[arg.table] ?? [];
-    const remaining = arg.after ? all.filter((row) => row.id > (arg.after ?? "")) : all;
+    const remaining =
+      arg.after !== null && arg.after !== undefined
+        ? all.filter((row) => row.id > (arg.after ?? ""))
+        : all;
     const rows = remaining.slice(0, arg.limit);
     const cursor = rows.length === arg.limit ? (rows.at(-1)?.id ?? null) : null;
     return Promise.resolve({

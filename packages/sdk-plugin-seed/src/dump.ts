@@ -122,7 +122,7 @@ async function dumpTable(params: DumpTableParams): Promise<SeedData[string]> {
     for (const row of result.rows) {
       rows.push(toSeedRow(row, params.omitFields));
     }
-    if (!result.cursor) return rows;
+    if (result.cursor === null) return rows;
     cursor = result.cursor;
   }
 

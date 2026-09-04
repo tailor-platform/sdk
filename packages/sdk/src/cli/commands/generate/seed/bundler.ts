@@ -189,7 +189,7 @@ function generateSeedDumpScriptContent(namespace: string): string {
 
       try {
         let query = db.selectFrom(input.table).selectAll().orderBy("id", "asc").limit(input.limit);
-        if (input.after) {
+        if (input.after !== null && input.after !== undefined) {
           query = query.where("id", ">", input.after);
         }
         const rows = (await query.execute()) as Record<string, unknown>[];
