@@ -1406,7 +1406,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
       type: "nested",
       required: false,
       fields: {
-        zip: { type: "string", required: true, description: "Postal code" },
+        zip: { type: "string", required: true, description: "Postal code", index: true },
         geo: {
           type: "nested",
           required: false,
@@ -1444,6 +1444,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
       type: "string",
       required: true,
       description: "Postal code",
+      index: false,
     });
     expect(Object.keys(address.fields!.geo!.fields ?? {})).toEqual(["lat", "lng"]);
     expect(address.fields!.geo!.fields!.lng).toMatchObject({ type: "float", required: true });

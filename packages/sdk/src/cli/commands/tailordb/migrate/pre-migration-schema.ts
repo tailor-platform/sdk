@@ -35,7 +35,11 @@
 import { assertDefined } from "#/utils/assert";
 import { collectNestedMemberChanges } from "./nested-members";
 import { isBreakingIndexChange } from "./snapshot";
-import { convertFieldConfigToProto, convertIndexToProto } from "./snapshot-manifest";
+import {
+  convertFieldConfigToProto,
+  convertIndexToProto,
+  processNestedFieldsFromSnapshot,
+} from "./snapshot-manifest";
 import type {
   DiffChange,
   FieldDiffChange,
@@ -271,7 +275,12 @@ function restoreRemovedNestedMembers(
     if (parent?.type !== "nested") continue;
     parent.fields ??= {};
     const memberName = assertDefined(change.path.at(-1), "removed nested member path is empty");
-    defineRecordEntry(parent.fields, memberName, convertFieldConfigToProto(change.before));
+    const restored = processNestedFieldsFromSnapshot({ [memberName]: change.before });
+    defineRecordEntry(
+      parent.fields,
+      memberName,
+      assertDefined(restored[memberName], `restored nested member "${memberName}" missing`),
+    );
   }
 }
 
