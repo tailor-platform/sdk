@@ -40,6 +40,17 @@ describe("user pat list", () => {
     expect(initOperatorClient).toHaveBeenCalledWith("scoped-token");
   });
 
+  test("uses the environment profile when --profile is omitted", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    using _json = jsonMode();
+
+    const result = await runCommand(listCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(loadAccessToken).toHaveBeenCalledWith({ profile: "dev" });
+    expect(initOperatorClient).toHaveBeenCalledWith("scoped-token");
+  });
+
   test("prefers an explicit profile over TAILOR_PLATFORM_PROFILE", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     using _json = jsonMode();

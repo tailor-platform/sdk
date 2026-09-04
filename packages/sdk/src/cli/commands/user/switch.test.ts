@@ -91,7 +91,13 @@ describe("user switch", () => {
     expect(config.current_user).toBe("u@example.com");
   });
 
-  test("an empty explicit profile falls back to the environment profile", async () => {
+  test.each([
+    ["uses the environment profile when --profile is omitted", ["other@example.com"]],
+    [
+      "an empty explicit profile falls back to the environment profile",
+      ["other@example.com", "--profile", ""],
+    ],
+  ])("%s", async (_name, args) => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -126,7 +132,7 @@ describe("user switch", () => {
       current_user: null,
     });
 
-    const result = await runCommand(switchCommand, ["other@example.com", "--profile", ""]);
+    const result = await runCommand(switchCommand, args);
 
     expect(result.success).toBe(true);
     const updatedConfig = await readPlatformConfig();

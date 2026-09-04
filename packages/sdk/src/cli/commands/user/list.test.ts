@@ -171,7 +171,10 @@ describe("user list", () => {
     expect(stderr.output).not.toContain("u@example.com (current)");
   });
 
-  test("an empty explicit profile falls back to the environment profile", async () => {
+  test.each([
+    ["uses the environment profile when --profile is omitted", ["list"]],
+    ["an empty explicit profile falls back to the environment profile", ["list", "--profile", ""]],
+  ])("%s", async (_name, args) => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
       version: 2,
@@ -202,7 +205,7 @@ describe("user list", () => {
 
     using stderr = captureStderr();
 
-    await runCommand(userCommand, ["list", "--profile", ""]);
+    await runCommand(userCommand, args);
 
     expect(stderr.output).toContain("profile@example.com [https://api.dev.tailor.tech] (current)");
     expect(stderr.output).toContain("default@example.com");

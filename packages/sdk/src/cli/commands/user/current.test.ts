@@ -68,7 +68,10 @@ describe("user current", () => {
     expect(JSON.parse(stdout.output)).toEqual({ user: "u@example.com" });
   });
 
-  test("an empty explicit profile falls back to the environment profile", async () => {
+  test.each([
+    ["uses the environment profile when --profile is omitted", []],
+    ["an empty explicit profile falls back to the environment profile", ["--profile", ""]],
+  ])("%s", async (_name, args) => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
       version: 2,
@@ -99,7 +102,7 @@ describe("user current", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
 
-    await runCommand(currentCommand, ["--profile", ""]);
+    await runCommand(currentCommand, args);
 
     expect(JSON.parse(stdout.output)).toEqual({ user: "profile@example.com" });
   });
