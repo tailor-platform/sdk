@@ -15,7 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-test("initializes the client with the platform config remembered for the token", async () => {
+test("initializes the client with the token loaded for the requested profile", async () => {
   vi.mocked(loadAccessToken).mockResolvedValue("scoped-token");
 
   await createPatOperatorClient("missing-profile");
