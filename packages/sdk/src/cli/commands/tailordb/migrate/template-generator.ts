@@ -21,6 +21,7 @@ import {
 import type {
   MigrationDiff,
   DiffChange,
+  FieldModifiedChange,
   FieldRenamedChange,
   TableRenamedChange,
 } from "./diff-calculator";
@@ -274,6 +275,12 @@ export function generateMigrationScript(
   // Add custom data transformations if required`);
   }
 
+  const helpers = diff.changes.some(
+    (change) => change.kind === "field_modified" && change.memberRenames?.length,
+  )
+    ? `\n${NESTED_MEMBER_RENAME_HELPER}`
+    : "";
+
   return `/**
  * Migration script for ${diff.namespace}
  *
@@ -288,7 +295,7 @@ export function generateMigrationScript(
  */
 
 import type { Transaction } from "./db";
-
+${helpers}
 export async function main(trx: Transaction): Promise<void> {
 ${updates.join("\n\n")}
 }
@@ -432,6 +439,10 @@ function generateChangeScripts(
     scripts.push(generateFieldTypeChangeScript(change));
   }
 
+  if (change.kind === "field_modified" && change.memberRenames?.length) {
+    scripts.push(generateNestedMemberRenameCopyScript(change));
+  }
+
   // Optional to required
   if (!before.required && after.required) {
     scripts.push(`  // Set ${change.fieldName} for ${change.tableName} records where it is null
@@ -532,6 +543,84 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
     .set((eb) => ({ ${fieldName}: eb.ref("${previousFieldName}") }))
     .execute();`;
 }
+
+function generateNestedMemberRenameCopyScript(change: FieldModifiedChange): string {
+  const { tableName, fieldName } = change;
+  const renames = change.memberRenames ?? [];
+  const summary = renames
+    .map((rename) => `${rename.previousPath.join(".")} → ${rename.path.join(".")}`)
+    .join(", ");
+  const steps = renames
+    .map(
+      (rename) =>
+        `        ${fieldName} = renameNestedMember(${fieldName}, [${rename.previousPath.map((segment) => JSON.stringify(segment)).join(", ")}], ${JSON.stringify(rename.path[rename.path.length - 1])});`,
+    )
+    .join("\n");
+
+  return `  // Copy renamed members inside ${tableName}.${fieldName}: ${summary}.
+  // The old members stay on the schema until the post-migration phase drops
+  // them, so they are kept in the written value.
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("${tableName}")
+        .select(["id", "${fieldName}"])
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        let ${fieldName}: unknown = row.${fieldName};
+${steps}
+        await trx
+          .updateTable("${tableName}")
+          .set({ ${fieldName}: ${fieldName} as never })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`;
+}
+
+// Emitted once per script that copies renamed nested members. Nested values
+// reach the script as objects (or arrays of objects for array members).
+const NESTED_MEMBER_RENAME_HELPER = `/**
+ * Return a copy of a nested value with the member at \`path\` also stored under
+ * \`newName\`, descending into arrays at every level. A stale value under the
+ * new name is dropped when the source member is absent.
+ */
+function renameNestedMember(value: unknown, path: readonly string[], newName: string): unknown {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map((item) => renameNestedMember(item, path, newName));
+  if (typeof value !== "object") {
+    throw new Error(\`Expected an object while renaming nested member \${path.join(".")}, got \${typeof value}\`);
+  }
+  const record = value as Record<string, unknown>;
+  const [head, ...rest] = path;
+  if (head === undefined || !Object.hasOwn(record, head)) {
+    const copy = { ...record };
+    if (rest.length === 0) delete copy[newName];
+    return copy;
+  }
+  if (rest.length > 0) {
+    return { ...record, [head]: renameNestedMember(record[head], rest, newName) };
+  }
+  const copy = { ...record };
+  Object.defineProperty(copy, newName, {
+    value: record[head],
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+  return copy;
+}
+`;
 
 function generateTypeRenameCopyScript(change: TableRenamedChange): string {
   const { tableName, previousTableName } = change;

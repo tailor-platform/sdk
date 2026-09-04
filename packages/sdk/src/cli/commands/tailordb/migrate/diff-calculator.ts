@@ -22,7 +22,7 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 5 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 6 as const;
 
 /** Oldest migration file format this SDK can replay. */
 export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
@@ -121,12 +121,27 @@ export interface FieldRemovedChange extends DiffChangeBase {
   before: SnapshotFieldConfig;
 }
 
-/** A field configuration was modified. */
+/**
+ * A member inside a nested field was renamed. Paths are relative to the
+ * top-level field and share the same parent; `path` is the new name.
+ */
+export interface NestedMemberRename {
+  previousPath: string[];
+  path: string[];
+}
+
+/**
+ * A field configuration was modified. `memberRenames` records members inside a
+ * nested field that the user confirmed as renames (interactively or via
+ * `--rename Table.field.old:new`); their values must be copied by the
+ * migration script.
+ */
 export interface FieldModifiedChange extends DiffChangeBase {
   kind: "field_modified";
   fieldName: string;
   before: SnapshotFieldConfig;
   after: SnapshotFieldConfig;
+  memberRenames?: NestedMemberRename[];
 }
 
 /**
@@ -415,6 +430,7 @@ function formatDiffChange(change: DiffChange): string {
     case "field_removed":
       return `  - ${change.fieldName}: ${change.before.type}`;
     case "field_modified":
+      return `  ~ ${change.fieldName}: ${formatFieldModification(change.before, change.after, change.memberRenames)}`;
     case "field_type_modified":
       return `  ~ ${change.fieldName}: ${formatFieldModification(change.before, change.after)}`;
     case "field_renamed":
@@ -467,9 +483,14 @@ function formatFieldType(field: SnapshotFieldConfig): string {
  * Format field modification details
  * @param {SnapshotFieldConfig} before - Before field configuration
  * @param {SnapshotFieldConfig} after - After field configuration
+ * @param {readonly NestedMemberRename[]} [memberRenames] - Confirmed renames of members inside the nested field
  * @returns {string} Formatted modification details
  */
-function formatFieldModification(before: SnapshotFieldConfig, after: SnapshotFieldConfig): string {
+function formatFieldModification(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+  memberRenames: readonly NestedMemberRename[] = [],
+): string {
   const changes: string[] = [];
 
   if (before.type !== after.type) {
@@ -524,11 +545,19 @@ function formatFieldModification(before: SnapshotFieldConfig, after: SnapshotFie
     );
   }
 
-  const members = collectNestedMemberChanges(before, after);
+  const renamedPaths = new Set(
+    memberRenames.flatMap((rename) => [rename.previousPath.join("."), rename.path.join(".")]),
+  );
+  const members = collectNestedMemberChanges(before, after)
+    .filter((m) => !renamedPaths.has(m.path.join(".")))
+    .map((m) => `${NESTED_MEMBER_CHANGE_MARKERS[m.kind]}${m.path.join(".")}`);
+  members.push(
+    ...memberRenames.map(
+      (rename) => `${rename.previousPath.join(".")} → ${rename.path.join(".")} (renamed)`,
+    ),
+  );
   if (members.length > 0) {
-    changes.push(
-      `members: ${members.map((m) => `${NESTED_MEMBER_CHANGE_MARKERS[m.kind]}${m.path.join(".")}`).join(", ")}`,
-    );
+    changes.push(`members: ${members.join(", ")}`);
   }
 
   return changes.length > 0 ? changes.join(", ") : "configuration changed";

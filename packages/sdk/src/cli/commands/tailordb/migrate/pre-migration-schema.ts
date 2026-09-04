@@ -10,7 +10,9 @@
  * - `field_added` with `required: true`: relax to `required: false`.
  * - `field_modified` optional→required, unique constraint added, enum
  *   value removed: keep the looser side until Post-phase. Members removed
- *   from a nested field are re-inserted so migrate.ts can read them.
+ *   from a nested field are re-inserted so migrate.ts can read them, and the
+ *   new member of a confirmed nested rename is relaxed to optional until the
+ *   copy script has filled it.
  * - `field_renamed`: keep the old field (readable by migrate.ts) and relax
  *   the new field's required/unique constraints until Post-phase.
  * - `field_type_modified`: keep the complete previous field config until
@@ -44,6 +46,7 @@ import type {
   DiffChange,
   FieldDiffChange,
   IndexDiffChange,
+  NestedMemberRename,
   TableScriptsModifiedChange,
 } from "./diff-calculator";
 import type { SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
@@ -218,6 +221,7 @@ export function applyPreMigrationFieldAdjustments(
     const { before, after } = change;
 
     restoreRemovedNestedMembers(field, before, after);
+    relaxRenamedNestedMembers(field, change.memberRenames ?? []);
 
     if (!before.required && after.required) {
       field.required = false;
@@ -283,6 +287,25 @@ function restoreRemovedNestedMembers(
       memberName,
       assertDefined(restored[memberName], `restored nested member "${memberPath}" missing`),
     );
+  }
+}
+
+/**
+ * Relax the new member of each confirmed nested rename to optional; the
+ * Post-phase enforces it after the copy script has filled it.
+ * @param {ProtoFieldConfig} field - Pre-phase proto field to adjust (mutated in place)
+ * @param {readonly NestedMemberRename[]} memberRenames - Confirmed renames inside the field
+ */
+function relaxRenamedNestedMembers(
+  field: ProtoFieldConfig,
+  memberRenames: readonly NestedMemberRename[],
+): void {
+  for (const rename of memberRenames) {
+    const member = rename.path.reduce<ProtoFieldConfig | undefined>(
+      (current, segment) => current?.fields?.[segment],
+      field,
+    );
+    if (member?.required) member.required = false;
   }
 }
 

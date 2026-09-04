@@ -158,6 +158,31 @@ describe("diff-calculator", () => {
         expected: ["~ address: members: -zip, +zipCode, ~geo.lat"],
       },
       {
+        name: "renamed nested members",
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: {
+                zip: { type: "string", required: false },
+                fax: { type: "string", required: false },
+              },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: { zipCode: { type: "string", required: false } },
+            },
+            memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+          },
+        ],
+        expected: ["~ address: members: -fax, zip → zipCode (renamed)"],
+      },
+      {
         name: "modified field without a rendered detail",
         changes: [
           {
