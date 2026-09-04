@@ -134,6 +134,33 @@ describe("user switch", () => {
     expect(updatedConfig.current_user).toBeNull();
   });
 
+  test("updates the explicitly selected profile instead of the environment profile", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "other@example.com": {
+          storage: "file",
+          access_token: "other-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: { user: "dev@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        prod: { user: "prod@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+      },
+      current_user: null,
+    });
+
+    const result = await runCommand(switchCommand, ["other@example.com", "--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.profiles.prod?.user).toBe("other@example.com");
+    expect(config.profiles.dev?.user).toBe("dev@example.com");
+  });
+
   test("rejects scoped token keys as current user values", async () => {
     writePlatformConfig({
       version: 2,

@@ -7,23 +7,21 @@ import {
 
 type PlatformConfig = Awaited<ReturnType<typeof readPlatformConfig>>;
 
-function resolvePatUser(config: PlatformConfig): string | null {
-  const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
+function resolvePatUser(config: PlatformConfig, activeProfile?: string): string | null {
   if (activeProfile) {
     return config.profiles[activeProfile]?.user ?? null;
   }
   return config.current_user;
 }
 
-export async function createPatOperatorClient() {
+export async function createPatOperatorClient(activeProfile?: string) {
   const config = await readPlatformConfig();
-  const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
   const profileEntry = activeProfile ? config.profiles[activeProfile] : undefined;
   if (activeProfile && !profileEntry) {
     throw new Error(`Profile "${activeProfile}" not found`);
   }
   const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-  const user = resolvePatUser(config);
+  const user = resolvePatUser(config, activeProfile);
 
   if (!user) {
     throw new Error("No user logged in.\nPlease login first using 'tailor login' command.");

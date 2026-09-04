@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paginationArgs, toPageDirection } from "#/cli/shared/args";
+import { paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
@@ -10,10 +10,10 @@ import { createPatOperatorClient } from "./user";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z.strictObject({ ...paginationArgs() }),
+  args: z.strictObject({ ...paginationArgs(), profile: workspaceArgs.profile }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
-    const client = await createPatOperatorClient();
+    const client = await createPatOperatorClient(args.profile);
 
     const pageDirection = toPageDirection(args.order);
     const pats = await fetchPaged(

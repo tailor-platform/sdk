@@ -61,4 +61,31 @@ describe("user pat list", () => {
       platformUrl: "https://api.dev.tailor.tech",
     });
   });
+
+  test("prefers an explicit profile over TAILOR_PLATFORM_PROFILE", async () => {
+    const config = {
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: {
+        dev: { user: "dev@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        prod: {
+          user: "prod@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.prod.tailor.tech",
+        },
+      },
+      current_user: null,
+    } satisfies Awaited<ReturnType<typeof readPlatformConfig>>;
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    vi.mocked(readPlatformConfig).mockResolvedValue(config);
+    using _json = jsonMode();
+
+    const result = await runCommand(listCommand, ["--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    expect(fetchLatestToken).toHaveBeenCalledWith(config, "prod@example.com", {
+      platformUrl: "https://api.prod.tailor.tech",
+    });
+  });
 });

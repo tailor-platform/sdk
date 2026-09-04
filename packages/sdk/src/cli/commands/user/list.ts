@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
@@ -16,8 +17,7 @@ type UserListInfo = {
   current: boolean;
 };
 
-function activeCurrentUserKey(config: PlatformConfig): string | null {
-  const activeProfile = process.env.TAILOR_PLATFORM_PROFILE;
+function activeCurrentUserKey(config: PlatformConfig, activeProfile?: string): string | null {
   if (!activeProfile) {
     if (!config.current_user) return null;
     return resolveUserTokenKey(config, config.current_user);
@@ -47,8 +47,8 @@ function formatUserListInfo(info: UserListInfo): string {
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
-  args: z.strictObject({}),
-  run: async () => {
+  args: z.strictObject({ profile: workspaceArgs.profile }),
+  run: async (args) => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;
 
@@ -64,7 +64,7 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const currentUserKey = activeCurrentUserKey(config);
+    const currentUserKey = activeCurrentUserKey(config, args.profile);
     const userInfos = users.map((user) => toUserListInfo(user, currentUserKey));
     if (jsonOutput) {
       logger.out([...new Set(userInfos.map((userInfo) => userInfo.user))]);

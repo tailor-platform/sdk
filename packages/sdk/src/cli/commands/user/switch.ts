@@ -1,5 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
+import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
@@ -18,10 +19,11 @@ export const switchCommand = defineAppCommand({
       positional: true,
       description: "User email address or machine user client ID",
     }),
+    profile: workspaceArgs.profile,
   }),
   run: async (args) => {
     const config = await readPlatformConfig();
-    const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
+    const activeProfileName = args.profile;
     const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
     if (activeProfileName && !activeProfileEntry) {
       throw new Error(`Profile "${activeProfileName}" not found`);

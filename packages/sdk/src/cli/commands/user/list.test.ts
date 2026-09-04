@@ -208,4 +208,39 @@ describe("user list", () => {
     expect(stderr.output).toContain("default@example.com");
     expect(stderr.output).not.toContain("default@example.com (current)");
   });
+
+  test("prefers an explicit profile when marking the current user", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "dev@example.com": {
+          storage: "file",
+          access_token: "dev-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+        "prod@example.com": {
+          storage: "file",
+          access_token: "prod-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: { user: "dev@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        prod: {
+          user: "prod@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+        },
+      },
+      current_user: null,
+    });
+    using stderr = captureStderr();
+
+    const result = await runCommand(userCommand, ["list", "--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("prod@example.com (current)");
+    expect(stderr.output).not.toContain("dev@example.com (current)");
+  });
 });

@@ -1,5 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
+import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
@@ -17,10 +18,11 @@ export const createCommand = defineAppCommand({
       alias: "W",
       description: "Grant write permission (default: read-only)",
     }),
+    profile: workspaceArgs.profile,
   }),
   run: async (args) => {
-    await assertWritable();
-    const client = await createPatOperatorClient();
+    await assertWritable({ profile: args.profile });
+    const client = await createPatOperatorClient(args.profile);
 
     const scopes = getScopesFromWriteFlag(args.write);
     const result = await client.createPersonalAccessToken({
