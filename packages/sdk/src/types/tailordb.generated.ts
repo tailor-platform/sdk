@@ -1012,7 +1012,12 @@ export type RawPermissionsInput = RawPermissions;
 export type TailorDBTypeRawInput = {
   name: string;
   fields: {
-    [x: string]: unknown;
+    [x: string]: {
+      type: string;
+      fields?: Record<string, any>;
+      metadata: DBFieldMetadata;
+      rawRelation?: RawRelationConfig;
+    };
   };
   metadata: {
     name: string;
@@ -1045,52 +1050,9 @@ export type TailorDBTypeRaw = {
   fields: {
     [x: string]: {
       type: string;
-      fields?: any | undefined;
-      metadata: {
-        required?: boolean | undefined | undefined;
-        array?: boolean | undefined | undefined;
-        description?: string | undefined | undefined;
-        typeName?: string | undefined | undefined;
-        allowedValues?:
-          | {
-              value: string;
-              description?: string | undefined | undefined;
-            }[]
-          | undefined;
-        index?: boolean | undefined | undefined;
-        unique?: boolean | undefined | undefined;
-        vector?: boolean | undefined | undefined;
-        foreignKey?: boolean | undefined | undefined;
-        foreignKeyType?: string | undefined | undefined;
-        foreignKeyField?: string | undefined | undefined;
-        hooks?:
-          | {
-              create?: Function | undefined;
-              update?: Function | undefined;
-            }
-          | undefined;
-        validate?: Function[] | undefined;
-        serial?:
-          | {
-              start: number;
-              maxValue?: number | undefined | undefined;
-              format?: string | undefined | undefined;
-            }
-          | undefined;
-        scale?: number | undefined | undefined;
-        default?: unknown;
-      };
-      rawRelation?:
-        | {
-            type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
-            toward: {
-              table: string;
-              as?: string | undefined | undefined;
-              key?: string | undefined | undefined;
-            };
-            backward?: string | undefined | undefined;
-          }
-        | undefined;
+      fields?: Record<string, any>;
+      metadata: DBFieldMetadata;
+      rawRelation?: RawRelationConfig;
     };
   };
   metadata: {

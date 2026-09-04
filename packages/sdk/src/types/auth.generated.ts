@@ -172,26 +172,6 @@ export type SCIMAuthorizationInput = SCIMAuthorization;
 export type SCIMAttributeType = "string" | "number" | "boolean" | "datetime" | "complex";
 export type SCIMAttributeTypeInput = SCIMAttributeType;
 
-export type SCIMAttributeInput = {
-  /** Attribute data type */
-  type: SCIMAttributeType;
-  /** Attribute name */
-  name: string;
-  /** Attribute description */
-  description?: string | undefined;
-  /** Attribute mutability */
-  mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
-  /** Whether the attribute is required */
-  required?: boolean | undefined;
-  /** Whether the attribute can have multiple values */
-  multiValued?: boolean | undefined;
-  /** Uniqueness constraint */
-  uniqueness?: "none" | "server" | "global" | undefined;
-  /** List of canonical values */
-  canonicalValues?: string[] | null | undefined;
-  subAttributes?: SCIMAttributeInput[] | null | undefined;
-};
-
 export type SCIMAttribute = {
   /** Attribute data type */
   type: SCIMAttributeType;
@@ -211,6 +191,7 @@ export type SCIMAttribute = {
   canonicalValues?: string[] | null | undefined;
   subAttributes?: SCIMAttribute[] | null | undefined;
 };
+export type SCIMAttributeInput = SCIMAttribute;
 
 export type SCIMAttributeMapping = {
   /** TailorDB field name to map to */
@@ -232,25 +213,7 @@ export type SCIMResource = {
     /** SCIM schema name */
     name: string;
     /** Schema attributes */
-    attributes: {
-      /** Attribute data type */
-      type: "string" | "number" | "boolean" | "datetime" | "complex";
-      /** Attribute name */
-      name: string;
-      /** Attribute description */
-      description?: string | undefined;
-      /** Attribute mutability */
-      mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
-      /** Whether the attribute is required */
-      required?: boolean | undefined;
-      /** Whether the attribute can have multiple values */
-      multiValued?: boolean | undefined;
-      /** Uniqueness constraint */
-      uniqueness?: "none" | "server" | "global" | undefined;
-      /** List of canonical values */
-      canonicalValues?: string[] | null | undefined;
-      subAttributes?: any[] | null | undefined;
-    }[];
+    attributes: SCIMAttribute[];
   };
   /** Attribute mapping configuration */
   attributeMapping: SCIMAttributeMapping[];
@@ -310,17 +273,24 @@ export type AuthConfigInput =
       oauth2Clients?:
         | {
             [x: string]: {
+              /** Allowed redirect URIs */
               redirectURIs: (
                 | `https://${string}`
                 | `http://${string}`
                 | `${string}:url`
                 | `${string}:url/${string}`
               )[];
+              /** Client description */
               description?: string | undefined;
+              /** Allowed OAuth2 grant types */
               grantTypes?: ("authorization_code" | "refresh_token")[] | undefined;
+              /** OAuth2 client type */
               clientType?: "confidential" | "public" | "browser" | undefined;
+              /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds?: number | undefined;
+              /** Refresh token lifetime in seconds (60-604800) */
               refreshTokenLifetimeSeconds?: number | undefined;
+              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
               requireDpop?: boolean | undefined;
             };
           }
@@ -460,12 +430,19 @@ export type AuthConfigInput =
       connections?:
         | {
             [x: string]: {
+              /** OAuth2 provider URL */
               providerUrl: string;
+              /** OAuth2 issuer URL */
               issuerUrl: string;
+              /** OAuth2 client ID */
               clientId: string;
+              /** OAuth2 client secret */
               clientSecret: string;
+              /** Connection type */
               type: "oauth2";
+              /** OAuth2 authorization endpoint override */
               authUrl?: string | undefined;
+              /** OAuth2 token endpoint override */
               tokenUrl?: string | undefined;
             };
           }
@@ -1410,6 +1387,7 @@ export type AuthConfigInput =
       /** Machine user attribute fields */
       machineUserAttributes: {
         [x: string]: {
+          /** Field data type */
           type:
             | "string"
             | "boolean"
@@ -1422,24 +1400,37 @@ export type AuthConfigInput =
             | "decimal"
             | "time"
             | "nested";
+          /** Field metadata configuration */
           metadata: {
+            /** Whether the field is required */
             required?: boolean | undefined;
+            /** Whether the field is an array */
             array?: boolean | undefined;
+            /** Field description */
             description?: string | undefined;
+            /** Allowed values for enum fields */
             allowedValues?:
               | {
+                  /** The allowed value */
                   value: string;
+                  /** Description of the allowed value */
                   description?: string | undefined;
                 }[]
               | undefined;
+            /** Lifecycle hooks */
             hooks?:
               | {
+                  /** Hook function called on creation */
                   create?: Function | undefined;
+                  /** Hook function called on update */
                   update?: Function | undefined;
                 }
               | undefined;
+            /** Validation functions for the field */
             validate?: Function[] | undefined;
+            /** Type name for nested or enum fields */
             typeName?: string | undefined;
+            /** Default value for the field on create */
             default?: unknown;
           };
           fields: any;
@@ -1474,17 +1465,24 @@ export type AuthConfigInput =
       oauth2Clients?:
         | {
             [x: string]: {
+              /** Allowed redirect URIs */
               redirectURIs: (
                 | `https://${string}`
                 | `http://${string}`
                 | `${string}:url`
                 | `${string}:url/${string}`
               )[];
+              /** Client description */
               description?: string | undefined;
+              /** Allowed OAuth2 grant types */
               grantTypes?: ("authorization_code" | "refresh_token")[] | undefined;
+              /** OAuth2 client type */
               clientType?: "confidential" | "public" | "browser" | undefined;
+              /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds?: number | undefined;
+              /** Refresh token lifetime in seconds (60-604800) */
               refreshTokenLifetimeSeconds?: number | undefined;
+              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
               requireDpop?: boolean | undefined;
             };
           }
@@ -1624,12 +1622,19 @@ export type AuthConfigInput =
       connections?:
         | {
             [x: string]: {
+              /** OAuth2 provider URL */
               providerUrl: string;
+              /** OAuth2 issuer URL */
               issuerUrl: string;
+              /** OAuth2 client ID */
               clientId: string;
+              /** OAuth2 client secret */
               clientSecret: string;
+              /** Connection type */
               type: "oauth2";
+              /** OAuth2 authorization endpoint override */
               authUrl?: string | undefined;
+              /** OAuth2 token endpoint override */
               tokenUrl?: string | undefined;
             };
           }
@@ -1673,27 +1678,34 @@ export type AuthConfig =
       oauth2Clients?:
         | {
             [x: string]: {
+              /** Allowed OAuth2 grant types */
               grantTypes: ("authorization_code" | "refresh_token")[];
+              /** Allowed redirect URIs */
               redirectURIs: (
                 | `https://${string}`
                 | `http://${string}`
                 | `${string}:url`
                 | `${string}:url/${string}`
               )[];
+              /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds:
                 | {
                     seconds: bigint;
                     nanos: number;
                   }
                 | undefined;
+              /** Refresh token lifetime in seconds (60-604800) */
               refreshTokenLifetimeSeconds:
                 | {
                     seconds: bigint;
                     nanos: number;
                   }
                 | undefined;
+              /** Client description */
               description?: string | undefined;
+              /** OAuth2 client type */
               clientType?: "confidential" | "public" | "browser" | undefined;
+              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
               requireDpop?: boolean | undefined;
             };
           }
@@ -1833,12 +1845,19 @@ export type AuthConfig =
       connections?:
         | {
             [x: string]: {
+              /** OAuth2 provider URL */
               providerUrl: string;
+              /** OAuth2 issuer URL */
               issuerUrl: string;
+              /** OAuth2 client ID */
               clientId: string;
+              /** OAuth2 client secret */
               clientSecret: string;
+              /** Connection type */
               type: "oauth2";
+              /** OAuth2 authorization endpoint override */
               authUrl?: string | undefined;
+              /** OAuth2 token endpoint override */
               tokenUrl?: string | undefined;
             };
           }
@@ -2827,6 +2846,7 @@ export type AuthConfig =
       /** Machine user attribute fields */
       machineUserAttributes: {
         [x: string]: {
+          /** Field data type */
           type:
             | "string"
             | "boolean"
@@ -2839,24 +2859,37 @@ export type AuthConfig =
             | "decimal"
             | "time"
             | "nested";
+          /** Field metadata configuration */
           metadata: {
+            /** Whether the field is required */
             required?: boolean | undefined;
+            /** Whether the field is an array */
             array?: boolean | undefined;
+            /** Field description */
             description?: string | undefined;
+            /** Allowed values for enum fields */
             allowedValues?:
               | {
+                  /** The allowed value */
                   value: string;
+                  /** Description of the allowed value */
                   description?: string | undefined;
                 }[]
               | undefined;
+            /** Lifecycle hooks */
             hooks?:
               | {
+                  /** Hook function called on creation */
                   create?: Function | undefined;
+                  /** Hook function called on update */
                   update?: Function | undefined;
                 }
               | undefined;
+            /** Validation functions for the field */
             validate?: Function[] | undefined;
+            /** Type name for nested or enum fields */
             typeName?: string | undefined;
+            /** Default value for the field on create */
             default?: unknown;
           };
           fields: any;
@@ -2891,27 +2924,34 @@ export type AuthConfig =
       oauth2Clients?:
         | {
             [x: string]: {
+              /** Allowed OAuth2 grant types */
               grantTypes: ("authorization_code" | "refresh_token")[];
+              /** Allowed redirect URIs */
               redirectURIs: (
                 | `https://${string}`
                 | `http://${string}`
                 | `${string}:url`
                 | `${string}:url/${string}`
               )[];
+              /** Access token lifetime in seconds (60-86400) */
               accessTokenLifetimeSeconds:
                 | {
                     seconds: bigint;
                     nanos: number;
                   }
                 | undefined;
+              /** Refresh token lifetime in seconds (60-604800) */
               refreshTokenLifetimeSeconds:
                 | {
                     seconds: bigint;
                     nanos: number;
                   }
                 | undefined;
+              /** Client description */
               description?: string | undefined;
+              /** OAuth2 client type */
               clientType?: "confidential" | "public" | "browser" | undefined;
+              /** Require DPoP (Demonstrating Proof-of-Possession) for token requests */
               requireDpop?: boolean | undefined;
             };
           }
@@ -3051,12 +3091,19 @@ export type AuthConfig =
       connections?:
         | {
             [x: string]: {
+              /** OAuth2 provider URL */
               providerUrl: string;
+              /** OAuth2 issuer URL */
               issuerUrl: string;
+              /** OAuth2 client ID */
               clientId: string;
+              /** OAuth2 client secret */
               clientSecret: string;
+              /** Connection type */
               type: "oauth2";
+              /** OAuth2 authorization endpoint override */
               authUrl?: string | undefined;
+              /** OAuth2 token endpoint override */
               tokenUrl?: string | undefined;
             };
           }
