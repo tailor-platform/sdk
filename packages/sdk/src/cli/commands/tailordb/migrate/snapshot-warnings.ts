@@ -91,8 +91,7 @@ export function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInf
       });
     } else if (change.kind === "table_removed") {
       warnings.push({ tableName: change.tableName, reason: TABLE_REMOVED_WARNING_REASON });
-    } else if (change.kind === "field_modified" && change.before.type === change.after.type) {
-      // Pre-warning-tier diff.json recorded type changes (now field_type_modified) as field_modified.
+    } else if (change.kind === "field_modified") {
       warnings.push(...collectNestedMemberRemovalWarnings(change));
     }
   }

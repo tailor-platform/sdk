@@ -92,9 +92,18 @@ describe("collectNestedMemberChanges", () => {
     expect(changes).toEqual([{ kind: "removed", path: ["city"], before: str }]);
   });
 
-  test("treats a field without nested members as having none", () => {
-    expect(collectNestedMemberChanges(str, nested({ zip: str }))).toEqual([
-      { kind: "added", path: ["zip"], after: str },
+  test("treats a member whose type changed as one modification without descending", () => {
+    const changes = collectNestedMemberChanges(
+      nested({ geo: nested({ lat: str, lng: str }) }),
+      nested({ geo: str }),
+    );
+
+    expect(changes).toEqual([
+      { kind: "modified", path: ["geo"], before: nested({ lat: str, lng: str }), after: str },
     ]);
+  });
+
+  test("does not diff members when the field's own type changed", () => {
+    expect(collectNestedMemberChanges(nested({ zip: str }), str)).toEqual([]);
   });
 });

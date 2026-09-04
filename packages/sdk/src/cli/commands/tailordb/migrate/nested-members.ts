@@ -22,9 +22,9 @@ export type NestedMemberChange =
  *
  * A member present on both sides is recursed into; it is reported as
  * `modified` only when its own configuration (everything except its members)
- * differs. A member present on one side only is reported once, without
- * descending into its members. Removed members come first, then added, then
- * the rest in `before` order.
+ * differs. A member present on one side only, or a field or member whose type
+ * changed, is treated as a whole without descending into its members. Removed
+ * members come first, then added, then the rest in `before` order.
  * @param {SnapshotFieldConfig} before - Field configuration before the change
  * @param {SnapshotFieldConfig} after - Field configuration after the change
  * @returns {NestedMemberChange[]} Member changes with paths relative to the field (may be empty)
@@ -33,6 +33,7 @@ export function collectNestedMemberChanges(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
 ): NestedMemberChange[] {
+  if (before.type !== after.type) return [];
   return collectMemberChanges(before.fields ?? {}, after.fields ?? {}, []);
 }
 
@@ -52,7 +53,9 @@ function collectMemberChanges(
       removed.push({ kind: "removed", path, before: beforeMember });
       continue;
     }
-    rest.push(...collectMemberChanges(beforeMember.fields ?? {}, afterMember.fields ?? {}, path));
+    if (beforeMember.type === afterMember.type) {
+      rest.push(...collectMemberChanges(beforeMember.fields ?? {}, afterMember.fields ?? {}, path));
+    }
     if (areOwnFieldConfigsDifferent(beforeMember, afterMember)) {
       rest.push({ kind: "modified", path, before: beforeMember, after: afterMember });
     }

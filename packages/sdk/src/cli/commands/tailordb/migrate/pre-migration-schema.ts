@@ -253,8 +253,7 @@ type ProtoFieldConfig = MessageInitShape<typeof TailorDBType_FieldConfigSchema>;
 
 /**
  * Re-insert members removed from a nested field so migrate.ts can still read
- * them; the Post-phase drops them. A member whose parent is no longer nested
- * has nowhere to go and is skipped.
+ * them; the Post-phase drops them.
  * @param {ProtoFieldConfig} field - Pre-phase proto field to adjust (mutated in place)
  * @param {SnapshotFieldConfig} before - Field configuration before the change
  * @param {SnapshotFieldConfig} after - Field configuration after the change
