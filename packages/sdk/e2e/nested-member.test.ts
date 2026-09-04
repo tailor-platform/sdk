@@ -284,11 +284,14 @@ export async function main(trx: Transaction): Promise<void> {
 
 export async function main(trx: Transaction): Promise<void> {
   const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
+  // The platform does not preserve member order, so compare sorted keys.
+  const sorted = (value: Record<string, unknown>) =>
+    JSON.stringify(Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))));
   const seen = rows
     .map((row) => {
       const raw: unknown = row.address;
       const address = typeof raw === "string" ? JSON.parse(raw) : raw;
-      return row.id + "=" + row.seedMarker + ":" + JSON.stringify(address);
+      return row.id + "=" + row.seedMarker + ":" + sorted(address as Record<string, unknown>);
     })
     .join("|");
   const expected = [
