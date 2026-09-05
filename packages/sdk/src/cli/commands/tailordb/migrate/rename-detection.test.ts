@@ -1,14 +1,21 @@
 import { describe, expect, test } from "vitest";
 import {
   assertValidFieldRenames,
+  assertValidNestedMemberRenames,
   assertValidTypeRenames,
   dropSpecApplies,
+  findNestedMemberRenameCandidates,
   findRenameCandidates,
   findTypeRenameCandidates,
   isBreakingForeignKeyRetarget,
+  isNestedMemberRenameCompatible,
   isRenameCompatible,
   isTypeRenameCompatible,
+  nestedMemberDropSpecApplies,
+  nestedMemberRenameSpecApplies,
   parseDropOption,
+  parseNestedMemberDropOption,
+  parseNestedMemberRenameOption,
   parseRenameOption,
   parseTypeDropOption,
   parseTypeRenameOption,
@@ -817,5 +824,266 @@ describe("typeDropSpecApplies", () => {
         snapshot({ User: snapshotType("User") }),
       ),
     ).toBe(false);
+  });
+});
+
+describe("parseNestedMemberRenameOption", () => {
+  test("parses Table.field.member:newName", () => {
+    expect(parseNestedMemberRenameOption("User.address.zip:zipCode")).toEqual({
+      tableName: "User",
+      fieldName: "address",
+      previousPath: ["zip"],
+      path: ["zipCode"],
+    });
+  });
+
+  test("keeps the parent path of a deeper member", () => {
+    expect(parseNestedMemberRenameOption("User.address.geo.lat:latitude")).toEqual({
+      tableName: "User",
+      fieldName: "address",
+      previousPath: ["geo", "lat"],
+      path: ["geo", "latitude"],
+    });
+  });
+
+  test.each([
+    "User.address:zip",
+    "User.address.zip:geo.code",
+    "User..zip:a",
+    "User.address.zip",
+    "",
+  ])("rejects malformed value %j", (value) => {
+    expect(() => parseNestedMemberRenameOption(value)).toThrow("Expected format");
+  });
+
+  test("rejects identical old and new names", () => {
+    expect(() => parseNestedMemberRenameOption("User.address.zip:zip")).toThrow("identical");
+  });
+});
+
+describe("parseNestedMemberDropOption", () => {
+  test("parses Table.field.member", () => {
+    expect(parseNestedMemberDropOption("User.address.geo.lat")).toEqual({
+      tableName: "User",
+      fieldName: "address",
+      path: ["geo", "lat"],
+    });
+  });
+
+  test.each(["User.address", "User", "User..zip", "User.address.zip:code"])(
+    "rejects malformed value %j",
+    (value) => {
+      expect(() => parseNestedMemberDropOption(value)).toThrow("Expected format");
+    },
+  );
+});
+
+describe("isNestedMemberRenameCompatible", () => {
+  test("accepts an identical member configuration", () => {
+    expect(isNestedMemberRenameCompatible(stringField(), stringField())).toBe(true);
+  });
+
+  test("tolerates description differences", () => {
+    expect(
+      isNestedMemberRenameCompatible(stringField(), stringField({ description: "renamed" })),
+    ).toBe(true);
+  });
+
+  test.each<[string, SnapshotFieldConfig]>([
+    ["type", stringField({ type: "integer" })],
+    ["required", stringField({ required: true })],
+    ["array", stringField({ array: true })],
+    ["index", stringField({ index: true })],
+    ["unique", stringField({ unique: true })],
+    ["hooks", stringField({ hooks: { create: { expr: "return 1" } } })],
+    ["validate", stringField({ validate: [{ script: { expr: "true" }, errorMessage: "x" }] })],
+  ])("rejects a %s difference", (_name, after) => {
+    expect(isNestedMemberRenameCompatible(stringField(), after)).toBe(false);
+  });
+
+  test("rejects differing decimal scales and serial members", () => {
+    const decimal = (scale: number) => stringField({ type: "decimal", scale });
+    expect(isNestedMemberRenameCompatible(decimal(6), decimal(2))).toBe(false);
+    expect(isNestedMemberRenameCompatible(decimal(2), decimal(2))).toBe(true);
+    const serial = stringField({ type: "integer", serial: { start: 1, maxValue: 10 } });
+    expect(isNestedMemberRenameCompatible(serial, serial)).toBe(false);
+  });
+
+  test("rejects removed enum values but accepts added ones", () => {
+    const status = (values: string[]) =>
+      stringField({ type: "enum", allowedValues: values.map((value) => ({ value })) });
+    expect(isNestedMemberRenameCompatible(status(["A", "B"]), status(["A"]))).toBe(false);
+    expect(isNestedMemberRenameCompatible(status(["A"]), status(["A", "B"]))).toBe(true);
+  });
+});
+
+describe("findNestedMemberRenameCandidates", () => {
+  const nested = (fields: Record<string, SnapshotFieldConfig>): SnapshotFieldConfig =>
+    stringField({ type: "nested", fields });
+
+  test("pairs a removed member with compatible added siblings", () => {
+    const diff = createMockMigrationDiff({
+      changes: [
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: nested({ zip: stringField(), city: stringField() }),
+          after: nested({
+            zipCode: stringField(),
+            postal: stringField({ type: "integer" }),
+            city: stringField(),
+          }),
+        },
+      ],
+    });
+
+    expect(findNestedMemberRenameCandidates(diff)).toEqual([
+      {
+        tableName: "User",
+        fieldName: "address",
+        previousPath: ["zip"],
+        removed: stringField(),
+        added: ["zipCode"],
+      },
+    ]);
+  });
+
+  test("pairs members only within the same parent", () => {
+    const diff = createMockMigrationDiff({
+      changes: [
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: nested({ geo: nested({ lat: stringField() }) }),
+          after: nested({ geo: nested({ latitude: stringField() }), lat: stringField() }),
+        },
+      ],
+    });
+
+    expect(findNestedMemberRenameCandidates(diff)).toEqual([
+      {
+        tableName: "User",
+        fieldName: "address",
+        previousPath: ["geo", "lat"],
+        removed: stringField(),
+        added: ["latitude"],
+      },
+    ]);
+  });
+
+  test("ignores removals without a compatible sibling", () => {
+    const diff = createMockMigrationDiff({
+      changes: [
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: nested({ zip: stringField() }),
+          after: nested({ code: stringField({ type: "integer" }) }),
+        },
+      ],
+    });
+
+    expect(findNestedMemberRenameCandidates(diff)).toEqual([]);
+  });
+});
+
+describe("nested member rename specs", () => {
+  const nestedSnapshot = (fields: Record<string, SnapshotFieldConfig>) =>
+    normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "tailordb",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      tables: {
+        User: snapshotType("User", {
+          fields: {
+            id: { type: "uuid", required: true },
+            address: stringField({ type: "nested", fields }),
+          },
+        }),
+      },
+    });
+  const spec = {
+    tableName: "User",
+    fieldName: "address",
+    previousPath: ["zip"],
+    path: ["zipCode"],
+  };
+
+  test("nestedMemberRenameSpecApplies matches a removed + added member pair", () => {
+    const previous = nestedSnapshot({ zip: stringField() });
+    const current = nestedSnapshot({ zipCode: stringField() });
+    expect(nestedMemberRenameSpecApplies(spec, previous, current)).toBe(true);
+    expect(nestedMemberRenameSpecApplies(spec, previous, previous)).toBe(false);
+    expect(nestedMemberRenameSpecApplies(spec, current, current)).toBe(false);
+  });
+
+  test("nestedMemberDropSpecApplies matches a removed member", () => {
+    const previous = nestedSnapshot({ zip: stringField() });
+    const current = nestedSnapshot({});
+    const drop = { tableName: "User", fieldName: "address", path: ["zip"] };
+    expect(nestedMemberDropSpecApplies(drop, previous, current)).toBe(true);
+    expect(nestedMemberDropSpecApplies(drop, previous, previous)).toBe(false);
+  });
+
+  test("assertValidNestedMemberRenames accepts a compatible pair", () => {
+    expect(() =>
+      assertValidNestedMemberRenames(
+        nestedSnapshot({ zip: stringField() }),
+        nestedSnapshot({ zipCode: stringField() }),
+        [spec],
+      ),
+    ).not.toThrow();
+  });
+
+  test.each<
+    [string, Record<string, SnapshotFieldConfig>, Record<string, SnapshotFieldConfig>, string]
+  >([
+    ["missing old member", {}, { zipCode: stringField() }, "does not exist in the previous schema"],
+    [
+      "old member still present",
+      { zip: stringField() },
+      { zip: stringField(), zipCode: stringField() },
+      "still exists",
+    ],
+    ["missing new member", { zip: stringField() }, {}, "does not exist in the current schema"],
+    [
+      "new member already present",
+      { zip: stringField(), zipCode: stringField() },
+      { zipCode: stringField() },
+      "already exists",
+    ],
+    [
+      "incompatible members",
+      { zip: stringField() },
+      { zipCode: stringField({ required: true }) },
+      "not rename-compatible",
+    ],
+  ])("rejects %s", (_name, before, after, message) => {
+    expect(() =>
+      assertValidNestedMemberRenames(nestedSnapshot(before), nestedSnapshot(after), [spec]),
+    ).toThrow(message);
+  });
+
+  test("rejects a member used in two renames", () => {
+    expect(() =>
+      assertValidNestedMemberRenames(
+        nestedSnapshot({ zip: stringField(), postal: stringField() }),
+        nestedSnapshot({ zipCode: stringField() }),
+        [spec, { ...spec, previousPath: ["postal"] }],
+      ),
+    ).toThrow("appears in more than one rename");
+  });
+
+  test("rejects a rename across different parents", () => {
+    expect(() =>
+      assertValidNestedMemberRenames(
+        nestedSnapshot({ zip: stringField(), geo: stringField({ type: "nested", fields: {} }) }),
+        nestedSnapshot({ geo: stringField({ type: "nested", fields: { zip: stringField() } }) }),
+        [{ ...spec, path: ["geo", "zip"] }],
+      ),
+    ).toThrow("same parent");
   });
 });

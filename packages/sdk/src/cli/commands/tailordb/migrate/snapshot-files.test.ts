@@ -711,6 +711,57 @@ describe("snapshot", () => {
       expect(loaded.warnings).toEqual([]);
     });
 
+    test("round-trips nested member renames recorded on a field_modified change", () => {
+      const diff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false } },
+            },
+            after: {
+              type: "nested",
+              required: false,
+              fields: { zipCode: { type: "string", required: false } },
+            },
+            memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "User", fieldName: "address.zipCode", reason: "renamed" }],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "member_rename_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
+
+      const loaded = loadDiff(filePath);
+      const change = loaded.changes[0]!;
+
+      expect(change.kind === "field_modified" && change.memberRenames).toEqual([
+        { previousPath: ["zip"], path: ["zipCode"] },
+      ]);
+    });
+
+    test("rejects a diff written by a newer migration file format", () => {
+      const filePath = path.join(testDir, "future_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({ version: SCHEMA_SNAPSHOT_VERSION + 1, namespace, changes: [] }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow("Unsupported migration file format version");
+    });
+
     test("keeps a recorded empty warnings array authoritative over changes", () => {
       const diff = {
         version: SCHEMA_SNAPSHOT_VERSION,
@@ -973,20 +1024,20 @@ describe("snapshot", () => {
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-5/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-6/);
       expect(() => loadSnapshot(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects snapshot formats newer than the supported window", () => {
-      const version = 6;
+      const version = 7;
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-5/);
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-6/);
       expect(() => loadSnapshot(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 6/i,
+        /upgrade to an SDK that supports migration file format version 7/i,
       );
     });
 
@@ -1297,20 +1348,20 @@ describe("snapshot", () => {
         }),
       );
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-5/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-6/);
       expect(() => loadDiff(filePath)).toThrow(
         /re-baseline with an SDK that still supports this migration history, then upgrade/i,
       );
     });
 
     test("rejects diff formats newer than the supported window", () => {
-      const version = 6;
+      const version = 7;
       const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
-      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-5/);
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-6/);
       expect(() => loadDiff(filePath)).toThrow(
-        /upgrade to an SDK that supports migration file format version 6/i,
+        /upgrade to an SDK that supports migration file format version 7/i,
       );
     });
 
@@ -1376,8 +1427,8 @@ describe("snapshot", () => {
       expect(fs.existsSync(filePath)).toBe(true);
 
       const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(SCHEMA_SNAPSHOT_VERSION).toBe(5);
-      expect(loaded.version).toBe(5);
+      expect(SCHEMA_SNAPSHOT_VERSION).toBe(6);
+      expect(loaded.version).toBe(6);
     });
   });
 

@@ -164,15 +164,33 @@ During deploy, the pre-migration phase keeps the old field and adds the new fiel
 
 If you decline the prompt (or confirm the removal with `--drop`), the change stays a plain removal + addition with the usual data-loss warning.
 
-Renaming a member inside a **nested field** is not detected as a rename: `User.address.zip` → `zipCode` becomes a single `field_modified` on `address`, so no `field_renamed` change is recorded and no copy script is generated. The removed member is reported as a data-loss warning instead, which `migration validate --strict` picks up like any other warning; when a compatible member was added at the same level, the warning names it as a possible rename target:
+#### Renaming a member inside a nested field
+
+Members inside a **nested field** (`db.object(...)`) are detected the same way: when `migration generate` finds a member removed from a nested field and a compatible member added under the same parent, it asks whether the member was renamed. Two members qualify only when copying the value preserves it exactly, because nested member constraints are never relaxed: the type, array-ness, requiredness, modifiers, decimal scale, hooks, and validations must match, enum values may be added but not removed, and serial members never qualify.
+
+```
+? User.address.zip was removed and zipCode was added with a compatible type. Was it renamed to zipCode? (Y/n)
+```
+
+In non-interactive environments the command fails while a candidate is left unresolved, exactly like field renames. Resolve it with the nested member forms of the same flags (a value with two or more dots before the `:` targets a member; deeper members use their dotted path, and the new name is a single segment under the same parent):
+
+```bash
+tailor tailordb migration generate --rename "User.address.zip:zipCode"
+tailor tailordb migration generate --rename "User.address.geo.lat:latitude"
+tailor tailordb migration generate --drop "User.address.zip"
+```
+
+A confirmed rename is recorded on the nested field's `field_modified` change as `memberRenames` and treated as **breaking**, so a migration script is required. The generated `migrate.ts` reads every row's nested value, stores each renamed member under its new name (descending into arrays at every level), and writes the value back; the old member is kept in the written value because it stays on the schema until the post-migration phase drops it. During deploy, the pre-migration phase keeps the old member on the nested field and adds the new member as optional, the script copies the values, and the post-migration phase drops the old member and enforces the new member's requiredness.
+
+A member removed without a confirmed rename stays a data-loss warning, which `migration validate --strict` picks up like any other warning; when a compatible sibling was added, the warning names it and the `--rename` value that confirms the rename:
 
 ```
 Warning: data loss possible:
 
-  - User.address.zip: Nested member removed (existing values will no longer be accessible through the schema). Possibly renamed to zipCode: nested renames are not detected, so copy its values with a migration script if it was renamed
+  - User.address.zip: Nested member removed (existing values will no longer be accessible through the schema). Possibly renamed to zipCode: confirm it with --rename "User.address.zip:<newName>" to scaffold a copy script, or keep the removal and copy the values yourself
 ```
 
-To carry the values over, add a custom `tailordb migration script` to the migration. The pre-migration phase keeps the removed member on the nested field until the script finishes, exactly like a removed top-level field, so the script can read `zip` and write `zipCode`. Nested fields reach the script as objects, so the copy rewrites the whole `address` value; keep the old member in what you write, because it is still part of the schema until the post-migration phase drops it. Declare the new member as optional: the platform rejects a nested member that is required while existing records lack it, and nested member constraints are not relaxed during the pre-migration phase.
+The pre-migration phase keeps a removed member on the nested field until the script finishes, exactly like a removed top-level field, so a custom script can still read it. Nested fields reach the script as objects. Renaming a nested member cannot be combined in one migration with renaming its table or the nested field itself; split such changes into separate migrations.
 
 ### Renaming a table
 
@@ -261,7 +279,7 @@ export default defineConfig({
 
 ### Migration file format compatibility
 
-Migration files are versioned independently of the SDK package. This SDK writes format version `3` and reads versions `1` through `3`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk.
+Migration files are versioned independently of the SDK package. This SDK writes format version `6` and reads versions `1` through `6`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk. Format version `6` records renames of members inside nested fields (`memberRenames`); older SDK versions refuse to read it rather than deploying such a migration without the copy step.
 
 If a future SDK can no longer replay an old migration format, re-baseline while using an SDK version that still supports the complete history, commit the new baseline, deploy it to every environment, and then upgrade the SDK. A file from a newer unsupported format instead requires upgrading the SDK first. The CLI rejects both cases with guidance rather than attempting a best-effort replay.
 
@@ -348,6 +366,8 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Add required field                | Yes       | Yes               | Script populates default values                                                                                                                                                                                                                    |
 | Remove field                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve or clear data before the field leaves the active schema. The field stays readable from `migrate.ts` during Pre-migration.             |
 | Rename field                      | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "Table.oldField:newField"` — see [Renaming a field](#renaming-a-field). Auto-generated script copies values from the old field to the new one; both fields coexist during Pre-migration. |
+| Remove nested member              | No        | Optional          | Warning tier — see [Renaming a member inside a nested field](#renaming-a-member-inside-a-nested-field). The member stays readable from `migrate.ts` during Pre-migration.                                                                          |
+| Rename nested member              | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "Table.field.oldMember:newMember"`. Auto-generated script rewrites each row's nested value; the old member stays readable and the new member is optional during Pre-migration.           |
 | Change optional → required        | Yes       | Yes               | Script sets defaults for null values                                                                                                                                                                                                               |
 | Change required → optional        | No        | No                | Schema change only                                                                                                                                                                                                                                 |
 | Add index (non-unique)            | No        | No                | Schema change only                                                                                                                                                                                                                                 |
@@ -552,7 +572,7 @@ When you run `tailor deploy`, the SDK detects pending migrations (anything past 
 
 For each pending migration:
 
-1. **Pre-migration**: Schema changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and table-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the table so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped); members removed from a nested field are kept the same way. For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. For a renamed table, the new table is created with its full constraints while the old table stays on the namespace until post-migration cleanup, so the script can copy rows between them. Breaking table-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
+1. **Pre-migration**: Schema changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and table-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the table so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped); members removed from a nested field are kept the same way, and the new member of a confirmed nested rename is added as optional. For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. For a renamed table, the new table is created with its full constraints while the old table stays on the namespace until post-migration cleanup, so the script can copy rows between them. Breaking table-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
 2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
 3. **Post-migration schema**: Required constraints and the target field definitions are applied. Do not assume that removing a field clears its underlying stored JSON value.
 4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and tables — including the old table left behind by a rename — are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.

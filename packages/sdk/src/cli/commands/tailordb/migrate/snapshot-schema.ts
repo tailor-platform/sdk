@@ -382,6 +382,9 @@ const fieldModifiedChangeSchema = z.looseObject({
   fieldName: z.string(),
   before: snapshotFieldConfigSchema,
   after: snapshotFieldConfigSchema,
+  memberRenames: z
+    .array(z.looseObject({ previousPath: z.array(z.string()), path: z.array(z.string()) }))
+    .optional(),
 }) as unknown as z.ZodType<FieldModifiedChange>;
 
 const fieldRenamedChangeSchema = z.looseObject({

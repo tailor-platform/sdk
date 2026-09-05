@@ -1,7 +1,6 @@
 import { collectNestedMemberChanges, type NestedMemberChange } from "./nested-members";
-import { isRenameCompatible } from "./rename-detection";
+import { isNestedMemberRenameCompatible } from "./rename-detection";
 import type { FieldModifiedChange, MigrationDiff, WarningChangeInfo } from "./diff-calculator";
-import type { SnapshotFieldConfig } from "./snapshot-types";
 
 export const FIELD_REMOVED_WARNING_REASON =
   "Field removed (existing data will no longer be accessible through the schema)";
@@ -9,25 +8,6 @@ export const TABLE_REMOVED_WARNING_REASON =
   "Table removed (all records in this table will be deleted during post-migration cleanup)";
 const NESTED_MEMBER_REMOVED_WARNING_REASON =
   "Nested member removed (existing values will no longer be accessible through the schema)";
-
-/**
- * Whether an added nested member could carry the removed member's values. The
- * Pre-phase never relaxes nested member constraints, so unlike a top-level
- * rename the requiredness and decimal scale must match as well.
- * @param {SnapshotFieldConfig} before - Removed member's configuration
- * @param {SnapshotFieldConfig} after - Added member's configuration
- * @returns {boolean} True if the pair looks like a rename
- */
-function isNestedMemberRenameCompatible(
-  before: SnapshotFieldConfig,
-  after: SnapshotFieldConfig,
-): boolean {
-  return (
-    before.required === after.required &&
-    (before.scale ?? null) === (after.scale ?? null) &&
-    isRenameCompatible(before, after)
-  );
-}
 
 function isSibling(a: NestedMemberChange, b: NestedMemberChange): boolean {
   return (
@@ -39,9 +19,10 @@ function isSibling(a: NestedMemberChange, b: NestedMemberChange): boolean {
 /**
  * Data-loss warnings for members removed inside a nested field.
  *
- * Nested renames are not detected and no copy script is scaffolded; the
- * Pre-phase keeps the removed member readable, and a compatible member added
- * at the same level is named in the warning as a hint for a hand-written copy.
+ * Members confirmed as renamed (`change.memberRenames`) are not data loss and
+ * are skipped, and their new names are not offered as rename hints. The
+ * Pre-phase keeps every removed member readable, and a compatible member added
+ * at the same level is named in the warning as a hint.
  * @param {FieldModifiedChange} change - Modification of the top-level nested field
  * @returns {WarningChangeInfo[]} One warning per removed member, keyed by dotted member path
  */
@@ -49,21 +30,29 @@ export function collectNestedMemberRemovalWarnings(
   change: FieldModifiedChange,
 ): WarningChangeInfo[] {
   const changes = collectNestedMemberChanges(change.before, change.after);
+  const renamedPaths = new Set(
+    (change.memberRenames ?? []).flatMap((rename) => [
+      rename.previousPath.join("."),
+      rename.path.join("."),
+    ]),
+  );
   const warnings: WarningChangeInfo[] = [];
   for (const removed of changes) {
-    if (removed.kind !== "removed") continue;
+    if (removed.kind !== "removed" || renamedPaths.has(removed.path.join("."))) continue;
     const renameTargets = changes
       .filter(
         (added) =>
           added.kind === "added" &&
+          !renamedPaths.has(added.path.join(".")) &&
           isSibling(added, removed) &&
           isNestedMemberRenameCompatible(removed.before, added.after),
       )
       .map((added) => added.path.at(-1));
     const hint =
       renameTargets.length > 0
-        ? `. Possibly renamed to ${renameTargets.join(", ")}: nested renames are not detected, ` +
-          "so copy its values with a migration script if it was renamed"
+        ? `. Possibly renamed to ${renameTargets.join(", ")}: confirm it with ` +
+          `--rename "${change.tableName}.${change.fieldName}.${removed.path.join(".")}:<newName>" ` +
+          "to scaffold a copy script, or keep the removal and copy the values yourself"
         : "";
     warnings.push({
       tableName: change.tableName,

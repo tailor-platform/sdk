@@ -1,10 +1,12 @@
 /**
- * E2E coverage for removing a member inside a nested field.
+ * E2E coverage for renaming a member inside a nested field.
  *
- * The diff reports the removal as a data-loss warning, and the pre-migration
- * phase must keep the removed member on the nested field so migrate.ts can copy
- * its values into the replacement member before the post-migration phase drops
- * it. Every assertion reads the rows back from inside a migration script.
+ * `migration generate` must detect the removed + added member pair, record the
+ * confirmed rename, and scaffold a copy script. During deploy the pre-migration
+ * phase must keep the old member readable and relax the required new member so
+ * the generated script can copy the values before the post-migration phase
+ * drops the old member. Every assertion reads the rows back from inside a
+ * migration script.
  */
 
 import { spawnSync } from "node:child_process";
@@ -90,7 +92,7 @@ describe("E2E: TailorDB nested member removal", { concurrent: false }, () => {
 export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
-  address: db.object({ city: db.string(), ${zipMember}: db.string({ optional: true }) }, { optional: true }),
+  address: db.object({ city: db.string(), ${zipMember}: db.string() }, { optional: true }),
 ${extraFields}}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
@@ -200,74 +202,67 @@ export async function main(trx: Transaction): Promise<void> {
     expect(await nestedMemberNames()).toEqual(["city", "zip"]);
   }, 900000);
 
-  test("reports the removed member as a warning instead of a rename", async () => {
+  test("fails on the unresolved rename candidate without --rename", async () => {
     updateTypeFile("zipCode", "  seedMarker: db.string({ optional: true }),\n");
     const configPath = createConfig();
 
-    const output = runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
+    const result = tryCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
 
-    const diff = loadDiff(getMigrationFilePath(migrationsDir, latestMigrationNumber(), "diff"));
-    expect(diff.changes.map((c) => c.kind)).toEqual(["field_modified"]);
-    expect(diff.hasBreakingChanges).toBe(false);
-    expect(diff.requiresMigrationScript).toBe(false);
-    expect(diff.warnings).toHaveLength(1);
-    expect(diff.warnings[0]!.fieldName).toBe("address.zip");
-    expect(diff.warnings[0]!.reason).toContain("Possibly renamed to zipCode");
-    expect(output).toContain("members: -zip, +zipCode");
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("Possible rename(s) detected");
+    expect(result.output).toContain("User.address.zip → zipCode?");
   }, 300000);
 
-  test("copies the removed member from inside the same migration", async () => {
+  test("records the rename and scaffolds a copy script with --rename", async () => {
     const configPath = createConfig();
-    const migrationNumber = latestMigrationNumber();
 
     runCli([
       "tailordb",
       "migration",
-      "script",
-      String(migrationNumber),
+      "generate",
       "--config",
       configPath,
-      "--namespace",
-      tailordbName,
+      "--yes",
+      "--rename",
+      "User.address.zip:zipCode",
     ]);
-    fs.writeFileSync(
-      getMigrationFilePath(migrationsDir, migrationNumber, "migrate"),
-      `import type { Transaction } from "./db";
 
-export async function main(trx: Transaction): Promise<void> {
-  const rows = await trx.selectFrom("User").select(["id", "address"]).orderBy("id", "asc").execute();
-  for (const row of rows) {
-    const raw: unknown = row.address;
-    const shape = typeof raw;
-    const before = (shape === "string" ? JSON.parse(raw as string) : raw) as Record<string, unknown> | null;
-    if (!before || typeof before.zip !== "string") {
-      throw new Error("PROBE_ZIP_MISSING " + JSON.stringify({ shape, raw }));
-    }
-    // The removed member stays on the schema until the post-migration phase, so
-    // keep its value in the write instead of dropping it here.
-    const after = { ...before, zipCode: before.zip };
-    await trx
-      .updateTable("User")
-      .set({
-        address: (shape === "string" ? JSON.stringify(after) : after) as never,
-        seedMarker: "shape=" + shape,
-      })
-      .where("id", "=", row.id)
-      .execute();
-  }
-}
-`,
+    const migrationNumber = latestMigrationNumber();
+    const diff = loadDiff(getMigrationFilePath(migrationsDir, migrationNumber, "diff"));
+    expect(diff.changes).toEqual([
+      expect.objectContaining({
+        kind: "field_modified",
+        fieldName: "address",
+        memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+      }),
+    ]);
+    expect(diff.requiresMigrationScript).toBe(true);
+    expect(diff.warnings).toEqual([]);
+    const script = fs.readFileSync(
+      getMigrationFilePath(migrationsDir, migrationNumber, "migrate"),
+      "utf-8",
     );
+    expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
+  }, 300000);
+
+  test("copies the renamed member with the generated script", async () => {
+    const configPath = createConfig();
 
     const result = tryCli(
       ["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"],
       900000,
     );
-    expect(result.output).not.toContain("PROBE_ZIP_MISSING");
     if (!result.ok) throw new Error(`deploy failed:\n${result.output}`);
     expect(result.ok).toBe(true);
 
-    expect(await nestedMemberNames()).toEqual(["city", "zipCode"]);
+    const resp = await client.getTailorDBType({
+      workspaceId,
+      namespaceName: tailordbName,
+      tailordbTypeName: "User",
+    });
+    const members = resp.tailordbType?.schema?.fields.address?.fields ?? {};
+    expect(Object.keys(members).toSorted()).toEqual(["city", "zipCode"]);
+    expect(members.zipCode?.required).toBe(true);
   }, 900000);
 
   test("reads the copied member back under its new name", async () => {
@@ -290,13 +285,12 @@ export async function main(trx: Transaction): Promise<void> {
   const seen = rows
     .map((row) => {
       const raw: unknown = row.address;
-      const address = typeof raw === "string" ? JSON.parse(raw) : raw;
-      return row.id + "=" + row.seedMarker + ":" + sorted(address as Record<string, unknown>);
+      return row.id + "=" + typeof raw + ":" + sorted(raw as Record<string, unknown>);
     })
     .join("|");
   const expected = [
-    "${FIRST_ID}=shape=object:" + JSON.stringify({ city: "Tokyo", zipCode: "150-0001" }),
-    "${SECOND_ID}=shape=object:" + JSON.stringify({ city: "Osaka", zipCode: "530-0001" }),
+    "${FIRST_ID}=object:" + JSON.stringify({ city: "Tokyo", zipCode: "150-0001" }),
+    "${SECOND_ID}=object:" + JSON.stringify({ city: "Osaka", zipCode: "530-0001" }),
   ].join("|");
   if (seen !== expected) {
     throw new Error("PROBE_MISMATCH " + seen);

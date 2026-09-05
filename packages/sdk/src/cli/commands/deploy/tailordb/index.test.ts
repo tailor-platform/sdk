@@ -1450,6 +1450,71 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(address.fields!.geo!.fields!.lng).toMatchObject({ type: "float", required: true });
   });
 
+  test("relaxes the new member of a nested rename until the migration script completes", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: {
+          zipCode: { type: "string", required: true },
+          geo: {
+            type: "nested",
+            required: false,
+            fields: { latitude: { type: "float", required: true } },
+          },
+        },
+      },
+    };
+    const before: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zip: { type: "string", required: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { lat: { type: "float", required: true } },
+        },
+      },
+    };
+    const after: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zipCode: { type: "string", required: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { latitude: { type: "float", required: true } },
+        },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before,
+          after,
+          memberRenames: [
+            { previousPath: ["zip"], path: ["zipCode"] },
+            { previousPath: ["geo", "lat"], path: ["geo", "latitude"] },
+          ],
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(address.fields!.zipCode!.required).toBe(false);
+    expect(address.fields!.zip).toMatchObject({ type: "string", required: true });
+    expect(address.fields!.geo!.fields!.latitude!.required).toBe(false);
+    expect(address.fields!.geo!.fields!.lat).toMatchObject({ type: "float", required: true });
+  });
+
   test("does not restore members whose parent is no longer nested", () => {
     const fields: Record<string, ProtoField> = {
       address: {
@@ -2079,7 +2144,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: 6,
+        version: 7,
       }),
     );
     const planResult = makePlanResult(true);
@@ -2087,7 +2152,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0001" });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /supports migration file format versions 1-5/,
+      /supports migration file format versions 1-6/,
     );
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();

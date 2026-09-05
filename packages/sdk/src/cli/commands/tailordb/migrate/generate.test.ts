@@ -500,6 +500,175 @@ describe("tailordb migration generate with an unsupported field type change", ()
   });
 });
 
+describe("tailordb migration generate nested member rename preflight", () => {
+  let tmpDir: string;
+
+  function nestedType(memberName: string): ReturnType<typeof parsedType> {
+    const type = parsedType("User");
+    type.fields.address = {
+      name: "address",
+      config: {
+        type: "nested",
+        required: false,
+        fields: { [memberName]: { type: "string", required: false } },
+      },
+    };
+    return type;
+  }
+
+  function addNestedNamespace(namespace: string, localMemberName: string): TestNamespace {
+    const migrationsDir = path.join(tmpDir, namespace);
+    const baseline = snapshotType("User");
+    baseline.fields.address = {
+      type: "nested",
+      required: false,
+      fields: { zip: { type: "string", required: false } },
+    };
+    writeInitialSchema(migrationsDir, { User: baseline });
+    const entry = {
+      namespace,
+      migrationsDir,
+      localTypes: { User: nestedType(localMemberName) },
+    };
+    state.namespaces.push(entry);
+    return entry;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.stubEnv("EDITOR", undefined);
+    vi.stubEnv("VISUAL", undefined);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-nested-rename-test-"));
+    state.namespaces = [];
+    vi.mocked(loadConfig).mockImplementation(
+      async () =>
+        ({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: Object.fromEntries(
+              state.namespaces.map(({ namespace, migrationsDir }) => [
+                namespace,
+                { migration: { directory: migrationsDir } },
+              ]),
+            ),
+          },
+          plugins: [],
+        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    );
+    vi.mocked(canPrompt).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("fails on an unresolved nested member rename candidate and writes no migration", async () => {
+    const entry = addNestedNamespace("tailordb", "zipCode");
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Possible rename(s) detected");
+    expect(String(result.error)).toContain("User.address.zip → zipCode?");
+    expect(String(result.error)).toContain('"Table.field.oldMember:newMember"');
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("records the rename and scaffolds a copy script with --rename Table.field.old:new", async () => {
+    const entry = addNestedNamespace("tailordb", "zipCode");
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.address.zip:zipCode",
+    ]);
+
+    expect(result.success).toBe(true);
+    const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
+    expect(diff.changes).toEqual([
+      expect.objectContaining({
+        kind: "field_modified",
+        fieldName: "address",
+        memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+      }),
+    ]);
+    expect(diff.requiresMigrationScript).toBe(true);
+    expect(diff.warnings).toEqual([]);
+    const script = fs.readFileSync(path.join(entry.migrationsDir, "0001", "migrate.ts"), "utf-8");
+    expect(script).toContain('renameNestedMember(value, ["zip"], "zipCode")');
+  });
+
+  test("keeps the removal warning with --drop Table.field.member", async () => {
+    const entry = addNestedNamespace("tailordb", "zipCode");
+
+    const result = await runCommand(generateCommand, ["--yes", "--drop", "User.address.zip"]);
+
+    expect(result.success).toBe(true);
+    const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
+    expect(diff.changes[0]).not.toHaveProperty("memberRenames");
+    expect(diff.requiresMigrationScript).toBe(false);
+    expect(diff.warnings.map((w) => w.fieldName)).toEqual(["address.zip"]);
+  });
+
+  test("confirms the rename interactively", async () => {
+    const entry = addNestedNamespace("tailordb", "zipCode");
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("User.address.zip was removed and zipCode was added"),
+      }),
+    );
+    const diff = loadDiff(path.join(entry.migrationsDir, "0001", "diff.json"));
+    expect(diff.changes[0]).toMatchObject({
+      memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+    });
+  });
+
+  test("rejects conflicting nested rename and drop flags before writing", async () => {
+    const entry = addNestedNamespace("tailordb", "zipCode");
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.address.zip:zipCode",
+      "--drop",
+      "User.address.zip",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("--rename and --drop conflict for: User.address.zip");
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("rejects unmatched nested flags before writing", async () => {
+    const entry = addNestedNamespace("tailordb", "zipCode");
+
+    const renameResult = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.address.fax:zipCode",
+    ]);
+    const dropResult = await runCommand(generateCommand, ["--yes", "--drop", "User.address.fax"]);
+
+    expect(String(renameResult.error)).toContain(
+      "--rename does not match a removed + added nested member pair: User.address.fax:zipCode",
+    );
+    expect(String(dropResult.error)).toContain(
+      "--drop does not match a removed nested member: User.address.fax",
+    );
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+});
+
 describe("tailordb migration generate type rename preflight", () => {
   let tmpDir: string;
 

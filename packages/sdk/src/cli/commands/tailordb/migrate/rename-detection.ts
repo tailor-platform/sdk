@@ -9,6 +9,7 @@
  * `field_renamed` / `table_renamed` change instead.
  */
 
+import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import {
   SNAPSHOT_FIELD_BOOLEAN_PROPS,
   type NormalizedSchemaSnapshot,
@@ -303,6 +304,290 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
     throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Table.field".`);
   }
   return { tableName, fieldName };
+}
+
+// ============================================================================
+// Nested Member Renames
+// ============================================================================
+
+/**
+ * A confirmed rename of a member inside a nested field. Paths are relative to
+ * the top-level field and share the same parent.
+ */
+export interface NestedMemberRenameSpec {
+  tableName: string;
+  /** Top-level nested field containing the member. */
+  fieldName: string;
+  /** Member path before the rename. */
+  previousPath: string[];
+  /** Member path after the rename. */
+  path: string[];
+}
+
+/**
+ * A removed nested member together with the added siblings it could have been
+ * renamed to.
+ */
+export interface NestedMemberRenameCandidate {
+  tableName: string;
+  fieldName: string;
+  previousPath: string[];
+  removed: SnapshotFieldConfig;
+  /** Compatible added sibling names, in diff order. */
+  added: string[];
+}
+
+/**
+ * Whether copying values from `before` into `after` preserves their meaning
+ * for members inside a nested field. The Pre-phase never relaxes nested
+ * member constraints, so unlike a top-level rename every constraint must match:
+ * type, array-ness, requiredness, modifiers, foreign key target, scale,
+ * hooks, and validations. Enum values may be added but not removed, serial
+ * members cannot be renamed, and nested members must match recursively.
+ * Description and default values may differ.
+ * @param {SnapshotFieldConfig} before - Removed member's configuration
+ * @param {SnapshotFieldConfig} after - Added member's configuration
+ * @returns {boolean} True if the pair is rename-compatible
+ */
+export function isNestedMemberRenameCompatible(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): boolean {
+  if (before.type !== after.type) return false;
+  if (before.required !== after.required) return false;
+  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
+    if ((before[prop] ?? false) !== (after[prop] ?? false)) return false;
+  }
+  if ((before.foreignKeyType ?? "") !== (after.foreignKeyType ?? "")) return false;
+  if ((before.foreignKeyField ?? "") !== (after.foreignKeyField ?? "")) return false;
+  if (before.serial || after.serial) return false;
+  if ((before.scale ?? null) !== (after.scale ?? null)) return false;
+  if ((before.hooks?.create?.expr ?? "") !== (after.hooks?.create?.expr ?? "")) return false;
+  if ((before.hooks?.update?.expr ?? "") !== (after.hooks?.update?.expr ?? "")) return false;
+  const beforeValidate = before.validate ?? [];
+  const afterValidate = after.validate ?? [];
+  if (beforeValidate.length !== afterValidate.length) return false;
+  for (const [index, beforeRule] of beforeValidate.entries()) {
+    const afterRule = afterValidate[index];
+    if ((beforeRule.script?.expr ?? "") !== (afterRule?.script?.expr ?? "")) return false;
+    if (beforeRule.errorMessage !== afterRule?.errorMessage) return false;
+  }
+  if (before.type === "enum") {
+    const afterValues = new Set((after.allowedValues ?? []).map((v) => v.value));
+    if ((before.allowedValues ?? []).some((v) => !afterValues.has(v.value))) return false;
+  }
+  const beforeMembers = before.fields ?? {};
+  const afterMembers = after.fields ?? {};
+  const beforeNames = Object.keys(beforeMembers);
+  if (beforeNames.length !== Object.keys(afterMembers).length) return false;
+  for (const name of beforeNames) {
+    const beforeMember = beforeMembers[name];
+    const afterMember = Object.hasOwn(afterMembers, name) ? afterMembers[name] : undefined;
+    if (!beforeMember || !afterMember) return false;
+    if (!isNestedMemberRenameCompatible(beforeMember, afterMember)) return false;
+  }
+  return true;
+}
+
+function haveSameParent(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.slice(0, -1).every((segment, index) => segment === b[index]);
+}
+
+/**
+ * Find removed members inside nested fields that a compatible added sibling
+ * could be the renamed form of.
+ * @param {MigrationDiff} diff - Migration diff to scan
+ * @returns {NestedMemberRenameCandidate[]} Candidates in diff order (may be empty)
+ */
+export function findNestedMemberRenameCandidates(
+  diff: MigrationDiff,
+): NestedMemberRenameCandidate[] {
+  const candidates: NestedMemberRenameCandidate[] = [];
+  for (const change of diff.changes) {
+    if (change.kind !== "field_modified") continue;
+    const memberChanges = collectNestedMemberChanges(change.before, change.after);
+    for (const removed of memberChanges) {
+      if (removed.kind !== "removed") continue;
+      const added = memberChanges
+        .filter(
+          (candidate) =>
+            candidate.kind === "added" &&
+            haveSameParent(candidate.path, removed.path) &&
+            isNestedMemberRenameCompatible(removed.before, candidate.after),
+        )
+        .map((candidate) => candidate.path[candidate.path.length - 1])
+        .filter((name): name is string => name !== undefined);
+      if (added.length > 0) {
+        candidates.push({
+          tableName: change.tableName,
+          fieldName: change.fieldName,
+          previousPath: removed.path,
+          removed: removed.before,
+          added,
+        });
+      }
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Whether a nested member rename spec matches a removed + added member pair
+ * between two snapshots. Compatibility is checked separately when the diff is
+ * recomputed with the spec.
+ * @param {NestedMemberRenameSpec} spec - Rename spec to test
+ * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
+ * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * @returns {boolean} True if the spec matches a removed + added pair
+ */
+export function nestedMemberRenameSpecApplies(
+  spec: NestedMemberRenameSpec,
+  previousSnapshot: SchemaSnapshot,
+  currentSnapshot: SchemaSnapshot,
+): boolean {
+  const prevField = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
+  const currField = currentSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
+  return Boolean(
+    getNestedMember(prevField, spec.previousPath) &&
+    !getNestedMember(currField, spec.previousPath) &&
+    getNestedMember(currField, spec.path) &&
+    !getNestedMember(prevField, spec.path),
+  );
+}
+
+/**
+ * Assert that every nested member rename spec matches a compatible removed +
+ * added member pair between the two normalized snapshots.
+ * @param {NormalizedSchemaSnapshot} previous - Previous normalized snapshot
+ * @param {NormalizedSchemaSnapshot} current - Current normalized snapshot
+ * @param {readonly NestedMemberRenameSpec[]} renames - Rename specs to validate
+ */
+export function assertValidNestedMemberRenames(
+  previous: NormalizedSchemaSnapshot,
+  current: NormalizedSchemaSnapshot,
+  renames: readonly NestedMemberRenameSpec[],
+): void {
+  const seen = new Set<string>();
+  for (const rename of renames) {
+    const { tableName, fieldName, previousPath, path } = rename;
+    const previousLabel = `${tableName}.${fieldName}.${previousPath.join(".")}`;
+    const label = `${previousLabel}:${path[path.length - 1] ?? ""}`;
+    for (const key of [previousLabel, `${tableName}.${fieldName}.${path.join(".")}`]) {
+      if (seen.has(key)) {
+        throw new Error(`Member "${key}" appears in more than one rename.`);
+      }
+      seen.add(key);
+    }
+    if (previousPath.length === 0 || !haveSameParent(previousPath, path)) {
+      throw new Error(
+        `Cannot rename ${label}: the old and new member must share the same parent inside "${fieldName}".`,
+      );
+    }
+    const prevField = previous.tables[tableName]?.fields[fieldName];
+    const currField = current.tables[tableName]?.fields[fieldName];
+    if (prevField?.type !== "nested" || currField?.type !== "nested") {
+      throw new Error(
+        `Cannot rename ${label}: "${tableName}.${fieldName}" must be a nested field in both the previous and the current schema.`,
+      );
+    }
+    const prevMember = getNestedMember(prevField, previousPath);
+    if (!prevMember) {
+      throw new Error(
+        `Cannot rename ${label}: member "${previousPath.join(".")}" does not exist in the previous schema.`,
+      );
+    }
+    if (getNestedMember(currField, previousPath)) {
+      throw new Error(
+        `Cannot rename ${label}: member "${previousPath.join(".")}" still exists in the current schema.`,
+      );
+    }
+    const currMember = getNestedMember(currField, path);
+    if (!currMember) {
+      throw new Error(
+        `Cannot rename ${label}: member "${path.join(".")}" does not exist in the current schema.`,
+      );
+    }
+    if (getNestedMember(prevField, path)) {
+      throw new Error(
+        `Cannot rename ${label}: member "${path.join(".")}" already exists in the previous schema.`,
+      );
+    }
+    if (!isNestedMemberRenameCompatible(prevMember, currMember)) {
+      throw new Error(
+        `Cannot rename ${label}: the members are not rename-compatible ` +
+          `(the member type, array-ness, requiredness, modifiers, foreign key target, scale, ` +
+          `hooks, and validations must match, enum values must not be removed, nested members ` +
+          `must match recursively, and serial members cannot be renamed).`,
+      );
+    }
+  }
+}
+
+const NESTED_MEMBER_RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+)((?:\.[^.:\s]+)+):([^.:\s]+)$/;
+
+/**
+ * Parse a `--rename` option value of the form `Table.field.member:newName`,
+ * where `member` may be a deeper dotted path inside the nested field.
+ * @param {string} value - Raw option value
+ * @returns {NestedMemberRenameSpec} Parsed rename spec
+ */
+export function parseNestedMemberRenameOption(value: string): NestedMemberRenameSpec {
+  const match = value.match(NESTED_MEMBER_RENAME_OPTION_PATTERN);
+  const [, tableName, fieldName, memberPath, newName] = match ?? [];
+  if (!tableName || !fieldName || !memberPath || !newName) {
+    throw new Error(
+      `Invalid --rename value "${value}". Expected format: "Table.field.member:newName".`,
+    );
+  }
+  const previousPath = memberPath.slice(1).split(".");
+  if (previousPath[previousPath.length - 1] === newName) {
+    throw new Error(`Invalid --rename value "${value}": old and new member names are identical.`);
+  }
+  return { tableName, fieldName, previousPath, path: [...previousPath.slice(0, -1), newName] };
+}
+
+/**
+ * A nested member removal confirmed as intentional (`--drop Table.field.member`),
+ * so its rename candidates need no interactive confirmation.
+ */
+export interface NestedMemberDropSpec {
+  tableName: string;
+  fieldName: string;
+  path: string[];
+}
+
+const NESTED_MEMBER_DROP_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+)((?:\.[^.:\s]+)+)$/;
+
+/**
+ * Parse a `--drop` option value of the form `Table.field.member`.
+ * @param {string} value - Raw option value
+ * @returns {NestedMemberDropSpec} Parsed drop spec
+ */
+export function parseNestedMemberDropOption(value: string): NestedMemberDropSpec {
+  const match = value.match(NESTED_MEMBER_DROP_OPTION_PATTERN);
+  const [, tableName, fieldName, memberPath] = match ?? [];
+  if (!tableName || !fieldName || !memberPath) {
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field.member".`);
+  }
+  return { tableName, fieldName, path: memberPath.slice(1).split(".") };
+}
+
+/**
+ * Whether a nested member drop spec matches a member that was removed between
+ * two snapshots.
+ * @param {NestedMemberDropSpec} spec - Drop spec to test
+ * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
+ * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * @returns {boolean} True if the spec matches a removed member
+ */
+export function nestedMemberDropSpecApplies(
+  spec: NestedMemberDropSpec,
+  previousSnapshot: SchemaSnapshot,
+  currentSnapshot: SchemaSnapshot,
+): boolean {
+  const prevField = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
+  const currField = currentSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
+  return Boolean(getNestedMember(prevField, spec.path) && !getNestedMember(currField, spec.path));
 }
 
 // ============================================================================
