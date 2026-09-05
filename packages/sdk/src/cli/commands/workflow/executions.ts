@@ -1,4 +1,5 @@
 import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import {
   Condition_Operator,
   ConditionSchema,
@@ -192,7 +193,12 @@ export async function getWorkflowExecution(
         executionId: functionExecutionId,
       });
       return execution;
-    } catch {
+    } catch (error) {
+      if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
+        logger.warn(
+          `Could not fetch logs for function execution '${functionExecutionId}': ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       return undefined;
     }
   }

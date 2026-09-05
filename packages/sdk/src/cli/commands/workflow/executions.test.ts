@@ -148,10 +148,11 @@ describe("getWorkflowExecution", () => {
     });
 
     expect(detail.jobDetails?.[0]).toMatchObject({ logs: "done", result: "1" });
-    expect(detail.jobDetails?.[0]).not.toHaveProperty("logEntries", expect.anything());
+    expect(detail.jobDetails?.[0]?.logEntries).toBeUndefined();
   });
 
-  test("keeps the job info when the function execution lookup fails", async () => {
+  test("keeps the job info quietly when the function execution is not found", async () => {
+    using stderr = captureStderr();
     vi.mocked(initOperatorClient).mockResolvedValue({
       getWorkflowExecution: vi.fn().mockResolvedValue({
         execution: execution(WorkflowExecution_Status.RUNNING, [runningJob]),
@@ -166,6 +167,30 @@ describe("getWorkflowExecution", () => {
 
     expect(detail.jobDetails).toEqual([expect.objectContaining({ stackedJobName: "main" })]);
     expect(detail.jobDetails?.[0]).not.toHaveProperty("logEntries");
+    expect(stderr.output).toBe("");
+  });
+
+  test("warns and keeps the job info when the function execution lookup fails otherwise", async () => {
+    using stderr = captureStderr();
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getWorkflowExecution: vi.fn().mockResolvedValue({
+        execution: execution(WorkflowExecution_Status.RUNNING, [runningJob]),
+      }),
+      getFunctionExecution: vi
+        .fn()
+        .mockRejectedValue(new ConnectError("try later", Code.Unavailable)),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    const { execution: detail } = await getWorkflowExecution({
+      executionId: "execution-1",
+      logs: true,
+    });
+
+    expect(detail.jobDetails).toEqual([expect.objectContaining({ stackedJobName: "main" })]);
+    expect(stripAnsi(stderr.output)).toContain(
+      "Could not fetch logs for function execution 'fn-exec-1'",
+    );
+    expect(stripAnsi(stderr.output)).toContain("try later");
   });
 });
 
