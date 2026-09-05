@@ -418,7 +418,7 @@ describe("seed dump script behavior", () => {
     const result = await main({ table: "User", limit: 2 });
 
     expect(result.success).toBe(false);
-    expect(result.errors).toEqual(["User: cannot page rows whose id is not a string"]);
+    expect(result.errors).toEqual(["cannot page rows whose id is not a string"]);
   });
 
   test("reports a query failure instead of throwing", async () => {
@@ -438,6 +438,6 @@ describe("seed dump script behavior", () => {
 
     expect(result.success).toBe(false);
     expect(result.rows).toEqual([]);
-    expect(result.errors).toEqual(["Ghost: relation does not exist"]);
+    expect(result.errors).toEqual(["relation does not exist"]);
   });
 });

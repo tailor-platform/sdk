@@ -50,7 +50,7 @@ export interface SeedNamespaceConfig {
   /** Field names a seed row must supply per table, enforced with `--upsert`. */
   requiredFields: Record<string, string[]>;
   /** Field names the platform assigns rather than the seed row, per table. */
-  omitFields: Record<string, string[]>;
+  omitFields?: Record<string, string[]>;
 }
 
 /**

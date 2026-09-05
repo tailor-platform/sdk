@@ -269,7 +269,7 @@ export const seedDumpCommand = defineAppCommand({
             namespace,
             table,
             pageSize: args["page-size"],
-            omitFields: entry.config.omitFields[table] ?? [],
+            omitFields: entry.config.omitFields?.[table] ?? [],
           });
           writeSeedData(dataDir, table, rows);
           dumped[table] = rows.length;

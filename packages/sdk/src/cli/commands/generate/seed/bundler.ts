@@ -199,7 +199,9 @@ function generateSeedDumpScriptContent(namespace: string): string {
         if (lastRow && typeof lastRow.id !== "string") {
           // Paging past this row is impossible, and reporting no cursor would
           // silently drop every row behind it.
-          const message = \`\${input.table}: cannot page rows whose id is not a string\`;
+          // Left unprefixed with the table name: the caller (dump.ts) already
+          // prefixes every error it throws with the table.
+          const message = "cannot page rows whose id is not a string";
           return { success: false, rows: [], cursor: null, errors: [message] };
         }
         const lastId = lastRow ? (lastRow.id as string) : null;
@@ -210,7 +212,9 @@ function generateSeedDumpScriptContent(namespace: string): string {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(\`[${namespace}] \${input.table}: failed - \${message}\`);
-        return { success: false, rows: [], cursor: null, errors: [\`\${input.table}: \${message}\`] };
+        // Left unprefixed with the table name: the caller (dump.ts) already
+        // prefixes every error it throws with the table.
+        return { success: false, rows: [], cursor: null, errors: [message] };
       }
     }
   `;
