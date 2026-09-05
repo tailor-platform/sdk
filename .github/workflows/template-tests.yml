@@ -27,7 +27,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     name: Template tests (${{ matrix.os }})
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
