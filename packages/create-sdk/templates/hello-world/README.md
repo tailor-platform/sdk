@@ -53,9 +53,10 @@ query {
 
 In the project directory, you can run:
 
-- `deploy`: Deploy the project to Tailor Platform
-- `format`: Format the code using Prettier
-- `format:check`: Check code formatting using Prettier
-- `lint`: Lint the code using ESLint
-- `lint:fix`: Fix linting issues using ESLint
+- `deploy`: Deploy the project to Tailor Platform (`tailor deploy`)
+- `generate`: Generate types for the project (`tailor generate`)
+- `format`: Format the code using oxfmt
+- `format:check`: Check code formatting using oxfmt
+- `lint`: Lint the code using oxlint
+- `lint:fix`: Fix linting issues using oxlint
 - `typecheck`: Run TypeScript type checks
