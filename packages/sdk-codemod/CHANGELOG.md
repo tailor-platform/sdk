@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.7
+
+### Patch Changes
+
+- [#2243](https://github.com/tailor-platform/sdk/pull/2243) [`353ff98`](https://github.com/tailor-platform/sdk/commit/353ff98c3e8702ac21244ce92a4cd66795bd9ba8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.45.3
+
 ## 0.8.6
 
 ### Patch Changes
