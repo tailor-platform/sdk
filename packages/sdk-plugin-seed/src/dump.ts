@@ -15,6 +15,7 @@ import {
 import * as path from "pathe";
 import { z } from "zod";
 import { selectEntities } from "./entities";
+import { parseExecutionResult } from "./execution-result";
 import { existingSeedDataFiles, writeSeedData } from "./jsonl";
 import { topologicalSort } from "./topo-sort";
 import type { OperatorClient, SeedData } from "@tailor-platform/sdk/cli";
@@ -83,24 +84,9 @@ async function dumpPage(params: DumpTableParams, after: string | null): Promise<
     },
   });
 
-  if (!result.success) {
-    throw new Error(`${table}: ${result.error ?? "Script execution failed"}`);
-  }
-
-  let parsed: Record<string, unknown>;
-  try {
-    const value: unknown = JSON.parse(result.result || "{}");
-    parsed = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`${table}: failed to parse result: ${message}`, { cause: error });
-  }
-
-  if (!parsed.success) {
-    const errors = Array.isArray(parsed.errors) ? (parsed.errors as string[]) : [];
-    throw new Error(
-      errors.length > 0 ? errors.join("; ") : `${table}: dump script reported failure`,
-    );
+  const { success, parsed, errors } = parseExecutionResult(result, "    ");
+  if (!success) {
+    throw new Error(`${table}: ${errors.join("; ")}`);
   }
 
   const rows = Array.isArray(parsed.rows) ? (parsed.rows as Record<string, unknown>[]) : [];
@@ -267,27 +253,41 @@ export const seedDumpCommand = defineAppCommand({
     logger.info(`Dumping seed data to ${dataDir}...`);
 
     const dumped: Record<string, number> = {};
-    for (const entry of plan) {
-      const { namespace } = entry.config;
-      logger.info(`  [${namespace}] Dumping ${String(entry.tables.length)} tables...`, {
-        mode: "plain",
-      });
-
-      const bundled = await bundleSeedDumpScript(namespace, path.dirname(context.config.path));
-
-      for (const table of entry.tables) {
-        const rows = await dumpTable({
-          execution,
-          scriptCode: bundled.bundledCode,
-          namespace,
-          table,
-          pageSize: args["page-size"],
-          omitFields: entry.config.omitFields[table] ?? [],
+    try {
+      for (const entry of plan) {
+        const { namespace } = entry.config;
+        logger.info(`  [${namespace}] Dumping ${String(entry.tables.length)} tables...`, {
+          mode: "plain",
         });
-        writeSeedData(dataDir, table, rows);
-        dumped[table] = rows.length;
-        logger.log(styles.success(`    ✓ ${table}: ${String(rows.length)} rows`));
+
+        const bundled = await bundleSeedDumpScript(namespace, path.dirname(context.config.path));
+
+        for (const table of entry.tables) {
+          const rows = await dumpTable({
+            execution,
+            scriptCode: bundled.bundledCode,
+            namespace,
+            table,
+            pageSize: args["page-size"],
+            omitFields: entry.config.omitFields[table] ?? [],
+          });
+          writeSeedData(dataDir, table, rows);
+          dumped[table] = rows.length;
+          logger.log(styles.success(`    ✓ ${table}: ${String(rows.length)} rows`));
+        }
       }
+    } catch (error) {
+      const writtenTables = Object.keys(dumped);
+      if (writtenTables.length > 0) {
+        logger.warn(
+          `Dump failed after writing ${String(writtenTables.length)} table(s) to ${dataDir}: ` +
+            `${writtenTables.join(", ")}. The rest of ${dataDir} still holds files from before ` +
+            "this run (or none, for tables never dumped); re-run with --force once the failure " +
+            "is fixed so every file reflects the same point in time.",
+          { mode: "plain" },
+        );
+      }
+      throw error;
     }
 
     logger.newline();
