@@ -14,5 +14,7 @@ export const user = db
   .features({
     gqlOperations: "query",
   })
+  // This template defines no auth, so its data is public by design.
+  // In production, define conditions in .permission() / .gqlPermission() instead.
   .permission(unsafeAllowAllTypePermission)
   .gqlPermission(unsafeAllowAllGqlPermission);
