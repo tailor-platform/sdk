@@ -33,7 +33,7 @@ describe("buildSeedNamespaceConfigs", () => {
     expect(requiredFields.User).toEqual(["name", "email"]);
   });
 
-  test("does not require timestamps() fields when only an id was filled in", () => {
+  test("does not require timestamps() fields (createdAt/updatedAt)", () => {
     const requiredFields = requiredFieldsOf({
       User: db.table("User", { name: db.string(), ...db.fields.timestamps() }),
     });
