@@ -250,4 +250,39 @@ describe("seedDumpCommand", () => {
     expect(result.exitCode).toBe(1);
     expect(jsonl.writeSeedData).not.toHaveBeenCalled();
   });
+
+  test("warns which tables were written before a mid-run failure", async () => {
+    const dumpUser = dumpRows({ User: [{ id: "u1", name: "Ada" }] });
+    sdk.executeScript.mockImplementation((options: { arg: DumpArg }) => {
+      if (options.arg.table === "Order") {
+        return Promise.resolve({
+          error: undefined,
+          logs: "",
+          result: JSON.stringify({
+            success: false,
+            rows: [],
+            cursor: null,
+            errors: ["Order: boom"],
+          }),
+          success: true,
+        });
+      }
+      return dumpUser(options);
+    });
+
+    const result = await runDumpCommand(["--machine-user", "manager"]);
+
+    expect(result.exitCode).toBe(1);
+    // Only the table written before the failure (User, dumped before Order in
+    // dependency order) is written; the failing table and anything after it
+    // are not.
+    expect(jsonl.writeSeedData).toHaveBeenCalledTimes(1);
+    expect(jsonl.writeSeedData).toHaveBeenCalledWith("/seed/data", "User", [
+      { id: "u1", name: "Ada" },
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Dump failed after writing 1 table(s) to /seed/data: User."),
+      { mode: "plain" },
+    );
+  });
 });
