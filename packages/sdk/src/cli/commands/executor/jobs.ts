@@ -26,7 +26,11 @@ import {
 import { fetchAll, fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { formatKeyValueTable } from "#/cli/shared/format";
-import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
+import {
+  colorizeFunctionExecutionStatus,
+  functionExecutionStatusToString,
+  isFunctionExecutionTerminalStatus,
+} from "#/cli/shared/function-execution";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { spinner } from "#/cli/shared/spinner";
@@ -36,9 +40,7 @@ import { waitForExecution } from "../workflow/start";
 import {
   classifyExecutorJobStatus,
   colorizeExecutorJobStatus,
-  colorizeFunctionExecutionStatus,
   executorTargetTypeToString,
-  isFunctionExecutionTerminalStatus,
   parseExecutorJobStatus,
 } from "./status";
 import {

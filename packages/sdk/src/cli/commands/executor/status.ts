@@ -3,7 +3,6 @@ import {
   ExecutorTargetType,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { styles } from "#/cli/shared/logger";
 
 // ============================================================================
@@ -116,41 +115,6 @@ export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
         `Invalid status: ${status}. Valid values: PENDING, RUNNING, SUCCESS, FAILED, CANCELED`,
       );
   }
-}
-
-// ============================================================================
-// Function Execution Status
-// ============================================================================
-
-/**
- * Colorize function execution status string.
- * @param status - Function execution status string
- * @returns Colorized status string
- */
-export function colorizeFunctionExecutionStatus(status: string): string {
-  switch (status) {
-    case "RUNNING":
-      return styles.info(status);
-    case "SUCCESS":
-      return styles.success(status);
-    case "FAILED":
-      return styles.error(status);
-    default:
-      return status;
-  }
-}
-
-/**
- * Check if function execution status is terminal.
- * @param status - Function execution status enum value
- * @returns True if status is terminal
- */
-export function isFunctionExecutionTerminalStatus(status: FunctionExecution_Status): boolean {
-  return (
-    status === FunctionExecution_Status.SUCCESS ||
-    status === FunctionExecution_Status.FAILED ||
-    status === FunctionExecution_Status.CANCELED
-  );
 }
 
 // ============================================================================

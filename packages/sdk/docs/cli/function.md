@@ -83,12 +83,14 @@ tailor function logs [options] [execution-id]
 
 **Options**
 
-| Option                          | Alias | Description                                      | Required | Default  | Env                            |
-| ------------------------------- | ----- | ------------------------------------------------ | -------- | -------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                     | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
-| `--order <ORDER>`               | -     | Sort order (asc or desc)                         | No       | `"desc"` | -                              |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0: unlimited) | No       | `50`     | -                              |
+| Option                          | Alias | Description                                                                                  | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                 | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                            | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                                                     | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0: unlimited)                                             | No       | `50`     | -                              |
+| `--follow`                      | `-f`  | Keep polling a running execution and print new log entries as they arrive (detail mode only) | No       | `false`  | -                              |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval for --follow (e.g., '3s', '500ms', '1m')                                    | No       | `"3s"`   | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -118,7 +120,17 @@ $ tailor function logs --json
 $ tailor function logs <execution-id> --json
 ```
 
+**Stream log entries of a running execution until it completes**
+
+```bash
+$ tailor function logs <execution-id> --follow
+```
+
 **Notes**
+
+Execution details include `logEntries`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running, whereas the flat `logs` string is filled in only after completion. The human-readable view shows the structured entries when present and falls back to `logs` otherwise.
+
+Use `--follow` to keep polling a running execution and print new log entries as they arrive until it completes. With `--json`, `--follow` waits for completion and then emits the final execution details once.
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function run` output).
 

@@ -1,12 +1,30 @@
+import { setTimeout } from "node:timers/promises";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
+import {
+  type FunctionExecution,
+  type FunctionExecution_Status,
+  FunctionExecution_Type,
+} from "@tailor-platform/tailor-proto/function_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { pagedLogArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import {
+  durationArg,
+  pagedLogArgs,
+  parseDuration,
+  toPageDirection,
+  workspaceArgs,
+} from "#/cli/shared/args";
 import { fetchPaged, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { formatKeyValueTable } from "#/cli/shared/format";
-import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
+import {
+  colorizeFunctionExecutionStatus,
+  formatFunctionLogEntry,
+  functionExecutionStatusToString,
+  type FunctionLogEntryInfo,
+  isFunctionExecutionTerminalStatus,
+  toFunctionLogEntryInfo,
+} from "#/cli/shared/function-execution";
 import {
   downloadFunctionScript,
   scriptNameToRegistryName,
@@ -14,7 +32,7 @@ import {
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
-import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
 
 interface FunctionExecutionListInfo {
   id: string;
@@ -33,6 +51,7 @@ interface FunctionExecutionErrorDisplay {
 
 interface FunctionExecutionDetailInfo extends FunctionExecutionListInfo {
   logs: string;
+  logEntries: FunctionLogEntryInfo[];
   result: string;
   error: FunctionExecutionErrorDisplay | null;
 }
@@ -78,6 +97,7 @@ function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionEx
   return {
     ...toFunctionExecutionListInfo(execution),
     logs: execution.logs,
+    logEntries: execution.logEntries.map(toFunctionLogEntryInfo),
     result: execution.result,
     error: execution.error
       ? {
@@ -147,38 +167,57 @@ export function formatExecutionError(
   return formatExecutionErrorFallback(error);
 }
 
-interface PrintFunctionExecutionDetailOptions {
+const formatDate = (date: Date | null): string => (date ? date.toISOString() : "N/A");
+
+/**
+ * Print the execution summary table.
+ * @param info - Function execution list info
+ */
+function printFunctionExecutionSummary(info: FunctionExecutionListInfo): void {
+  const summaryData: [string, string][] = [
+    ["id", info.id],
+    ["scriptName", info.scriptName],
+    ["status", info.status],
+    ["type", info.type],
+    ["startedAt", formatDate(info.startedAt)],
+    ["finishedAt", formatDate(info.finishedAt)],
+  ];
+  logger.out(formatKeyValueTable(summaryData));
+}
+
+/**
+ * Print the logs section. Structured entries take precedence; the flat
+ * `logs` string is shown only when the platform returned no entries.
+ * @param detail - Function execution detail info
+ */
+function printFunctionExecutionLogs(detail: FunctionExecutionDetailInfo): void {
+  if (detail.logEntries.length > 0) {
+    logger.log(styles.bold("\nLogs:"));
+    for (const entry of detail.logEntries) {
+      logger.log(`  ${formatFunctionLogEntry(entry)}`);
+    }
+  } else if (detail.logs) {
+    logger.log(styles.bold("\nLogs:"));
+    for (const line of detail.logs.split("\n")) {
+      logger.log(`  ${line}`);
+    }
+  }
+}
+
+interface PrintFunctionExecutionOutcomeOptions {
   detail: FunctionExecutionDetailInfo;
   /** Bundled script content for sourcemap-based stack trace mapping (optional) */
   bundledCode?: string | null;
 }
 
 /**
- * Print function execution detail in a human-readable format.
+ * Print the result and error sections.
  * @param options - Print options
  * @param options.detail - Function execution detail info
  * @param options.bundledCode - Downloaded bundled script content (used for sourcemap mapping)
  */
-function printFunctionExecutionDetail(options: PrintFunctionExecutionDetailOptions) {
+function printFunctionExecutionOutcome(options: PrintFunctionExecutionOutcomeOptions): void {
   const { detail, bundledCode } = options;
-  const formatDate = (date: Date | null): string => (date ? date.toISOString() : "N/A");
-
-  const summaryData: [string, string][] = [
-    ["id", detail.id],
-    ["scriptName", detail.scriptName],
-    ["status", detail.status],
-    ["type", detail.type],
-    ["startedAt", formatDate(detail.startedAt)],
-    ["finishedAt", formatDate(detail.finishedAt)],
-  ];
-  logger.out(formatKeyValueTable(summaryData));
-
-  if (detail.logs) {
-    logger.log(styles.bold("\nLogs:"));
-    for (const line of detail.logs.split("\n")) {
-      logger.log(`  ${line}`);
-    }
-  }
 
   if (detail.result) {
     logger.log(styles.bold("\nResult:"));
@@ -193,6 +232,100 @@ function printFunctionExecutionDetail(options: PrintFunctionExecutionDetailOptio
   if (detail.error) {
     logger.log(styles.bold("\nError:"));
     logger.log(formatExecutionError(detail.error, bundledCode ?? null));
+  }
+}
+
+interface FetchFunctionExecutionOptions {
+  client: OperatorClient;
+  workspaceId: string;
+  executionId: string;
+}
+
+async function fetchFunctionExecution(
+  options: FetchFunctionExecutionOptions,
+): Promise<FunctionExecution> {
+  const { execution } = await options.client.getFunctionExecution({
+    workspaceId: options.workspaceId,
+    executionId: options.executionId,
+  });
+  if (!execution) {
+    throw new Error(`Function execution '${options.executionId}' not found.`);
+  }
+  return execution;
+}
+
+interface FollowFunctionExecutionOptions extends FetchFunctionExecutionOptions {
+  /** Polling interval in milliseconds */
+  interval: number;
+  /** Print the summary, new log entries, and status changes as they arrive */
+  showProgress: boolean;
+}
+
+interface FollowFunctionExecutionResult {
+  execution: FunctionExecution;
+  /** Number of log entries already printed while following */
+  printedEntries: number;
+}
+
+/**
+ * Poll a function execution until it reaches a terminal status, printing
+ * newly arrived log entries on each poll. Log entries are cumulative, so
+ * entries past the count already printed are the new ones.
+ * @param options - Follow options
+ * @returns Final execution and how many entries were printed
+ */
+async function followFunctionExecution(
+  options: FollowFunctionExecutionOptions,
+): Promise<FollowFunctionExecutionResult> {
+  const { interval, showProgress } = options;
+  let printedEntries = 0;
+  let lastStatus: FunctionExecution_Status | undefined;
+
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  while (true) {
+    let execution: FunctionExecution;
+    try {
+      execution = await fetchFunctionExecution(options);
+    } catch (error) {
+      if (!isRetryableWaitError(error)) {
+        throw error;
+      }
+      logger.debug(`Retrying function execution poll: ${formatWaitError(error)}`);
+      await setTimeout(interval);
+      continue;
+    }
+
+    if (showProgress) {
+      if (lastStatus === undefined) {
+        printFunctionExecutionSummary(toFunctionExecutionListInfo(execution));
+        if (!isFunctionExecutionTerminalStatus(execution.status)) {
+          logger.info("Following log entries until the execution completes (Ctrl+C to stop)", {
+            mode: "stream",
+          });
+        }
+      }
+      if (execution.logEntries.length > printedEntries) {
+        if (printedEntries === 0) {
+          logger.log(styles.bold("\nLogs:"));
+        }
+        for (const entry of execution.logEntries.slice(printedEntries)) {
+          logger.log(`  ${formatFunctionLogEntry(toFunctionLogEntryInfo(entry))}`);
+        }
+        printedEntries = execution.logEntries.length;
+      }
+      if (lastStatus !== undefined && execution.status !== lastStatus) {
+        const status = colorizeFunctionExecutionStatus(
+          functionExecutionStatusToString(execution.status),
+        );
+        logger.info(`Status: ${status}`, { mode: "stream" });
+      }
+    }
+    lastStatus = execution.status;
+
+    if (isFunctionExecutionTerminalStatus(execution.status)) {
+      return { execution, printedEntries };
+    }
+    await setTimeout(interval);
   }
 }
 
@@ -274,7 +407,11 @@ export async function downloadScriptForMapping(
 export const logsCommand = defineAppCommand({
   name: "logs",
   description: "List or get function execution logs.",
-  notes: `When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching \`function run\` output).
+  notes: `Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running, whereas the flat \`logs\` string is filled in only after completion. The human-readable view shows the structured entries when present and falls back to \`logs\` otherwise.
+
+Use \`--follow\` to keep polling a running execution and print new log entries as they arrive until it completes. With \`--json\`, \`--follow\` waits for completion and then emits the final execution details once.
+
+When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching \`function run\` output).
 
 Stack traces are mapped only when the execution includes a content hash for the exact build that ran. If the content hash is missing or the build is no longer available, the command falls back to a plain-text error display.`,
   examples: [
@@ -294,6 +431,10 @@ Stack traces are mapped only when the execution includes a content hash for the 
       cmd: "<execution-id> --json",
       desc: "Get execution details as JSON",
     },
+    {
+      cmd: "<execution-id> --follow",
+      desc: "Stream log entries of a running execution until it completes",
+    },
   ],
   args: z.strictObject({
     ...workspaceArgs,
@@ -302,43 +443,64 @@ Stack traces are mapped only when the execution includes a content hash for the 
       positional: true,
       description: "Execution ID (if provided, shows details with logs)",
     }),
+    follow: arg(z.boolean().default(false), {
+      alias: "f",
+      description:
+        "Keep polling a running execution and print new log entries as they arrive (detail mode only)",
+    }),
+    interval: arg(durationArg.default("3s"), {
+      alias: "i",
+      description: "Polling interval for --follow (e.g., '3s', '500ms', '1m')",
+    }),
   }),
   run: async (args) => {
+    if (args.follow && !args.executionId) {
+      throw new Error("--follow requires an execution ID.");
+    }
+
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],
     });
 
     if (args.executionId) {
-      const { execution } = await client.getFunctionExecution({
-        workspaceId,
-        executionId: args.executionId,
-      });
-
-      if (!execution) {
-        throw new Error(`Function execution '${args.executionId}' not found.`);
-      }
+      const jsonOutput = logger.jsonMode || args.json;
+      const fetchOptions = { client, workspaceId, executionId: args.executionId };
+      const { execution, printedEntries } = args.follow
+        ? await followFunctionExecution({
+            ...fetchOptions,
+            interval: parseDuration(args.interval),
+            showProgress: !jsonOutput,
+          })
+        : { execution: await fetchFunctionExecution(fetchOptions), printedEntries: 0 };
 
       const detail = toFunctionExecutionDetailInfo(execution);
 
-      if (args.json) {
+      if (jsonOutput) {
         logger.out(detail);
-      } else {
-        // Download the deployed script when an error is present so the
-        // stack trace can be mapped back to original sources via the
-        // inline sourcemap. Failure (script removed, no permission, etc.)
-        // is non-fatal; we fall back to a plain-text error display.
-        const bundledCode = detail.error
-          ? await downloadScriptForMapping({
-              client,
-              workspaceId,
-              scriptName: detail.scriptName,
-              executionType: execution.type,
-              executionContentHash: execution.contentHash,
-            })
-          : null;
-        printFunctionExecutionDetail({ detail, bundledCode });
+        return;
       }
+
+      if (!args.follow) {
+        printFunctionExecutionSummary(detail);
+      }
+      if (printedEntries === 0) {
+        printFunctionExecutionLogs(detail);
+      }
+      // Download the deployed script when an error is present so the
+      // stack trace can be mapped back to original sources via the
+      // inline sourcemap. Failure (script removed, no permission, etc.)
+      // is non-fatal; we fall back to a plain-text error display.
+      const bundledCode = detail.error
+        ? await downloadScriptForMapping({
+            client,
+            workspaceId,
+            scriptName: detail.scriptName,
+            executionType: execution.type,
+            executionContentHash: execution.contentHash,
+          })
+        : null;
+      printFunctionExecutionOutcome({ detail, bundledCode });
     } else {
       const pageDirection = toPageDirection(args.order);
       const executions = await fetchPaged(
