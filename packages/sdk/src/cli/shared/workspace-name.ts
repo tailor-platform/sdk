@@ -3,11 +3,10 @@ import { formatIssues } from "#/cli/shared/parse-options";
 
 /** Shared constraints for workspace names, reused by both the zod schema
  * below and `workspaceNameDescription` so the two can't drift apart. */
-export const WORKSPACE_NAME_MIN_LENGTH = 3;
-export const WORKSPACE_NAME_MAX_LENGTH = 63;
-export const WORKSPACE_NAME_ALLOWED_CHARS_DESCRIPTION = "lowercase letters, numbers, and hyphens";
-export const WORKSPACE_NAME_NO_LEADING_TRAILING_HYPHEN_DESCRIPTION =
-  "cannot start or end with a hyphen";
+const WORKSPACE_NAME_MIN_LENGTH = 3;
+const WORKSPACE_NAME_MAX_LENGTH = 63;
+const WORKSPACE_NAME_ALLOWED_CHARS_DESCRIPTION = "lowercase letters, numbers, and hyphens";
+const WORKSPACE_NAME_NO_LEADING_TRAILING_HYPHEN_DESCRIPTION = "cannot start or end with a hyphen";
 
 /**
  * Validates a workspace name against the platform's naming rules: 3-63
