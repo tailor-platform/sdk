@@ -98,7 +98,7 @@ function extractFieldMetadata(type: TailorDBType): {
     if (isGeneratedOnCreate(field)) {
       optionalFields.push(fieldName);
     }
-    // Serial fields are auto-generated, so they should be optional in seed data
+    // Serial fields are auto-generated, so they are excluded from the seed schema entirely
     if (field.config.serial) {
       omitFields.push(fieldName);
     }
