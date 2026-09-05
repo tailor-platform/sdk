@@ -1,6 +1,7 @@
 import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import ml from "#/utils/multiline";
 import type {
+  ParsedField,
   PluginGeneratedTableSource,
   TailorDBType,
   TypeSourceInfoEntry,
@@ -66,6 +67,17 @@ function processLinesDbForPluginTable(
 }
 
 /**
+ * Whether the platform produces a value for the field on create when a row omits it,
+ * either from a create hook or from a schema default. Such fields stay optional in seed
+ * data even when the table marks them required.
+ * @param field - Parsed TailorDB field
+ * @returns True when a seed row does not have to supply the field
+ */
+function isGeneratedOnCreate(field: ParsedField): boolean {
+  return field.config.hooks?.create !== undefined || field.config.default !== undefined;
+}
+
+/**
  * Extract field metadata from TailorDB table
  * @param type - Parsed TailorDB table
  * @returns Field metadata including optional fields, omit fields, indexes, and foreign keys
@@ -81,9 +93,9 @@ function extractFieldMetadata(type: TailorDBType): {
   const indexes: IndexDefinition[] = [];
   const foreignKeys: ForeignKeyDefinition[] = [];
 
-  // Find fields with hooks.create or serial
+  // Find fields generated on create, or serial
   for (const [fieldName, field] of Object.entries(type.fields)) {
-    if (field.config.hooks?.create) {
+    if (isGeneratedOnCreate(field)) {
       optionalFields.push(fieldName);
     }
     // Serial fields are auto-generated, so they should be optional in seed data
