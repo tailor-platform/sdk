@@ -6,9 +6,15 @@ import {
 import { styles } from "./logger";
 import type { FunctionLogEntry } from "@tailor-platform/tailor-proto/function_resource_pb";
 
+/**
+ * A structured log line recorded while a function execution ran.
+ */
 export interface FunctionLogEntryInfo {
+  /** Log message */
   message: string;
+  /** Severity name such as `INFO`, `WARNING`, or `ERROR` */
   severity: string;
+  /** When the line was logged, or null when unknown */
   timestamp: Date | null;
 }
 
@@ -124,4 +130,21 @@ function colorizeLogSeverity(severity: string): string {
 export function formatFunctionLogEntry(entry: FunctionLogEntryInfo): string {
   const timestamp = entry.timestamp ? entry.timestamp.toISOString() : "N/A";
   return `${styles.dim(timestamp)} ${colorizeLogSeverity(entry.severity)} ${entry.message}`;
+}
+
+/**
+ * Build the lines of a logs section. Structured entries take precedence;
+ * the flat `logs` string is used only when no entries are available.
+ * @param logEntries - Structured log entries, if any
+ * @param logs - Flat newline-delimited logs, if any
+ * @returns Lines to print, empty when there is nothing to show
+ */
+export function formatFunctionLogLines(
+  logEntries: FunctionLogEntryInfo[] | undefined,
+  logs: string | undefined,
+): string[] {
+  if (logEntries && logEntries.length > 0) {
+    return logEntries.map(formatFunctionLogEntry);
+  }
+  return logs ? logs.split("\n") : [];
 }

@@ -8,6 +8,7 @@ import {
 import { describe, expect, test } from "vitest";
 import {
   formatFunctionLogEntry,
+  formatFunctionLogLines,
   functionExecutionStatusToString,
   functionLogSeverityToString,
   isFunctionExecutionTerminalStatus,
@@ -79,6 +80,26 @@ describe("toFunctionLogEntryInfo", () => {
     });
 
     expect(toFunctionLogEntryInfo(entry).timestamp).toBeNull();
+  });
+});
+
+describe("formatFunctionLogLines", () => {
+  const entry = { message: "structured", severity: "INFO", timestamp: null };
+
+  test("prefers structured entries over the flat logs string", () => {
+    const lines = formatFunctionLogLines([entry], "flat");
+
+    expect(lines.map(stripAnsi)).toEqual(["N/A [INFO] structured"]);
+  });
+
+  test("splits the flat logs string when no entries are present", () => {
+    expect(formatFunctionLogLines([], "line 1\nline 2")).toEqual(["line 1", "line 2"]);
+    expect(formatFunctionLogLines(undefined, "line 1")).toEqual(["line 1"]);
+  });
+
+  test("returns no lines when neither is present", () => {
+    expect(formatFunctionLogLines([], "")).toEqual([]);
+    expect(formatFunctionLogLines(undefined, undefined)).toEqual([]);
   });
 });
 

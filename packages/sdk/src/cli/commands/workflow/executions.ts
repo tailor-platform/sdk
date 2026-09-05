@@ -18,7 +18,7 @@ import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import {
-  formatFunctionLogEntry,
+  formatFunctionLogLines,
   type FunctionLogEntryInfo,
   toFunctionLogEntryInfo,
 } from "#/cli/shared/function-execution";
@@ -295,14 +295,9 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
       logger.log(`  Started: ${formatDate(job.startedAt)}`);
       logger.log(`  Finished: ${formatDate(job.finishedAt)}`);
 
-      if (job.logEntries && job.logEntries.length > 0) {
+      const logLines = formatFunctionLogLines(job.logEntries, job.logs);
+      if (logLines.length > 0) {
         logger.log(styles.warning("\n  Logs:"));
-        for (const entry of job.logEntries) {
-          logger.log(`    ${formatFunctionLogEntry(entry)}`);
-        }
-      } else if (job.logs) {
-        logger.log(styles.warning("\n  Logs:"));
-        const logLines = job.logs.split("\n");
         for (const line of logLines) {
           logger.log(`    ${line}`);
         }

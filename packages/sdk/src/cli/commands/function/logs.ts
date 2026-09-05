@@ -20,6 +20,7 @@ import { formatKeyValueTable } from "#/cli/shared/format";
 import {
   colorizeFunctionExecutionStatus,
   formatFunctionLogEntry,
+  formatFunctionLogLines,
   functionExecutionStatusToString,
   type FunctionLogEntryInfo,
   isFunctionExecutionTerminalStatus,
@@ -186,21 +187,15 @@ function printFunctionExecutionSummary(info: FunctionExecutionListInfo): void {
 }
 
 /**
- * Print the logs section. Structured entries take precedence; the flat
- * `logs` string is shown only when the platform returned no entries.
+ * Print the logs section.
  * @param detail - Function execution detail info
  */
 function printFunctionExecutionLogs(detail: FunctionExecutionDetailInfo): void {
-  if (detail.logEntries.length > 0) {
-    logger.log(styles.bold("\nLogs:"));
-    for (const entry of detail.logEntries) {
-      logger.log(`  ${formatFunctionLogEntry(entry)}`);
-    }
-  } else if (detail.logs) {
-    logger.log(styles.bold("\nLogs:"));
-    for (const line of detail.logs.split("\n")) {
-      logger.log(`  ${line}`);
-    }
+  const lines = formatFunctionLogLines(detail.logEntries, detail.logs);
+  if (lines.length === 0) return;
+  logger.log(styles.bold("\nLogs:"));
+  for (const line of lines) {
+    logger.log(`  ${line}`);
   }
 }
 
@@ -290,7 +285,11 @@ async function followFunctionExecution(
       if (!isRetryableWaitError(error)) {
         throw error;
       }
-      logger.debug(`Retrying function execution poll: ${formatWaitError(error)}`);
+      if (showProgress) {
+        logger.warn(`Retrying function execution poll: ${formatWaitError(error)}`, {
+          mode: "stream",
+        });
+      }
       await setTimeout(interval);
       continue;
     }

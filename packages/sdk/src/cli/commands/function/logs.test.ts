@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import {
   FunctionExecution_Status,
   FunctionExecution_Type,
@@ -423,6 +424,57 @@ describe("logs command detail output", () => {
     expect(plain.match(/\[LOG\] two/g)).toHaveLength(1);
     expect(plain).toContain("Status: FAILED");
     expect(plain).toContain("Error: boom");
+  });
+
+  test("--follow retries transient poll errors and reports them", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    const getFunctionExecution = vi
+      .fn()
+      .mockResolvedValueOnce({
+        execution: functionExecution({
+          status: FunctionExecution_Status.RUNNING,
+          logEntries: [entries[0]!],
+        }),
+      })
+      .mockRejectedValueOnce(new ConnectError("try later", Code.Unavailable))
+      .mockResolvedValueOnce({
+        execution: functionExecution({
+          status: FunctionExecution_Status.SUCCESS,
+          logEntries: entries,
+        }),
+      });
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getFunctionExecution,
+    } as unknown as OperatorClient);
+
+    const result = await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
+
+    expect(result.success).toBe(true);
+    expect(getFunctionExecution).toHaveBeenCalledTimes(3);
+    const plain = stripAnsi(stderr.output);
+    expect(plain).toContain("Retrying function execution poll");
+    expect(plain).toContain("[WARNING] careful");
+  });
+
+  test("--follow stops on a non-retryable poll error", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    const getFunctionExecution = vi
+      .fn()
+      .mockResolvedValueOnce({
+        execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
+      })
+      .mockRejectedValueOnce(new ConnectError("denied", Code.PermissionDenied));
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getFunctionExecution,
+    } as unknown as OperatorClient);
+
+    const result = await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain("denied");
+    expect(getFunctionExecution).toHaveBeenCalledTimes(2);
   });
 
   test("--follow with --json emits the final execution once", async () => {
