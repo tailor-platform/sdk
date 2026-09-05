@@ -482,6 +482,14 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
   logger.newline();
 }
 
+function hasMissingCheckpoint(
+  report: NamespaceValidationReport,
+): report is NamespaceValidationReport & {
+  remoteSchema: CompletedRemoteSchemaReport & { checkpointMissingLocal: true };
+} {
+  return report.remoteSchema?.checkpointMissingLocal === true;
+}
+
 function printResolutionHints(reports: NamespaceValidationReport[], configPath?: string): void {
   if (reports.some((r) => r.localSchema?.hasDiff && !r.localSchema.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create the initial snapshot.");
@@ -489,13 +497,13 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
   if (reports.some((r) => r.localSchema?.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create migration files.");
   }
-  const missingCheckpointReports = reports.filter((r) => r.remoteSchema?.checkpointMissingLocal);
+  const missingCheckpointReports = reports.filter(hasMissingCheckpoint);
   if (missingCheckpointReports.length > 0) {
     logMissingCheckpointGuidance(
       missingCheckpointReports.map((r) => ({
         namespace: r.namespace,
-        remoteMigrationNumber: r.remoteSchema?.remoteMigrationNumber ?? 0,
-        ...(r.remoteSchema?.rebaselinePending
+        remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
+        ...(r.remoteSchema.rebaselinePending
           ? { rebaselinePending: r.remoteSchema.rebaselinePending }
           : {}),
       })),
