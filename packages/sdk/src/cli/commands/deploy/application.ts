@@ -351,8 +351,10 @@ export async function planApplication(
     trn: resourceTrn(workspaceId, "application", application.name),
     appName: application.name,
     appId: application.id,
+    metadata: application.config.metadata,
   });
   const existingLabels = await fetchAppLabels(client, workspaceId, application.name);
+  const metadataDetails = diffMetadataDisplay(existingLabels, application.config.metadata);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
@@ -424,19 +426,23 @@ export async function planApplication(
     if (
       owned &&
       hasMatchingSdkVersion(existingLabels, metaRequest.labels) &&
-      areApplicationsEqual(existing, desired)
+      areApplicationsEqual(existing, desired) &&
+      metadataDetails.length === 0
     ) {
       // Plan display shows this as unchanged, but apply still re-issues it.
       changeSet.unchanged.push(update);
     } else {
-      const details = diffHttpAdapterDisplay(existing.httpAdapters, httpAdapters);
+      const details = [
+        ...diffHttpAdapterDisplay(existing.httpAdapters, httpAdapters),
+        ...metadataDetails,
+      ];
       if (details.length > 0) {
         update.details = details;
       }
       changeSet.updates.push(update);
     }
   } else {
-    const details = diffHttpAdapterDisplay(undefined, httpAdapters);
+    const details = [...diffHttpAdapterDisplay(undefined, httpAdapters), ...metadataDetails];
     changeSet.creates.push({
       name: application.name,
       request,
@@ -519,6 +525,26 @@ export function diffHttpAdapterDisplay(
   return entries
     .toSorted((left, right) => left.name.localeCompare(right.name))
     .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
+}
+
+/**
+ * Build per-entry diff lines for the config's `metadata` labels. Labels the
+ * config does not name are kept as they are, so they never appear here.
+ * @param existingLabels - Labels currently stored on the application
+ * @param metadata - `metadata` entries from the local config
+ * @returns Indented diff lines (`+`/`~` per entry), sorted by key
+ */
+function diffMetadataDisplay(
+  existingLabels: Record<string, string> | undefined,
+  metadata: Record<string, string> | undefined,
+): string[] {
+  return Object.entries(metadata ?? {})
+    .filter(([key, value]) => existingLabels?.[key] !== value)
+    .toSorted(([left], [right]) => left.localeCompare(right))
+    .map(([key]) => {
+      const symbol = existingLabels?.[key] === undefined ? symbols.create : symbols.update;
+      return `${symbol} ${key} (metadata)`;
+    });
 }
 
 function buildHttpAdapters(

@@ -103,6 +103,37 @@ describe("buildMetaRequest", () => {
       "sdk-app-id": "app-id-2",
     });
   });
+
+  test("writes config metadata alongside the SDK labels", async () => {
+    const client = createClient({ "sdk-name": "my-app", team: "billing" });
+
+    const write = await buildMetaRequest({
+      trn: "trn:x",
+      appName: "my-app",
+      appId: "id-1",
+      metadata: { "erp-kit-version": "v1-2-3", tier: "gold" },
+    });
+    await writeMetadataLabels(client, write);
+
+    expect(client.setMetadata.mock.calls[0]?.[0].labels).toMatchObject({
+      "sdk-name": "my-app",
+      "sdk-app-id": "app-id-1",
+      "erp-kit-version": "v1-2-3",
+      tier: "gold",
+      team: "billing",
+    });
+  });
+
+  test("keeps the SDK labels when config metadata names one of them", async () => {
+    const write = await buildMetaRequest({
+      trn: "trn:x",
+      appName: "my-app",
+      appId: "id-1",
+      metadata: { "sdk-name": "other", "sdk-app-id": "app-other" },
+    });
+
+    expect(write.labels).toMatchObject({ "sdk-name": "my-app", "sdk-app-id": "app-id-1" });
+  });
 });
 
 describe("writeMetadataLabels", () => {

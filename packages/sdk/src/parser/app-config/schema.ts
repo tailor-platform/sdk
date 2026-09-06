@@ -18,6 +18,34 @@ const envEntrySchema = z.union([
 
 export const LogLevelSchema = z.enum(LOG_LEVELS);
 
+const METADATA_KEY_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
+const METADATA_VALUE_PATTERN = /^$|^[a-z][a-z0-9_-]{0,62}$/;
+const RESERVED_METADATA_KEY_PREFIX = "sdk-";
+
+const metadataValueSchema = z.string().regex(METADATA_VALUE_PATTERN, {
+  message: `'metadata' values must match ${METADATA_VALUE_PATTERN.source}.`,
+});
+
+// A key schema on `z.record` reports a generic "Invalid key in record", so the
+// keys are checked here to name the offending key and the constraint.
+const metadataSchema = z.record(z.string(), metadataValueSchema).superRefine((metadata, ctx) => {
+  for (const key of Object.keys(metadata)) {
+    if (!METADATA_KEY_PATTERN.test(key)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [key],
+        message: `'metadata' keys must match ${METADATA_KEY_PATTERN.source}.`,
+      });
+    } else if (key.startsWith(RESERVED_METADATA_KEY_PREFIX)) {
+      ctx.addIssue({
+        code: "custom",
+        path: [key],
+        message: `'metadata' keys starting with '${RESERVED_METADATA_KEY_PREFIX}' are reserved for the SDK.`,
+      });
+    }
+  }
+});
+
 const logLevelSchema = z
   .string()
   .refine((value) => LogLevelSchema.safeParse(value.trim().toUpperCase()).success, {
@@ -44,6 +72,7 @@ export const AppConfigSchema = z.strictObject({
   disableIntrospection: z.boolean().optional(),
   inlineSourcemap: z.boolean().optional(),
   logLevel: logLevelSchema.optional(),
+  metadata: metadataSchema.optional(),
   db: z.unknown().optional(),
   resolver: z.unknown().optional(),
   idp: z.unknown().optional(),

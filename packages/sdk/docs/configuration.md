@@ -28,6 +28,7 @@ export default defineConfig({
   allowedIpAddresses: ["192.168.1.0/24"],
   disableIntrospection: false,
   logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
+  metadata: { "erp-kit-version": "v1-2-3" },
 });
 ```
 
@@ -40,6 +41,19 @@ export default defineConfig({
 **Allowed IP Addresses**: Specify IP addresses allowed to access the application in CIDR format.
 
 **Disable Introspection**: Disable GraphQL introspection. Default is `false`.
+
+**Metadata**: Extra labels written to the deployed application's metadata on `deploy`, alongside the labels the SDK writes itself. Use it to record information that tooling reads back from the platform, such as the version of a framework the config is generated from. Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`; values must be empty or match the same pattern, so a version like `1.2.3` is written as `v1-2-3`:
+
+```typescript
+const erpKitVersion = "1.2.3";
+
+export default defineConfig({
+  name: "my-app",
+  metadata: { "erp-kit-version": `v${erpKitVersion.replace(/\./g, "-")}` },
+});
+```
+
+Entries are only added or overwritten. An entry removed from the config keeps its last deployed value on the platform, and labels the config does not name are left untouched. The labels are written when the application itself is deployed, so a config with no TailorDB, Resolver, IdP, or Auth service has no application to carry them.
 
 **Log Level**: Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`) calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all calls. `console.log` is treated as a DEBUG-level call (matching the platform's OpenTelemetry severity mapping), so it is dropped at `"INFO"` and above, alongside `console.debug` and `logger.debug`. `logger.setAttributes` has no severity and is never dropped, regardless of `logLevel`. For production deployments, use `"WARN"` to keep warn/error calls while dropping debug, log, and info calls:
 

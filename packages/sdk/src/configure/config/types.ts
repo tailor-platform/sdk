@@ -118,6 +118,20 @@ export interface AppConfig<
   allowedIpAddresses?: string[];
   /** Disable GraphQL introspection in production. */
   disableIntrospection?: boolean;
+  /**
+   * Extra labels written to the deployed application's metadata, alongside the
+   * labels the SDK writes itself. Use it to record information about the
+   * application that tooling reads back from the platform, e.g. the version of
+   * a framework the config is generated from.
+   *
+   * Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`.
+   * Values must be empty or match `^[a-z][a-z0-9_-]{0,62}$`, so a version like
+   * `1.2.3` is written as `v1-2-3`.
+   *
+   * Entries are only added or overwritten: an entry removed from this config
+   * keeps its last deployed value on the platform.
+   */
+  metadata?: Record<string, string>;
   /** TailorDB service configuration with table definition files. */
   db?: TailorDBServiceInput;
   /** Resolver service configuration with resolver files. */

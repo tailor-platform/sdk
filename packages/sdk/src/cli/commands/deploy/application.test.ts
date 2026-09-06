@@ -14,9 +14,20 @@ vi.mock("./label", async (importOriginal) => {
     buildMetaRequest: vi
       .fn()
       .mockImplementation(
-        async ({ trn, appName, appId }: { trn: string; appName: string; appId?: string }) => ({
+        async ({
+          trn,
+          appName,
+          appId,
+          metadata,
+        }: {
+          trn: string;
+          appName: string;
+          appId?: string;
+          metadata?: Record<string, string>;
+        }) => ({
           trn,
           labels: {
+            ...metadata,
             "sdk-name": appName,
             "sdk-version": "v1-0-0",
             ...(appId ? { "sdk-app-id": `app-${appId}` } : {}),
@@ -43,13 +54,15 @@ function createMockApplication(
     name?: string;
     id?: string;
     cors?: string[];
+    metadata?: Record<string, string>;
+    subgraphs?: Array<{ Type: string; Name: string }>;
     staticWebsiteServices?: Array<{ name: string }>;
   } = {},
 ): Application {
   return {
     name: overrides.name ?? appName,
     id: overrides.id,
-    subgraphs: [
+    subgraphs: overrides.subgraphs ?? [
       { Type: "pipeline", Name: "pipeline-a" },
       { Type: "tailordb", Name: "tailordb-a" },
     ],
@@ -57,6 +70,7 @@ function createMockApplication(
       cors: overrides.cors ?? ["https://b.example.com", "https://a.example.com"],
       allowedIpAddresses: ["2.2.2.2", "1.1.1.1"],
       disableIntrospection: true,
+      metadata: overrides.metadata,
     },
     staticWebsiteServices: overrides.staticWebsiteServices ?? [],
     authService: {
@@ -174,6 +188,104 @@ describe("planApplication", () => {
     expect(result.unchanged).toHaveLength(1);
     expect(result.unchanged[0]!.name).toBe(appName);
     expect(result.updates).toHaveLength(0);
+  });
+
+  describe("config metadata", () => {
+    const matchingApplication = {
+      name: appName,
+      authNamespace: "auth-a",
+      authIdpConfigName: "idp-a",
+      cors: ["https://a.example.com", "https://b.example.com"],
+      allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+      disableIntrospection: true,
+      disabled: false,
+      subgraphs: matchingSubgraphs,
+    };
+
+    test("carries config metadata in the application's metadata request", async () => {
+      const client = createMockClient([]);
+
+      const result = await planApplication(
+        createContext(client, createMockApplication({ metadata: { "erp-kit-version": "v1-2-3" } })),
+      );
+
+      expect(result.creates[0]?.metaRequest.labels).toMatchObject({
+        "erp-kit-version": "v1-2-3",
+        "sdk-name": appName,
+      });
+    });
+
+    test("marks application updated when a metadata entry is missing remotely", async () => {
+      const client = createMockClient([matchingApplication]);
+
+      const result = await planApplication(
+        createContext(client, createMockApplication({ metadata: { "erp-kit-version": "v1-2-3" } })),
+      );
+
+      expect(result.unchanged).toHaveLength(0);
+      expect(result.updates).toHaveLength(1);
+      expect(result.updates[0]?.details).toEqual([`${symbols.create} erp-kit-version (metadata)`]);
+    });
+
+    test("marks application updated when a metadata entry differs remotely", async () => {
+      const client = createMockClient([
+        { ...matchingApplication, extraLabels: { "erp-kit-version": "v1-0-0", tier: "gold" } },
+      ]);
+
+      const result = await planApplication(
+        createContext(
+          client,
+          createMockApplication({ metadata: { "erp-kit-version": "v1-2-3", tier: "gold" } }),
+        ),
+      );
+
+      expect(result.unchanged).toHaveLength(0);
+      expect(result.updates[0]?.details).toEqual([`${symbols.update} erp-kit-version (metadata)`]);
+    });
+
+    test("marks application unchanged when the stored labels already carry the metadata", async () => {
+      const client = createMockClient([
+        { ...matchingApplication, extraLabels: { "erp-kit-version": "v1-2-3" } },
+      ]);
+
+      const result = await planApplication(
+        createContext(client, createMockApplication({ metadata: { "erp-kit-version": "v1-2-3" } })),
+      );
+
+      expect(result.unchanged).toHaveLength(1);
+      expect(result.updates).toHaveLength(0);
+    });
+
+    test("ignores stored labels the config metadata does not name", async () => {
+      // A label removed from the config, or one set by another tool, is kept as-is.
+      const client = createMockClient([
+        { ...matchingApplication, extraLabels: { team: "billing" } },
+      ]);
+
+      for (const metadata of [undefined, {}]) {
+        const result = await planApplication(
+          createContext(client, createMockApplication({ metadata })),
+        );
+
+        expect(result.unchanged).toHaveLength(1);
+        expect(result.updates).toHaveLength(0);
+      }
+    });
+
+    test("plans no metadata write when the application has no subgraphs", async () => {
+      const client = createMockClient([]);
+
+      const result = await planApplication(
+        createContext(
+          client,
+          createMockApplication({ subgraphs: [], metadata: { "erp-kit-version": "v1-2-3" } }),
+        ),
+      );
+
+      expect(result.creates).toHaveLength(0);
+      expect(result.updates).toHaveLength(0);
+      expect(result.unchanged).toHaveLength(0);
+    });
   });
 
   test("marks application updated when remote state matches but ownership differs", async () => {

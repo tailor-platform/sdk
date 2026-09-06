@@ -93,4 +93,70 @@ describe("AppConfigSchema", () => {
     }
     expect(result.error.issues[0]?.path).toEqual(["logLevel"]);
   });
+
+  describe("metadata", () => {
+    function parseMetadata(metadata: unknown) {
+      return AppConfigSchema.safeParse({ name: "my-app", metadata });
+    }
+
+    test("accepts label-shaped keys and values", () => {
+      const result = parseMetadata({
+        "erp-kit-version": "v1-2-3",
+        team: "",
+        a_b: "x",
+        [`a${"b".repeat(62)}`]: `v${"1".repeat(62)}`,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("accepts an empty record", () => {
+      expect(parseMetadata({}).success).toBe(true);
+    });
+
+    test.each([
+      ["camelCase", "erpKit"],
+      ["a leading digit", "1abc"],
+      ["a leading hyphen", "-abc"],
+      ["a dot", "erp.kit"],
+      ["an empty key", ""],
+      ["64 characters", `a${"b".repeat(63)}`],
+    ])("rejects a key with %s", (_case, key) => {
+      const result = parseMetadata({ [key]: "ok" });
+      expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("Expected AppConfigSchema parsing to fail");
+      }
+      expect(result.error.issues[0]?.path).toEqual(["metadata", key]);
+      expect(result.error.issues[0]?.message).toContain("^[a-z][a-z0-9_-]{0,62}$");
+    });
+
+    test("rejects keys reserved for the SDK", () => {
+      const result = parseMetadata({ "sdk-version": "v9-9-9" });
+      expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("Expected AppConfigSchema parsing to fail");
+      }
+      expect(result.error.issues[0]?.path).toEqual(["metadata", "sdk-version"]);
+      expect(result.error.issues[0]?.message).toContain("sdk-");
+    });
+
+    test.each([
+      ["a dotted version", "1.2.3"],
+      ["a leading digit", "1-2-3"],
+      ["uppercase", "V1"],
+      ["64 characters", `v${"1".repeat(63)}`],
+    ])("rejects a value with %s", (_case, value) => {
+      const result = parseMetadata({ "erp-kit-version": value });
+      expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("Expected AppConfigSchema parsing to fail");
+      }
+      expect(result.error.issues[0]?.path).toEqual(["metadata", "erp-kit-version"]);
+      expect(result.error.issues[0]?.message).toContain("^$|^[a-z][a-z0-9_-]{0,62}$");
+    });
+
+    test("rejects non-string values", () => {
+      expect(parseMetadata({ count: 1 }).success).toBe(false);
+    });
+  });
 });
