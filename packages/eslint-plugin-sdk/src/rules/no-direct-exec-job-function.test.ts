@@ -51,6 +51,14 @@ describe("no-direct-exec-job-function", () => {
     );
     expectClean('const workflow = createMock();\nworkflow.execJobFunction("child", {});', RULE);
     expectClean(
+      'function run(tailor: Runtime) {\n  return tailor.workflow.execJobFunction("child", {});\n}',
+      RULE,
+    );
+    expectClean(
+      'import { tailor } from "another-runtime";\ntailor.workflow.execJobFunction("child", {});',
+      RULE,
+    );
+    expectClean(
       'import { workflow } from "@tailor-platform/sdk/runtime";\nworkflow.startWorkflow("wf", {});',
       RULE,
     );

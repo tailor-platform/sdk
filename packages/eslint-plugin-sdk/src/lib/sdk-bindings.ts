@@ -52,6 +52,11 @@ function isBindingReference(
   );
 }
 
+export function isLocalBinding(context: Rule.RuleContext, node: AstIdentifier): boolean {
+  const variable = findVariable(context.sourceCode, node);
+  return variable !== null && variable.defs.length > 0;
+}
+
 export function constInitializer(
   context: Rule.RuleContext,
   node: AstNode | null | undefined,

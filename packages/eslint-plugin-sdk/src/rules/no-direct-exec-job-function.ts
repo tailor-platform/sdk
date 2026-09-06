@@ -1,8 +1,16 @@
 import { type AstCallExpression, type AstNode, memberName, unwrapExpression } from "../lib/ast.js";
-import { type ImportTracker, runtimeImportTracker } from "../lib/sdk-bindings.js";
+import { type ImportTracker, isLocalBinding, runtimeImportTracker } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
-function isWorkflowRuntime(imports: ImportTracker, node: AstNode | null | undefined): boolean {
+function isAmbientTailor(context: Rule.RuleContext, node: AstNode | null | undefined): boolean {
+  return node?.type === "Identifier" && node.name === "tailor" && !isLocalBinding(context, node);
+}
+
+function isWorkflowRuntime(
+  context: Rule.RuleContext,
+  imports: ImportTracker,
+  node: AstNode | null | undefined,
+): boolean {
   const value = unwrapExpression(node);
   if (value?.type === "Identifier") return imports.importedAs(value, "workflow");
   if (value?.type !== "MemberExpression" && value?.type !== "OptionalMemberExpression") {
@@ -10,7 +18,7 @@ function isWorkflowRuntime(imports: ImportTracker, node: AstNode | null | undefi
   }
   if (memberName(value) !== "workflow") return false;
   const object = unwrapExpression(value.object);
-  return (object?.type === "Identifier" && object.name === "tailor") || imports.isNamespace(object);
+  return isAmbientTailor(context, object) || imports.isNamespace(object);
 }
 
 const rule = {
@@ -40,7 +48,7 @@ const rule = {
             continue;
           }
           if (memberName(callee) !== "execJobFunction") continue;
-          if (!isWorkflowRuntime(imports, callee.object)) continue;
+          if (!isWorkflowRuntime(context, imports, callee.object)) continue;
           context.report({ node: call, messageId: "directCall" });
         }
       },

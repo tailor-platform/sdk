@@ -1,5 +1,5 @@
 import { type AstCallExpression, type AstNode, parentOf, unwrapExpression } from "../lib/ast.js";
-import { configureImportTracker } from "../lib/sdk-bindings.js";
+import { configureImportTracker, constInitializer } from "../lib/sdk-bindings.js";
 import { isInsideFunction } from "../lib/workflow.js";
 import type { Rule } from "eslint";
 
@@ -12,7 +12,19 @@ function moduleName(node: AstNode): string | null {
   return null;
 }
 
-function collectExports(program: AstProgram): ModuleExports {
+function rootBindingName(context: Rule.RuleContext, node: AstNode): string | null {
+  let current = node;
+  const seen = new Set<string>();
+  while (current.type === "Identifier" && !seen.has(current.name)) {
+    seen.add(current.name);
+    const initializer = unwrapExpression(constInitializer(context, current));
+    if (initializer?.type !== "Identifier") return current.name;
+    current = initializer;
+  }
+  return moduleName(current);
+}
+
+function collectExports(context: Rule.RuleContext, program: AstProgram): ModuleExports {
   const exports: ModuleExports = new Map();
   const add = (local: string, exported: string) => {
     const names = exports.get(local) ?? [];
@@ -24,7 +36,8 @@ function collectExports(program: AstProgram): ModuleExports {
       const { declaration } = statement;
       if (declaration.type !== "ClassDeclaration" && declaration.type !== "FunctionDeclaration") {
         const value = unwrapExpression(declaration);
-        if (value?.type === "Identifier") add(value.name, "default");
+        if (value?.type === "Identifier")
+          add(rootBindingName(context, value) ?? value.name, "default");
       }
       continue;
     }
@@ -38,7 +51,7 @@ function collectExports(program: AstProgram): ModuleExports {
     if (statement.source) continue;
     for (const specifier of statement.specifiers) {
       if ("exportKind" in specifier && specifier.exportKind === "type") continue;
-      const local = moduleName(specifier.local);
+      const local = rootBindingName(context, specifier.local);
       const exported = moduleName(specifier.exported);
       if (local !== null && exported !== null) add(local, exported);
     }
@@ -91,7 +104,7 @@ const rule = {
       ImportDeclaration: (node) => imports.track(node),
       CallExpression: (node) => calls.push(node),
       "Program:exit"(program) {
-        const exports = collectExports(program);
+        const exports = collectExports(context, program);
         for (const call of calls) {
           const name = imports.callName(call);
           if (name !== "createWorkflow" && name !== "createWorkflowJob") continue;
