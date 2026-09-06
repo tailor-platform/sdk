@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 2.13.2
+
+### Patch Changes
+
+- [#2257](https://github.com/tailor-platform/sdk/pull/2257) [`f0405c6`](https://github.com/tailor-platform/sdk/commit/f0405c627955fc7208369d3dd5a39d35a19dd7ed) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @napi-rs/keyring to v2
+
 ## 2.13.1
 
 ### Patch Changes
