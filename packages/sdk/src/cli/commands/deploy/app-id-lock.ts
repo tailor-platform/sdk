@@ -395,10 +395,12 @@ export type WriteAppIdsParams = {
 };
 
 /**
- * Replace the `appIds` section of an existing lock file, leaving every other
- * field as it is. Only `tailor setup` creates the lock, so a missing file is
- * an error rather than a reason to create one.
- * @param params - The lock to update and the section to write
+ * Write a planned `appIds` section into an existing lock file, leaving every
+ * other field as it is. Only the entries the plan changed relative to the lock
+ * it was planned against are applied, so a deploy of another app that wrote
+ * the file in the meantime keeps its entry. Only `tailor setup` creates the
+ * lock, so a missing file is an error rather than a reason to create one.
+ * @param params - The lock the plan was made against and the planned section
  */
 export function writeAppIds(params: WriteAppIdsParams): void {
   const { lock, appIds } = params;
@@ -408,7 +410,14 @@ export function writeAppIds(params: WriteAppIdsParams): void {
       `${TAILOR_LOCK_FILENAME} does not exist under ${lock.root}. Run 'tailor setup' to create it.`,
     );
   }
-  const next = { ...raw, version: TAILOR_LOCK_VERSION, appIds };
+  const merged: Record<string, string> = { ...parseAppIds(raw.appIds) };
+  for (const key of Object.keys(lock.appIds)) {
+    if (!(key in appIds)) delete merged[key];
+  }
+  for (const [key, id] of Object.entries(appIds)) {
+    if (lock.appIds[key] !== id) merged[key] = id;
+  }
+  const next = { ...raw, version: TAILOR_LOCK_VERSION, appIds: merged };
   fs.writeFileSync(
     path.join(lock.root, TAILOR_LOCK_FILENAME),
     `${JSON.stringify(next, null, 2)}\n`,

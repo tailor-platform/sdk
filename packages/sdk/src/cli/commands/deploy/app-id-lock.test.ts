@@ -475,6 +475,23 @@ describe("app-id-lock", () => {
       });
     });
 
+    test("keeps entries another process recorded since the plan was made", () => {
+      writeLock({ version: 2, targets: [], appIds: { "apps/old/tailor.config.ts": ID_A } });
+      const planned = readAppIdLock(root) as AppIdLock;
+      const other = "33333333-3333-4333-8333-333333333333";
+      writeLock({
+        version: 2,
+        targets: [],
+        appIds: { "apps/old/tailor.config.ts": ID_A, "apps/other/tailor.config.ts": other },
+      });
+
+      writeAppIds({ lock: planned, appIds: { "apps/new/tailor.config.ts": ID_A } });
+      expect(readRawLock().appIds).toEqual({
+        "apps/other/tailor.config.ts": other,
+        "apps/new/tailor.config.ts": ID_A,
+      });
+    });
+
     test("never creates the lock file", () => {
       expect(() => writeAppIds({ lock: lockWith({}), appIds: {} })).toThrow(/does not exist/);
       expect(fs.existsSync(path.join(root, TAILOR_LOCK_FILENAME))).toBe(false);
