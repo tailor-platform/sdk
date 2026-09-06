@@ -278,6 +278,12 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
   let changed = false;
   const planned: Array<AppIdEntry | undefined> = entries.map(() => undefined);
   const unresolved: Array<{ index: number; configPath: string; key: string }> = [];
+  // Every id in play, recorded or provisional, so two configs can never leave
+  // this plan sharing one even when nothing is persisted.
+  const claimed = new Map<string, string>(
+    Object.entries(appIds).map(([key, id]) => [id.toLowerCase(), key]),
+  );
+  const exists = (key: string): boolean => fs.existsSync(path.join(lock.root, key));
 
   entries.forEach(({ configPath, configId }, index) => {
     const key = appIdLockKey(lock.root, configPath);
@@ -301,17 +307,21 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
           `'id' in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
         );
       }
-      const owner = Object.entries(appIds).find(
-        ([, id]) => id.toLowerCase() === configId.toLowerCase(),
-      )?.[0];
-      if (owner !== undefined) {
+      const owner = claimed.get(configId.toLowerCase());
+      const movedFrom = owner !== undefined && owner !== key && !exists(owner) ? owner : undefined;
+      if (owner !== undefined && owner !== key && movedFrom === undefined) {
         throw new Error(
           `${configPath} carries the app id already recorded for ${owner} in ${TAILOR_LOCK_FILENAME}. ` +
             "If this config was copied from that app, delete its 'id' so it gets a fresh one.",
         );
       }
+      claimed.set(configId.toLowerCase(), key);
       const removeConfigId = mode === "write";
       if (removeConfigId) {
+        if (movedFrom !== undefined) {
+          delete appIds[movedFrom];
+          logger.info(`Keeping the app id of ${movedFrom} for ${key}: ${configId}`);
+        }
         appIds[key] = configId;
         changed = true;
       } else {
@@ -337,7 +347,7 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     return finish();
   }
 
-  const orphans = Object.keys(appIds).filter((key) => !fs.existsSync(path.join(lock.root, key)));
+  const orphans = Object.keys(appIds).filter((key) => !exists(key));
   const keys = unresolved.map(({ key }) => key);
   if (mode === "require") throw missingInCIError(keys, orphans);
 
@@ -351,6 +361,17 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
   }
 
   for (const { index, configPath, key } of unresolved) {
+    const alreadyPlanned = appIds[key];
+    if (alreadyPlanned !== undefined) {
+      planned[index] = {
+        configPath,
+        key,
+        id: alreadyPlanned,
+        source: "generated",
+        removeConfigId: false,
+      };
+      continue;
+    }
     let id: string;
     if (moved?.key === key) {
       id = assertDefined(appIds[moved.from], "orphaned app id missing");
@@ -412,8 +433,10 @@ export async function removeAdoptedConfigIds(
   plan: AppIdPlan,
 ): Promise<RemoveAdoptedConfigIdsResult> {
   let configEdited = false;
+  const edited = new Set<string>();
   for (const entry of plan.entries) {
-    if (!entry.removeConfigId || entry.id === undefined) continue;
+    if (!entry.removeConfigId || entry.id === undefined || edited.has(entry.configPath)) continue;
+    edited.add(entry.configPath);
     if (await removeConfigId(entry.configPath, entry.id)) {
       configEdited = true;
       logger.info(`Moved the app id of ${entry.key} from the config into ${TAILOR_LOCK_FILENAME}.`);

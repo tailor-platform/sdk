@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
-import { type AppIds, parseAppIds, TAILOR_LOCK_VERSION } from "@tailor-platform/sdk/cli";
+import { type AppIds, parseAppIds } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 
-/** Current lock schema version. Bumped only on breaking lock-format changes. */
-export const LOCK_VERSION = TAILOR_LOCK_VERSION;
+/**
+ * Highest lock schema version this plugin understands. Pinned here rather than
+ * read from the SDK so an SDK that moves the format on refuses to let an older
+ * plugin rewrite the lock.
+ */
+export const LOCK_VERSION = 2;
 
 /** Lock file path, relative to the repository root. */
 const LOCK_FILENAME = ".github/tailor.lock";

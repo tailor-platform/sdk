@@ -262,6 +262,7 @@ describe("app-id-lock", () => {
     );
 
     test("rejects a config id that another config already owns", async () => {
+      writeConfig("apps/original/tailor.config.ts");
       const configPath = writeConfig("apps/copy/tailor.config.ts");
       await expect(
         planAppIds({
@@ -270,6 +271,63 @@ describe("app-id-lock", () => {
           mode: "write",
         }),
       ).rejects.toThrow(/already recorded for apps\/original\/tailor.config.ts/);
+    });
+
+    test.each(["read", "require"] as const)(
+      "rejects two configs carrying the same unrecorded id in %s mode",
+      async (mode) => {
+        const first = writeConfig("apps/a/tailor.config.ts");
+        const second = writeConfig("apps/b/tailor.config.ts");
+        await expect(
+          planAppIds({
+            lock: lockWith({}),
+            entries: [
+              { configPath: first, configId: ID_A },
+              { configPath: second, configId: ID_A.toUpperCase() },
+            ],
+            mode,
+          }),
+        ).rejects.toThrow(/already recorded for apps\/a\/tailor.config.ts/);
+      },
+    );
+
+    test("re-keys an orphaned entry whose id the config still carries", async () => {
+      const configPath = writeConfig("apps/new/tailor.config.ts");
+      const plan = await planAppIds({
+        lock: lockWith({ "apps/old/tailor.config.ts": ID_A }),
+        entries: [{ configPath, configId: ID_A }],
+        mode: "write",
+      });
+      expect(plan.appIds).toEqual({ "apps/new/tailor.config.ts": ID_A });
+      expect(plan.entries[0]).toMatchObject({ id: ID_A, source: "config", removeConfigId: true });
+      expect(prompt.confirm).not.toHaveBeenCalled();
+    });
+
+    test("uses the config id of a moved app provisionally outside write mode", async () => {
+      const configPath = writeConfig("apps/new/tailor.config.ts");
+      const plan = await planAppIds({
+        lock: lockWith({ "apps/old/tailor.config.ts": ID_A }),
+        entries: [{ configPath, configId: ID_A }],
+        mode: "require",
+      });
+      expect(plan.changed).toBe(false);
+      expect(plan.appIds).toEqual({ "apps/old/tailor.config.ts": ID_A });
+      expect(plan.entries[0]).toMatchObject({ id: ID_A, source: "config" });
+    });
+
+    test("gives the same config listed twice one generated id", async () => {
+      const configPath = writeConfig("tailor.config.ts");
+      const plan = await planAppIds({
+        lock: lockWith({}),
+        entries: [
+          { configPath, configId: undefined },
+          { configPath, configId: undefined },
+        ],
+        mode: "write",
+      });
+      expect(Object.keys(plan.appIds)).toEqual(["tailor.config.ts"]);
+      expect(plan.entries[0]?.id).toBe(plan.appIds["tailor.config.ts"]);
+      expect(plan.entries[1]?.id).toBe(plan.appIds["tailor.config.ts"]);
     });
 
     test("rejects a config id that is not a UUID", async () => {
@@ -452,6 +510,26 @@ export default defineConfig({
 });
 `,
       );
+    });
+
+    test("edits a config listed twice only once", async () => {
+      writeLock({ version: 2, targets: [] });
+      const configPath = writeConfig(
+        "tailor.config.ts",
+        `export default defineConfig({ id: "${ID_A}", name: "app" });\n`,
+      );
+      await resolveLockedAppIds({
+        lock: lockWith({}),
+        entries: [
+          { configPath, configId: ID_A },
+          { configPath, configId: ID_A },
+        ],
+        mode: "write",
+      });
+      expect(fs.readFileSync(configPath, "utf-8")).toBe(
+        `export default defineConfig({ name: "app" });\n`,
+      );
+      expect(logger.warn).not.toHaveBeenCalled();
     });
 
     test("warns instead of failing when the config shape cannot be edited", async () => {

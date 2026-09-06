@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { TAILOR_LOCK_VERSION } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
 import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock, type LockFile } from "./lock";
@@ -26,6 +27,12 @@ function makeLock(): LockFile {
     ],
   };
 }
+
+describe("LOCK_VERSION", () => {
+  test("matches the version the SDK writes", () => {
+    expect(LOCK_VERSION).toBe(TAILOR_LOCK_VERSION);
+  });
+});
 
 describe("hashContent", () => {
   test("is a stable sha256 prefix", () => {
