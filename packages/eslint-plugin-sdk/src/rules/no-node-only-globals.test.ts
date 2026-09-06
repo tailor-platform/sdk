@@ -78,6 +78,14 @@ describe("no-node-only-globals", () => {
       `${RESOLVER}export const region = typeof process === "undefined" ? undefined : process.env.REGION;`,
       RULE,
     );
+    expectClean(
+      `${RESOLVER}export const region = typeof process != "undefined" && typeof process.env !== "undefined" && process.env.REGION;`,
+      RULE,
+    );
+    expectClean(
+      `${RESOLVER}export const region = typeof process === "undefined" || !process.env ? undefined : process.env.REGION;`,
+      RULE,
+    );
   });
 
   test("still reports references outside a typeof guard", () => {

@@ -43,21 +43,31 @@ function typeofGuard(node: AstNode | null | undefined): TypeofGuard | null {
   return { name, declaredWhenTrue: isNegative === (literal === "undefined") };
 }
 
+function guardsDeclared(
+  test: AstNode | null | undefined,
+  name: string,
+  declaredWhenTrue: boolean,
+): boolean {
+  const guard = typeofGuard(test);
+  if (guard !== null) return guard.name === name && guard.declaredWhenTrue === declaredWhenTrue;
+  if (test?.type !== "LogicalExpression" || test.operator !== (declaredWhenTrue ? "&&" : "||")) {
+    return false;
+  }
+  return (
+    guardsDeclared(test.left, name, declaredWhenTrue) ||
+    guardsDeclared(test.right, name, declaredWhenTrue)
+  );
+}
+
 function isGuarded(node: AstIdentifier): boolean {
   let child: AstNode = node;
   for (let parent = parentOf(child); parent !== null; child = parent, parent = parentOf(parent)) {
     if (parent.type === "LogicalExpression" && parent.right === child) {
-      const guard = typeofGuard(parent.left);
-      if (guard?.name === node.name && guard.declaredWhenTrue === (parent.operator === "&&")) {
-        return true;
-      }
+      if (guardsDeclared(parent.left, node.name, parent.operator === "&&")) return true;
     }
     if (parent.type === "ConditionalExpression" || parent.type === "IfStatement") {
-      const guard = typeofGuard(parent.test);
-      if (guard?.name === node.name) {
-        if (parent.consequent === child && guard.declaredWhenTrue) return true;
-        if (parent.alternate === child && !guard.declaredWhenTrue) return true;
-      }
+      if (parent.consequent === child && guardsDeclared(parent.test, node.name, true)) return true;
+      if (parent.alternate === child && guardsDeclared(parent.test, node.name, false)) return true;
     }
   }
   return false;
