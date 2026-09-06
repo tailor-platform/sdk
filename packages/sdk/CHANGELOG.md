@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 2.13.1
+
+### Patch Changes
+
+- [#2249](https://github.com/tailor-platform/sdk/pull/2249) [`ab26f98`](https://github.com/tailor-platform/sdk/commit/ab26f98c19b85eac31d0dd84d889fa313ad72c58) Thanks [@dqn](https://github.com/dqn)! - Fix the generated migration `db.ts` for an enum field whose allowed values change in the same migration as its required-ness: the write slots now follow the post-migration schema, so making the field required rejects `null` in `migrate.ts`, and making it optional accepts `null`. When an emptied enum becomes optional, the scaffolded `migrate.ts` writes `null` for the removed values instead of a `"NEW_VALUE"` placeholder.
+
+- [#2256](https://github.com/tailor-platform/sdk/pull/2256) [`915f35d`](https://github.com/tailor-platform/sdk/commit/915f35d5148144940721cc115fd0eb961eb5a851) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Fix `seed apply --upsert` rejecting rows that omit fields the platform fills in on create, such as the `createdAt` / `updatedAt` fields from `db.fields.timestamps()` or any field declared with `.default()`
+
+- [#2260](https://github.com/tailor-platform/sdk/pull/2260) [`1f1bd6f`](https://github.com/tailor-platform/sdk/commit/1f1bd6f13f4000a355c4fab61d46ddd71d508845) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc to v0.148.0
+
 ## 2.13.0
 
 ### Minor Changes

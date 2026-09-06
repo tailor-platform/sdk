@@ -1,5 +1,13 @@
 # @tailor-platform/create-sdk
 
+## 2.13.1
+
+### Patch Changes
+
+- [#2263](https://github.com/tailor-platform/sdk/pull/2263) [`ec80f8c`](https://github.com/tailor-platform/sdk/commit/ec80f8c7fbb5878010cc702a6336f6cb5b3d9bfb) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Fix the `hello-world` template docs so they match the tooling the template actually ships: the README now documents `oxfmt` / `oxlint` (instead of Prettier / ESLint) and the `generate` script, and the setup commands use `npx @tailor-platform/sdk <command>`. The unused empty `.prettierrc` is no longer generated.
+
+- [#2263](https://github.com/tailor-platform/sdk/pull/2263) [`9495e4e`](https://github.com/tailor-platform/sdk/commit/9495e4e2b77a0a3e680fff22dda0cb5493756c6c) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Fix the same stale-tooling docs issue across the remaining `create-sdk` templates (executor, inventory-management, multi-application, resolver, static-web-site, tailordb, workflow): remove the unused empty `.prettierrc` files, and update the `inventory-management` / `multi-application` READMEs' Scripts sections to document `oxfmt` / `oxlint` (instead of Prettier / ESLint), matching the tooling their `package.json` actually ships. The `inventory-management` README's Scripts section also referenced a nonexistent `gen` script; it now documents the actual `generate` script.
+
 ## 2.13.0
 
 ## 2.12.0
