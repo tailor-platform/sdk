@@ -308,6 +308,16 @@ export default defineConfig({
     );
   });
 
+  test("keeps a user comment when the id was the only property", async () => {
+    const filePath = await writeConfig(
+      `export default defineConfig({\n  // keep me\n  id: "${existingId}",\n});\n`,
+    );
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(
+      `export default defineConfig({\n  // keep me\n});\n`,
+    );
+  });
+
   test("removes a trailing inline id together with its separator", async () => {
     const filePath = await writeConfig(
       `export default defineConfig({ name: "my-app", id: "${existingId}" });\n`,
@@ -358,6 +368,14 @@ export default defineConfig({
     {
       name: "the module reads the id back",
       source: `const app = defineConfig({ id: "${existingId}", name: "my-app" });\nexport const label = app.id;\nexport default app;\n`,
+    },
+    {
+      name: "the module reads the id back through a computed key",
+      source: `const app = defineConfig({ id: "${existingId}", name: "my-app" });\nexport const label = app["id"];\nexport default app;\n`,
+    },
+    {
+      name: "the module destructures the id",
+      source: `const app = defineConfig({ id: "${existingId}", name: "my-app" });\nexport const { id } = app;\nexport default app;\n`,
     },
     {
       name: "defineConfig is called more than once",

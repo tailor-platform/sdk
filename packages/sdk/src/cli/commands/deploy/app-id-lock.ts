@@ -103,9 +103,15 @@ function readRawLock(root: string): RawLock | null {
   assertSafeLockPath(root);
   const file = path.join(root, TAILOR_LOCK_FILENAME);
   if (!fs.existsSync(file)) return null;
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf-8");
+  } catch (cause) {
+    throw new Error(`${TAILOR_LOCK_FILENAME} under ${root} could not be read.`, { cause });
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
+    parsed = JSON.parse(text);
   } catch (cause) {
     throw new Error(`${TAILOR_LOCK_FILENAME} is not valid JSON. ${restoreHint}`, { cause });
   }
@@ -134,17 +140,17 @@ export function readAppIdLock(root: string): AppIdLock | null {
 
 /**
  * Locate the lock file that governs a config: the nearest `.github/tailor.lock`
- * in the config's directory or one of its ancestors, without leaving the
- * repository the config belongs to.
+ * in the config's directory or one of its ancestors. That is the root setup
+ * records against when it runs from that directory.
  * @param configPath - Absolute path to the config file
- * @returns The lock, or null when no ancestor directory inside the repository has one
+ * @returns The lock, or null when no ancestor directory has one
  */
 export function findAppIdLock(configPath: string): AppIdLock | null {
   let dir = path.dirname(configPath);
   for (;;) {
     if (fs.existsSync(path.join(dir, TAILOR_LOCK_FILENAME))) return readAppIdLock(dir);
     const parent = path.dirname(dir);
-    if (parent === dir || fs.existsSync(path.join(dir, ".git"))) return null;
+    if (parent === dir) return null;
     dir = parent;
   }
 }
@@ -349,11 +355,11 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
   }
 
   const orphans = Object.keys(appIds).filter((key) => !exists(key));
-  const keys = unresolved.map(({ key }) => key);
+  const keys = [...new Set(unresolved.map(({ key }) => key))];
   if (mode === "require") throw missingInCIError(keys, orphans);
 
   let moved: { from: string; key: string } | undefined;
-  if (orphans.length === 1 && unresolved.length === 1) {
+  if (orphans.length === 1 && keys.length === 1) {
     const from = assertDefined(orphans[0], "orphan missing");
     const key = assertDefined(keys[0], "key missing");
     if (await confirmMove(from, key)) moved = { from, key };
@@ -453,7 +459,8 @@ export async function removeAdoptedConfigIds(
     } else {
       logger.warn(
         `The app id of ${entry.key} is recorded in ${TAILOR_LOCK_FILENAME}. Remove the 'id' from ` +
-          `${entry.configPath} by hand; the SDK could not edit this config shape.`,
+          "the object passed to defineConfig() by hand; the SDK could not edit " +
+          `${entry.configPath} to do it.`,
       );
     }
   }

@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import {
   logBetaWarning,
   extractOwnedNamespaces,
+  findAppIdLock,
   loadConfig,
   logger,
   planAppIds,
@@ -656,6 +657,21 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
 
   if (decision.action === "conflict") {
     throw new Error(`${resolved.file}: ${decision.reason}`);
+  }
+
+  // deploy resolves the app id against the nearest lock above the config, so
+  // a lock between the config and this directory would take precedence over
+  // the one written here.
+  const nearestLock = findAppIdLock(resolved.configPath);
+  if (
+    nearestLock !== null &&
+    path.normalize(nearestLock.root) !== path.normalize(options.outputDir)
+  ) {
+    throw new Error(
+      `${path.relative(options.outputDir, path.join(nearestLock.root, TAILOR_LOCK_FILENAME))} ` +
+        "already governs the app id of this config. Run setup from that directory, or remove " +
+        "that lock file if it is a leftover.",
+    );
   }
 
   // Planned before any file is written, so an app id conflict leaves the

@@ -128,14 +128,6 @@ describe("app-id-lock", () => {
       });
     });
 
-    test("does not cross into a parent repository's lock", () => {
-      writeLock({ version: 2, targets: [] });
-      fs.mkdirSync(path.join(root, "vendor/app"), { recursive: true });
-      fs.writeFileSync(path.join(root, "vendor/.git"), "gitdir: elsewhere\n");
-      const configPath = writeConfig("vendor/app/tailor.config.ts");
-      expect(findAppIdLock(configPath)).toBeNull();
-    });
-
     test("reads a version 1 lock as having no app ids", () => {
       writeLock({ version: 1, targets: [] });
       expect(readAppIdLock(root)).toEqual({ root, appIds: {} });
@@ -157,6 +149,11 @@ describe("app-id-lock", () => {
     ])("throws on $name instead of recreating the lock", ({ contents, error }) => {
       writeLock(contents);
       expect(() => readAppIdLock(root)).toThrow(error);
+    });
+
+    test("reports a lock that cannot be read without blaming its contents", () => {
+      fs.mkdirSync(path.join(root, TAILOR_LOCK_FILENAME), { recursive: true });
+      expect(() => readAppIdLock(root)).toThrow(/could not be read/);
     });
 
     test("refuses a lock reached through a symbolic link", () => {
@@ -404,6 +401,22 @@ describe("app-id-lock", () => {
       );
       expect(plan.appIds).toEqual({ "tailor.config.ts": ID_B, "apps/new/tailor.config.ts": ID_A });
       expect(plan.entries[0]).toMatchObject({ id: ID_A, source: "lock" });
+    });
+
+    test("still offers the move when the same config is listed twice", async () => {
+      vi.mocked(prompt.confirm).mockResolvedValue(true);
+      const configPath = writeConfig("apps/new/tailor.config.ts");
+      const plan = await planAppIds({
+        lock: lockWith({ "apps/old/tailor.config.ts": ID_A }),
+        entries: [
+          { configPath, configId: undefined },
+          { configPath, configId: undefined },
+        ],
+        mode: "write",
+      });
+      expect(prompt.confirm).toHaveBeenCalledTimes(1);
+      expect(plan.appIds).toEqual({ "apps/new/tailor.config.ts": ID_A });
+      expect(plan.entries.map((entry) => entry.id)).toEqual([ID_A, ID_A]);
     });
 
     test("generates a fresh id and keeps the orphan when the user denies the move", async () => {

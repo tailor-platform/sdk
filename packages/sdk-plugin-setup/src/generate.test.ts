@@ -904,6 +904,22 @@ export default defineConfig({
     });
   });
 
+  test("refuses to record an app id when a nearer lock governs the config", async () => {
+    fs.mkdirSync(path.join(testDir, "apps/api/.github"), { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, "apps/api/.github/tailor.lock"),
+      `${JSON.stringify({ version: 2, targets: [] }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(testDir, "apps/api/tailor.config.ts"),
+      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
+    );
+    await expect(
+      setupTarget(baseOptions({ workspaceName: "api", dir: "apps/api" })),
+    ).rejects.toThrow(/apps\/api\/.github\/tailor.lock already governs/);
+    expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
+  });
+
   test("stops before writing anything when the config id disagrees with the lock", async () => {
     await setupTarget(baseOptions({ workspaceName: "my-app" }));
     const lockBefore = fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8");

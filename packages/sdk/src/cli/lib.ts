@@ -30,6 +30,7 @@ export { ensureConfigId } from "./commands/deploy/config-id-injector";
 export {
   TAILOR_LOCK_FILENAME,
   TAILOR_LOCK_VERSION,
+  findAppIdLock,
   parseAppIds,
   planAppIds,
   removeAdoptedConfigIds,

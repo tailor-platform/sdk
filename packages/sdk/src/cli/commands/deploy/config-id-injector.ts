@@ -89,12 +89,21 @@ function findIdProperty(obj: ObjectExpression): ObjectProperty | null {
   return findIdProperties(obj)[0] ?? null;
 }
 
+function namesId(node: ASTNode | undefined): boolean {
+  return (
+    (node?.type === "Identifier" && node.name === "id") ||
+    (node?.type === "Literal" && node.value === "id")
+  );
+}
+
+// `app.id`, `app["id"]`, and `const { id } = app` all observe a removed property.
 function readsIdMember(node: unknown): boolean {
   if (!node || typeof node !== "object") return false;
   const n = node as ASTNode;
-  if (n.type === "MemberExpression" && n.computed === false) {
-    const property = n.property as ASTNode | undefined;
-    if (property?.type === "Identifier" && property.name === "id") return true;
+  if (n.type === "MemberExpression" && namesId(n.property as ASTNode | undefined)) return true;
+  if (n.type === "ObjectPattern") {
+    const properties = n.properties as ASTNode[];
+    if (properties.some((p) => p.type === "Property" && namesId(p.key as ASTNode))) return true;
   }
   return Object.values(n).some((child) =>
     Array.isArray(child) ? child.some(readsIdMember) : readsIdMember(child),
@@ -299,9 +308,17 @@ function removeIdProperty(
   configObj: ObjectExpression,
   prop: ObjectProperty,
 ): string {
-  if (configObj.properties.length === 1) {
-    return source.slice(0, configObj.start + 1) + source.slice(configObj.end - 1);
-  }
+  const edited = removeIdPropertyText(source, prop);
+  if (configObj.properties.length > 1) return edited;
+  // The object became empty: collapse it unless it still holds a user comment.
+  const objectEnd = configObj.end - (source.length - edited.length);
+  const inner = edited.slice(configObj.start + 1, objectEnd - 1);
+  return inner.trim() === ""
+    ? `${edited.slice(0, configObj.start + 1)}${edited.slice(objectEnd - 1)}`
+    : edited;
+}
+
+function removeIdPropertyText(source: string, prop: ObjectProperty): string {
   let end = prop.end;
   const trailingComma = /^[\t ]*,/.exec(source.slice(end));
   if (trailingComma) end += trailingComma[0].length;
