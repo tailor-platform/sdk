@@ -4,6 +4,7 @@ import { isCI } from "std-env";
 import { logger } from "#/cli/shared/logger";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
+import { assertDefined } from "#/utils/assert";
 import { removeConfigId } from "./config-id-injector";
 
 /** Lock file path, relative to the repository root. Created by `tailor setup`. */
@@ -207,10 +208,6 @@ export type PlanAppIdsParams = {
   mode: AppIdPlanMode;
 };
 
-function describeKeys(keys: readonly string[]): string {
-  return keys.join(", ");
-}
-
 function warnConfigStillCarriesId(key: string): void {
   logger.warn(
     `${key} still carries an 'id' that is also recorded in ${TAILOR_LOCK_FILENAME}. ` +
@@ -236,7 +233,7 @@ function warnMissingLockedAppId(key: string): void {
 
 function rekeyInstructions(orphans: readonly string[]): string {
   return (
-    `${TAILOR_LOCK_FILENAME} has entries whose config no longer exists: ${describeKeys(orphans)}. ` +
+    `${TAILOR_LOCK_FILENAME} has entries whose config no longer exists: ${orphans.join(", ")}. ` +
     "If an app directory was moved, re-key its entry to the new path under 'appIds' so the " +
     "app keeps its id; delete the entries of removed apps."
   );
@@ -244,7 +241,7 @@ function rekeyInstructions(orphans: readonly string[]): string {
 
 function missingInCIError(keys: readonly string[], orphans: readonly string[]): Error {
   let message =
-    `No app id is recorded for ${describeKeys(keys)} in ${TAILOR_LOCK_FILENAME}, and the config ` +
+    `No app id is recorded for ${keys.join(", ")} in ${TAILOR_LOCK_FILENAME}, and the config ` +
     "has no 'id'. CI does not generate one (each run would be treated as a separate app and " +
     `break resource ownership). Run 'tailor deploy' locally and commit ${TAILOR_LOCK_FILENAME}.`;
   if (orphans.length > 0) message += ` ${rekeyInstructions(orphans)}`;
@@ -280,11 +277,10 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
   const { lock, entries, mode } = params;
   const appIds: Record<string, string> = { ...lock.appIds };
   let changed = false;
-  const planned: AppIdEntry[] = [];
-  const unresolved: Array<{ input: AppIdEntryInput; key: string }> = [];
+  const planned: Array<AppIdEntry | undefined> = entries.map(() => undefined);
+  const unresolved: Array<{ index: number; configPath: string; key: string }> = [];
 
-  for (const input of entries) {
-    const { configPath, configId } = input;
+  entries.forEach(({ configPath, configId }, index) => {
     const key = appIdLockKey(lock.root, configPath);
     const recorded = appIds[key];
     if (recorded !== undefined) {
@@ -297,8 +293,8 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
       }
       const removeConfigId = configId !== undefined && mode === "write";
       if (configId !== undefined && !removeConfigId) warnConfigStillCarriesId(key);
-      planned.push({ configPath, key, id: recorded, source: "lock", removeConfigId });
-      continue;
+      planned[index] = { configPath, key, id: recorded, source: "lock", removeConfigId };
+      return;
     }
     if (configId !== undefined) {
       if (!uuidRegex.test(configId)) {
@@ -315,53 +311,50 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
             "If this config was copied from that app, delete its 'id' so it gets a fresh one.",
         );
       }
-      if (mode === "write") {
+      const removeConfigId = mode === "write";
+      if (removeConfigId) {
         appIds[key] = configId;
         changed = true;
-        planned.push({ configPath, key, id: configId, source: "config", removeConfigId: true });
       } else {
         warnUnrecordedConfigId(key);
-        planned.push({ configPath, key, id: configId, source: "config", removeConfigId: false });
       }
-      continue;
+      planned[index] = { configPath, key, id: configId, source: "config", removeConfigId };
+      return;
     }
-    unresolved.push({ input, key });
-  }
+    unresolved.push({ index, configPath, key });
+  });
 
-  if (unresolved.length === 0) return { appIds, changed, entries: planned };
+  const finish = (): AppIdPlan => ({
+    appIds,
+    changed,
+    entries: planned.map((entry) => assertDefined(entry, "app id entry missing")),
+  });
+  if (unresolved.length === 0) return finish();
 
   const orphans = Object.keys(appIds).filter((key) => !fs.existsSync(path.join(lock.root, key)));
   const keys = unresolved.map(({ key }) => key);
   if (mode === "require") throw missingInCIError(keys, orphans);
   if (mode === "read") {
-    for (const { input, key } of unresolved) {
+    for (const { index, configPath, key } of unresolved) {
       warnMissingLockedAppId(key);
-      planned.push({
-        configPath: input.configPath,
-        key,
-        id: undefined,
-        source: "none",
-        removeConfigId: false,
-      });
+      planned[index] = { configPath, key, id: undefined, source: "none", removeConfigId: false };
     }
-    return { appIds, changed, entries: sortLikeInput(planned, entries) };
+    return finish();
   }
 
   let moved: { from: string; key: string } | undefined;
   if (orphans.length === 1 && unresolved.length === 1) {
-    const from = orphans[0] as string;
-    const key = keys[0] as string;
+    const from = assertDefined(orphans[0], "orphan missing");
+    const key = assertDefined(keys[0], "key missing");
     if (await confirmMove(from, key)) moved = { from, key };
   } else if (orphans.length > 0) {
-    throw new Error(
-      `No app id is recorded for ${describeKeys(keys)}. ${rekeyInstructions(orphans)}`,
-    );
+    throw new Error(`No app id is recorded for ${keys.join(", ")}. ${rekeyInstructions(orphans)}`);
   }
 
-  for (const { input, key } of unresolved) {
+  for (const { index, configPath, key } of unresolved) {
     let id: string;
     if (moved?.key === key) {
-      id = appIds[moved.from] as string;
+      id = assertDefined(appIds[moved.from], "orphaned app id missing");
       delete appIds[moved.from];
       logger.info(`Keeping the app id of ${moved.from} for ${key}: ${id}`);
     } else {
@@ -370,23 +363,10 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     }
     appIds[key] = id;
     changed = true;
-    planned.push({
-      configPath: input.configPath,
-      key,
-      id,
-      source: moved?.key === key ? "lock" : "generated",
-      removeConfigId: false,
-    });
+    const source = moved?.key === key ? "lock" : "generated";
+    planned[index] = { configPath, key, id, source, removeConfigId: false };
   }
-  return { appIds, changed, entries: sortLikeInput(planned, entries) };
-}
-
-function sortLikeInput(planned: AppIdEntry[], inputs: readonly AppIdEntryInput[]): AppIdEntry[] {
-  const remaining = [...planned];
-  return inputs.map((input) => {
-    const index = remaining.findIndex((entry) => entry.configPath === input.configPath);
-    return remaining.splice(index, 1)[0] as AppIdEntry;
-  });
+  return finish();
 }
 
 export type WriteAppIdsParams = {
