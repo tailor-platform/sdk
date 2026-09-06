@@ -17,6 +17,11 @@ describe("valid-workflow-job-definition", () => {
       RULE,
       "createWorkflowJob's options must be an inline object literal",
     );
+    expectViolation(
+      `${IMPORT}export const job = createWorkflowJob();`,
+      RULE,
+      "createWorkflowJob's options must be an inline object literal",
+    );
   });
 
   test("rejects a missing or non-literal name", () => {

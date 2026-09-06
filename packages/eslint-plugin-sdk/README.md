@@ -176,9 +176,9 @@ export const processOrder = createWorkflowJob({
 });
 ```
 
-The rule only checks `.start()` calls on jobs defined with `createWorkflowJob` in the same file
-(including through a `const` alias). A job imported from another module cannot be told apart from an
-unrelated `.start()` method, so such calls are not reported; the build still rejects them. Test files
+The rule only checks `.start()` calls on a `const` initialized with `createWorkflowJob` in the same
+file. A job imported from another module cannot be told apart from an unrelated `.start()` method,
+so such calls are not reported; the build still rejects them. Test files
 that define jobs inline and start them directly can turn this rule off for `**/*.test.ts`.
 
 ### `no-direct-exec-job-function` (warning)
@@ -186,7 +186,7 @@ that define jobs inline and start them directly can turn this rule off for `**/*
 `.start()` calls are rewritten to `execJobFunction` at build time, and only those rewritten calls are
 recognized as job dependencies. Calling `execJobFunction` yourself, on the ambient `tailor.workflow`
 global or on the `workflow` value from `@tailor-platform/sdk/runtime`, drops the target job from the
-bundle and fails the build.
+bundle; the build rejects the forms it can detect.
 
 Incorrect:
 

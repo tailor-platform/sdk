@@ -52,7 +52,7 @@ function isBindingReference(
   );
 }
 
-function variableInitializer(
+export function constInitializer(
   context: Rule.RuleContext,
   node: AstNode | null | undefined,
 ): AstNode | null {
@@ -72,7 +72,7 @@ export function resolveValue(
   const seen = new Set<string>();
   while (current?.type === "Identifier" && !seen.has(current.name)) {
     seen.add(current.name);
-    const initializer = variableInitializer(context, current);
+    const initializer = constInitializer(context, current);
     if (initializer === null) break;
     current = unwrapExpression(initializer);
   }

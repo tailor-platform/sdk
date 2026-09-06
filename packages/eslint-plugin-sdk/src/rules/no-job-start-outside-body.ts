@@ -1,5 +1,5 @@
 import { type AstCallExpression, type AstNode, memberName, unwrapExpression } from "../lib/ast.js";
-import { configureImportTracker, resolveValue } from "../lib/sdk-bindings.js";
+import { configureImportTracker, constInitializer } from "../lib/sdk-bindings.js";
 import { hasAncestor, workflowJobDefinition } from "../lib/workflow.js";
 import type { Rule } from "eslint";
 
@@ -37,7 +37,7 @@ const rule = {
           if (memberName(callee) !== "start") continue;
           const job = unwrapExpression(callee.object);
           if (job?.type !== "Identifier") continue;
-          const target = resolveValue(context, job);
+          const target = unwrapExpression(constInitializer(context, job));
           if (
             target?.type !== "CallExpression" ||
             workflowJobDefinition(imports, target) === null

@@ -33,12 +33,8 @@ describe("no-job-start-outside-body", () => {
     );
   });
 
-  test("resolves the started job through a const alias", () => {
-    expectViolation(
-      `${CHILD}const alias = child;\nexport const result = alias.start();`,
-      RULE,
-      MESSAGE,
-    );
+  test("ignores start calls through a const alias, which the build never rewrites", () => {
+    expectClean(`${CHILD}const alias = child;\nexport const result = alias.start();`, RULE);
   });
 
   test("accepts start calls lexically inside a job body", () => {

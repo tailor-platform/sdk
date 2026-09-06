@@ -78,6 +78,14 @@ describe("valid-workflow-exports", () => {
       RULE,
     );
     expectClean(
+      `${MAIN}export default (createWorkflow({ name: "wf", mainJob: main }) as object) satisfies object;`,
+      RULE,
+    );
+    expectClean(
+      `${MAIN}const workflow = createWorkflow({ name: "wf", mainJob: main });\nexport default workflow as object;`,
+      RULE,
+    );
+    expectClean(
       `${IMPORT}const main = createWorkflowJob({ name: "main", body: () => 1 });\nexport { main };\nexport default createWorkflow({ name: "wf", mainJob: main });`,
       RULE,
     );

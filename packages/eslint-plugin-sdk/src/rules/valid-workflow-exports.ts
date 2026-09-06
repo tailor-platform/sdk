@@ -22,7 +22,11 @@ function collectExports(program: AstProgram): ModuleExports {
   };
   for (const statement of program.body) {
     if (statement.type === "ExportDefaultDeclaration") {
-      if (statement.declaration.type === "Identifier") add(statement.declaration.name, "default");
+      const { declaration } = statement;
+      if (declaration.type !== "ClassDeclaration" && declaration.type !== "FunctionDeclaration") {
+        const value = unwrapExpression(declaration);
+        if (value?.type === "Identifier") add(value.name, "default");
+      }
       continue;
     }
     if (statement.type !== "ExportNamedDeclaration") continue;
@@ -45,7 +49,7 @@ function collectExports(program: AstProgram): ModuleExports {
 function exportedNames(exports: ModuleExports, call: AstCallExpression): string[] {
   let node: AstNode = call;
   let parent = parentOf(node);
-  while (parent !== null && unwrapExpression(parent) === node) {
+  while (parent !== null && unwrapExpression(parent) === call) {
     node = parent;
     parent = parentOf(parent);
   }
