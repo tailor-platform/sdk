@@ -1,7 +1,12 @@
 import * as fs from "node:fs";
+import { create, createRegistry } from "@bufbuild/protobuf";
+import { usedTypes } from "@bufbuild/protobuf/reflect";
+import { createValidator } from "@bufbuild/protovalidate";
+import { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
+import { AppConfigSchema } from "#/parser/app-config/schema";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
@@ -133,6 +138,51 @@ describe("buildMetaRequest", () => {
     });
 
     expect(write.labels).toMatchObject({ "sdk-name": "my-app", "sdk-app-id": "app-id-1" });
+  });
+});
+
+describe("config metadata against the platform's label rules", () => {
+  const validator = createValidator({
+    registry: createRegistry(SetMetadataRequestSchema, ...usedTypes(SetMetadataRequestSchema)),
+  });
+  const trn = "trn:v1:workspace:c98794dd-9bf1-480f-a5c9-bf92b3679d42:application:my-app";
+
+  function platformAccepts(labels: Record<string, string>): boolean {
+    const message = create(SetMetadataRequestSchema, { trn, labels });
+    return validator.validate(SetMetadataRequestSchema, message).kind === "valid";
+  }
+
+  function configAccepts(metadata: Record<string, string>): boolean {
+    return AppConfigSchema.safeParse({ name: "my-app", metadata }).success;
+  }
+
+  async function labelsFor(metadata: Record<string, string>): Promise<Record<string, string>> {
+    const write = await buildMetaRequest({ trn, appName: "my-app", appId: "id-1", metadata });
+    return write.labels ?? {};
+  }
+
+  test.each([
+    ["a 63-character key", { [`a${"b".repeat(62)}`]: "v" }, true],
+    ["a 64-character key", { [`a${"b".repeat(63)}`]: "v" }, false],
+    ["an uppercase key", { Team: "v" }, false],
+    ["an empty value", { team: "" }, true],
+    ["a 63-character value", { team: `v${"1".repeat(62)}` }, true],
+    ["a 64-character value", { team: `v${"1".repeat(63)}` }, false],
+    ["a dotted value", { team: "1.2.3" }, false],
+  ])("agrees with the platform on %s", async (_case, metadata, accepted) => {
+    expect(configAccepts(metadata)).toBe(accepted);
+    expect(platformAccepts(await labelsFor(metadata))).toBe(accepted);
+  });
+
+  test("the entry cap fills the platform's label limit exactly once the SDK labels are added", async () => {
+    const entries = (count: number) =>
+      Object.fromEntries(Array.from({ length: count }, (_, i) => [`key-${i}`, "v"]));
+
+    expect(configAccepts(entries(17))).toBe(true);
+    expect(platformAccepts(await labelsFor(entries(17)))).toBe(true);
+
+    expect(configAccepts(entries(18))).toBe(false);
+    expect(platformAccepts(await labelsFor(entries(18)))).toBe(false);
   });
 });
 

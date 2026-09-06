@@ -538,13 +538,12 @@ function diffMetadataDisplay(
   existingLabels: Record<string, string> | undefined,
   metadata: Record<string, string> | undefined,
 ): string[] {
+  const existing = existingLabels ?? {};
+  const isStored = (key: string) => Object.hasOwn(existing, key);
   return Object.entries(metadata ?? {})
-    .filter(([key, value]) => existingLabels?.[key] !== value)
+    .filter(([key, value]) => !isStored(key) || existing[key] !== value)
     .toSorted(([left], [right]) => left.localeCompare(right))
-    .map(([key]) => {
-      const symbol = existingLabels?.[key] === undefined ? symbols.create : symbols.update;
-      return `${symbol} ${key} (metadata)`;
-    });
+    .map(([key]) => `${isStored(key) ? symbols.update : symbols.create} ${key} (metadata)`);
 }
 
 function buildHttpAdapters(

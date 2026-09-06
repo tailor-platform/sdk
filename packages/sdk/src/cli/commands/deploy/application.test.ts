@@ -256,6 +256,16 @@ describe("planApplication", () => {
       expect(result.updates).toHaveLength(0);
     });
 
+    test("treats a key named like an Object.prototype member as absent remotely", async () => {
+      const client = createMockClient([matchingApplication]);
+
+      const result = await planApplication(
+        createContext(client, createMockApplication({ metadata: { constructor: "v1" } })),
+      );
+
+      expect(result.updates[0]?.details).toEqual([`${symbols.create} constructor (metadata)`]);
+    });
+
     test("ignores stored labels the config metadata does not name", async () => {
       // A label removed from the config, or one set by another tool, is kept as-is.
       const client = createMockClient([
