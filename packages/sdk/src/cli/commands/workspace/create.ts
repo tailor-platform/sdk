@@ -134,7 +134,8 @@ export const createCommand = defineAppCommand({
     // fails --name during option parsing, before any Platform request.
     name: arg(workspaceNameSchema, {
       alias: "n",
-      description: "Workspace name",
+      description:
+        "Workspace name (3-63 characters; lowercase letters, numbers, and hyphens; cannot start or end with a hyphen)",
     }),
     region: arg(z.string(), {
       alias: "r",
