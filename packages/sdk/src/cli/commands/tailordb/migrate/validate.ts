@@ -21,6 +21,7 @@ import {
 import { formatMigrationScriptCommand } from "./hints";
 import {
   checkMigrationDiffs,
+  logMissingCheckpointGuidance,
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
@@ -37,6 +38,7 @@ import {
 } from "./snapshot";
 import { MIGRATION_REVIEW_REQUIRED_MARKER } from "./template-generator";
 import type {
+  RebaselinePendingInfo,
   RemoteSchemaVerificationResult,
   RemoteSchemaVerificationSkipReason,
   SchemaDrift,
@@ -70,6 +72,11 @@ interface CompletedRemoteSchemaReport {
   skipped?: RemoteSchemaVerificationSkipReason;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
   checkpointMissingLocal?: boolean;
+  /**
+   * Set alongside `checkpointMissingLocal` when the cause is an environment that fell behind
+   * before `migration rebaseline` ran, rather than a generic history mismatch.
+   */
+  rebaselinePending?: RebaselinePendingInfo;
   checkpointRepair?: { from: number; to: 0 };
 }
 
@@ -79,6 +86,7 @@ interface FailedRemoteSchemaReport {
   hasDrift?: never;
   drifts?: never;
   checkpointMissingLocal?: never;
+  rebaselinePending?: never;
   checkpointRepair?: never;
 }
 
@@ -251,6 +259,7 @@ function buildValidationReports(
       drifts: remote.drifts,
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
+      ...(remote.rebaselinePending ? { rebaselinePending: remote.rebaselinePending } : {}),
       ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
     };
 
@@ -426,6 +435,11 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
           `remote migration ${formatMigrationNumber(remote.remoteMigrationNumber)} is not in the local migration history`,
         )}`,
       );
+      if (remote.rebaselinePending) {
+        logger.log(
+          `    Fell behind before 'migration rebaseline' ran; must reach ${formatMigrationNumber(remote.rebaselinePending.replacedLatestMigration)} first.`,
+        );
+      }
     } else if (remote?.hasDrift) {
       logger.log(
         `  Remote schema: ${styles.error("drift detected")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
@@ -468,6 +482,14 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
   logger.newline();
 }
 
+function hasMissingCheckpoint(
+  report: NamespaceValidationReport,
+): report is NamespaceValidationReport & {
+  remoteSchema: CompletedRemoteSchemaReport & { checkpointMissingLocal: true };
+} {
+  return report.remoteSchema?.checkpointMissingLocal === true;
+}
+
 function printResolutionHints(reports: NamespaceValidationReport[], configPath?: string): void {
   if (reports.some((r) => r.localSchema?.hasDiff && !r.localSchema.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create the initial snapshot.");
@@ -475,9 +497,16 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
   if (reports.some((r) => r.localSchema?.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create migration files.");
   }
-  if (reports.some((r) => r.remoteSchema?.checkpointMissingLocal)) {
-    logger.info(
-      "The remote migration checkpoint is ahead of the local history. Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
+  const missingCheckpointReports = reports.filter(hasMissingCheckpoint);
+  if (missingCheckpointReports.length > 0) {
+    logMissingCheckpointGuidance(
+      missingCheckpointReports.map((r) => ({
+        namespace: r.namespace,
+        remoteMigrationNumber: r.remoteSchema.remoteMigrationNumber,
+        ...(r.remoteSchema.rebaselinePending
+          ? { rebaselinePending: r.remoteSchema.rebaselinePending }
+          : {}),
+      })),
     );
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
