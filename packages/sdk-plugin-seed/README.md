@@ -56,7 +56,7 @@ tailor seed dump --force User Order
 `tailor seed dump` reads the rows a deployed app currently holds and writes them as JSONL, one file per table, in the format `tailor seed apply` reads. That makes a dump the restore point for the change you are about to make:
 
 ```bash
-tailor seed dump --out ./snapshot
+tailor seed dump --force
 # ... run the migration, the executor, the workflow you want to try ...
 tailor seed apply --truncate --yes
 ```
