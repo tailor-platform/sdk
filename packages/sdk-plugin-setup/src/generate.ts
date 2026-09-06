@@ -733,7 +733,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     );
     logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
     if (configEdited) {
-      logger.log(`The app id was moved out of tailor.config.ts; commit that change too.`);
+      logger.log("The app id was moved out of tailor.config.ts; commit that change too.");
     }
   } else {
     printNextSteps({ environment: resolved.environment, configEdited });

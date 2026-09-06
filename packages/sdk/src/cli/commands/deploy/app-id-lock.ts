@@ -209,7 +209,8 @@ export type PlanAppIdsParams = {
 function warnConfigStillCarriesId(key: string): void {
   logger.warn(
     `${key} still carries an 'id' that is also recorded in ${TAILOR_LOCK_FILENAME}. ` +
-      "Remove it from the config; the lock is where the id lives now.",
+      "Remove it from the config, or run 'tailor deploy' locally to move it; " +
+      "the lock is where the id lives now.",
   );
 }
 
