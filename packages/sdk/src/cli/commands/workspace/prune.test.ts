@@ -1,4 +1,5 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
@@ -604,6 +605,43 @@ describe("workspace prune command", () => {
       profiles: { live: { workspace_id: "id-other" } },
     });
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("1 local profile(s)"));
+  });
+
+  test("treats a workspace deleted mid-run as already pruned", async () => {
+    const client = stubClient([workspace("e2e-ws-1"), workspace("e2e-ws-2")]);
+    client.deleteWorkspace
+      .mockRejectedValueOnce(new ConnectError("workspace not found", Code.NotFound))
+      .mockResolvedValueOnce({});
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace).toHaveBeenCalledTimes(2);
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("already deleted"));
+    expect(logger.success).toHaveBeenCalledWith(expect.stringContaining("Deleted 2"));
+  });
+
+  test("treats empty scope environment variables as unset", async () => {
+    const client = stubClient([workspace("e2e-ws-a", { organizationId: ORG_B })]);
+    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", "");
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", "");
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "id-e2e-ws-a" });
   });
 
   test("reads the organization scope from the environment", async () => {

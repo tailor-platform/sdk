@@ -70,13 +70,9 @@ export const positiveIntArg = z.coerce.number().int().positive();
 
 /**
  * Schema for non-negative integer validation (from string input).
- * Accepts 0 (used for `--limit 0` to disable the limit). An empty string is
- * rejected rather than coerced to 0, so `--limit=` cannot silently disable a cap.
+ * Accepts 0 (used for `--limit 0` to disable the limit).
  */
-export const nonNegativeIntArg = z.preprocess(
-  (value) => (typeof value === "string" && value.trim() === "" ? Number.NaN : value),
-  z.coerce.number().int().nonnegative(),
-);
+export const nonNegativeIntArg = z.coerce.number().int().nonnegative();
 
 /**
  * Schema for sort order (`asc` or `desc`).

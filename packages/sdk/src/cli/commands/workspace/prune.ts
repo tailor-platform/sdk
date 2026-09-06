@@ -1,6 +1,7 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
-import { confirmationArgs, nonNegativeIntArg } from "#/cli/shared/args";
+import { confirmationArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
@@ -28,6 +29,19 @@ const ageUnitToMs = {
   h: 60 * 60 * 1000,
   d: 24 * 60 * 60 * 1000,
 } as const;
+
+// CI often exports an unset secret as "", which must mean "no scope", not an invalid id.
+// A fresh schema per option, for the same reason as `limitArg`.
+const scopeIdArg = () =>
+  z.preprocess((value) => (value === "" ? undefined : value), z.uuid().optional());
+
+// Rejects `--limit=` instead of coercing "" to 0, which would silently remove the cap.
+// Single-use on purpose: politty keys option metadata by schema instance, and pipe
+// schemas are not cloned per option, so sharing one across options collides.
+const limitArg = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? Number.NaN : value),
+  z.coerce.number().int().nonnegative(),
+);
 
 const ageArg = z.string().regex(agePattern, {
   message: "Invalid --older-than format. Expected a number with a unit: '30m', '24h', '7d'",
@@ -201,19 +215,19 @@ export const pruneCommand = defineAppCommand({
       description:
         "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id",
     }),
-    "organization-id": arg(z.uuid().optional(), {
+    "organization-id": arg(scopeIdArg(), {
       alias: "o",
       description: "Only consider workspaces in this organization",
       env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     }),
-    "folder-id": arg(z.uuid().optional(), {
+    "folder-id": arg(scopeIdArg(), {
       description: "Only consider workspaces in this folder",
       env: "TAILOR_PLATFORM_FOLDER_ID",
     }),
     exclude: arg(z.array(z.string().min(1)).optional(), {
       description: "Keep a workspace with this exact name even when it matches (repeatable)",
     }),
-    limit: arg(nonNegativeIntArg.default(20), {
+    limit: arg(limitArg.default(20), {
       description:
         "Abort when more workspaces match than this, without deleting anything. 0 removes the cap",
     }),
@@ -339,6 +353,11 @@ export const pruneCommand = defineAppCommand({
         result.deleted.push(workspace);
         logger.success(`Deleted ${displayName} (${workspace.id}).`);
       } catch (error) {
+        if (error instanceof ConnectError && error.code === Code.NotFound) {
+          result.deleted.push(workspace);
+          logger.info(`${displayName} (${workspace.id}) was already deleted.`);
+          continue;
+        }
         const message = error instanceof Error ? error.message : String(error);
         result.failed.push({ workspace, error: message });
         logger.error(`Failed to delete ${displayName} (${workspace.id}): ${message}`);
