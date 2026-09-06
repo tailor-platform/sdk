@@ -45,7 +45,8 @@ function collectExports(context: Rule.RuleContext, program: AstProgram): ModuleE
     if ("exportKind" in statement && statement.exportKind === "type") continue;
     if (statement.declaration?.type === "VariableDeclaration") {
       for (const declarator of statement.declaration.declarations) {
-        if (declarator.id.type === "Identifier") add(declarator.id.name, declarator.id.name);
+        if (declarator.id.type !== "Identifier") continue;
+        add(rootBindingName(context, declarator.id) ?? declarator.id.name, declarator.id.name);
       }
     }
     if (statement.source) continue;

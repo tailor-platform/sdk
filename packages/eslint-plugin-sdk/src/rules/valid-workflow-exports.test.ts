@@ -33,6 +33,11 @@ describe("valid-workflow-exports", () => {
       WORKFLOW_NAMED,
     );
     expectViolation(
+      `${MAIN}const workflow = createWorkflow({ name: "wf", mainJob: main });\nexport const alias = workflow;\nexport default workflow;`,
+      RULE,
+      WORKFLOW_NAMED,
+    );
+    expectViolation(
       `${MAIN}const workflow = createWorkflow({ name: "wf", mainJob: main });\nexport default workflow;\nexport { workflow as wf };`,
       RULE,
       WORKFLOW_NAMED,
@@ -110,6 +115,10 @@ describe("valid-workflow-exports", () => {
     );
     expectClean(
       `${IMPORT}const main = createWorkflowJob({ name: "main", body: () => 1 });\nexport { main as mainJob };\nexport default createWorkflow({ name: "wf", mainJob: main });`,
+      RULE,
+    );
+    expectClean(
+      `${IMPORT}const main = createWorkflowJob({ name: "main", body: () => 1 });\nexport const mainJob = main;\nexport default createWorkflow({ name: "wf", mainJob: main });`,
       RULE,
     );
     expectClean(
