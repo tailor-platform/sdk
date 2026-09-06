@@ -318,6 +318,16 @@ export default defineConfig({
     );
   });
 
+  test("matches the expected id case-insensitively", async () => {
+    const filePath = await writeConfig(
+      `export default defineConfig({ id: "${existingId.toUpperCase()}", name: "my-app" });\n`,
+    );
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(
+      `export default defineConfig({ name: "my-app" });\n`,
+    );
+  });
+
   test("handles CRLF line endings", async () => {
     const filePath = await writeConfig(
       `export default defineConfig({\r\n  id: "${existingId}",\r\n  name: "my-app",\r\n});\r\n`,

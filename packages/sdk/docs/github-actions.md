@@ -212,7 +212,7 @@ they were generated from, and their content hashes, plus the id of every app in
 the repository (see [App id](#app-id)). **Commit this file.** The SDK uses it to
 recognize its own files on re-runs and to detect hand edits. The only part
 meant for hand editing is `appIds`, and only to re-key an entry after moving an
-app directory.
+app directory or to delete the entry of a removed app.
 
 ### App id
 

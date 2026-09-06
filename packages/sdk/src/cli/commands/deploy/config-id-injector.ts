@@ -38,7 +38,7 @@ type ASTNode = Record<string, unknown>;
 // The user-facing id is a plain UUID. A label-compatible prefix is added
 // at the metadata boundary in `cli/commands/deploy/label.ts`, so the
 // in-config value does not need to satisfy the platform label-value regex.
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ConfigCallSite {
   callExpr: CallExpression;
@@ -325,8 +325,9 @@ function removeIdProperty(
  *
  * Only edits a shape it can read back unambiguously: exactly one inline
  * `defineConfig({...})` call whose single `id` property is a string literal
- * equal to `expectedId`, and whose edited source still parses. Returns false
- * without touching the file otherwise, so the caller can ask for a manual edit.
+ * equal to `expectedId` (UUIDs compare case-insensitively), and whose edited
+ * source still parses. Returns false without touching the file otherwise, so
+ * the caller can ask for a manual edit.
  * @param configPath - Absolute path to the config file
  * @param expectedId - The id the property must hold to be removed
  * @returns Whether the file was edited
@@ -342,7 +343,8 @@ export async function removeConfigId(configPath: string, expectedId: string): Pr
   const idProps = findIdProperties(configObj);
   const idProp = idProps.length === 1 ? idProps[0] : undefined;
   if (!idProp || idProp.value.type !== "Literal") return false;
-  if ((idProp.value as { value?: unknown }).value !== expectedId) return false;
+  const value = (idProp.value as { value?: unknown }).value;
+  if (typeof value !== "string" || value.toLowerCase() !== expectedId.toLowerCase()) return false;
 
   const edited = removeIdProperty(source, configObj, idProp);
   if (parseSync(configPath, edited).errors.length > 0) return false;

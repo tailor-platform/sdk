@@ -5,7 +5,7 @@ import { logger } from "#/cli/shared/logger";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
-import { removeConfigId } from "./config-id-injector";
+import { removeConfigId, uuidRegex } from "./config-id-injector";
 
 /** Lock file path, relative to the repository root. Created by `tailor setup`. */
 export const TAILOR_LOCK_FILENAME = ".github/tailor.lock";
@@ -15,8 +15,6 @@ export const TAILOR_LOCK_FILENAME = ".github/tailor.lock";
  * must not be rewritten by a tool that would drop the section.
  */
 export const TAILOR_LOCK_VERSION = 2;
-
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const restoreHint =
   "The lock file is machine-owned; restore it from git " +
@@ -330,10 +328,6 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     entries: planned.map((entry) => assertDefined(entry, "app id entry missing")),
   });
   if (unresolved.length === 0) return finish();
-
-  const orphans = Object.keys(appIds).filter((key) => !fs.existsSync(path.join(lock.root, key)));
-  const keys = unresolved.map(({ key }) => key);
-  if (mode === "require") throw missingInCIError(keys, orphans);
   if (mode === "read") {
     for (const { index, configPath, key } of unresolved) {
       warnMissingLockedAppId(key);
@@ -341,6 +335,10 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     }
     return finish();
   }
+
+  const orphans = Object.keys(appIds).filter((key) => !fs.existsSync(path.join(lock.root, key)));
+  const keys = unresolved.map(({ key }) => key);
+  if (mode === "require") throw missingInCIError(keys, orphans);
 
   let moved: { from: string; key: string } | undefined;
   if (orphans.length === 1 && unresolved.length === 1) {

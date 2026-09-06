@@ -707,7 +707,12 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   } else {
     targets[index] = newTarget;
   }
-  writeLock(options.outputDir, { version: LOCK_VERSION, targets, appIds: appIdPlan.appIds });
+  writeLock(options.outputDir, {
+    ...lock,
+    version: LOCK_VERSION,
+    targets,
+    appIds: appIdPlan.appIds,
+  });
   const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
 
   if (decision.action === "restore") {

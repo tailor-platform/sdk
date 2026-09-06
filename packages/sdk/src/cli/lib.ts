@@ -37,7 +37,9 @@ export {
   type AppIdEntryInput,
   type AppIdLock,
   type AppIdPlan,
+  type AppIdPlanMode,
   type AppIds,
+  type PlanAppIdsParams,
   type RemoveAdoptedConfigIdsResult,
 } from "./commands/deploy/app-id-lock";
 export { generate } from "./commands/generate/service";
