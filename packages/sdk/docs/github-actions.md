@@ -208,22 +208,54 @@ planned.)
 ### `.github/tailor.lock`
 
 A machine-owned JSON file that tracks which files the SDK manages, the inputs
-they were generated from, and their content hashes. **Commit this file. Never
-edit it by hand.** The SDK uses it to recognize its own files on re-runs and to
-detect hand edits.
+they were generated from, and their content hashes, plus the id of every app in
+the repository (see [App id](#app-id)). **Commit this file.** The SDK uses it to
+recognize its own files on re-runs and to detect hand edits. The only part
+meant for hand editing is `appIds`, and only to re-key an entry after moving an
+app directory.
 
-### `tailor.config.ts` (id injection)
+### App id
 
-If your config does not already have an `id` field, `setup` injects one.
-This `id` must be committed alongside the workflow file. In CI, `tailor
-deploy` refuses to inject a new id — if the id were assigned fresh on each CI
-run, every deploy would create a brand-new application and lose ownership of
-previously deployed resources.
+Every application has a stable id (a UUID) that the SDK uses to recognize the
+resources it owns across renames. In a repository set up with `tailor setup`,
+the id lives in `.github/tailor.lock` under `appIds`, keyed by the config
+file's repository-relative path:
 
+```jsonc
+{
+  "version": 2,
+  "targets": [/* generated workflows */],
+  "appIds": {
+    "apps/order/tailor.config.ts": "d0a3398a-…",
+    "apps/billing/tailor.config.ts": "7f21c4e0-…",
+  },
+}
+```
+
+`setup` records the id when it generates a workflow, and a local `tailor
+deploy` records one for any config that has none yet. Because the key is the
+config path, renaming the app keeps its id, and copying a config to a new
+directory gives the copy a fresh id instead of the original's. If
+`tailor.config.ts` still has an `id` field from before, `setup` or a local
+`deploy` moves it into the lock and removes it from the config; a config `id`
+that disagrees with the lock stops the command so you can decide which value
+to keep.
+
+In CI, `tailor deploy` never assigns an id — if one were assigned fresh on
+each run, every deploy would create a brand-new application and lose ownership
+of previously deployed resources. A config without a recorded id fails the
+plan job with instructions to run `tailor deploy` locally and commit the lock.
 If your pipeline intentionally deploys a fresh, throwaway application on every
 run (for example an end-to-end test harness that creates and deletes its own
-workspace), set `TAILOR_CI_ALLOW_ID_INJECTION=true` to opt back
-into automatic id injection for that pipeline.
+workspace), set `TAILOR_CI_ALLOW_ID_INJECTION=true` to let CI assign one.
+
+When you move an app directory, its `appIds` entry still points at the old
+path. Locally, `deploy` and `setup` notice the single unmatched entry and ask
+whether the app was moved; answering yes re-keys the entry so the app keeps
+its id. In CI, or when more than one entry is unmatched, the command stops and
+asks you to re-key the entry (or delete entries of removed apps) by hand.
+Re-run the relevant `setup` subcommand as well so the workflow's paths follow
+the move.
 
 ## Secrets
 

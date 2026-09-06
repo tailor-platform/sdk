@@ -11,7 +11,7 @@ import {
   type CoordinateSetupOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { hashContent, readLock, writeLock } from "./lock";
+import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
 import {
   ACTIONS_SHA,
   ACTIONS_VERSION,
@@ -771,6 +771,7 @@ describe("setupTarget (integration)", () => {
     branch: "main",
     gitRunner: () => "origin/main",
     loadConfigName: async () => "cfg-app",
+    loadConfigId: async () => undefined,
     ...overrides,
   });
 
@@ -839,9 +840,83 @@ describe("setupTarget (integration)", () => {
     ).rejects.toThrow(/No TailorDB namespaces/);
   });
 
-  test("injects an app id when missing", async () => {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const EXISTING_ID = "c98794dd-9bf1-480f-a5c9-bf92b3679d42";
+
+  test("records a generated app id in the lock and leaves the config alone", async () => {
+    const before = fs.readFileSync(path.join(testDir, "tailor.config.ts"), "utf-8");
     await setupTarget(baseOptions({ workspaceName: "my-app" }));
-    expect(fs.readFileSync(path.join(testDir, "tailor.config.ts"), "utf-8")).toMatch(/id:\s*"/);
+    const lock = readLock(testDir);
+    expect(lock?.version).toBe(LOCK_VERSION);
+    expect(lock?.appIds?.["tailor.config.ts"]).toMatch(UUID);
+    expect(fs.readFileSync(path.join(testDir, "tailor.config.ts"), "utf-8")).toBe(before);
+  });
+
+  test("keys the app id by the config path under --dir", async () => {
+    fs.mkdirSync(path.join(testDir, "apps/api"), { recursive: true });
+    fs.writeFileSync(
+      path.join(testDir, "apps/api/tailor.config.ts"),
+      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
+    );
+    await setupTarget(baseOptions({ workspaceName: "api", dir: "./apps/api/" }));
+    expect(Object.keys(readLock(testDir)?.appIds ?? {})).toEqual(["apps/api/tailor.config.ts"]);
+  });
+
+  test("moves an existing config id into the lock and deletes it from the config", async () => {
+    writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+export default defineConfig({
+  // SDK-managed app id — do not edit, except when copying this config to a separate app.
+  id: "${EXISTING_ID}",
+  name: "cfg-app",
+});
+`,
+    );
+    await setupTarget(
+      baseOptions({ workspaceName: "my-app", loadConfigId: async () => EXISTING_ID }),
+    );
+    expect(readLock(testDir)?.appIds).toEqual({ "tailor.config.ts": EXISTING_ID });
+    expect(fs.readFileSync(path.join(testDir, "tailor.config.ts"), "utf-8")).toBe(
+      `import { defineConfig } from "@tailor-platform/sdk";
+export default defineConfig({
+  name: "cfg-app",
+});
+`,
+    );
+  });
+
+  test("keeps the recorded app id and other entries across reruns", async () => {
+    const opts = baseOptions({ workspaceName: "my-app" });
+    await setupTarget(opts);
+    const first = readLock(testDir);
+    const other = "11111111-1111-4111-8111-111111111111";
+    writeLock(testDir, {
+      ...(first as NonNullable<typeof first>),
+      appIds: { ...first?.appIds, "apps/other/tailor.config.ts": other },
+    });
+    fs.mkdirSync(path.join(testDir, "apps/other"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, "apps/other/tailor.config.ts"), "");
+
+    await setupTarget({ ...opts, force: true });
+    expect(readLock(testDir)?.appIds).toEqual({
+      "tailor.config.ts": first?.appIds?.["tailor.config.ts"],
+      "apps/other/tailor.config.ts": other,
+    });
+  });
+
+  test("stops before writing anything when the config id disagrees with the lock", async () => {
+    await setupTarget(baseOptions({ workspaceName: "my-app" }));
+    const lockBefore = fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8");
+    await expect(
+      setupTarget(
+        baseOptions({
+          workspaceName: "my-app",
+          force: true,
+          loadConfigId: async () => EXISTING_ID,
+        }),
+      ),
+    ).rejects.toThrow(/Neither can be chosen automatically/);
+    expect(fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8")).toBe(lockBefore);
   });
 
   test("silent regenerate when hash matches", async () => {
@@ -904,6 +979,7 @@ describe("setupTarget (integration)", () => {
         outputDir: testDir,
         gitRunner: () => "origin/main",
         loadConfigName: async () => "cfg-app",
+        loadConfigId: async () => undefined,
       }),
     ).rejects.toThrow(/Invalid tag pattern/);
   });
@@ -919,6 +995,7 @@ describe("setupTarget (integration)", () => {
       workspaceName: "my-app",
       dir: "./apps/backend/",
       loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
     });
     await setupTarget(opts);
     const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
@@ -948,6 +1025,7 @@ describe("setupTarget (integration)", () => {
         outputDir: testDir,
         gitRunner: () => "origin/main",
         loadConfigName: async () => "cfg-app",
+        loadConfigId: async () => undefined,
       }),
     ).resolves.toBeUndefined();
     const lock = readLock(testDir);
@@ -968,6 +1046,7 @@ describe("setupTarget (integration)", () => {
       outputDir: testDir,
       gitRunner: () => "origin/main",
       loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
     });
     const wf = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
     expect(fs.existsSync(wf)).toBe(true);
@@ -991,6 +1070,7 @@ describe("setupTarget (integration)", () => {
       outputDir: testDir,
       gitRunner: () => "origin/main",
       loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
     });
     const content = fs.readFileSync(
       path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
@@ -1011,6 +1091,7 @@ describe("setupTarget (integration)", () => {
         outputDir: testDir,
         gitRunner: () => "origin/main",
         loadConfigName: async () => "my-app",
+        loadConfigId: async () => undefined,
       }),
     ).rejects.toThrow(/Invalid region/);
   });
@@ -1042,6 +1123,7 @@ describe("setupTarget (integration)", () => {
       outputDir: testDir,
       gitRunner: () => "origin/main",
       loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
       loadHasStaticWebsites: async () => true,
     });
     // First run: generate the composite action
@@ -1089,6 +1171,7 @@ describe("setupCoordinate", () => {
     outputDir: testDir,
     gitRunner: () => "origin/main",
     loadConfigName: async () => name,
+    loadConfigId: async () => undefined,
     loadHasStaticWebsites: async () => hasStaticWebsites,
   });
 

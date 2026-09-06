@@ -70,7 +70,8 @@ function findDefineConfigCalls(node: unknown, results: ConfigCallSite[]): void {
   }
 }
 
-function findIdProperty(obj: ObjectExpression): ObjectProperty | null {
+function findIdProperties(obj: ObjectExpression): ObjectProperty[] {
+  const found: ObjectProperty[] = [];
   for (const prop of obj.properties) {
     if (prop.type !== "Property") continue;
     const keyName =
@@ -79,9 +80,13 @@ function findIdProperty(obj: ObjectExpression): ObjectProperty | null {
         : prop.key.type === "Literal"
           ? (prop.key as { value?: unknown }).value
           : null;
-    if (keyName === "id") return prop;
+    if (keyName === "id") found.push(prop);
   }
-  return null;
+  return found;
+}
+
+function findIdProperty(obj: ObjectExpression): ObjectProperty | null {
+  return findIdProperties(obj)[0] ?? null;
 }
 
 /**
@@ -275,4 +280,72 @@ function insertIdProperty(source: string, configObj: ObjectExpression, id: strin
   const innerIndent = `${baseIndent}  `;
   const insertion = `\n${innerIndent}${idComment}\n${innerIndent}${idLiteral},\n${baseIndent}`;
   return source.slice(0, openBracePos) + insertion + source.slice(openBracePos);
+}
+
+function removeIdProperty(
+  source: string,
+  configObj: ObjectExpression,
+  prop: ObjectProperty,
+): string {
+  if (configObj.properties.length === 1) {
+    return source.slice(0, configObj.start + 1) + source.slice(configObj.end - 1);
+  }
+  let end = prop.end;
+  const trailingComma = /^[\t ]*,/.exec(source.slice(end));
+  if (trailingComma) end += trailingComma[0].length;
+
+  const lineStart = source.lastIndexOf("\n", prop.start - 1) + 1;
+  const newlineAfter = source.indexOf("\n", end);
+  const lineEnd = newlineAfter === -1 ? source.length : newlineAfter + 1;
+  const ownLine =
+    /^[\t ]*$/.test(source.slice(lineStart, prop.start)) &&
+    /^[\t \r]*$/.test(source.slice(end, lineEnd).replace(/\n$/, ""));
+  if (ownLine) {
+    let removeStart = lineStart;
+    if (lineStart > 1) {
+      const prevLineStart = source.lastIndexOf("\n", lineStart - 2) + 1;
+      if (source.slice(prevLineStart, lineStart).trim() === idComment) removeStart = prevLineStart;
+    }
+    return source.slice(0, removeStart) + source.slice(lineEnd);
+  }
+  if (trailingComma) {
+    const spacing = /^[\t ]*/.exec(source.slice(end))?.[0].length ?? 0;
+    return source.slice(0, prop.start) + source.slice(end + spacing);
+  }
+  // Last property of a single-line object: the separator to drop is the one before it.
+  const before = source.slice(0, prop.start);
+  const separator = /,?[\t ]*$/.exec(before)?.[0].length ?? 0;
+  return before.slice(0, before.length - separator) + source.slice(end);
+}
+
+/**
+ * Remove the `id` property from the inline `defineConfig({...})` argument once
+ * the id is recorded elsewhere (the inverse of {@link ensureConfigId}). The
+ * injected `// SDK-managed app id` comment goes with it.
+ *
+ * Only edits a shape it can read back unambiguously: exactly one inline
+ * `defineConfig({...})` call whose single `id` property is a string literal
+ * equal to `expectedId`, and whose edited source still parses. Returns false
+ * without touching the file otherwise, so the caller can ask for a manual edit.
+ * @param configPath - Absolute path to the config file
+ * @param expectedId - The id the property must hold to be removed
+ * @returns Whether the file was edited
+ */
+export async function removeConfigId(configPath: string, expectedId: string): Promise<boolean> {
+  const source = await fs.promises.readFile(configPath, "utf-8");
+  const { program } = parseSync(configPath, source);
+  const calls: ConfigCallSite[] = [];
+  findDefineConfigCalls(program, calls);
+  const configObj = calls.length === 1 ? calls[0]?.configObj : null;
+  if (!configObj) return false;
+
+  const idProps = findIdProperties(configObj);
+  const idProp = idProps.length === 1 ? idProps[0] : undefined;
+  if (!idProp || idProp.value.type !== "Literal") return false;
+  if ((idProp.value as { value?: unknown }).value !== expectedId) return false;
+
+  const edited = removeIdProperty(source, configObj, idProp);
+  if (parseSync(configPath, edited).errors.length > 0) return false;
+  await fs.promises.writeFile(configPath, edited, "utf-8");
+  return true;
 }

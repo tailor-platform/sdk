@@ -29,6 +29,7 @@ describe("setupDelete", () => {
     outputDir: testDir,
     gitRunner: () => "origin/main",
     loadConfigName: async () => name,
+    loadConfigId: async () => undefined,
   });
 
   const actionOpts = (name: string, dir = "."): Parameters<typeof setupTarget>[0] => ({
@@ -39,6 +40,7 @@ describe("setupDelete", () => {
     outputDir: testDir,
     gitRunner: () => "origin/main",
     loadConfigName: async () => name,
+    loadConfigId: async () => undefined,
     loadHasStaticWebsites: async () => false,
   });
 
@@ -90,6 +92,30 @@ describe("setupDelete", () => {
     expect(fs.existsSync(wf)).toBe(false);
     expect(prompt.confirm).not.toHaveBeenCalled();
     expect(readLock(testDir)?.targets).toHaveLength(0);
+  });
+
+  test("keeps the appIds section when a target is deleted", async () => {
+    await setupTarget(branchOpts("my-app"));
+    const appIds = readLock(testDir)?.appIds;
+    expect(appIds?.["tailor.config.ts"]).toBeDefined();
+
+    await setupDelete({
+      files: [".github/workflows/tailor-my-app.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    expect(readLock(testDir)).toMatchObject({ targets: [], appIds });
+  });
+
+  test("keeps the appIds section when a coordinator is generated", async () => {
+    writeAppConfig("api", "apps/api");
+    await setupTarget(actionOpts("api", "apps/api"));
+    const appIds = readLock(testDir)?.appIds;
+    expect(appIds).toEqual({ "apps/api/tailor.config.ts": expect.any(String) });
+
+    await setupCoordinate(coordinateOpts());
+    expect(readLock(testDir)?.appIds).toEqual(appIds);
   });
 
   test("prompts for confirmation and aborts when declined", async () => {
