@@ -3,6 +3,7 @@ import { configureImportTracker } from "../lib/sdk-bindings.js";
 import { isInsideFunction } from "../lib/workflow.js";
 import type { Rule } from "eslint";
 
+type AstProgram = Extract<AstNode, { type: "Program" }>;
 type ModuleExports = Map<string, string[]>;
 
 function moduleName(node: AstNode): string | null {
@@ -10,8 +11,6 @@ function moduleName(node: AstNode): string | null {
   if (node.type === "Literal" && typeof node.value === "string") return node.value;
   return null;
 }
-
-type AstProgram = Extract<AstNode, { type: "Program" }>;
 
 function collectExports(program: AstProgram): ModuleExports {
   const exports: ModuleExports = new Map();
@@ -38,6 +37,7 @@ function collectExports(program: AstProgram): ModuleExports {
     }
     if (statement.source) continue;
     for (const specifier of statement.specifiers) {
+      if ("exportKind" in specifier && specifier.exportKind === "type") continue;
       const local = moduleName(specifier.local);
       const exported = moduleName(specifier.exported);
       if (local !== null && exported !== null) add(local, exported);
@@ -75,7 +75,7 @@ const rule = {
       workflowNotDefault:
         "createWorkflow's result must be the module's default export (export default createWorkflow(...)); a workflow that is not default-exported is never deployed.",
       workflowNamedExport:
-        "createWorkflow's result must not be a named export; the build treats named exports as workflow jobs and fails to load the file.",
+        "createWorkflow's result must not be a named export; make it the module's default export instead. The build treats named exports as workflow jobs and fails to load the file.",
       jobNotExported:
         "createWorkflowJob's result must be a named export (export const job = createWorkflowJob(...)); the build only collects jobs from named exports.",
       jobDefaultExport:
@@ -99,9 +99,10 @@ const rule = {
           const names = exportedNames(exports, call);
           const isDefault = names.includes("default");
           if (name === "createWorkflow") {
-            if (!isDefault) context.report({ node: call, messageId: "workflowNotDefault" });
             if (names.some((exported) => exported !== "default")) {
               context.report({ node: call, messageId: "workflowNamedExport" });
+            } else if (!isDefault) {
+              context.report({ node: call, messageId: "workflowNotDefault" });
             }
             continue;
           }

@@ -51,6 +51,16 @@ describe("valid-workflow-exports", () => {
       JOB_NOT_EXPORTED,
     );
     expectViolation(
+      `${IMPORT}const main = createWorkflowJob({ name: "main", body: () => 1 });\nexport type { main };\nexport default createWorkflow({ name: "wf", mainJob: main });`,
+      RULE,
+      JOB_NOT_EXPORTED,
+    );
+    expectViolation(
+      `${IMPORT}const main = createWorkflowJob({ name: "main", body: () => 1 });\nexport { type main };\nexport default createWorkflow({ name: "wf", mainJob: main });`,
+      RULE,
+      JOB_NOT_EXPORTED,
+    );
+    expectViolation(
       `${IMPORT}export default createWorkflowJob({ name: "main", body: () => 1 });`,
       RULE,
       JOB_DEFAULT,
