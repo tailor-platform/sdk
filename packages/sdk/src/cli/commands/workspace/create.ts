@@ -22,7 +22,7 @@ import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { workspaceNameDescription, workspaceNameSchema } from "#/cli/shared/workspace-name";
+import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
 import {
   workspaceDisplayName,
@@ -134,7 +134,7 @@ export const createCommand = defineAppCommand({
     // fails --name during option parsing, before any Platform request.
     name: arg(workspaceNameSchema, {
       alias: "n",
-      description: workspaceNameDescription,
+      description: "Workspace name",
     }),
     region: arg(z.string(), {
       alias: "r",
