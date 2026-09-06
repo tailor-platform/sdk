@@ -89,6 +89,18 @@ function findIdProperty(obj: ObjectExpression): ObjectProperty | null {
   return findIdProperties(obj)[0] ?? null;
 }
 
+function readsIdMember(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const n = node as ASTNode;
+  if (n.type === "MemberExpression" && n.computed === false) {
+    const property = n.property as ASTNode | undefined;
+    if (property?.type === "Identifier" && property.name === "id") return true;
+  }
+  return Object.values(n).some((child) =>
+    Array.isArray(child) ? child.some(readsIdMember) : readsIdMember(child),
+  );
+}
+
 /**
  * Ensure `tailor.config.ts` has an `id` property on the `defineConfig({...})`
  * argument. Generates a UUID when missing and writes it back to the file.
@@ -325,9 +337,10 @@ function removeIdProperty(
  *
  * Only edits a shape it can read back unambiguously: exactly one inline
  * `defineConfig({...})` call whose single `id` property is a string literal
- * equal to `expectedId` (UUIDs compare case-insensitively), and whose edited
- * source still parses. Returns false without touching the file otherwise, so
- * the caller can ask for a manual edit.
+ * equal to `expectedId` (UUIDs compare case-insensitively), no `.id` read
+ * anywhere in the module that could observe the removal, and an edited source
+ * that still parses. Returns false without touching the file otherwise, so the
+ * caller can ask for a manual edit.
  * @param configPath - Absolute path to the config file
  * @param expectedId - The id the property must hold to be removed
  * @returns Whether the file was edited
@@ -338,7 +351,7 @@ export async function removeConfigId(configPath: string, expectedId: string): Pr
   const calls: ConfigCallSite[] = [];
   findDefineConfigCalls(program, calls);
   const configObj = calls.length === 1 ? calls[0]?.configObj : null;
-  if (!configObj) return false;
+  if (!configObj || readsIdMember(program)) return false;
 
   const idProps = findIdProperties(configObj);
   const idProp = idProps.length === 1 ? idProps[0] : undefined;

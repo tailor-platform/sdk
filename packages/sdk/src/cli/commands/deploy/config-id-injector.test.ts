@@ -356,6 +356,10 @@ export default defineConfig({
       source: `export { default } from "./base.config";\n`,
     },
     {
+      name: "the module reads the id back",
+      source: `const app = defineConfig({ id: "${existingId}", name: "my-app" });\nexport const label = app.id;\nexport default app;\n`,
+    },
+    {
       name: "defineConfig is called more than once",
       source: `defineConfig({ id: "${existingId}" });\nexport default defineConfig({ id: "${existingId}" });\n`,
     },
