@@ -30,14 +30,11 @@ const ageUnitToMs = {
   d: 24 * 60 * 60 * 1000,
 } as const;
 
-// CI often exports an unset secret as "", which must mean "no scope", not an invalid id.
-// A fresh schema per option, for the same reason as `limitArg`.
+// "" (an unset CI secret) means no scope, not an invalid id. Fresh per option, like `limitArg`.
 const scopeIdArg = () =>
   z.preprocess((value) => (value === "" ? undefined : value), z.uuid().optional());
 
-// Rejects `--limit=` instead of coercing "" to 0, which would silently remove the cap.
-// Single-use on purpose: politty keys option metadata by schema instance, and pipe
-// schemas are not cloned per option, so sharing one across options collides.
+// Rejects `--limit=` instead of coercing "" to 0. Single-use: politty does not clone pipe schemas per option.
 const limitArg = z.preprocess(
   (value) => (typeof value === "string" && value.trim() === "" ? Number.NaN : value),
   z.coerce.number().int().nonnegative(),
@@ -159,8 +156,7 @@ async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> 
 
 function compileNameRegex(pattern: string): RegExp {
   try {
-    // Compiling the bare pattern first rejects unbalanced parentheses, which
-    // would otherwise break out of the anchoring group below.
+    // The bare compile rejects unbalanced parentheses that would escape the anchoring group.
     new RegExp(pattern);
     return new RegExp(`^(?:${pattern})$`);
   } catch (error) {
