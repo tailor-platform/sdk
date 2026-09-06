@@ -638,6 +638,79 @@ describe("snapshot", () => {
       ]);
     });
 
+    test("derives nested member removal warnings in a legacy diff.json", () => {
+      const legacyDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false } },
+            },
+            after: { type: "nested", required: false, fields: {} },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "legacy_nested_removal_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.hasWarnings).toBe(true);
+      expect(loaded.warnings).toEqual([
+        {
+          tableName: "User",
+          fieldName: "address.zip",
+          reason:
+            "Nested member removed (existing values will no longer be accessible through the schema)",
+        },
+      ]);
+    });
+
+    test("does not derive nested warnings from a legacy field_modified type change", () => {
+      const legacyDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: {
+              type: "nested",
+              required: false,
+              fields: { zip: { type: "string", required: false } },
+            },
+            after: { type: "string", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { tableName: "User", fieldName: "address", reason: "Field type changed" },
+        ],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "legacy_type_change_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.hasWarnings).toBe(false);
+      expect(loaded.warnings).toEqual([]);
+    });
+
     test("keeps a recorded empty warnings array authoritative over changes", () => {
       const diff = {
         version: SCHEMA_SNAPSHOT_VERSION,

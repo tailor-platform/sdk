@@ -5,6 +5,7 @@
  * The actual diff calculation is performed by snapshot.ts.
  */
 
+import { collectNestedMemberChanges, type NestedMemberChange } from "./nested-members";
 import type {
   SnapshotFieldConfig,
   SnapshotGqlPermission,
@@ -345,6 +346,7 @@ export interface BreakingChangeInfo {
  */
 export interface WarningChangeInfo {
   tableName: string;
+  /** Field name, or the dotted path of a member inside a nested field (e.g. `address.zip`). */
   fieldName?: string;
   reason: string;
 }
@@ -522,8 +524,21 @@ function formatFieldModification(before: SnapshotFieldConfig, after: SnapshotFie
     );
   }
 
-  return changes.join(", ");
+  const members = collectNestedMemberChanges(before, after);
+  if (members.length > 0) {
+    changes.push(
+      `members: ${members.map((m) => `${NESTED_MEMBER_CHANGE_MARKERS[m.kind]}${m.path.join(".")}`).join(", ")}`,
+    );
+  }
+
+  return changes.length > 0 ? changes.join(", ") : "configuration changed";
 }
+
+const NESTED_MEMBER_CHANGE_MARKERS: Record<NestedMemberChange["kind"], string> = {
+  removed: "-",
+  added: "+",
+  modified: "~",
+};
 
 /**
  * Format breaking changes for display

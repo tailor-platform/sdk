@@ -9,7 +9,8 @@
  *   (the physical drop happens in Post-phase).
  * - `field_added` with `required: true`: relax to `required: false`.
  * - `field_modified` optional→required, unique constraint added, enum
- *   value removed: keep the looser side until Post-phase.
+ *   value removed: keep the looser side until Post-phase. Members removed
+ *   from a nested field are re-inserted so migrate.ts can read them.
  * - `field_renamed`: keep the old field (readable by migrate.ts) and relax
  *   the new field's required/unique constraints until Post-phase.
  * - `field_type_modified`: keep the complete previous field config until
@@ -31,15 +32,21 @@
  * to fix up data.
  */
 
+import { assertDefined } from "#/utils/assert";
+import { collectNestedMemberChanges } from "./nested-members";
 import { isBreakingIndexChange } from "./snapshot";
-import { convertFieldConfigToProto, convertIndexToProto } from "./snapshot-manifest";
+import {
+  convertFieldConfigToProto,
+  convertIndexToProto,
+  processNestedFieldsFromSnapshot,
+} from "./snapshot-manifest";
 import type {
   DiffChange,
   FieldDiffChange,
   IndexDiffChange,
   TableScriptsModifiedChange,
 } from "./diff-calculator";
-import type { TailorDBSnapshotType } from "./snapshot-types";
+import type { SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
 import type { PendingMigration } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -161,7 +168,8 @@ export function buildPreMigrationChangesMap(
  *
  * - Removed fields are re-inserted using their pre-migration config.
  * - Newly added required fields are relaxed to optional.
- * - Modified fields keep the looser side of unique/required/enum.
+ * - Modified fields keep the looser side of unique/required/enum, and
+ *   members removed from a nested field are re-inserted.
  *
  * @param {Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>} fields - Field map to adjust (mutated in place)
  * @param {Map<string, FieldDiffChange>} typeChanges - Changes for this table, keyed by fieldName
@@ -209,6 +217,8 @@ export function applyPreMigrationFieldAdjustments(
 
     const { before, after } = change;
 
+    restoreRemovedNestedMembers(field, before, after);
+
     if (!before.required && after.required) {
       field.required = false;
     }
@@ -237,6 +247,42 @@ export function applyPreMigrationFieldAdjustments(
         description,
       }));
     }
+  }
+}
+
+type ProtoFieldConfig = MessageInitShape<typeof TailorDBType_FieldConfigSchema>;
+
+/**
+ * Re-insert members removed from a nested field so migrate.ts can still read
+ * them; the Post-phase drops them.
+ * @param {ProtoFieldConfig} field - Pre-phase proto field to adjust (mutated in place)
+ * @param {SnapshotFieldConfig} before - Field configuration before the change
+ * @param {SnapshotFieldConfig} after - Field configuration after the change
+ */
+function restoreRemovedNestedMembers(
+  field: ProtoFieldConfig,
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): void {
+  for (const change of collectNestedMemberChanges(before, after)) {
+    if (change.kind !== "removed") continue;
+    const memberPath = change.path.join(".");
+    const parentMembers = assertDefined(
+      change.path
+        .slice(0, -1)
+        .reduce<ProtoFieldConfig | undefined>(
+          (current, segment) => current?.fields?.[segment],
+          field,
+        )?.fields,
+      `parent of removed nested member "${memberPath}" missing from the Pre-phase field`,
+    );
+    const memberName = assertDefined(change.path.at(-1), "removed nested member path is empty");
+    const restored = processNestedFieldsFromSnapshot({ [memberName]: change.before });
+    defineRecordEntry(
+      parentMembers,
+      memberName,
+      assertDefined(restored[memberName], `restored nested member "${memberPath}" missing`),
+    );
   }
 }
 
