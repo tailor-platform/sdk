@@ -126,7 +126,7 @@ export interface AppConfig<
    *
    * Keys must match `^[a-z][a-z0-9_-]{0,62}$` and must not start with `sdk-`.
    * Values must be empty or match `^[a-z][a-z0-9_-]{0,62}$`, so a version like
-   * `1.2.3` is written as `v1-2-3`.
+   * `1.2.3` is written as `v1-2-3`. At most 17 entries can be set.
    *
    * Entries are only added or overwritten: an entry removed from this config
    * keeps its last deployed value on the platform.

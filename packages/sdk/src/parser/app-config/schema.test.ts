@@ -158,5 +158,20 @@ describe("AppConfigSchema", () => {
     test("rejects non-string values", () => {
       expect(parseMetadata({ count: 1 }).success).toBe(false);
     });
+
+    test("caps the entry count so the SDK's own labels still fit the platform limit", () => {
+      const entries = (count: number) =>
+        Object.fromEntries(Array.from({ length: count }, (_, i) => [`key-${i}`, "v"]));
+
+      expect(parseMetadata(entries(17)).success).toBe(true);
+
+      const result = parseMetadata(entries(18));
+      expect(result.success).toBe(false);
+      if (result.success) {
+        throw new Error("Expected AppConfigSchema parsing to fail");
+      }
+      expect(result.error.issues[0]?.path).toEqual(["metadata"]);
+      expect(result.error.issues[0]?.message).toContain("17");
+    });
   });
 });
