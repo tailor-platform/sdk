@@ -4,6 +4,7 @@ import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
+import { pruneCommand } from "./prune";
 import { restoreCommand } from "./restore";
 import { userCommand } from "./user";
 
@@ -16,6 +17,7 @@ export const workspaceCommand = defineCommand({
     delete: deleteCommand,
     get: getCommand,
     list: listCommand,
+    prune: pruneCommand,
     restore: restoreCommand,
     user: userCommand,
   },
