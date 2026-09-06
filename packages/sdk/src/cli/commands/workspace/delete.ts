@@ -4,11 +4,12 @@ import { z } from "zod";
 import { confirmationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { loadAccessToken } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import { removeProfilesForWorkspaces } from "./profile-cleanup";
 import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
 
 // strip unknown keys
@@ -99,17 +100,7 @@ export const deleteCommand = defineAppCommand({
       workspaceId,
     });
 
-    // Remove profiles associated with the deleted workspace
-    const pfConfig = await readPlatformConfig();
-    const profilesToDelete = Object.entries(pfConfig.profiles).filter(
-      ([, profile]) => profile?.workspace_id === workspaceId,
-    );
-    if (profilesToDelete.length > 0) {
-      for (const [profileName] of profilesToDelete) {
-        delete pfConfig.profiles[profileName];
-      }
-      writePlatformConfig(pfConfig);
-    }
+    const profilesToDelete = await removeProfilesForWorkspaces(new Set([workspaceId]));
 
     // Show success message
     if (profilesToDelete.length > 0) {

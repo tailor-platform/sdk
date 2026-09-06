@@ -9,6 +9,7 @@ import {
   loadEnvFiles,
   durationArg,
   parseDuration,
+  nonNegativeIntArg,
   positiveIntArg,
   resolveMachineUserInputSource,
   toPageDirection,
@@ -167,6 +168,24 @@ describe("parseDuration", () => {
     ["2m", 120000],
   ])("parses %s to %d ms", (input, expected) => {
     expect(parseDuration(input)).toBe(expected);
+  });
+});
+
+describe("nonNegativeIntArg", () => {
+  test("parses zero and positive integers", () => {
+    expect(nonNegativeIntArg.parse("0")).toBe(0);
+    expect(nonNegativeIntArg.parse("25")).toBe(25);
+    expect(nonNegativeIntArg.parse(5)).toBe(5);
+  });
+
+  test("rejects an empty string instead of coercing it to zero", () => {
+    expect(() => nonNegativeIntArg.parse("")).toThrow(/Invalid input/);
+    expect(() => nonNegativeIntArg.parse("  ")).toThrow(/Invalid input/);
+  });
+
+  test("rejects negative numbers and non-integers", () => {
+    expect(() => nonNegativeIntArg.parse("-1")).toThrow(/Too small/);
+    expect(() => nonNegativeIntArg.parse("1.5")).toThrow(/Invalid input/);
   });
 });
 

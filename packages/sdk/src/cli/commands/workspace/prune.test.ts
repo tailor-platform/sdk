@@ -2,6 +2,12 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
+import {
+  loadAccessToken,
+  loadPlatformClientConfig,
+  readPlatformConfig,
+  writePlatformConfig,
+} from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -17,6 +23,8 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadPlatformClientConfig: vi.fn().mockResolvedValue(undefined),
+  readPlatformConfig: vi.fn().mockResolvedValue({ profiles: {} }),
+  writePlatformConfig: vi.fn(),
 }));
 
 const loggerState = vi.hoisted(() => ({ jsonMode: false }));
@@ -301,6 +309,21 @@ describe("workspace prune command", () => {
     expect(client.deleteWorkspace.mock.calls).toEqual([[{ workspaceId: "id-my-app-pr-42" }]]);
   });
 
+  test("rejects a --name-regex whose parentheses would escape the whole-name anchor", async () => {
+    const client = stubClient([workspace("production"), workspace("temp")]);
+
+    const result = await runCommand(pruneCommand, [
+      "--name-regex",
+      "prod)|(?:temp",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expectFailure(result, "--name-regex");
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
   test("rejects an invalid --name-regex", async () => {
     const client = stubClient([]);
 
@@ -415,6 +438,52 @@ describe("workspace prune command", () => {
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
   });
 
+  test("rejects an empty --limit instead of treating it as no cap", async () => {
+    const client = stubClient([workspace("e2e-ws-1")]);
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--limit=",
+      "--yes",
+    ]);
+
+    expectFailure(result, "limit");
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("lists every candidate in dry-run mode even beyond --limit", async () => {
+    const client = stubClient([
+      workspace("e2e-ws-1"),
+      workspace("e2e-ws-2"),
+      workspace("e2e-ws-3"),
+    ]);
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--limit",
+      "2",
+      "--dry-run",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(logger.out).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ name: "e2e-ws-1" }),
+        expect.objectContaining({ name: "e2e-ws-2" }),
+        expect.objectContaining({ name: "e2e-ws-3" }),
+      ],
+      expect.anything(),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("--limit is 2"));
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
   test("lifts the cap with --limit 0", async () => {
     const workspaces = Array.from({ length: 25 }, (_, i) => workspace(`e2e-ws-${i}`));
     const client = stubClient(workspaces);
@@ -466,6 +535,75 @@ describe("workspace prune command", () => {
     expectFailure(result, "Failed to delete 1 workspace(s)");
     expect(client.deleteWorkspace).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("e2e-ws-1"));
+  });
+
+  test("fetches every page of the workspace list", async () => {
+    const client = stubClient([]);
+    client.listWorkspaces
+      .mockResolvedValueOnce({ workspaces: [workspace("e2e-ws-1")], nextPageToken: "page-2" })
+      .mockResolvedValueOnce({ workspaces: [workspace("e2e-ws-2")], nextPageToken: "" });
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.listWorkspaces).toHaveBeenCalledTimes(2);
+    expect(client.listWorkspaces).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pageToken: "page-2" }),
+    );
+    expect(client.deleteWorkspace.mock.calls).toEqual([
+      [{ workspaceId: "id-e2e-ws-1" }],
+      [{ workspaceId: "id-e2e-ws-2" }],
+    ]);
+  });
+
+  test("forwards --profile to authentication and the read-only guard", async () => {
+    stubClient([]);
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--profile",
+      "staging",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(assertWritable).toHaveBeenCalledWith({ profile: "staging" });
+    expect(loadAccessToken).toHaveBeenCalledWith({ profile: "staging" });
+    expect(loadPlatformClientConfig).toHaveBeenCalledWith({ profile: "staging" });
+  });
+
+  test("removes local profiles that pointed at the deleted workspaces", async () => {
+    const client = stubClient([workspace("e2e-ws-1"), workspace("e2e-ws-2")]);
+    vi.mocked(readPlatformConfig).mockResolvedValue({
+      profiles: {
+        stale: { workspace_id: "id-e2e-ws-1" },
+        live: { workspace_id: "id-other" },
+      },
+    } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace).toHaveBeenCalledTimes(2);
+    expect(writePlatformConfig).toHaveBeenCalledWith({
+      profiles: { live: { workspace_id: "id-other" } },
+    });
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("1 local profile(s)"));
   });
 
   test("reads the organization scope from the environment", async () => {

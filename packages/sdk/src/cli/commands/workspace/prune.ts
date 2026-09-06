@@ -11,6 +11,7 @@ import { profileNameSchema } from "#/cli/shared/profile-name";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
+import { removeProfilesForWorkspaces } from "./profile-cleanup";
 import {
   workspaceDisplayName,
   workspaceInfosWithFolderNames,
@@ -144,6 +145,9 @@ async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> 
 
 function compileNameRegex(pattern: string): RegExp {
   try {
+    // Compiling the bare pattern first rejects unbalanced parentheses, which
+    // would otherwise break out of the anchoring group below.
+    new RegExp(pattern);
     return new RegExp(`^(?:${pattern})$`);
   } catch (error) {
     throw CLIError({
@@ -182,7 +186,7 @@ export const pruneCommand = defineAppCommand({
   notes: ml`
     Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows, and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
@@ -281,7 +285,8 @@ export const pruneCommand = defineAppCommand({
       if (logger.jsonMode) logger.out(result);
       return;
     }
-    if (args.limit > 0 && selection.candidates.length > args.limit) {
+    const overLimit = args.limit > 0 && selection.candidates.length > args.limit;
+    if (overLimit && !args["dry-run"]) {
       throw CLIError({
         code: "PRUNE_LIMIT_EXCEEDED",
         message: `${selection.candidates.length} workspaces matched, but --limit is ${args.limit}. Nothing was deleted.`,
@@ -305,6 +310,11 @@ export const pruneCommand = defineAppCommand({
     }
 
     if (args["dry-run"]) {
+      if (overLimit) {
+        logger.warn(
+          `${result.candidates.length} workspaces matched, but --limit is ${args.limit}: a real run would abort without deleting anything.`,
+        );
+      }
       logger.info(`Dry run: ${result.candidates.length} workspace(s) would be deleted.`);
       if (logger.jsonMode) logger.out(result);
       return;
@@ -333,6 +343,15 @@ export const pruneCommand = defineAppCommand({
         result.failed.push({ workspace, error: message });
         logger.error(`Failed to delete ${displayName} (${workspace.id}): ${message}`);
       }
+    }
+
+    const removedProfiles = await removeProfilesForWorkspaces(
+      new Set(result.deleted.map((workspace) => workspace.id)),
+    );
+    if (removedProfiles.length > 0) {
+      logger.info(
+        `Removed ${removedProfiles.length} local profile(s) that pointed at deleted workspaces: ${removedProfiles.join(", ")}.`,
+      );
     }
 
     if (logger.jsonMode) logger.out(result);

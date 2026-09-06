@@ -202,7 +202,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
 
-Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows, and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike `workspace delete`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with `workspace restore` for a limited time.
+Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike `workspace delete`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with `workspace restore` for a limited time.
 
 Only workspaces visible to the current login (or the machine user in CI) are considered.
 
