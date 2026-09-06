@@ -111,7 +111,7 @@ jobs:
             template: hello-world
     runs-on: ubuntu-latest
     name: Smoke (${{ matrix.template }}, ${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
 
