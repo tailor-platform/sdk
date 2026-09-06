@@ -1,6 +1,10 @@
 import noApiPrefixInPathPattern from "./rules/no-api-prefix-in-path-pattern.js";
+import noDirectExecJobFunction from "./rules/no-direct-exec-job-function.js";
 import noExecuteScriptArgStringify from "./rules/no-execute-script-arg-stringify.js";
+import noJobStartOutsideBody from "./rules/no-job-start-outside-body.js";
 import noUnconditionalPermit from "./rules/no-unconditional-permit.js";
+import validWorkflowExports from "./rules/valid-workflow-exports.js";
+import validWorkflowJobDefinition from "./rules/valid-workflow-job-definition.js";
 import type { ESLint, Linter, Rule } from "eslint";
 
 function defineRules<const Rules extends Record<string, Rule.RuleModule>>(
@@ -11,8 +15,12 @@ function defineRules<const Rules extends Record<string, Rule.RuleModule>>(
 
 const rules = defineRules({
   "no-api-prefix-in-path-pattern": noApiPrefixInPathPattern,
+  "no-direct-exec-job-function": noDirectExecJobFunction,
   "no-execute-script-arg-stringify": noExecuteScriptArgStringify,
+  "no-job-start-outside-body": noJobStartOutsideBody,
   "no-unconditional-permit": noUnconditionalPermit,
+  "valid-workflow-exports": validWorkflowExports,
+  "valid-workflow-job-definition": validWorkflowJobDefinition,
 });
 
 export type TailorSdkRuleName = keyof typeof rules;

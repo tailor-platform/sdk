@@ -34,7 +34,7 @@ export type AstArrayExpression = Extract<EstreeNode, { type: "ArrayExpression" }
 export type AstCallExpression = Extract<EstreeNode, { type: "CallExpression" }>;
 export type AstIdentifier = Extract<EstreeNode, { type: "Identifier" }>;
 export type AstImportDeclaration = Extract<EstreeNode, { type: "ImportDeclaration" }>;
-type AstProperty = Extract<EstreeNode, { type: "Property" }>;
+export type AstProperty = Extract<EstreeNode, { type: "Property" }>;
 
 const EXPRESSION_WRAPPERS: ReadonlySet<string> = new Set(EXPRESSION_WRAPPER_TYPES);
 
@@ -49,6 +49,10 @@ export function unwrapExpression(node: AstNode | null | undefined): AstNode | nu
     current = (current as ExpressionWrapperNode).expression;
   }
   return current;
+}
+
+export function parentOf(node: AstNode | null | undefined): AstNode | null {
+  return (node as { parent?: AstNode } | null | undefined)?.parent ?? null;
 }
 
 export function memberName(node: AstNode | null | undefined): string | null {

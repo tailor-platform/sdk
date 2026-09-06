@@ -11,6 +11,10 @@ import type { Rule, Scope, SourceCode } from "eslint";
 
 const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
 const SDK_CLI_MODULE = "@tailor-platform/sdk/cli";
+const SDK_RUNTIME_MODULES = [
+  "@tailor-platform/sdk/runtime",
+  "@tailor-platform/sdk/runtime/workflow",
+];
 
 interface ImportBinding {
   binding: AstIdentifier;
@@ -141,4 +145,8 @@ export function configureImportTracker(context: Rule.RuleContext): ImportTracker
 
 export function cliImportTracker(context: Rule.RuleContext): ImportTracker {
   return createImportTracker(context, new Set([SDK_CLI_MODULE]));
+}
+
+export function runtimeImportTracker(context: Rule.RuleContext): ImportTracker {
+  return createImportTracker(context, new Set(SDK_RUNTIME_MODULES));
 }

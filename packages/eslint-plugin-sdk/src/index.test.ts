@@ -11,14 +11,22 @@ describe("plugin", () => {
   test("exports every rule in the recommended ESLint flat config", () => {
     expect(Object.keys(plugin.rules).toSorted()).toEqual([
       "no-api-prefix-in-path-pattern",
+      "no-direct-exec-job-function",
       "no-execute-script-arg-stringify",
+      "no-job-start-outside-body",
       "no-unconditional-permit",
+      "valid-workflow-exports",
+      "valid-workflow-job-definition",
     ]);
     expect(plugin.configs.recommended.plugins?.["tailor-sdk"]).toBe(plugin);
     expect(plugin.configs.recommended.rules).toEqual({
       "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+      "tailor-sdk/no-direct-exec-job-function": "warn",
       "tailor-sdk/no-execute-script-arg-stringify": "warn",
+      "tailor-sdk/no-job-start-outside-body": "warn",
       "tailor-sdk/no-unconditional-permit": "warn",
+      "tailor-sdk/valid-workflow-exports": "warn",
+      "tailor-sdk/valid-workflow-job-definition": "warn",
     });
   });
 
