@@ -19,12 +19,14 @@ vi.mock("#/cli/shared/context", () => ({
   loadPlatformClientConfig: vi.fn().mockResolvedValue(undefined),
 }));
 
+const loggerState = vi.hoisted(() => ({ jsonMode: false }));
+
 vi.mock("#/cli/shared/logger", async (importOriginal) => {
   return {
     ...(await importOriginal()),
     logger: {
       get jsonMode() {
-        return false;
+        return loggerState.jsonMode;
       },
       info: vi.fn(),
       success: vi.fn(),
@@ -222,6 +224,7 @@ describe("selectPruneCandidates", () => {
 describe("workspace prune command", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    loggerState.jsonMode = false;
     vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
     vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
     vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
@@ -482,6 +485,33 @@ describe("workspace prune command", () => {
 
     expect(result.success).toBe(true);
     expect(client.deleteWorkspace.mock.calls).toEqual([[{ workspaceId: "id-e2e-ws-a" }]]);
+  });
+
+  test("emits a single JSON result instead of the table in JSON mode", async () => {
+    loggerState.jsonMode = true;
+    const client = stubClient([
+      workspace("e2e-ws-1"),
+      workspace("e2e-ws-protected", { deleteProtection: true }),
+    ]);
+
+    const result = await runCommand(pruneCommand, [
+      "--name-prefix",
+      "e2e-ws-",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace).toHaveBeenCalledTimes(1);
+    expect(logger.out).toHaveBeenCalledTimes(1);
+    expect(logger.out).toHaveBeenCalledWith({
+      dryRun: false,
+      candidates: [expect.objectContaining({ id: "id-e2e-ws-1", name: "e2e-ws-1" })],
+      deleted: [expect.objectContaining({ id: "id-e2e-ws-1" })],
+      failed: [],
+      skipped: { excluded: [], deleteProtection: ["e2e-ws-protected"], unknownAge: [] },
+    });
   });
 
   test("reports when nothing matched", async () => {
