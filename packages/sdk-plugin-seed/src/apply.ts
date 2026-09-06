@@ -19,14 +19,10 @@ import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
 import { z } from "zod";
 import { selectEntities } from "./entities";
+import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { topologicalSort } from "./topo-sort";
-import type {
-  OperatorClient,
-  ScriptExecutionResult,
-  SeedData,
-  SeedIdpUserContext,
-} from "@tailor-platform/sdk/cli";
+import type { OperatorClient, SeedData, SeedIdpUserContext } from "@tailor-platform/sdk/cli";
 
 interface SeedExecutionContext {
   operatorClient: OperatorClient;
@@ -59,60 +55,6 @@ function promptConfirmation(question: string): Promise<boolean> {
       resolve(answer.toLowerCase().trim() === "y");
     });
   });
-}
-
-function logExecutionLogs(logs: string | undefined, indent: string): void {
-  if (!logs) return;
-  for (const line of logs.split("\n").filter(Boolean)) {
-    logger.log(styles.dim(`${indent}${line}`));
-  }
-}
-
-function parseExecutionResult(
-  result: ScriptExecutionResult,
-  indent: string,
-): {
-  success: boolean;
-  parsed: Record<string, unknown>;
-  errors: string[];
-  outcomeUnknown: boolean;
-} {
-  logExecutionLogs(result.logs, indent);
-
-  if (!result.success) {
-    return {
-      success: false,
-      parsed: {},
-      errors: [result.error ?? "Script execution failed"],
-      outcomeUnknown: true,
-    };
-  }
-
-  let parsed: Record<string, unknown>;
-  try {
-    const value: unknown = JSON.parse(result.result || "{}");
-    parsed = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      parsed: {},
-      errors: [`Failed to parse result: ${message}`],
-      outcomeUnknown: true,
-    };
-  }
-
-  if (!parsed.success) {
-    const errors = Array.isArray(parsed.errors) ? (parsed.errors as string[]) : [];
-    return {
-      success: false,
-      parsed,
-      errors: errors.length > 0 ? errors : ["Script reported failure"],
-      outcomeUnknown: false,
-    };
-  }
-
-  return { success: true, parsed, errors: [], outcomeUnknown: false };
 }
 
 interface SeedResult {

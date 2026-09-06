@@ -1,8 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
+import {
+  assertSeedDataDirectory,
+  existingSeedDataFiles,
+  loadSeedData,
+  writeSeedData,
+} from "./jsonl";
 
 let tempDir: string | undefined;
 
@@ -109,5 +114,55 @@ describe("loadSeedData", () => {
         requiredFieldsByType: { Customer: ["name", "email"] },
       }),
     ).toThrow(/Customer\.jsonl:2: field `email` is required with --upsert/);
+  });
+});
+
+describe("writeSeedData", () => {
+  test("writes one JSON object per line, ending with a newline", () => {
+    const dir = makeDataDir({});
+
+    const written = writeSeedData(dir, "User", [
+      { id: "u1", name: "Ada" },
+      { id: "u2", name: "Bob" },
+    ]);
+
+    expect(written).toBe(path.join(dir, "User.jsonl"));
+    expect(readFileSync(written, "utf-8")).toBe(
+      '{"id":"u1","name":"Ada"}\n{"id":"u2","name":"Bob"}\n',
+    );
+  });
+
+  test("round-trips through loadSeedData", () => {
+    const dir = makeDataDir({});
+    const rows = [{ id: "u1", name: "Ada", tags: ["a", "b"] }];
+
+    writeSeedData(dir, "User", rows);
+
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: rows });
+  });
+
+  test("writes an empty file for an entity with no rows", () => {
+    const dir = makeDataDir({});
+
+    writeSeedData(dir, "User", []);
+
+    expect(readFileSync(path.join(dir, "User.jsonl"), "utf-8")).toBe("");
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [] });
+  });
+
+  test("creates the output directory when it does not exist", () => {
+    const dir = path.join(makeDataDir({}), "nested", "data");
+
+    writeSeedData(dir, "User", [{ id: "u1" }]);
+
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: "u1" }] });
+  });
+});
+
+describe("existingSeedDataFiles", () => {
+  test("returns only the entities whose file exists", () => {
+    const dir = makeDataDir({ "User.jsonl": "" });
+
+    expect(existingSeedDataFiles(dir, ["User", "Order"])).toEqual(["User"]);
   });
 });

@@ -21,6 +21,14 @@ export type SeedBundleResult = {
   typesIncluded: string[];
 };
 
+/**
+ * Result of bundling a seed dump script.
+ */
+export type SeedDumpBundleResult = {
+  namespace: string;
+  bundledCode: string;
+};
+
 const BATCH_SIZE = 100;
 
 /**
@@ -148,6 +156,71 @@ function generateSeedScriptContent(namespace: string): string {
 }
 
 /**
+ * Generate seed dump script content for server-side execution
+ * @param namespace - TailorDB namespace
+ * @returns Generated seed dump script content
+ */
+function generateSeedDumpScriptContent(namespace: string): string {
+  return ml /* ts */ `
+    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+
+    type DumpInput = {
+      table: string;
+      limit: number;
+      after?: string | null;
+    };
+
+    type DumpResult = {
+      success: boolean;
+      rows: Record<string, unknown>[];
+      cursor: string | null;
+      errors: string[];
+    };
+
+    function getDB(namespace: string) {
+      const client = new tailordb.Client({ namespace });
+      return new Kysely<Record<string, Record<string, unknown>>>({
+        dialect: new TailordbDialect(client),
+      });
+    }
+
+    export async function main(input: DumpInput): Promise<DumpResult> {
+      const db = getDB("${namespace}");
+
+      try {
+        let query = db.selectFrom(input.table).selectAll().orderBy("id", "asc").limit(input.limit);
+        if (input.after !== null && input.after !== undefined) {
+          query = query.where("id", ">", input.after);
+        }
+        const rows = (await query.execute()) as Record<string, unknown>[];
+
+        // A full page may have more rows behind it; page again from the last id.
+        const lastRow = rows.length === input.limit ? rows[rows.length - 1] : undefined;
+        if (lastRow && typeof lastRow.id !== "string") {
+          // Paging past this row is impossible, and reporting no cursor would
+          // silently drop every row behind it.
+          // Left unprefixed with the table name: the caller (dump.ts) already
+          // prefixes every error it throws with the table.
+          const message = "cannot page rows whose id is not a string";
+          return { success: false, rows: [], cursor: null, errors: [message] };
+        }
+        const lastId = lastRow ? (lastRow.id as string) : null;
+
+        console.log(\`[${namespace}] \${input.table}: \${rows.length} rows read\`);
+
+        return { success: true, rows, cursor: lastId, errors: [] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(\`[${namespace}] \${input.table}: failed - \${message}\`);
+        // Left unprefixed with the table name: the caller (dump.ts) already
+        // prefixes every error it throws with the table.
+        return { success: false, rows: [], cursor: null, errors: [message] };
+      }
+    }
+  `;
+}
+
+/**
  * Bundle a seed script for server-side execution
  *
  * Creates an entry that:
@@ -165,15 +238,64 @@ export async function bundleSeedScript(
   tableNames: string[],
   baseDir: string = process.cwd(),
 ): Promise<SeedBundleResult> {
+  const bundledCode = await bundleGeneratedEntry({
+    entryFileName: `seed_${namespace}.entry.ts`,
+    entryContent: generateSeedScriptContent(namespace),
+    baseDir,
+  });
+
+  return {
+    namespace,
+    bundledCode,
+    typesIncluded: tableNames,
+  };
+}
+
+/**
+ * Bundle a seed dump script for server-side execution
+ *
+ * The read-only counterpart of the seed script: it selects one page of rows
+ * from a single table ordered by id, so a caller can page through a table with
+ * a keyset cursor instead of holding it all in one message.
+ * @param namespace - TailorDB namespace
+ * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses
+ * @returns Bundled seed dump script result
+ */
+export async function bundleSeedDumpScript(
+  namespace: string,
+  baseDir: string = process.cwd(),
+): Promise<SeedDumpBundleResult> {
+  const bundledCode = await bundleGeneratedEntry({
+    entryFileName: `seed_dump_${namespace}.entry.ts`,
+    entryContent: generateSeedDumpScriptContent(namespace),
+    baseDir,
+  });
+
+  return { namespace, bundledCode };
+}
+
+interface BundleGeneratedEntryParams {
+  /** File name the generated entry is written under the seed dist directory */
+  entryFileName: string;
+  /** Source of the generated entry */
+  entryContent: string;
+  /** Directory whose dependencies and tsconfig the generated entry uses */
+  baseDir: string;
+}
+
+/**
+ * Write a generated server-side entry and bundle it for script execution.
+ * @param params - Entry file name, its source, and the base directory
+ * @returns Bundled script code
+ */
+async function bundleGeneratedEntry(params: BundleGeneratedEntryParams): Promise<string> {
+  const { entryFileName, entryContent, baseDir } = params;
+
   // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");
   fs.mkdirSync(outputDir, { recursive: true });
 
-  // Entry file in output directory
-  const entryPath = path.join(outputDir, `seed_${namespace}.entry.ts`);
-
-  // Generate seed script content
-  const entryContent = generateSeedScriptContent(namespace);
+  const entryPath = path.join(outputDir, entryFileName);
   fs.writeFileSync(entryPath, entryContent);
 
   let tsconfig: string | undefined;
@@ -216,11 +338,5 @@ export async function bundleSeedScript(
   } as rolldown.BuildOptions);
   bundleLog.assertAllResolved();
 
-  const bundledCode = result.output[0].code;
-
-  return {
-    namespace,
-    bundledCode,
-    typesIncluded: tableNames,
-  };
+  return result.output[0].code;
 }

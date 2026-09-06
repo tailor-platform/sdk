@@ -240,7 +240,12 @@ export {
   type ChunkSeedDataOptions,
   type SeedData,
 } from "./shared/seed-chunker";
-export { bundleSeedScript, type SeedBundleResult } from "./commands/generate/seed/bundler";
+export {
+  bundleSeedScript,
+  bundleSeedDumpScript,
+  type SeedBundleResult,
+  type SeedDumpBundleResult,
+} from "./commands/generate/seed/bundler";
 export {
   bundleMigrationScript,
   type MigrationBundleResult,
