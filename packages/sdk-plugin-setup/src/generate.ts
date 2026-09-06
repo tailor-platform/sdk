@@ -261,7 +261,7 @@ function escapesRoot(rel: string): boolean {
  * Resolve the config file path for the given app directory.
  *
  * `--dir` must stay inside the repository: the value is embedded in workflow
- * `paths:` filters and the config under it gets mutated (id injection), so
+ * `paths:` filters and the config under it may be edited (its id moves into the lock), so
  * absolute paths and `..` traversal are rejected.
  * @param outputDir - Repository root (cwd)
  * @param dir - App directory relative to the repo root

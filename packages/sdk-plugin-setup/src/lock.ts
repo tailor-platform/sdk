@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
-import { type AppIds, parseAppIds } from "@tailor-platform/sdk/cli";
+import { type AppIds, parseAppIds, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 
 /**
@@ -10,8 +10,7 @@ import * as path from "pathe";
  */
 export const LOCK_VERSION = 2;
 
-/** Lock file path, relative to the repository root. */
-const LOCK_FILENAME = ".github/tailor.lock";
+const LOCK_FILENAME = TAILOR_LOCK_FILENAME;
 
 function assertSafeLockPath(outputDir: string): void {
   for (const relativePath of [".github", LOCK_FILENAME]) {
