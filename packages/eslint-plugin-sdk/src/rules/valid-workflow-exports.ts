@@ -1,4 +1,10 @@
-import { type AstCallExpression, type AstNode, parentOf, unwrapExpression } from "../lib/ast.js";
+import {
+  type AstCallExpression,
+  type AstIdentifier,
+  type AstNode,
+  parentOf,
+  unwrapExpression,
+} from "../lib/ast.js";
 import { configureImportTracker, constInitializer } from "../lib/sdk-bindings.js";
 import { isInsideFunction } from "../lib/workflow.js";
 import type { Rule } from "eslint";
@@ -12,16 +18,16 @@ function moduleName(node: AstNode): string | null {
   return null;
 }
 
-function rootBindingName(context: Rule.RuleContext, node: AstNode): string | null {
+function rootBindingName(context: Rule.RuleContext, node: AstIdentifier): string {
   let current = node;
   const seen = new Set<string>();
-  while (current.type === "Identifier" && !seen.has(current.name)) {
+  while (!seen.has(current.name)) {
     seen.add(current.name);
     const initializer = unwrapExpression(constInitializer(context, current));
-    if (initializer?.type !== "Identifier") return current.name;
+    if (initializer?.type !== "Identifier") break;
     current = initializer;
   }
-  return moduleName(current);
+  return current.name;
 }
 
 function collectExports(context: Rule.RuleContext, program: AstProgram): ModuleExports {
@@ -36,8 +42,7 @@ function collectExports(context: Rule.RuleContext, program: AstProgram): ModuleE
       const { declaration } = statement;
       if (declaration.type !== "ClassDeclaration" && declaration.type !== "FunctionDeclaration") {
         const value = unwrapExpression(declaration);
-        if (value?.type === "Identifier")
-          add(rootBindingName(context, value) ?? value.name, "default");
+        if (value?.type === "Identifier") add(rootBindingName(context, value), "default");
       }
       continue;
     }
@@ -46,15 +51,15 @@ function collectExports(context: Rule.RuleContext, program: AstProgram): ModuleE
     if (statement.declaration?.type === "VariableDeclaration") {
       for (const declarator of statement.declaration.declarations) {
         if (declarator.id.type !== "Identifier") continue;
-        add(rootBindingName(context, declarator.id) ?? declarator.id.name, declarator.id.name);
+        add(rootBindingName(context, declarator.id), declarator.id.name);
       }
     }
     if (statement.source) continue;
     for (const specifier of statement.specifiers) {
       if ("exportKind" in specifier && specifier.exportKind === "type") continue;
-      const local = rootBindingName(context, specifier.local);
+      if (specifier.local.type !== "Identifier") continue;
       const exported = moduleName(specifier.exported);
-      if (local !== null && exported !== null) add(local, exported);
+      if (exported !== null) add(rootBindingName(context, specifier.local), exported);
     }
   }
   return exports;
