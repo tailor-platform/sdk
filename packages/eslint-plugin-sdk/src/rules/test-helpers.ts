@@ -49,6 +49,10 @@ function lint(source: string, rule: string, filename = "fixture.ts") {
   };
 }
 
+export function lintOutput(source: string, rule: string, filename?: string): string {
+  return lint(source, rule, filename).output;
+}
+
 export function expectViolation(
   source: string,
   rule: string,

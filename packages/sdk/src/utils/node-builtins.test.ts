@@ -1,3 +1,4 @@
+import { NODE_ONLY_GLOBAL_NAMES } from "@tailor-platform/shared/node-builtins";
 import { describe, expect, test } from "vitest";
 import { NODE_ONLY_GLOBALS } from "#/utils/es-builtins";
 import { getForbiddenGlobalMessage, isForbiddenGlobal } from "./node-builtins";
@@ -40,6 +41,10 @@ describe("isForbiddenGlobal", () => {
     for (const name of NODE_ONLY_GLOBALS) {
       expect(isForbiddenGlobal(name)).toBe(true);
     }
+  });
+
+  test("matches the hardcoded list the lint plugin ships", () => {
+    expect([...NODE_ONLY_GLOBALS].toSorted()).toEqual([...NODE_ONLY_GLOBAL_NAMES].toSorted());
   });
 });
 

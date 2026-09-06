@@ -55,6 +55,56 @@ export function parentOf(node: AstNode | null | undefined): AstNode | null {
   return (node as { parent?: AstNode } | null | undefined)?.parent ?? null;
 }
 
+export function isValueReference(node: AstIdentifier): boolean {
+  const parent = parentOf(node);
+  switch (parent?.type) {
+    case "ImportSpecifier":
+    case "ImportDefaultSpecifier":
+    case "ImportNamespaceSpecifier":
+    case "ExportSpecifier":
+    case "LabeledStatement":
+    case "BreakStatement":
+    case "ContinueStatement":
+      return false;
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return parent.object === node || parent.computed;
+    case "Property":
+      return parent.value === node || parent.computed;
+    case "MethodDefinition":
+    case "PropertyDefinition":
+      return parent.key !== node || parent.computed;
+    default:
+      return true;
+  }
+}
+
+const TYPE_NODE_TYPES: ReadonlySet<string> = new Set([
+  "TSClassImplements",
+  "TSDeclareFunction",
+  "TSIndexSignature",
+  "TSInterfaceDeclaration",
+  "TSInterfaceHeritage",
+  "TSMethodSignature",
+  "TSPropertySignature",
+  "TSQualifiedName",
+  "TSTypeAliasDeclaration",
+  "TSTypeAnnotation",
+  "TSTypeLiteral",
+  "TSTypeParameterDeclaration",
+  "TSTypeParameterInstantiation",
+  "TSTypePredicate",
+  "TSTypeQuery",
+  "TSTypeReference",
+]);
+
+export function isTypePosition(node: AstNode): boolean {
+  for (let current = parentOf(node); current !== null; current = parentOf(current)) {
+    if (TYPE_NODE_TYPES.has(current.type)) return true;
+  }
+  return false;
+}
+
 export function memberName(node: AstNode | null | undefined): string | null {
   if (!node || (node.type !== "MemberExpression" && node.type !== "OptionalMemberExpression")) {
     return null;

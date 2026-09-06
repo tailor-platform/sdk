@@ -435,6 +435,9 @@ importers:
         specifier: 9.6.1
         version: 9.6.1
     devDependencies:
+      '@tailor-platform/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3

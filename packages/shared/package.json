@@ -6,7 +6,8 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    "./color": "./src/color.ts"
+    "./color": "./src/color.ts",
+    "./node-builtins": "./src/node-builtins.ts"
   },
   "scripts": {
     "lint": "oxlint --type-aware .",

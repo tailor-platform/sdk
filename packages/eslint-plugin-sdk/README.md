@@ -28,6 +28,8 @@ Add the plugin and its rules to `.oxlintrc.json`:
     "tailor-sdk/no-direct-exec-job-function": "warn",
     "tailor-sdk/no-execute-script-arg-stringify": "warn",
     "tailor-sdk/no-job-start-outside-body": "warn",
+    "tailor-sdk/no-node-builtin-imports": "warn",
+    "tailor-sdk/no-node-only-globals": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
     "tailor-sdk/valid-workflow-exports": "warn",
     "tailor-sdk/valid-workflow-job-definition": "warn"
@@ -233,6 +235,57 @@ export default createWorkflow({ name: "orders", mainJob: validate });
 `export default workflow` and `export { job }` forms are accepted as well. Calls inside functions
 (job factories) are not checked because the exported value cannot be traced statically. Test files
 that define jobs inline without exporting them can turn this rule off for `**/*.test.ts`.
+
+### `no-node-only-globals` (warning)
+
+The Tailor Platform runtime does not define Node-only globals such as `process`, `Buffer`,
+`__dirname`, `require`, or `setImmediate`. The build rejects bundled resolvers, executors, and
+workflow jobs that still reference one; this rule reports the reference in source, with the same
+suggested alternative the build prints.
+
+Incorrect:
+
+```ts
+export default createResolver({
+  name: "region",
+  body: () => process.env.REGION,
+});
+```
+
+Correct:
+
+```ts
+export default createResolver({
+  name: "region",
+  body: (_input, { env }) => env.REGION,
+});
+```
+
+### `no-node-builtin-imports` (warning)
+
+Node built-in modules (`node:fs`, `path`, `crypto`, `http`, ...) cannot be bundled for the Tailor
+Platform runtime. The rule reports static imports, re-exports, and `import("...")` calls of a
+built-in module, with the same Web Standard alternative the build suggests. Type-only imports are
+ignored.
+
+Incorrect:
+
+```ts
+import { createHash } from "node:crypto";
+```
+
+Correct:
+
+```ts
+const digest = await crypto.subtle.digest("SHA-256", data);
+```
+
+Both rules only act on files that define a platform function, that is, files that call
+`createResolver`, `createExecutor`, `createWorkflowJob`, or `createHttpAdapter`. Configuration,
+scripts, and tests are left alone, and so are helper modules imported by a function file; the build
+still checks the bundled output. In a file that only defines HTTP adapters the messages omit the
+suggestions, which are written for `body` functions. References that reach the global through
+`globalThis.process`, and references guarded by `typeof process !== "undefined"`, are not reported.
 
 The rules recognize named and namespace imports from `@tailor-platform/sdk`, including local import
 aliases. Same-named functions imported from other packages are ignored.
