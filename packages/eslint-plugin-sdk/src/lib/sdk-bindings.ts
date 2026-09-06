@@ -52,9 +52,18 @@ function isBindingReference(
   );
 }
 
+function isValueDefinition(definition: Scope.Definition): boolean {
+  const kind: string = definition.type;
+  if (kind === "Type") return false;
+  if (kind !== "ImportBinding") return true;
+  const declaration = definition.parent as { importKind?: string } | null | undefined;
+  const specifier = definition.node as { importKind?: string };
+  return declaration?.importKind !== "type" && specifier.importKind !== "type";
+}
+
 export function isLocalBinding(context: Rule.RuleContext, node: AstIdentifier): boolean {
   const variable = findVariable(context.sourceCode, node);
-  return variable !== null && variable.defs.length > 0;
+  return variable?.defs.some(isValueDefinition) ?? false;
 }
 
 export function constInitializer(

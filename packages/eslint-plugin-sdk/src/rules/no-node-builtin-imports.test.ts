@@ -77,6 +77,7 @@ describe("no-node-builtin-imports", () => {
     expectClean(`import type { Stats } from "node:fs";\n${RESOLVER}`, RULE);
     expectClean(`import { type Stats } from "node:fs";\n${RESOLVER}`, RULE);
     expectClean(`export type { Stats } from "node:fs";\n${RESOLVER}`, RULE);
+    expectClean(`export { type Stats } from "node:fs";\n${RESOLVER}`, RULE);
     expectClean(
       `import { format } from "date-fns";\nimport { getDB } from "../generated/tailordb";\n${RESOLVER}`,
       RULE,

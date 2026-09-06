@@ -20,6 +20,13 @@ function isTypeOnly(node: object): boolean {
   );
 }
 
+function isTypeOnlyDeclaration(node: { specifiers: readonly object[] }): boolean {
+  return (
+    isTypeOnly(node) ||
+    (node.specifiers.length > 0 && node.specifiers.every((specifier) => isTypeOnly(specifier)))
+  );
+}
+
 const rule = {
   meta: {
     type: "problem",
@@ -43,12 +50,10 @@ const rule = {
     return {
       ImportDeclaration: (node) => {
         imports.track(node);
-        const typeOnlySpecifiers =
-          node.specifiers.length > 0 && node.specifiers.every((specifier) => isTypeOnly(specifier));
-        if (!isTypeOnly(node) && !typeOnlySpecifiers) addSource(node.source, node.source.value);
+        if (!isTypeOnlyDeclaration(node)) addSource(node.source, node.source.value);
       },
       ExportNamedDeclaration: (node) => {
-        if (node.source && !isTypeOnly(node)) addSource(node.source, node.source.value);
+        if (node.source && !isTypeOnlyDeclaration(node)) addSource(node.source, node.source.value);
       },
       ExportAllDeclaration: (node) => {
         if (!isTypeOnly(node)) addSource(node.source, node.source.value);

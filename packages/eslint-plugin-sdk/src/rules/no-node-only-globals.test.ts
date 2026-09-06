@@ -88,6 +88,19 @@ describe("no-node-only-globals", () => {
     );
   });
 
+  test("still reports references shadowed only by a type declaration", () => {
+    expectViolation(
+      `${RESOLVER}type Buffer = Uint8Array;\nexport const encode = (): Buffer => Buffer.from("x");`,
+      RULE,
+      '"Buffer" is not available',
+    );
+    expectViolation(
+      `${RESOLVER}interface process { env: Record<string, string> }\nexport const region = process.env.REGION;`,
+      RULE,
+      '"process" is not available',
+    );
+  });
+
   test("still reports references outside a typeof guard", () => {
     expectViolation(
       `${RESOLVER}export const region = typeof process === "undefined" && process.env.REGION;`,
