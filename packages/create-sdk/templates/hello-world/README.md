@@ -49,6 +49,13 @@ query {
 # }
 ```
 
+## Security
+
+This template is a tutorial project: it defines no auth, and its permissions are fully open so you can deploy and query it right away. Replace both of the following before using it for anything real:
+
+- `src/db/user.ts` grants `unsafeAllowAllTypePermission` / `unsafeAllowAllGqlPermission`, which allow every operation on the `User` table. Define conditions that match your requirements instead — see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).
+- `tailor.config.ts` sets `defaultPermission: "allowAnonymous"` for `main-resolver`, so its resolvers are callable without a token.
+
 ## Scripts
 
 In the project directory, you can run:
