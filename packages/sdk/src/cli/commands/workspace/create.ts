@@ -22,7 +22,7 @@ import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { workspaceNameSchema } from "#/cli/shared/workspace-name";
+import { workspaceNameHelpText, workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
 import {
   workspaceDisplayName,
@@ -130,9 +130,11 @@ export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
   args: z.strictObject({
-    name: arg(z.string(), {
+    // createWorkspace() re-applies this schema for programmatic callers; here it
+    // fails --name during option parsing, before any Platform request.
+    name: arg(workspaceNameSchema, {
       alias: "n",
-      description: "Workspace name",
+      description: `Workspace name (${workspaceNameHelpText})`,
     }),
     region: arg(z.string(), {
       alias: "r",

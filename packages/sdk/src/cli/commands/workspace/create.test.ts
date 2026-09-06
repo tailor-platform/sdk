@@ -71,7 +71,7 @@ aroundAll(async (runSuite) => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
-describe("workspace create --permission", () => {
+describe("workspace create", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
@@ -108,6 +108,39 @@ describe("workspace create --permission", () => {
       "Name must be at least 3 characters",
     );
     expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("rejects an invalid --name while parsing options, before running the command", async () => {
+    using _logger = silenceLogger("out", "success", "warn", "error");
+    const result = await runCommand(createCommand, [
+      "--name",
+      "My_Workspace",
+      "--region",
+      "us-west",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain(
+      "Name can only contain lowercase letters, numbers, and hyphens",
+    );
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("reports a too-short --name without contacting the Platform", async () => {
+    using _logger = silenceLogger("out", "success", "warn", "error");
+    const result = await runCommand(createCommand, ["--name", "ab", "--region", "us-west"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Name must be at least 3 characters");
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("accepts a valid --name through the CLI", async () => {
+    using _logger = silenceLogger("out", "success", "warn");
+    const result = await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west"]);
+
+    expect(result.success).toBe(true);
+    expect(initOperatorClient).toHaveBeenCalledWith("mock-token", undefined);
   });
 
   test("rejects an explicitly empty profile instead of falling back", async () => {
