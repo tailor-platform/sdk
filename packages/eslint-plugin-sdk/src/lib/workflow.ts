@@ -8,7 +8,6 @@ import {
 import type { ImportTracker } from "./sdk-bindings.js";
 
 export interface WorkflowJobDefinition {
-  call: AstCallExpression;
   options: AstNode | undefined;
   name: AstProperty | null;
   body: AstProperty | null;
@@ -28,7 +27,6 @@ export function workflowJobDefinition(
   const options = call.arguments[0];
   const object = options?.type === "ObjectExpression" ? options : null;
   return {
-    call,
     options,
     name: objectProperty(object, "name"),
     body: objectProperty(object, "body"),

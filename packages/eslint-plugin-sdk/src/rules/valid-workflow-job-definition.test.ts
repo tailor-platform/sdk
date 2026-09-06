@@ -101,6 +101,10 @@ describe("valid-workflow-job-definition", () => {
       `${IMPORT}export const job = createWorkflowJob({ "name": "job", body: () => 1, publishEvents: true });`,
       RULE,
     );
+    expectClean(
+      `${IMPORT}const defaults = { publishEvents: true };\nexport const job = createWorkflowJob({ ...defaults, name: "job", body: () => 1 });`,
+      RULE,
+    );
   });
 
   test("ignores same-named factories from other packages", () => {

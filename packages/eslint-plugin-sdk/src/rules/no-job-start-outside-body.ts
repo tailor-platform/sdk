@@ -40,7 +40,7 @@ const rule = {
           const target = unwrapExpression(constInitializer(context, job));
           if (
             target?.type !== "CallExpression" ||
-            workflowJobDefinition(imports, target) === null
+            imports.callName(target) !== "createWorkflowJob"
           ) {
             continue;
           }
