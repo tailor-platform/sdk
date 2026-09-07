@@ -234,15 +234,17 @@ interface FetchFunctionExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
   executionId: string;
+  /** Aborts the request, e.g. when a follow deadline passes mid-request */
+  signal?: AbortSignal;
 }
 
 async function fetchFunctionExecution(
   options: FetchFunctionExecutionOptions,
 ): Promise<FunctionExecution> {
-  const { execution } = await options.client.getFunctionExecution({
-    workspaceId: options.workspaceId,
-    executionId: options.executionId,
-  });
+  const { execution } = await options.client.getFunctionExecution(
+    { workspaceId: options.workspaceId, executionId: options.executionId },
+    { signal: options.signal },
+  );
   if (!execution) {
     throw new Error(`Function execution '${options.executionId}' not found.`);
   }
@@ -281,35 +283,49 @@ async function followFunctionExecution(
   let printedEntries = 0;
   let lastStatus: FunctionExecution_Status | undefined;
 
-  const sleepOrTimeOut = async (): Promise<void> => {
-    if (timeout === undefined) {
+  const remainingMs = (): number | undefined =>
+    timeout === undefined ? undefined : timeout - (Date.now() - startedAt);
+  const timedOut = (): boolean => {
+    const remaining = remainingMs();
+    return remaining !== undefined && remaining <= 0;
+  };
+  const timeoutError = (): Error => {
+    const lastStatusText =
+      lastStatus === undefined ? "unknown" : functionExecutionStatusToString(lastStatus);
+    return new Error(
+      `Timed out waiting for function execution '${options.executionId}' to complete. Last status: ${lastStatusText}.`,
+    );
+  };
+  const sleep = async (): Promise<void> => {
+    const remaining = remainingMs();
+    if (remaining === undefined) {
       await setTimeout(interval);
       return;
     }
-    const remainingMs = timeout - (Date.now() - startedAt);
-    if (remainingMs <= 0) {
-      const lastStatusText =
-        lastStatus === undefined ? "unknown" : functionExecutionStatusToString(lastStatus);
-      throw new Error(
-        `Timed out waiting for function execution '${options.executionId}' to complete. Last status: ${lastStatusText}.`,
-      );
-    }
-    await setTimeout(Math.min(interval, remainingMs));
+    if (remaining <= 0) throw timeoutError();
+    await setTimeout(Math.min(interval, remaining));
   };
 
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
+    const budget = remainingMs();
+    if (budget !== undefined && budget <= 0) throw timeoutError();
+
     let execution: FunctionExecution;
     try {
-      execution = await fetchFunctionExecution(options);
+      execution = await fetchFunctionExecution({
+        ...options,
+        signal: budget === undefined ? undefined : AbortSignal.timeout(budget),
+      });
     } catch (error) {
+      if (timedOut()) throw timeoutError();
       if (!isRetryableWaitError(error)) {
         throw error;
       }
       logger.warn(`Retrying function execution poll: ${formatWaitError(error)}`, {
         mode: "stream",
       });
-      await sleepOrTimeOut();
+      await sleep();
       continue;
     }
 
@@ -344,7 +360,7 @@ async function followFunctionExecution(
     if (isFunctionExecutionTerminalStatus(execution.status)) {
       return { execution, printedEntries, followed };
     }
-    await sleepOrTimeOut();
+    await sleep();
   }
 }
 

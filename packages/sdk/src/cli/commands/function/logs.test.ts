@@ -488,10 +488,44 @@ describe("logs command detail output", () => {
     expect(result.success).toBe(false);
     expect(result.error?.message).toContain("Timed out");
     expect(result.error?.message).toContain("RUNNING");
-    expect(getFunctionExecution).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      executionId: "exec-1",
-    });
+    expect(getFunctionExecution).toHaveBeenCalledWith(
+      { workspaceId: "workspace-1", executionId: "exec-1" },
+      { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  test("--follow --timeout aborts a poll request that never answers", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    const getFunctionExecution = vi
+      .fn()
+      .mockResolvedValueOnce({
+        execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
+      })
+      .mockImplementation(
+        (_request: unknown, options: { signal: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            options.signal.addEventListener("abort", () =>
+              reject(new ConnectError("deadline", Code.DeadlineExceeded)),
+            );
+          }),
+      );
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getFunctionExecution,
+    } as unknown as OperatorClient);
+
+    const result = await runCommand(logsCommand, [
+      "exec-1",
+      "--follow",
+      "--interval",
+      "1ms",
+      "--timeout",
+      "30ms",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain("Timed out");
+    expect(result.error?.message).toContain("RUNNING");
   });
 
   test("--follow retries transient poll errors and reports them even in JSON mode", async () => {
