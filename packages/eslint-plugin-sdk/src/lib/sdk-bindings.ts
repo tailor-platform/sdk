@@ -39,7 +39,7 @@ function findVariable(sourceCode: SourceCode, node: AstIdentifier): Scope.Variab
   return null;
 }
 
-function isBindingReference(
+export function isBindingReference(
   context: Rule.RuleContext,
   node: AstNode | null | undefined,
   binding: AstIdentifier,

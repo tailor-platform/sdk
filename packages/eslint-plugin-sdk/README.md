@@ -31,8 +31,11 @@ Add the plugin and its rules to `.oxlintrc.json`:
     "tailor-sdk/no-node-builtin-imports": "warn",
     "tailor-sdk/no-node-only-globals": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
+    "tailor-sdk/valid-execution-policy-definition": "warn",
+    "tailor-sdk/valid-resolver-permission": "warn",
     "tailor-sdk/valid-workflow-exports": "warn",
-    "tailor-sdk/valid-workflow-job-definition": "warn"
+    "tailor-sdk/valid-workflow-job-definition": "warn",
+    "tailor-sdk/valid-workflow-retry-policy": "warn"
   }
 }
 ```
@@ -286,6 +289,70 @@ scripts, and tests are left alone, and so are helper modules imported by a funct
 still checks the bundled output. In a file that only defines HTTP adapters the messages omit the
 suggestions, which are written for `body` functions. References that reach the global through
 `globalThis.process`, and references guarded by `typeof process !== "undefined"`, are not reported.
+
+### `valid-execution-policy-definition` (warning)
+
+Workflow execution policy names must match `[a-z0-9-]` (3-63 characters, starting and ending with
+`[a-z0-9]`), and keys must match `[a-z0-9_:.-]` (2-64 characters); a `matchType: "prefix"` policy
+gets `*` appended by the SDK, so the declared key must not end with `*`. The deploy validates these
+with Zod; this rule checks the literal values in `defineWorkflowExecutionPolicies` /
+`defineWorkflowExecutionPolicy`, including names derived from the property name.
+
+Incorrect:
+
+```ts
+export const policies = defineWorkflowExecutionPolicies((define) => ({
+  tenantApi: define({ matchType: "prefix" }), // name "tenantApi" has an uppercase letter
+}));
+```
+
+Correct:
+
+```ts
+export const policies = defineWorkflowExecutionPolicies((define) => ({
+  tenantApi: define({ name: "tenant-api", matchType: "prefix" }),
+}));
+```
+
+### `valid-workflow-retry-policy` (warning)
+
+A `createWorkflow` `retryPolicy` written with literal values must satisfy the platform limits:
+`initialBackoff` at most `maxBackoff`, durations positive and at most 1h / 24h, `maxRetries` an
+integer from 1 to 10, and `backoffMultiplier` at least 1.
+
+Incorrect:
+
+```ts
+retryPolicy: { maxRetries: 3, initialBackoff: "2m", maxBackoff: "30s", backoffMultiplier: 2 }
+```
+
+Correct:
+
+```ts
+retryPolicy: { maxRetries: 3, initialBackoff: "1s", maxBackoff: "30s", backoffMultiplier: 2 }
+```
+
+### `valid-resolver-permission` (warning)
+
+A literal resolver `permission` (or a namespace `defaultPermission` in `defineConfig`) must contain
+at least one policy with `permit: true`, every policy at least one condition, and every condition
+exactly one `{ user }` operand. `_loggedIn` must compare to a boolean and `id` to a string.
+
+Incorrect:
+
+```ts
+permission: [{ conditions: [[{ user: "role" }, "=", { user: "team" }]], permit: false }];
+```
+
+Correct:
+
+```ts
+permission: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }];
+```
+
+These three rules only check values they can read statically: literals, and `const` values defined
+in the same file. Values built by function calls, spread into an object or array, or imported from
+another module are skipped and still validated by the build.
 
 The rules recognize named and namespace imports from `@tailor-platform/sdk`, including local import
 aliases. Same-named functions imported from other packages are ignored.

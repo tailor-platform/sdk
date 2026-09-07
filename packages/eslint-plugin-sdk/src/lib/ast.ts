@@ -149,6 +149,38 @@ export function staticString(node: AstNode | null | undefined): string | null {
   return null;
 }
 
+/** The object's properties when every one is a plain, non-computed property; null otherwise. */
+export function literalProperties(node: AstNode | null | undefined): AstProperty[] | null {
+  const value = unwrapExpression(node);
+  if (value?.type !== "ObjectExpression") return null;
+  const properties: AstProperty[] = [];
+  for (const property of value.properties) {
+    if (property.type !== "Property" || property.computed) return null;
+    properties.push(property);
+  }
+  return properties;
+}
+
+/** The array's elements when none is a spread or a hole; null otherwise. */
+export function literalElements(node: AstNode | null | undefined): AstNode[] | null {
+  const value = unwrapExpression(node);
+  if (value?.type !== "ArrayExpression") return null;
+  const elements: AstNode[] = [];
+  for (const element of value.elements) {
+    if (element === null || element.type === "SpreadElement") return null;
+    elements.push(element);
+  }
+  return elements;
+}
+
+export function propertyName(property: AstProperty): string | null {
+  if (property.computed) return null;
+  if (property.key.type === "Identifier") return property.key.name;
+  return property.key.type === "Literal" && typeof property.key.value === "string"
+    ? property.key.value
+    : null;
+}
+
 export function objectProperty(
   object: AstNode | null | undefined,
   name: string,
