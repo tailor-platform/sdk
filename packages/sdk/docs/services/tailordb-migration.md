@@ -898,6 +898,20 @@ For genuinely different schemas across environments, prefer separate workspaces 
 4. To force the remote schema back to a known snapshot, use `migration sync <N>` (see [`migration sync` Semantics](#migration-sync-semantics)).
 5. As a last resort in non-production environments, `--no-schema-check` skips both checks. Do not use this as a routine workaround.
 
+### "Remote migration checkpoint is not in the local migration history" error
+
+**Cause:** The deployed namespace's checkpoint refers to a migration number, or a migration history ID, that the local `migrations/` directory no longer has a record of. This is a different code path from schema drift above: it fires before any schema comparison, because the CLI cannot even locate the remote's recorded position in the local history.
+
+One specific cause is a `migration rebaseline` run on a different environment while this one had not yet caught up to the latest pre-rebaseline migration. `migration rebaseline` requires every other environment to already be at the latest migration (see [Re-baselining a deployed migration history](#re-baselining-a-deployed-migration-history)), but the CLI only verifies the one workspace it runs against. If this environment was behind, the error message names the migration this environment must reach (the migration every environment was required to be at before the rebaseline) alongside the migration it is actually at.
+
+**Resolution (fell behind before a rebaseline):**
+
+1. Restore the pre-rebaseline `migrations/` directory from git history — check out the commit before `migration rebaseline` ran. Re-baselining removes migration files after `0000` from the working tree but Git history retains everything that was committed.
+2. Deploy this environment against that restored history until its checkpoint reaches the migration named in the error, running any `migrate.ts` scripts it still needs.
+3. Switch back to the current (rebaselined) migration files and deploy again. The remote schema now matches the new baseline, so this deploy offers the automatic checkpoint reset to `0000` under the new history ID.
+
+**Resolution (any other cause):** Run `tailor tailordb migration status` to compare local and remote, or pull the latest migration files if your checkout is stale.
+
 ### "Invalid schema snapshot" or "Invalid migration diff" error
 
 **Cause:** A `schema.json` or `diff.json` file in the `migrations/` directory is corrupted or does not match the expected structure. Merge conflicts left in these files are a common cause.
