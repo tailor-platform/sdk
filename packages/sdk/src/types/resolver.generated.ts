@@ -52,6 +52,8 @@ export type Resolver = {
       | "nested";
     /** Field metadata configuration */
     metadata: {
+      /** Date value representation */
+      representation?: "string" | "date" | undefined;
       /** Whether the field is required */
       required?: boolean | undefined;
       /** Whether the field is an array */

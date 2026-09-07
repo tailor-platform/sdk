@@ -301,6 +301,7 @@ export function buildResolverPermissionAndInputCheckExpr(
           path: issue.path ?? [],
         })));
       }
+      context = { ...context, input: result.value };
     }
   `;
 }

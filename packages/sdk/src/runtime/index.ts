@@ -34,6 +34,7 @@ export { context } from "./context";
 export { file } from "./file";
 export { aigateway } from "./aigateway";
 export { logger } from "./logger";
+export { serializeDateFields } from "./date";
 
 /** SQL command type recorded on a {@link TailordbQueryResult}. */
 export type TailordbCommandType =

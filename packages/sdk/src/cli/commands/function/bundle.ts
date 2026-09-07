@@ -181,13 +181,15 @@ function generateEntry(options: GenerateEntryOptions): string {
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
+        import { serializeDateFields } from "@tailor-platform/sdk/runtime";
 
         const $tailor_resolver_body = async (rawInput) => {
           const _caller = ${principalExpr};
           const invoker = (${INVOKER_EXPR}) ?? _caller;
-          const context = { input: rawInput, env: ${JSON.stringify(env)}, caller: _caller, invoker };
+          let context = { input: rawInput, env: ${JSON.stringify(env)}, caller: _caller, invoker };
           ${guardAndInputCheckExpr}
-          return _internalResolver.body(context);
+          const result = await _internalResolver.body(context);
+          return serializeDateFields(_internalResolver.output, result);
         };
 
         export { $tailor_resolver_body as main };

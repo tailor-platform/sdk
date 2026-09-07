@@ -120,6 +120,27 @@ createResolver({
 });
 ```
 
+### Date Values
+
+`t.date()` uses `YYYY-MM-DD` strings by default. Use `t.date({ representation: "date" })` to work with JavaScript `Date` values in the resolver body and input validators:
+
+```typescript
+createResolver({
+  name: "nextDay",
+  operation: "query",
+  input: { day: t.date({ representation: "date" }) },
+  body: ({ input }) => {
+    input.day.setUTCDate(input.day.getUTCDate() + 1);
+    return input.day;
+  },
+  output: t.date({ representation: "date" }),
+});
+```
+
+GraphQL still accepts and returns `YYYY-MM-DD` strings. The SDK converts input to a `Date` at midnight UTC and formats output using its UTC year, month, and day. Use UTC getters and setters for date arithmetic; local getters and setters depend on the runtime's timezone. Any time component in the returned `Date` is discarded according to UTC, so `new Date("2026-09-07T00:00:00+09:00")` returns `"2026-09-06"`.
+
+This option also works in nested objects and with `array: true` or `optional: true`. Input must be a valid calendar date, and output must be a valid `Date` with a UTC year between 0000 and 9999. Both deployed resolvers and `tailor function run` perform these conversions.
+
 ### Custom Type Name (`typeName`)
 
 Enum and nested object fields in input/output schemas generate protobuf type names automatically (e.g., `{ResolverName}{FieldName}`). Use `typeName()` to set a custom name:

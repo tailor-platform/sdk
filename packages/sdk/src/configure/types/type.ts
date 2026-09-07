@@ -10,6 +10,8 @@ import type {
   TailorToTs,
   FieldMetadata,
   FieldOptions,
+  DateFieldOptions,
+  DateFieldValue,
   FieldOutput,
   TailorField as TailorFieldBase,
   FieldValidateInput,
@@ -360,9 +362,17 @@ function decimal<const Opt extends FieldOptions>(options?: Opt) {
  * @param options - Field configuration options
  * @returns A date field
  * @example t.date()
+ * @example t.date({ representation: "date" })
  */
-function date<const Opt extends FieldOptions>(options?: Opt) {
-  return createTailorField("date", options);
+function date<const Opt extends DateFieldOptions = FieldOptions>(options?: Opt) {
+  const field = createTailorField<"date", Opt, DateFieldValue<Opt["representation"]>>(
+    "date",
+    options,
+  );
+  if (options?.representation === "date") {
+    field._metadata.representation = "date";
+  }
+  return field;
 }
 
 /**

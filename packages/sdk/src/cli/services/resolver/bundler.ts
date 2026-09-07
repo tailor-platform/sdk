@@ -180,11 +180,13 @@ async function bundleSingleResolver(
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
+        import { serializeDateFields } from "@tailor-platform/sdk/runtime";
 
         const $tailor_resolver_body = async (context) => {
           const invoker = ${INVOKER_EXPR};
           ${guardAndInputCheckExpr}
-          return _internalResolver.body({ ...context, invoker });
+          const result = await _internalResolver.body({ ...context, invoker });
+          return serializeDateFields(_internalResolver.output, result);
         };
 
         export { $tailor_resolver_body as main };
