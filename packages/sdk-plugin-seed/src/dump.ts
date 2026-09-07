@@ -126,7 +126,10 @@ export const seedDumpCommand = defineAppCommand({
     "what restores the tables after it: `tailor seed apply --truncate` puts the dumped rows back. " +
     "Fields the platform assigns rather than the row — `serial` fields — are left out, as are " +
     "fields with no value, so the result reads back the way hand-written seed data does. " +
-    "IdP `_User` records are never dumped: their credentials do not survive the round trip.",
+    "IdP `_User` records are never dumped: their credentials do not survive the round trip. " +
+    "Rows are paged by id, which is a UUID rather than a monotonic value, so a row written to " +
+    "a table while it is being dumped can be missed; pause writes to the app (or dump from a " +
+    "replica/snapshot) before relying on the result as a restore point.",
   args: z.strictObject({
     ...deploymentArgs,
     "machine-user": arg(z.string().optional(), {

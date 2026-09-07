@@ -75,6 +75,8 @@ Without `--out`, the files land in the seed data directory under the seedPlugin 
 
 Two things the dump does not capture: the bytes behind stored file fields, and which rows came from a previous seed rather than from the app — a dump is the whole current state of the tables it covers.
 
+**Paging is not safe against concurrent writes.** Each page is fetched with `id` as a keyset cursor, but TailorDB ids are UUIDs rather than a monotonic sequence, so a row inserted after paging starts can land before the cursor already handed out and never be seen. Dumping a table that a running app keeps writing to can therefore miss rows written during the dump; for a true point-in-time restore point, pause writes (or dump from a replica/snapshot) before running `tailor seed dump`.
+
 ## Filling in create-time values
 
 A relation in seed data points at a field of the row it references — usually its id — so a row you want to reference needs an id written in the file. `tailor seed fill` writes the value a record would get on create into the rows that are missing it, `id` by default:
