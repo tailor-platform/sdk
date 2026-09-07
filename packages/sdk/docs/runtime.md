@@ -43,6 +43,41 @@ const { url } = await aigateway.get("my-aigateway");
 logger.info("order processed", { orderId: "o-1", total: 99.5 });
 ```
 
+## Uploading files
+
+Pass bytes directly to `file.upload`. For strings, specify how to interpret the input:
+
+```ts
+import { file } from "@tailor-platform/sdk/runtime";
+
+await file.upload("my-namespace", "Document", "attachment", recordId, text, {
+  encoding: "utf8",
+  contentType: "text/plain",
+});
+
+await file.upload("my-namespace", "Document", "attachment", recordId, imageBase64, {
+  encoding: "base64",
+  contentType: "image/png",
+});
+```
+
+`encoding` controls the input string's interpretation; `contentType` describes the stored file.
+Setting `contentType: "image/png"` does not decode Base64. Byte arrays and buffers are uploaded
+unchanged, even when `encoding` is supplied.
+
+Base64 input may omit padding and contain ASCII whitespace. Invalid characters, invalid padding,
+and data URL prefixes such as `data:image/png;base64,` are rejected with `TypeError` before upload.
+Decoding Base64 does not validate the resulting file's format.
+
+Uploading a string without `encoding` still stores it as text, but that overload is deprecated
+and will be removed in v3. Add `encoding: "utf8"` to preserve existing behavior, or choose
+`"base64"` when decoding is intended. Calls with byte arrays or buffers are not deprecated.
+The generated `uploadFile` helper supports the same options; run `tailor generate` to update it.
+
+The encoding option is available on the imported SDK `file.upload` and generated helpers.
+For code using the global `tailordb.file.upload`, switch to the imported `file.upload` before
+using this option.
+
 ## Subpath imports
 
 Each namespace can also be imported individually so you only pull what you need:

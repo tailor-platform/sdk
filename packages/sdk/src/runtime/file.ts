@@ -42,7 +42,17 @@ export interface FileMetadata {
 /** Upload options. */
 export interface FileUploadOptions {
   contentType?: string;
+  /** How to interpret string data. Ignored for byte arrays and buffers. */
+  encoding?: "utf8" | "base64";
 }
+
+/** Upload options with an explicit interpretation for string data. */
+export interface FileUploadStringOptions extends FileUploadOptions {
+  encoding: "utf8" | "base64";
+}
+
+/** Binary contents accepted by {@link file.upload}. */
+export type FileUploadBytes = ArrayBuffer | Uint8Array | number[];
 
 /** Upload stream options. */
 export interface FileUploadStreamOptions {
@@ -117,7 +127,7 @@ export interface TailorDBFileAPI {
     fieldName: string,
     recordId: string,
     data: string | ArrayBuffer | Uint8Array | number[],
-    options?: FileUploadOptions,
+    options?: Omit<FileUploadOptions, "encoding">,
   ): Promise<FileUploadResponse>;
 
   /**
@@ -220,11 +230,105 @@ const api = (): TailorDBFileAPI =>
   (globalThis as unknown as { tailordb: { file: TailorDBFileAPI } }).tailordb.file;
 
 /**
- * See {@link TailorDBFileAPI.upload}.
- * @param args - Forwarded to {@link TailorDBFileAPI.upload}
+ * Upload file bytes without encoding or decoding them.
+ * @param namespace - TailorDB namespace
+ * @param tableName - TailorDB table name
+ * @param fieldName - File field name on the table
+ * @param recordId - Record ID owning the field
+ * @param data - File bytes
+ * @param options - Upload options; encoding is ignored for bytes
  * @returns Upload response containing the file metadata
  */
-const upload: TailorDBFileAPI["upload"] = (...args) => api().upload(...args);
+function upload(
+  namespace: string,
+  tableName: string,
+  fieldName: string,
+  recordId: string,
+  data: FileUploadBytes,
+  options?: FileUploadOptions,
+): Promise<FileUploadResponse>;
+/**
+ * Upload text as UTF-8 or decode Base64 into file bytes.
+ * @param namespace - TailorDB namespace
+ * @param tableName - TailorDB table name
+ * @param fieldName - File field name on the table
+ * @param recordId - Record ID owning the field
+ * @param data - String to encode or decode, or file bytes to upload unchanged
+ * @param options - String encoding and optional content type
+ * @returns Upload response containing the file metadata
+ * @throws {TypeError} If the encoding is unsupported or Base64 data is invalid
+ */
+function upload(
+  namespace: string,
+  tableName: string,
+  fieldName: string,
+  recordId: string,
+  data: string | FileUploadBytes,
+  options: FileUploadStringOptions,
+): Promise<FileUploadResponse>;
+/**
+ * Upload file contents, treating strings without encoding as text.
+ * @deprecated since NEXT_RELEASE — pass encoding: "utf8" for text or "base64" for Base64 strings. codemod: v3/file-upload-encoding
+ * @param namespace - TailorDB namespace
+ * @param tableName - TailorDB table name
+ * @param fieldName - File field name on the table
+ * @param recordId - Record ID owning the field
+ * @param data - File contents
+ * @param options - Upload options
+ * @returns Upload response containing the file metadata
+ */
+function upload(
+  namespace: string,
+  tableName: string,
+  fieldName: string,
+  recordId: string,
+  data: string | FileUploadBytes,
+  options?: FileUploadOptions,
+): Promise<FileUploadResponse>;
+async function upload(
+  namespace: string,
+  tableName: string,
+  fieldName: string,
+  recordId: string,
+  data: string | FileUploadBytes,
+  options?: FileUploadOptions,
+): Promise<FileUploadResponse> {
+  if (options?.encoding === undefined) {
+    return api().upload(namespace, tableName, fieldName, recordId, data, options);
+  }
+
+  const { encoding, ...uploadOptions } = options;
+  let contents = data;
+  if (typeof data === "string") {
+    switch (encoding) {
+      case "utf8":
+        contents = new TextEncoder().encode(data);
+        break;
+      case "base64": {
+        const base64 = data.replace(/[\t\n\f\r ]/g, "");
+        if (
+          !/^[A-Za-z0-9+/]*={0,2}$/.test(base64) ||
+          base64.length % 4 === 1 ||
+          (base64.includes("=") && base64.length % 4 !== 0)
+        ) {
+          throw new TypeError(
+            "Invalid Base64 file data. Pass a Base64 string without a data URL prefix.",
+          );
+        }
+        const decoded = atob(base64);
+        const bytes = new Uint8Array(decoded.length);
+        for (let index = 0; index < decoded.length; index++) {
+          bytes[index] = decoded.charCodeAt(index);
+        }
+        contents = bytes;
+        break;
+      }
+      default:
+        throw new TypeError(`Unsupported file upload encoding: ${encoding}`);
+    }
+  }
+  return api().upload(namespace, tableName, fieldName, recordId, contents, uploadOptions);
+}
 
 /**
  * See {@link TailorDBFileAPI.download}.
@@ -272,6 +376,7 @@ const uploadStream: TailorDBFileAPI["uploadStream"] = (...args) => api().uploadS
 
 /** Runtime wrapper namespace for `tailordb.file`. */
 export const file = {
+  // oxlint-disable-next-line typescript/no-deprecated -- Only the legacy overload is deprecated.
   upload,
   download,
   downloadAsBase64,

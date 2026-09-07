@@ -41,6 +41,8 @@ export function generateUnifiedFileUtils(
       import { file } from "@tailor-platform/sdk/runtime/file";
       import type {
         FileUploadOptions,
+        FileUploadStringOptions,
+        FileUploadBytes,
         FileUploadResponse,
         FileMetadata,
         FileDownloadStreamResponse,
@@ -81,11 +83,35 @@ export function generateUnifiedFileUtils(
   // Generate uploadFile helper function
   const uploadFunction =
     multiline /* ts */ `
+      export function uploadFile<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+        data: FileUploadBytes,
+        options?: FileUploadOptions,
+      ): Promise<FileUploadResponse>;
+      export function uploadFile<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+        data: string | FileUploadBytes,
+        options: FileUploadStringOptions,
+      ): Promise<FileUploadResponse>;
+      /**
+       * @deprecated since NEXT_RELEASE — pass encoding: "utf8" for text or "base64" for Base64 strings. codemod: v3/file-upload-encoding
+       */
+      export function uploadFile<T extends keyof TypeWithFiles>(
+        type: T,
+        field: TypeWithFiles[T]["fields"],
+        recordId: string,
+        data: string | FileUploadBytes,
+        options?: FileUploadOptions,
+      ): Promise<FileUploadResponse>;
       export async function uploadFile<T extends keyof TypeWithFiles>(
         type: T,
         field: TypeWithFiles[T]["fields"],
         recordId: string,
-        data: string | ArrayBuffer | Uint8Array<ArrayBufferLike> | number[],
+        data: string | FileUploadBytes,
         options?: FileUploadOptions,
       ): Promise<FileUploadResponse> {
         return await file.upload(namespaces[type], type, field, recordId, data, options);
