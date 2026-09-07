@@ -595,6 +595,45 @@ describe("resolverExecutedTrigger", () => {
     });
   });
 
+  test("result type reports date fields as strings because events arrive as JSON", () => {
+    const resolver = createResolver({
+      name: "dateOutput",
+      operation: "query",
+      body: () => ({
+        day: new Date("2026-09-07"),
+        days: [new Date("2026-09-07")],
+        absent: null,
+        rows: [{ day: new Date("2026-09-07") }],
+        plain: "2026-09-07",
+      }),
+      output: t.object({
+        day: t.date({ as: "date" }),
+        days: t.date({ as: "date", array: true }),
+        absent: t.date({ as: "date", optional: true }),
+        rows: t.object({ day: t.date({ as: "date" }) }, { array: true }),
+        plain: t.date(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (!args.success) return;
+          expectTypeOf(args.result.day).toEqualTypeOf<string>();
+          expectTypeOf(args.result.days).toEqualTypeOf<string[]>();
+          expectTypeOf(args.result.absent).toEqualTypeOf<string | null | undefined>();
+          expectTypeOf(args.result.rows).toEqualTypeOf<{ day: string }[]>();
+          expectTypeOf(args.result.plain).toEqualTypeOf<string>();
+        },
+      },
+    });
+  });
+
   test("result type preserves nested object structure from resolver output", () => {
     const resolver = createResolver({
       name: "nestedOutput",

@@ -11,7 +11,7 @@ import type {
   WorkflowExecutionTrigger as ParserWorkflowExecutionTrigger,
   WorkflowJobExecutionTrigger as ParserWorkflowJobExecutionTrigger,
 } from "#/types/executor.generated";
-import type { output } from "#/types/helpers";
+import type { SerializeDates, output } from "#/types/helpers";
 
 interface EventArgs {
   workspaceId: string;
@@ -50,6 +50,9 @@ export interface RecordDeletedArgs<T extends TailorDBType> extends RecordArgs {
  * When `success` is false, `error` contains the error message and `result` is never.
  *
  * Narrow on `success` to safely access either `result` or `error`.
+ *
+ * The event payload arrives as JSON, so a `t.date({ as: "date" })` field in the
+ * resolver's output reaches `result` as its serialized `YYYY-MM-DD` string.
  * @example
  * body: async (args) => {
  *   if (args.success) {
@@ -64,7 +67,7 @@ export type ResolverExecutedArgs<R extends ResolverConfig> = EventArgs & {
 } & (
     | {
         success: true;
-        result: output<R["output"]>;
+        result: SerializeDates<output<R["output"]>>;
         error?: never;
       }
     | {

@@ -36,6 +36,19 @@ export type DeepReadonly<T> = T extends Date | RegExp | Function
 
 export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never;
 
+/**
+ * Replace `Date` with `string` throughout a type.
+ *
+ * Values that reach user code as a parsed JSON payload cannot carry a `Date`
+ * instance, so a type describing such a payload must report the serialized
+ * form even when the type it derives from uses `Date`.
+ */
+export type SerializeDates<T> = T extends Date
+  ? string
+  : T extends object
+    ? { [K in keyof T]: SerializeDates<T[K]> }
+    : T;
+
 export type NullableToOptional<T> = {
   [K in keyof T as null extends T[K] ? never : K]: T[K];
 } & {
