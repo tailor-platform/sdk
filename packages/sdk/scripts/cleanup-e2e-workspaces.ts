@@ -36,19 +36,76 @@ const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
 // right after the prefix. "sdk-ci-migration-" must precede "sdk-ci-" so the longer prefix wins.
 const RUN_ID_PATTERN = /^(?:e2e-ws-|template-e2e-|sdk-ci-migration-|sdk-ci-)(\d+)/;
 
-interface Workspace {
+export interface CleanupWorkspace {
   id?: string;
   name?: string;
   createTime?: Timestamp;
 }
 
+export interface SelectionOptions {
+  /** CI run id the workspaces must belong to. */
+  runId?: string;
+  /** Restrict to workspaces whose name carries no run id. */
+  localOrphans?: boolean;
+  /** Minimum age in hours, used with `localOrphans`. */
+  minAgeHours?: number;
+}
+
+/**
+ * Whether a name carries this exact run id as a whole segment right after a
+ * recognized prefix. A substring test would let run id "123" match the
+ * workspaces of run "1234", so the segment must end at a hyphen or the name's
+ * end.
+ * @param name - Workspace name
+ * @param runId - Run id to match
+ * @returns Whether the name belongs to that run
+ */
+function belongsToRun(name: string, runId: string): boolean {
+  for (const prefix of E2E_WORKSPACE_PREFIXES) {
+    if (!name.startsWith(prefix)) continue;
+    const rest = name.slice(prefix.length);
+    if (rest === runId || rest.startsWith(`${runId}-`)) return true;
+  }
+  return false;
+}
+
+/**
+ * Pick the workspaces to delete out of every workspace the caller can see.
+ * @param workspaces - Workspaces to filter
+ * @param options - Selection options
+ * @param now - Reference time for the local-orphan age check
+ * @returns The workspaces to delete, in input order
+ */
+export function selectWorkspacesToDelete(
+  workspaces: readonly CleanupWorkspace[],
+  options: SelectionOptions,
+  now: Date,
+): CleanupWorkspace[] {
+  return workspaces.filter((ws) => {
+    const name = ws.name;
+    if (!name) return false;
+    if (!E2E_WORKSPACE_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
+    if (options.localOrphans) {
+      if (RUN_ID_PATTERN.test(name)) return false;
+      const createdAt = ws.createTime ? timestampDate(ws.createTime) : undefined;
+      if (!createdAt) return false;
+      const ageHours = (now.getTime() - createdAt.getTime()) / 3_600_000;
+      return ageHours >= (options.minAgeHours ?? 0);
+    }
+    if (options.runId) {
+      return belongsToRun(name, options.runId);
+    }
+    return true;
+  });
+}
+
 /**
  * Fetch all workspaces with pagination
  * @param {OperatorClient} client - Operator client
- * @returns {Promise<Workspace[]>} All workspaces
+ * @returns {Promise<CleanupWorkspace[]>} All workspaces
  */
-async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> {
-  const allWorkspaces: Workspace[] = [];
+async function fetchAllWorkspaces(client: OperatorClient): Promise<CleanupWorkspace[]> {
+  const allWorkspaces: CleanupWorkspace[] = [];
   let pageToken = "";
 
   // loop exits when the platform stops returning a page token
@@ -131,22 +188,11 @@ async function main() {
   console.log(`Total workspaces found: ${workspaces.length}\n`);
 
   // Filter e2e workspaces
-  const e2eWorkspaces = workspaces.filter((ws) => {
-    const matchesPrefix = E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix));
-    if (!matchesPrefix) return false;
-    if (localOrphans) {
-      if (ws.name && RUN_ID_PATTERN.test(ws.name)) return false;
-      const createdAt = ws.createTime ? timestampDate(ws.createTime) : undefined;
-      if (!createdAt) return false;
-      const ageHours = (Date.now() - createdAt.getTime()) / 3_600_000;
-      return ageHours >= minAgeHours;
-    }
-    // When --run-id is specified (CI), only delete workspaces from this run to avoid cross-run conflicts
-    if (runId) {
-      return ws.name?.includes(runId);
-    }
-    return true;
-  });
+  const e2eWorkspaces = selectWorkspacesToDelete(
+    workspaces,
+    { runId, localOrphans, minAgeHours },
+    new Date(),
+  );
 
   if (e2eWorkspaces.length === 0) {
     console.log("✅ No e2e workspaces found to delete.");
