@@ -130,8 +130,8 @@ export const IdPUserAuthPolicySchema = z
           ),
       )
       .max(100, "allowedEmailDomains accepts at most 100 entries")
-      .refine((domains) => new Set(domains).size === domains.length, {
-        message: "allowedEmailDomains entries must be unique",
+      .refine((domains) => new Set(domains.map((d) => d.toLowerCase())).size === domains.length, {
+        message: "allowedEmailDomains entries must be unique, compared case-insensitively",
       })
       .refine((domains) => domains.length <= 1 || !containsAllEmailDomains(domains), {
         message: `allowedEmailDomains cannot contain other entries when ${ALL_EMAIL_DOMAINS} is set`,
@@ -207,7 +207,7 @@ export const IdPUserAuthPolicySchema = z
     (data) =>
       !data.allowGoogleOauth || (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
     {
-      message: `allowGoogleOauth requires a non-empty allowedEmailDomains (set ${ALL_EMAIL_DOMAINS} to allow every domain)`,
+      message: `allowGoogleOauth requires a non-empty allowedEmailDomains (["${ALL_EMAIL_DOMAINS}"] to allow every domain)`,
       path: ["allowGoogleOauth"],
     },
   )
@@ -220,7 +220,7 @@ export const IdPUserAuthPolicySchema = z
       !data.allowMicrosoftOauth ||
       (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
     {
-      message: `allowMicrosoftOauth requires a non-empty allowedEmailDomains (set ${ALL_EMAIL_DOMAINS} to allow every domain)`,
+      message: `allowMicrosoftOauth requires a non-empty allowedEmailDomains (["${ALL_EMAIL_DOMAINS}"] to allow every domain)`,
       path: ["allowMicrosoftOauth"],
     },
   )

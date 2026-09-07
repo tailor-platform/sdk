@@ -143,6 +143,11 @@ describe("IdPUserAuthPolicySchema validation", () => {
     ],
     ["a duplicated hostname", ["example.com", "example.com"], "entries must be unique"],
     [
+      "a hostname duplicated in another case",
+      ["Example.com", "example.com"],
+      "entries must be unique",
+    ],
+    [
       "101 entries",
       Array.from({ length: 101 }, (_, i) => `d${i}.example.com`),
       "accepts at most 100 entries",
@@ -150,6 +155,20 @@ describe("IdPUserAuthPolicySchema validation", () => {
   ])("rejects allowedEmailDomains with %s", (_name, allowedEmailDomains, message) => {
     expect(() => IdPUserAuthPolicySchema.parse({ allowedEmailDomains })).toThrow(message);
   });
+
+  test.each([["allowGoogleOauth"], ["allowMicrosoftOauth"]])(
+    "names the all-domains entry in the %s guidance",
+    (flag) => {
+      // ZodError.message serializes the issues as JSON, so the quotes in the
+      // guidance survive only when read off the issue itself.
+      const result = IdPUserAuthPolicySchema.safeParse({ [flag]: true, disablePasswordAuth: true });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.issues.map((issue) => issue.message)).toContain(
+        `${flag} requires a non-empty allowedEmailDomains (["*"] to allow every domain)`,
+      );
+    },
+  );
 
   test.each([["allowGoogleOauth"], ["allowMicrosoftOauth"]])(
     "accepts %s with the all-domains entry",
@@ -264,7 +283,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       };
 
       expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
-        "allowGoogleOauth requires a non-empty allowedEmailDomains (set * to allow every domain)",
+        "allowGoogleOauth requires a non-empty allowedEmailDomains",
       );
     },
   );
@@ -339,12 +358,12 @@ describe("IdPUserAuthPolicySchema validation", () => {
     [
       "allowedEmailDomains is not set",
       { allowMicrosoftOauth: true },
-      "allowMicrosoftOauth requires a non-empty allowedEmailDomains (set * to allow every domain)",
+      "allowMicrosoftOauth requires a non-empty allowedEmailDomains",
     ],
     [
       "allowedEmailDomains is empty",
       { allowMicrosoftOauth: true, allowedEmailDomains: [] },
-      "allowMicrosoftOauth requires a non-empty allowedEmailDomains (set * to allow every domain)",
+      "allowMicrosoftOauth requires a non-empty allowedEmailDomains",
     ],
   ])("rejects allowMicrosoftOauth when %s", (_name, policy, message) => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(message);
