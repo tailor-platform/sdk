@@ -206,7 +206,7 @@ defineIdp("my-idp", {
 - A non-empty `allowedEmailDomains` cannot be combined with `useNonEmailIdentifier: true` (an empty list is allowed). Enabling `allowGoogleOauth` or `allowMicrosoftOauth` is likewise rejected with `useNonEmailIdentifier: true` (leaving them `false` or unset is fine).
 - `allowGoogleOauth` requires a non-empty `allowedEmailDomains` (`["*"]` to allow every domain).
 - `allowMicrosoftOauth` requires both a non-empty `allowedEmailDomains` (`["*"]` to allow every domain) and `disablePasswordAuth: true`.
-- `allowedEmailDomains` entries must be unique, must each be a hostname or `"*"`, and number at most 100. `"*"` cannot appear alongside another entry.
+- `allowedEmailDomains` entries must each be a hostname or `"*"`, must be unique when compared case-insensitively, and number at most 100. `"*"` cannot appear alongside another entry.
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
 - `requireMfa: true` requires `enableMfa: true`.
 - `enableMfa: true` requires at least one entry in `allowedReturnOrigins`.
