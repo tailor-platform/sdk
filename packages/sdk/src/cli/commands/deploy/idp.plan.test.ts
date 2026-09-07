@@ -610,7 +610,7 @@ describe("planIdP and an implicit all-domains policy", () => {
     });
 
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("does not set userAuthPolicy.allowedEmailDomains"),
+      expect.stringContaining("leaves userAuthPolicy.allowedEmailDomains empty"),
     );
   });
 
@@ -631,7 +631,7 @@ describe("planIdP and an implicit all-domains policy", () => {
     });
 
     expect(logger.warn).not.toHaveBeenCalledWith(
-      expect.stringContaining("does not set userAuthPolicy.allowedEmailDomains"),
+      expect.stringContaining("leaves userAuthPolicy.allowedEmailDomains empty"),
     );
   });
 });

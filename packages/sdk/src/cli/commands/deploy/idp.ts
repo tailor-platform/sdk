@@ -518,7 +518,7 @@ async function planServices(
     }
     if (hasImplicitAllEmailDomains(userAuthPolicy)) {
       logger.warn(
-        `IdP service "${namespaceName}" does not set userAuthPolicy.allowedEmailDomains, which currently allows every email domain. The platform will stop treating an empty list as "allow every domain", so set allowedEmailDomains: ["${ALL_EMAIL_DOMAINS}"] to keep that behavior, or list the domains you accept.`,
+        `IdP service "${namespaceName}" leaves userAuthPolicy.allowedEmailDomains empty, which currently allows every email domain. The platform will stop treating an empty list as "allow every domain", so set allowedEmailDomains: ["${ALL_EMAIL_DOMAINS}"] to keep that behavior, or list the domains you accept.`,
       );
     }
     const parsedPermission = parseIdPPermission(idp.permission);
