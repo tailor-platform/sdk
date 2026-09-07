@@ -24,6 +24,7 @@ import {
   type OperatorClient,
 } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
 import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
@@ -468,6 +469,11 @@ async function planServices(
     if (omittedPermitLocations.length > 0) {
       logger.warn(
         `IdP service "${namespaceName}" has permission rule(s) ${omittedPermitLocations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+      );
+    }
+    if (hasImplicitAllEmailDomains(userAuthPolicy)) {
+      logger.warn(
+        `IdP service "${namespaceName}" does not set userAuthPolicy.allowedEmailDomains, which currently allows every email domain. The platform will stop treating an empty list as "allow every domain", so set allowedEmailDomains: ["${ALL_EMAIL_DOMAINS}"] to keep that behavior, or list the domains you accept.`,
       );
     }
     const parsedPermission = parseIdPPermission(idp.permission);

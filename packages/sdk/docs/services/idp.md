@@ -163,7 +163,9 @@ defineIdp("my-idp", {
 
 **Email domains and social login:**
 
-- `allowedEmailDomains` - Restrict registration to these email domains. An empty list (the default) allows all domains, but a non-empty list is required when `allowGoogleOauth` or `allowMicrosoftOauth` is enabled.
+- `allowedEmailDomains` - Restrict registration to these email domains. Each entry is a hostname (`example.com`), matched exactly and case-insensitively, so `example.com` does not cover `sub.example.com`. Up to 100 entries.
+  - A lone `"*"` entry allows every email domain. It cannot be combined with any other entry, and it is the only way to enable `allowGoogleOauth` or `allowMicrosoftOauth` without enumerating domains.
+  - An empty list (the default) also allows every domain today, but that meaning is going away: a future release requires the all-domains state to be spelled out. `tailor deploy` warns while both forms still work, so set `["*"]` to keep allowing every domain, or list the domains you accept.
 - `allowGoogleOauth` - Enable the "Sign in with Google" button. Default `false`.
 - `allowMicrosoftOauth` - Enable the "Sign in with Microsoft" button. Default `false`.
 
@@ -202,8 +204,9 @@ defineIdp("my-idp", {
 
 - `passwordMinLength` must be less than or equal to `passwordMaxLength`.
 - A non-empty `allowedEmailDomains` cannot be combined with `useNonEmailIdentifier: true` (an empty list is allowed). Enabling `allowGoogleOauth` or `allowMicrosoftOauth` is likewise rejected with `useNonEmailIdentifier: true` (leaving them `false` or unset is fine).
-- `allowGoogleOauth` requires a non-empty `allowedEmailDomains`.
-- `allowMicrosoftOauth` requires both a non-empty `allowedEmailDomains` and `disablePasswordAuth: true`.
+- `allowGoogleOauth` requires a non-empty `allowedEmailDomains` (`["*"]` to allow every domain).
+- `allowMicrosoftOauth` requires both a non-empty `allowedEmailDomains` (`["*"]` to allow every domain) and `disablePasswordAuth: true`.
+- `allowedEmailDomains` entries must be unique, must each be a hostname or `"*"`, and number at most 100. `"*"` cannot appear alongside another entry.
 - `disablePasswordAuth` requires `allowGoogleOauth` or `allowMicrosoftOauth`, and cannot be combined with `allowSelfPasswordReset`.
 - `requireMfa: true` requires `enableMfa: true`.
 - `enableMfa: true` requires at least one entry in `allowedReturnOrigins`.
