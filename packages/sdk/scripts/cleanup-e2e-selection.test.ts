@@ -1,6 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { describe, expect, test } from "vitest";
-import { selectWorkspacesToDelete, type CleanupWorkspace } from "./cleanup-e2e-workspaces";
+import { describe, expect, test, vi } from "vitest";
+import { selectWorkspacesToDelete, type CleanupWorkspace } from "./cleanup-e2e-selection";
 
 const NOW = new Date("2026-09-07T12:00:00Z");
 
@@ -61,6 +61,37 @@ describe("selectWorkspacesToDelete", () => {
     expect(selectWorkspacesToDelete([template], { runId: "123-template" }, NOW)).toEqual([
       template,
     ]);
+  });
+
+  test("matches every suffix a bare run id spawns across the e2e workflows", () => {
+    // sdk-metrics.yml passes the bare run id while its shards suffix theirs with
+    // the shard number; sdk-e2e.yml and deploy-drift-check.yml pass a composite id.
+    const all = [
+      workspace("e2e-ws-123-1-mabc"),
+      workspace("e2e-ws-123-sdk-mdef"),
+      workspace("e2e-ws-1234-1-mghi"),
+    ];
+
+    expect(selectWorkspacesToDelete(all, { runId: "123" }, NOW)).toEqual(all.slice(0, 2));
+  });
+
+  test("matches sdk-ci-migration-<runId> by its own run id", () => {
+    // `sdk-ci-migration-` has to be recognized on its own: with only `sdk-ci-`
+    // the remainder would be "migration-123" and never match run id "123".
+    const migration = workspace("sdk-ci-migration-123");
+
+    expect(selectWorkspacesToDelete([migration], { runId: "123" }, NOW)).toEqual([migration]);
+    expect(selectWorkspacesToDelete([migration], { runId: "12" }, NOW)).toEqual([]);
+  });
+
+  test("importing the selection module runs no CLI entrypoint", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.resetModules();
+
+    await import("./cleanup-e2e-selection");
+
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
   });
 
   test("selects only run-id-less workspaces old enough in local-orphan mode", () => {
