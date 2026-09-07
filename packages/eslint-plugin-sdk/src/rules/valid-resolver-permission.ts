@@ -3,7 +3,7 @@ import {
   type AstNode,
   literalElements,
   literalProperties,
-  objectProperty,
+  literalProperty,
   staticString,
   unwrapExpression,
 } from "../lib/ast.js";
@@ -30,7 +30,7 @@ function operand(context: Rule.RuleContext, node: AstNode): Operand {
   if (value?.type === "Literal" && typeof value.value === "boolean") return { kind: "boolean" };
   if (value?.type === "Literal") return { kind: "invalid" };
   if (literalProperties(value) === null) return { kind: "unknown" };
-  const user = objectProperty(value, "user");
+  const user = literalProperty(value, "user");
   if (user === null) return { kind: "invalid" };
   return { kind: "user", key: staticString(resolveValue(context, user.value)) };
 }
@@ -111,24 +111,26 @@ function checkPermission(context: Rule.RuleContext, node: AstNode): void {
       permitKnown = false;
       continue;
     }
-    const permit = unwrapExpression(resolveValue(context, objectProperty(policy, "permit")?.value));
+    const permit = unwrapExpression(
+      resolveValue(context, literalProperty(policy, "permit")?.value),
+    );
     if (permit?.type === "Literal" && typeof permit.value === "boolean") {
       permits ||= permit.value;
     } else {
       permitKnown = false;
     }
-    const conditions = objectProperty(policy, "conditions");
+    const conditions = literalProperty(policy, "conditions");
     if (conditions !== null) checkConditions(context, conditions.value);
   }
   if (permitKnown && !permits) context.report({ node: value, messageId: "noPermitPolicy" });
 }
 
 function defaultPermissions(context: Rule.RuleContext, config: AstCallExpression): AstNode[] {
-  const resolver = objectProperty(resolveValue(context, config.arguments[0]), "resolver");
+  const resolver = literalProperty(resolveValue(context, config.arguments[0]), "resolver");
   const namespaces = literalProperties(resolveValue(context, resolver?.value));
   if (namespaces === null) return [];
   return namespaces.flatMap((namespace) => {
-    const permission = objectProperty(resolveValue(context, namespace.value), "defaultPermission");
+    const permission = literalProperty(resolveValue(context, namespace.value), "defaultPermission");
     return permission === null ? [] : [permission.value];
   });
 }
@@ -163,7 +165,7 @@ const rule = {
         for (const call of calls) {
           const name = imports.callName(call);
           if (name === "createResolver") {
-            const permission = objectProperty(
+            const permission = literalProperty(
               resolveValue(context, call.arguments[0]),
               "permission",
             );

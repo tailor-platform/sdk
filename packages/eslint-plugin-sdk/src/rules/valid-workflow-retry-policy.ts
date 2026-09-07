@@ -4,7 +4,7 @@ import {
   type AstNode,
   type AstProperty,
   literalProperties,
-  objectProperty,
+  literalProperty,
   propertyName,
   staticString,
   unwrapExpression,
@@ -19,7 +19,10 @@ interface Duration {
 
 function numberValue(context: Rule.RuleContext, node: AstNode | null | undefined): number | null {
   const value = unwrapExpression(resolveValue(context, node));
-  return value?.type === "Literal" && typeof value.value === "number" ? value.value : null;
+  if (value?.type === "Literal" && typeof value.value === "number") return value.value;
+  if (value?.type !== "UnaryExpression" || value.operator !== "-") return null;
+  const operand = unwrapExpression(value.argument);
+  return operand?.type === "Literal" && typeof operand.value === "number" ? -operand.value : null;
 }
 
 function checkDuration(
@@ -116,7 +119,7 @@ const rule = {
       "Program:exit"() {
         for (const call of calls) {
           if (imports.callName(call) !== "createWorkflow") continue;
-          const retryPolicy = objectProperty(
+          const retryPolicy = literalProperty(
             resolveValue(context, call.arguments[0]),
             "retryPolicy",
           );

@@ -173,6 +173,15 @@ export function literalElements(node: AstNode | null | undefined): AstNode[] | n
   return elements;
 }
 
+/** One property of an object literal that carries no spread; null when unresolvable. */
+export function literalProperty(
+  node: AstNode | null | undefined,
+  name: string,
+): AstProperty | null {
+  const properties = literalProperties(node);
+  return properties?.findLast((property) => propertyName(property) === name) ?? null;
+}
+
 export function propertyName(property: AstProperty): string | null {
   if (property.computed) return null;
   if (property.key.type === "Identifier") return property.key.name;

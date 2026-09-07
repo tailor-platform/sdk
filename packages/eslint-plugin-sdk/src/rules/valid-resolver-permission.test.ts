@@ -113,6 +113,17 @@ describe("valid-resolver-permission", () => {
     );
   });
 
+  test("skips a permission a later spread can override", () => {
+    expectClean(
+      'import { createResolver } from "@tailor-platform/sdk";\nexport default createResolver({ name: "r", body: () => 1, permission: [], ...overrides });',
+      RULE,
+    );
+    expectClean(
+      'import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "app", resolver: { main: { files: [], defaultPermission: [] }, ...extra } });',
+      RULE,
+    );
+  });
+
   test("skips values it cannot resolve statically", () => {
     expectClean(resolver("buildPermission()"), RULE);
     expectClean(

@@ -67,6 +67,26 @@ describe("valid-workflow-retry-policy", () => {
     );
   });
 
+  test("rejects negative numeric values", () => {
+    expectViolation(
+      workflow('{ maxRetries: -1, initialBackoff: "1s", maxBackoff: "30s", backoffMultiplier: 2 }'),
+      RULE,
+      "maxRetries must be an integer between 1 and 10",
+    );
+    expectViolation(
+      workflow('{ maxRetries: 3, initialBackoff: "1s", maxBackoff: "30s", backoffMultiplier: -1 }'),
+      RULE,
+      "backoffMultiplier must be at least 1",
+    );
+  });
+
+  test("skips a retryPolicy a later spread can override", () => {
+    expectClean(
+      `${HEAD}export default createWorkflow({ name: "wf", mainJob: main, retryPolicy: { maxRetries: 0, initialBackoff: "1m", maxBackoff: "1s", backoffMultiplier: 2 }, ...overrides });`,
+      RULE,
+    );
+  });
+
   test("follows const values and reports each violation once", () => {
     expectViolation(
       `${HEAD}const retryPolicy = { maxRetries: 3, initialBackoff: "1m", maxBackoff: "30s", backoffMultiplier: 2 };\nexport default createWorkflow({ name: "wf", mainJob: main, retryPolicy });`,
