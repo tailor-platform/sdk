@@ -1387,6 +1387,109 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.age!.unique).toBe(false);
   });
 
+  test("keeps removed nested members readable until the migration script completes", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: {
+          zipCode: { type: "string", required: false },
+          geo: {
+            type: "nested",
+            required: false,
+            fields: { lat: { type: "float", required: true } },
+          },
+        },
+      },
+    };
+    const before: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zip: { type: "string", required: true, description: "Postal code", index: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: {
+            lat: { type: "float", required: true },
+            lng: { type: "float", required: true },
+          },
+        },
+      },
+    };
+    const after: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zipCode: { type: "string", required: false },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { lat: { type: "float", required: true } },
+        },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        { kind: "field_modified", tableName: "User", fieldName: "address", before, after },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(Object.keys(address.fields ?? {})).toEqual(["zipCode", "geo", "zip"]);
+    expect(address.fields!.zip).toMatchObject({
+      type: "string",
+      required: true,
+      description: "Postal code",
+      index: false,
+    });
+    expect(Object.keys(address.fields!.geo!.fields ?? {})).toEqual(["lat", "lng"]);
+    expect(address.fields!.geo!.fields!.lng).toMatchObject({ type: "float", required: true });
+  });
+
+  test("does not restore members whose parent is no longer nested", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: { geo: { type: "string", required: false } },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: {
+            type: "nested",
+            required: false,
+            fields: {
+              geo: {
+                type: "nested",
+                required: false,
+                fields: { lat: { type: "float", required: false } },
+              },
+            },
+          },
+          after: {
+            type: "nested",
+            required: false,
+            fields: { geo: { type: "string", required: false } },
+          },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.address!.fields!.geo).toEqual({ type: "string", required: false });
+  });
+
   test("keeps the previous enum values when the target drops every value", () => {
     const fields: Record<string, ProtoField> = {
       kind: { type: "enum", required: false, allowedValues: [] },
