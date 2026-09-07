@@ -106,6 +106,17 @@ describe("Date representation", () => {
     });
   });
 
+  test("collects invalid calendar dates before running custom validators", () => {
+    const validate = vi.fn();
+    const schema = t
+      .object({ dates: t.date({ representation: "date", array: true }).validate(validate) })
+      .validate(validate);
+    expect(parse(schema, { dates: ["2023-02-29", "2026-04-31"] })).toMatchObject({
+      issues: [{ path: ["dates", "[0]"] }, { path: ["dates", "[1]"] }],
+    });
+    expect(validate).not.toHaveBeenCalled();
+  });
+
   test.each([null, undefined])("preserves optional input and output %s", (value) => {
     const field = t.date({ representation: "date", optional: true });
     expect(field.parse({ value, data: {}, invoker: null })).toEqual({ value: null });

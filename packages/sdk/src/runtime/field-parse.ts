@@ -95,11 +95,6 @@ function validateBaseValue<T extends TailorFieldType>(args: FieldValidationArgs<
           message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
           path,
         });
-      } else if (field._metadata.representation === "date") {
-        const date = new Date(`${value}T00:00:00.000Z`);
-        if (!Number.isFinite(date.getTime()) || formatDate(date) !== value) {
-          issues.push({ message: `Expected a valid calendar date: received ${value}`, path });
-        }
       }
       break;
     case "datetime":
@@ -279,8 +274,10 @@ export function parseInternal<T extends TailorFieldType, Output>(
   const validationArgs = { ...args, issues };
   const baseValid = validateBaseField(validationArgs);
   if (baseValid) {
-    value = deserializeDates(args.field, value);
-    validateCustomField({ ...validationArgs, value });
+    value = deserializeDates(validationArgs);
+    if (issues.length === 0) {
+      validateCustomField({ ...validationArgs, value });
+    }
   }
   if (issues.length > 0) {
     return { issues };
@@ -289,17 +286,30 @@ export function parseInternal<T extends TailorFieldType, Output>(
   return { value: (value ?? null) as Output };
 }
 
-function deserializeDates(field: FieldRuntime, value: unknown): unknown {
+function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
+  const { field, value, issues, pathArray } = args;
   if (value === null || value === undefined) return value;
-  const convert = (item: unknown): unknown => {
+  const convert = (item: unknown, itemPath: string[]): unknown => {
     if (field.type === "date" && field._metadata.representation === "date") {
-      return new Date(`${item}T00:00:00.000Z`);
+      const date = new Date(`${item}T00:00:00.000Z`);
+      if (!Number.isFinite(date.getTime()) || formatDate(date) !== item) {
+        issues.push({
+          message: `Expected a valid calendar date: received ${item}`,
+          path: itemPath.length > 0 ? itemPath : undefined,
+        });
+      }
+      return date;
     }
     if (field.type !== "nested") return item;
     const record = item as Record<string, unknown>;
     let result = record;
     for (const [key, child] of Object.entries(field.fields)) {
-      const converted = deserializeDates(child, record[key]);
+      const converted = deserializeDates({
+        ...args,
+        field: child,
+        value: record[key],
+        pathArray: itemPath.concat(key),
+      });
       if (converted !== record[key]) {
         if (result === record) result = { ...record };
         Object.defineProperty(result, key, {
@@ -312,9 +322,9 @@ function deserializeDates(field: FieldRuntime, value: unknown): unknown {
     }
     return result;
   };
-  if (!field._metadata.array) return convert(value);
+  if (!field._metadata.array) return convert(value, pathArray);
   const values = value as unknown[];
-  const converted = values.map(convert);
+  const converted = values.map((item, index) => convert(item, pathArray.concat(`[${index}]`)));
   return converted.every((item, index) => item === values[index]) ? value : converted;
 }
 
