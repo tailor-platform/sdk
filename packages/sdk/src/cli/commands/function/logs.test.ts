@@ -426,9 +426,78 @@ describe("logs command detail output", () => {
     expect(plain).toContain("Error: boom");
   });
 
-  test("--follow retries transient poll errors and reports them", async () => {
+  test("--follow reprints the summary with the final status after following", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    const writes: string[] = [];
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+    try {
+      mockClient([
+        functionExecution({ status: FunctionExecution_Status.RUNNING }),
+        functionExecution({ status: FunctionExecution_Status.SUCCESS, logs: "done" }),
+      ]);
+
+      await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+
+    const tables = writes.map(stripAnsi).filter((chunk) => chunk.includes("scriptName"));
+    expect(tables).toHaveLength(2);
+    expect(tables[0]).toContain("RUNNING");
+    expect(tables[1]).toContain("SUCCESS");
+  });
+
+  test("--follow falls back to the flat logs when no entries ever arrive", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
+    mockClient([
+      functionExecution({ status: FunctionExecution_Status.RUNNING }),
+      functionExecution({ status: FunctionExecution_Status.SUCCESS, logs: "only at the end" }),
+    ]);
+
+    await runCommand(logsCommand, ["exec-1", "--follow", "--interval", "1ms"]);
+
+    const plain = stripAnsi(stderr.output);
+    expect(plain).toContain("  only at the end");
+    expect(plain.match(/Logs:/g)).toHaveLength(1);
+  });
+
+  test("--follow --timeout stops with an error when the execution does not finish", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    const getFunctionExecution = vi.fn().mockResolvedValue({
+      execution: functionExecution({ status: FunctionExecution_Status.RUNNING }),
+    });
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      getFunctionExecution,
+    } as unknown as OperatorClient);
+
+    const result = await runCommand(logsCommand, [
+      "exec-1",
+      "--follow",
+      "--interval",
+      "1ms",
+      "--timeout",
+      "20ms",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.message).toContain("Timed out");
+    expect(result.error?.message).toContain("RUNNING");
+    expect(getFunctionExecution).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      executionId: "exec-1",
+    });
+  });
+
+  test("--follow retries transient poll errors and reports them even in JSON mode", async () => {
+    using stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
     const getFunctionExecution = vi
       .fn()
       .mockResolvedValueOnce({
@@ -452,9 +521,8 @@ describe("logs command detail output", () => {
 
     expect(result.success).toBe(true);
     expect(getFunctionExecution).toHaveBeenCalledTimes(3);
-    const plain = stripAnsi(stderr.output);
-    expect(plain).toContain("Retrying function execution poll");
-    expect(plain).toContain("[WARNING] careful");
+    expect(stripAnsi(stderr.output)).toContain("Retrying function execution poll");
+    expect(JSON.parse(stdout.output).logEntries).toHaveLength(2);
   });
 
   test("--follow stops on a non-retryable poll error", async () => {

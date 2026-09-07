@@ -252,6 +252,8 @@ async function fetchFunctionExecution(
 interface FollowFunctionExecutionOptions extends FetchFunctionExecutionOptions {
   /** Polling interval in milliseconds */
   interval: number;
+  /** Maximum time to keep polling in milliseconds; unbounded when omitted */
+  timeout?: number;
   /** Print the summary, new log entries, and status changes as they arrive */
   showProgress: boolean;
 }
@@ -260,6 +262,8 @@ interface FollowFunctionExecutionResult {
   execution: FunctionExecution;
   /** Number of log entries already printed while following */
   printedEntries: number;
+  /** Whether at least one poll was needed before the execution completed */
+  followed: boolean;
 }
 
 /**
@@ -272,9 +276,26 @@ interface FollowFunctionExecutionResult {
 async function followFunctionExecution(
   options: FollowFunctionExecutionOptions,
 ): Promise<FollowFunctionExecutionResult> {
-  const { interval, showProgress } = options;
+  const { interval, timeout, showProgress } = options;
+  const startedAt = Date.now();
   let printedEntries = 0;
   let lastStatus: FunctionExecution_Status | undefined;
+
+  const sleepOrTimeOut = async (): Promise<void> => {
+    if (timeout === undefined) {
+      await setTimeout(interval);
+      return;
+    }
+    const remainingMs = timeout - (Date.now() - startedAt);
+    if (remainingMs <= 0) {
+      const lastStatusText =
+        lastStatus === undefined ? "unknown" : functionExecutionStatusToString(lastStatus);
+      throw new Error(
+        `Timed out waiting for function execution '${options.executionId}' to complete. Last status: ${lastStatusText}.`,
+      );
+    }
+    await setTimeout(Math.min(interval, remainingMs));
+  };
 
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
@@ -285,12 +306,10 @@ async function followFunctionExecution(
       if (!isRetryableWaitError(error)) {
         throw error;
       }
-      if (showProgress) {
-        logger.warn(`Retrying function execution poll: ${formatWaitError(error)}`, {
-          mode: "stream",
-        });
-      }
-      await setTimeout(interval);
+      logger.warn(`Retrying function execution poll: ${formatWaitError(error)}`, {
+        mode: "stream",
+      });
+      await sleepOrTimeOut();
       continue;
     }
 
@@ -319,12 +338,13 @@ async function followFunctionExecution(
         logger.info(`Status: ${status}`, { mode: "stream" });
       }
     }
+    const followed = lastStatus !== undefined;
     lastStatus = execution.status;
 
     if (isFunctionExecutionTerminalStatus(execution.status)) {
-      return { execution, printedEntries };
+      return { execution, printedEntries, followed };
     }
-    await setTimeout(interval);
+    await sleepOrTimeOut();
   }
 }
 
@@ -408,7 +428,7 @@ export const logsCommand = defineAppCommand({
   description: "List or get function execution logs.",
   notes: `Execution details include \`logEntries\`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running, whereas the flat \`logs\` string is filled in only after completion. The human-readable view shows the structured entries when present and falls back to \`logs\` otherwise.
 
-Use \`--follow\` to keep polling a running execution and print new log entries as they arrive until it completes. With \`--json\`, \`--follow\` waits for completion and then emits the final execution details once.
+Use \`--follow\` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless \`--timeout\` is set. On environments where no structured entries are returned, \`--follow\` shows the flat \`logs\` string once the execution completes. With \`--json\`, \`--follow\` waits for completion and then emits the final execution details once.
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching \`function run\` output).
 
@@ -451,6 +471,10 @@ Stack traces are mapped only when the execution includes a content hash for the 
       alias: "i",
       description: "Polling interval for --follow (e.g., '3s', '500ms', '1m')",
     }),
+    timeout: arg(durationArg.optional(), {
+      alias: "t",
+      description: "Maximum time to keep following (e.g., '30s', '10m'); unbounded by default",
+    }),
   }),
   run: async (args) => {
     if (args.follow && !args.executionId) {
@@ -465,13 +489,18 @@ Stack traces are mapped only when the execution includes a content hash for the 
     if (args.executionId) {
       const jsonOutput = logger.jsonMode || args.json;
       const fetchOptions = { client, workspaceId, executionId: args.executionId };
-      const { execution, printedEntries } = args.follow
+      const { execution, printedEntries, followed } = args.follow
         ? await followFunctionExecution({
             ...fetchOptions,
             interval: parseDuration(args.interval),
+            timeout: args.timeout === undefined ? undefined : parseDuration(args.timeout),
             showProgress: !jsonOutput,
           })
-        : { execution: await fetchFunctionExecution(fetchOptions), printedEntries: 0 };
+        : {
+            execution: await fetchFunctionExecution(fetchOptions),
+            printedEntries: 0,
+            followed: false,
+          };
 
       const detail = toFunctionExecutionDetailInfo(execution);
 
@@ -480,7 +509,7 @@ Stack traces are mapped only when the execution includes a content hash for the 
         return;
       }
 
-      if (!args.follow) {
+      if (!args.follow || followed) {
         printFunctionExecutionSummary(detail);
       }
       if (printedEntries === 0) {

@@ -91,6 +91,7 @@ tailor function logs [options] [execution-id]
 | `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0: unlimited)                                             | No       | `50`     | -                              |
 | `--follow`                      | `-f`  | Keep polling a running execution and print new log entries as they arrive (detail mode only) | No       | `false`  | -                              |
 | `--interval <INTERVAL>`         | `-i`  | Polling interval for --follow (e.g., '3s', '500ms', '1m')                                    | No       | `"3s"`   | -                              |
+| `--timeout <TIMEOUT>`           | `-t`  | Maximum time to keep following (e.g., '30s', '10m'); unbounded by default                    | No       | -        | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -130,7 +131,7 @@ $ tailor function logs <execution-id> --follow
 
 Execution details include `logEntries`, the structured log lines (message, severity, timestamp) recorded while the function ran. They are available while the execution is still running, whereas the flat `logs` string is filled in only after completion. The human-readable view shows the structured entries when present and falls back to `logs` otherwise.
 
-Use `--follow` to keep polling a running execution and print new log entries as they arrive until it completes. With `--json`, `--follow` waits for completion and then emits the final execution details once.
+Use `--follow` to keep polling a running execution and print new log entries as they arrive until it completes. Polling continues while the execution is suspended at a wait point, and indefinitely unless `--timeout` is set. On environments where no structured entries are returned, `--follow` shows the flat `logs` string once the execution completes. With `--json`, `--follow` waits for completion and then emits the final execution details once.
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function run` output).
 
