@@ -31,7 +31,7 @@ function serialize(field: DateField, value: unknown, path: string): unknown {
 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
   if (value === null || value === undefined) return value;
-  if (field.type === "date" && field.metadata.representation === "date") {
+  if (field.type === "date" && field.metadata.as === "date") {
     if (!(value instanceof Date)) {
       throw new TypeError(`Expected a Date at ${path || "<root>"}`);
     }

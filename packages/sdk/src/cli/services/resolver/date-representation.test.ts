@@ -35,14 +35,14 @@ describe("resolver Date representation bundles", () => {
       sourceFile,
       `
       import { createResolver, t } from "@tailor-platform/sdk";
-      const date = t.date({ representation: "date" }).validate(({ value }) =>
+      const date = t.date({ as: "date" }).validate(({ value }) =>
         value instanceof Date ? undefined : "Expected Date in validator"
       );
       const fields = {
         rows: t.object({
           day: date,
-          dates: t.date({ representation: "date", array: true }),
-          absent: t.date({ representation: "date", optional: true }),
+          dates: t.date({ as: "date", array: true }),
+          absent: t.date({ as: "date", optional: true }),
           plain: t.date(),
         }, { array: true }),
       };

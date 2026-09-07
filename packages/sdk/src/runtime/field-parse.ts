@@ -290,7 +290,7 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
   const { field, value, issues, pathArray } = args;
   if (value === null || value === undefined) return value;
   const convert = (item: unknown, itemPath: string[]): unknown => {
-    if (field.type === "date" && field._metadata.representation === "date") {
+    if (field.type === "date" && field._metadata.as === "date") {
       const date = new Date(`${item}T00:00:00.000Z`);
       if (!Number.isFinite(date.getTime()) || formatDate(date) !== item) {
         issues.push({

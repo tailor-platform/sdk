@@ -122,18 +122,18 @@ createResolver({
 
 ### Date Values
 
-`t.date()` uses `YYYY-MM-DD` strings by default. Use `t.date({ representation: "date" })` to work with JavaScript `Date` values in the resolver body and input validators:
+`t.date()` uses `YYYY-MM-DD` strings by default. Use `t.date({ as: "date" })` to work with JavaScript `Date` values in the resolver body and input validators:
 
 ```typescript
 createResolver({
   name: "nextDay",
   operation: "query",
-  input: { day: t.date({ representation: "date" }) },
+  input: { day: t.date({ as: "date" }) },
   body: ({ input }) => {
     input.day.setUTCDate(input.day.getUTCDate() + 1);
     return input.day;
   },
-  output: t.date({ representation: "date" }),
+  output: t.date({ as: "date" }),
 });
 ```
 

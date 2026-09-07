@@ -17,7 +17,7 @@ export type TailorFieldInput = {
   /** Field metadata configuration */
   metadata: {
     /** Date value representation */
-    representation?: "string" | "date" | undefined;
+    as?: "string" | "date" | undefined;
     /** Whether the field is required */
     required?: boolean | undefined;
     /** Whether the field is an array */
@@ -71,7 +71,7 @@ export type TailorField = {
   /** Field metadata configuration */
   metadata: {
     /** Date value representation */
-    representation?: "string" | "date" | undefined;
+    as?: "string" | "date" | undefined;
     /** Whether the field is required */
     required?: boolean | undefined;
     /** Whether the field is an array */

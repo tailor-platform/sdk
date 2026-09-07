@@ -1423,7 +1423,7 @@ export type AuthConfigInput =
             | "time"
             | "nested";
           metadata: {
-            representation?: "string" | "date" | undefined;
+            as?: "string" | "date" | undefined;
             required?: boolean | undefined;
             array?: boolean | undefined;
             description?: string | undefined;
@@ -2841,7 +2841,7 @@ export type AuthConfig =
             | "time"
             | "nested";
           metadata: {
-            representation?: "string" | "date" | undefined;
+            as?: "string" | "date" | undefined;
             required?: boolean | undefined;
             array?: boolean | undefined;
             description?: string | undefined;

@@ -13,10 +13,10 @@ const parse = (field: ReturnType<typeof t.object>, value: unknown) =>
 describe("Date representation", () => {
   test("infers Date only when opted in, preserving arrays and optional fields", () => {
     const plain = t.date();
-    const explicit = t.date({ representation: "string" });
-    const date = t.date({ representation: "date" });
-    const optional = t.date({ representation: "date", optional: true });
-    const array = t.date({ representation: "date", array: true, optional: true });
+    const explicit = t.date({ as: "string" });
+    const date = t.date({ as: "date" });
+    const optional = t.date({ as: "date", optional: true });
+    const array = t.date({ as: "date", array: true, optional: true });
     expectTypeOf<output<typeof plain>>().toEqualTypeOf<string>();
     expectTypeOf<output<typeof explicit>>().toEqualTypeOf<string>();
     expectTypeOf<output<typeof date>>().toEqualTypeOf<Date>();
@@ -24,23 +24,23 @@ describe("Date representation", () => {
     expectTypeOf<output<typeof array>>().toEqualTypeOf<Date[] | null>();
     const dynamic = (options: DateFieldOptions) => t.date(options);
     expectTypeOf<output<ReturnType<typeof dynamic>>>().toEqualTypeOf<string | Date>();
-    expect(plain.metadata).not.toHaveProperty("representation");
-    expect(date.metadata.representation).toBe("date");
+    expect(plain.metadata).not.toHaveProperty("as");
+    expect(date.metadata.as).toBe("date");
   });
 
   test("converts nested input before field and parent validation without mutating it", () => {
     const validateDate = vi.fn(({ value }: { value: Date }) => {
       expect(value).toBeInstanceOf(Date);
     });
-    const date = t.date({ representation: "date" }).description("Day").validate(validateDate);
+    const date = t.date({ as: "date" }).description("Day").validate(validateDate);
     const schema = t
       .object({
         rows: t
           .object(
             {
               date,
-              dates: t.date({ representation: "date", array: true }),
-              absent: t.date({ representation: "date", optional: true }),
+              dates: t.date({ as: "date", array: true }),
+              absent: t.date({ as: "date", optional: true }),
               plain: t.date(),
             },
             { array: true },
@@ -92,7 +92,7 @@ describe("Date representation", () => {
     "2026-09-07T00:00:00Z",
   ])("rejects invalid date input %s with a nested path", (value) => {
     const schema = t.object({
-      rows: t.object({ date: t.date({ representation: "date" }) }, { array: true }),
+      rows: t.object({ date: t.date({ as: "date" }) }, { array: true }),
     });
     expect(parse(schema, { rows: [{ date: value }] })).toMatchObject({
       issues: [{ path: ["rows", "[0]", "date"] }],
@@ -109,7 +109,7 @@ describe("Date representation", () => {
   test("collects invalid calendar dates before running custom validators", () => {
     const validate = vi.fn();
     const schema = t
-      .object({ dates: t.date({ representation: "date", array: true }).validate(validate) })
+      .object({ dates: t.date({ as: "date", array: true }).validate(validate) })
       .validate(validate);
     expect(parse(schema, { dates: ["2023-02-29", "2026-04-31"] })).toMatchObject({
       issues: [{ path: ["dates", "[0]"] }, { path: ["dates", "[1]"] }],
@@ -118,13 +118,13 @@ describe("Date representation", () => {
   });
 
   test.each([null, undefined])("preserves optional input and output %s", (value) => {
-    const field = t.date({ representation: "date", optional: true });
+    const field = t.date({ as: "date", optional: true });
     expect(field.parse({ value, data: {}, invoker: null })).toEqual({ value: null });
     expect(serializeDateFields(field, value)).toBe(value);
   });
 
   test("formats the UTC calendar date and pads four-digit years", () => {
-    const field = t.date({ representation: "date", array: true });
+    const field = t.date({ as: "date", array: true });
     expect(
       serializeDateFields(field, [
         new Date("2026-09-07T00:00:00+09:00"),
@@ -138,7 +138,7 @@ describe("Date representation", () => {
   test.each([new Date(NaN), new Date("+010000-01-01"), new Date("-000001-01-01")])(
     "rejects unrepresentable Date output %s",
     (value) => {
-      const schema = t.object({ dates: t.date({ representation: "date", array: true }) });
+      const schema = t.object({ dates: t.date({ as: "date", array: true }) });
       expect(() => serializeDateFields(schema, { dates: [value] })).toThrow(
         "Invalid date at dates[0]",
       );
@@ -146,7 +146,7 @@ describe("Date representation", () => {
   );
 
   test("rejects strings returned for a Date representation", () => {
-    expect(() => serializeDateFields(t.date({ representation: "date" }), "2026-09-07")).toThrow(
+    expect(() => serializeDateFields(t.date({ as: "date" }), "2026-09-07")).toThrow(
       "Expected a Date at <root>",
     );
   });
@@ -155,14 +155,14 @@ describe("Date representation", () => {
     const resolver = createResolver({
       name: "dateExample",
       operation: "query",
-      input: { date: t.date({ representation: "date" }) },
+      input: { date: t.date({ as: "date" }) },
       body: ({ input }) => {
         expectTypeOf(input.date).toEqualTypeOf<Date>();
         return { date: input.date };
       },
-      output: { date: t.date({ representation: "date" }) },
+      output: { date: t.date({ as: "date" }) },
     });
-    expect(ResolverSchema.parse(resolver).input?.date?.metadata.representation).toBe("date");
-    expect(ResolverSchema.parse(resolver).output.fields.date?.metadata.representation).toBe("date");
+    expect(ResolverSchema.parse(resolver).input?.date?.metadata.as).toBe("date");
+    expect(ResolverSchema.parse(resolver).output.fields.date?.metadata.as).toBe("date");
   });
 });
