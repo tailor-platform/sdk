@@ -65,6 +65,17 @@ export function expectViolation(
   expect(result.output).toContain(message);
 }
 
+export function expectReportCount(
+  source: string,
+  rule: string,
+  count: number,
+  filename?: string,
+): void {
+  const output = lint(source, rule, filename).output;
+  const reports = output.split("\n").filter((line) => line.includes(`tailor-sdk(${rule})`));
+  expect({ reports: reports.length, output }).toMatchObject({ reports: count });
+}
+
 export function expectClean(source: string, rule: string, filename?: string): void {
   const result = lint(source, rule, filename);
   expect({ status: result.status, output: result.output }).toMatchObject({ status: 0 });

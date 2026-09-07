@@ -61,7 +61,6 @@ export function isValueReference(node: AstIdentifier): boolean {
     case "ImportSpecifier":
     case "ImportDefaultSpecifier":
     case "ImportNamespaceSpecifier":
-    case "ExportSpecifier":
     case "LabeledStatement":
     case "BreakStatement":
     case "ContinueStatement":
@@ -74,6 +73,11 @@ export function isValueReference(node: AstIdentifier): boolean {
     case "MethodDefinition":
     case "PropertyDefinition":
       return parent.key !== node || parent.computed;
+    case "VariableDeclarator":
+      return parent.id !== node;
+    case "FunctionDeclaration":
+    case "ClassDeclaration":
+      return parent.id !== node;
     default:
       return true;
   }

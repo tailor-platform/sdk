@@ -52,9 +52,19 @@ function isBindingReference(
   );
 }
 
+function isDeclared(node: object): boolean {
+  return "declare" in node && node.declare === true;
+}
+
 function isValueDefinition(definition: Scope.Definition): boolean {
   const kind: string = definition.type;
   if (kind === "Type") return false;
+  if (
+    isDeclared(definition.node) ||
+    (definition.parent !== null && isDeclared(definition.parent))
+  ) {
+    return false;
+  }
   if (kind !== "ImportBinding") return true;
   const declaration = definition.parent as { importKind?: string } | null | undefined;
   const specifier = definition.node as { importKind?: string };

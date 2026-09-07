@@ -1,6 +1,6 @@
 /* oxlint-disable vitest/expect-expect -- Assertions are centralized in shared lint helpers. */
 import { describe, expect, test } from "vitest";
-import { expectClean, expectViolation, lintOutput } from "./test-helpers.js";
+import { expectClean, expectReportCount, expectViolation, lintOutput } from "./test-helpers.js";
 
 const RULE = "no-node-only-globals";
 const RESOLVER =
@@ -85,6 +85,24 @@ describe("no-node-only-globals", () => {
     expectClean(
       `${RESOLVER}export const region = typeof process === "undefined" || !process.env ? undefined : process.env.REGION;`,
       RULE,
+    );
+  });
+
+  test("still reports references shadowed only by an ambient declaration", () => {
+    expectViolation(
+      `${RESOLVER}declare const process: { env: Record<string, string> };\nexport const region = process.env.REGION;`,
+      RULE,
+      '"process" is not available',
+    );
+    expectReportCount(
+      `${RESOLVER}declare const process: { env: Record<string, string> };\nexport const region = process.env.REGION;`,
+      RULE,
+      1,
+    );
+    expectViolation(
+      `${RESOLVER}declare function require(id: string): unknown;\nexport const fs = require("fs");`,
+      RULE,
+      '"require" is not available',
     );
   });
 
