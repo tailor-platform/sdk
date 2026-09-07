@@ -101,6 +101,79 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.allowedEmailDomains).toEqual(expected);
   });
 
+  test.each([
+    ["the all-domains entry on its own", ["*"]],
+    ["a single hostname", ["example.com"]],
+    ["a hostname with a mixed-case label", ["Corp.Example.com"]],
+    ["a single-label hostname", ["localhost"]],
+    ["a hostname with digits and hyphens", ["my-corp-1.example.co.jp"]],
+    ["100 entries", Array.from({ length: 100 }, (_, i) => `d${i}.example.com`)],
+  ])("accepts allowedEmailDomains with %s", (_name, allowedEmailDomains) => {
+    const result = IdPUserAuthPolicySchema.parse({ allowedEmailDomains });
+    expect(result.allowedEmailDomains).toEqual(allowedEmailDomains);
+  });
+
+  test.each([
+    [
+      "the all-domains entry alongside a hostname",
+      ["*", "example.com"],
+      "allowedEmailDomains cannot contain other entries when * is set",
+    ],
+    [
+      "a padded all-domains entry alongside a hostname",
+      [" *", "example.com"],
+      "allowedEmailDomains cannot contain other entries when * is set",
+    ],
+    [
+      "a wildcard subdomain",
+      ["*.example.com"],
+      "must be a hostname, or * to allow all email domains",
+    ],
+    ["a padded hostname", [" example.com "], "must be a hostname, or * to allow all email domains"],
+    [
+      "an email address",
+      ["user@example.com"],
+      "must be a hostname, or * to allow all email domains",
+    ],
+    [
+      "a label starting with a hyphen",
+      ["-example.com"],
+      "must be a hostname, or * to allow all email domains",
+    ],
+    ["a duplicated hostname", ["example.com", "example.com"], "entries must be unique"],
+    [
+      "101 entries",
+      Array.from({ length: 101 }, (_, i) => `d${i}.example.com`),
+      "accepts at most 100 entries",
+    ],
+  ])("rejects allowedEmailDomains with %s", (_name, allowedEmailDomains, message) => {
+    expect(() => IdPUserAuthPolicySchema.parse({ allowedEmailDomains })).toThrow(message);
+  });
+
+  test.each([["allowGoogleOauth"], ["allowMicrosoftOauth"]])(
+    "accepts %s with the all-domains entry",
+    (flag) => {
+      const policy = {
+        [flag]: true,
+        allowedEmailDomains: ["*"],
+        disablePasswordAuth: true,
+      };
+
+      expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+    },
+  );
+
+  test("rejects the all-domains entry when useNonEmailIdentifier is true", () => {
+    const policy = {
+      useNonEmailIdentifier: true,
+      allowedEmailDomains: ["*"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowedEmailDomains cannot be set when useNonEmailIdentifier is true",
+    );
+  });
+
   test("rejects allowedEmailDomains when useNonEmailIdentifier is true", () => {
     const policy = {
       useNonEmailIdentifier: true,
@@ -190,7 +263,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       };
 
       expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
-        "allowGoogleOauth requires allowedEmailDomains to be set",
+        "allowGoogleOauth requires a non-empty allowedEmailDomains (set * to allow every domain)",
       );
     },
   );
@@ -265,12 +338,12 @@ describe("IdPUserAuthPolicySchema validation", () => {
     [
       "allowedEmailDomains is not set",
       { allowMicrosoftOauth: true },
-      "allowMicrosoftOauth requires allowedEmailDomains to be set",
+      "allowMicrosoftOauth requires a non-empty allowedEmailDomains (set * to allow every domain)",
     ],
     [
       "allowedEmailDomains is empty",
       { allowMicrosoftOauth: true, allowedEmailDomains: [] },
-      "allowMicrosoftOauth requires allowedEmailDomains to be set",
+      "allowMicrosoftOauth requires a non-empty allowedEmailDomains (set * to allow every domain)",
     ],
   ])("rejects allowMicrosoftOauth when %s", (_name, policy, message) => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(message);

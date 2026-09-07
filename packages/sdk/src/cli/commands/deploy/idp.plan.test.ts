@@ -1,5 +1,7 @@
 import { IdPLang, IdPPermissionPermit } from "@tailor-platform/tailor-proto/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { planIdP } from "./idp";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -54,6 +56,7 @@ type MockIdpServiceOpts = {
   publishEvents?: boolean | undefined;
   gqlOperations?: Record<string, boolean | undefined>;
   omitUserAuthPolicy?: boolean;
+  userAuthPolicy?: Record<string, unknown>;
 };
 
 function createMockApplication(opts?: {
@@ -80,6 +83,7 @@ function createMockApplication(opts?: {
           allowGoogleOauth: false,
           disablePasswordAuth: false,
           allowMicrosoftOauth: false,
+          ...service.userAuthPolicy,
         },
         gqlOperations: {
           create: true,
@@ -589,5 +593,45 @@ describe("planIdP and an unchanged service's dependency records", () => {
         scope: undefined,
       },
     ]);
+  });
+});
+
+describe("planIdP and an implicit all-domains policy", () => {
+  test.each([
+    ["userAuthPolicy is omitted", { omitUserAuthPolicy: true }],
+    ["allowedEmailDomains is empty", { userAuthPolicy: { allowedEmailDomains: [] } }],
+  ])("warns when %s", async (_name, service) => {
+    using _logger = silenceLogger("warn");
+    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+
+    await planIdP({
+      ...createContext(client),
+      application: createMockApplication({ idpServices: [service] }),
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("does not set userAuthPolicy.allowedEmailDomains"),
+    );
+  });
+
+  test.each([
+    ["domains are enumerated", { allowedEmailDomains: ["example.com"] }],
+    ["the all-domains entry is set", { allowedEmailDomains: ["*"] }],
+    [
+      "the namespace uses a non-email identifier",
+      { useNonEmailIdentifier: true, allowedEmailDomains: [] },
+    ],
+  ])("stays quiet when %s", async (_name, userAuthPolicy) => {
+    using _logger = silenceLogger("warn");
+    const client = createMockClient({ services: [], clients: defaultIdpClientSecret });
+
+    await planIdP({
+      ...createContext(client),
+      application: createMockApplication({ idpServices: [{ userAuthPolicy }] }),
+    });
+
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("does not set userAuthPolicy.allowedEmailDomains"),
+    );
   });
 });
