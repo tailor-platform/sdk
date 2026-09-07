@@ -1820,7 +1820,7 @@ export const allCodemods: CodemodPackage[] = [
     name: "String file uploads → explicit encoding",
     description:
       'String inputs to the SDK `file.upload` and generated `uploadFile` require an explicit `encoding` in v3. Add `encoding: "utf8"` to preserve the previous behavior; use `"base64"` only when decoding the input is intended. Byte inputs are unchanged. This migration requires checking the input type and regenerating file helpers, so it provides review guidance instead of rewriting calls automatically.',
-    since: "0.8.2",
+    since: "1.51.0",
     until: "3.0.0",
     suspiciousPatterns: [/\bupload\b/, "uploadFile"],
     examples: [

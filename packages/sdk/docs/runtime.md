@@ -63,11 +63,15 @@ await file.upload("my-namespace", "Document", "attachment", recordId, imageBase6
 
 `encoding` controls the input string's interpretation; `contentType` describes the stored file.
 Setting `contentType: "image/png"` does not decode Base64. Byte arrays and buffers are uploaded
-unchanged, even when `encoding` is supplied.
+unchanged, even when `encoding` is supplied. Omitting `contentType` with `encoding: "utf8"`
+stores the file as `text/plain; charset=utf-8`; omitting it with `"base64"` leaves the content
+type unset, unless the Base64 string is a `data:<contentType>;base64,<data>` URL, in which case
+`<contentType>` is used. An explicit `contentType` option always takes precedence over one
+found in a data URL.
 
-Base64 input may omit padding and contain ASCII whitespace. Invalid characters, invalid padding,
-and data URL prefixes such as `data:image/png;base64,` are rejected with `TypeError` before upload.
-Decoding Base64 does not validate the resulting file's format.
+Base64 input may omit padding and contain ASCII whitespace. Invalid characters and invalid
+padding are rejected with `TypeError` before upload. Decoding Base64 does not validate the
+resulting file's format.
 
 Uploading a string without `encoding` still stores it as text, but that overload is deprecated
 and will be removed in v3. Add `encoding: "utf8"` to preserve existing behavior, or choose

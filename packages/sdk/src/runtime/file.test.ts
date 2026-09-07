@@ -60,8 +60,84 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     expect(options.encoding).toBe(encoding);
   });
 
-  test.each(["!YQ==", "A", "YQ=", "Y===", "YQ===", "Y=Q=", "____", "data:image/png;base64,YQ=="])(
+  test("upload defaults contentType to text/plain; charset=utf-8 for utf8 when omitted", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "a", { encoding: "utf8" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "text/plain; charset=utf-8",
+    });
+  });
+
+  test("upload keeps an explicit contentType for utf8", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "a", { encoding: "utf8", contentType: "text/markdown" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "text/markdown",
+    });
+  });
+
+  test("upload leaves contentType unset for base64 when omitted", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "YQ==", { encoding: "base64" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {});
+  });
+
+  test.each(["!YQ==", "A", "YQ=", "Y===", "YQ===", "Y=Q=", "____"])(
     "upload rejects invalid Base64 %s before storing anything",
+    async (data) => {
+      using fileM = mockFile();
+      await expect(file.upload(...args, data, { encoding: "base64" })).rejects.toThrow(TypeError);
+      expect(fileM.upload).not.toHaveBeenCalled();
+    },
+  );
+
+  test("upload extracts contentType from a base64 data URL", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "data:image/png;base64,YQ==", { encoding: "base64" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "image/png",
+    });
+  });
+
+  test("upload keeps parameters in a data URL's media type", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "data:text/plain;charset=utf-8;base64,YQ==", { encoding: "base64" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "text/plain;charset=utf-8",
+    });
+  });
+
+  test("upload keeps an explicit contentType over a data URL's media type", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "data:image/png;base64,YQ==", {
+      encoding: "base64",
+      contentType: "image/jpeg",
+    });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "image/jpeg",
+    });
+  });
+
+  test.each(["data:image/png;base64,!YQ==", "data:;base64,YQ=", "data:image/png,YQ=="])(
+    "upload rejects an invalid base64 data URL %s before storing anything",
     async (data) => {
       using fileM = mockFile();
       await expect(file.upload(...args, data, { encoding: "base64" })).rejects.toThrow(TypeError);

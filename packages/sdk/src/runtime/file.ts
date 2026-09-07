@@ -126,7 +126,7 @@ export interface TailorDBFileAPI {
     tableName: string,
     fieldName: string,
     recordId: string,
-    data: string | ArrayBuffer | Uint8Array | number[],
+    data: string | FileUploadBytes,
     options?: Omit<FileUploadOptions, "encoding">,
   ): Promise<FileUploadResponse>;
 
@@ -229,6 +229,40 @@ export interface TailorDBFileAPI {
 const api = (): TailorDBFileAPI =>
   (globalThis as unknown as { tailordb: { file: TailorDBFileAPI } }).tailordb.file;
 
+const DATA_URL_PREFIX = /^data:([^,]*);base64,/i;
+
+function stripBase64DataUrl(data: string): { contentType?: string; payload: string } {
+  const match = DATA_URL_PREFIX.exec(data);
+  if (!match) return { payload: data };
+  return { contentType: match[1] || undefined, payload: data.slice(match[0].length) };
+}
+
+function decodeBase64(data: string): Uint8Array {
+  if (typeof Uint8Array.fromBase64 === "function") {
+    try {
+      return Uint8Array.fromBase64(data);
+    } catch {
+      throw new TypeError("Invalid Base64 file data.");
+    }
+  }
+
+  // Uint8Array.fromBase64 is unflagged only from Node 25 (V8 14.1); decode manually before that.
+  const base64 = data.replace(/[\t\n\f\r ]/g, "");
+  if (
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(base64) ||
+    base64.length % 4 === 1 ||
+    (base64.includes("=") && base64.length % 4 !== 0)
+  ) {
+    throw new TypeError("Invalid Base64 file data.");
+  }
+  const decoded = atob(base64);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index++) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes;
+}
+
 /**
  * Upload file bytes without encoding or decoding them.
  * @param namespace - TailorDB namespace
@@ -253,8 +287,9 @@ function upload(
  * @param tableName - TailorDB table name
  * @param fieldName - File field name on the table
  * @param recordId - Record ID owning the field
- * @param data - String to encode or decode, or file bytes to upload unchanged
- * @param options - String encoding and optional content type
+ * @param data - String to encode or decode, or file bytes to upload unchanged; a base64 value
+ * may be a `data:<contentType>;base64,<payload>` URL, whose content type is extracted
+ * @param options - String encoding and optional content type; utf8 defaults contentType to text/plain; charset=utf-8 when omitted
  * @returns Upload response containing the file metadata
  * @throws {TypeError} If the encoding is unsupported or Base64 data is invalid
  */
@@ -303,24 +338,12 @@ async function upload(
     switch (encoding) {
       case "utf8":
         contents = new TextEncoder().encode(data);
+        uploadOptions.contentType ??= "text/plain; charset=utf-8";
         break;
       case "base64": {
-        const base64 = data.replace(/[\t\n\f\r ]/g, "");
-        if (
-          !/^[A-Za-z0-9+/]*={0,2}$/.test(base64) ||
-          base64.length % 4 === 1 ||
-          (base64.includes("=") && base64.length % 4 !== 0)
-        ) {
-          throw new TypeError(
-            "Invalid Base64 file data. Pass a Base64 string without a data URL prefix.",
-          );
-        }
-        const decoded = atob(base64);
-        const bytes = new Uint8Array(decoded.length);
-        for (let index = 0; index < decoded.length; index++) {
-          bytes[index] = decoded.charCodeAt(index);
-        }
-        contents = bytes;
+        const { contentType, payload } = stripBase64DataUrl(data);
+        contents = decodeBase64(payload);
+        uploadOptions.contentType ??= contentType;
         break;
       }
       default:
