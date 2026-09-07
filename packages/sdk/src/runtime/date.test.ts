@@ -151,6 +151,18 @@ describe("Date representation", () => {
     );
   });
 
+  test.each([
+    [42, "a number (42)"],
+    [true, "a boolean (true)"],
+    [{}, "an object"],
+    [[1, "a"], "an array of number/string"],
+    [[], "an empty array"],
+  ])("describes non-Date output %s in the type mismatch message", (value, described) => {
+    expect(() => serializeDateFields(t.date({ as: "date" }), value)).toThrow(
+      `Expected a Date instance at the top-level value, but received ${described}`,
+    );
+  });
+
   test("keeps resolver body types and parsed metadata aligned", () => {
     const resolver = createResolver({
       name: "dateExample",
