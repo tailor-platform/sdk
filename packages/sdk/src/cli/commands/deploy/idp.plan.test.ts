@@ -635,3 +635,26 @@ describe("planIdP and an implicit all-domains policy", () => {
     );
   });
 });
+
+describe("planIdP and allowedEmailDomains normalization", () => {
+  test("does not plan an update for domains that differ only in case", async () => {
+    // The platform lowercases domains before storing, so a mixed-case local entry
+    // would otherwise be re-applied on every deploy.
+    const client = createMockClient({
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: createMockApplication({
+        idpServices: [
+          { userAuthPolicy: { allowedEmailDomains: ["B.Example.com", "A.EXAMPLE.COM"] } },
+        ],
+      }),
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(0);
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+  });
+});

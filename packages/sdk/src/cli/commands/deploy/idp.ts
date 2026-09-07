@@ -316,7 +316,12 @@ function normalizeComparableUserAuthPolicy(
     // every falsy local value must compare equal to the stored defaults.
     passwordMinLength: policy?.passwordMinLength || 6,
     passwordMaxLength: policy?.passwordMaxLength || 4096,
-    allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
+    // The platform lowercases and deduplicates domains before storing and echoes
+    // the normalized list back, so comparing the raw local list would report a
+    // permanent diff for an entry written in mixed case.
+    allowedEmailDomains: [
+      ...new Set((policy?.allowedEmailDomains ?? []).map((domain) => domain.toLowerCase())),
+    ].toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
     allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
