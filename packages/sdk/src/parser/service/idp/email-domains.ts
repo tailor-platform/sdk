@@ -7,11 +7,12 @@ export const ALL_EMAIL_DOMAINS = "*";
 /**
  * A single `allowedEmailDomains` entry: a hostname, or {@link ALL_EMAIL_DOMAINS}.
  *
- * The platform validates entries with protovalidate's `isHostname()`, which is
- * looser than this pattern in the corners (trailing dot, IDN). Surrounding
- * whitespace is deliberately rejected even though the platform trims it before
- * storing, because a padded entry would otherwise be echoed back normalized and
- * show up as a permanent diff in every subsequent plan.
+ * Two forms the platform accepts are rejected here, because each stores an entry
+ * that can never match: surrounding whitespace, which the platform trims and then
+ * echoes back normalized as a permanent diff in every later plan, and a trailing
+ * dot, which a domain taken from an email address never carries. Elsewhere this
+ * is looser than the platform's own check, so nothing else it accepts is rejected
+ * here.
  */
 export const allowedEmailDomainPattern =
   /^(\*|[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$/;

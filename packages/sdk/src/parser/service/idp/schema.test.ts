@@ -130,6 +130,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
       "must be a hostname, or * to allow all email domains",
     ],
     ["a padded hostname", [" example.com "], "must be a hostname, or * to allow all email domains"],
+    ["a trailing dot", ["example.com."], "must be a hostname, or * to allow all email domains"],
     [
       "an email address",
       ["user@example.com"],
