@@ -12,6 +12,7 @@ import {
   type AstProperty,
   literalProperties,
   propertyName,
+  returnStatements,
   staticString,
   unwrapExpression,
 } from "../lib/ast.js";
@@ -88,13 +89,9 @@ function checkPolicy(
   }
 }
 
-function returnedObject(context: Rule.RuleContext, builder: AstNode): AstNode | null | undefined {
-  if (builder.type !== "ArrowFunctionExpression" && builder.type !== "FunctionExpression") {
-    return null;
-  }
-  if (builder.body.type !== "BlockStatement") return resolveValue(context, builder.body);
-  const statement = builder.body.body.find((entry) => entry.type === "ReturnStatement");
-  return statement?.type === "ReturnStatement" ? resolveValue(context, statement.argument) : null;
+function returnedValues(context: Rule.RuleContext, body: AstNode): (AstNode | null | undefined)[] {
+  if (body.type !== "BlockStatement") return [resolveValue(context, body)];
+  return returnStatements(body).map((statement) => resolveValue(context, statement.argument));
 }
 
 function checkPolicyGroup(context: Rule.RuleContext, call: AstCallExpression): void {
@@ -104,15 +101,17 @@ function checkPolicyGroup(context: Rule.RuleContext, call: AstCallExpression): v
   }
   const define = builder.params[0];
   if (define?.type !== "Identifier") return;
-  const policies = literalProperties(returnedObject(context, builder));
-  if (policies === null) return;
-  for (const property of policies) {
-    const name = propertyName(property);
-    const definition = unwrapExpression(property.value);
-    if (name === null || definition?.type !== "CallExpression") continue;
-    if (!isBindingReference(context, unwrapExpression(definition.callee), define)) continue;
-    const options = readOptions(context, definition.arguments[0]);
-    if (options !== null) checkPolicy(context, { value: name, node: property.key }, options);
+  for (const returned of returnedValues(context, builder.body)) {
+    const policies = literalProperties(returned);
+    if (policies === null) continue;
+    for (const property of policies) {
+      const name = propertyName(property);
+      const definition = unwrapExpression(property.value);
+      if (name === null || definition?.type !== "CallExpression") continue;
+      if (!isBindingReference(context, unwrapExpression(definition.callee), define)) continue;
+      const options = readOptions(context, definition.arguments[0]);
+      if (options !== null) checkPolicy(context, { value: name, node: property.key }, options);
+    }
   }
 }
 

@@ -181,6 +181,51 @@ export function propertyName(property: AstProperty): string | null {
     : null;
 }
 
+type AstReturnStatement = Extract<EstreeNode, { type: "ReturnStatement" }>;
+type AstStatement = Extract<EstreeNode, { type: "BlockStatement" }>["body"][number];
+
+/** Every `return` in a block, skipping nested functions' own returns. */
+export function returnStatements(block: AstNode): AstReturnStatement[] {
+  if (block.type !== "BlockStatement") return [];
+  const returns: AstReturnStatement[] = [];
+  const visitStatement = (statement: AstStatement): void => {
+    switch (statement.type) {
+      case "ReturnStatement":
+        returns.push(statement);
+        return;
+      case "BlockStatement":
+        for (const child of statement.body) visitStatement(child);
+        return;
+      case "IfStatement":
+        visitStatement(statement.consequent);
+        if (statement.alternate) visitStatement(statement.alternate);
+        return;
+      case "ForStatement":
+      case "ForInStatement":
+      case "ForOfStatement":
+      case "WhileStatement":
+      case "DoWhileStatement":
+      case "LabeledStatement":
+        visitStatement(statement.body);
+        return;
+      case "TryStatement":
+        visitStatement(statement.block);
+        if (statement.handler) visitStatement(statement.handler.body);
+        if (statement.finalizer) visitStatement(statement.finalizer);
+        return;
+      case "SwitchStatement":
+        for (const switchCase of statement.cases) {
+          for (const child of switchCase.consequent) visitStatement(child);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  for (const statement of block.body) visitStatement(statement);
+  return returns;
+}
+
 export function objectProperty(
   object: AstNode | null | undefined,
   name: string,

@@ -21,16 +21,17 @@ const OPERATORS = new Set(["=", "!="]);
 
 type Operand =
   | { kind: "user"; key: string | null }
-  | { kind: "string" | "boolean" }
+  | { kind: "string" | "boolean" | "invalid" }
   | { kind: "unknown" };
 
 function operand(context: Rule.RuleContext, node: AstNode): Operand {
   const value = unwrapExpression(resolveValue(context, node));
   if (value?.type === "Literal" && typeof value.value === "string") return { kind: "string" };
   if (value?.type === "Literal" && typeof value.value === "boolean") return { kind: "boolean" };
+  if (value?.type === "Literal") return { kind: "invalid" };
   if (literalProperties(value) === null) return { kind: "unknown" };
   const user = objectProperty(value, "user");
-  if (user === null) return { kind: "unknown" };
+  if (user === null) return { kind: "invalid" };
   return { kind: "user", key: staticString(resolveValue(context, user.value)) };
 }
 
@@ -56,6 +57,10 @@ function checkCondition(
   const other = operands.find((entry) => entry.kind !== "user");
   if (user?.kind !== "user" || other === undefined) {
     context.report({ node: tuple, messageId: "userOperandSide" });
+    return;
+  }
+  if (other.kind === "invalid") {
+    context.report({ node: tuple, messageId: "operandValue" });
     return;
   }
   const expected = user.key === null ? undefined : KNOWN_USER_OPERAND_TYPES[user.key];
@@ -143,6 +148,7 @@ const rule = {
       userOperandSide:
         "Resolver permission condition must reference a `user` operand on exactly one side (comparing two `user` operands to each other can match on `undefined === undefined`).",
       operandType: "`{{key}}` must compare to a {{expected}}.",
+      operandValue: "A `user` operand must compare to a string or a boolean.",
     },
     schema: [],
   },

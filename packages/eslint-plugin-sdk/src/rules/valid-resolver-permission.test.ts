@@ -63,6 +63,24 @@ describe("valid-resolver-permission", () => {
     );
   });
 
+  test("rejects operands that are not a user object, string, or boolean", () => {
+    expectViolation(
+      resolver('[{ conditions: [[{ user: "id" }, "=", 5]], permit: true }]'),
+      RULE,
+      "A `user` operand must compare to a string or a boolean",
+    );
+    expectViolation(
+      resolver('[{ conditions: [[{ user: "role" }, "=", 5]], permit: true }]'),
+      RULE,
+      "A `user` operand must compare to a string or a boolean",
+    );
+    expectViolation(
+      resolver('[{ conditions: [[{ user: "role" }, "=", null]], permit: true }]'),
+      RULE,
+      "A `user` operand must compare to a string or a boolean",
+    );
+  });
+
   test("accepts valid permissions", () => {
     expectClean(
       resolver('[{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }]'),

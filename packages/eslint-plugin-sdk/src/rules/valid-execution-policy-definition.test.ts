@@ -82,6 +82,14 @@ describe("valid-execution-policy-definition", () => {
     );
   });
 
+  test("checks every returned object in a block body", () => {
+    expectViolation(
+      `${GROUP}export const policies = defineWorkflowExecutionPolicies((define) => {\n  if (extended) return { Premium: define() };\n  return { premium: define() };\n});`,
+      RULE,
+      NAME_MESSAGE,
+    );
+  });
+
   test("accepts valid definitions, including the example project's", () => {
     expectClean(
       `${GROUP}export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({\n  premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),\n  tenantApi: define({ name: "tenant-api", matchType: "prefix", concurrencyPolicy: { maxConcurrentExecutions: 3 } }),\n}));`,

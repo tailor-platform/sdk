@@ -336,7 +336,8 @@ retryPolicy: { maxRetries: 3, initialBackoff: "1s", maxBackoff: "30s", backoffMu
 
 A literal resolver `permission` (or a namespace `defaultPermission` in `defineConfig`) must contain
 at least one policy with `permit: true`, every policy at least one condition, and every condition
-exactly one `{ user }` operand. `_loggedIn` must compare to a boolean and `id` to a string.
+exactly one `{ user }` operand compared to a string or a boolean. `_loggedIn` must compare to a
+boolean and `id` to a string.
 
 Incorrect:
 
