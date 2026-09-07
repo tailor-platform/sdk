@@ -605,6 +605,7 @@ describe("resolverExecutedTrigger", () => {
         absent: null,
         rows: [{ day: new Date("2026-09-07") }],
         plain: "2026-09-07",
+        at: new Date("2026-09-07T12:00:00Z"),
       }),
       output: t.object({
         day: t.date({ as: "date" }),
@@ -612,6 +613,7 @@ describe("resolverExecutedTrigger", () => {
         absent: t.date({ as: "date", optional: true }),
         rows: t.object({ day: t.date({ as: "date" }) }, { array: true }),
         plain: t.date(),
+        at: t.datetime(),
       }),
     });
 
@@ -629,6 +631,7 @@ describe("resolverExecutedTrigger", () => {
           expectTypeOf(args.result.absent).toEqualTypeOf<string | null | undefined>();
           expectTypeOf(args.result.rows).toEqualTypeOf<{ day: string }[]>();
           expectTypeOf(args.result.plain).toEqualTypeOf<string>();
+          expectTypeOf(args.result.at).toEqualTypeOf<string>();
         },
       },
     });
