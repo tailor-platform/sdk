@@ -29,16 +29,36 @@ function serialize(field: DateField, value: unknown, path: string): unknown {
   return serializeValue(field, value, path);
 }
 
+function describePathTarget(path: string): string {
+  return path || "the top-level value";
+}
+
+function describeReceivedValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    const elementTypes = [...new Set(value.map((item) => typeof item))];
+    return elementTypes.length > 0 ? `an array of ${elementTypes.join("/")}` : "an empty array";
+  }
+  const type = typeof value;
+  if (type === "object") return "an object";
+  if (type === "function") return "a function";
+  return type === "string" ? `a string (${JSON.stringify(value)})` : `a ${type} (${String(value)})`;
+}
+
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
   if (value === null || value === undefined) return value;
   if (field.type === "date" && field.metadata.as === "date") {
     if (!(value instanceof Date)) {
-      throw new TypeError(`Expected a Date at ${path || "<root>"}`);
+      throw new TypeError(
+        `Expected a Date instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+      );
     }
     try {
       return formatDate(value);
     } catch (error) {
-      throw new RangeError(`Invalid date at ${path || "<root>"}`, { cause: error });
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new RangeError(`Invalid date at ${describePathTarget(path)}: ${reason}`, {
+        cause: error,
+      });
     }
   }
   if (field.type !== "nested" || typeof value !== "object" || Array.isArray(value)) return value;

@@ -140,14 +140,14 @@ describe("Date representation", () => {
     (value) => {
       const schema = t.object({ dates: t.date({ as: "date", array: true }) });
       expect(() => serializeDateFields(schema, { dates: [value] })).toThrow(
-        "Invalid date at dates[0]",
+        "Invalid date at dates[0]: Expected a valid Date with a year between 0000 and 9999",
       );
     },
   );
 
   test("rejects strings returned for a Date representation", () => {
     expect(() => serializeDateFields(t.date({ as: "date" }), "2026-09-07")).toThrow(
-      "Expected a Date at <root>",
+      'Expected a Date instance at the top-level value, but received a string ("2026-09-07")',
     );
   });
 
