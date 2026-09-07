@@ -43,7 +43,7 @@ const tailordbName = `nesteddb-${testRunId}`;
 const FIRST_ID = "50000000-0000-4000-8000-000000000001";
 const SECOND_ID = "50000000-0000-4000-8000-000000000002";
 
-describe("E2E: TailorDB nested member removal", { concurrent: false }, () => {
+describe("E2E: TailorDB nested member rename", { concurrent: false }, () => {
   let workspaceId: string;
   let client: OperatorClient;
   let tempDir: string;

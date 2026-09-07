@@ -802,7 +802,7 @@ interface NamespaceGeneration {
 /** A rename candidate that a non-interactive run could not resolve. */
 interface UnresolvedRenameCandidate {
   namespace: string;
-  /** Removed field (`Table.field`) or table (`Table`) with rename candidates. */
+  /** Removed field, table, or nested member (`Table.field.member`) with rename candidates. */
   label: string;
   targets: string[];
 }
@@ -952,11 +952,11 @@ async function promptTypeRenameCandidate(
 }
 
 /**
- * Resolve field and type renames for a diff: apply `--rename` flags, skip
- * candidates whose removal is confirmed by `--drop`, confirm the rest
- * interactively, and recompute the diff with the confirmed renames. When
- * prompting is unavailable (`--yes` or no TTY), the remaining candidates are
- * returned as unresolved for the caller to fail on.
+ * Resolve field, table, and nested member renames for a diff: apply
+ * `--rename` flags, skip candidates whose removal is confirmed by `--drop`,
+ * confirm the rest interactively, and recompute the diff with the confirmed
+ * renames. When prompting is unavailable (`--yes` or no TTY), the remaining
+ * candidates are returned as unresolved for the caller to fail on.
  * @param {NormalizedSchemaSnapshot} previousSnapshot - Previous normalized schema snapshot
  * @param {NormalizedSchemaSnapshot} currentSnapshot - Current normalized schema snapshot
  * @param {MigrationDiff} diff - Diff computed without rename knowledge

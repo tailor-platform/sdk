@@ -389,7 +389,13 @@ export function isNestedMemberRenameCompatible(
   return true;
 }
 
-function haveSameParent(a: readonly string[], b: readonly string[]): boolean {
+/**
+ * Whether two member paths have the same length and the same parent path.
+ * @param {readonly string[]} a - First member path
+ * @param {readonly string[]} b - Second member path
+ * @returns {boolean} True if the paths name siblings
+ */
+export function haveSameParent(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.slice(0, -1).every((segment, index) => segment === b[index]);
 }
 

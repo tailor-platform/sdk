@@ -1,5 +1,5 @@
-import { collectNestedMemberChanges, type NestedMemberChange } from "./nested-members";
-import { isNestedMemberRenameCompatible } from "./rename-detection";
+import { collectNestedMemberChanges } from "./nested-members";
+import { haveSameParent, isNestedMemberRenameCompatible } from "./rename-detection";
 import type { FieldModifiedChange, MigrationDiff, WarningChangeInfo } from "./diff-calculator";
 
 export const FIELD_REMOVED_WARNING_REASON =
@@ -8,13 +8,6 @@ export const TABLE_REMOVED_WARNING_REASON =
   "Table removed (all records in this table will be deleted during post-migration cleanup)";
 const NESTED_MEMBER_REMOVED_WARNING_REASON =
   "Nested member removed (existing values will no longer be accessible through the schema)";
-
-function isSibling(a: NestedMemberChange, b: NestedMemberChange): boolean {
-  return (
-    a.path.length === b.path.length &&
-    a.path.slice(0, -1).every((segment, index) => segment === b.path[index])
-  );
-}
 
 /**
  * Data-loss warnings for members removed inside a nested field.
@@ -44,7 +37,7 @@ export function collectNestedMemberRemovalWarnings(
         (added) =>
           added.kind === "added" &&
           !renamedPaths.has(added.path.join(".")) &&
-          isSibling(added, removed) &&
+          haveSameParent(added.path, removed.path) &&
           isNestedMemberRenameCompatible(removed.before, added.after),
       )
       .map((added) => added.path.at(-1));
