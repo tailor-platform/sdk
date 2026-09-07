@@ -16,6 +16,8 @@ export type TailorFieldInput = {
     | "nested";
   /** Field metadata configuration */
   metadata: {
+    /** Date value representation */
+    as?: "string" | "date" | undefined;
     /** Whether the field is required */
     required?: boolean | undefined;
     /** Whether the field is an array */
@@ -68,6 +70,8 @@ export type TailorField = {
     | "nested";
   /** Field metadata configuration */
   metadata: {
+    /** Date value representation */
+    as?: "string" | "date" | undefined;
     /** Whether the field is required */
     required?: boolean | undefined;
     /** Whether the field is an array */

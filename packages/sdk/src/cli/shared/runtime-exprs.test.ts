@@ -3,7 +3,7 @@ import {
   INVOKER_EXPR,
   buildExecutorArgsExpr,
   buildResolverOperationHookExpr,
-  buildResolverPermissionAndInputCheckExpr,
+  buildResolverValidatedInputExpr,
   buildResolverPermissionGuardExpr,
 } from "./runtime-exprs";
 
@@ -440,11 +440,11 @@ describe("buildResolverPermissionGuardExpr", () => {
   });
 });
 
-describe("buildResolverPermissionAndInputCheckExpr", () => {
+describe("buildResolverValidatedInputExpr", () => {
   const loggedIn = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] as const;
 
   test("guards with the namespace default when the resolver declares no permission", () => {
-    const expr = buildResolverPermissionAndInputCheckExpr({
+    const expr = buildResolverValidatedInputExpr({
       permission: undefined,
       defaultPermission: loggedIn,
     });
@@ -453,7 +453,7 @@ describe("buildResolverPermissionAndInputCheckExpr", () => {
 
   test("uses the resolver's own permission instead of the namespace default", () => {
     const adminOnly = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
-    const expr = buildResolverPermissionAndInputCheckExpr({
+    const expr = buildResolverValidatedInputExpr({
       permission: adminOnly,
       defaultPermission: loggedIn,
     });
@@ -462,7 +462,7 @@ describe("buildResolverPermissionAndInputCheckExpr", () => {
   });
 
   test("lets a resolver opt out of the namespace default with allowAnonymous", () => {
-    const expr = buildResolverPermissionAndInputCheckExpr({
+    const expr = buildResolverValidatedInputExpr({
       permission: "allowAnonymous",
       defaultPermission: loggedIn,
     });
