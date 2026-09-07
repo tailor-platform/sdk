@@ -383,7 +383,20 @@ const fieldModifiedChangeSchema = z.looseObject({
   before: snapshotFieldConfigSchema,
   after: snapshotFieldConfigSchema,
   memberRenames: z
-    .array(z.looseObject({ previousPath: z.array(z.string()), path: z.array(z.string()) }))
+    .array(
+      z
+        .looseObject({
+          previousPath: z.array(z.string()).min(1),
+          path: z.array(z.string()).min(1),
+        })
+        .refine(
+          ({ previousPath, path }) =>
+            previousPath.length === path.length &&
+            previousPath.slice(0, -1).every((segment, index) => segment === path[index]) &&
+            previousPath.at(-1) !== path.at(-1),
+          { message: "memberRenames entries must rename a member within its parent" },
+        ),
+    )
     .optional(),
 }) as unknown as z.ZodType<FieldModifiedChange>;
 

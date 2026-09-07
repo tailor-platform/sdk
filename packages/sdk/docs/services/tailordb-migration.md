@@ -166,7 +166,7 @@ If you decline the prompt (or confirm the removal with `--drop`), the change sta
 
 #### Renaming a member inside a nested field
 
-Members inside a **nested field** (`db.object(...)`) are detected the same way: when `migration generate` finds a member removed from a nested field and a compatible member added under the same parent, it asks whether the member was renamed. Two members qualify only when copying the value preserves it exactly, because nested member constraints are never relaxed: the type, array-ness, requiredness, modifiers, decimal scale, hooks, and validations must match, enum values may be added but not removed, and serial members never qualify.
+Members inside a **nested field** (`db.object(...)`) are detected the same way: when `migration generate` finds a member removed from a nested field and a compatible member added under the same parent, it asks whether the member was renamed. Two members qualify only when copying the value preserves it exactly, because nested member constraints other than the new member's requiredness are not relaxed: the type, array-ness, requiredness, foreign key target, decimal scale, hooks, and validations must match (index, unique, and vector may differ, as for a top-level rename), enum values may be added but not removed, an object-typed member must keep the same members recursively, and serial members never qualify.
 
 ```
 ? User.address.zip was removed and zipCode was added with a compatible type. Was it renamed to zipCode? (Y/n)
@@ -190,7 +190,7 @@ Warning: data loss possible:
   - User.address.zip: Nested member removed (existing values will no longer be accessible through the schema). Possibly renamed to zipCode: confirm it with --rename "User.address.zip:<newName>" to scaffold a copy script, or keep the removal and copy the values yourself
 ```
 
-The pre-migration phase keeps a removed member on the nested field until the script finishes, exactly like a removed top-level field, so a custom script can still read it. Nested fields reach the script as objects. Renaming a nested member cannot be combined in one migration with renaming its table or the nested field itself; split such changes into separate migrations.
+The pre-migration phase keeps a removed member on the nested field until the script finishes, exactly like a removed top-level field, so a custom script can still read it. Nested fields reach the script as objects. Renaming a nested member cannot be combined in one migration with renaming its table or the nested field itself, and an object-typed member cannot be renamed in the same migration as one of its own members; split such changes into separate migrations (rename the object first, then its member).
 
 ### Renaming a table
 

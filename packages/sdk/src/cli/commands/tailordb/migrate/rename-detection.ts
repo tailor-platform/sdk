@@ -339,12 +339,13 @@ export interface NestedMemberRenameCandidate {
 
 /**
  * Whether copying values from `before` into `after` preserves their meaning
- * for members inside a nested field. The Pre-phase never relaxes nested
- * member constraints, so unlike a top-level rename every constraint must match:
- * type, array-ness, requiredness, modifiers, foreign key target, scale,
- * hooks, and validations. Enum values may be added but not removed, serial
- * members cannot be renamed, and nested members must match recursively.
- * Description and default values may differ.
+ * for members inside a nested field. The Pre-phase relaxes nothing but the
+ * new member's requiredness, so unlike a top-level rename the requiredness,
+ * foreign key target, scale, hooks, and validations must match as well as the
+ * type and array-ness. Index, unique, and vector may differ as for top-level
+ * renames. Enum values may be added but not removed, serial members cannot be
+ * renamed, and nested members must match recursively. Description and
+ * default values may differ.
  * @param {SnapshotFieldConfig} before - Removed member's configuration
  * @param {SnapshotFieldConfig} after - Added member's configuration
  * @returns {boolean} True if the pair is rename-compatible
@@ -356,6 +357,7 @@ export function isNestedMemberRenameCompatible(
   if (before.type !== after.type) return false;
   if (before.required !== after.required) return false;
   for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
+    if (RENAME_TOLERATED_BOOLEAN_PROPS.has(prop)) continue;
     if ((before[prop] ?? false) !== (after[prop] ?? false)) return false;
   }
   if ((before.foreignKeyType ?? "") !== (after.foreignKeyType ?? "")) return false;
@@ -521,7 +523,7 @@ export function assertValidNestedMemberRenames(
     if (!isNestedMemberRenameCompatible(prevMember, currMember)) {
       throw new Error(
         `Cannot rename ${label}: the members are not rename-compatible ` +
-          `(the member type, array-ness, requiredness, modifiers, foreign key target, scale, ` +
+          `(the member type, array-ness, requiredness, foreign key target, scale, ` +
           `hooks, and validations must match, enum values must not be removed, nested members ` +
           `must match recursively, and serial members cannot be renamed).`,
       );
@@ -580,7 +582,9 @@ export function parseNestedMemberDropOption(value: string): NestedMemberDropSpec
 
 /**
  * Whether a nested member drop spec matches a member that was removed between
- * two snapshots.
+ * two snapshots: the member existed before and is gone now while its parent
+ * still exists, so the spec names the removal itself rather than a descendant
+ * of a removed parent.
  * @param {NestedMemberDropSpec} spec - Drop spec to test
  * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
  * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
@@ -593,7 +597,11 @@ export function nestedMemberDropSpecApplies(
 ): boolean {
   const prevField = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
   const currField = currentSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
-  return Boolean(getNestedMember(prevField, spec.path) && !getNestedMember(currField, spec.path));
+  return Boolean(
+    getNestedMember(prevField, spec.path) &&
+    !getNestedMember(currField, spec.path) &&
+    getNestedMember(currField, spec.path.slice(0, -1)),
+  );
 }
 
 // ============================================================================

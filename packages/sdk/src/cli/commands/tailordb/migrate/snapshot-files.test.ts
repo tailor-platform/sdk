@@ -752,6 +752,39 @@ describe("snapshot", () => {
       ]);
     });
 
+    test.each([
+      ["empty paths", { previousPath: [], path: [] }],
+      ["different parents", { previousPath: ["geo", "lat"], path: ["loc", "lat"] }],
+      ["identical paths", { previousPath: ["zip"], path: ["zip"] }],
+    ])("rejects a hand-edited member rename with %s", (_name, rename) => {
+      const filePath = path.join(testDir, "invalid_member_rename_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          changes: [
+            {
+              kind: "field_modified",
+              tableName: "User",
+              fieldName: "address",
+              before: { type: "nested", required: false, fields: {} },
+              after: { type: "nested", required: false, fields: {} },
+              memberRenames: [rename],
+            },
+          ],
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          hasWarnings: false,
+          warnings: [],
+          requiresMigrationScript: false,
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(/Invalid migration diff/);
+    });
+
     test("rejects a diff written by a newer migration file format", () => {
       const filePath = path.join(testDir, "future_diff.json");
       fs.writeFileSync(

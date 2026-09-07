@@ -893,12 +893,20 @@ describe("isNestedMemberRenameCompatible", () => {
     ["type", stringField({ type: "integer" })],
     ["required", stringField({ required: true })],
     ["array", stringField({ array: true })],
-    ["index", stringField({ index: true })],
-    ["unique", stringField({ unique: true })],
     ["hooks", stringField({ hooks: { create: { expr: "return 1" } } })],
     ["validate", stringField({ validate: [{ script: { expr: "true" }, errorMessage: "x" }] })],
   ])("rejects a %s difference", (_name, after) => {
     expect(isNestedMemberRenameCompatible(stringField(), after)).toBe(false);
+  });
+
+  test("tolerates index, unique, and vector differences like a top-level rename", () => {
+    for (const after of [
+      stringField({ index: true }),
+      stringField({ unique: true }),
+      stringField({ vector: true }),
+    ]) {
+      expect(isNestedMemberRenameCompatible(stringField(), after)).toBe(true);
+    }
   });
 
   test("rejects differing decimal scales and serial members", () => {
@@ -1026,6 +1034,16 @@ describe("nested member rename specs", () => {
     const drop = { tableName: "User", fieldName: "address", path: ["zip"] };
     expect(nestedMemberDropSpecApplies(drop, previous, current)).toBe(true);
     expect(nestedMemberDropSpecApplies(drop, previous, previous)).toBe(false);
+  });
+
+  test("nestedMemberDropSpecApplies rejects a member whose parent was removed", () => {
+    const previous = nestedSnapshot({
+      geo: stringField({ type: "nested", fields: { lat: stringField() } }),
+    });
+    const current = nestedSnapshot({});
+    const drop = { tableName: "User", fieldName: "address", path: ["geo", "lat"] };
+    expect(nestedMemberDropSpecApplies(drop, previous, current)).toBe(false);
+    expect(nestedMemberDropSpecApplies({ ...drop, path: ["geo"] }, previous, current)).toBe(true);
   });
 
   test("assertValidNestedMemberRenames accepts a compatible pair", () => {
