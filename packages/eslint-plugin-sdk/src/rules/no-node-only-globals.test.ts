@@ -52,6 +52,15 @@ describe("no-node-only-globals", () => {
     expect(lintOutput(source, RULE)).not.toContain("defineConfig");
   });
 
+  test("ignores the `global` keyword of a global augmentation", () => {
+    expectClean(`${RESOLVER}declare global {\n  var appVersion: string;\n}`, RULE);
+    expectReportCount(
+      `${RESOLVER}declare global {\n  var appVersion: string;\n}\nexport const g = global;`,
+      RULE,
+      1,
+    );
+  });
+
   test("ignores files that define no platform function", () => {
     expectClean(
       'import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: process.env.NAME ?? "app" });',

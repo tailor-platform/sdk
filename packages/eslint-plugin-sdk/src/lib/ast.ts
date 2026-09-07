@@ -51,12 +51,18 @@ export function unwrapExpression(node: AstNode | null | undefined): AstNode | nu
   return current;
 }
 
+function nodeType(node: AstNode | null | undefined): string | undefined {
+  return node?.type;
+}
+
 export function parentOf(node: AstNode | null | undefined): AstNode | null {
   return (node as { parent?: AstNode } | null | undefined)?.parent ?? null;
 }
 
 export function isValueReference(node: AstIdentifier): boolean {
   const parent = parentOf(node);
+  // `declare global {}` / `declare module "x" {}` name the augmented scope.
+  if (nodeType(parent) === "TSModuleDeclaration") return false;
   switch (parent?.type) {
     case "ImportSpecifier":
     case "ImportDefaultSpecifier":
@@ -78,6 +84,7 @@ export function isValueReference(node: AstIdentifier): boolean {
     case "FunctionDeclaration":
     case "ClassDeclaration":
       return parent.id !== node;
+
     default:
       return true;
   }
