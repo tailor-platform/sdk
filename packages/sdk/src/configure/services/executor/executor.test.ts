@@ -634,6 +634,29 @@ describe("resolverExecutedTrigger", () => {
     });
   });
 
+  test("result type is a string when the whole output is a date field", () => {
+    const resolver = createResolver({
+      name: "day",
+      operation: "query",
+      body: () => new Date("2026-09-07"),
+      output: t.date({ as: "date" }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (!args.success) return;
+          expectTypeOf(args.result).toEqualTypeOf<string>();
+        },
+      },
+    });
+  });
+
   test("result type preserves nested object structure from resolver output", () => {
     const resolver = createResolver({
       name: "nestedOutput",

@@ -45,9 +45,12 @@ export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never
  */
 export type SerializeDates<T> = T extends Date
   ? string
-  : T extends object
-    ? { [K in keyof T]: SerializeDates<T[K]> }
-    : T;
+  : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    T extends RegExp | Function
+    ? T
+    : T extends object
+      ? { [K in keyof T]: SerializeDates<T[K]> }
+      : T;
 
 export type NullableToOptional<T> = {
   [K in keyof T as null extends T[K] ? never : K]: T[K];

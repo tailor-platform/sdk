@@ -11,7 +11,7 @@ import type {
   WorkflowExecutionTrigger as ParserWorkflowExecutionTrigger,
   WorkflowJobExecutionTrigger as ParserWorkflowJobExecutionTrigger,
 } from "#/types/executor.generated";
-import type { SerializeDates, output } from "#/types/helpers";
+import type { output, SerializeDates } from "#/types/helpers";
 
 interface EventArgs {
   workspaceId: string;
