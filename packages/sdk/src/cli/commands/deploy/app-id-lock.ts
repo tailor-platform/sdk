@@ -140,17 +140,18 @@ export function readAppIdLock(root: string): AppIdLock | null {
 
 /**
  * Locate the lock file that governs a config: the nearest `.github/tailor.lock`
- * in the config's directory or one of its ancestors. That is the root setup
- * records against when it runs from that directory.
+ * in the config's directory or one of its ancestors, without leaving the
+ * repository the config belongs to. That is the root setup records against
+ * when it runs from that directory.
  * @param configPath - Absolute path to the config file
- * @returns The lock, or null when no ancestor directory has one
+ * @returns The lock, or null when no ancestor directory inside the repository has one
  */
 export function findAppIdLock(configPath: string): AppIdLock | null {
   let dir = path.dirname(configPath);
   for (;;) {
     if (fs.existsSync(path.join(dir, TAILOR_LOCK_FILENAME))) return readAppIdLock(dir);
     const parent = path.dirname(dir);
-    if (parent === dir) return null;
+    if (parent === dir || fs.existsSync(path.join(dir, ".git"))) return null;
     dir = parent;
   }
 }

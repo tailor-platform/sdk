@@ -128,6 +128,14 @@ describe("app-id-lock", () => {
       });
     });
 
+    test("does not cross into a parent repository's lock", () => {
+      writeLock({ version: 2, targets: [] });
+      fs.mkdirSync(path.join(root, "vendor/app"), { recursive: true });
+      fs.writeFileSync(path.join(root, "vendor/.git"), "gitdir: elsewhere\n");
+      const configPath = writeConfig("vendor/app/tailor.config.ts");
+      expect(findAppIdLock(configPath)).toBeNull();
+    });
+
     test("reads a version 1 lock as having no app ids", () => {
       writeLock({ version: 1, targets: [] });
       expect(readAppIdLock(root)).toEqual({ root, appIds: {} });
