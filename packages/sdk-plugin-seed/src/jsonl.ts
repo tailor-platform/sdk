@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -125,19 +126,21 @@ export function writeSeedData(dataDir: string, typeName: string, rows: SeedData[
 }
 
 /**
- * Start a streamed write for one entity: creates (or truncates) a hidden
- * temp file next to the entity's JSONL file, so rows can be appended a page
- * at a time instead of held in memory for the whole table. The real
- * `<typeName>.jsonl` is left untouched until {@link commitSeedDataWrite}, so
- * a table that fails partway through never corrupts or truncates the file
- * from a previous run.
+ * Start a streamed write for one entity: creates a hidden temp file next to
+ * the entity's JSONL file, so rows can be appended a page at a time instead
+ * of held in memory for the whole table. The temp file name includes the
+ * process id and a random suffix so two dumps running concurrently against
+ * the same directory never collide on it. The real `<typeName>.jsonl` is
+ * left untouched until {@link commitSeedDataWrite}, so a table that fails
+ * partway through never corrupts or truncates the file from a previous run.
  * @param dataDir - Directory the entity's JSONL file lives in
  * @param typeName - Entity name the rows belong to
  * @returns Path of the temp file to append rows to
  */
 export function beginSeedDataWrite(dataDir: string, typeName: string): string {
   mkdirSync(dataDir, { recursive: true });
-  const tmpPath = path.join(dataDir, `.${typeName}.jsonl.tmp`);
+  const suffix = `${process.pid}-${randomBytes(4).toString("hex")}`;
+  const tmpPath = path.join(dataDir, `.${typeName}.${suffix}.jsonl.tmp`);
   writeFileSync(tmpPath, "", "utf-8");
   return tmpPath;
 }
