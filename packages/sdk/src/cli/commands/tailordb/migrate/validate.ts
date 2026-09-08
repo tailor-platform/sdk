@@ -44,7 +44,7 @@ import type {
   SchemaDrift,
 } from "./types";
 
-export interface ValidateOptions {
+interface ValidateOptions {
   configPath?: string;
   namespace?: string;
   workspaceId?: string;
