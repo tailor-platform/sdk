@@ -1,3 +1,4 @@
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -24,6 +25,9 @@ import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
+import { writeMetadataLabelsDirect } from "../deploy/label";
+import { ageArg, parseAge } from "./age";
+import { encodeExpiresAt, expiresAtLabelKey, workspaceTrn } from "./expiry";
 import {
   workspaceDisplayName,
   workspaceInfoWithFolderName,
@@ -31,6 +35,7 @@ import {
   type WorkspaceInfo,
 } from "./transform";
 import type { ProfileInfo } from "../profile";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 /**
  * Schema for workspace creation options
@@ -44,6 +49,7 @@ const createWorkspaceOptionsSchema = z.object({
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
   folderId: z.uuid().optional(),
+  staleAfter: ageArg.optional(),
   profile: profileNameSchema.optional(),
 });
 
@@ -107,10 +113,50 @@ export async function createValidatedWorkspaceWithClient(
     folderId: options.folderId,
   });
 
-  return workspaceInfoWithFolderName(
-    client,
-    assertDefined(resp.workspace, "createWorkspace response missing workspace"),
-  );
+  const workspace = assertDefined(resp.workspace, "createWorkspace response missing workspace");
+  if (options.staleAfter !== undefined) {
+    await recordStaleAfter(client, workspace.id, options.staleAfter, workspace.createTime);
+  }
+
+  return workspaceInfoWithFolderName(client, workspace);
+}
+
+/**
+ * Record when a freshly created workspace becomes prunable.
+ *
+ * The expiry is anchored to the platform's own `createTime` so the creating
+ * machine's clock cannot shift it, and stored as an absolute instant so a
+ * later change to `createTime` cannot reinterpret it.
+ *
+ * The workspace already exists by the time this runs, so a failure here is
+ * reported against the created workspace rather than raised as a create
+ * failure: the caller's next step is to set the expiry again, not to create
+ * the workspace again.
+ * @param client - Authenticated Operator client
+ * @param workspaceId - Created workspace ID
+ * @param staleAfter - Duration after creation, such as `24h`
+ * @param createTime - Creation time reported by the platform
+ */
+async function recordStaleAfter(
+  client: OperatorClient,
+  workspaceId: string,
+  staleAfter: string,
+  createTime: Timestamp | undefined,
+): Promise<void> {
+  const createdAt = createTime ? timestampDate(createTime) : new Date();
+  const expiresAt = new Date(createdAt.getTime() + parseAge(staleAfter));
+  try {
+    await writeMetadataLabelsDirect(client, {
+      trn: workspaceTrn(workspaceId),
+      labels: { [expiresAtLabelKey]: encodeExpiresAt(expiresAt) },
+    });
+    logger.info(`Workspace becomes prunable at ${expiresAt.toISOString()}.`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn(
+      `Workspace "${workspaceId}" was created, but recording --stale-after failed: ${message}`,
+    );
+  }
 }
 
 /**
@@ -151,6 +197,10 @@ export const createCommand = defineAppCommand({
       alias: "f",
       description: "Folder ID to workspace associate with",
       env: "TAILOR_PLATFORM_FOLDER_ID",
+    }),
+    "stale-after": arg(ageArg.optional(), {
+      description:
+        "Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d. `workspace prune --expired` deletes it once that has passed",
     }),
     "profile-name": arg(z.string().optional(), {
       alias: "p",
@@ -217,6 +267,7 @@ export const createCommand = defineAppCommand({
       deleteProtection: args["delete-protection"],
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
+      staleAfter: args["stale-after"],
       profile: args.profile,
     });
 

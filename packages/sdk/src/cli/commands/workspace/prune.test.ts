@@ -12,6 +12,7 @@ import {
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 import { parseAge, pruneCommand, selectPruneCandidates } from "./prune";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 import type { RunResult } from "politty";
@@ -83,11 +84,27 @@ function workspace(
   } as Workspace;
 }
 
-function stubClient(workspaces: Workspace[]) {
+/**
+ * Stub the metadata read behind `--expired`, keyed by workspace id.
+ * @param expiries - Expiry per workspace id; an absent id records no expiry, an `Error` fails the read
+ * @returns The `getMetadata` stub
+ */
+function stubExpiries(expiries: Record<string, Date | Error>) {
+  return vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+    const entry = expiries[trn.replace("trn:v1:workspace:", "")];
+    if (entry instanceof Error) return Promise.reject(entry);
+    return Promise.resolve({
+      metadata: { labels: entry ? { [expiresAtLabelKey]: encodeExpiresAt(entry) } : {} },
+    });
+  });
+}
+
+function stubClient(workspaces: Workspace[], expiries: Record<string, Date | Error> = {}) {
   const client = {
     listWorkspaces: vi.fn().mockResolvedValue({ workspaces, nextPageToken: "" }),
     getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
     deleteWorkspace: vi.fn().mockResolvedValue({}),
+    getMetadata: stubExpiries(expiries),
   };
   vi.mocked(initOperatorClient).mockResolvedValue(
     client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
@@ -686,7 +703,14 @@ describe("workspace prune command", () => {
       candidates: [expect.objectContaining({ id: "id-e2e-ws-1", name: "e2e-ws-1" })],
       deleted: [expect.objectContaining({ id: "id-e2e-ws-1" })],
       failed: [],
-      skipped: { excluded: [], deleteProtection: ["e2e-ws-protected"], unknownAge: [] },
+      skipped: {
+        excluded: [],
+        deleteProtection: ["e2e-ws-protected"],
+        unknownAge: [],
+        notExpired: [],
+        noExpiry: [],
+        unreadableExpiry: [],
+      },
     });
   });
 
@@ -704,5 +728,104 @@ describe("workspace prune command", () => {
     expect(result.success).toBe(true);
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("No stale workspaces"));
+  });
+
+  describe("--expired", () => {
+    test("deletes only the workspaces whose recorded expiry has passed", async () => {
+      const expired = workspace("ws-expired", { createdAt: hoursAgo(1) });
+      const pending = workspace("ws-pending", { createdAt: hoursAgo(99) });
+      const client = stubClient([expired, pending], {
+        [expired.id]: hoursAgo(1),
+        [pending.id]: new Date(NOW.getTime() + 3_600_000),
+      });
+
+      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: expired.id });
+    });
+
+    test("keeps a workspace that records no expiry", async () => {
+      const unlabelled = workspace("ws-unlabelled", { createdAt: hoursAgo(999) });
+      const client = stubClient([unlabelled]);
+
+      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
+    });
+
+    test("keeps a workspace whose expiry could not be read", async () => {
+      const unreadable = workspace("ws-unreadable", { createdAt: hoursAgo(999) });
+      const client = stubClient([unreadable], {
+        [unreadable.id]: new Error("permission denied"),
+      });
+
+      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("permission denied"));
+    });
+
+    test("still honours delete protection and --exclude", async () => {
+      const guarded = workspace("ws-guarded", { deleteProtection: true });
+      const excluded = workspace("ws-excluded");
+      const client = stubClient([guarded, excluded], {
+        [guarded.id]: hoursAgo(1),
+        [excluded.id]: hoursAgo(1),
+      });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--exclude",
+        "ws-excluded",
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
+      // Delete protection is checked before the expiry read, so it costs no request.
+      expect(client.getMetadata).not.toHaveBeenCalledWith({
+        trn: `trn:v1:workspace:${guarded.id}`,
+      });
+    });
+
+    test("narrows to the name filter when one is given", async () => {
+      const matching = workspace("e2e-ws-1");
+      const other = workspace("prod-1");
+      const client = stubClient([matching, other], {
+        [matching.id]: hoursAgo(1),
+        [other.id]: hoursAgo(1),
+      });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--name-prefix",
+        "e2e-ws-",
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: matching.id });
+    });
+
+    test("rejects being combined with --older-than", async () => {
+      const client = stubClient([]);
+
+      const result = await runCommand(pruneCommand, ["--expired", "--older-than", "24h", "--yes"]);
+
+      expectFailure(result, "--expired and --older-than cannot be combined");
+      expect(client.listWorkspaces).not.toHaveBeenCalled();
+    });
+
+    test("requires --older-than when it is not given", async () => {
+      const client = stubClient([]);
+
+      const result = await runCommand(pruneCommand, ["--name-prefix", "e2e-ws-", "--yes"]);
+
+      expectFailure(result, "--older-than");
+      expect(client.listWorkspaces).not.toHaveBeenCalled();
+    });
   });
 });

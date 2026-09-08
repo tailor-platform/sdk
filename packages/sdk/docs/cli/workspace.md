@@ -16,16 +16,16 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                   | Description                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------- |
-| [`workspace app`](#workspace-app)         | Manage workspace applications                                                    |
-| [`workspace create`](#workspace-create)   | Create a new Tailor Platform workspace.                                          |
-| [`workspace delete`](#workspace-delete)   | Delete a Tailor Platform workspace.                                              |
-| [`workspace get`](#workspace-get)         | Show detailed information about a workspace                                      |
-| [`workspace list`](#workspace-list)       | List all Tailor Platform workspaces.                                             |
-| [`workspace prune`](#workspace-prune)     | Delete stale temporary workspaces that match a name filter and an age threshold. |
-| [`workspace restore`](#workspace-restore) | Restore a deleted workspace                                                      |
-| [`workspace user`](#workspace-user)       | Manage workspace users                                                           |
+| Command                                   | Description                                                                                    |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [`workspace app`](#workspace-app)         | Manage workspace applications                                                                  |
+| [`workspace create`](#workspace-create)   | Create a new Tailor Platform workspace.                                                        |
+| [`workspace delete`](#workspace-delete)   | Delete a Tailor Platform workspace.                                                            |
+| [`workspace get`](#workspace-get)         | Show detailed information about a workspace                                                    |
+| [`workspace list`](#workspace-list)       | List all Tailor Platform workspaces.                                                           |
+| [`workspace prune`](#workspace-prune)     | Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation. |
+| [`workspace restore`](#workspace-restore) | Restore a deleted workspace                                                                    |
+| [`workspace user`](#workspace-user)       | Manage workspace users                                                                         |
 
 ### workspace app
 
@@ -99,17 +99,18 @@ tailor workspace create [options]
 
 **Options**
 
-| Option                                | Alias | Description                                                                                                 | Required | Default   | Env                               |
-| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
-| `--name <NAME>`                       | `-n`  | Workspace name                                                                                              | Yes      | -         | -                                 |
-| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                  | Yes      | -         | -                                 |
-| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                    | No       | `false`   | -                                 |
-| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
-| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                            | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
-| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                     | No       | -         | -                                 |
-| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
+| Option                                | Alias | Description                                                                                                                                   | Required | Default   | Env                               |
+| ------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
+| `--name <NAME>`                       | `-n`  | Workspace name                                                                                                                                | Yes      | -         | -                                 |
+| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                                                    | Yes      | -         | -                                 |
+| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                                                      | No       | `false`   | -                                 |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                                                   | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                                                         | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--stale-after <STALE_AFTER>`         | -     | Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d. `workspace prune --expired` deletes it once that has passed | No       | -         | -                                 |
+| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                                                        | No       | -         | -                                 |
+| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                                                              | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
+| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                                                       | No       | -         | -                                 |
+| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.                                   | No       | `"write"` | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -173,7 +174,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### workspace prune
 
-Delete stale temporary workspaces that match a name filter and an age threshold.
+Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation.
 
 **Usage**
 
@@ -183,24 +184,29 @@ tailor workspace prune [options]
 
 **Options**
 
-| Option                                | Alias | Description                                                                                                                  | Required | Default | Env                               |
-| ------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------- |
-| `--name-prefix <NAME_PREFIX>`         | -     | Select workspaces whose name starts with this prefix (repeatable)                                                            | No       | -       | -                                 |
-| `--name-regex <NAME_REGEX>`           | -     | Select workspaces whose whole name matches this regular expression                                                           | No       | -       | -                                 |
-| `--older-than <OLDER_THAN>`           | -     | Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id | Yes      | -       | -                                 |
-| `--organization-id <ORGANIZATION_ID>` | `-o`  | Only consider workspaces in this organization                                                                                | No       | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`             | -     | Only consider workspaces in this folder                                                                                      | No       | -       | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--exclude <EXCLUDE>`                 | -     | Keep a workspace with this exact name even when it matches (repeatable)                                                      | No       | -       | -                                 |
-| `--limit <LIMIT>`                     | -     | Abort when more workspaces match than this, without deleting anything. 0 removes the cap                                     | No       | `20`    | -                                 |
-| `--dry-run`                           | -     | List the workspaces that would be deleted without deleting them                                                              | No       | `false` | -                                 |
-| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                                             | No       | -       | `TAILOR_PLATFORM_PROFILE`         |
-| `--yes`                               | `-y`  | Skip confirmation prompts                                                                                                    | No       | `false` | -                                 |
+| Option                                | Alias | Description                                                                                                                                                      | Required | Default | Env                               |
+| ------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------- |
+| `--name-prefix <NAME_PREFIX>`         | -     | Select workspaces whose name starts with this prefix (repeatable)                                                                                                | No       | -       | -                                 |
+| `--name-regex <NAME_REGEX>`           | -     | Select workspaces whose whole name matches this regular expression                                                                                               | No       | -       | -                                 |
+| `--older-than <OLDER_THAN>`           | -     | Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id. Required unless --expired is given | No       | -       | -                                 |
+| `--expired`                           | -     | Select workspaces whose own --stale-after expiry has passed, instead of by name and age                                                                          | No       | `false` | -                                 |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Only consider workspaces in this organization                                                                                                                    | No       | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`             | -     | Only consider workspaces in this folder                                                                                                                          | No       | -       | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--exclude <EXCLUDE>`                 | -     | Keep a workspace with this exact name even when it matches (repeatable)                                                                                          | No       | -       | -                                 |
+| `--limit <LIMIT>`                     | -     | Abort when more workspaces match than this, without deleting anything. 0 removes the cap                                                                         | No       | `20`    | -                                 |
+| `--dry-run`                           | -     | List the workspaces that would be deleted without deleting them                                                                                                  | No       | `false` | -                                 |
+| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                                                                                 | No       | -       | `TAILOR_PLATFORM_PROFILE`         |
+| `--yes`                               | `-y`  | Skip confirmation prompts                                                                                                                                        | No       | `false` | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 **Notes**
 
 Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+
+With --expired the workspaces select themselves instead: each one is deleted only once the --stale-after expiry it recorded at creation has passed, so callers need no name or age filter. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward; --name-prefix, --name-regex, and the scope options still apply and are worth keeping in a shared organization.
+
+Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Give it a new expiry, or exclude it, before restoring.
 
 Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike `workspace delete`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with `workspace restore` for a limited time.
 

@@ -12,6 +12,8 @@ import { profileNameSchema } from "#/cli/shared/profile-name";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
+import { ageArg, parseAge } from "./age";
+import { fetchWorkspaceExpiry, type WorkspaceExpiry } from "./expiry";
 import { removeProfilesForWorkspaces } from "./profile-cleanup";
 import {
   workspaceDisplayName,
@@ -20,15 +22,6 @@ import {
   type WorkspaceInfo,
 } from "./transform";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
-
-const agePattern = /^(\d+)(s|m|h|d)$/;
-
-const ageUnitToMs = {
-  s: 1000,
-  m: 60 * 1000,
-  h: 60 * 60 * 1000,
-  d: 24 * 60 * 60 * 1000,
-} as const;
 
 // "" (an unset CI secret) means no scope, not an invalid id. Fresh per option, like `limitArg`.
 const scopeIdArg = () =>
@@ -40,31 +33,18 @@ const limitArg = z.preprocess(
   z.coerce.number().int().nonnegative(),
 );
 
-const ageArg = z.string().regex(agePattern, {
-  message: "Invalid --older-than format. Expected a number with a unit: '30m', '24h', '7d'",
-});
-
-/**
- * Parse a validated age string into milliseconds.
- * @param age - Age string such as `30m`, `24h`, or `7d`
- * @returns Age in milliseconds
- */
-export function parseAge(age: string): number {
-  const match = age.match(agePattern);
-  if (!match?.[1] || !match[2]) {
-    throw new Error(`invalid age format: ${age}`);
-  }
-  const unit = match[2] as keyof typeof ageUnitToMs;
-  return parseInt(match[1], 10) * ageUnitToMs[unit];
-}
+export { parseAge };
 
 export interface PruneCriteria {
   /** Name prefixes; a workspace matches when its name starts with any of them. */
   namePrefixes: readonly string[];
   /** Regex that must match the whole workspace name. */
   nameRegex?: RegExp;
-  /** Minimum age since creation, in milliseconds. `0` selects any age. */
-  olderThanMs: number;
+  /**
+   * Minimum age since creation, in milliseconds. `0` selects any age.
+   * `undefined` in `--expired` mode, where the recorded expiry decides.
+   */
+  olderThanMs?: number;
   organizationId?: string;
   folderId?: string;
   /** Exact names kept even when they match. */
@@ -85,6 +65,9 @@ export interface PruneSelection {
 }
 
 function matchesName(workspace: Workspace, criteria: PruneCriteria): boolean {
+  // No filter selects everything: `--expired` reaches every workspace the
+  // caller can see, and the recorded expiry is what narrows it.
+  if (criteria.namePrefixes.length === 0 && !criteria.nameRegex) return true;
   if (criteria.namePrefixes.some((prefix) => workspace.name.startsWith(prefix))) {
     return true;
   }
@@ -120,8 +103,6 @@ export function selectPruneCandidates(
     missingCreateTime: [],
     tooYoung: [],
   };
-  const cutoff = now.getTime() - criteria.olderThanMs;
-
   for (const workspace of workspaces) {
     if (!matchesScope(workspace, criteria) || !matchesName(workspace, criteria)) continue;
     if (criteria.exclude.has(workspace.name)) {
@@ -132,19 +113,98 @@ export function selectPruneCandidates(
       selection.protectedSkipped.push(workspace);
       continue;
     }
-    const createdAt = formatTimestamp(workspace.createTime);
-    if (!createdAt) {
-      selection.missingCreateTime.push(workspace);
-      continue;
-    }
-    if (createdAt.getTime() > cutoff) {
-      selection.tooYoung.push(workspace);
-      continue;
+    // In `--expired` mode the workspace's own recorded expiry decides, so
+    // creation time is not consulted at all.
+    if (criteria.olderThanMs !== undefined) {
+      const createdAt = formatTimestamp(workspace.createTime);
+      if (!createdAt) {
+        selection.missingCreateTime.push(workspace);
+        continue;
+      }
+      if (createdAt.getTime() > now.getTime() - criteria.olderThanMs) {
+        selection.tooYoung.push(workspace);
+        continue;
+      }
     }
     selection.candidates.push(workspace);
   }
 
   return selection;
+}
+
+/** How the recorded expiry sorted the workspaces the name and scope filters kept. */
+interface ExpiryPartition {
+  /** Workspaces whose recorded expiry has passed. */
+  expired: Workspace[];
+  /** Workspaces kept because their expiry is still in the future. */
+  pending: Workspace[];
+  /** Workspaces kept because they record no expiry. */
+  unset: Workspace[];
+  /** Workspaces kept because their recorded expiry could not be read. */
+  unreadable: { workspace: Workspace; reason: string }[];
+}
+
+// Bounds the metadata fan-out: one request per candidate, a few at a time.
+const expiryReadConcurrency = 5;
+
+/**
+ * Sort workspaces by what their own labels say about when they may be pruned.
+ *
+ * Only a workspace whose recorded expiry has passed is a candidate. One that
+ * records nothing, records something unreadable, or whose read failed is kept
+ * — none of those states says the workspace may be deleted, and a failed read
+ * in particular must never be read as "no expiry recorded".
+ * @param client - Operator client instance
+ * @param workspaces - Workspaces the name and scope filters kept
+ * @param now - Reference time
+ * @returns The workspaces grouped by expiry state
+ */
+async function partitionByExpiry(
+  client: OperatorClient,
+  workspaces: readonly Workspace[],
+  now: Date,
+): Promise<ExpiryPartition> {
+  const partition: ExpiryPartition = { expired: [], pending: [], unset: [], unreadable: [] };
+  for (let start = 0; start < workspaces.length; start += expiryReadConcurrency) {
+    const wave = workspaces.slice(start, start + expiryReadConcurrency);
+    const results = await Promise.all(
+      wave.map(async (workspace) => ({
+        workspace,
+        result: await fetchWorkspaceExpiry(client, workspace.id, now),
+      })),
+    );
+    for (const { workspace, result } of results) {
+      if ("error" in result) {
+        partition.unreadable.push({ workspace, reason: result.error.message });
+        continue;
+      }
+      recordExpiryState(partition, workspace, result.expiry);
+    }
+  }
+  return partition;
+}
+
+function recordExpiryState(
+  partition: ExpiryPartition,
+  workspace: Workspace,
+  expiry: WorkspaceExpiry,
+): void {
+  switch (expiry.state) {
+    case "expired":
+      partition.expired.push(workspace);
+      return;
+    case "pending":
+      partition.pending.push(workspace);
+      return;
+    case "unset":
+      partition.unset.push(workspace);
+      return;
+    case "invalid":
+      partition.unreadable.push({
+        workspace,
+        reason: `recorded expiry "${expiry.value}" is not a value this CLI wrote`,
+      });
+  }
 }
 
 async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> {
@@ -177,6 +237,12 @@ interface PruneResult {
     excluded: string[];
     deleteProtection: string[];
     unknownAge: string[];
+    /** `--expired` only: kept because the recorded expiry has not passed. */
+    notExpired: string[];
+    /** `--expired` only: kept because no expiry is recorded. */
+    noExpiry: string[];
+    /** `--expired` only: kept because the recorded expiry could not be read. */
+    unreadableExpiry: string[];
   };
 }
 
@@ -192,9 +258,14 @@ const KEPT_REASONS: {
 
 export const pruneCommand = defineAppCommand({
   name: "prune",
-  description: "Delete stale temporary workspaces that match a name filter and an age threshold.",
+  description:
+    "Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation.",
   notes: ml`
     Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+
+    With --expired the workspaces select themselves instead: each one is deleted only once the --stale-after expiry it recorded at creation has passed, so callers need no name or age filter. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward; --name-prefix, --name-regex, and the scope options still apply and are worth keeping in a shared organization.
+
+    Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Give it a new expiry, or exclude it, before restoring.
 
     Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
@@ -207,9 +278,13 @@ export const pruneCommand = defineAppCommand({
     "name-regex": arg(z.string().min(1).optional(), {
       description: "Select workspaces whose whole name matches this regular expression",
     }),
-    "older-than": arg(ageArg, {
+    "older-than": arg(ageArg.optional(), {
       description:
-        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id",
+        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id. Required unless --expired is given",
+    }),
+    expired: arg(z.boolean().default(false), {
+      description:
+        "Select workspaces whose own --stale-after expiry has passed, instead of by name and age",
     }),
     "organization-id": arg(scopeIdArg(), {
       alias: "o",
@@ -239,14 +314,29 @@ export const pruneCommand = defineAppCommand({
   run: async (args) => {
     const namePrefixes = args["name-prefix"] ?? [];
     const nameRegexPattern = args["name-regex"];
-    if (namePrefixes.length === 0 && !nameRegexPattern) {
+    const olderThan = args["older-than"];
+    if (args.expired && olderThan !== undefined) {
+      throw CLIError({
+        code: "CONFLICTING_AGE_FILTER",
+        message: "--expired and --older-than cannot be combined.",
+        details:
+          "--expired defers to the expiry each workspace recorded at creation, which --older-than would override.",
+      });
+    }
+    if (!args.expired && olderThan === undefined) {
+      throw CLIError({
+        code: "MISSING_AGE_FILTER",
+        message: "Specify --older-than, or --expired to use each workspace's recorded expiry.",
+      });
+    }
+    if (!args.expired && namePrefixes.length === 0 && !nameRegexPattern) {
       throw CLIError({
         code: "MISSING_NAME_FILTER",
         message: "Specify at least one of --name-prefix or --name-regex.",
         details: "Only workspaces whose name matches the filter are considered for deletion.",
       });
     }
-    const olderThanMs = parseAge(args["older-than"]);
+    const olderThanMs = olderThan === undefined ? undefined : parseAge(olderThan);
     if (olderThanMs === 0 && !args["organization-id"] && !args["folder-id"]) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
@@ -258,7 +348,7 @@ export const pruneCommand = defineAppCommand({
     const criteria: PruneCriteria = {
       namePrefixes,
       ...(nameRegexPattern ? { nameRegex: compileNameRegex(nameRegexPattern) } : {}),
-      olderThanMs,
+      ...(olderThanMs === undefined ? {} : { olderThanMs }),
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
       exclude: new Set(args.exclude ?? []),
@@ -269,15 +359,41 @@ export const pruneCommand = defineAppCommand({
     const platformConfig = await loadPlatformClientConfig({ profile: args.profile });
     const client = await initOperatorClient(accessToken, platformConfig);
 
-    const selection = selectPruneCandidates(await fetchAllWorkspaces(client), criteria, new Date());
+    const now = new Date();
+    const selection = selectPruneCandidates(await fetchAllWorkspaces(client), criteria, now);
 
     const result: PruneResult = {
       dryRun: args["dry-run"],
       candidates: [],
       deleted: [],
       failed: [],
-      skipped: { excluded: [], deleteProtection: [], unknownAge: [] },
+      skipped: {
+        excluded: [],
+        deleteProtection: [],
+        unknownAge: [],
+        notExpired: [],
+        noExpiry: [],
+        unreadableExpiry: [],
+      },
     };
+
+    if (args.expired) {
+      const partition = await partitionByExpiry(client, selection.candidates, now);
+      selection.candidates = partition.expired;
+      for (const workspace of partition.pending) {
+        result.skipped.notExpired.push(workspace.name);
+      }
+      for (const workspace of partition.unset) {
+        result.skipped.noExpiry.push(workspace.name);
+      }
+      for (const { workspace, reason } of partition.unreadable) {
+        result.skipped.unreadableExpiry.push(workspace.name);
+        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${reason}.`);
+      }
+      logger.info(
+        `${partition.pending.length} workspace(s) have not expired and ${partition.unset.length} record no expiry; both were kept.`,
+      );
+    }
     for (const { key, selection: group, reason } of KEPT_REASONS) {
       for (const workspace of selection[group]) {
         result.skipped[key].push(workspace.name);
