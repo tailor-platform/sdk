@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -8,7 +9,6 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { randomBytes } from "node:crypto";
 import * as path from "pathe";
 import type { SeedData } from "@tailor-platform/sdk/cli";
 
