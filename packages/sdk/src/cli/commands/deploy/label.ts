@@ -103,6 +103,9 @@ export function resolverTrn(workspaceId: string, namespace: string, resolverName
   return nestedResourceTrn(workspaceId, ["pipeline", namespace], ["resolver", resolverName]);
 }
 
+/** The platform rejects a `SetMetadata` write holding more labels than this. */
+export const MAX_RESOURCE_LABELS = 20;
+
 export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
 export const sdkAppIdLabelKey = "sdk-app-id";

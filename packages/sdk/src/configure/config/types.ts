@@ -129,7 +129,9 @@ export interface AppConfig<
    * `1.2.3` is written as `v1-2-3`. At most 17 entries can be set.
    *
    * Entries are only added or overwritten: an entry removed from this config
-   * keeps its last deployed value on the platform.
+   * keeps its last deployed value on the platform. Those retained labels count
+   * towards the platform's limit of 20 labels per resource, so `deploy` stops
+   * before changing the application when the total would exceed it.
    */
   metadata?: Record<string, string>;
   /** TailorDB service configuration with table definition files. */
