@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 2.14.2
+
+### Patch Changes
+
+- [#2297](https://github.com/tailor-platform/sdk/pull/2297) [`9f50a5d`](https://github.com/tailor-platform/sdk/commit/9f50a5d07941eb4f14f141dcbdcb9e32cf34d6fd) Thanks [@k1LoW](https://github.com/k1LoW)! - Fix `tailor deploy` rejecting IdP `userAuthPolicy.allowedEmailDomains: ["*"]` with "must be a valid hostname" during pre-flight validation. The bundled protobuf descriptors carried the platform's older hostname-only rule, so the wildcard entry documented in 2.14.1 could be written but never deployed.
+
 ## 2.14.1
 
 ### Patch Changes
