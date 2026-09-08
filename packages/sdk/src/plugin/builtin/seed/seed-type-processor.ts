@@ -55,10 +55,12 @@ export interface SeedNamespaceConfig {
 
 /**
  * Field names, per target table, that some relation elsewhere is keyed to
- * (`field.relation.key`) rather than the target's `id`. A `serial` field
- * this set names must survive the dump even though it is otherwise
- * platform-assigned: `apply --truncate` gives the row a fresh serial value,
- * and a relation keyed to the old one would otherwise break silently.
+ * (`field.relation.key`, or `field.config.foreignKeyField` for a `keyOnly`
+ * relation, which never populates `field.relation`) rather than the target's
+ * `id`. A `serial` field this set names must survive the dump even though it
+ * is otherwise platform-assigned: `apply --truncate` gives the row a fresh
+ * serial value, and a relation keyed to the old one would otherwise break
+ * silently.
  * @param tailordb - TailorDB namespaces with their tables
  * @returns Relation-targeted field names per target table name
  */
@@ -67,10 +69,12 @@ function collectRelationTargetKeys(tailordb: TailorDBNamespaceData[]): Map<strin
   for (const ns of tailordb) {
     for (const type of Object.values(ns.tables)) {
       for (const field of Object.values(type.fields)) {
-        if (!field.relation) continue;
-        const keys = targetKeysByType.get(field.relation.targetType) ?? new Set<string>();
-        keys.add(field.relation.key);
-        targetKeysByType.set(field.relation.targetType, keys);
+        const targetType = field.relation?.targetType ?? field.config.foreignKeyType;
+        const key = field.relation?.key ?? field.config.foreignKeyField;
+        if (!targetType || !key) continue;
+        const keys = targetKeysByType.get(targetType) ?? new Set<string>();
+        keys.add(key);
+        targetKeysByType.set(targetType, keys);
       }
     }
   }

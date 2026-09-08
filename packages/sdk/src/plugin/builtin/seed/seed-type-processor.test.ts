@@ -127,5 +127,26 @@ describe("buildSeedNamespaceConfigs", () => {
       expect(config?.omitFields?.User).toEqual([]);
       expect(config?.omitFields?.Order).toEqual([]);
     });
+
+    test("keeps a serial field a keyOnly relation is keyed to", () => {
+      // A keyOnly relation never populates `field.relation` (see
+      // buildRelationInfo in relation.ts); it only sets
+      // `field.config.foreignKeyType`/`foreignKeyField`.
+      const user = makeType("User", {
+        id: { name: "id", config: { type: "string" } },
+        code: { name: "code", config: { type: "integer", serial: { start: 1 } } },
+      });
+      const order = makeType("Order", {
+        id: { name: "id", config: { type: "string" } },
+        userCode: {
+          name: "userCode",
+          config: { type: "integer", foreignKeyType: "User", foreignKeyField: "code" },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [user, order])]);
+
+      expect(config?.omitFields?.User).toEqual([]);
+    });
   });
 });
