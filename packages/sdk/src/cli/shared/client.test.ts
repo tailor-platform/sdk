@@ -74,8 +74,17 @@ describe("createTransport", () => {
 });
 
 describe("createPooledStreamTransport", () => {
+  type MockStreamResponse = { message: AsyncIterable<undefined> };
+
+  function makeStreamResponse(): MockStreamResponse {
+    return { message: (async function* () {})() };
+  }
+
   function makeMockTransport(): Transport {
-    return { unary: vi.fn(), stream: vi.fn() };
+    return {
+      unary: vi.fn(),
+      stream: vi.fn(() => Promise.resolve(makeStreamResponse())) as unknown as Transport["stream"],
+    };
   }
 
   // A transport whose stream() call stays pending until `resolve()` is
@@ -83,8 +92,8 @@ describe("createPooledStreamTransport", () => {
   // while a second, concurrent stream() call comes in.
   function makeControllableTransport(): { transport: Transport; resolve: () => void } {
     let resolve!: () => void;
-    const pending = new Promise<undefined>((r) => {
-      resolve = () => r(undefined);
+    const pending = new Promise<MockStreamResponse>((r) => {
+      resolve = () => r(makeStreamResponse());
     });
     return {
       transport: {
@@ -93,6 +102,15 @@ describe("createPooledStreamTransport", () => {
       },
       resolve,
     };
+  }
+
+  // The real generated client always reads `message` to completion; do the
+  // same here so the pooled transport releases the connection as busy only
+  // once the "upload" is actually done.
+  async function drain(response: MockStreamResponse): Promise<void> {
+    for await (const _ of response.message) {
+      // no-op
+    }
   }
 
   const unaryArgs = [{}, undefined, undefined, undefined, {}, undefined] as unknown as Parameters<
@@ -126,9 +144,9 @@ describe("createPooledStreamTransport", () => {
     const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
     const pooled = createPooledStreamTransport(primary, createAdditional, 4);
 
-    await pooled.stream(...streamArgs);
-    await pooled.stream(...streamArgs);
-    await pooled.stream(...streamArgs);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
 
     expect(createAdditional).not.toHaveBeenCalled();
     expect(primary.stream).toHaveBeenCalledTimes(3);
@@ -152,13 +170,31 @@ describe("createPooledStreamTransport", () => {
     await call1;
   });
 
+  test("keeps a connection busy until its response message is fully read, not merely once stream() resolves", async () => {
+    const primary = makeMockTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi.fn<() => Promise<Transport>>().mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary, createAdditional, 2);
+
+    const response1 = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+    // stream() has resolved, but response1.message hasn't been read yet, so
+    // primary must still count as busy: this call should grow the pool
+    // rather than reuse primary.
+    await pooled.stream(...streamArgs);
+
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+
+    await drain(response1);
+  });
+
   test("a pool size of 1 never creates additional connections", async () => {
     const primary = makeMockTransport();
     const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
     const pooled = createPooledStreamTransport(primary, createAdditional, 1);
 
-    await pooled.stream(...streamArgs);
-    await pooled.stream(...streamArgs);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
 
     expect(createAdditional).not.toHaveBeenCalled();
     expect(primary.stream).toHaveBeenCalledTimes(2);

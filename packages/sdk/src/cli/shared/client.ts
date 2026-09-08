@@ -7,6 +7,7 @@ import {
   ConnectError,
   createClient,
   type Interceptor,
+  type StreamResponse,
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
@@ -255,6 +256,10 @@ export function createPooledStreamTransport(
     }
   }
 
+  function release(index: number): void {
+    busyCounts[index] = (busyCounts[index] ?? 0) - 1;
+  }
+
   return {
     unary(method, signal, timeoutMs, header, input, contextValues) {
       return primary.unary(method, signal, timeoutMs, header, input, contextValues);
@@ -262,13 +267,30 @@ export function createPooledStreamTransport(
     async stream(method, signal, timeoutMs, header, input, contextValues) {
       const index = await acquireTransportIndex();
       const transport = transports[index] as Transport;
+      let response: StreamResponse<typeof method.input, typeof method.output>;
       try {
-        return await transport.stream(method, signal, timeoutMs, header, input, contextValues);
-      } finally {
-        busyCounts[index] = (busyCounts[index] ?? 0) - 1;
+        response = await transport.stream(method, signal, timeoutMs, header, input, contextValues);
+      } catch (error) {
+        release(index);
+        throw error;
       }
+      // `stream()` resolves once response headers arrive, not once the
+      // response is fully read (or the request body fully sent) — connect's
+      // node http2 client starts writing the request body without waiting
+      // for it, and only awaits headers here. Keep the connection marked
+      // busy until the caller finishes reading `message`, so a connection
+      // isn't reused while this upload is still in flight.
+      return { ...response, message: releaseAfter(response.message, () => release(index)) };
     },
   };
+}
+
+async function* releaseAfter<T>(iterable: AsyncIterable<T>, release: () => void): AsyncIterable<T> {
+  try {
+    yield* iterable;
+  } finally {
+    release();
+  }
 }
 
 /**
