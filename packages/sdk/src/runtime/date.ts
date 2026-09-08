@@ -8,7 +8,10 @@ import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.typ
 export function formatDate(date: Date): string {
   const year = date.getUTCFullYear();
   if (!Number.isFinite(year) || year < 0 || year > 9999) {
-    throw new RangeError("Expected a valid Date with a year between 0000 and 9999");
+    const received = Number.isNaN(date.getTime()) ? "an invalid Date" : `year ${year}`;
+    throw new RangeError(
+      `Expected a Date with a 4-digit year (0000-9999), but received ${received}`,
+    );
   }
   return `${String(year).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }

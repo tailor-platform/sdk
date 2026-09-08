@@ -135,15 +135,16 @@ describe("Date representation", () => {
     ).toEqual(["2026-09-06", "0099-01-02", "0000-02-29", "9999-12-31"]);
   });
 
-  test.each([new Date(NaN), new Date("+010000-01-01"), new Date("-000001-01-01")])(
-    "rejects unrepresentable Date output %s",
-    (value) => {
-      const schema = t.object({ dates: t.date({ as: "date", array: true }) });
-      expect(() => serializeDateFields(schema, { dates: [value] })).toThrow(
-        "Invalid date at dates[0]: Expected a valid Date with a year between 0000 and 9999",
-      );
-    },
-  );
+  test.each([
+    [new Date(NaN), "an invalid Date"],
+    [new Date("+010000-01-01"), "year 10000"],
+    [new Date("-000001-01-01"), "year -1"],
+  ])("rejects unrepresentable Date output %s", (value, received) => {
+    const schema = t.object({ dates: t.date({ as: "date", array: true }) });
+    expect(() => serializeDateFields(schema, { dates: [value] })).toThrow(
+      `Invalid date at dates[0]: Expected a Date with a 4-digit year (0000-9999), but received ${received}`,
+    );
+  });
 
   test("rejects strings returned for a Date representation", () => {
     expect(() => serializeDateFields(t.date({ as: "date" }), "2026-09-07")).toThrow(
