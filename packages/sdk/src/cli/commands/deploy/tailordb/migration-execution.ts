@@ -69,14 +69,18 @@ export async function captureMigrationRestrictionState(
       settingsByTable.set(type.name, {
         bulkUpsert: settings?.bulkUpsert ?? false,
         publishRecordEvents: settings?.publishRecordEvents ?? false,
+        // The proto type marks these fields required, but the platform can
+        // return a legacy record with one actually absent.
+        // oxlint-disable typescript/no-unnecessary-condition
         ...(settings?.disableGqlOperations && {
           disableGqlOperations: {
-            create: settings.disableGqlOperations.create,
-            update: settings.disableGqlOperations.update,
-            delete: settings.disableGqlOperations.delete,
-            read: settings.disableGqlOperations.read,
+            create: settings.disableGqlOperations.create ?? false,
+            update: settings.disableGqlOperations.update ?? false,
+            delete: settings.disableGqlOperations.delete ?? false,
+            read: settings.disableGqlOperations.read ?? false,
           },
         }),
+        // oxlint-enable typescript/no-unnecessary-condition
         tailordbType: structuredClone(type),
       });
     }
