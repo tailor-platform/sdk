@@ -11,7 +11,7 @@ import {
   type UnaryResponse,
 } from "@connectrpc/connect";
 import { z } from "zod";
-import { createApplyLimiter } from "./apply-concurrency";
+import { createApplyLimiter, resolveUploadTransportPoolSize } from "./apply-concurrency";
 import { logger } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 import { userAgent } from "./user-agent";
@@ -156,7 +156,13 @@ export async function initOperatorClient(accessToken: string, config?: PlatformC
     concurrencyLimitInterceptor(),
   ];
 
-  const transport = await createTransport(getPlatformBaseUrl(platformConfig), interceptors);
+  const baseUrl = getPlatformBaseUrl(platformConfig);
+  const primary = await createTransport(baseUrl, interceptors);
+  const transport = createPooledStreamTransport(
+    primary,
+    () => createTransport(baseUrl, interceptors),
+    resolveUploadTransportPoolSize(),
+  );
   return createClient(OperatorService, transport);
 }
 
@@ -175,6 +181,55 @@ export async function createTransport(
 ): Promise<Transport> {
   const { createConnectTransport } = await import("@connectrpc/connect-node");
   return createConnectTransport({ httpVersion: "2", baseUrl, interceptors });
+}
+
+/**
+ * Wrap a transport so streaming calls (function/script/static website
+ * uploads) are spread round-robin across a pool of connections, built lazily
+ * on first streaming call. Unary calls always use `primary`, unaffected.
+ *
+ * A single HTTP/2 connection has one connection-level flow-control window,
+ * fixed by Node's http2 implementation and not enlargeable from the client
+ * for outbound data. Concurrent upload streams multiplexed on one connection
+ * divide that window between them; spreading them across independent
+ * connections gives each its own window instead, which measurement shows
+ * scales both aggregate and per-upload throughput ~linearly with pool size.
+ * @internal
+ * @param primary - Transport used for unary calls and the first stream slot
+ * @param createAdditional - Creates one more transport for the pool
+ * @param poolSize - Target number of connections in the pool (>= 1)
+ * @returns A transport presenting the same interface, backed by the pool
+ */
+export function createPooledStreamTransport(
+  primary: Transport,
+  createAdditional: () => Promise<Transport>,
+  poolSize: number,
+): Transport {
+  const transports: Transport[] = [primary];
+  let filling: Promise<void> | undefined;
+  let next = 0;
+
+  async function ensurePoolFilled(): Promise<void> {
+    if (transports.length >= poolSize) return;
+    filling ??= (async () => {
+      while (transports.length < poolSize) {
+        transports.push(await createAdditional());
+      }
+    })();
+    await filling;
+  }
+
+  return {
+    unary(method, signal, timeoutMs, header, input, contextValues) {
+      return primary.unary(method, signal, timeoutMs, header, input, contextValues);
+    },
+    async stream(method, signal, timeoutMs, header, input, contextValues) {
+      await ensurePoolFilled();
+      const transport = transports[next % transports.length] as Transport;
+      next += 1;
+      return transport.stream(method, signal, timeoutMs, header, input, contextValues);
+    },
+  };
 }
 
 /**

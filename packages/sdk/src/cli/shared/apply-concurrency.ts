@@ -40,6 +40,34 @@ export function createApplyLimiter(): <R>(task: () => Promise<R>) => Promise<R> 
 }
 
 /**
+ * Default number of HTTP/2 connections streaming RPCs (function/script/static
+ * website uploads) are spread across when `TAILOR_UPLOAD_CONNECTIONS` is
+ * unset.
+ *
+ * A single HTTP/2 connection has one connection-level flow-control window
+ * (65,535 bytes, fixed by Node's http2 implementation and not enlargeable
+ * from the client for outbound data). Concurrent upload streams multiplexed
+ * on one connection divide that window between them, so aggregate and
+ * per-upload throughput both scale ~linearly with the number of connections
+ * they are spread across, independent of round-trip latency.
+ */
+const DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE = 4;
+
+/**
+ * Resolve how many HTTP/2 connections to spread streaming RPCs across.
+ *
+ * Resolution order:
+ * 1. `TAILOR_UPLOAD_CONNECTIONS` env var (positive integer)
+ * 2. `DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE`
+ * @returns Connection pool size for streaming RPCs (always >= 1)
+ */
+export function resolveUploadTransportPoolSize(): number {
+  return (
+    parsePositiveInt(process.env.TAILOR_UPLOAD_CONNECTIONS) ?? DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE
+  );
+}
+
+/**
  * Comparator that orders `name`-bearing items by `name`, for a stable,
  * reproducible apply order within the concurrency cap.
  *

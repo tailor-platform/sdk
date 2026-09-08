@@ -1,13 +1,24 @@
 import { aroundEach, describe, expect, test } from "vitest";
-import { byName, createApplyLimiter, resolveApplyConcurrency } from "./apply-concurrency";
+import {
+  byName,
+  createApplyLimiter,
+  resolveApplyConcurrency,
+  resolveUploadTransportPoolSize,
+} from "./apply-concurrency";
 
 const original = process.env.TAILOR_APPLY_CONCURRENCY;
+const originalUploadConnections = process.env.TAILOR_UPLOAD_CONNECTIONS;
 aroundEach(async (runTest) => {
   await runTest();
   if (original === undefined) {
     delete process.env.TAILOR_APPLY_CONCURRENCY;
   } else {
     process.env.TAILOR_APPLY_CONCURRENCY = original;
+  }
+  if (originalUploadConnections === undefined) {
+    delete process.env.TAILOR_UPLOAD_CONNECTIONS;
+  } else {
+    process.env.TAILOR_UPLOAD_CONNECTIONS = originalUploadConnections;
   }
 });
 
@@ -48,6 +59,25 @@ describe("createApplyLimiter", () => {
 
     await Promise.all(Array.from({ length: 10 }, task));
     expect(peak).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("resolveUploadTransportPoolSize", () => {
+  test("defaults to 4 when unset", () => {
+    delete process.env.TAILOR_UPLOAD_CONNECTIONS;
+    expect(resolveUploadTransportPoolSize()).toBe(4);
+  });
+
+  test("honors a positive integer override", () => {
+    process.env.TAILOR_UPLOAD_CONNECTIONS = "8";
+    expect(resolveUploadTransportPoolSize()).toBe(8);
+  });
+
+  test("ignores non-positive or non-numeric values", () => {
+    for (const value of ["0", "-3", "abc", "1.5", "", "  "]) {
+      process.env.TAILOR_UPLOAD_CONNECTIONS = value;
+      expect(resolveUploadTransportPoolSize()).toBe(4);
+    }
   });
 });
 

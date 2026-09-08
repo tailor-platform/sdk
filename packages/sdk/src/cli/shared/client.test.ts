@@ -1,13 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
+import { Code, ConnectError, type Transport, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
   closeConnectionPool,
   concurrencyLimitInterceptor,
+  createPooledStreamTransport,
   createTransport,
   errorHandlingInterceptor,
   fetchAll,
@@ -69,6 +70,72 @@ describe("createTransport", () => {
       interceptors: [],
     });
     expect(transport).toEqual({ type: "node-transport" });
+  });
+});
+
+describe("createPooledStreamTransport", () => {
+  function makeMockTransport(): Transport {
+    return { unary: vi.fn(), stream: vi.fn() };
+  }
+
+  const unaryArgs = [{}, undefined, undefined, undefined, {}, undefined] as unknown as Parameters<
+    Transport["unary"]
+  >;
+  const streamArgs = [
+    {},
+    undefined,
+    undefined,
+    undefined,
+    (async function* () {})(),
+    undefined,
+  ] as unknown as Parameters<Transport["stream"]>;
+
+  test("unary calls always use the primary transport", async () => {
+    const primary = makeMockTransport();
+    const pooled = createPooledStreamTransport(
+      primary,
+      () => Promise.resolve(makeMockTransport()),
+      3,
+    );
+
+    await pooled.unary(...unaryArgs);
+    await pooled.unary(...unaryArgs);
+
+    expect(primary.unary).toHaveBeenCalledTimes(2);
+  });
+
+  test("stream calls are spread round-robin across a lazily built pool", async () => {
+    const primary = makeMockTransport();
+    const second = makeMockTransport();
+    const third = makeMockTransport();
+    const createAdditional = vi
+      .fn<() => Promise<Transport>>()
+      .mockResolvedValueOnce(second)
+      .mockResolvedValueOnce(third);
+    const pooled = createPooledStreamTransport(primary, createAdditional, 3);
+
+    expect(createAdditional).not.toHaveBeenCalled();
+
+    for (let i = 0; i < 6; i++) {
+      await pooled.stream(...streamArgs);
+    }
+
+    expect(createAdditional).toHaveBeenCalledTimes(2);
+    expect(primary.stream).toHaveBeenCalledTimes(2);
+    expect(second.stream).toHaveBeenCalledTimes(2);
+    expect(third.stream).toHaveBeenCalledTimes(2);
+  });
+
+  test("a pool size of 1 never creates additional connections", async () => {
+    const primary = makeMockTransport();
+    const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
+    const pooled = createPooledStreamTransport(primary, createAdditional, 1);
+
+    await pooled.stream(...streamArgs);
+    await pooled.stream(...streamArgs);
+
+    expect(createAdditional).not.toHaveBeenCalled();
+    expect(primary.stream).toHaveBeenCalledTimes(2);
   });
 });
 

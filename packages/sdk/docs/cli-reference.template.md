@@ -75,6 +75,7 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                     |
 | `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count     |
 | `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent platform RPCs during `apply`/`deploy`. Defaults to 16                                  |
+| `TAILOR_UPLOAD_CONNECTIONS`                  | Connections `deploy` spreads function/script/static website uploads across. Defaults to 4             |
 | `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                           |
 | `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                      |
 | `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                            |
