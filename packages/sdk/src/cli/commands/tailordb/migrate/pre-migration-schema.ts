@@ -303,8 +303,10 @@ function restoreRemovedNestedMembers(
 }
 
 /**
- * Relax the new member of each confirmed nested rename to optional; the
- * Post-phase enforces it after the copy script has filled it.
+ * Relax the new member of each confirmed nested rename to optional and
+ * non-unique; the Post-phase enforces both after the copy script has filled
+ * it. The manifest currently sends every nested member as non-unique, so the
+ * unique relaxation only guards a manifest that starts sending it.
  * @param {ProtoFieldConfig} field - Pre-phase proto field to adjust (mutated in place)
  * @param {readonly NestedMemberRename[]} memberRenames - Confirmed renames inside the field
  */
@@ -315,6 +317,7 @@ function relaxRenamedNestedMembers(
   for (const rename of memberRenames) {
     const member = getProtoNestedMember(field, rename.path);
     if (member?.required) member.required = false;
+    if (member?.unique) member.unique = false;
   }
 }
 

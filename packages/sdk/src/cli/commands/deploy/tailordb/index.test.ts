@@ -1515,6 +1515,43 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(address.fields!.geo!.fields!.lat).toMatchObject({ type: "float", required: true });
   });
 
+  test("relaxes a unique new member of a nested rename until the migration script completes", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: { zipCode: { type: "string", required: false, unique: true } },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: {
+            type: "nested",
+            required: false,
+            fields: { zip: { type: "string", required: false } },
+          },
+          after: {
+            type: "nested",
+            required: false,
+            fields: { zipCode: { type: "string", required: false, unique: true } },
+          },
+          memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(address.fields!.zipCode!.unique).toBe(false);
+    expect(address.fields!.zip).toMatchObject({ type: "string", required: false });
+  });
+
   test("does not restore members whose parent is no longer nested", () => {
     const fields: Record<string, ProtoField> = {
       address: {
