@@ -594,8 +594,13 @@ ${steps}
 // reach the script as objects (or arrays of objects for array members).
 const NESTED_MEMBER_RENAME_HELPER = `/**
  * Return a copy of a nested value with the member at \`path\` also stored under
- * \`newName\`, descending into arrays at every level. A stale value under the
- * new name is dropped when the source member is absent.
+ * \`newName\`, descending into arrays at every level.
+ *
+ * When the source member is absent, any value already stored under
+ * \`newName\` is dropped rather than kept: stored values of previously removed
+ * members are not pruned, so a stale value could otherwise resurface under
+ * \`newName\`. This mirrors the unconditional overwrite of a top-level field
+ * rename.
  */
 function renameNestedMember(value: unknown, path: readonly string[], newName: string): unknown {
   if (value === null || value === undefined) return value;
