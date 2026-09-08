@@ -531,7 +531,12 @@ describe("createEnvironmentPlugin", () => {
     expect(userConfig.test.projects[1]!.test.environment).toBe("node");
   });
 
-  test("adds the setup file to every inline project instead of relying on root inheritance", () => {
+  test("adds the setup file only to inline projects that select tailor-runtime", () => {
+    // Vitest 5 inline projects no longer inherit the root `setupFiles` this
+    // hook returns, so the setup file is added per project. It must not go
+    // into projects on another environment: setup.ts statically imports
+    // "node:url" and fails to load where Node builtins do not resolve
+    // (e.g. Vitest browser mode).
     const plugin = createEnvironmentPlugin();
     const userConfig = {
       test: {
@@ -548,12 +553,49 @@ describe("createEnvironmentPlugin", () => {
 
     const setupFilesOf = (index: number) =>
       (userConfig.test.projects[index] as { test?: { setupFiles?: unknown } }).test?.setupFiles;
-    const injected = expect.stringMatching(/setup\.mjs$/);
-    expect(setupFilesOf(0)).toEqual([injected]);
-    expect(setupFilesOf(1)).toEqual(["./e2e-setup.ts", injected]);
-    expect(setupFilesOf(2)).toEqual(["./a.ts", injected]);
-    expect(setupFilesOf(3)).toEqual([injected]);
+    expect(setupFilesOf(0)).toEqual([expect.stringMatching(/setup\.mjs$/)]);
+    expect(setupFilesOf(1)).toBe("./e2e-setup.ts");
+    expect(setupFilesOf(2)).toEqual(["./a.ts"]);
+    expect(setupFilesOf(3)).toBeUndefined();
     expect(userConfig.test.projects[4]).toBe("./packages/*/vitest.config.ts");
+  });
+
+  test("does not inject the setup file into a root config that selects another environment", () => {
+    // The fallback return must stay gated on the root's own environment
+    // selection: an unconditional return would force setup.ts (and its
+    // static "node:url" import) onto a standalone browser-mode config.
+    const plugin = createEnvironmentPlugin();
+    const userConfig: { test: { environment: string; setupFiles?: string | string[] } } = {
+      test: { environment: "browser" },
+    };
+    const merged = applyConfig(plugin, userConfig);
+
+    expect(merged.test?.setupFiles ?? []).toEqual([]);
+    expect(userConfig.test.setupFiles).toBeUndefined();
+  });
+
+  test("keeps the env var when a sibling project re-resolves without selecting tailor-runtime", () => {
+    // Vitest 5 re-executes the root config once per inline project that needs
+    // its own Vite server. The pass for a non-tailor project carries neither
+    // `projects` nor a tailor-runtime `environment`, so an unconditional
+    // clear would drop the seed a sibling tailor-runtime project still needs.
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    const firstPass = {
+      root: "/proj",
+      test: {
+        projects: [
+          { test: { environment: "tailor-runtime", name: "unit" } },
+          { test: { environment: "node", name: "e2e" } },
+        ],
+      },
+    };
+    applyConfig(plugin, firstPass);
+    expect(process.env[ENV_VAR]).toBe(resolve("/proj", "tailor.config.ts"));
+
+    // Re-run for the "e2e" project: named, no `projects`, non-tailor env.
+    applyConfig(plugin, { root: "/proj", test: { environment: "node", name: "e2e" } });
+
+    expect(process.env[ENV_VAR]).toBe(resolve("/proj", "tailor.config.ts"));
   });
 
   test("survives Vitest re-running the config for a project whose environment is already rewritten", () => {
