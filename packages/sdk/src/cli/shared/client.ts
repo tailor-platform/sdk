@@ -703,7 +703,7 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
     throw new Error(`Failed to fetch user info: ${resp.statusText}`);
   }
 
-  const rawJson = await resp.json();
+  const rawJson: unknown = await resp.json();
   // strip unknown keys
   const schema = z.object({
     sub: z.string(),
@@ -826,7 +826,7 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
       `Failed to fetch machine user token: ${resp.status} ${resp.statusText} ${body.slice(0, 500)}`,
     );
   }
-  const rawJson = await resp.json();
+  const rawJson: unknown = await resp.json();
 
   // strip unknown keys
   const schema = z.object({
