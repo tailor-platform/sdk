@@ -560,6 +560,34 @@ describe("createEnvironmentPlugin", () => {
     expect(userConfig.test.projects[4]).toBe("./packages/*/vitest.config.ts");
   });
 
+  test("treats an inline project without its own environment as tailor-runtime when the root selects it", () => {
+    // Vitest 5 no longer propagates the plugin-rewritten root `environment`
+    // into projects that do not declare one, so the project would keep the
+    // literal "tailor-runtime" and Vitest would try to load it as a module.
+    const plugin = createEnvironmentPlugin();
+    const userConfig = {
+      test: {
+        environment: "tailor-runtime",
+        projects: [
+          { test: { name: "inherits" } },
+          { test: { name: "opts-out" }, extends: false },
+          { test: { name: "other-env", environment: "node" } },
+        ],
+      },
+    };
+    applyConfig(plugin, userConfig);
+
+    const projectTest = (index: number) =>
+      (userConfig.test.projects[index] as { test: { environment?: unknown; setupFiles?: unknown } })
+        .test;
+    expect(projectTest(0).environment).toMatch(/environment\.mjs$/);
+    expect(projectTest(0).setupFiles).toEqual([expect.stringMatching(/setup\.mjs$/)]);
+    expect(projectTest(1).environment).toBeUndefined();
+    expect(projectTest(1).setupFiles).toBeUndefined();
+    expect(projectTest(2).environment).toBe("node");
+    expect(projectTest(2).setupFiles).toBeUndefined();
+  });
+
   test("does not inject the setup file into a root config that selects another environment", () => {
     // The fallback return must stay gated on the root's own environment
     // selection: an unconditional return would force setup.ts (and its

@@ -335,13 +335,22 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
       // statically imports "node:url" and would fail to even load in a
       // project whose environment cannot resolve Node builtins (e.g. Vitest
       // browser mode).
+      //
+      // A project that declares no `environment` of its own inherits the
+      // root's, but Vitest 5 inherits the literal name rather than the path
+      // this hook rewrote it to, so it has to be rewritten here as well —
+      // unless the project opted out of inheritance with `extends: false`.
       if (testConfig?.projects) {
         for (const project of testConfig.projects) {
           if (typeof project === "string") continue;
           const projectTest = (project.test ??= {}) as Record<string, unknown> & {
             setupFiles?: string | string[];
           };
-          if (!selectsTailorRuntime(projectTest.environment)) continue;
+          const inheritsRootEnvironment =
+            projectTest.environment === undefined &&
+            rootSelectsTailorRuntime &&
+            project.extends !== false;
+          if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) continue;
           projectTest.environment = environmentPath;
           usesTailorRuntime = true;
           const projectSetupFiles = toFileList(projectTest.setupFiles);
