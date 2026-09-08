@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
+import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
 import { confirmationArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -144,9 +145,6 @@ interface ExpiryPartition {
   unreadable: { workspace: Workspace; reason: string }[];
 }
 
-// Bounds the metadata fan-out: one request per candidate, a few at a time.
-const expiryReadConcurrency = 5;
-
 /**
  * Sort workspaces by what their own labels say about when they may be pruned.
  *
@@ -154,6 +152,9 @@ const expiryReadConcurrency = 5;
  * records nothing, records something unreadable, or whose read failed is kept
  * — none of those states says the workspace may be deleted, and a failed read
  * in particular must never be read as "no expiry recorded".
+ *
+ * The reads share the apply limiter, so a sweep over every visible workspace
+ * stays within the budget the CLI's other operator RPCs already contend for.
  * @param client - Operator client instance
  * @param workspaces - Workspaces the name and scope filters kept
  * @param now - Reference time
@@ -164,22 +165,21 @@ async function partitionByExpiry(
   workspaces: readonly Workspace[],
   now: Date,
 ): Promise<ExpiryPartition> {
+  const limit = createApplyLimiter();
+  const results = await Promise.all(
+    workspaces.map(async (workspace) => ({
+      workspace,
+      result: await limit(() => fetchWorkspaceExpiry(client, workspace.id, now)),
+    })),
+  );
+
   const partition: ExpiryPartition = { expired: [], pending: [], unset: [], unreadable: [] };
-  for (let start = 0; start < workspaces.length; start += expiryReadConcurrency) {
-    const wave = workspaces.slice(start, start + expiryReadConcurrency);
-    const results = await Promise.all(
-      wave.map(async (workspace) => ({
-        workspace,
-        result: await fetchWorkspaceExpiry(client, workspace.id, now),
-      })),
-    );
-    for (const { workspace, result } of results) {
-      if ("error" in result) {
-        partition.unreadable.push({ workspace, reason: result.error.message });
-        continue;
-      }
-      recordExpiryState(partition, workspace, result.expiry);
+  for (const { workspace, result } of results) {
+    if ("error" in result) {
+      partition.unreadable.push({ workspace, reason: result.error.message });
+      continue;
     }
+    recordExpiryState(partition, workspace, result.expiry);
   }
   return partition;
 }
