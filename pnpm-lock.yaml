@@ -532,8 +532,8 @@ importers:
         specifier: 1.1.11
         version: 1.1.11
       confbox:
-        specifier: 0.2.4
-        version: 0.2.4
+        specifier: 0.3.1
+        version: 0.3.1
       date-fns:
         specifier: 4.4.0
         version: 4.4.0
@@ -794,8 +794,8 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
       confbox:
-        specifier: 0.2.4
-        version: 0.2.4
+        specifier: 0.3.1
+        version: 0.3.1
       eslint-plugin-zod:
         specifier: 4.12.0
         version: 4.12.0(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(oxlint@1.81.0(oxlint-tsgolint@7.0.2001))(supports-color@7.2.0)(typescript@6.0.3)(zod@4.5.4)
@@ -2914,9 +2914,6 @@ packages:
 
   commondir@1.0.1:
     resolution: {integrity: sha512-W9pAhw0ja1Edb5GVdIF1mjZw/ASI0AlShXM83UUGe2DVr5TdAPEA1OA8m/g8zWp9x6On7gqufY+FatDbC3MDQg==}
-
-  confbox@0.2.4:
-    resolution: {integrity: sha512-ysOGlgTFbN2/Y6Cg3Iye8YKulHw+R2fNXHrgSmXISQdMnomY6eNDprVdW9R5xBguEqI954+S6709UyiO7B+6OQ==}
 
   confbox@0.3.1:
     resolution: {integrity: sha512-cKUSoKa8YxFZZSmraVi7onONx3amu77ngK3kGpsYHDH7drPwCRkQE1RYMPlLRrMtnciRj274XNRxcHxnKmDSnA==}
@@ -5900,8 +5897,6 @@ snapshots:
   commander@7.2.0: {}
 
   commondir@1.0.1: {}
-
-  confbox@0.2.4: {}
 
   confbox@0.3.1: {}
 
