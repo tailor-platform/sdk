@@ -1,5 +1,13 @@
 # @tailor-platform/create-sdk
 
+## 2.14.0
+
+### Patch Changes
+
+- [#2270](https://github.com/tailor-platform/sdk/pull/2270) [`1023fc5`](https://github.com/tailor-platform/sdk/commit/1023fc5f12462a2753a4452760c9ed2e0fa7bc07) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Document why the `hello-world` template ships with fully open permissions: `src/db/user.ts` now explains that the template defines no auth and that production projects should define conditions in `.permission()` / `.gqlPermission()`, and the README gained a Security section listing the open `unsafeAllowAll*Permission` grants and the `allowAnonymous` resolver default that must be replaced before real use.
+
+- [#2270](https://github.com/tailor-platform/sdk/pull/2270) [`bc46936`](https://github.com/tailor-platform/sdk/commit/bc4693632116451935a83fb7b39d487c66e3a093) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Document why the `multi-application` template ships with fully open permissions: the README gained a Security section listing the open `unsafeAllowAllTypePermission` / `unsafeAllowAllGqlPermission` grants on the `User` and `AdminNote` tables and pointing at the TailorDB Permission documentation for what to replace them with.
+
 ## 2.13.1
 
 ### Patch Changes

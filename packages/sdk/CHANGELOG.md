@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 2.14.0
+
+### Minor Changes
+
+- [#2278](https://github.com/tailor-platform/sdk/pull/2278) [`925c6e1`](https://github.com/tailor-platform/sdk/commit/925c6e14bbb74f3ea649118e3b8b219d582d0638) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `t.date({ as: "date" })` to use JavaScript Date values in resolvers. Inputs become Dates at midnight UTC, and returned Dates are formatted as YYYY-MM-DD using their UTC calendar date, including nested objects, arrays, and optional fields. Existing `t.date()` fields continue to use strings.
+
+### Patch Changes
+
+- [#2264](https://github.com/tailor-platform/sdk/pull/2264) [`11816e1`](https://github.com/tailor-platform/sdk/commit/11816e17b5803fa85f7e9529c0992bbfc2abb409) Thanks [@dqn](https://github.com/dqn)! - Report a member removed inside a nested field as a data-loss warning in `tailordb migration generate`, so `migration validate --strict` requires an acknowledgment; the pre-migration phase keeps the removed member readable for `migrate.ts`, a compatible member added at the same level is named as a possible rename target, and the diff output lists changed nested members
+
+- [#2266](https://github.com/tailor-platform/sdk/pull/2266) [`b85a570`](https://github.com/tailor-platform/sdk/commit/b85a570f96598e5e90916558ec7b425291777939) Thanks [@toiroakr](https://github.com/toiroakr)! - Diagnose the "Remote migration checkpoint is not in the local migration history" error from `deploy` and `tailordb migration validate` when its specific cause is an environment that fell behind before a `migration rebaseline` ran on another environment: the message now names the migration this environment must reach and points at a concrete recovery procedure (restore the pre-rebaseline `migrations/` directory from git history, deploy against it up to that migration, then switch back and deploy again). Documented the same error and recovery procedure in the migrations troubleshooting guide.
+
+- [#2258](https://github.com/tailor-platform/sdk/pull/2258) [`8ec7e92`](https://github.com/tailor-platform/sdk/commit/8ec7e922f5c6e5930065a70f3a906c791fff6dc4) Thanks [@dqn](https://github.com/dqn)! - Reject TailorDB enum fields that define no allowed values. `tailor deploy` and `tailor tailordb migration generate` now report an error identifying the table and field.
+
+- [#2257](https://github.com/tailor-platform/sdk/pull/2257) [`f0405c6`](https://github.com/tailor-platform/sdk/commit/f0405c627955fc7208369d3dd5a39d35a19dd7ed) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @napi-rs/keyring to v2
+
+- [#2262](https://github.com/tailor-platform/sdk/pull/2262) [`681a2b7`](https://github.com/tailor-platform/sdk/commit/681a2b756b4022131a2b46aadcfcdcd4d0140041) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - `tailor workspace create --name` now reports an invalid workspace name while the command's options are parsed, instead of after the command starts running.
+
 ## 2.13.1
 
 ### Patch Changes
