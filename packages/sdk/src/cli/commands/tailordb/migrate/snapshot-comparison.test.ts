@@ -430,8 +430,9 @@ describe("snapshot", () => {
         expect(diff.warnings).toHaveLength(1);
         expect(diff.warnings[0]!.fieldName).toBe("address.zip");
         expect(diff.warnings[0]!.reason).toBe(
-          `${NESTED_MEMBER_REMOVED}. Possibly renamed to zipCode: nested renames are not detected, ` +
-            "so copy its values with a migration script if it was renamed",
+          `${NESTED_MEMBER_REMOVED}. Possibly renamed to zipCode: confirm it with ` +
+            '--rename "User.address.zip:<newName>" to scaffold a copy script, ' +
+            "or keep the removal and copy the values yourself",
         );
       });
 
@@ -684,6 +685,104 @@ describe("snapshot", () => {
             ],
           }),
         ).toThrow('table "Ghost" must exist');
+      });
+    });
+
+    describe("nested member renames", () => {
+      const str: SnapshotFieldConfig = { type: "string", required: false };
+      const nestedUser = (members: Record<string, SnapshotFieldConfig>): SchemaSnapshot => ({
+        ...createEmptySnapshot(),
+        tables: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              address: { type: "nested", required: false, fields: members },
+            },
+          },
+        },
+      });
+      const spec = {
+        tableName: "User",
+        fieldName: "address",
+        previousPath: ["zip"],
+        path: ["zipCode"],
+      };
+
+      test("records the rename on the field_modified change as breaking", () => {
+        const diff = compareRawSnapshots(nestedUser({ zip: str }), nestedUser({ zipCode: str }), {
+          nestedMemberRenames: [spec],
+        });
+
+        expect(diff.changes).toEqual([
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: { type: "nested", required: false, fields: { zip: str } },
+            after: { type: "nested", required: false, fields: { zipCode: str } },
+            memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+          },
+        ]);
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(true);
+        expect(diff.breakingChanges).toEqual([
+          {
+            tableName: "User",
+            fieldName: "address.zipCode",
+            reason:
+              "Nested member renamed from zip to zipCode (existing values must be copied by the migration script)",
+          },
+        ]);
+        expect(diff.warnings).toEqual([]);
+      });
+
+      test("keeps warning about members removed outside the rename", () => {
+        const diff = compareRawSnapshots(
+          nestedUser({ zip: str, fax: str }),
+          nestedUser({ zipCode: str }),
+          { nestedMemberRenames: [spec] },
+        );
+
+        expect(diff.warnings.map((w) => w.fieldName)).toEqual(["address.fax"]);
+      });
+
+      test("records a deeper member rename with its full path", () => {
+        const geo = (members: Record<string, SnapshotFieldConfig>): SnapshotFieldConfig => ({
+          type: "nested",
+          required: false,
+          fields: members,
+        });
+        const diff = compareRawSnapshots(
+          nestedUser({ geo: geo({ lat: str }) }),
+          nestedUser({ geo: geo({ latitude: str }) }),
+          {
+            nestedMemberRenames: [
+              { ...spec, previousPath: ["geo", "lat"], path: ["geo", "latitude"] },
+            ],
+          },
+        );
+
+        const change = diff.changes[0]!;
+        expect(change.kind === "field_modified" && change.memberRenames).toEqual([
+          { previousPath: ["geo", "lat"], path: ["geo", "latitude"] },
+        ]);
+        expect(diff.breakingChanges[0]).toMatchObject({
+          fieldName: "address.geo.latitude",
+          reason:
+            "Nested member renamed from geo.lat to geo.latitude (existing values must be copied by the migration script)",
+        });
+      });
+
+      test("rejects a rename whose members are not compatible", () => {
+        expect(() =>
+          compareRawSnapshots(
+            nestedUser({ zip: str }),
+            nestedUser({ zipCode: { type: "string", required: true } }),
+            { nestedMemberRenames: [spec] },
+          ),
+        ).toThrow("not rename-compatible");
       });
     });
 
