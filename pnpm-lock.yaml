@@ -161,8 +161,8 @@ importers:
         specifier: 1.1.1
         version: 1.1.1
       pkg-types:
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.3.2
+        version: 2.3.2
       politty:
         specifier: 0.11.9
         version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.0(@types/node@24.13.3))(zod@4.5.4)
@@ -580,8 +580,8 @@ importers:
         specifier: 12.0.2
         version: 12.0.2
       pkg-types:
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.3.2
+        version: 2.3.2
       politty:
         specifier: 0.11.9
         version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.0(@types/node@24.13.3))(zod@4.5.4)
@@ -680,8 +680,8 @@ importers:
         specifier: 4.0.7
         version: 4.0.7
       pkg-types:
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.3.2
+        version: 2.3.2
       politty:
         specifier: 0.11.9
         version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.0(@types/node@24.13.3))(zod@4.5.4)
@@ -729,8 +729,8 @@ importers:
         specifier: 2.0.3
         version: 2.0.3
       pkg-types:
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.3.2
+        version: 2.3.2
       politty:
         specifier: 0.11.9
         version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.0(@types/node@24.13.3))(zod@4.5.4)
@@ -778,8 +778,8 @@ importers:
         specifier: 2.0.3
         version: 2.0.3
       pkg-types:
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.3.2
+        version: 2.3.2
       politty:
         specifier: 0.11.9
         version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.0(@types/node@24.13.3))(zod@4.5.4)
@@ -830,8 +830,8 @@ importers:
         specifier: 2.0.3
         version: 2.0.3
       pkg-types:
-        specifier: 2.3.1
-        version: 2.3.1
+        specifier: 2.3.2
+        version: 2.3.2
       politty:
         specifier: 0.11.9
         version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.0(@types/node@24.13.3))(zod@4.5.4)
@@ -2922,6 +2922,9 @@ packages:
   confbox@0.2.4:
     resolution: {integrity: sha512-ysOGlgTFbN2/Y6Cg3Iye8YKulHw+R2fNXHrgSmXISQdMnomY6eNDprVdW9R5xBguEqI954+S6709UyiO7B+6OQ==}
 
+  confbox@0.3.1:
+    resolution: {integrity: sha512-cKUSoKa8YxFZZSmraVi7onONx3amu77ngK3kGpsYHDH7drPwCRkQE1RYMPlLRrMtnciRj274XNRxcHxnKmDSnA==}
+
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
 
@@ -3805,8 +3808,8 @@ packages:
     resolution: {integrity: sha512-Xc6PMJ2gher0WZP+rtjefFk26hIb7V1PTLL30bmy1Z2vsRmSvqiss7Ag1XUdyplTGYzIlFNJp4L3vMNmK44N6g==}
     hasBin: true
 
-  pkg-types@2.3.1:
-    resolution: {integrity: sha512-y+ichcgc2LrADuhLNAx8DFjVfgz91pRxfZdI3UDhxHvcVEZsenLO+7XaU5vOp0u/7V/wZ+plyuQxtrDlZJ+yeg==}
+  pkg-types@2.3.2:
+    resolution: {integrity: sha512-v0sVXzj7oPGysr543YYZLYbcJNJsKikSsp/fFzoxQ12ewY3ZZr7oCPC8y7OlmxfYB3QPvriXmuPD8KZggE1vqg==}
 
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
@@ -5906,6 +5909,8 @@ snapshots:
 
   confbox@0.2.4: {}
 
+  confbox@0.3.1: {}
+
   convert-source-map@2.0.0: {}
 
   cross-spawn@7.0.6:
@@ -6831,9 +6836,9 @@ snapshots:
 
   pkg-pr-new@0.0.88: {}
 
-  pkg-types@2.3.1:
+  pkg-types@2.3.2:
     dependencies:
-      confbox: 0.2.4
+      confbox: 0.3.1
       exsolve: 1.1.1
       pathe: 2.0.3
 
