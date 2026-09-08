@@ -18,7 +18,7 @@ import {
   UnsupportedMigrationFileVersionError,
 } from "./snapshot";
 
-export interface StatusOptions {
+interface StatusOptions {
   configPath?: string;
   namespace?: string;
   workspaceId?: string;

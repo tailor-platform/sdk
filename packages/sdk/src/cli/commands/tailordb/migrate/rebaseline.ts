@@ -42,7 +42,7 @@ import {
 import { generateSchemaFile } from "./template-generator";
 import { createMigrationHistoryId } from "./types";
 
-export interface RebaselineOptions {
+interface RebaselineOptions {
   configPath?: string;
   namespace?: string;
   yes?: boolean;

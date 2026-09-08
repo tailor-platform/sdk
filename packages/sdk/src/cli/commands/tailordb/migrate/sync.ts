@@ -44,7 +44,7 @@ import {
 } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
-export interface SyncOptions {
+interface SyncOptions {
   configPath?: string;
   number: string;
   namespace?: string;
