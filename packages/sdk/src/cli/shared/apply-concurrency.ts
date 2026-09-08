@@ -51,7 +51,7 @@ export function createApplyLimiter(): <R>(task: () => Promise<R>) => Promise<R> 
  * in wall-clock time even though aggregate throughput is unchanged.
  * Spreading streams across connections sidesteps that; 4 follows the same
  * small-pool pattern as `@aws-sdk/lib-storage`'s S3 multipart `queueSize`
- * default. See the PR description for the measurement and its limits.
+ * default. See the PR description for the measurement.
  */
 const DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE = 4;
 

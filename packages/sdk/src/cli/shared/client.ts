@@ -195,8 +195,7 @@ export async function createTransport(
  * scheduling: streams sharing a connection can finish 12x+ apart in
  * wall-clock time even though aggregate throughput is unchanged. Spreading
  * streams across independent connections sidesteps that rather than fixing
- * it; see the PR description for the measurement and what it does and
- * doesn't confirm.
+ * it; see the PR description for the measurement.
  * @internal
  * @param primary - Transport used for unary calls and the first stream slot
  * @param createAdditional - Creates one more transport for the pool
