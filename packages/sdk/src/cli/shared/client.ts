@@ -185,8 +185,8 @@ export async function createTransport(
 
 /**
  * Wrap a transport so streaming calls (function/script/static website
- * uploads) are spread round-robin across a pool of connections, built lazily
- * on first streaming call. Unary calls always use `primary`, unaffected.
+ * uploads) are spread across a pool of connections instead of one. Unary
+ * calls always use `primary`, unaffected.
  *
  * Since Node 22.23.0/24.2.0 (nghttp2 dropped its legacy priority-tree
  * scheduler for RFC 9218, whose default urgency/incremental values make
@@ -197,18 +197,16 @@ export async function createTransport(
  * streams across independent connections sidesteps that rather than fixing
  * it; see this change's changeset entry for the measurement.
  *
- * `poolSize` is passed the same apply-concurrency budget that already bounds
- * how many streaming uploads run at once (see `applyFunctionRegistry`), so
- * the pool never grows past the number of connections that could actually
- * see concurrent use. Assignment is plain round-robin by call order, not by
- * which transport is currently idle, so two uploads can still land on the
- * same connection if completion order differs from call order — but with
- * the pool sized to match peak concurrency, that greatly reduces contention
- * rather than leaving every upload on one connection.
+ * Each streaming call picks an idle connection if one exists; only when
+ * every existing connection is busy does it create one more, up to
+ * `poolSize` (the same apply-concurrency budget that already bounds how
+ * many streaming uploads run at once — see `applyFunctionRegistry`). This
+ * grows the pool to match actual concurrent demand instead of opening
+ * `poolSize` connections up front on the first call.
  * @internal
- * @param primary - Transport used for unary calls and the first stream slot
+ * @param primary - Transport used for unary calls and as the first stream slot
  * @param createAdditional - Creates one more transport for the pool
- * @param poolSize - Target number of connections in the pool (>= 1)
+ * @param poolSize - Maximum number of connections in the pool (>= 1)
  * @returns A transport presenting the same interface, backed by the pool
  */
 export function createPooledStreamTransport(
@@ -217,20 +215,44 @@ export function createPooledStreamTransport(
   poolSize: number,
 ): Transport {
   const transports: Transport[] = [primary];
-  let filling: Promise<void> | undefined;
-  let next = 0;
+  const busyCounts: number[] = [0];
+  let growing: Promise<void> | undefined;
 
-  async function ensurePoolFilled(): Promise<void> {
-    if (transports.length >= poolSize) return;
-    filling ??= (async () => {
-      while (transports.length < poolSize) {
-        transports.push(await createAdditional());
+  // Finds an index and marks it busy in the same synchronous step (no
+  // `await` in between) so that two `stream()` calls issued back to back
+  // (e.g. via `Promise.all(uploads.map(...))`, which starts each task
+  // synchronously) can't both claim the same idle transport before either
+  // marks it busy.
+  async function acquireTransportIndex(): Promise<number> {
+    for (;;) {
+      const idleIndex = busyCounts.findIndex((count) => count === 0);
+      if (idleIndex !== -1) {
+        busyCounts[idleIndex] = (busyCounts[idleIndex] ?? 0) + 1;
+        return idleIndex;
       }
-    })().catch((error: unknown) => {
-      filling = undefined;
-      throw error;
-    });
-    await filling;
+      if (transports.length >= poolSize) {
+        let leastBusy = 0;
+        let leastBusyCount = busyCounts[0] ?? 0;
+        for (let i = 1; i < busyCounts.length; i++) {
+          const count = busyCounts[i] ?? 0;
+          if (count < leastBusyCount) {
+            leastBusy = i;
+            leastBusyCount = count;
+          }
+        }
+        busyCounts[leastBusy] = (busyCounts[leastBusy] ?? 0) + 1;
+        return leastBusy;
+      }
+      growing ??= createAdditional()
+        .then((transport) => {
+          transports.push(transport);
+          busyCounts.push(0);
+        })
+        .finally(() => {
+          growing = undefined;
+        });
+      await growing;
+    }
   }
 
   return {
@@ -238,10 +260,13 @@ export function createPooledStreamTransport(
       return primary.unary(method, signal, timeoutMs, header, input, contextValues);
     },
     async stream(method, signal, timeoutMs, header, input, contextValues) {
-      await ensurePoolFilled();
-      const transport = transports[next % transports.length] as Transport;
-      next += 1;
-      return transport.stream(method, signal, timeoutMs, header, input, contextValues);
+      const index = await acquireTransportIndex();
+      const transport = transports[index] as Transport;
+      try {
+        return await transport.stream(method, signal, timeoutMs, header, input, contextValues);
+      } finally {
+        busyCounts[index] = (busyCounts[index] ?? 0) - 1;
+      }
     },
   };
 }

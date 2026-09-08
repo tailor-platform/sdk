@@ -21,12 +21,10 @@ const DEFAULT_APPLY_CONCURRENCY = 16;
  * `Unavailable`/`ResourceExhausted` and drive retries into the non-idempotent
  * compound-create `already_exists` race. Capping bounds the worst case.
  *
- * Also sizes the streaming-upload connection pool (see
+ * Also caps the streaming-upload connection pool (see
  * `createPooledStreamTransport` in `client.ts`): since `applyFunctionRegistry`
- * already bounds concurrent uploads to this same cap, a pool this size never
- * has more connections than could see concurrent use, greatly reducing (though
- * not eliminating, since assignment is round-robin rather than idle-tracking)
- * how often two uploads share one connection.
+ * already bounds concurrent uploads to this same cap, the pool never needs
+ * more connections than could see concurrent use.
  * @returns Concurrency cap (always >= 1)
  */
 export function resolveApplyConcurrency(): number {

@@ -78,6 +78,23 @@ describe("createPooledStreamTransport", () => {
     return { unary: vi.fn(), stream: vi.fn() };
   }
 
+  // A transport whose stream() call stays pending until `resolve()` is
+  // called, so tests can simulate a connection that's genuinely still busy
+  // while a second, concurrent stream() call comes in.
+  function makeControllableTransport(): { transport: Transport; resolve: () => void } {
+    let resolve!: () => void;
+    const pending = new Promise<undefined>((r) => {
+      resolve = () => r(undefined);
+    });
+    return {
+      transport: {
+        unary: vi.fn(),
+        stream: vi.fn(() => pending) as unknown as Transport["stream"],
+      },
+      resolve,
+    };
+  }
+
   const unaryArgs = [{}, undefined, undefined, undefined, {}, undefined] as unknown as Parameters<
     Transport["unary"]
   >;
@@ -104,26 +121,35 @@ describe("createPooledStreamTransport", () => {
     expect(primary.unary).toHaveBeenCalledTimes(2);
   });
 
-  test("stream calls are spread round-robin across a lazily built pool", async () => {
+  test("a stream reuses an idle connection instead of growing the pool", async () => {
     const primary = makeMockTransport();
-    const second = makeMockTransport();
-    const third = makeMockTransport();
-    const createAdditional = vi
-      .fn<() => Promise<Transport>>()
-      .mockResolvedValueOnce(second)
-      .mockResolvedValueOnce(third);
-    const pooled = createPooledStreamTransport(primary, createAdditional, 3);
+    const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
+    const pooled = createPooledStreamTransport(primary, createAdditional, 4);
+
+    await pooled.stream(...streamArgs);
+    await pooled.stream(...streamArgs);
+    await pooled.stream(...streamArgs);
 
     expect(createAdditional).not.toHaveBeenCalled();
+    expect(primary.stream).toHaveBeenCalledTimes(3);
+  });
 
-    for (let i = 0; i < 6; i++) {
-      await pooled.stream(...streamArgs);
-    }
+  test("grows the pool on demand only when every existing connection is busy", async () => {
+    const primary = makeControllableTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi.fn<() => Promise<Transport>>().mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary.transport, createAdditional, 2);
 
-    expect(createAdditional).toHaveBeenCalledTimes(2);
-    expect(primary.stream).toHaveBeenCalledTimes(2);
-    expect(second.stream).toHaveBeenCalledTimes(2);
-    expect(third.stream).toHaveBeenCalledTimes(2);
+    const call1 = pooled.stream(...streamArgs);
+    const call2 = pooled.stream(...streamArgs);
+    await call2;
+
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(primary.transport.stream).toHaveBeenCalledTimes(1);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+
+    primary.resolve();
+    await call1;
   });
 
   test("a pool size of 1 never creates additional connections", async () => {
@@ -138,22 +164,29 @@ describe("createPooledStreamTransport", () => {
     expect(primary.stream).toHaveBeenCalledTimes(2);
   });
 
-  test("retries filling the pool after a failed attempt instead of failing permanently", async () => {
-    const primary = makeMockTransport();
+  test("retries growing the pool after a failed attempt instead of failing permanently", async () => {
+    const primary = makeControllableTransport();
     const second = makeMockTransport();
     const createAdditional = vi
       .fn<() => Promise<Transport>>()
       .mockRejectedValueOnce(new Error("connect failed"))
       .mockResolvedValueOnce(second);
-    const pooled = createPooledStreamTransport(primary, createAdditional, 2);
+    const pooled = createPooledStreamTransport(primary.transport, createAdditional, 2);
 
+    // Occupies the only existing (primary) connection, staying pending.
+    const call1 = pooled.stream(...streamArgs);
+    // No idle connection, so this must grow the pool; the first attempt fails.
     await expect(pooled.stream(...streamArgs)).rejects.toThrow("connect failed");
-    await pooled.stream(...streamArgs);
-    await pooled.stream(...streamArgs);
+
+    // Retries growth, which succeeds this time.
+    const call3 = pooled.stream(...streamArgs);
+    await call3;
 
     expect(createAdditional).toHaveBeenCalledTimes(2);
-    expect(primary.stream).toHaveBeenCalledTimes(1);
     expect(second.stream).toHaveBeenCalledTimes(1);
+
+    primary.resolve();
+    await call1;
   });
 });
 
