@@ -141,6 +141,8 @@ GraphQL still accepts and returns `YYYY-MM-DD` strings. The SDK converts input t
 
 This option also works in nested objects and with `array: true` or `optional: true`. Input must be a valid calendar date, and output must be a valid `Date` with a UTC year between 0000 and 9999. Both deployed resolvers and `tailor function run` perform these conversions.
 
+An executor subscribing to the resolver with `resolverExecutedTrigger` receives the event as JSON, so `result` holds the `YYYY-MM-DD` string rather than a `Date`.
+
 ### Custom Type Name (`typeName`)
 
 Enum and nested object fields in input/output schemas generate protobuf type names automatically (e.g., `{ResolverName}{FieldName}`). Use `typeName()` to set a custom name:
