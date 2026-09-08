@@ -1,5 +1,27 @@
 # @tailor-platform/sdk
 
+## 2.14.1
+
+### Patch Changes
+
+- [#2281](https://github.com/tailor-platform/sdk/pull/2281) [`ee9374a`](https://github.com/tailor-platform/sdk/commit/ee9374aca30aad24b03009cba76e857b430c9cfa) Thanks [@k1LoW](https://github.com/k1LoW)! - Validate IdP `userAuthPolicy.allowedEmailDomains` locally and document `["*"]`, the lone entry that allows every email domain and the only way to enable `allowGoogleOauth` or `allowMicrosoftOauth` without enumerating domains. Each entry must be a hostname or `"*"`, entries must be unique when compared case-insensitively and number at most 100, and `"*"` cannot sit alongside another entry. These were already rejected on deploy, so they now surface before the apply instead of during it.
+  
+  `tailor deploy` also warns on an IdP service that leaves `allowedEmailDomains` empty. An empty list still allows every domain, but a future platform release requires that state to be explicit, so set `["*"]` to keep the current behavior or list the domains you accept.
+  
+  Fixes a plan diff that re-applied `allowedEmailDomains` on every deploy when an entry was written in mixed case.
+
+- [#2252](https://github.com/tailor-platform/sdk/pull/2252) [`d56876d`](https://github.com/tailor-platform/sdk/commit/d56876d6947a18345150bdbaee2d63fa1ce17992) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @bufbuild/protobuf to v2.14.1
+
+- [#2255](https://github.com/tailor-platform/sdk/pull/2255) [`39662f4`](https://github.com/tailor-platform/sdk/commit/39662f4bf56ccc7b0fa251d70a2b47d16979c2bc) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#2273](https://github.com/tailor-platform/sdk/pull/2273) [`656714a`](https://github.com/tailor-platform/sdk/commit/656714a8215a03458b2a2a5b084faafb805b3b59) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#2276](https://github.com/tailor-platform/sdk/pull/2276) [`453a11b`](https://github.com/tailor-platform/sdk/commit/453a11b1db0fa87a0b5d1ab41620bb4b094f5365) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.6
+
+- [#2277](https://github.com/tailor-platform/sdk/pull/2277) [`7926310`](https://github.com/tailor-platform/sdk/commit/7926310a7d5154e5bace9be7f66760a264df1151) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.2
+
+- [#2279](https://github.com/tailor-platform/sdk/pull/2279) [`9f926d5`](https://github.com/tailor-platform/sdk/commit/9f926d510a8e972d025a33266936a3d9be80f526) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
 ## 2.14.0
 
 ### Minor Changes
