@@ -11,7 +11,7 @@ import {
   type UnaryResponse,
 } from "@connectrpc/connect";
 import { z } from "zod";
-import { createApplyLimiter, resolveUploadTransportPoolSize } from "./apply-concurrency";
+import { createApplyLimiter, resolveApplyConcurrency } from "./apply-concurrency";
 import { logger } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 import { userAgent } from "./user-agent";
@@ -161,7 +161,7 @@ export async function initOperatorClient(accessToken: string, config?: PlatformC
   const transport = createPooledStreamTransport(
     primary,
     () => createTransport(baseUrl, interceptors),
-    resolveUploadTransportPoolSize(),
+    resolveApplyConcurrency(),
   );
   return createClient(OperatorService, transport);
 }
@@ -196,6 +196,12 @@ export async function createTransport(
  * wall-clock time even though aggregate throughput is unchanged. Spreading
  * streams across independent connections sidesteps that rather than fixing
  * it; see the PR description for the measurement.
+ *
+ * `poolSize` is passed the same apply-concurrency budget that already bounds
+ * how many streaming uploads run at once (see `applyFunctionRegistry`), so
+ * the pool never grows past the number of connections that could actually
+ * see concurrent use, and no upload ever shares a connection with another
+ * once the pool is full.
  * @internal
  * @param primary - Transport used for unary calls and the first stream slot
  * @param createAdditional - Creates one more transport for the pool

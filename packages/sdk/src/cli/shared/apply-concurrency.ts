@@ -20,6 +20,12 @@ const DEFAULT_APPLY_CONCURRENCY = 16;
  * concurrently overloads the platform, whose responses then come back as
  * `Unavailable`/`ResourceExhausted` and drive retries into the non-idempotent
  * compound-create `already_exists` race. Capping bounds the worst case.
+ *
+ * Also sizes the streaming-upload connection pool (see
+ * `createPooledStreamTransport` in `client.ts`): since `applyFunctionRegistry`
+ * already bounds concurrent uploads to this same cap, a pool this size never
+ * has more connections than could see concurrent use, and no upload ever
+ * shares a connection with another once the pool is full.
  * @returns Concurrency cap (always >= 1)
  */
 export function resolveApplyConcurrency(): number {
@@ -37,36 +43,6 @@ export function resolveApplyConcurrency(): number {
  */
 export function createApplyLimiter(): <R>(task: () => Promise<R>) => Promise<R> {
   return pLimit(resolveApplyConcurrency());
-}
-
-/**
- * Default number of HTTP/2 connections streaming RPCs (function/script/static
- * website uploads) are spread across when `TAILOR_UPLOAD_CONNECTIONS` is
- * unset.
- *
- * Since Node 22.23.0/24.2.0 (nghttp2 dropped its legacy priority-tree
- * scheduler for RFC 9218's own default of serial-by-stream-ID processing),
- * Node's http2 client has no way for a caller to opt a stream into
- * incremental scheduling: streams sharing a connection can finish far apart
- * in wall-clock time even though aggregate throughput is unchanged.
- * Spreading streams across connections sidesteps that; 4 follows the same
- * small-pool pattern as `@aws-sdk/lib-storage`'s S3 multipart `queueSize`
- * default. See the PR description for the measurement.
- */
-const DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE = 4;
-
-/**
- * Resolve how many HTTP/2 connections to spread streaming RPCs across.
- *
- * Resolution order:
- * 1. `TAILOR_UPLOAD_CONNECTIONS` env var (positive integer)
- * 2. `DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE`
- * @returns Connection pool size for streaming RPCs (always >= 1)
- */
-export function resolveUploadTransportPoolSize(): number {
-  return (
-    parsePositiveInt(process.env.TAILOR_UPLOAD_CONNECTIONS) ?? DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE
-  );
 }
 
 /**
