@@ -1,7 +1,28 @@
 import { describe, expect, test } from "vitest";
+import { db } from "#/configure/services/tailordb/schema";
+import { parseTypes } from "#/parser/service/tailordb/index";
+import { toSchemaOutputs } from "#/utils/test/internal";
 import { buildSeedNamespaceConfigs } from "./seed-type-processor";
-import type { TailorDBType } from "#/parser/service/tailordb/types";
+import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 import type { TailorDBNamespaceData } from "#/plugin/types";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Accept any db.table() result for testing
+function namespaceData(tables: Record<string, any>): TailorDBNamespaceData {
+  const sourceInfo = new Map<string, TypeSourceInfoEntry>(
+    Object.keys(tables).map((name) => [name, { filePath: `/test/${name}.ts`, exportName: name }]),
+  );
+  return {
+    namespace: "test",
+    tables: parseTypes(toSchemaOutputs(tables), "test", Object.fromEntries(sourceInfo)),
+    sourceInfo,
+    pluginAttachments: new Map(),
+  };
+}
+
+function requiredFieldsOf(tables: Record<string, unknown>): Record<string, string[]> {
+  const [config] = buildSeedNamespaceConfigs([namespaceData(tables)]);
+  return config!.requiredFields;
+}
 
 /**
  * Build a minimal TailorDB type for seed processor tests.
@@ -25,43 +46,86 @@ function makeNamespace(namespace: string, types: TailorDBType[]): TailorDBNamesp
 }
 
 describe("buildSeedNamespaceConfigs", () => {
-  test("omits a serial field with no incoming relation", () => {
-    const user = makeType("User", {
-      id: { name: "id", config: { type: "string" } },
-      code: { name: "code", config: { type: "integer", serial: { start: 1 } } },
+  describe("requiredFields", () => {
+    test("keeps required fields the user has to supply", () => {
+      const requiredFields = requiredFieldsOf({
+        User: db.table("User", { name: db.string(), email: db.string() }),
+      });
+
+      expect(requiredFields.User).toEqual(["name", "email"]);
     });
 
-    const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [user])]);
+    test("does not require timestamps() fields (createdAt/updatedAt)", () => {
+      const requiredFields = requiredFieldsOf({
+        User: db.table("User", { name: db.string(), ...db.fields.timestamps() }),
+      });
 
-    expect(config?.omitFields?.User).toEqual(["code"]);
+      expect(requiredFields.User).toEqual(["name"]);
+    });
+
+    test("does not require a field with a custom default", () => {
+      const requiredFields = requiredFieldsOf({
+        Order: db.table("Order", {
+          status: db.string().default("pending"),
+          priority: db.int(),
+        }),
+      });
+
+      expect(requiredFields.Order).toEqual(["priority"]);
+    });
+
+    test("does not require create-hook or serial fields", () => {
+      const requiredFields = requiredFieldsOf({
+        Invoice: db.table("Invoice", {
+          number: db.string().serial({ start: 1000 }),
+          issuedBy: db.string().hooks({ create: () => "system" }),
+          total: db.int(),
+        }),
+      });
+
+      expect(requiredFields.Invoice).toEqual(["total"]);
+    });
   });
 
-  test("keeps a serial field that another table's relation is keyed to", () => {
-    const user = makeType("User", {
-      id: { name: "id", config: { type: "string" } },
-      code: { name: "code", config: { type: "integer", serial: { start: 1 } } },
+  describe("omitFields", () => {
+    test("omits a serial field with no incoming relation", () => {
+      const user = makeType("User", {
+        id: { name: "id", config: { type: "string" } },
+        code: { name: "code", config: { type: "integer", serial: { start: 1 } } },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [user])]);
+
+      expect(config?.omitFields?.User).toEqual(["code"]);
     });
-    const order = makeType("Order", {
-      id: { name: "id", config: { type: "string" } },
-      user: {
-        name: "user",
-        config: { type: "string" },
-        relation: {
-          targetType: "User",
-          forwardName: "user",
-          backwardName: "orders",
-          key: "code",
-          unique: false,
+
+    test("keeps a serial field that another table's relation is keyed to", () => {
+      const user = makeType("User", {
+        id: { name: "id", config: { type: "string" } },
+        code: { name: "code", config: { type: "integer", serial: { start: 1 } } },
+      });
+      const order = makeType("Order", {
+        id: { name: "id", config: { type: "string" } },
+        user: {
+          name: "user",
+          config: { type: "string" },
+          relation: {
+            targetType: "User",
+            forwardName: "user",
+            backwardName: "orders",
+            key: "code",
+            unique: false,
+          },
         },
-      },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [user, order])]);
+
+      // `code` is serial, so it would normally be dropped from the dump, but
+      // Order.user is keyed to it: dropping it would leave apply --truncate
+      // assigning User a fresh `code` while Order still points at the old one.
+      expect(config?.omitFields?.User).toEqual([]);
+      expect(config?.omitFields?.Order).toEqual([]);
     });
-
-    const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [user, order])]);
-
-    // `code` is serial, so it would normally be dropped from the dump, but
-    // Order.user is keyed to it: dropping it would leave apply --truncate
-    // assigning User a fresh `code` while Order still points at the old one.
-    expect(config?.omitFields?.User).toEqual([]);
-    expect(config?.omitFields?.Order).toEqual([]);
   });
 });

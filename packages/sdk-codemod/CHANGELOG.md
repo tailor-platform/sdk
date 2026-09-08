@@ -1,5 +1,19 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.8
+
+### Patch Changes
+
+- [#2273](https://github.com/tailor-platform/sdk/pull/2273) [`656714a`](https://github.com/tailor-platform/sdk/commit/656714a8215a03458b2a2a5b084faafb805b3b59) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#2277](https://github.com/tailor-platform/sdk/pull/2277) [`7926310`](https://github.com/tailor-platform/sdk/commit/7926310a7d5154e5bace9be7f66760a264df1151) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.2
+
+## 0.8.7
+
+### Patch Changes
+
+- [#2243](https://github.com/tailor-platform/sdk/pull/2243) [`353ff98`](https://github.com/tailor-platform/sdk/commit/353ff98c3e8702ac21244ce92a4cd66795bd9ba8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.45.3
+
 ## 0.8.6
 
 ### Patch Changes

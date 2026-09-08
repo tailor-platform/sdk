@@ -33,7 +33,7 @@ import {
 import { generateMigrationScript, generateMigrationTestScript } from "./template-generator";
 import type { ScriptSkippedInfo } from "./diff-calculator";
 
-export interface ScriptOptions {
+interface ScriptOptions {
   configPath?: string;
   number: string;
   namespace?: string;

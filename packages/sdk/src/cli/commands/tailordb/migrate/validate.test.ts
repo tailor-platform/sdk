@@ -112,6 +112,22 @@ function markHistoryAsRebaselined(): void {
   );
 }
 
+function markHistoryAsRebaselinedFrom(replacedHistoryId: string): void {
+  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+  fs.writeFileSync(
+    schemaPath,
+    JSON.stringify({
+      ...schema,
+      rebaseline: {
+        historyId: "htailordb",
+        replacedHistoryId,
+        replacedLatestMigration: 5,
+      },
+    }),
+  );
+}
+
 function writeMigrationFile(number: number, fileName: string, content: string): void {
   const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
   fs.mkdirSync(dir, { recursive: true });
@@ -327,6 +343,88 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(true);
     expect(stderr.output).toContain("next deploy will reset the checkpoint to 0000");
     expect(stderr.output).not.toContain("migration sync");
+  });
+
+  test("reports a checkpoint that fell behind before a rebaseline", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    markHistoryAsRebaselinedFrom("hprevious");
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
+      },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.remoteSchema).toEqual({
+      remoteMigrationNumber: 3,
+      hasDrift: false,
+      drifts: [],
+      checkpointMissingLocal: true,
+      rebaselinePending: { replacedLatestMigration: 5 },
+    });
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("does not report rebaseline-pending when the checkpoint is already past the replaced migration", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    markHistoryAsRebaselinedFrom("hprevious");
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
+      },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.remoteSchema).toEqual({
+      remoteMigrationNumber: 7,
+      hasDrift: false,
+      drifts: [],
+      checkpointMissingLocal: true,
+    });
+  });
+
+  test("falls back to the generic checkpoint guidance when already past the replaced migration", async () => {
+    using stderr = captureStderr();
+    markHistoryAsRebaselinedFrom("hprevious");
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
+      },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).not.toContain("fell behind");
+    expect(stderr.output).toContain("Pull the latest migration files");
+  });
+
+  test("explains the rebaseline-pending recovery procedure for a checkpoint that fell behind", async () => {
+    using stderr = captureStderr();
+    markHistoryAsRebaselinedFrom("hprevious");
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
+      },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain("fell behind before 'migration rebaseline' ran");
+    expect(stderr.output).toContain("must reach 0005");
+    expect(stderr.output).toContain(
+      "Restore the pre-rebaseline migrations/ directory from git history",
+    );
   });
 
   test("retains drift guidance when the remote checkpoint is available locally", async () => {

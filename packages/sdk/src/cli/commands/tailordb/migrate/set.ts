@@ -21,7 +21,7 @@ import {
 } from "./snapshot";
 import { MIGRATION_HISTORY_LABEL_KEY, MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
 
-export interface SetOptions {
+interface SetOptions {
   configPath?: string;
   number: string;
   namespace?: string;

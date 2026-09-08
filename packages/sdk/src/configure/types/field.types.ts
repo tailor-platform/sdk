@@ -37,6 +37,7 @@ export type TailorToTs = {
 } & Record<TailorFieldType, unknown>;
 
 export interface FieldMetadata {
+  as?: "string" | "date";
   description?: string;
   required?: boolean;
 
@@ -60,6 +61,14 @@ export type FieldOptions = {
   optional?: boolean;
   array?: boolean;
 };
+
+/** Options for a date field. */
+export type DateFieldOptions = FieldOptions & {
+  /** Use a Date at midnight UTC instead of a YYYY-MM-DD string. Defaults to string. */
+  as?: "string" | "date";
+};
+
+export type DateFieldValue<As> = As extends "date" ? Date : string;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;

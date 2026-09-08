@@ -1126,7 +1126,7 @@ function time<const Opt extends FieldOptions>(options?: Opt) {
 }
 
 /**
- * Create an enum field with a fixed set of allowed string values.
+ * Create an enum field with at least one allowed string value.
  * @param values - Array of allowed string values, or array of `{ value, description }` objects
  * @param options - Field configuration options
  * @returns An enum field
