@@ -299,6 +299,20 @@ describe("seedDumpCommand", () => {
     expect(jsonl.discardSeedDataWrite).toHaveBeenCalledWith(tmpPathFor("/seed/data", "User"));
   });
 
+  test("discards the temp file when commitSeedDataWrite itself fails", async () => {
+    sdk.executeScript.mockImplementation(dumpRows({ User: [{ id: "u1" }] }));
+    jsonl.commitSeedDataWrite.mockImplementationOnce(() => {
+      throw new Error("EACCES: permission denied");
+    });
+
+    const result = await runDumpCommand(["--machine-user", "manager", "User"]);
+
+    expect(result.exitCode).toBe(1);
+    // The temp file created by beginSeedDataWrite is cleaned up even though
+    // the failure came from commitSeedDataWrite (the rename), not dumpTable.
+    expect(jsonl.discardSeedDataWrite).toHaveBeenCalledWith(tmpPathFor("/seed/data", "User"));
+  });
+
   test("warns which tables were written before a mid-run failure", async () => {
     const dumpUser = dumpRows({ User: [{ id: "u1", name: "Ada" }] });
     sdk.executeScript.mockImplementation((options: { arg: DumpArg }) => {

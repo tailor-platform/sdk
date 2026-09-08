@@ -299,11 +299,11 @@ export const seedDumpCommand = defineAppCommand({
                 appendSeedDataRows(tmpPath, rows);
               },
             );
+            commitSeedDataWrite(dataDir, table, tmpPath);
           } catch (error) {
             discardSeedDataWrite(tmpPath);
             throw error;
           }
-          commitSeedDataWrite(dataDir, table, tmpPath);
           dumped[table] = rowCount;
           logger.log(styles.success(`    ✓ ${table}: ${String(rowCount)} rows`));
         }
