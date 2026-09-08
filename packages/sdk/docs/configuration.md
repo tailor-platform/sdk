@@ -21,8 +21,6 @@ To deploy the same config to multiple workspaces with per-environment values, se
 import { defineConfig } from "@tailor-platform/sdk";
 
 export default defineConfig({
-  // SDK-managed app id — do not edit, except when copying this config to a separate app.
-  // id: "<uuid>" — written here automatically on first run
   name: "my-app",
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
@@ -34,7 +32,12 @@ export default defineConfig({
 
 **Name**: Set the application name.
 
-**Id (auto-managed)**: A stable identifier used to recognize resources managed by the SDK across renames. On first `deploy`, the SDK injects an `id: "<uuid>"` field into your `defineConfig({...})` call and commits it to `tailor.config.ts`. Keep it under version control; do not edit it by hand. Delete it only if you want the SDK to assign a new id on the next `deploy` — typically when `tailor.config.ts` was copied from another project and the new application should not share the original's id. Auto-injection requires `defineConfig({...})` to be called with an inline object literal: if the argument is a separate variable (e.g. `defineConfig(config)`), or if `tailor.config.ts` is a wrapper that re-exports `defineConfig` from another file, the SDK cannot inject — add the `id` field manually to the file that contains the actual `defineConfig({...})` object literal.
+**Id (auto-managed)**: A stable identifier used to recognize resources managed by the SDK across renames. The SDK assigns it on the first local `deploy` and keeps it under version control for you; do not edit it by hand.
+
+- Projects that use [`tailor setup`](./github-actions.md#app-id) keep the id in `.github/tailor.lock`, under `appIds`, keyed by the config file's path. `tailor.config.ts` itself carries no id, so a config copied inside the repository gets its own id, and configs that re-export another file work as well.
+- Other projects get an `id: "<uuid>"` field written into the `defineConfig({...})` call. Delete it only if you want the SDK to assign a new id on the next `deploy` — typically when `tailor.config.ts` was copied from another project and the new application should not share the original's id. Writing the field requires `defineConfig({...})` to be called with an inline object literal: if the argument is a separate variable (e.g. `defineConfig(config)`), or if `tailor.config.ts` re-exports a config from another file, add the `id` field manually to the file that contains the actual `defineConfig({...})` object literal.
+
+When a project starts using `tailor setup`, the next local `deploy` or `setup` moves the id from `tailor.config.ts` into the lock and removes it from the config. `AppConfig.id` stays supported: a config `id` that agrees with the lock is accepted (a local `deploy` moves it into the lock; `deploy --dry-run`, `remove`, and CI remind you to remove it), and one that disagrees stops the command so you can decide which value to keep.
 
 **CORS**: Specify CORS settings as an array. You can also include Static Website URL references (e.g. `website.url`) in this array; see [Static Website](./services/staticwebsite.md).
 

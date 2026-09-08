@@ -95,12 +95,13 @@ export interface AppConfig<
   name: string;
   /**
    * Stable identifier used to track the application across renames.
-   * Managed by the SDK: auto-generated and written into `tailor.config.ts`
-   * on first `deploy`. Delete this field if you want the SDK to assign a
-   * new id on the next `deploy` — typical case: `tailor.config.ts` was
-   * copied from another project and the new application should not share
-   * the original's id. Existing resources are re-tagged with the new id;
-   * data is preserved.
+   * Managed by the SDK and assigned on the first local `deploy`. Projects
+   * that use `tailor setup` keep it in `.github/tailor.lock` under `appIds`
+   * and leave this field unset; other projects get it written here. Delete
+   * this field if you want the SDK to assign a new id on the next `deploy`
+   * — typical case: `tailor.config.ts` was copied from another project and
+   * the new application should not share the original's id. Existing
+   * resources are re-tagged with the new id; data is preserved.
    */
   id?: string;
   /**

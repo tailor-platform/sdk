@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { TAILOR_LOCK_VERSION } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
 import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock, type LockFile } from "./lock";
@@ -26,6 +27,12 @@ function makeLock(): LockFile {
     ],
   };
 }
+
+describe("LOCK_VERSION", () => {
+  test("matches the version the SDK writes", () => {
+    expect(LOCK_VERSION).toBe(TAILOR_LOCK_VERSION);
+  });
+});
 
 describe("hashContent", () => {
   test("is a stable sha256 prefix", () => {
@@ -58,7 +65,7 @@ describe("readLock / writeLock", () => {
     writeLock(testDir, lock);
     const raw = fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8");
     expect(raw.endsWith("\n")).toBe(true);
-    expect(raw).toContain('  "version": 1');
+    expect(raw).toContain(`  "version": ${String(LOCK_VERSION)}`);
     expect(readLock(testDir)).toEqual(lock);
   });
 
@@ -90,6 +97,29 @@ describe("readLock / writeLock", () => {
 
     expect(() => writeLock(testDir, makeLock())).toThrow(/symbolic link/);
     expect(fs.existsSync(path.join(outsideDir, "tailor.lock"))).toBe(false);
+  });
+
+  test("round-trips the appIds section", () => {
+    const lock: LockFile = {
+      ...makeLock(),
+      appIds: { "tailor.config.ts": "11111111-1111-4111-8111-111111111111" },
+    };
+    writeLock(testDir, lock);
+    expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("accepts a version 1 lock without appIds", () => {
+    const lock = { ...makeLock(), version: 1 };
+    writeLock(testDir, lock);
+    expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("rejects an appIds section that is not config paths to UUIDs", () => {
+    writeLock(testDir, {
+      ...makeLock(),
+      appIds: { "tailor.config.ts": "not-a-uuid" },
+    });
+    expect(() => readLock(testDir)).toThrow(/must be a UUID/);
   });
 
   test("throws on a forward-incompatible version", () => {

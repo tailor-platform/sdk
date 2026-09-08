@@ -9,6 +9,13 @@ import { loadConfigPath } from "#/cli/shared/context";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
+import {
+  type AppIdLock,
+  appIdPlanModeForDeploy,
+  findAppIdLock,
+  resolveLockedAppIds,
+} from "./app-id-lock";
 import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector";
 
 type LoadedDeployConfig = Awaited<ReturnType<typeof loadConfig>>;
@@ -71,7 +78,11 @@ async function buildDeploymentTarget(
 ): Promise<BuiltDeploymentTarget> {
   const { configPath, loadedConfig, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
   const { config, plugins } =
-    loadedConfig ?? (await loadPreparedDeployConfig({ configPath, dryRun, buildOnly }));
+    loadedConfig ??
+    assertDefined(
+      (await loadDeployConfigs({ configPaths: [configPath], dryRun, buildOnly }))[0],
+      "loaded config missing",
+    );
 
   const configDir = path.dirname(config.path);
   const lockfilePath =
@@ -132,8 +143,12 @@ function resolveExistingConfigPath(configPath: string | undefined): string | und
   return fs.existsSync(resolvedPath) ? resolvedPath : undefined;
 }
 
+// Configs governed by a lock file resolve their id after the module is loaded
+// (the lock is compared against the id the module evaluates to), so only
+// lock-less configs are prepared here.
 async function prepareDeployConfigs(params: LoadDeployConfigsParams): Promise<void> {
   const { configPaths, dryRun, buildOnly } = params;
+  if (buildOnly) return;
   const resolvedPaths = new Set(
     configPaths
       .map(resolveExistingConfigPath)
@@ -142,9 +157,10 @@ async function prepareDeployConfigs(params: LoadDeployConfigsParams): Promise<vo
 
   await Promise.all(
     [...resolvedPaths].map((configPath) =>
-      withSpan("build.prepareConfig", () =>
-        ensureConfigIdForDeploy({ configPath, dryRun, buildOnly }),
-      ),
+      withSpan("build.prepareConfig", async () => {
+        if (findAppIdLock(configPath) !== null) return;
+        await ensureConfigIdForDeploy({ configPath, dryRun, buildOnly });
+      }),
     ),
   );
 }
@@ -152,22 +168,62 @@ async function prepareDeployConfigs(params: LoadDeployConfigsParams): Promise<vo
 async function loadPreparedDeployConfig(
   params: LoadDeployConfigParams,
 ): Promise<LoadedDeployConfig> {
-  return withSpan("build.loadConfig", async () => {
-    const { configPath, buildOnly } = params;
-    const loaded = await loadConfig(configPath);
-    // build-only never reaches the platform, so ownership does not apply.
-    if (!buildOnly) warnMissingAppId(loaded.config.id);
-    return loaded;
+  return withSpan("build.loadConfig", () => loadConfig(params.configPath));
+}
+
+type ResolveDeployAppIdsParams = {
+  loaded: ReadonlyArray<LoadedDeployConfig>;
+  dryRun: boolean;
+  buildOnly: boolean;
+};
+
+async function resolveDeployAppIds(
+  params: ResolveDeployAppIdsParams,
+): Promise<LoadedDeployConfig[]> {
+  const { loaded, dryRun, buildOnly } = params;
+  // build-only never reaches the platform, so ownership does not apply.
+  if (buildOnly) return [...loaded];
+
+  const resolved = [...loaded];
+  const byLockRoot = new Map<string, { lock: AppIdLock; indexes: number[] }>();
+  loaded.forEach((entry, index) => {
+    const lock = findAppIdLock(entry.config.path);
+    if (lock === null) {
+      warnMissingAppId(entry.config.id);
+      return;
+    }
+    const group = byLockRoot.get(lock.root) ?? { lock, indexes: [] };
+    group.indexes.push(index);
+    byLockRoot.set(lock.root, group);
   });
+
+  const mode = appIdPlanModeForDeploy(dryRun);
+  for (const { lock, indexes } of byLockRoot.values()) {
+    const plan = await resolveLockedAppIds({
+      lock,
+      mode,
+      entries: indexes.map((index) => {
+        const { config } = assertDefined(loaded[index], "loaded config missing");
+        return { configPath: config.path, configId: config.id };
+      }),
+    });
+    indexes.forEach((index, position) => {
+      const entry = assertDefined(loaded[index], "loaded config missing");
+      const id = assertDefined(plan.entries[position], "planned app id entry missing").id;
+      resolved[index] = { ...entry, config: { ...entry.config, id } };
+    });
+  }
+  return resolved;
 }
 
 export async function loadDeployConfigs(
   params: LoadDeployConfigsParams,
 ): Promise<LoadedDeployConfig[]> {
   await prepareDeployConfigs(params);
-  return Promise.all(
+  const loaded = await Promise.all(
     params.configPaths.map((configPath) => loadPreparedDeployConfig({ ...params, configPath })),
   );
+  return resolveDeployAppIds({ loaded, dryRun: params.dryRun, buildOnly: params.buildOnly });
 }
 
 export async function buildDeploymentTargets(
@@ -186,13 +242,14 @@ export async function buildDeploymentTargets(
   ) {
     throw new Error("loadedConfigs must contain exactly one entry for every configPath");
   }
-  if (buildTarget === undefined && providedLoadedConfigs === undefined) {
-    await prepareDeployConfigs({
-      configPaths,
-      dryRun: params.dryRun,
-      buildOnly: params.buildOnly,
-    });
-  }
+  const loadedConfigs =
+    buildTarget === undefined && providedLoadedConfigs === undefined
+      ? await loadDeployConfigs({
+          configPaths,
+          dryRun: params.dryRun,
+          buildOnly: params.buildOnly,
+        })
+      : providedLoadedConfigs;
   const build = buildTarget ?? buildDeploymentTarget;
 
   return Promise.all(
@@ -200,7 +257,7 @@ export async function buildDeploymentTargets(
       build({
         ...targetParams,
         configPath,
-        loadedConfig: providedLoadedConfigs?.[index],
+        loadedConfig: loadedConfigs?.[index],
       }),
     ),
   );
