@@ -1,6 +1,7 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
+import { spawnSync } from "node:child_process";
 import { aroundEach, describe, expect, test } from "vitest";
 import { file, type TailorDBFileError, type TailorDBFileErrorCode } from "#/runtime/file";
 import { mockFile, injectMocks } from "#/vitest/mock";
@@ -28,6 +29,174 @@ describe("@tailor-platform/sdk/runtime/file", () => {
 
     expect(result).toEqual({ metadata: { fileSize: 4, sha256sum: "abc" } });
     expect(fileM.calls).toEqual([expectedCall("upload")]);
+  });
+
+  test.each([
+    {
+      encoding: "utf8" as const,
+      data: "日本語😀",
+      expected: [230, 151, 165, 230, 156, 172, 232, 170, 158, 240, 159, 152, 128],
+    },
+    {
+      encoding: "base64" as const,
+      data: "iVBORw0KGgo=",
+      expected: [137, 80, 78, 71, 13, 10, 26, 10],
+    },
+    { encoding: "base64" as const, data: "AP/+", expected: [0, 255, 254] },
+    { encoding: "base64" as const, data: "YQ", expected: [97] },
+    { encoding: "base64" as const, data: " Y Q==\n", expected: [97] },
+    { encoding: "base64" as const, data: "", expected: [] },
+  ])("upload interprets $encoding data $data", async ({ encoding, data, expected }) => {
+    using fileM = mockFile();
+    const options = { encoding, contentType: "image/png" };
+    fileM.enqueueResult({ metadata: { fileSize: expected.length, sha256sum: "hash" } });
+
+    const result = await file.upload(...args, data, options);
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array(expected), {
+      contentType: "image/png",
+    });
+    expect(result.metadata.fileSize).toBe(expected.length);
+    expect(options.encoding).toBe(encoding);
+  });
+
+  test("upload defaults contentType to text/plain; charset=utf-8 for utf8 when omitted", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "a", { encoding: "utf8" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "text/plain; charset=utf-8",
+    });
+  });
+
+  test("upload keeps an explicit contentType for utf8", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "a", { encoding: "utf8", contentType: "text/markdown" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "text/markdown",
+    });
+  });
+
+  test("upload leaves contentType unset for base64 when omitted", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "YQ==", { encoding: "base64" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {});
+  });
+
+  test.each(["!YQ==", "A", "YQ=", "Y===", "YQ===", "Y=Q=", "____"])(
+    "upload rejects invalid Base64 %s before storing anything",
+    async (data) => {
+      using fileM = mockFile();
+      await expect(file.upload(...args, data, { encoding: "base64" })).rejects.toThrow(TypeError);
+      expect(fileM.upload).not.toHaveBeenCalled();
+    },
+  );
+
+  test("upload extracts contentType from a base64 data URL", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "data:image/png;base64,YQ==", { encoding: "base64" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "image/png",
+    });
+  });
+
+  test("upload keeps parameters in a data URL's media type", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "data:text/plain;charset=utf-8;base64,YQ==", { encoding: "base64" });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "text/plain;charset=utf-8",
+    });
+  });
+
+  test("upload keeps an explicit contentType over a data URL's media type", async () => {
+    using fileM = mockFile();
+    fileM.enqueueResult({ metadata: { fileSize: 1, sha256sum: "hash" } });
+
+    await file.upload(...args, "data:image/png;base64,YQ==", {
+      encoding: "base64",
+      contentType: "image/jpeg",
+    });
+
+    expect(fileM.upload).toHaveBeenCalledWith(...args, new Uint8Array([97]), {
+      contentType: "image/jpeg",
+    });
+  });
+
+  test.each(["data:image/png;base64,!YQ==", "data:;base64,YQ=", "data:image/png,YQ=="])(
+    "upload rejects an invalid base64 data URL %s before storing anything",
+    async (data) => {
+      using fileM = mockFile();
+      await expect(file.upload(...args, data, { encoding: "base64" })).rejects.toThrow(TypeError);
+      expect(fileM.upload).not.toHaveBeenCalled();
+    },
+  );
+
+  test("upload rejects unsupported string encodings", async () => {
+    using fileM = mockFile();
+    // @ts-expect-error Unsupported encodings must also fail at runtime.
+    await expect(file.upload(...args, "text", { encoding: "hex" })).rejects.toThrow(
+      "Unsupported file upload encoding",
+    );
+    expect(fileM.upload).not.toHaveBeenCalled();
+  });
+
+  test.each([undefined, { contentType: "image/png" }])(
+    "upload preserves legacy string behavior with options %j",
+    async (options) => {
+      using fileM = mockFile();
+      // oxlint-disable-next-line typescript/no-deprecated -- Verify backward compatibility.
+      await file.upload(...args, "iVBORw0KGgo=", options);
+      expect(fileM.upload).toHaveBeenCalledWith(...args, "iVBORw0KGgo=", options);
+    },
+  );
+
+  test.each([new Uint8Array([1, 2, 3]).subarray(1), new ArrayBuffer(2), [1, 2]])(
+    "upload leaves byte input unchanged",
+    async (data) => {
+      using fileM = mockFile();
+      await file.upload(...args, data, { encoding: "base64" });
+      expect(fileM.upload.mock.calls[0]?.[4]).toBe(data);
+      expect(fileM.upload.mock.calls[0]?.[5]).toEqual({});
+    },
+  );
+
+  test("upload decodes a 3 MB file within a 32 MB V8 heap", () => {
+    const script = `
+      import { file } from ${JSON.stringify(new URL("./file.ts", import.meta.url).href)};
+      globalThis.tailordb = {
+        file: {
+          upload: async (...args) => ({ metadata: { fileSize: args[4].byteLength, sha256sum: "" } }),
+        },
+      };
+      const result = await file.upload("ns", "Doc", "blob", "id", "AQID".repeat(1_000_000), { encoding: "base64" });
+      console.log(result.metadata.fileSize);
+    `;
+    const result = spawnSync(
+      process.execPath,
+      ["--max-old-space-size=32", "--input-type=module", "--eval", script],
+      {
+        encoding: "utf8",
+        timeout: 10_000,
+      },
+    );
+    expect({ status: result.status, output: result.stdout }).toEqual({
+      status: 0,
+      output: "3000000\n",
+    });
   });
 
   test("download forwards and returns the queued payload", async () => {
