@@ -471,7 +471,7 @@ export default defineConfig({
 });
 ```
 
-Inline projects inherit the root-level `tailorRuntime()` plugin by default on Vitest 5. On Vitest 4, add `extends: true` to each project; without it only the environment name rewrite applies, and `node:*` import blocking silently does not run.
+Inline projects inherit the root-level `tailorRuntime()` plugin by default on Vitest 5. On Vitest 4, add `extends: true` to each project; without it, `node:*` import blocking silently does not run.
 
 ### Known Limitations
 
