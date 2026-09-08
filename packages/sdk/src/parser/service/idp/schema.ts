@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  ALL_EMAIL_DOMAINS,
+  allowedEmailDomainPattern,
+  containsAllEmailDomains,
+} from "#/parser/service/idp/email-domains";
 
 /**
  * Normalize IdPGqlOperationsConfig (alias or object) to IdPGqlOperations object.
@@ -116,9 +121,25 @@ export const IdPUserAuthPolicySchema = z
       .optional()
       .describe("Maximum password length (6-4096)"),
     allowedEmailDomains: z
-      .array(z.string())
+      .array(
+        z
+          .string()
+          .regex(
+            allowedEmailDomainPattern,
+            `must be a hostname, or ${ALL_EMAIL_DOMAINS} to allow all email domains`,
+          ),
+      )
+      .max(100, "allowedEmailDomains accepts at most 100 entries")
+      .refine((domains) => new Set(domains.map((d) => d.toLowerCase())).size === domains.length, {
+        message: "allowedEmailDomains entries must be unique, compared case-insensitively",
+      })
+      .refine((domains) => domains.length <= 1 || !containsAllEmailDomains(domains), {
+        message: `allowedEmailDomains cannot contain other entries when ${ALL_EMAIL_DOMAINS} is set`,
+      })
       .optional()
-      .describe("Restrict registration to these email domains"),
+      .describe(
+        `Restrict registration to these email domains. A lone ${ALL_EMAIL_DOMAINS} entry allows every domain`,
+      ),
     allowGoogleOauth: z.boolean().optional().describe("Enable Google OAuth login"),
     allowMicrosoftOauth: z.boolean().optional().describe("Enable Microsoft OAuth login"),
     disablePasswordAuth: z.boolean().optional().describe("Disable password-based authentication"),
@@ -186,7 +207,7 @@ export const IdPUserAuthPolicySchema = z
     (data) =>
       !data.allowGoogleOauth || (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
     {
-      message: "allowGoogleOauth requires allowedEmailDomains to be set",
+      message: `allowGoogleOauth requires a non-empty allowedEmailDomains (["${ALL_EMAIL_DOMAINS}"] to allow every domain)`,
       path: ["allowGoogleOauth"],
     },
   )
@@ -199,7 +220,7 @@ export const IdPUserAuthPolicySchema = z
       !data.allowMicrosoftOauth ||
       (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
     {
-      message: "allowMicrosoftOauth requires allowedEmailDomains to be set",
+      message: `allowMicrosoftOauth requires a non-empty allowedEmailDomains (["${ALL_EMAIL_DOMAINS}"] to allow every domain)`,
       path: ["allowMicrosoftOauth"],
     },
   )

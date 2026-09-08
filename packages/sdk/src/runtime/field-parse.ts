@@ -1,3 +1,4 @@
+import { formatDate } from "./date";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -268,18 +269,63 @@ function validateCustomField<T extends TailorFieldType>(args: FieldValidationArg
 export function parseInternal<T extends TailorFieldType, Output>(
   args: FieldParseRuntimeArgs<T>,
 ): StandardSchemaV1.Result<Output> {
-  const { value } = args;
+  let { value } = args;
   const issues: StandardSchemaV1.Issue[] = [];
   const validationArgs = { ...args, issues };
   const baseValid = validateBaseField(validationArgs);
   if (baseValid) {
-    validateCustomField(validationArgs);
+    value = deserializeDates(validationArgs);
+    if (issues.length === 0) {
+      validateCustomField({ ...validationArgs, value });
+    }
   }
   if (issues.length > 0) {
     return { issues };
   }
 
   return { value: (value ?? null) as Output };
+}
+
+function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
+  const { field, value, issues, pathArray } = args;
+  if (value === null || value === undefined) return value;
+  const convert = (item: unknown, itemPath: string[]): unknown => {
+    if (field.type === "date" && field._metadata.as === "date") {
+      const date = new Date(`${item}T00:00:00.000Z`);
+      if (!Number.isFinite(date.getTime()) || formatDate(date) !== item) {
+        issues.push({
+          message: `Expected a valid calendar date: received ${item}`,
+          path: itemPath.length > 0 ? itemPath : undefined,
+        });
+      }
+      return date;
+    }
+    if (field.type !== "nested") return item;
+    const record = item as Record<string, unknown>;
+    let result = record;
+    for (const [key, child] of Object.entries(field.fields)) {
+      const converted = deserializeDates({
+        ...args,
+        field: child,
+        value: record[key],
+        pathArray: itemPath.concat(key),
+      });
+      if (converted !== record[key]) {
+        if (result === record) result = { ...record };
+        Object.defineProperty(result, key, {
+          value: converted,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      }
+    }
+    return result;
+  };
+  if (!field._metadata.array) return convert(value, pathArray);
+  const values = value as unknown[];
+  const converted = values.map((item, index) => convert(item, pathArray.concat(`[${index}]`)));
+  return converted.every((item, index) => item === values[index]) ? value : converted;
 }
 
 type ParseInputFieldsArgs = FieldParseArgs & {

@@ -461,12 +461,18 @@ function generateChangeScripts(
     const afterValues = (after.allowedValues ?? []).map((v) => v.value);
     const removedValues = beforeValues.filter((v) => !afterValues.includes(v));
     if (removedValues.length > 0) {
-      const defaultValue = afterValues[0] ?? "NEW_VALUE";
+      const [firstValue] = afterValues;
+      const replacement =
+        firstValue !== undefined
+          ? JSON.stringify(firstValue)
+          : after.required
+            ? '"NEW_VALUE"'
+            : "null";
       scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
   await trx
     .updateTable("${change.tableName}")
-    .set({ ${change.fieldName}: "${defaultValue}" }) // TODO: Set appropriate value
-    .where("${change.fieldName}", "in", [${removedValues.map((v) => `"${v}"`).join(", ")}])
+    .set({ ${change.fieldName}: ${replacement} }) // TODO: Set appropriate value
+    .where("${change.fieldName}", "in", [${removedValues.map((v) => JSON.stringify(v)).join(", ")}])
     .execute();`);
     }
   }

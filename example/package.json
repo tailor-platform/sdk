@@ -30,7 +30,7 @@
     "date-fns": "4.4.0"
   },
   "devDependencies": {
-    "@bufbuild/protobuf": "2.14.0",
+    "@bufbuild/protobuf": "2.14.1",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-node": "2.1.2",
     "@electric-sql/pglite": "0.5.8",
@@ -42,10 +42,10 @@
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
-    "oxfmt": "0.65.0",
-    "oxlint": "1.80.0",
+    "oxfmt": "0.66.0",
+    "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "tsx": "4.23.13",
     "typescript": "6.0.3",
     "vitest": "5.0.0"

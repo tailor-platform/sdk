@@ -277,7 +277,7 @@ export function convertFieldConfigToProto(
  * @param {Record<string, SnapshotFieldConfig>} fields - Nested fields
  * @returns {Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>} Proto nested fields
  */
-function processNestedFieldsFromSnapshot(
+export function processNestedFieldsFromSnapshot(
   fields: Record<string, SnapshotFieldConfig>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
   const nestedFields = new Map<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>();

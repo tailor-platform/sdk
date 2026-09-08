@@ -21,6 +21,7 @@ const AllowedValueSchema = z.strictObject({
 });
 
 const FieldMetadataSchema = z.strictObject({
+  as: z.enum(["string", "date"]).optional().describe("Date value representation"),
   required: z.boolean().optional().describe("Whether the field is required"),
   array: z.boolean().optional().describe("Whether the field is an array"),
   description: z.string().optional().describe("Field description"),

@@ -1,5 +1,29 @@
 # @tailor-platform/create-sdk
 
+## 2.14.2
+
+No changes in this release.
+
+## 2.14.1
+
+No changes in this release.
+
+## 2.14.0
+
+### Patch Changes
+
+- [#2270](https://github.com/tailor-platform/sdk/pull/2270) [`1023fc5`](https://github.com/tailor-platform/sdk/commit/1023fc5f12462a2753a4452760c9ed2e0fa7bc07) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Document why the `hello-world` template ships with fully open permissions: `src/db/user.ts` now explains that the template defines no auth and that production projects should define conditions in `.permission()` / `.gqlPermission()`, and the README gained a Security section listing the open `unsafeAllowAll*Permission` grants and the `allowAnonymous` resolver default that must be replaced before real use.
+
+- [#2270](https://github.com/tailor-platform/sdk/pull/2270) [`bc46936`](https://github.com/tailor-platform/sdk/commit/bc4693632116451935a83fb7b39d487c66e3a093) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Document why the `multi-application` template ships with fully open permissions: the README gained a Security section listing the open `unsafeAllowAllTypePermission` / `unsafeAllowAllGqlPermission` grants on the `User` and `AdminNote` tables and pointing at the TailorDB Permission documentation for what to replace them with.
+
+## 2.13.1
+
+### Patch Changes
+
+- [#2263](https://github.com/tailor-platform/sdk/pull/2263) [`ec80f8c`](https://github.com/tailor-platform/sdk/commit/ec80f8c7fbb5878010cc702a6336f6cb5b3d9bfb) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Fix the `hello-world` template docs so they match the tooling the template actually ships: the README now documents `oxfmt` / `oxlint` (instead of Prettier / ESLint) and the `generate` script, and the setup commands use `npx @tailor-platform/sdk <command>`. The unused empty `.prettierrc` is no longer generated.
+
+- [#2263](https://github.com/tailor-platform/sdk/pull/2263) [`9495e4e`](https://github.com/tailor-platform/sdk/commit/9495e4e2b77a0a3e680fff22dda0cb5493756c6c) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Fix the same stale-tooling docs issue across the remaining `create-sdk` templates (executor, inventory-management, multi-application, resolver, static-web-site, tailordb, workflow): remove the unused empty `.prettierrc` files, and update the `inventory-management` / `multi-application` READMEs' Scripts sections to document `oxfmt` / `oxlint` (instead of Prettier / ESLint), matching the tooling their `package.json` actually ships. The `inventory-management` README's Scripts section also referenced a nonexistent `gen` script; it now documents the actual `generate` script.
+
 ## 2.13.0
 
 ## 2.12.0

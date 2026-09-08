@@ -7,7 +7,7 @@ import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import type { SecretManagerVault } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
-export interface VaultListOptions {
+interface VaultListOptions {
   workspaceId?: string;
   profile?: string;
   order?: Order;
