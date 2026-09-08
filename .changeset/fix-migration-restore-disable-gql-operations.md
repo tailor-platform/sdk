@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Fix `deploy` failing to restore GraphQL operation restrictions after a TailorDB migration, when a table outside the local migration snapshot has a partially-set `disableGqlOperations` record on the platform. The restore step now normalizes missing fields to `false` instead of forwarding them unset, which previously made the platform reject the request and left the original migration error unrecovered.
+Harden `deploy`'s TailorDB migration restore step so it always sends a fully specified `disableGqlOperations` record when restoring a table's GraphQL operation restrictions, instead of relying on the platform response to populate every field.
