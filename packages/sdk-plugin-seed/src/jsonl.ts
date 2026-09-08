@@ -8,6 +8,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { randomBytes } from "node:crypto";
 import * as path from "pathe";
 import type { SeedData } from "@tailor-platform/sdk/cli";
 
@@ -125,19 +126,21 @@ export function writeSeedData(dataDir: string, typeName: string, rows: SeedData[
 }
 
 /**
- * Start a streamed write for one entity: creates (or truncates) a hidden
- * temp file next to the entity's JSONL file, so rows can be appended a page
- * at a time instead of held in memory for the whole table. The real
- * `<typeName>.jsonl` is left untouched until {@link commitSeedDataWrite}, so
- * a table that fails partway through never corrupts or truncates the file
- * from a previous run.
+ * Start a streamed write for one entity: creates a hidden temp file next to
+ * the entity's JSONL file, so rows can be appended a page at a time instead
+ * of held in memory for the whole table. The real `<typeName>.jsonl` is left
+ * untouched until {@link commitSeedDataWrite}, so a table that fails partway
+ * through never corrupts or truncates the file from a previous run. The temp
+ * file name includes a random suffix so concurrent dumps into the same
+ * directory do not collide on it.
  * @param dataDir - Directory the entity's JSONL file lives in
  * @param typeName - Entity name the rows belong to
  * @returns Path of the temp file to append rows to
  */
 export function beginSeedDataWrite(dataDir: string, typeName: string): string {
   mkdirSync(dataDir, { recursive: true });
-  const tmpPath = path.join(dataDir, `.${typeName}.jsonl.tmp`);
+  const suffix = randomBytes(4).toString("hex");
+  const tmpPath = path.join(dataDir, `.${typeName}.jsonl.${suffix}.tmp`);
   writeFileSync(tmpPath, "", "utf-8");
   return tmpPath;
 }
