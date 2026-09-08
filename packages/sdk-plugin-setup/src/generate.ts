@@ -1,11 +1,14 @@
 import * as fs from "node:fs";
 import {
-  ensureConfigId,
   logBetaWarning,
   extractOwnedNamespaces,
+  findAppIdLock,
   loadConfig,
   logger,
+  planAppIds,
+  removeAdoptedConfigIds,
   styles,
+  TAILOR_LOCK_FILENAME,
   workspaceNameSchema,
   getNamespacesWithMigrations,
 } from "@tailor-platform/sdk/cli";
@@ -48,6 +51,8 @@ type CommonSetupOptions = {
   gitRunner?: GitRunner;
   /** Injectable config-name loader, for testing. Defaults to loading the config. */
   loadConfigName?: (configPath: string) => Promise<string | undefined>;
+  /** Injectable config-id loader, for testing. Defaults to loading the config. */
+  loadConfigId?: (configPath: string) => Promise<string | undefined>;
   /** Injectable TailorDB namespace loader, for testing. Defaults to loading the config. */
   loadErdNamespaces?: (configPath: string) => Promise<string[]>;
   /** Injectable migration config detector, for testing. Defaults to loading the config. */
@@ -133,6 +138,11 @@ function uniqueGroupId(names: readonly string[], usedIds: Set<string>): string {
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
   return config.name;
+}
+
+async function defaultLoadConfigId(configPath: string): Promise<string | undefined> {
+  const { config } = await loadConfig(configPath);
+  return config.id;
 }
 
 async function defaultLoadErdNamespaces(configPath: string): Promise<string[]> {
@@ -251,7 +261,7 @@ function escapesRoot(rel: string): boolean {
  * Resolve the config file path for the given app directory.
  *
  * `--dir` must stay inside the repository: the value is embedded in workflow
- * `paths:` filters and the config under it gets mutated (id injection), so
+ * `paths:` filters and the config under it may be edited (its id moves into the lock), so
  * absolute paths and `..` traversal are rejected.
  * @param outputDir - Repository root (cwd)
  * @param dir - App directory relative to the repo root
@@ -584,10 +594,10 @@ function assertNoKindCollision(obj: {
  * Print next-step guidance after generating workflow files.
  * @param obj - Output context
  * @param obj.environment - Resolved GitHub Environment name for this target
- * @param obj.idInjected - Whether an app id was injected into the config
+ * @param obj.configEdited - Whether the app id was moved out of the config
  */
-function printNextSteps(obj: { environment: string; idInjected: boolean }): void {
-  const { environment, idInjected } = obj;
+function printNextSteps(obj: { environment: string; configEdited: boolean }): void {
+  const { environment, configEdited } = obj;
 
   logger.newline();
   logger.info("Next steps:");
@@ -608,8 +618,8 @@ function printNextSteps(obj: { environment: string; idInjected: boolean }): void
   logger.log("3. Commit the generated files:");
   logger.log("   - .github/workflows/tailor-*.yml");
   logger.log("   - .github/tailor.lock");
-  if (idInjected) {
-    logger.log("   - tailor.config.ts (app id was added)");
+  if (configEdited) {
+    logger.log(`   - tailor.config.ts (app id moved to ${TAILOR_LOCK_FILENAME})`);
   }
 }
 
@@ -649,17 +659,31 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     throw new Error(`${resolved.file}: ${decision.reason}`);
   }
 
-  // Inject the app id only after reconciliation has ruled out conflicts, so
-  // validation failures leave tailor.config.ts untouched (later filesystem
-  // errors can still occur after injection).
-  const idResult = await ensureConfigId(resolved.configPath);
-  if (idResult === null) {
-    logger.warn(
-      "Could not find a defineConfig() call to confirm an app id. " +
-        "The CI deploy will fail unless your config resolves to one with an 'id'.",
+  // deploy resolves the app id against the nearest lock above the config, so
+  // a lock between the config and this directory would take precedence over
+  // the one written here.
+  const nearestLock = findAppIdLock(resolved.configPath);
+  if (
+    nearestLock !== null &&
+    path.normalize(nearestLock.root) !== path.normalize(options.outputDir)
+  ) {
+    throw new Error(
+      `${path.relative(options.outputDir, path.join(nearestLock.root, TAILOR_LOCK_FILENAME))} ` +
+        "already governs the app id of this config. Run setup from that directory, or remove " +
+        "that lock file if it is a leftover.",
     );
   }
-  const idInjected = idResult?.injected ?? false;
+
+  // Planned before any file is written, so an app id conflict leaves the
+  // workflow, the lock, and tailor.config.ts untouched.
+  const loadConfigId = options.loadConfigId ?? defaultLoadConfigId;
+  const appIdPlan = await planAppIds({
+    lock: { root: options.outputDir, appIds: lock?.appIds ?? {} },
+    entries: [
+      { configPath: resolved.configPath, configId: await loadConfigId(resolved.configPath) },
+    ],
+    mode: "write",
+  });
 
   // For action targets, preserve the user-editable build-site run body when
   // regenerating (hash matched after normalization) so that custom build commands
@@ -699,7 +723,13 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   } else {
     targets[index] = newTarget;
   }
-  writeLock(options.outputDir, { version: LOCK_VERSION, targets });
+  writeLock(options.outputDir, {
+    ...lock,
+    version: LOCK_VERSION,
+    targets,
+    appIds: appIdPlan.appIds,
+  });
+  const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
 
   if (decision.action === "restore") {
     logger.success(`Regenerated ${styles.path(resolved.file)} (was missing on disk)`);
@@ -717,8 +747,12 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     logger.log(
       "Use `tailor setup coordinate` to generate a coordinator workflow that orchestrates this action.",
     );
+    logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
+    if (configEdited) {
+      logger.log("The app id was moved out of tailor.config.ts; commit that change too.");
+    }
   } else {
-    printNextSteps({ environment: resolved.environment, idInjected });
+    printNextSteps({ environment: resolved.environment, configEdited });
   }
 }
 
@@ -877,7 +911,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   } else {
     targets[idx] = newTarget;
   }
-  writeLock(outputDir, { version: LOCK_VERSION, targets });
+  writeLock(outputDir, { ...lock, version: LOCK_VERSION, targets });
 
   if (decision.action === "restore") {
     logger.success(`Regenerated ${styles.path(file)} (was missing on disk)`);

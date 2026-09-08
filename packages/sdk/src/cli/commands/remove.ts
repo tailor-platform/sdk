@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
+import { findAppIdLock, resolveLockedAppIds } from "#/cli/commands/deploy/app-id-lock";
 import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
 import { warnMissingAppId } from "#/cli/commands/deploy/config-id-injector";
@@ -37,14 +38,30 @@ export interface RemoveOptions {
   configPath?: string;
 }
 
+// remove never writes: a config whose id is not recorded yet is removed by
+// name, with the same warning deploy prints.
+async function resolveRemoveConfigId(config: LoadedConfig): Promise<LoadedConfig> {
+  const lock = findAppIdLock(config.path);
+  if (lock === null) {
+    warnMissingAppId(config.id);
+    return config;
+  }
+  const plan = await resolveLockedAppIds({
+    lock,
+    mode: "read",
+    entries: [{ configPath: config.path, configId: config.id }],
+  });
+  return { ...config, id: plan.entries[0]?.id };
+}
+
 async function loadOptions(options?: RemoveOptions) {
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options?.profile,
     workspaceId: options?.workspaceId,
   });
-  const { config } = await loadConfig(options?.configPath);
+  const { config: loadedConfig } = await loadConfig(options?.configPath);
+  const config = await resolveRemoveConfigId(loadedConfig);
   const application = defineApplication({ config });
-  warnMissingAppId(application.id);
   return {
     client,
     workspaceId,
@@ -227,7 +244,7 @@ export const removeCommand = defineAppCommand({
     if (leftBehind) {
       logger.warn(ml`
         Resources tagged with "${application.name}" were left in place: they carry an application id this config does not match.
-        Put that id in your config, or run deploy to take them over first, then remove again.
+        Record that id for this config (in .github/tailor.lock, or the config's 'id'), or run deploy to take them over first, then remove again.
       `);
       return;
     }

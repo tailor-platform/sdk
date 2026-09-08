@@ -111,7 +111,7 @@ describe("resolver Date representation bundles", () => {
       "valid calendar date",
     );
     await expect(run({ ...input, invalidOutput: true })).rejects.toThrow(
-      "Invalid date at rows[0].day",
+      "Invalid date at rows[0].day: Expected a Date with a 4-digit year (0000-9999), but received an invalid Date",
     );
   });
 });

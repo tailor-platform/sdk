@@ -98,7 +98,7 @@ async function confirmIdRegeneration(
   }
 
   const confirmed = await prompt.confirm({
-    message: `Re-tag these resources with the new id for "${appName}"?\n${styles.dim("(The id in tailor.config.ts was removed since the previous deploy, so a new one was generated)")}`,
+    message: `Re-tag these resources with the new id for "${appName}"?\n${styles.dim("(The app id recorded for this config was removed since the previous deploy, so a new one was generated)")}`,
     default: false,
   });
   if (!confirmed) {
@@ -138,7 +138,7 @@ async function confirmMissingConfigId(
   if (!confirmed) {
     throw new Error(ml`
       Apply cancelled. Resources remain tagged with their current id.
-      Restore the 'id' in your config to keep owning them by id, or run again and confirm to own them by name.
+      Restore the app id for this config (in .github/tailor.lock, or the config's 'id') to keep owning them by id, or run again and confirm to own them by name.
     `);
   }
 }

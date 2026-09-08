@@ -690,6 +690,45 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     );
   });
 
+  test("normalizes a captured disableGqlOperations field left undefined by the remote state", async () => {
+    const client = createMockClient({
+      existingTableNames: ["Order", "Drift"],
+      existingSettings: {
+        Drift: {
+          disableGqlOperations: {
+            create: undefined,
+            update: false,
+            delete: false,
+            read: false,
+          },
+        },
+      },
+    });
+    const planResult = createMockPlanResult({ creates: [] });
+    planResult.changeSet.gqlPermission.updates.push({
+      name: "Drift",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-ns",
+        typeName: "Drift",
+        permission: {},
+      },
+    });
+    const order = snapshotTable("Order", { status: { type: "string", required: true } });
+    snapshotState.tablesByVersion = { 0: { Order: order }, 1: { Order: order } };
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration([])]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const driftWrites = gqlOperationWrites(client).filter(([name]) => name === "Drift");
+    expect(driftWrites.at(-1)?.[1]).toEqual({
+      create: false,
+      update: false,
+      delete: false,
+      read: false,
+    });
+  });
+
   test("locks the namespace while a data-only migration runs", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult({ creates: [] });

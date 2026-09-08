@@ -135,19 +135,49 @@ describe("Date representation", () => {
     ).toEqual(["2026-09-06", "0099-01-02", "0000-02-29", "9999-12-31"]);
   });
 
-  test.each([new Date(NaN), new Date("+010000-01-01"), new Date("-000001-01-01")])(
-    "rejects unrepresentable Date output %s",
-    (value) => {
-      const schema = t.object({ dates: t.date({ as: "date", array: true }) });
-      expect(() => serializeDateFields(schema, { dates: [value] })).toThrow(
-        "Invalid date at dates[0]",
-      );
-    },
-  );
+  test.each([
+    [new Date(NaN), "an invalid Date"],
+    [new Date("+010000-01-01"), "year 10000"],
+    [new Date("-000001-01-01"), "year -1"],
+  ])("rejects unrepresentable Date output %s", (value, received) => {
+    const schema = t.object({ dates: t.date({ as: "date", array: true }) });
+    expect(() => serializeDateFields(schema, { dates: [value] })).toThrow(
+      `Invalid date at dates[0]: Expected a Date with a 4-digit year (0000-9999), but received ${received}`,
+    );
+  });
 
   test("rejects strings returned for a Date representation", () => {
     expect(() => serializeDateFields(t.date({ as: "date" }), "2026-09-07")).toThrow(
-      "Expected a Date at <root>",
+      'Expected a Date instance at the top-level value, but received a string ("2026-09-07")',
+    );
+  });
+
+  test.each([
+    [42, "a number (42)"],
+    [true, "a boolean (true)"],
+    [{}, "an object"],
+    [[1, "a"], "an array of number/string"],
+    [[], "an empty array"],
+  ])("describes non-Date output %s in the type mismatch message", (value, described) => {
+    expect(() => serializeDateFields(t.date({ as: "date" }), value)).toThrow(
+      `Expected a Date instance at the top-level value, but received ${described}`,
+    );
+  });
+
+  test("truncates long strings in the type mismatch message", () => {
+    const longString = "a".repeat(200);
+    expect(() => serializeDateFields(t.date({ as: "date" }), longString)).toThrow(
+      `Expected a Date instance at the top-level value, but received a string ("${"a".repeat(100)}...")`,
+    );
+  });
+
+  test("describes holes in a sparse array as undefined instead of an empty type list", () => {
+    const sparse: unknown[] = Array.from({ length: 3 });
+    sparse[0] = 1;
+    sparse[2] = 3;
+    delete sparse[1];
+    expect(() => serializeDateFields(t.date({ as: "date" }), sparse)).toThrow(
+      "Expected a Date instance at the top-level value, but received an array of number/undefined",
     );
   });
 

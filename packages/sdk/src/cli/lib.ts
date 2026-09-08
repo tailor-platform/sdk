@@ -27,6 +27,22 @@ export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
 export type { BundledScripts } from "./commands/deploy/function-registry";
 export { ensureConfigId } from "./commands/deploy/config-id-injector";
+export {
+  TAILOR_LOCK_FILENAME,
+  TAILOR_LOCK_VERSION,
+  findAppIdLock,
+  parseAppIds,
+  planAppIds,
+  removeAdoptedConfigIds,
+  type AppIdEntry,
+  type AppIdEntryInput,
+  type AppIdLock,
+  type AppIdPlan,
+  type AppIdPlanMode,
+  type AppIds,
+  type PlanAppIdsParams,
+  type RemoveAdoptedConfigIdsResult,
+} from "./commands/deploy/app-id-lock";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";

@@ -23,6 +23,11 @@ export type AppConfigParsed = {
   disableIntrospection?: boolean | undefined;
   inlineSourcemap?: boolean | undefined;
   logLevel?: string | undefined;
+  metadata?:
+    | {
+        [x: string]: string;
+      }
+    | undefined;
   db?: unknown;
   resolver?: unknown;
   idp?: unknown;
