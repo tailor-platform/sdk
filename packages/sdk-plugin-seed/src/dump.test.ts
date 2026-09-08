@@ -14,9 +14,36 @@ const sdk = vi.hoisted(() => ({
 }));
 
 const jsonl = vi.hoisted(() => ({
+  appendSeedDataRows: vi.fn(),
+  beginSeedDataWrite: vi.fn(),
+  commitSeedDataWrite: vi.fn(),
+  discardSeedDataWrite: vi.fn(),
   existingSeedDataFiles: vi.fn(),
-  writeSeedData: vi.fn(),
 }));
+
+/**
+ * Path the mocked `beginSeedDataWrite`/`commitSeedDataWrite` use for a
+ * table's temp/real file, matching the real jsonl.ts naming.
+ * @param dataDir - Directory the entity's JSONL file lives in
+ * @param typeName - Entity name
+ * @returns The (fake) temp file path
+ */
+function tmpPathFor(dataDir: string, typeName: string): string {
+  return `${dataDir}/.${typeName}.jsonl.tmp`;
+}
+
+/**
+ * All rows appended to a table's temp file across every page, in order.
+ * @param dataDir - Directory the entity's JSONL file lives in
+ * @param typeName - Entity name
+ * @returns The rows passed to every `appendSeedDataRows` call for that table
+ */
+function appendedRowsFor(dataDir: string, typeName: string): unknown[] {
+  const tmpPath = tmpPathFor(dataDir, typeName);
+  return jsonl.appendSeedDataRows.mock.calls
+    .filter(([path]) => path === tmpPath)
+    .flatMap(([, rows]) => rows as unknown[]);
+}
 
 const logger = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -93,6 +120,9 @@ beforeEach(() => {
   });
   sdk.executeScript.mockImplementation(dumpRows({ Order: [], User: [] }));
   jsonl.existingSeedDataFiles.mockReturnValue([]);
+  jsonl.beginSeedDataWrite.mockImplementation((dataDir: string, typeName: string) =>
+    tmpPathFor(dataDir, typeName),
+  );
 });
 
 afterEach(() => {
@@ -122,13 +152,14 @@ describe("seedDumpCommand", () => {
 
     await runDump([]);
 
-    expect(jsonl.writeSeedData.mock.calls.map(([, table]) => table)).toEqual(["User", "Order"]);
-    expect(jsonl.writeSeedData).toHaveBeenCalledWith("/seed/data", "User", [
-      { id: "u1", name: "Ada" },
+    expect(jsonl.commitSeedDataWrite.mock.calls.map(([, table]) => table)).toEqual([
+      "User",
+      "Order",
     ]);
+    expect(appendedRowsFor("/seed/data", "User")).toEqual([{ id: "u1", name: "Ada" }]);
   });
 
-  test("drops platform-assigned fields and empty values from dumped rows", async () => {
+  test("drops platform-assigned fields but keeps explicit nulls in dumped rows", async () => {
     sdk.executeScript.mockImplementation(
       dumpRows({
         Order: [{ id: "o1", note: null, orderNumber: 7, user: "u1" }],
@@ -138,9 +169,10 @@ describe("seedDumpCommand", () => {
 
     await runDump([]);
 
-    expect(jsonl.writeSeedData).toHaveBeenCalledWith("/seed/data", "Order", [
-      { id: "o1", user: "u1" },
-    ]);
+    // `orderNumber` is a serial field (dropped); `note: null` is an explicit
+    // value and must survive so `apply` writes NULL rather than letting a
+    // column default or `hooks.create` fill it in.
+    expect(appendedRowsFor("/seed/data", "Order")).toEqual([{ id: "o1", note: null, user: "u1" }]);
   });
 
   test("pages through a table until it is exhausted", async () => {
@@ -158,17 +190,26 @@ describe("seedDumpCommand", () => {
     );
     const userPages = dumpArgs.filter((dumpArg) => dumpArg.table === "User");
     expect(userPages.map((dumpArg) => dumpArg.after)).toEqual([null, "u2"]);
-    expect(jsonl.writeSeedData).toHaveBeenCalledWith("/seed/data", "User", [
+    // Streamed in two pages rather than one call with every row.
+    const tmpPath = tmpPathFor("/seed/data", "User");
+    expect(jsonl.appendSeedDataRows).toHaveBeenNthCalledWith(1, tmpPath, [
       { id: "u1" },
       { id: "u2" },
-      { id: "u3" },
     ]);
+    expect(jsonl.appendSeedDataRows).toHaveBeenNthCalledWith(2, tmpPath, [{ id: "u3" }]);
+    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledWith("/seed/data", "User", tmpPath);
   });
 
   test("writes to --out instead of the seed data directory", async () => {
     await runDump(["--out", "/tmp/snapshot", "User"]);
 
-    expect(jsonl.writeSeedData).toHaveBeenCalledWith("/tmp/snapshot", "User", []);
+    expect(jsonl.beginSeedDataWrite).toHaveBeenCalledWith("/tmp/snapshot", "User");
+    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledWith(
+      "/tmp/snapshot",
+      "User",
+      tmpPathFor("/tmp/snapshot", "User"),
+    );
+    expect(appendedRowsFor("/tmp/snapshot", "User")).toEqual([]);
   });
 
   test("refuses to overwrite existing files without --force", async () => {
@@ -177,7 +218,7 @@ describe("seedDumpCommand", () => {
     const result = await runDumpCommand(["--machine-user", "manager"]);
 
     expect(result.exitCode).toBe(1);
-    expect(jsonl.writeSeedData).not.toHaveBeenCalled();
+    expect(jsonl.beginSeedDataWrite).not.toHaveBeenCalled();
     expect(sdk.show).not.toHaveBeenCalled();
     expect(sdk.executeScript).not.toHaveBeenCalled();
   });
@@ -187,7 +228,12 @@ describe("seedDumpCommand", () => {
 
     await runDump(["--force", "User"]);
 
-    expect(jsonl.writeSeedData).toHaveBeenCalledWith("/seed/data", "User", []);
+    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledWith(
+      "/seed/data",
+      "User",
+      tmpPathFor("/seed/data", "User"),
+    );
+    expect(appendedRowsFor("/seed/data", "User")).toEqual([]);
   });
 
   test("rejects dumping the IdP user before touching the config", async () => {
@@ -195,7 +241,7 @@ describe("seedDumpCommand", () => {
 
     expect(result.exitCode).toBe(1);
     expect(sdk.loadSeedContext).not.toHaveBeenCalled();
-    expect(jsonl.writeSeedData).not.toHaveBeenCalled();
+    expect(jsonl.beginSeedDataWrite).not.toHaveBeenCalled();
   });
 
   test("fails when a machine user is configured nowhere", async () => {
@@ -203,7 +249,7 @@ describe("seedDumpCommand", () => {
 
     expect(result.exitCode).toBe(1);
     expect(sdk.show).not.toHaveBeenCalled();
-    expect(jsonl.writeSeedData).not.toHaveBeenCalled();
+    expect(jsonl.beginSeedDataWrite).not.toHaveBeenCalled();
   });
 
   test("succeeds without remote operations when the project has no tables", async () => {
@@ -248,7 +294,9 @@ describe("seedDumpCommand", () => {
     const result = await runDumpCommand(["--machine-user", "manager", "User"]);
 
     expect(result.exitCode).toBe(1);
-    expect(jsonl.writeSeedData).not.toHaveBeenCalled();
+    expect(jsonl.commitSeedDataWrite).not.toHaveBeenCalled();
+    // The temp file opened for the attempt is cleaned up rather than left behind.
+    expect(jsonl.discardSeedDataWrite).toHaveBeenCalledWith(tmpPathFor("/seed/data", "User"));
   });
 
   test("warns which tables were written before a mid-run failure", async () => {
@@ -274,12 +322,16 @@ describe("seedDumpCommand", () => {
 
     expect(result.exitCode).toBe(1);
     // Only the table written before the failure (User, dumped before Order in
-    // dependency order) is written; the failing table and anything after it
-    // are not.
-    expect(jsonl.writeSeedData).toHaveBeenCalledTimes(1);
-    expect(jsonl.writeSeedData).toHaveBeenCalledWith("/seed/data", "User", [
-      { id: "u1", name: "Ada" },
-    ]);
+    // dependency order) is committed; the failing table's temp file is
+    // discarded, so /seed/data/Order.jsonl is never touched by this run.
+    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledTimes(1);
+    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledWith(
+      "/seed/data",
+      "User",
+      tmpPathFor("/seed/data", "User"),
+    );
+    expect(appendedRowsFor("/seed/data", "User")).toEqual([{ id: "u1", name: "Ada" }]);
+    expect(jsonl.discardSeedDataWrite).toHaveBeenCalledWith(tmpPathFor("/seed/data", "Order"));
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining("Dump failed after writing 1 table(s) to /seed/data: User."),
       { mode: "plain" },

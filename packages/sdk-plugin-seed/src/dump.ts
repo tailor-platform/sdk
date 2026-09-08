@@ -16,7 +16,13 @@ import * as path from "pathe";
 import { z } from "zod";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
-import { existingSeedDataFiles, writeSeedData } from "./jsonl";
+import {
+  appendSeedDataRows,
+  beginSeedDataWrite,
+  commitSeedDataWrite,
+  discardSeedDataWrite,
+  existingSeedDataFiles,
+} from "./jsonl";
 import { topologicalSort } from "./topo-sort";
 import type { OperatorClient, SeedData } from "@tailor-platform/sdk/cli";
 
@@ -48,8 +54,10 @@ interface DumpPage {
 }
 
 /**
- * Drop the fields a seed row must not carry and the nulls that stand for "no
- * value", so a dumped row reads back the way a hand-written one does.
+ * Drop the fields a seed row must not carry, so a dumped row reads back the
+ * way a hand-written one does. An explicit `null` is kept: `apply`'s insert
+ * sets the column to NULL for a key present with a `null` value, but leaves
+ * it to a column default or `hooks.create` when the key is absent entirely.
  * @param row - Row as the table returned it
  * @param omitFields - Fields the platform assigns rather than the seed row
  * @returns The row reduced to the fields seed data carries
@@ -57,7 +65,7 @@ interface DumpPage {
 function toSeedRow(row: Record<string, unknown>, omitFields: string[]): SeedData[string][number] {
   const seedRow: Record<string, unknown> = {};
   for (const [field, value] of Object.entries(row)) {
-    if (omitFields.includes(field) || value === null || value === undefined) continue;
+    if (omitFields.includes(field) || value === undefined) continue;
     seedRow[field] = value;
   }
   return seedRow as SeedData[string][number];
@@ -96,19 +104,26 @@ async function dumpPage(params: DumpTableParams, after: string | null): Promise<
 
 /**
  * Read every row of one table, paging by id until the table is exhausted.
+ * Each page is handed to `onRows` as soon as it arrives instead of being
+ * held in memory for the whole table, so memory use stays bounded by the
+ * page size rather than the table's row count.
  * @param params - Execution context, script, and the table to read
- * @returns The table's rows in seed row form
+ * @param onRows - Called with each page's rows, in seed row form
+ * @returns The number of rows read
  */
-async function dumpTable(params: DumpTableParams): Promise<SeedData[string]> {
-  const rows: SeedData[string] = [];
+async function dumpTable(
+  params: DumpTableParams,
+  onRows: (rows: SeedData[string]) => void,
+): Promise<number> {
   let cursor: string | null = null;
+  let count = 0;
 
   for (let page = 0; page < MAX_PAGES_PER_TABLE; page++) {
     const result: DumpPage = await dumpPage(params, cursor);
-    for (const row of result.rows) {
-      rows.push(toSeedRow(row, params.omitFields));
-    }
-    if (result.cursor === null) return rows;
+    const rows = result.rows.map((row) => toSeedRow(row, params.omitFields));
+    if (rows.length > 0) onRows(rows);
+    count += rows.length;
+    if (result.cursor === null) return count;
     cursor = result.cursor;
   }
 
@@ -124,8 +139,10 @@ export const seedDumpCommand = defineAppCommand({
   notes:
     "The output is the same format `tailor seed apply` reads, so a dump taken before a change is " +
     "what restores the tables after it: `tailor seed apply --truncate` puts the dumped rows back. " +
-    "Fields the platform assigns rather than the row — `serial` fields — are left out, as are " +
-    "fields with no value, so the result reads back the way hand-written seed data does. " +
+    "Fields the platform assigns rather than the row — `serial` fields — are left out, unless " +
+    "another table's relation is keyed to that field: it is kept then, so the relation still " +
+    "resolves instead of breaking once `apply --truncate` assigns the field a fresh value. " +
+    "Explicit nulls are kept as-is, so the result reads back the way hand-written seed data does. " +
     "IdP `_User` records are never dumped: their credentials do not survive the round trip. " +
     "Rows are paged by id, which is a UUID rather than a monotonic value, so a row written to " +
     "a table while it is being dumped can be missed; pause writes to the app (or dump from a " +
@@ -266,17 +283,29 @@ export const seedDumpCommand = defineAppCommand({
         const bundled = await bundleSeedDumpScript(namespace, path.dirname(context.config.path));
 
         for (const table of entry.tables) {
-          const rows = await dumpTable({
-            execution,
-            scriptCode: bundled.bundledCode,
-            namespace,
-            table,
-            pageSize: args["page-size"],
-            omitFields: entry.config.omitFields?.[table] ?? [],
-          });
-          writeSeedData(dataDir, table, rows);
-          dumped[table] = rows.length;
-          logger.log(styles.success(`    ✓ ${table}: ${String(rows.length)} rows`));
+          const tmpPath = beginSeedDataWrite(dataDir, table);
+          let rowCount: number;
+          try {
+            rowCount = await dumpTable(
+              {
+                execution,
+                scriptCode: bundled.bundledCode,
+                namespace,
+                table,
+                pageSize: args["page-size"],
+                omitFields: entry.config.omitFields?.[table] ?? [],
+              },
+              (rows) => {
+                appendSeedDataRows(tmpPath, rows);
+              },
+            );
+          } catch (error) {
+            discardSeedDataWrite(tmpPath);
+            throw error;
+          }
+          commitSeedDataWrite(dataDir, table, tmpPath);
+          dumped[table] = rowCount;
+          logger.log(styles.success(`    ✓ ${table}: ${String(rowCount)} rows`));
         }
       }
     } catch (error) {

@@ -63,7 +63,7 @@ tailor seed apply --truncate --yes
 
 Naming tables limits the dump to them, and `--namespace` limits it to one namespace, so a table you are about to change can be captured and put back on its own rather than resetting the whole app.
 
-Fields the platform assigns rather than the seed row — `serial` fields — are left out, as are fields the row has no value for, so a dumped line reads back the way a hand-written one does and `tailor seed validate` accepts it. Rows are read a page at a time, ordered by id; `--page-size` changes how many come back per request.
+Fields the platform assigns rather than the seed row — `serial` fields — are left out, unless another table's relation is keyed to that field, in which case it is kept so the relation still resolves after `apply --truncate` gives the row a fresh value. Explicit nulls are kept as-is, so a dumped line reads back the way a hand-written one does and `tailor seed validate` accepts it. Rows are read a page at a time, ordered by id, and written to disk as each page arrives rather than held in memory for the whole table; `--page-size` changes how many come back per request.
 
 Without `--out`, the files land in the seed data directory under the seedPlugin `distPath`, on top of the data that is already there — so a file that already exists is only overwritten with `--force`:
 
