@@ -714,16 +714,21 @@ function targetDepth(raw: string): number {
   return (raw.split(":")[0] ?? "").split(".").length - 1;
 }
 
+/** Location of a member inside a nested field. */
+interface NestedMemberLocation {
+  tableName: string;
+  /** Top-level nested field containing the member. */
+  fieldName: string;
+  /** Member path relative to the top-level field. */
+  path: readonly string[];
+}
+
 /**
  * Dotted key of a member inside a nested field, e.g. `User.address.zip`.
- * @param {{ tableName: string; fieldName: string; path: readonly string[] }} member - Member location
+ * @param {NestedMemberLocation} member - Member location
  * @returns {string} Dotted key
  */
-function nestedMemberKey(member: {
-  tableName: string;
-  fieldName: string;
-  path: readonly string[];
-}): string {
+function nestedMemberKey(member: NestedMemberLocation): string {
   return `${member.tableName}.${member.fieldName}.${member.path.join(".")}`;
 }
 
