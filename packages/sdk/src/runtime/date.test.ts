@@ -164,6 +164,13 @@ describe("Date representation", () => {
     );
   });
 
+  test("truncates long strings in the type mismatch message", () => {
+    const longString = "a".repeat(200);
+    expect(() => serializeDateFields(t.date({ as: "date" }), longString)).toThrow(
+      `Expected a Date instance at the top-level value, but received a string ("${"a".repeat(100)}...")`,
+    );
+  });
+
   test("keeps resolver body types and parsed metadata aligned", () => {
     const resolver = createResolver({
       name: "dateExample",

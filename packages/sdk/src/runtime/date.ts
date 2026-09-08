@@ -36,15 +36,27 @@ function describePathTarget(path: string): string {
   return path || "the top-level value";
 }
 
+const MAX_DESCRIBED_VALUE_LENGTH = 100;
+const MAX_DESCRIBED_ARRAY_SAMPLE = 100;
+
+function truncateForDescription(text: string): string {
+  return text.length > MAX_DESCRIBED_VALUE_LENGTH
+    ? `${text.slice(0, MAX_DESCRIBED_VALUE_LENGTH)}...`
+    : text;
+}
+
 function describeReceivedValue(value: unknown): string {
   if (Array.isArray(value)) {
-    const elementTypes = [...new Set(value.map((item) => typeof item))];
+    const sample = value.slice(0, MAX_DESCRIBED_ARRAY_SAMPLE);
+    const elementTypes = [...new Set(sample.map((item) => typeof item))];
     return elementTypes.length > 0 ? `an array of ${elementTypes.join("/")}` : "an empty array";
   }
+  if (typeof value === "string")
+    return `a string (${JSON.stringify(truncateForDescription(value))})`;
   const type = typeof value;
   if (type === "object") return "an object";
   if (type === "function") return "a function";
-  return type === "string" ? `a string (${JSON.stringify(value)})` : `a ${type} (${String(value)})`;
+  return `a ${type} (${truncateForDescription(String(value))})`;
 }
 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
