@@ -171,6 +171,16 @@ describe("Date representation", () => {
     );
   });
 
+  test("describes holes in a sparse array as undefined instead of an empty type list", () => {
+    const sparse: unknown[] = Array.from({ length: 3 });
+    sparse[0] = 1;
+    sparse[2] = 3;
+    delete sparse[1];
+    expect(() => serializeDateFields(t.date({ as: "date" }), sparse)).toThrow(
+      "Expected a Date instance at the top-level value, but received an array of number/undefined",
+    );
+  });
+
   test("keeps resolver body types and parsed metadata aligned", () => {
     const resolver = createResolver({
       name: "dateExample",

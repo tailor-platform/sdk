@@ -48,7 +48,7 @@ function truncateForDescription(text: string): string {
 function describeReceivedValue(value: unknown): string {
   if (Array.isArray(value)) {
     const sample = value.slice(0, MAX_DESCRIBED_ARRAY_SAMPLE);
-    const elementTypes = [...new Set(sample.map((item) => typeof item))];
+    const elementTypes = [...new Set(Array.from(sample, (item) => typeof item))];
     return elementTypes.length > 0 ? `an array of ${elementTypes.join("/")}` : "an empty array";
   }
   if (typeof value === "string")
