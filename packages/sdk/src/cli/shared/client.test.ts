@@ -137,6 +137,24 @@ describe("createPooledStreamTransport", () => {
     expect(createAdditional).not.toHaveBeenCalled();
     expect(primary.stream).toHaveBeenCalledTimes(2);
   });
+
+  test("retries filling the pool after a failed attempt instead of failing permanently", async () => {
+    const primary = makeMockTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi
+      .fn<() => Promise<Transport>>()
+      .mockRejectedValueOnce(new Error("connect failed"))
+      .mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary, createAdditional, 2);
+
+    await expect(pooled.stream(...streamArgs)).rejects.toThrow("connect failed");
+    await pooled.stream(...streamArgs);
+    await pooled.stream(...streamArgs);
+
+    expect(createAdditional).toHaveBeenCalledTimes(2);
+    expect(primary.stream).toHaveBeenCalledTimes(1);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("initOperatorClient", () => {

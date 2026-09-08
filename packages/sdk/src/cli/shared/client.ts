@@ -195,13 +195,16 @@ export async function createTransport(
  * scheduling: streams sharing a connection can finish 12x+ apart in
  * wall-clock time even though aggregate throughput is unchanged. Spreading
  * streams across independent connections sidesteps that rather than fixing
- * it; see the PR description for the measurement.
+ * it; see this change's changeset entry for the measurement.
  *
  * `poolSize` is passed the same apply-concurrency budget that already bounds
  * how many streaming uploads run at once (see `applyFunctionRegistry`), so
  * the pool never grows past the number of connections that could actually
- * see concurrent use, and no upload ever shares a connection with another
- * once the pool is full.
+ * see concurrent use. Assignment is plain round-robin by call order, not by
+ * which transport is currently idle, so two uploads can still land on the
+ * same connection if completion order differs from call order — but with
+ * the pool sized to match peak concurrency, that greatly reduces contention
+ * rather than leaving every upload on one connection.
  * @internal
  * @param primary - Transport used for unary calls and the first stream slot
  * @param createAdditional - Creates one more transport for the pool
@@ -223,7 +226,10 @@ export function createPooledStreamTransport(
       while (transports.length < poolSize) {
         transports.push(await createAdditional());
       }
-    })();
+    })().catch((error: unknown) => {
+      filling = undefined;
+      throw error;
+    });
     await filling;
   }
 
