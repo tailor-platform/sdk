@@ -188,12 +188,15 @@ export async function createTransport(
  * uploads) are spread round-robin across a pool of connections, built lazily
  * on first streaming call. Unary calls always use `primary`, unaffected.
  *
- * A single HTTP/2 connection has one connection-level flow-control window,
- * fixed by Node's http2 implementation and not enlargeable from the client
- * for outbound data. Concurrent upload streams multiplexed on one connection
- * divide that window between them; spreading them across independent
- * connections gives each its own window instead, which measurement shows
- * scales both aggregate and per-upload throughput ~linearly with pool size.
+ * Since Node 22.23.0/24.2.0 (nghttp2 dropped its legacy priority-tree
+ * scheduler for RFC 9218, whose default urgency/incremental values make
+ * serial-by-stream-ID processing the spec-recommended behavior), Node's
+ * http2 client has no way for a caller to opt a stream into incremental
+ * scheduling: streams sharing a connection can finish 12x+ apart in
+ * wall-clock time even though aggregate throughput is unchanged. Spreading
+ * streams across independent connections sidesteps that rather than fixing
+ * it; see the PR description for the measurement and what it does and
+ * doesn't confirm.
  * @internal
  * @param primary - Transport used for unary calls and the first stream slot
  * @param createAdditional - Creates one more transport for the pool

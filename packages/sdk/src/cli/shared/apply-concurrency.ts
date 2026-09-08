@@ -44,12 +44,14 @@ export function createApplyLimiter(): <R>(task: () => Promise<R>) => Promise<R> 
  * website uploads) are spread across when `TAILOR_UPLOAD_CONNECTIONS` is
  * unset.
  *
- * A single HTTP/2 connection has one connection-level flow-control window
- * (65,535 bytes, fixed by Node's http2 implementation and not enlargeable
- * from the client for outbound data). Concurrent upload streams multiplexed
- * on one connection divide that window between them, so aggregate and
- * per-upload throughput both scale ~linearly with the number of connections
- * they are spread across, independent of round-trip latency.
+ * Since Node 22.23.0/24.2.0 (nghttp2 dropped its legacy priority-tree
+ * scheduler for RFC 9218's own default of serial-by-stream-ID processing),
+ * Node's http2 client has no way for a caller to opt a stream into
+ * incremental scheduling: streams sharing a connection can finish far apart
+ * in wall-clock time even though aggregate throughput is unchanged.
+ * Spreading streams across connections sidesteps that; 4 follows the same
+ * small-pool pattern as `@aws-sdk/lib-storage`'s S3 multipart `queueSize`
+ * default. See the PR description for the measurement and its limits.
  */
 const DEFAULT_UPLOAD_TRANSPORT_POOL_SIZE = 4;
 
