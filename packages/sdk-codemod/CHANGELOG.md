@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.9
+
+### Patch Changes
+
+- [#2274](https://github.com/tailor-platform/sdk/pull/2274) [`5168d35`](https://github.com/tailor-platform/sdk/commit/5168d35b49e9e3d691c0f2f79041b333f327ce43) Thanks [@toiroakr](https://github.com/toiroakr)! - Add explicit `utf8` and `base64` encoding options to `file.upload` and generated `uploadFile` helpers. String uploads without encoding retain their existing text behavior but are deprecated ahead of v3; byte uploads remain unchanged and are not deprecated. Include migration guidance for existing string uploads.
+
+- [#2295](https://github.com/tailor-platform/sdk/pull/2295) [`e9ca76d`](https://github.com/tailor-platform/sdk/commit/e9ca76d8e18670ae71d1203cb930cf14f8c6e816) Thanks [@renovate](https://github.com/apps/renovate)! - Depend on `@politty/zod` directly instead of the `politty` wrapper package. `politty` re-exported everything from `@politty/zod` unchanged, so this is an internal dependency swap with no effect on CLI behavior.
+
 ## 0.8.8
 
 ### Patch Changes
