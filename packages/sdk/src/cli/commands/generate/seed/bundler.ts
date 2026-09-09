@@ -74,6 +74,12 @@ function generateSeedScriptContent(namespace: string): string {
      * resolve. Rows that form a cycle (which a real hierarchy should never
      * produce) are appended in their original order rather than dropped, so
      * a run never silently loses data.
+     *
+     * \`record.id\` is used as the map key to resolve edges, so it must be
+     * present and unique across the batch. If any id is missing (allowed
+     * when not using \`--upsert\`) or duplicated, the map would collapse
+     * distinct rows onto the same key and silently drop them from the
+     * result; fall back to the original file order instead.
      */
     function sortBySelfReference(
       records: Record<string, unknown>[],
@@ -83,6 +89,7 @@ function generateSeedScriptContent(namespace: string): string {
 
       const byId = new Map<unknown, Record<string, unknown>>();
       for (const record of records) byId.set(record.id, record);
+      if (byId.size !== records.length) return records;
 
       const inDegree = new Map<unknown, number>();
       const dependents = new Map<unknown, unknown[]>();

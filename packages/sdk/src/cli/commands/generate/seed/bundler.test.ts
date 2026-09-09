@@ -343,6 +343,31 @@ describe("seed script upsert behavior", () => {
     expect(insertQueries[0]?.parameters).toContain("c1");
     expect(insertQueries[1]?.parameters).toContain("c2");
   });
+
+  test("falls back to file order when self-referencing rows have missing or duplicate ids", async () => {
+    // Without a stable, unique id per row the topological sort can't tell
+    // rows apart, so it must not silently collapse/drop any of them.
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c1", parentId: null },
+          { id: "c1", parentId: "c1" },
+          { id: "c1", parentId: null },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 3, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries).toHaveLength(3);
+  });
 });
 
 type DumpInput = { table: string; limit: number; after?: string | null };
