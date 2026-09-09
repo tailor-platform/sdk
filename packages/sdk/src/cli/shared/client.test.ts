@@ -343,6 +343,146 @@ describe("createPooledStreamTransport", () => {
     expect(primary.stream).toHaveBeenCalledTimes(2);
   });
 
+  test("expires a queued upload without dispatching it or blocking the next upload", async () => {
+    vi.useFakeTimers();
+    try {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+      const timedArgs = [...streamArgs] as Parameters<Transport["stream"]>;
+      timedArgs[2] = 50;
+      let timedError: unknown;
+      const timed = pooled.stream(...timedArgs).catch((error: unknown) => {
+        timedError = error;
+      });
+      const next = pooled.stream(...streamArgs);
+
+      await vi.advanceTimersByTimeAsync(50);
+      expect(timedError).toMatchObject({ code: Code.DeadlineExceeded });
+      expect(primary.stream).toHaveBeenCalledTimes(1);
+
+      await drain(first);
+      await drain((await next) as unknown as MockStreamResponse);
+      await timed;
+      expect(primary.stream).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("deducts queueing time from the timeout passed to the transport", async () => {
+    vi.useFakeTimers();
+    try {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+      const args = [...streamArgs] as Parameters<Transport["stream"]>;
+      args[2] = 50;
+      const queued = pooled.stream(...args);
+
+      await vi.advanceTimersByTimeAsync(20);
+      await drain(first);
+      await drain((await queued) as unknown as MockStreamResponse);
+
+      expect(primary.stream).toHaveBeenLastCalledWith(args[0], args[1], 30, ...args.slice(3));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test.each([undefined, 0, -1])(
+    "preserves a disabled timeout (%s) while queued",
+    async (timeoutMs) => {
+      vi.useFakeTimers();
+      try {
+        const primary = makeMockTransport();
+        const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+        const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+        const args = [...streamArgs] as Parameters<Transport["stream"]>;
+        args[2] = timeoutMs;
+        const queued = pooled.stream(...args);
+
+        await vi.advanceTimersByTimeAsync(100);
+        await drain(first);
+        await drain((await queued) as unknown as MockStreamResponse);
+
+        expect(primary.stream).toHaveBeenLastCalledWith(...args);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  test.each(["before acquisition", "after acquisition"])(
+    "rejects an upload canceled %s without consuming a pool slot",
+    async (when) => {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const controller = new AbortController();
+      const args = [...streamArgs] as Parameters<Transport["stream"]>;
+      args[1] = controller.signal;
+      if (when === "before acquisition") controller.abort();
+      const canceled = pooled.stream(...args);
+      if (when === "after acquisition") controller.abort();
+
+      await expect(canceled).rejects.toMatchObject({ code: Code.Canceled });
+      expect(primary.stream).not.toHaveBeenCalled();
+      await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+      expect(primary.stream).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("reuses a connection created after its waiting upload was canceled", async () => {
+    const primary = makeMockTransport();
+    const second = makeMockTransport();
+    let finishCreate!: (transport: Transport) => void;
+    const createAdditional = vi.fn(
+      () =>
+        new Promise<Transport>((resolve) => {
+          finishCreate = resolve;
+        }),
+    );
+    const pooled = createPooledStreamTransport(primary, createAdditional, 2);
+    const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+    const controller = new AbortController();
+    const args = [...streamArgs] as Parameters<Transport["stream"]>;
+    args[1] = controller.signal;
+    const canceled = pooled.stream(...args);
+    const next = pooled.stream(...streamArgs);
+
+    controller.abort();
+    await expect(canceled).rejects.toMatchObject({ code: Code.Canceled });
+    finishCreate(second);
+    await drain((await next) as unknown as MockStreamResponse);
+
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+    await drain(first);
+  });
+
+  test("rejects a deadline reached after acquisition before dispatching the upload", async () => {
+    vi.useFakeTimers();
+    try {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const args = [...streamArgs] as Parameters<Transport["stream"]>;
+      args[2] = 50;
+      const expired = pooled.stream(...args);
+      vi.advanceTimersByTime(50);
+
+      await expect(expired).rejects.toMatchObject({ code: Code.DeadlineExceeded });
+      expect(primary.stream).not.toHaveBeenCalled();
+      await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+      expect(primary.stream).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Drift guard: every client_streaming OperatorService method must be a
   // conscious decision — pooled (in POOLED_UPLOAD_METHODS) or explicitly
   // exempt below — so a newly added client-streaming RPC can't silently

@@ -267,12 +267,45 @@ export function createPooledStreamTransport(
   // transport before either marks it busy. Growth and waiting are the only
   // async steps; every other transition (finding an idle slot, deciding to
   // grow, waking a waiter) happens synchronously within one of these steps.
-  function acquireTransportIndex(): Promise<number> {
+  function acquireTransportIndex(
+    signal: AbortSignal | undefined,
+    deadline: number | undefined,
+  ): Promise<number> {
     return new Promise<number>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      function cleanup(): void {
+        settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        const waiterIndex = waiters.indexOf(attempt);
+        if (waiterIndex !== -1) waiters.splice(waiterIndex, 1);
+      }
+
+      function onAbort(): void {
+        cleanup();
+        reject(ConnectError.from(signal?.reason, Code.Canceled));
+      }
+
+      function onTimeout(): void {
+        cleanup();
+        reject(new ConnectError("the operation timed out", Code.DeadlineExceeded));
+      }
+
+      function claim(index: number): void {
+        if (settled) {
+          release(index);
+          return;
+        }
+        cleanup();
+        resolve(index);
+      }
+
       function attempt(): void {
         const idleIndex = idle.pop();
         if (idleIndex !== undefined) {
-          resolve(idleIndex);
+          claim(idleIndex);
           return;
         }
         if (transports.length + pendingCreates < maxConnections) {
@@ -282,10 +315,11 @@ export function createPooledStreamTransport(
               pendingCreates--;
               const index = transports.length;
               transports.push(transport);
-              resolve(index);
+              claim(index);
             },
             (error: unknown) => {
               pendingCreates--;
+              cleanup();
               reject(error instanceof Error ? error : new Error(String(error)));
               // The failed connection never joins the pool, so a waiter
               // stuck behind "pool full" would wait forever unless woken to
@@ -296,6 +330,19 @@ export function createPooledStreamTransport(
           return;
         }
         waiters.push(attempt);
+      }
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (deadline !== undefined) {
+        const remainingMs = deadline - performance.now();
+        if (remainingMs <= 0) {
+          onTimeout();
+          return;
+        }
+        timer = setTimeout(onTimeout, remainingMs);
       }
       attempt();
     });
@@ -318,11 +365,26 @@ export function createPooledStreamTransport(
       if (!POOLED_UPLOAD_METHODS.has(method.name)) {
         return primary.stream(method, signal, timeoutMs, header, input, contextValues);
       }
-      const index = await acquireTransportIndex();
+      const deadline =
+        timeoutMs !== undefined && timeoutMs > 0 ? performance.now() + timeoutMs : undefined;
+      const index = await acquireTransportIndex(signal, deadline);
       const transport = transports[index] as Transport;
       let response: StreamResponse<typeof method.input, typeof method.output>;
       try {
-        response = await transport.stream(method, signal, timeoutMs, header, input, contextValues);
+        if (signal?.aborted) throw ConnectError.from(signal.reason, Code.Canceled);
+        const remainingMs =
+          deadline === undefined ? timeoutMs : Math.ceil(deadline - performance.now());
+        if (deadline !== undefined && remainingMs !== undefined && remainingMs <= 0) {
+          throw new ConnectError("the operation timed out", Code.DeadlineExceeded);
+        }
+        response = await transport.stream(
+          method,
+          signal,
+          remainingMs,
+          header,
+          input,
+          contextValues,
+        );
       } catch (error) {
         release(index);
         throw error;
