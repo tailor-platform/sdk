@@ -1,6 +1,6 @@
 import * as http2 from "node:http2";
 import { create } from "@bufbuild/protobuf";
-import { createClient } from "@connectrpc/connect";
+import { Code, createClient } from "@connectrpc/connect";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import {
@@ -146,6 +146,40 @@ describe("createPooledStreamTransport against a real HTTP/2 server", () => {
     }
     return requests();
   }
+
+  test("cancels a queued upload before a connection is available and lets the next upload proceed", async () => {
+    const server = await startServer();
+    const primary = await createTransport(server.baseUrl, []);
+    const client = createClient(
+      OperatorService,
+      createPooledStreamTransport(primary, () => createTransport(server.baseUrl, []), 1),
+    );
+    const controller = new AbortController();
+    const first = client.uploadFile(makeUpload("first.txt"));
+    let canceledError: unknown;
+    const canceled = client
+      .uploadFile(makeUpload("canceled.txt"), { signal: controller.signal })
+      .catch((error: unknown) => {
+        canceledError = error;
+      });
+    const next = client.uploadFile(makeUpload("next.txt"));
+    try {
+      await vi.waitFor(() => expect(server.totalActive()).toBe(1));
+      controller.abort();
+      await vi.waitFor(() => expect(canceledError).toMatchObject({ code: Code.Canceled }));
+      expect(server.sessionCount()).toBe(1);
+      server.release("first.txt");
+      server.release("next.txt");
+      await Promise.all([first, canceled, next]);
+      expect(server.maxActivePerSession()).toBe(1);
+    } finally {
+      server.release("first.txt");
+      server.release("canceled.txt");
+      server.release("next.txt");
+      await Promise.allSettled([first, canceled, next]);
+      await server.close();
+    }
+  });
 
   test("caps sessions at maxConnections, never runs 2 uploads concurrently on one session, and reuses a freed session instead of opening a new one", async () => {
     const server = await startServer();
