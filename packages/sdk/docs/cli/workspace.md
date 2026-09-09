@@ -185,8 +185,7 @@ tailor workspace prune [options]
 
 | Option                                | Alias | Description                                                                                                                  | Required | Default | Env                               |
 | ------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------- |
-| `--name-prefix <NAME_PREFIX>`         | -     | Select workspaces whose name starts with this prefix (repeatable)                                                            | No       | -       | -                                 |
-| `--name-regex <NAME_REGEX>`           | -     | Select workspaces whose whole name matches this regular expression                                                           | No       | -       | -                                 |
+| `--name <NAME>`                       | -     | Select workspaces whose whole name matches this regular expression (repeatable)                                              | No       | -       | -                                 |
 | `--older-than <OLDER_THAN>`           | -     | Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id | Yes      | -       | -                                 |
 | `--organization-id <ORGANIZATION_ID>` | `-o`  | Only consider workspaces in this organization                                                                                | No       | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
 | `--folder-id <FOLDER_ID>`             | -     | Only consider workspaces in this folder                                                                                      | No       | -       | `TAILOR_PLATFORM_FOLDER_ID`       |
@@ -200,9 +199,9 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
 
-Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike `workspace delete`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with `workspace restore` for a limited time.
+Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Unlike `workspace delete`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with `workspace restore` for a limited time.
 
 Only workspaces visible to the current login (or the machine user in CI) are considered.
 
