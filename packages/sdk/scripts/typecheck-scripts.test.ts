@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -9,8 +9,9 @@ type Scripts = Record<string, string>;
 const packageJson = JSON.parse(
   readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
 ) as { packageManager: string; scripts: Scripts };
+const coordinatorScript = new URL("../../../scripts/run-parallel-checks.mjs", import.meta.url);
 
-const expectedCoordinator = 'pnpm run --no-bail "/^check-type:/"';
+const expectedCoordinator = "node scripts/run-parallel-checks.mjs check-type:";
 const expectedChecks = {
   "check-type:example": "pnpm --filter example run typecheck:generated",
   "check-type:native-preview": "pnpm --no-bail -r run typecheck:go",
@@ -120,6 +121,8 @@ describe("workspace typecheck scripts", () => {
           join(fixture, "package.json"),
           JSON.stringify({ packageManager: packageJson.packageManager, private: true, scripts }),
         );
+        mkdirSync(join(fixture, "scripts"));
+        cpSync(coordinatorScript, join(fixture, "scripts", "run-parallel-checks.mjs"));
         const result = await runCheckTypecheck(fixture);
 
         expect(result.status).not.toBe(0);

@@ -23,7 +23,7 @@
     "check:codemod-docs": "pnpm run codemod:docs:check",
     "check:deprecations": "tsx packages/sdk-codemod/scripts/check-deprecations.ts",
     "check:lint": "pnpm -r run lint:fix && pnpm run lint:tooling:fix && pnpm run lint:vitest",
-    "check:typecheck": "pnpm run --no-bail \"/^check-type:/\"",
+    "check:typecheck": "node scripts/run-parallel-checks.mjs check-type:",
     "check-type:root": "pnpm run typecheck:root",
     "check-type:native-preview": "pnpm --no-bail -r run typecheck:go",
     "check-type:stable": "pnpm --filter=!example --no-bail -r run typecheck",
