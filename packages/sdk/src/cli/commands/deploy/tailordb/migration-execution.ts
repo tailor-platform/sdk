@@ -71,7 +71,8 @@ export async function captureMigrationRestrictionState(
         publishRecordEvents: settings?.publishRecordEvents ?? false,
         // Defensive: the generated client always populates these bools, so the
         // fallbacks only guard a hand-built client and keep the shape identical
-        // to resolveMigrationSnapshotSettings, whose input type is optional.
+        // to resolveMigrationSnapshotSettings, whose settings come from a
+        // MessageInitShape that declares the fields optional.
         // oxlint-disable typescript/no-unnecessary-condition
         ...(settings?.disableGqlOperations && {
           disableGqlOperations: {
