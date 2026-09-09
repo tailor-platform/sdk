@@ -1,5 +1,13 @@
 # @tailor-platform/create-sdk
 
+## 2.15.0
+
+### Patch Changes
+
+- [#2295](https://github.com/tailor-platform/sdk/pull/2295) [`e9ca76d`](https://github.com/tailor-platform/sdk/commit/e9ca76d8e18670ae71d1203cb930cf14f8c6e816) Thanks [@renovate](https://github.com/apps/renovate)! - Depend on `@politty/zod` directly instead of the `politty` wrapper package. `politty` re-exported everything from `@politty/zod` unchanged, so this is an internal dependency swap with no effect on CLI behavior.
+
+- [#2275](https://github.com/tailor-platform/sdk/pull/2275) [`c2c0d93`](https://github.com/tailor-platform/sdk/commit/c2c0d932d52759d9b7a3db3cfa3679b7ff44df80) Thanks [@dqn](https://github.com/dqn)! - Support Vitest 5 in `@tailor-platform/sdk/vitest` and scaffold new projects with Vitest 5. `tailorRuntime({ config })` now seeds each project's secrets from that project's own root, so a run combining projects with different roots no longer loads one project's config for all of them. Projects keep resolving the same environment they did on Vitest 4: a project that omits `extends` inherits the root `tailor-runtime` environment only on Vitest 5, where that is Vitest's own default. The `tailor-runtime` environment no longer removes the `performance` global during tests: Vitest 5's module loader reads it while resolving `import()` calls, and the deploy-time free-variable check already treats `performance` as a runtime global.
+
 ## 2.14.2
 
 No changes in this release.
