@@ -250,6 +250,11 @@ export function createPooledStreamTransport(
   createAdditional: () => Promise<Transport>,
   maxConnections: number,
 ): Transport {
+  if (!Number.isInteger(maxConnections) || maxConnections < 1) {
+    throw new Error(
+      `createPooledStreamTransport: maxConnections must be a positive integer, got ${maxConnections}`,
+    );
+  }
   const transports: Transport[] = [primary];
   const idle: number[] = [0];
   const waiters: Array<() => void> = [];

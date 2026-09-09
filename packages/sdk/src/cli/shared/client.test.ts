@@ -189,6 +189,20 @@ describe("createPooledStreamTransport", () => {
     await drain(response1);
   });
 
+  test.each([0, -1, 1.5, Number.NaN])(
+    "rejects a non-positive-integer maxConnections (%s) instead of deadlocking",
+    (maxConnections) => {
+      const primary = makeMockTransport();
+      expect(() =>
+        createPooledStreamTransport(
+          primary,
+          () => Promise.resolve(makeMockTransport()),
+          maxConnections,
+        ),
+      ).toThrow(/maxConnections must be a positive integer/);
+    },
+  );
+
   test("a pool size of 1 never creates additional connections", async () => {
     const primary = makeMockTransport();
     const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
