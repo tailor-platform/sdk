@@ -77,6 +77,8 @@ Two things the dump does not capture: the bytes behind stored file fields, and w
 
 **Paging is not safe against concurrent writes.** Each page is fetched with `id` as a keyset cursor, but TailorDB ids are UUIDs rather than a monotonic sequence, so a row inserted after paging starts can land before the cursor already handed out and never be seen. Dumping a table that a running app keeps writing to can therefore miss rows written during the dump; for a true point-in-time restore point, pause writes (or dump from a replica/snapshot) before running `tailor seed dump`.
 
+**The machine user needs unconditional read access.** TailorDB `read` permission conditions filter rows per record, so a machine user that can only see a subset of a table still gets a successful result back — just a smaller one — and the dump reports that subset as the complete table. Restoring from it with `apply --truncate` then permanently drops the rows the machine user could not see, with no error at any point. Grant the machine user used for `tailor seed dump` unconditional read access to every table you dump.
+
 ## Filling in create-time values
 
 A relation in seed data points at a field of the row it references — usually its id — so a row you want to reference needs an id written in the file. `tailor seed fill` writes the value a record would get on create into the rows that are missing it, `id` by default:

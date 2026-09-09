@@ -146,7 +146,12 @@ export const seedDumpCommand = defineAppCommand({
     "IdP `_User` records are never dumped: their credentials do not survive the round trip. " +
     "Rows are paged by id, which is a UUID rather than a monotonic value, so a row written to " +
     "a table while it is being dumped can be missed; pause writes to the app (or dump from a " +
-    "replica/snapshot) before relying on the result as a restore point.",
+    "replica/snapshot) before relying on the result as a restore point. " +
+    "TailorDB `read` permission conditions filter rows per record, so a machine user without " +
+    "unconditional read access on a table gets back a smaller result that still reports success; " +
+    "the dump then treats that subset as the whole table, and `apply --truncate` permanently " +
+    "drops the rows the machine user could not see. Give the machine user unconditional read " +
+    "access to every table being dumped.",
   args: z.strictObject({
     ...deploymentArgs,
     "machine-user": arg(z.string().optional(), {
