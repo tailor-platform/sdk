@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deploymentArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";

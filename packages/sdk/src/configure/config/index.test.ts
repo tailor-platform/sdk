@@ -11,6 +11,18 @@ describe("defineConfig", () => {
     });
   });
 
+  test("accepts metadata as a record of string labels", () => {
+    defineConfig({
+      name: "my-app",
+      metadata: { "erp-kit-version": "v1-2-3" },
+    });
+    defineConfig({
+      name: "my-app",
+      // @ts-expect-error - metadata values must be strings
+      metadata: { count: 1 },
+    });
+  });
+
   test("accepts logLevel from an environment variable fallback", () => {
     defineConfig({
       name: "my-app",

@@ -55,7 +55,7 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
     body: options.body ?? "{}",
   });
 
-  const data = await response.json();
+  const data: unknown = await response.json();
 
   if (!response.ok) {
     throw new Error(`API call failed (${response.status}): ${JSON.stringify(data)}`);

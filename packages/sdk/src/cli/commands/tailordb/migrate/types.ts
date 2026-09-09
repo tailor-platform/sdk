@@ -215,6 +215,16 @@ export interface MigrationCheckpointRepair {
 }
 
 /**
+ * Diagnostic detail for {@link RemoteSchemaVerificationResult.checkpointMissingLocal} when the
+ * cause is specifically an environment that fell behind before `migration rebaseline` ran: its
+ * remote history still matches the pre-rebaseline history, but at a migration number other than
+ * the one every environment was required to reach first.
+ */
+export interface RebaselinePendingInfo {
+  replacedLatestMigration: number;
+}
+
+/**
  * Result of remote schema verification for a single namespace
  */
 export interface RemoteSchemaVerificationResult {
@@ -224,6 +234,11 @@ export interface RemoteSchemaVerificationResult {
   hasDrift: boolean;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
   checkpointMissingLocal?: boolean;
+  /**
+   * Set alongside `checkpointMissingLocal` when the cause is an environment that fell behind
+   * before `migration rebaseline` ran, rather than a generic history mismatch.
+   */
+  rebaselinePending?: RebaselinePendingInfo;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
   /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */

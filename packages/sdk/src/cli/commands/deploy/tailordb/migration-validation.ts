@@ -8,6 +8,7 @@ import {
   checkMigrationDiffs,
   formatMigrationCheckResults,
   formatRemoteVerificationResults,
+  logMissingCheckpointGuidance,
   logRemoteDriftGuidance,
   verifyRemoteSchema,
   type TailorDBDeployInput,
@@ -124,9 +125,7 @@ export async function validateAndDetectMigrations(
           );
         }
         logger.newline();
-        logger.info(
-          "Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
-        );
+        logMissingCheckpointGuidance(missingCheckpointResults);
         throw new Error("Remote migration checkpoint verification failed");
       }
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);

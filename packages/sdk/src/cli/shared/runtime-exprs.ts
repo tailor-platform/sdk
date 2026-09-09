@@ -268,27 +268,19 @@ export type ResolverPermissionResolution = {
 };
 
 /**
- * Build the permission guard and input-validation statements shared by every
- * resolver entry wrapper (production bundling and `function run`).
- *
- * Kept as a single generator so a resolver-wrapping behavior (like the
- * permission guard) can't be added to one entry-point template and forgotten
- * in the other — the namespace-default precedence below is resolved here for
- * the same reason. References `context.caller`, `context.input`, `invoker`,
- * and `_internalResolver` — the caller's wrapper must bind a `context` object
- * with `user`/`input` properties and an `invoker` binding (from
- * `INVOKER_EXPR`) before inlining this expression.
+ * Build an expression that checks resolver permissions and returns parsed input.
+ * Requires `context`, `invoker`, `_internalResolver`, `t`, and `TailorErrors`
+ * in the enclosing scope.
  * @param params - The resolver's and its namespace's permission config
- * @returns A JS statement block to inline before calling `_internalResolver.body(...)`
+ * @returns A JS expression that returns validated input without modifying context
  */
-export function buildResolverPermissionAndInputCheckExpr(
-  params: ResolverPermissionResolution,
-): string {
+export function buildResolverValidatedInputExpr(params: ResolverPermissionResolution): string {
   const { permission, defaultPermission } = params;
   const permissionGuardExpr = buildResolverPermissionGuardExpr(permission ?? defaultPermission);
   return `
-    ${permissionGuardExpr ?? ""}
-    if (_internalResolver.input) {
+    (() => {
+      ${permissionGuardExpr ?? ""}
+      if (!_internalResolver.input) return context.input;
       const result = t.object(_internalResolver.input).parse({
         value: context.input,
         data: context.input,
@@ -301,6 +293,7 @@ export function buildResolverPermissionAndInputCheckExpr(
           path: issue.path ?? [],
         })));
       }
-    }
+      return result.value;
+    })()
   `;
 }

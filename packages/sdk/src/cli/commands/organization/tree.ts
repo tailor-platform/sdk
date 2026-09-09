@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { positiveIntArg } from "#/cli/shared/args";
 import { fetchAll, initOperatorClient, type OperatorClient } from "#/cli/shared/client";

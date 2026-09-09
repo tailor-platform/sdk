@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";

@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/zod";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
@@ -44,7 +44,7 @@ import {
 } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
-export interface SyncOptions {
+interface SyncOptions {
   configPath?: string;
   number: string;
   namespace?: string;

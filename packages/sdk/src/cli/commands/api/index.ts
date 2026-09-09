@@ -1,5 +1,5 @@
 import { ScalarType } from "@bufbuild/protobuf";
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { configArg, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";

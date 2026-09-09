@@ -418,6 +418,44 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
+  test("retries a transport-level premature close for no-side-effect methods then succeeds", async () => {
+    const prematureClose = Object.assign(new Error("Premature close"), {
+      code: "ERR_STREAM_PREMATURE_CLOSE",
+    });
+    const next = vi.fn().mockRejectedValueOnce(prematureClose).mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("logs the actual transport error code when retrying a transport-level disconnect", async () => {
+    using debugSpy = vi.spyOn(logger, "debug").mockImplementation(() => {});
+    const prematureClose = Object.assign(new Error("Premature close"), {
+      code: "ERR_STREAM_PREMATURE_CLOSE",
+    });
+    const next = vi.fn().mockRejectedValueOnce(prematureClose).mockResolvedValueOnce(okResponse);
+
+    await settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)));
+
+    expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining("ERR_STREAM_PREMATURE_CLOSE"));
+  });
+
+  test("does not retry a transport-level premature close for methods without an idempotency declaration", async () => {
+    const prematureClose = Object.assign(new Error("Premature close"), {
+      code: "ERR_STREAM_PREMATURE_CLOSE",
+    });
+    const next = vi.fn().mockRejectedValueOnce(prematureClose).mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+    ).rejects.toThrow("Premature close");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   test("methods eligible for Aborted retries remain read-only", () => {
     type RetryMethodDescriptor = Pick<
       (typeof OperatorService.method)[keyof typeof OperatorService.method],

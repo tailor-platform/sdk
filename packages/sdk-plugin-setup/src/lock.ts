@@ -1,12 +1,16 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
+import { type AppIds, parseAppIds, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 
-/** Current lock schema version. Bumped only on breaking lock-format changes. */
-export const LOCK_VERSION = 1;
+/**
+ * Highest lock schema version this plugin understands. Pinned here rather than
+ * read from the SDK so an SDK that moves the format on refuses to let an older
+ * plugin rewrite the lock.
+ */
+export const LOCK_VERSION = 2;
 
-/** Lock file path, relative to the repository root. */
-const LOCK_FILENAME = ".github/tailor.lock";
+const LOCK_FILENAME = TAILOR_LOCK_FILENAME;
 
 function assertSafeLockPath(outputDir: string): void {
   for (const relativePath of [".github", LOCK_FILENAME]) {
@@ -68,6 +72,8 @@ export type LockTarget = {
 export type LockFile = {
   version: number;
   targets: LockTarget[];
+  /** App ids keyed by repository-relative config path. Absent in version 1 locks. */
+  appIds?: AppIds;
 };
 
 /**
@@ -121,7 +127,7 @@ export function readLock(outputDir: string): LockFile | null {
   if (parsed.version > LOCK_VERSION) {
     throw new Error(
       `${LOCK_FILENAME} was written by a newer SDK (lock version ${String(parsed.version)}). ` +
-        "Update @tailor-platform/sdk to continue (e.g. pnpm update @tailor-platform/sdk).",
+        "Update @tailor-platform/sdk and @tailor-platform/sdk-plugin-setup to continue.",
     );
   }
   if (!Array.isArray(parsed.targets)) {
@@ -130,6 +136,7 @@ export function readLock(outputDir: string): LockFile | null {
         "restore it from git (git checkout -- .github/tailor.lock) and re-run setup.",
     );
   }
+  if (parsed.appIds !== undefined) parseAppIds(parsed.appIds);
   return parsed;
 }
 

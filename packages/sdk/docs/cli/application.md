@@ -118,7 +118,7 @@ create one explicitly before requesting a deployment plan.
 
 **Config File Modification:**
 
-On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
+On the first local run, `deploy` assigns your application a stable id (a UUID) so the SDK can recognize ownership across renames. Projects that use `tailor setup` get it recorded in `.github/tailor.lock` under `appIds`; other projects get an `id: "<uuid>"` field written into the `defineConfig({...})` call in `tailor.config.ts`. Commit the file that received the id. See [Configuration](../configuration.md#application-settings) for details.
 
 **Multiple Config Deploys:**
 

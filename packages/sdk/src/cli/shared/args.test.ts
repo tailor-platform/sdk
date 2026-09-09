@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
+import { runCommand } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { describe, expect, aroundEach, test, vi } from "vitest";
 import { z } from "zod";
 import {

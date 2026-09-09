@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { create } from "@bufbuild/protobuf";
+import { arg } from "@politty/zod";
 import {
   AuthInvokerSchema,
   type AuthInvoker,
@@ -9,7 +10,6 @@ import {
 import { createPrompt } from "@toiroakr/read-multiline";
 import * as path from "pathe";
 import { parse as parseSql } from "pgsql-ast-parser";
-import { arg } from "politty";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";

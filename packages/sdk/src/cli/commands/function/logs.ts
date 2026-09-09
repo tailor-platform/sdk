@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { arg } from "@politty/zod";
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { arg } from "politty";
 import { z } from "zod";
 import { pagedLogArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged, type OperatorClient } from "#/cli/shared/client";

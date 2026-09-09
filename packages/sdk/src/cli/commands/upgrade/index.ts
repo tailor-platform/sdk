@@ -1,5 +1,5 @@
+import { arg } from "@politty/zod";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 

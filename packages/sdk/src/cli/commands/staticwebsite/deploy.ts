@@ -1,9 +1,9 @@
 import * as fs from "fs";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/zod";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";

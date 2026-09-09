@@ -62,6 +62,25 @@ describe("runCodemods", () => {
     }
   });
 
+  test.each([
+    'import { file } from "@tailor-platform/sdk/runtime"; await file.upload(ns, table, field, id, text);',
+    'import { file as storage } from "@tailor-platform/sdk/runtime"; await storage.upload(ns, table, field, id, text);',
+    'import { file } from "@tailor-platform/sdk/runtime"; const { upload } = file; await upload(ns, table, field, id, text);',
+    'import { uploadFile } from "./generated/files"; await uploadFile(table, field, id, text);',
+  ])("flags string file uploads for encoding review: %s", async (source) => {
+    const codemod = allCodemods.find((entry) => entry.id === "v3/file-upload-encoding");
+    if (!codemod) throw new Error("file upload encoding migration missing");
+    const { tmpDir: dir } = await createTestProject("upload.ts", source);
+    tmpDir = dir;
+
+    const result = await runCodemods([{ codemod }], dir, true);
+
+    expect(result.changed).toBe(false);
+    expect(result.llmReviews).toEqual([
+      { codemodId: codemod.id, prompt: codemod.prompt, files: ["upload.ts"] },
+    ]);
+  });
+
   describe("chained transforms in dry-run", () => {
     // Transform A: renames "oldFunc" → "midFunc"
     const transformAPath = path.join(os.tmpdir(), "transform-a.ts");

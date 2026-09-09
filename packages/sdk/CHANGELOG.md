@@ -1,5 +1,51 @@
 # @tailor-platform/sdk
 
+## 2.14.2
+
+### Patch Changes
+
+- [#2297](https://github.com/tailor-platform/sdk/pull/2297) [`9f50a5d`](https://github.com/tailor-platform/sdk/commit/9f50a5d07941eb4f14f141dcbdcb9e32cf34d6fd) Thanks [@k1LoW](https://github.com/k1LoW)! - Fix `tailor deploy` rejecting IdP `userAuthPolicy.allowedEmailDomains: ["*"]` with "must be a valid hostname" during pre-flight validation. The bundled protobuf descriptors carried the platform's older hostname-only rule, so the wildcard entry documented in 2.14.1 could be written but never deployed.
+
+## 2.14.1
+
+### Patch Changes
+
+- [#2281](https://github.com/tailor-platform/sdk/pull/2281) [`ee9374a`](https://github.com/tailor-platform/sdk/commit/ee9374aca30aad24b03009cba76e857b430c9cfa) Thanks [@k1LoW](https://github.com/k1LoW)! - Validate IdP `userAuthPolicy.allowedEmailDomains` locally and document `["*"]`, the lone entry that allows every email domain and the only way to enable `allowGoogleOauth` or `allowMicrosoftOauth` without enumerating domains. Each entry must be a hostname or `"*"`, entries must be unique when compared case-insensitively and number at most 100, and `"*"` cannot sit alongside another entry. These were already rejected on deploy, so they now surface before the apply instead of during it.
+  
+  `tailor deploy` also warns on an IdP service that leaves `allowedEmailDomains` empty. An empty list still allows every domain, but a future platform release requires that state to be explicit, so set `["*"]` to keep the current behavior or list the domains you accept.
+  
+  Fixes a plan diff that re-applied `allowedEmailDomains` on every deploy when an entry was written in mixed case.
+
+- [#2252](https://github.com/tailor-platform/sdk/pull/2252) [`d56876d`](https://github.com/tailor-platform/sdk/commit/d56876d6947a18345150bdbaee2d63fa1ce17992) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @bufbuild/protobuf to v2.14.1
+
+- [#2255](https://github.com/tailor-platform/sdk/pull/2255) [`39662f4`](https://github.com/tailor-platform/sdk/commit/39662f4bf56ccc7b0fa251d70a2b47d16979c2bc) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#2273](https://github.com/tailor-platform/sdk/pull/2273) [`656714a`](https://github.com/tailor-platform/sdk/commit/656714a8215a03458b2a2a5b084faafb805b3b59) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#2276](https://github.com/tailor-platform/sdk/pull/2276) [`453a11b`](https://github.com/tailor-platform/sdk/commit/453a11b1db0fa87a0b5d1ab41620bb4b094f5365) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.6
+
+- [#2277](https://github.com/tailor-platform/sdk/pull/2277) [`7926310`](https://github.com/tailor-platform/sdk/commit/7926310a7d5154e5bace9be7f66760a264df1151) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.2
+
+- [#2279](https://github.com/tailor-platform/sdk/pull/2279) [`9f926d5`](https://github.com/tailor-platform/sdk/commit/9f926d510a8e972d025a33266936a3d9be80f526) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+## 2.14.0
+
+### Minor Changes
+
+- [#2278](https://github.com/tailor-platform/sdk/pull/2278) [`925c6e1`](https://github.com/tailor-platform/sdk/commit/925c6e14bbb74f3ea649118e3b8b219d582d0638) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `t.date({ as: "date" })` to use JavaScript Date values in resolvers. Inputs become Dates at midnight UTC, and returned Dates are formatted as YYYY-MM-DD using their UTC calendar date, including nested objects, arrays, and optional fields. Existing `t.date()` fields continue to use strings.
+
+### Patch Changes
+
+- [#2264](https://github.com/tailor-platform/sdk/pull/2264) [`11816e1`](https://github.com/tailor-platform/sdk/commit/11816e17b5803fa85f7e9529c0992bbfc2abb409) Thanks [@dqn](https://github.com/dqn)! - Report a member removed inside a nested field as a data-loss warning in `tailordb migration generate`, so `migration validate --strict` requires an acknowledgment; the pre-migration phase keeps the removed member readable for `migrate.ts`, a compatible member added at the same level is named as a possible rename target, and the diff output lists changed nested members
+
+- [#2266](https://github.com/tailor-platform/sdk/pull/2266) [`b85a570`](https://github.com/tailor-platform/sdk/commit/b85a570f96598e5e90916558ec7b425291777939) Thanks [@toiroakr](https://github.com/toiroakr)! - Diagnose the "Remote migration checkpoint is not in the local migration history" error from `deploy` and `tailordb migration validate` when its specific cause is an environment that fell behind before a `migration rebaseline` ran on another environment: the message now names the migration this environment must reach and points at a concrete recovery procedure (restore the pre-rebaseline `migrations/` directory from git history, deploy against it up to that migration, then switch back and deploy again). Documented the same error and recovery procedure in the migrations troubleshooting guide.
+
+- [#2258](https://github.com/tailor-platform/sdk/pull/2258) [`8ec7e92`](https://github.com/tailor-platform/sdk/commit/8ec7e922f5c6e5930065a70f3a906c791fff6dc4) Thanks [@dqn](https://github.com/dqn)! - Reject TailorDB enum fields that define no allowed values. `tailor deploy` and `tailor tailordb migration generate` now report an error identifying the table and field.
+
+- [#2257](https://github.com/tailor-platform/sdk/pull/2257) [`f0405c6`](https://github.com/tailor-platform/sdk/commit/f0405c627955fc7208369d3dd5a39d35a19dd7ed) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @napi-rs/keyring to v2
+
+- [#2262](https://github.com/tailor-platform/sdk/pull/2262) [`681a2b7`](https://github.com/tailor-platform/sdk/commit/681a2b756b4022131a2b46aadcfcdcd4d0140041) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - `tailor workspace create --name` now reports an invalid workspace name while the command's options are parsed, instead of after the command starts running.
+
 ## 2.13.1
 
 ### Patch Changes

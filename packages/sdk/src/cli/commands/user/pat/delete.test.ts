@@ -1,4 +1,4 @@
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { deleteCommand } from "./delete";

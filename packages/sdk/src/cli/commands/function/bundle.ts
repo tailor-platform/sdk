@@ -19,7 +19,7 @@ import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { buildResolverValidatedInputExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
@@ -169,25 +169,27 @@ function generateEntry(options: GenerateEntryOptions): string {
 
     case "resolver": {
       // Mirrors the production resolver bundler (services/resolver/bundler.ts):
-      // both call buildResolverPermissionAndInputCheckExpr so the permission
+      // both call buildResolverValidatedInputExpr so the permission
       // guard and input validation can't drift between the two entry points.
       // In production, the operationHook injects caller/env into context.
       // For function run, we embed machine user info since there's no operationHook.
       const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
-      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr({
+      const validatedInputExpr = buildResolverValidatedInputExpr({
         permission: detected.permission,
         defaultPermission,
       });
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
+        import { serializeDateFields } from "@tailor-platform/sdk/runtime";
 
         const $tailor_resolver_body = async (rawInput) => {
           const _caller = ${principalExpr};
           const invoker = (${INVOKER_EXPR}) ?? _caller;
           const context = { input: rawInput, env: ${JSON.stringify(env)}, caller: _caller, invoker };
-          ${guardAndInputCheckExpr}
-          return _internalResolver.body(context);
+          const input = ${validatedInputExpr};
+          const result = await _internalResolver.body({ ...context, input });
+          return serializeDateFields(_internalResolver.output, result);
         };
 
         export { $tailor_resolver_body as main };

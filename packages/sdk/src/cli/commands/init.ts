@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";

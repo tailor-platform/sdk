@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -13,6 +16,8 @@ vi.mock("#/cli/shared/config-loader", () => ({
 
 vi.mock("./config-id-injector", () => ({
   ensureConfigIdForDeploy: mocks.ensureConfigIdForDeploy,
+  removeConfigId: vi.fn(),
+  uuidRegex: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   warnMissingAppId: mocks.warnMissingAppId,
 }));
 
@@ -21,7 +26,7 @@ vi.mock("./workspace", () => ({
 }));
 
 import { deploy } from "./deploy";
-import { buildDeploymentTargets } from "./deployment-target";
+import { buildDeploymentTargets, loadDeployConfigs } from "./deployment-target";
 
 const firstConfigPath = "src/cli/commands/deploy/__test_fixtures__/tailor.config.ts";
 const secondConfigPath = "src/cli/commands/deploy/__test_fixtures__/single-evaluation.config.ts";
@@ -89,6 +94,36 @@ describe("multi-config deploy preflight", () => {
     secondPrepared.resolve();
     await expect(targetError).resolves.toBe(loadError);
     expect(mocks.loadConfig).toHaveBeenCalledTimes(2);
+  });
+
+  test("resolves the app id from a governing lock instead of preparing the config", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "deploy-lock-"));
+    try {
+      const lockedId = "22222222-2222-4222-8222-222222222222";
+      fs.mkdirSync(path.join(root, ".github"));
+      fs.writeFileSync(
+        path.join(root, ".github/tailor.lock"),
+        JSON.stringify({ version: 2, targets: [], appIds: { "tailor.config.ts": lockedId } }),
+      );
+      const configPath = path.join(root, "tailor.config.ts");
+      fs.writeFileSync(configPath, "");
+      mocks.loadConfig.mockResolvedValue({
+        config: { id: undefined, name: "app", path: configPath },
+        plugins: [],
+      });
+
+      const [loaded] = await loadDeployConfigs({
+        configPaths: [configPath],
+        dryRun: true,
+        buildOnly: false,
+      });
+
+      expect(loaded?.config.id).toBe(lockedId);
+      expect(mocks.ensureConfigIdForDeploy).not.toHaveBeenCalled();
+      expect(mocks.warnMissingAppId).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("rejects incomplete preloaded config batches", async () => {
