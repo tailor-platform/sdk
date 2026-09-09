@@ -189,6 +189,7 @@
     "@opentelemetry/sdk-trace-node": "2.11.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
     "@oxc-project/types": "0.148.0",
+    "@politty/zod": "0.2.1",
     "@secretlint/core": "13.0.5",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.5",
     "@standard-schema/spec": "1.1.0",
@@ -203,7 +204,7 @@
     "find-up-simple": "1.0.1",
     "get-east-asian-width": "1.6.0",
     "get-tsconfig": "4.14.3",
-    "globals": "17.11.0",
+    "globals": "17.12.0",
     "graphql": "17.0.2",
     "inflection": "3.0.2",
     "kysely": "0.29.5",
@@ -214,7 +215,6 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.2",
-    "politty": "0.11.9",
     "rolldown": "1.2.7",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
@@ -241,7 +241,7 @@
     "tsdown": "0.23.0",
     "typescript": "6.0.3",
     "vitest": "5.0.0",
-    "zinfer": "0.2.8"
+    "zinfer": "0.4.5"
   },
   "peerDependencies": {
     "@electric-sql/pglite": ">=0.2.0",

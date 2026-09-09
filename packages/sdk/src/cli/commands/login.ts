@@ -1,8 +1,8 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { generateCodeVerifier } from "@badgateway/oauth2-client";
+import { arg } from "@politty/zod";
 import open from "open";
-import { arg } from "politty";
 import { z } from "zod";
 import {
   closeConnectionPool,

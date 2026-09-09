@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { runCommand } from "@politty/zod";
 import * as path from "pathe";
-import { runCommand } from "politty";
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
 import { initOperatorClient } from "#/cli/shared/client";

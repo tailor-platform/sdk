@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/zod";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { arg } from "politty";
 import { z } from "zod";
 import {
   deploymentArgs,

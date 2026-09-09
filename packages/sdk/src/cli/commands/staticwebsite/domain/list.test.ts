@@ -1,5 +1,5 @@
+import { runCommand } from "@politty/zod";
 import { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
-import { runCommand } from "politty";
 import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";

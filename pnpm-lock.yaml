@@ -154,6 +154,9 @@ importers:
       '@clack/prompts':
         specifier: 1.7.0
         version: 1.7.0
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       execa:
         specifier: 10.0.1
         version: 10.0.1
@@ -163,9 +166,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.11.9
-        version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -507,6 +507,9 @@ importers:
       '@oxc-project/types':
         specifier: 0.148.0
         version: 0.148.0
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       '@secretlint/core':
         specifier: 13.0.5
         version: 13.0.5(supports-color@7.2.0)
@@ -550,8 +553,8 @@ importers:
         specifier: 4.14.3
         version: 4.14.3
       globals:
-        specifier: 17.11.0
-        version: 17.11.0
+        specifier: 17.12.0
+        version: 17.12.0
       graphql:
         specifier: 17.0.2
         version: 17.0.2
@@ -582,9 +585,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.11.9
-        version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       rolldown:
         specifier: 1.2.7
         version: 1.2.7
@@ -662,14 +662,17 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
       zinfer:
-        specifier: 0.2.8
-        version: 0.2.8(typescript@6.0.3)(zod@4.5.4)
+        specifier: 0.4.5
+        version: 0.4.5(typescript@6.0.3)(zod@4.5.4)
 
   packages/sdk-codemod:
     dependencies:
       '@ast-grep/napi':
         specifier: 0.45.3
         version: 0.45.3
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -682,9 +685,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.11.9
-        version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       semver:
         specifier: 7.8.5
         version: 7.8.5
@@ -725,15 +725,15 @@ importers:
 
   packages/sdk-plugin-seed:
     dependencies:
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.11.9
-        version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -771,6 +771,9 @@ importers:
       '@croct/json5-parser':
         specifier: 0.2.2
         version: 0.2.2
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       json5:
         specifier: 2.2.3
         version: 2.2.3
@@ -780,9 +783,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.11.9
-        version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -817,6 +817,9 @@ importers:
 
   packages/sdk-plugin-tailordb-erd:
     dependencies:
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -832,9 +835,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.11.9
-        version: 0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -2321,6 +2321,20 @@ packages:
       '@inquirer/prompts':
         optional: true
 
+  '@politty/zod@0.2.1':
+    resolution: {integrity: sha512-UlzrVAcLE2EOMFJdfF8O2N2iHuabm3dz2W/8OwocKSIBOBuEhNSUob1fKKZrEw9AgjLXqyuZzCJSMOo8iibKRQ==}
+    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
+    hasBin: true
+    peerDependencies:
+      '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
+      '@inquirer/prompts': ^8.3.2
+      zod: ^4.2.1
+    peerDependenciesMeta:
+      '@clack/prompts':
+        optional: true
+      '@inquirer/prompts':
+        optional: true
+
   '@publint/pack@0.1.7':
     resolution: {integrity: sha512-4EDEmvxWtgsCnnVeBvtFIFZtUhPPt1+bA9JrSwU4Sa//6oKtzCSlGGXYJr44OD9aGISymbieJ4mCKHUygUDU+g==}
     engines: {node: '>=18'}
@@ -3246,8 +3260,8 @@ packages:
     resolution: {integrity: sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw==}
     engines: {node: 18 || 20 || >=22}
 
-  globals@17.11.0:
-    resolution: {integrity: sha512-Z2I8hM+PbJDXQDq3Icgpzv+mPdwr68iZUU9d5WW4FuXfDUQfkZaZuvjMv42/5crNyw154+9+VWXbYrUgDXbxNw==}
+  globals@17.12.0:
+    resolution: {integrity: sha512-cezEd/DTyyht9cvSSURyygXPfy04GtWO/5e6ZPvH7fCtjKz9PYOmuawphw1Ctd1f6C+5JypXfGD7ahNMXvevBA==}
     engines: {node: '>=18'}
 
   gonzales-pe@4.3.0:
@@ -3796,20 +3810,6 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.11.9:
-    resolution: {integrity: sha512-usDFAjTncaZs8KBPZlUhij75/WtODvtXvsyzOAR98peHwoaojs+f9uWk+7LRcb2n+15GpyaVqSYvmkGa1xMhUw==}
-    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
-    hasBin: true
-    peerDependencies:
-      '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
-      '@inquirer/prompts': ^8.3.2
-      zod: ^4.2.1
-    peerDependenciesMeta:
-      '@clack/prompts':
-        optional: true
-      '@inquirer/prompts':
-        optional: true
-
   postcss-values-parser@6.0.2:
     resolution: {integrity: sha512-YLJpK0N1brcNJrs9WatuJFtHaV9q5aAOj+S4DI5S7jgHlRfm0PIbDCAFRYMQD5SHq7Fy6xsDhyutgS0QOAs0qw==}
     engines: {node: '>=10'}
@@ -4352,12 +4352,12 @@ packages:
   yuku-parser@0.9.3:
     resolution: {integrity: sha512-96wPoHnwaXfkZv7UIOUkDb+s7ZH8lv8Qtg+MxdvHUV1LFa5jV9iKOaams1942YQt+krFQrWiD6lSg2ermv5kHA==}
 
-  zinfer@0.2.8:
-    resolution: {integrity: sha512-QPekcok07BZNGfJiFl/ysIaUzxhibeFsbaBI3E746L/IZE34o0LXdWM63ul+0NR+L1SkTAgxqbVoXHPAJ20GOw==}
+  zinfer@0.4.5:
+    resolution: {integrity: sha512-0gVUI4AQ6L2RramSrZ6q3ZxJV82KKfFsS2cg048peJsTijQY/IkiGkJKXylhoWSVjbrZlT10iA++fOqh2gBPkA==}
     hasBin: true
     peerDependencies:
       typescript: '>=5.0.0'
-      zod: '>=3.0.0'
+      zod: '>=3.25.76'
 
   zod@4.5.4:
     resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
@@ -5376,6 +5376,14 @@ snapshots:
       '@clack/prompts': 1.7.0
       '@inquirer/prompts': 8.7.1(@types/node@24.13.3)
 
+  '@politty/zod@0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)':
+    dependencies:
+      yaml: 2.9.0
+      zod: 4.5.4
+    optionalDependencies:
+      '@clack/prompts': 1.7.0
+      '@inquirer/prompts': 8.7.1(@types/node@24.13.3)
+
   '@publint/pack@0.1.7':
     dependencies:
       tinyexec: 1.3.1
@@ -6260,7 +6268,7 @@ snapshots:
       minipass: 7.1.3
       path-scurry: 2.0.2
 
-  globals@17.11.0: {}
+  globals@17.12.0: {}
 
   gonzales-pe@4.3.0:
     dependencies:
@@ -6810,14 +6818,6 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.11.9(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4):
-    dependencies:
-      '@politty/zod': 0.1.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
-      zod: 4.5.4
-    optionalDependencies:
-      '@clack/prompts': 1.7.0
-      '@inquirer/prompts': 8.7.1(@types/node@24.13.3)
-
   postcss-values-parser@6.0.2(postcss@8.5.28):
     dependencies:
       color-name: 1.1.4
@@ -7288,7 +7288,7 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.9.3
       '@yuku-parser/binding-win32-x64': 0.9.3
 
-  zinfer@0.2.8(typescript@6.0.3)(zod@4.5.4):
+  zinfer@0.4.5(typescript@6.0.3)(zod@4.5.4):
     dependencies:
       commander: 15.0.0
       glob: 13.0.6

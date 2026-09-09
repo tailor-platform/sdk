@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { sendCrashReport } from "#/cli/crashreport/sender";
 import { JSON_FOOTER_MARKER } from "#/cli/crashreport/writer";

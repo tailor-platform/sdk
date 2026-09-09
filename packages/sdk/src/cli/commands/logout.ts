@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { defaultPlatformBaseUrl, initOAuth2Client, isDefaultPlatform } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";

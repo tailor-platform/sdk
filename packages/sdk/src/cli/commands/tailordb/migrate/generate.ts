@@ -8,8 +8,8 @@
 
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
+import { arg } from "@politty/zod";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { configArg, confirmationArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
