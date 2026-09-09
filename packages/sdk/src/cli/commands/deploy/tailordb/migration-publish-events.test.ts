@@ -396,7 +396,6 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   }
 
   beforeEach(() => {
-    vi.clearAllMocks();
     snapshotState.tablesByVersion = {};
     snapshotState.historyId = null;
     remoteCheckpoint.number = 0;

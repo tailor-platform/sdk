@@ -1,4 +1,4 @@
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -15,11 +15,6 @@ const clientWithMetadata = (metadata: unknown) =>
   ({ getMetadata: vi.fn().mockResolvedValue({ metadata }) }) as unknown as OperatorClient;
 
 describe("checkVaultManaged", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("returns isManaged: true with labels when vault has sdk-name label", async () => {
     const client = clientWithMetadata({
       labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0", custom: "value" },

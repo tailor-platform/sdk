@@ -32,7 +32,6 @@ afterAll(() => {
 
 describe("user switch", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_URL", undefined);

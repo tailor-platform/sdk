@@ -37,7 +37,6 @@ describe("confirmOwnerConflict", () => {
   let prompt: typeof promptModule;
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     ({ prompt } = await import("#/cli/shared/prompt"));
     await runTest();
     vi.restoreAllMocks();
@@ -150,7 +149,6 @@ describe("confirmMigrationCheckpointRepairs", () => {
   let prompt: typeof promptModule;
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     ({ prompt } = await import("#/cli/shared/prompt"));
     await runTest();
     vi.restoreAllMocks();
@@ -235,7 +233,6 @@ describe("confirmMissingDependentApps", () => {
   ];
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     ({ prompt } = await import("#/cli/shared/prompt"));
     await runTest();
     vi.restoreAllMocks();

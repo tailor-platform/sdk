@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
@@ -129,11 +129,6 @@ function buildCtx(overrides: Partial<PlanContext>): PlanContext {
     ...overrides,
   };
 }
-
-aroundEach(async (runTest) => {
-  vi.clearAllMocks();
-  await runTest();
-});
 
 describe("planPipeline (resolver service level)", () => {
   describe("rename scenarios (service level)", () => {

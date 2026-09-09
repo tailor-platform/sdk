@@ -138,7 +138,6 @@ describe("tailordb migration validate", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-validate-test-"));

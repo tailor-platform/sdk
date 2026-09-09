@@ -57,7 +57,6 @@ aroundAll(async (runSuite) => {
 
 describe("logout --profile", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     resetKeyringState();
     keyringPasswords.clear();
     writePlatformConfig({

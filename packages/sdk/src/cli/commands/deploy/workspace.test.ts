@@ -90,7 +90,6 @@ const contextTargets = (...configPaths: string[]) =>
 
 describe("resolveDeployWorkspace", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     mocks.canPrompt.mockReturnValue(false);
     mocks.getPlatformBaseUrl.mockReturnValue("https://api.tailor.tech");
     mocks.initOperatorClient.mockResolvedValue(client);

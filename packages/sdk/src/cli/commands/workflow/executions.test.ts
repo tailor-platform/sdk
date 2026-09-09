@@ -48,8 +48,6 @@ const runningJob = {
 
 describe("getWorkflowExecution", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     await runTest();

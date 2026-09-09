@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { dirname, isAbsolute, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
@@ -137,6 +138,31 @@ function buildBlockedReplacement(node: ImportLikeNode, message: string): string 
   return throwStmt;
 }
 
+const toFileList = (value: string | string[] | undefined): string[] =>
+  Array.isArray(value) ? value : value ? [value] : [];
+
+// Vitest 5 inherits an inline project's config from its declaring config file
+// by default; Vitest 4 only does so when the project sets `extends: true`.
+// Reading the resolved peer's major lets a project that omits `extends` be
+// treated as inheriting the root environment on 5 without changing what the
+// same config resolved to on 4.
+let cachedSupportsDefaultProjectInheritance: boolean | undefined;
+function supportsDefaultProjectInheritance(): boolean {
+  if (cachedSupportsDefaultProjectInheritance === undefined) {
+    try {
+      const { version } = createRequire(import.meta.url)("vitest/package.json") as {
+        version: string;
+      };
+      cachedSupportsDefaultProjectInheritance = Number.parseInt(version, 10) >= 5;
+    } catch {
+      // Unresolvable peer: assume the explicit-opt-in model so a project that
+      // would not have inherited anything is never forced into tailor-runtime.
+      cachedSupportsDefaultProjectInheritance = false;
+    }
+  }
+  return cachedSupportsDefaultProjectInheritance;
+}
+
 /**
  * Vite plugin that blocks Node.js built-in module imports from production code.
  *
@@ -177,13 +203,12 @@ export function createBlockPlugin(): Plugin {
         globalSetup?: string | string[];
         root?: string;
       };
-      const testConfig = (
-        config as typeof config & {
-          test?: HostFileTestConfig & {
-            projects?: { test?: HostFileTestConfig }[];
-          };
-        }
-      ).test;
+      // Read `test` as the user-facing shape rather than Vitest's resolved
+      // config type: this hook may see the config before Vitest fills in
+      // defaults, so every field keeps its fallback.
+      const testConfig = (config as { test?: unknown }).test as
+        | (HostFileTestConfig & { projects?: { test?: HostFileTestConfig }[] })
+        | undefined;
       const root = testConfig?.root ?? config.root;
       // Setup files and global-setup files run in the Vitest host (not the
       // emulated runtime), so they may freely import node:* modules. Collect
@@ -191,7 +216,7 @@ export function createBlockPlugin(): Plugin {
       // per-project setup files run in the host too and would otherwise be
       // transformed as production code, breaking node:* imports inside them.
       const toAbsolutePaths = (value: string | string[] | undefined, baseRoot: string) =>
-        (Array.isArray(value) ? value : value ? [value] : []).map((f) => resolve(baseRoot, f));
+        toFileList(value).map((f) => resolve(baseRoot, f));
       const exemptHostFiles = new Set<string>([
         ...toAbsolutePaths(testConfig?.setupFiles, root),
         ...toAbsolutePaths(testConfig?.globalSetup, root),
@@ -287,14 +312,31 @@ export function createBlockPlugin(): Plugin {
 
 const ENVIRONMENT_NAME = "tailor-runtime";
 
+// Channel that carries the resolved `tailor.config.ts` path to setup.ts, which
+// runs in a separate worker process. Set through Vitest's `test.env` rather
+// than `process.env` so each project carries its own value: the config hook
+// runs once per project in the same parent process, and a process-global slot
+// would let the last project resolved win for every worker. The leading `__`
+// marks it plugin-private, so overwriting a pre-existing value is safe.
+const CONFIG_ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
+
+// An empty value reads as "no config" in setup.ts and, unlike omitting the
+// key, overrides a stale value inherited from the root `test.env`.
+function setConfigEnv(
+  target: Record<string, unknown> & { env?: Record<string, string> },
+  configAbsPath: string,
+): void {
+  target.env = { ...target.env, [CONFIG_ENV_VAR]: configAbsPath };
+}
+
 /**
  * Vite plugin that resolves the tailor-runtime environment and injects setup files.
  *
  * Vitest resolves environments starting with "." or "/" as file paths.
  * This plugin rewrites `environment: "tailor-runtime"` to the absolute path
  * of the bundled environment module, both at the top-level and per-project.
- * It also injects the setup file that removes Vitest-dependent globals
- * (like `performance`) per-test via beforeEach/afterEach hooks.
+ * It also injects the setup file that seeds the SecretManager mock from
+ * `tailor.config.ts`.
  * @param options - Optional configuration
  * @param options.config - Path to tailor.config.ts to load SecretManager values into mock
  * @returns Vite plugin
@@ -303,6 +345,10 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const environmentPath = resolve(currentDir, "environment.mjs");
   const setupPath = resolve(currentDir, "setup.mjs");
+  // Vitest re-runs the config for inline projects that need their own Vite
+  // server, so a rewritten absolute path still counts as tailor-runtime.
+  const selectsTailorRuntime = (environment: unknown): boolean =>
+    environment === ENVIRONMENT_NAME || environment === environmentPath;
 
   return {
     name: "tailor-runtime-environment",
@@ -310,54 +356,102 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
     config(config) {
       const testConfig = config.test as
         | (Record<string, unknown> & {
-            projects?: Record<string, unknown>[];
+            projects?: (string | Record<string, unknown>)[];
             setupFiles?: string | string[];
+            env?: Record<string, string>;
           })
         | undefined;
 
       // Rewrite environment name to absolute path at top-level
-      let usesTailorRuntime = false;
-      if (testConfig?.environment === ENVIRONMENT_NAME) {
+      const rootSelectsTailorRuntime = !!testConfig && selectsTailorRuntime(testConfig.environment);
+      if (testConfig && rootSelectsTailorRuntime) {
         testConfig.environment = environmentPath;
-        usesTailorRuntime = true;
       }
 
-      // Rewrite in each project config
+      // Rewrite in each inline project config. Since Vitest 5 inline projects
+      // no longer receive the `setupFiles` this hook returns for the root
+      // config, the setup file is added directly to whichever projects select
+      // the tailor-runtime environment — not to every project, since setup.ts
+      // statically imports "node:url" and would fail to even load in a
+      // project whose environment cannot resolve Node builtins (e.g. Vitest
+      // browser mode).
+      //
+      // A project that declares no `environment` of its own inherits the
+      // root's, but Vitest 5 inherits the literal name rather than the path
+      // this hook rewrote it to, so it has to be rewritten here as well —
+      // only when the project actually inherits from the root. A string
+      // `extends` points at another config file, whose environment must not
+      // be overridden here. Omitting `extends` only inherits on Vitest 5;
+      // on 4 such a project resolves independently and must be left alone.
       if (testConfig?.projects) {
         for (const project of testConfig.projects) {
-          const projectTest = project.test as Record<string, unknown> | undefined;
-          if (projectTest?.environment === ENVIRONMENT_NAME) {
-            projectTest.environment = environmentPath;
-            usesTailorRuntime = true;
+          if (typeof project === "string") continue;
+          const projectTest = (project.test ??= {}) as Record<string, unknown> & {
+            setupFiles?: string | string[];
+            env?: Record<string, string>;
+            root?: string;
+          };
+          const inheritsRootEnvironment =
+            projectTest.environment === undefined &&
+            rootSelectsTailorRuntime &&
+            (project.extends === true ||
+              (project.extends === undefined && supportsDefaultProjectInheritance()));
+          if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) {
+            // Blank the key so a project on another environment cannot pick up
+            // the root's value through Vitest's root-into-project env merge.
+            if (options?.config) setConfigEnv(projectTest, "");
+            continue;
+          }
+          projectTest.environment = environmentPath;
+          const projectSetupFiles = toFileList(projectTest.setupFiles);
+          if (!projectSetupFiles.includes(setupPath)) {
+            projectTest.setupFiles = [...projectSetupFiles, setupPath];
+          }
+          if (options?.config) {
+            // A project may set its own `root`, so a relative options.config
+            // resolves per project rather than once against the root config.
+            const projectRoot =
+              (project.root as string | undefined) ??
+              projectTest.root ??
+              config.root ??
+              process.cwd();
+            setConfigEnv(projectTest, resolve(projectRoot, options.config));
           }
         }
       }
 
-      // Pass config path to setup.ts via env var (cross-process compatible).
-      // Always clear first, then set only when tailor-runtime is actually
-      // selected. This makes the env var deterministic across Vite config
-      // reloads (watch mode, programmatic re-init): a stale value from a
-      // prior iteration cannot make setup.ts load secrets from an old config.
-      // The leading `__` marks this as plugin-private, so deleting any
-      // pre-existing value is safe.
-      delete process.env.__TAILOR_RUNTIME_CONFIG;
-      if (options?.config && usesTailorRuntime) {
+      // Seed the config path for setup.ts, which reads it in the worker. Each
+      // tailor-runtime project already carries its own value from the loop
+      // above; this covers a root config that selects tailor-runtime itself,
+      // including the standalone (no `projects`) case.
+      if (options?.config && testConfig) {
         // Resolve against the user-provided Vite root when present (falling
         // back to cwd). Vitest projects with a non-cwd `root` would otherwise
         // resolve a relative options.config against the wrong directory.
-        const configRoot = config.root ?? process.cwd();
-        const configAbsPath = resolve(configRoot, options.config);
-        process.env.__TAILOR_RUNTIME_CONFIG = configAbsPath;
+        const configRoot = (testConfig.root as string | undefined) ?? config.root ?? process.cwd();
+        setConfigEnv(
+          testConfig,
+          rootSelectsTailorRuntime ? resolve(configRoot, options.config) : "",
+        );
       }
 
       // Normalize a user-provided string `setupFiles` into an array so Vite's
       // array-concat merge sees both sides as arrays (the string form would
       // otherwise be replaced rather than concatenated by some merge paths).
       // Vite then concatenates the user's array with our [setupPath].
+      const rootSetupFiles = toFileList(testConfig?.setupFiles);
       if (testConfig && typeof testConfig.setupFiles === "string") {
-        testConfig.setupFiles = [testConfig.setupFiles];
+        testConfig.setupFiles = rootSetupFiles;
       }
 
+      // A re-run for an inline project already carries the setup file added
+      // in the first pass; returning it again would register it twice. This
+      // merges into the root-level test config only (nested projects were
+      // already handled above), so it stays gated on the root's own
+      // environment selection — an unconditional return here would force
+      // setup.ts (and its static "node:url" import) onto a root/standalone
+      // config whose environment cannot resolve Node builtins.
+      if (!rootSelectsTailorRuntime || rootSetupFiles.includes(setupPath)) return {};
       return {
         test: {
           setupFiles: [setupPath],

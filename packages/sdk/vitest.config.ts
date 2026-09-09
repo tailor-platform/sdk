@@ -7,7 +7,9 @@ type PackageExport = {
   default?: string;
 };
 
-const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8")) as {
+const packageJson = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, "package.json"), "utf8"),
+) as {
   exports: Record<string, PackageExport>;
 };
 
@@ -27,7 +29,7 @@ const sdkSourceAliases = Object.entries(packageJson.exports).map(([exportName, t
   return {
     find: new RegExp(`^${escapeRegExp(publicImport)}$`),
     replacement: path.resolve(
-      __dirname,
+      import.meta.dirname,
       distImport
         .replace(/^\.\//, "")
         .replace(/^dist\//, "src/")
@@ -65,7 +67,9 @@ const pluginTestInclude = "src/cli/shared/plugin.test.ts";
 // halves their import time.
 // Classification is by file content so new tests are routed automatically.
 const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
-  const integrationTestFiles = new Set(globSync(integrationTestIncludes, { cwd: __dirname }));
+  const integrationTestFiles = new Set(
+    globSync(integrationTestIncludes, { cwd: import.meta.dirname }),
+  );
   const isExcludedUnitTest = (file: string): boolean =>
     file.includes("/node_modules/") ||
     file.includes("/__test_fixtures__/") ||
@@ -77,13 +81,13 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
 
   const needsIsolation = (file: string): boolean =>
     /\bvi\.(mock|doMock|useFakeTimers)\s*\(/.test(
-      readFileSync(path.resolve(__dirname, file), "utf8"),
+      readFileSync(path.resolve(import.meta.dirname, file), "utf8"),
     );
 
   const isolated: string[] = [];
   const shared: string[] = [];
   for (const file of globSync(["src/**/*.{test,spec}.ts", "scripts/**/*.{test,spec}.ts"], {
-    cwd: __dirname,
+    cwd: import.meta.dirname,
   })) {
     if (isExcludedUnitTest(file)) continue;
     (needsIsolation(file) ? isolated : shared).push(file);
@@ -91,11 +95,7 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
   return { isolated, shared };
 };
 
-// This config module is re-evaluated once per `extends: true` project (each in
-// the same process), so cache the file scan on globalThis to run it only once.
-const globalCache = globalThis as { __sdkUnitTestSplit?: ReturnType<typeof classifyUnitTests> };
-const { isolated: isolatedUnitTests, shared: sharedUnitTests } = (globalCache.__sdkUnitTestSplit ??=
-  classifyUnitTests());
+const { isolated: isolatedUnitTests, shared: sharedUnitTests } = classifyUnitTests();
 
 export default defineConfig({
   resolve: {
@@ -108,7 +108,6 @@ export default defineConfig({
   test: {
     projects: [
       {
-        extends: true,
         test: {
           // Tests that mutate worker-global state keep per-file isolation
           // (see split above).
@@ -122,7 +121,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           // The remaining tests share module evaluation across files
           // (isolate:false) to cut module-import time. Safe because no
@@ -134,7 +132,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           // Carved out so a Windows CI job can run just the plugin test via
           // `--project unit-plugin`; the `unit*` glob still runs it on Linux.
@@ -145,7 +142,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: "integration",
           include: integrationTestIncludes,
@@ -154,7 +150,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: "e2e",
           include: ["e2e/**/*.test.ts"],
@@ -165,7 +160,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           // Type tests already run in "unit-core"; disable so `--project 'e2e*'`
           // does not compile them a second time.

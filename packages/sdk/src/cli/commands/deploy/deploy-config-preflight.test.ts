@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   ensureConfigIdForDeploy: vi.fn(),
@@ -41,11 +41,6 @@ function deferConfigPreparation() {
 }
 
 describe("multi-config deploy preflight", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("waits for every config ID preparation before importing any config", async () => {
     const { firstPrepared, secondPrepared } = deferConfigPreparation();
     mocks.loadConfig.mockImplementation(async (configPath: string) => ({
