@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { TailorFieldType } from "#/configure/types/field.types";
 import type { UnionToTuple } from "type-fest";
 
@@ -15,4 +16,6 @@ const tailorFieldTypes: Record<TailorFieldType, true> = {
   nested: true,
 };
 
-export const tailorFieldTypeKeys = Object.keys(tailorFieldTypes) as UnionToTuple<TailorFieldType>;
+const tailorFieldTypeKeys = Object.keys(tailorFieldTypes) as UnionToTuple<TailorFieldType>;
+
+export const TailorFieldTypeSchema = z.enum(tailorFieldTypeKeys);
