@@ -44,7 +44,8 @@ export async function isKeyringAvailable(): Promise<boolean> {
 /**
  * Load tokens from the OS keyring for a given account.
  * @param account - User identifier (e.g. email or client ID)
- * @returns Token data or undefined if not found
+ * @returns Token data or undefined if not found or the stored JSON is invalid
+ * @throws If the keyring library is unavailable or the keyring cannot be read
  */
 export async function loadKeyringTokens(account: string): Promise<TokenData | undefined> {
   const Entry = await getEntryClass();
