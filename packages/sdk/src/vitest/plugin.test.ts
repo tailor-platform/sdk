@@ -564,6 +564,8 @@ describe("createEnvironmentPlugin", () => {
     // Vitest 5 no longer propagates the plugin-rewritten root `environment`
     // into projects that do not declare one, so the project would keep the
     // literal "tailor-runtime" and Vitest would try to load it as a module.
+    // A string `extends` inherits from that file instead of the root, so it
+    // must be left alone.
     const plugin = createEnvironmentPlugin();
     const userConfig = {
       test: {
@@ -571,6 +573,7 @@ describe("createEnvironmentPlugin", () => {
         projects: [
           { test: { name: "inherits" } },
           { test: { name: "opts-out" }, extends: false },
+          { test: { name: "other-config" }, extends: "./other.config.mjs" },
           { test: { name: "other-env", environment: "node" } },
         ],
       },
@@ -584,8 +587,10 @@ describe("createEnvironmentPlugin", () => {
     expect(projectTest(0).setupFiles).toEqual([expect.stringMatching(/setup\.mjs$/)]);
     expect(projectTest(1).environment).toBeUndefined();
     expect(projectTest(1).setupFiles).toBeUndefined();
-    expect(projectTest(2).environment).toBe("node");
+    expect(projectTest(2).environment).toBeUndefined();
     expect(projectTest(2).setupFiles).toBeUndefined();
+    expect(projectTest(3).environment).toBe("node");
+    expect(projectTest(3).setupFiles).toBeUndefined();
   });
 
   test("does not inject the setup file into a root config that selects another environment", () => {

@@ -339,7 +339,9 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
       // A project that declares no `environment` of its own inherits the
       // root's, but Vitest 5 inherits the literal name rather than the path
       // this hook rewrote it to, so it has to be rewritten here as well —
-      // unless the project opted out of inheritance with `extends: false`.
+      // only when the project actually inherits from the root. A string
+      // `extends` points at another config file, whose environment must not
+      // be overridden here.
       if (testConfig?.projects) {
         for (const project of testConfig.projects) {
           if (typeof project === "string") continue;
@@ -349,7 +351,7 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
           const inheritsRootEnvironment =
             projectTest.environment === undefined &&
             rootSelectsTailorRuntime &&
-            project.extends !== false;
+            (project.extends === undefined || project.extends === true);
           if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) continue;
           projectTest.environment = environmentPath;
           usesTailorRuntime = true;
