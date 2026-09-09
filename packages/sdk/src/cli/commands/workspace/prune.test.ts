@@ -740,7 +740,12 @@ describe("workspace prune command", () => {
         [pending.id]: new Date(NOW.getTime() + 3_600_000),
       });
 
-      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--organization-id",
+        ORG_A,
+        "--yes",
+      ]);
 
       expect(result.success).toBe(true);
       expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: expired.id });
@@ -767,7 +772,12 @@ describe("workspace prune command", () => {
           }),
         );
 
-      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--organization-id",
+        ORG_A,
+        "--yes",
+      ]);
 
       expect(result.success).toBe(true);
       expect(client.deleteWorkspace).not.toHaveBeenCalled();
@@ -777,7 +787,12 @@ describe("workspace prune command", () => {
       const unlabelled = workspace("ws-unlabelled", { createdAt: hoursAgo(999) });
       const client = stubClient([unlabelled]);
 
-      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--organization-id",
+        ORG_A,
+        "--yes",
+      ]);
 
       expect(result.success).toBe(true);
       expect(client.deleteWorkspace).not.toHaveBeenCalled();
@@ -789,7 +804,12 @@ describe("workspace prune command", () => {
         [unreadable.id]: new Error("permission denied"),
       });
 
-      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--organization-id",
+        ORG_A,
+        "--yes",
+      ]);
 
       expect(result.success).toBe(true);
       expect(client.deleteWorkspace).not.toHaveBeenCalled();
@@ -806,6 +826,8 @@ describe("workspace prune command", () => {
 
       const result = await runCommand(pruneCommand, [
         "--expired",
+        "--organization-id",
+        ORG_A,
         "--exclude",
         "ws-excluded",
         "--yes",
@@ -829,6 +851,8 @@ describe("workspace prune command", () => {
 
       const result = await runCommand(pruneCommand, [
         "--expired",
+        "--organization-id",
+        ORG_A,
         "--name-prefix",
         "e2e-ws-",
         "--yes",
@@ -836,6 +860,30 @@ describe("workspace prune command", () => {
 
       expect(result.success).toBe(true);
       expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: matching.id });
+    });
+
+    test("rejects an unscoped sweep, which would delete on a metadata writer's behalf", async () => {
+      const client = stubClient([workspace("ws-expired", { createdAt: hoursAgo(99) })]);
+
+      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+
+      expectFailure(result, "--expired requires --organization-id or --folder-id");
+      expect(client.listWorkspaces).not.toHaveBeenCalled();
+    });
+
+    test("accepts a folder scope in place of an organization scope", async () => {
+      const target = workspace("ws-expired", { createdAt: hoursAgo(99), folderId: FOLDER_A });
+      const client = stubClient([target], { [target.id]: hoursAgo(1) });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--folder-id",
+        FOLDER_A,
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
     });
 
     test("rejects being combined with --older-than", async () => {

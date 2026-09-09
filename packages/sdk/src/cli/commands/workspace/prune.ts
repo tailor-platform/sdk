@@ -265,11 +265,11 @@ export const pruneCommand = defineAppCommand({
   notes: ml`
     Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
 
-    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no name or age filter. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward; --name-prefix, --name-regex, and the scope options still apply and are worth keeping in a shared organization.
+    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no name or age filter. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires --organization-id or --folder-id, and --name-prefix / --name-regex still apply on top.
 
     Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and both --expired and --older-than 0s (no age check) are only accepted together with --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
@@ -286,7 +286,7 @@ export const pruneCommand = defineAppCommand({
     }),
     expired: arg(z.boolean().default(false), {
       description:
-        "Select workspaces whose own --ttl expiry has passed, instead of by name and age",
+        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-id or --folder-id",
     }),
     "organization-id": arg(scopeIdArg(), {
       alias: "o",
@@ -336,6 +336,14 @@ export const pruneCommand = defineAppCommand({
         code: "MISSING_NAME_FILTER",
         message: "Specify at least one of --name-prefix or --name-regex.",
         details: "Only workspaces whose name matches the filter are considered for deletion.",
+      });
+    }
+    if (args.expired && !args["organization-id"] && !args["folder-id"]) {
+      throw CLIError({
+        code: "UNSCOPED_EXPIRED",
+        message: "--expired requires --organization-id or --folder-id.",
+        details:
+          "The expiry lives on the workspace, and writing a workspace's metadata is a lesser permission than deleting it, so an unscoped sweep would delete on behalf of anyone able to write that metadata.",
       });
     }
     const olderThanMs = olderThan === undefined ? undefined : parseAge(olderThan);
