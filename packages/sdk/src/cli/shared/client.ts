@@ -239,6 +239,12 @@ export const UPLOAD_POOL_MAX_CONNECTIONS = 4;
  * of how many uploads are requested concurrently or how they're divided
  * across call sites (independent limiters at different call sites no longer
  * need to agree on a shared concurrency cap for this invariant to hold).
+ *
+ * The caller's `signal` and `timeoutMs` are honored while an upload is
+ * queued, not just once it's dispatched: an abort or an elapsed deadline
+ * rejects the queued call immediately and frees its place in line without
+ * consuming a pool slot, and time already spent queued is deducted from the
+ * deadline passed to the underlying transport once a connection is acquired.
  * @internal
  * @param primary - Transport used for unary calls, non-upload streams, and as the first pool slot
  * @param createAdditional - Creates one more transport for the pool
