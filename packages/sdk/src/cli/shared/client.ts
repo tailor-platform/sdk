@@ -7,6 +7,7 @@ import {
   ConnectError,
   createClient,
   type Interceptor,
+  type StreamResponse,
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
@@ -156,7 +157,13 @@ export async function initOperatorClient(accessToken: string, config?: PlatformC
     concurrencyLimitInterceptor(),
   ];
 
-  const transport = await createTransport(getPlatformBaseUrl(platformConfig), interceptors);
+  const baseUrl = getPlatformBaseUrl(platformConfig);
+  const primary = await createTransport(baseUrl, interceptors);
+  const transport = createPooledStreamTransport(
+    primary,
+    () => createTransport(baseUrl, interceptors),
+    UPLOAD_POOL_MAX_CONNECTIONS,
+  );
   return createClient(OperatorService, transport);
 }
 
@@ -175,6 +182,236 @@ export async function createTransport(
 ): Promise<Transport> {
   const { createConnectTransport } = await import("@connectrpc/connect-node");
   return createConnectTransport({ httpVersion: "2", baseUrl, interceptors });
+}
+
+/**
+ * RPCs that upload a request body via client streaming and are affected by
+ * the connection-pooling workaround below. Deliberately an allowlist rather
+ * than `method.methodKind === "client_streaming"`: the workaround targets
+ * outbound-DATA scheduling for uploads specifically, so a future streaming
+ * RPC (client- or server-streaming) is routed to `primary` — unaffected and
+ * unpooled — until someone consciously adds it here.
+ *
+ * A drift guard (see client.test.ts) fails CI if any `client_streaming`
+ * OperatorService method is neither listed here nor explicitly exempt, so a
+ * newly added client-streaming RPC can't silently bypass the pool by omission.
+ * @internal
+ */
+export const POOLED_UPLOAD_METHODS: ReadonlySet<string> = new Set([
+  "CreateFunctionRegistry",
+  "UpdateFunctionRegistry",
+  "UploadFile",
+]);
+
+/**
+ * Hard cap on the number of HTTP/2 connections `createPooledStreamTransport`
+ * opens. Deliberately small and internal (not derived from
+ * `TAILOR_APPLY_CONCURRENCY`, which bounds unrelated RPC concurrency and can
+ * be set arbitrarily large by a user) rather than a public env var: the pool
+ * now queues callers past this limit instead of relying on the caller never
+ * exceeding it, so correctness does not depend on this exact number. Not
+ * validated against production connection limits — kept conservative until
+ * real-platform data says otherwise.
+ * @internal
+ */
+export const UPLOAD_POOL_MAX_CONNECTIONS = 4;
+
+/**
+ * Wrap a transport so upload RPCs (see `POOLED_UPLOAD_METHODS`) are spread
+ * across a bounded pool of connections instead of sharing one. Unary calls,
+ * and any streaming call not in `POOLED_UPLOAD_METHODS`, always use
+ * `primary`, unaffected.
+ *
+ * Since Node 22.23.0/24.2.0, nghttp2 dropped its legacy priority-tree
+ * scheduler. In our measurements this changed how Node's http2 client
+ * schedules concurrent outbound DATA streams: uploads sharing one connection
+ * can finish 12x+ apart in wall-clock time even though aggregate throughput
+ * is unchanged, and there is no request header or API that opts a stream
+ * into different client-side scheduling. Spreading uploads across
+ * independent connections sidesteps that rather than fixing it; see this
+ * change's changeset entry for the measurement.
+ *
+ * Acquiring a connection: reuse an idle one if any exists; otherwise open a
+ * new one if the pool is below `maxConnections`; otherwise wait for a
+ * connection to become idle. A connection is never reused for a second
+ * concurrent upload while the pool still has room to grow or a caller is
+ * waiting — at most one upload is ever in flight per connection, regardless
+ * of how many uploads are requested concurrently or how they're divided
+ * across call sites (independent limiters at different call sites no longer
+ * need to agree on a shared concurrency cap for this invariant to hold).
+ *
+ * The caller's `signal` and `timeoutMs` are honored while an upload is
+ * queued, not just once it's dispatched: an abort or an elapsed deadline
+ * rejects the queued call immediately and frees its place in line without
+ * consuming a pool slot, and time already spent queued is deducted from the
+ * deadline passed to the underlying transport once a connection is acquired.
+ * @internal
+ * @param primary - Transport used for unary calls, non-upload streams, and as the first pool slot
+ * @param createAdditional - Creates one more transport for the pool
+ * @param maxConnections - Maximum number of connections in the pool (>= 1)
+ * @returns A transport presenting the same interface, backed by the pool
+ */
+export function createPooledStreamTransport(
+  primary: Transport,
+  createAdditional: () => Promise<Transport>,
+  maxConnections: number,
+): Transport {
+  if (!Number.isInteger(maxConnections) || maxConnections < 1) {
+    throw new Error(
+      `createPooledStreamTransport: maxConnections must be a positive integer, got ${maxConnections}`,
+    );
+  }
+  const transports: Transport[] = [primary];
+  const idle: number[] = [0];
+  const waiters: Array<() => void> = [];
+  let pendingCreates = 0;
+
+  // Finds (or creates) a connection and marks it busy in the same
+  // synchronous step (no `await` in between) so that two `stream()` calls
+  // issued back to back (e.g. via `Promise.all(uploads.map(...))`, which
+  // starts each task synchronously) can't both claim the same idle
+  // transport before either marks it busy. Growth and waiting are the only
+  // async steps; every other transition (finding an idle slot, deciding to
+  // grow, waking a waiter) happens synchronously within one of these steps.
+  function acquireTransportIndex(
+    signal: AbortSignal | undefined,
+    deadline: number | undefined,
+  ): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      function cleanup(): void {
+        settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        const waiterIndex = waiters.indexOf(attempt);
+        if (waiterIndex !== -1) waiters.splice(waiterIndex, 1);
+      }
+
+      function onAbort(): void {
+        cleanup();
+        reject(ConnectError.from(signal?.reason, Code.Canceled));
+      }
+
+      function onTimeout(): void {
+        cleanup();
+        reject(new ConnectError("the operation timed out", Code.DeadlineExceeded));
+      }
+
+      function claim(index: number): void {
+        if (settled) {
+          release(index);
+          return;
+        }
+        cleanup();
+        resolve(index);
+      }
+
+      function attempt(): void {
+        const idleIndex = idle.pop();
+        if (idleIndex !== undefined) {
+          claim(idleIndex);
+          return;
+        }
+        if (transports.length + pendingCreates < maxConnections) {
+          pendingCreates++;
+          createAdditional().then(
+            (transport) => {
+              pendingCreates--;
+              const index = transports.length;
+              transports.push(transport);
+              claim(index);
+            },
+            (error: unknown) => {
+              pendingCreates--;
+              cleanup();
+              reject(error instanceof Error ? error : new Error(String(error)));
+              // The failed connection never joins the pool, so a waiter
+              // stuck behind "pool full" would wait forever unless woken to
+              // retry (it may now see room to grow, or another release).
+              wakeOneWaiter();
+            },
+          );
+          return;
+        }
+        waiters.push(attempt);
+      }
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (deadline !== undefined) {
+        const remainingMs = deadline - performance.now();
+        if (remainingMs <= 0) {
+          onTimeout();
+          return;
+        }
+        timer = setTimeout(onTimeout, remainingMs);
+      }
+      attempt();
+    });
+  }
+
+  function wakeOneWaiter(): void {
+    waiters.shift()?.();
+  }
+
+  function release(index: number): void {
+    idle.push(index);
+    wakeOneWaiter();
+  }
+
+  return {
+    unary(method, signal, timeoutMs, header, input, contextValues) {
+      return primary.unary(method, signal, timeoutMs, header, input, contextValues);
+    },
+    async stream(method, signal, timeoutMs, header, input, contextValues) {
+      if (!POOLED_UPLOAD_METHODS.has(method.name)) {
+        return primary.stream(method, signal, timeoutMs, header, input, contextValues);
+      }
+      const deadline =
+        timeoutMs !== undefined && timeoutMs > 0 ? performance.now() + timeoutMs : undefined;
+      const index = await acquireTransportIndex(signal, deadline);
+      const transport = transports[index] as Transport;
+      let response: StreamResponse<typeof method.input, typeof method.output>;
+      try {
+        if (signal?.aborted) throw ConnectError.from(signal.reason, Code.Canceled);
+        const remainingMs =
+          deadline === undefined ? timeoutMs : Math.ceil(deadline - performance.now());
+        if (deadline !== undefined && remainingMs !== undefined && remainingMs <= 0) {
+          throw new ConnectError("the operation timed out", Code.DeadlineExceeded);
+        }
+        response = await transport.stream(
+          method,
+          signal,
+          remainingMs,
+          header,
+          input,
+          contextValues,
+        );
+      } catch (error) {
+        release(index);
+        throw error;
+      }
+      // `stream()` resolves once response headers arrive, not once the
+      // response is fully read (or the request body fully sent) — connect's
+      // node http2 client starts writing the request body without waiting
+      // for it, and only awaits headers here. Keep the connection marked
+      // busy until the caller finishes reading `message`, so a connection
+      // isn't reused while this upload is still in flight.
+      return { ...response, message: releaseAfter(response.message, () => release(index)) };
+    },
+  };
+}
+
+async function* releaseAfter<T>(iterable: AsyncIterable<T>, release: () => void): AsyncIterable<T> {
+  try {
+    yield* iterable;
+  } finally {
+    release();
+  }
 }
 
 /**
