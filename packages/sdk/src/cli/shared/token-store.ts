@@ -22,9 +22,6 @@ async function getEntryClass(): Promise<EntryConstructor | false> {
 
   try {
     const mod = await import("@napi-rs/keyring");
-    const probe = new mod.Entry(SERVICE_NAME, "__probe__");
-    probe.setPassword("probe");
-    probe.deletePassword();
     entryClass = mod.Entry;
   } catch {
     logger.warn(
@@ -37,8 +34,8 @@ async function getEntryClass(): Promise<EntryConstructor | false> {
 }
 
 /**
- * Check whether the OS keyring is available and functional.
- * @returns true if keyring is available
+ * Check whether the native keyring library can be loaded.
+ * @returns true if the library is available; individual operations may still fail
  */
 export async function isKeyringAvailable(): Promise<boolean> {
   return (await getEntryClass()) !== false;
@@ -47,16 +44,16 @@ export async function isKeyringAvailable(): Promise<boolean> {
 /**
  * Load tokens from the OS keyring for a given account.
  * @param account - User identifier (e.g. email or client ID)
- * @returns Token data or undefined if not found or keyring unavailable
+ * @returns Token data or undefined if not found
  */
 export async function loadKeyringTokens(account: string): Promise<TokenData | undefined> {
   const Entry = await getEntryClass();
-  if (!Entry) return undefined;
+  if (!Entry) throw new Error("System keyring is not available.");
 
+  const entry = new Entry(SERVICE_NAME, account);
+  const raw = entry.getPassword();
+  if (raw === null) return undefined;
   try {
-    const entry = new Entry(SERVICE_NAME, account);
-    const raw = entry.getPassword();
-    if (raw === null) return undefined;
     return JSON.parse(raw) as TokenData;
   } catch {
     return undefined;
@@ -70,7 +67,7 @@ export async function loadKeyringTokens(account: string): Promise<TokenData | un
  */
 export async function saveKeyringTokens(account: string, tokens: TokenData): Promise<void> {
   const Entry = await getEntryClass();
-  if (!Entry) return;
+  if (!Entry) throw new Error("System keyring is not available.");
 
   const entry = new Entry(SERVICE_NAME, account);
   entry.setPassword(JSON.stringify(tokens));

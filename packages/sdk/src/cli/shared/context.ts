@@ -843,11 +843,25 @@ export async function resolveTokens(
   label = user,
 ): Promise<{ accessToken: string; refreshToken?: string }> {
   if (userEntry.storage === "keyring") {
-    const tokens = await loadKeyringTokens(user);
+    let tokens: UserTokens | undefined;
+    try {
+      tokens = await loadKeyringTokens(user);
+    } catch (error) {
+      throw new Error(
+        ml`
+          Failed to read credentials from OS keyring for "${label}". ${formatUnknownError(error)}
+          Restore access to the OS keyring and try again, or run 'tailor login' in this environment to authenticate again.
+          For non-interactive environments, set TAILOR_PLATFORM_TOKEN.
+        `,
+        { cause: error },
+      );
+    }
     if (!tokens) {
       throw new Error(ml`
         Credentials not found in OS keyring for "${label}".
-        Please run 'tailor login' and try again.
+        Credentials may be missing or inaccessible from this environment (for example, due to sandbox restrictions).
+        Restore access to the OS keyring and try again, or run 'tailor login' in this environment to authenticate again.
+        For non-interactive environments, set TAILOR_PLATFORM_TOKEN.
       `);
     }
     return tokens;
