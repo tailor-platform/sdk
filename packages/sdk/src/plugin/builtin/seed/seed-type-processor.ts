@@ -51,6 +51,12 @@ export interface SeedNamespaceConfig {
   requiredFields: Record<string, string[]>;
   /** Field names the platform assigns rather than the seed row, per table. */
   omitFields?: Record<string, string[]>;
+  /**
+   * Self-referencing field names per table (a subset of the table's own
+   * fields, e.g. `parentId`). Lets the seed script order same-table inserts
+   * so a row is never inserted before the row it points to.
+   */
+  selfRefFields?: Record<string, string[]>;
 }
 
 /**
@@ -95,6 +101,7 @@ export function buildSeedNamespaceConfigs(
     const types: string[] = [];
     const dependencies: Record<string, string[]> = {};
     const selfRefTypes: string[] = [];
+    const selfRefFields: Record<string, string[]> = {};
     const requiredFields: Record<string, string[]> = {};
     const omitFields: Record<string, string[]> = {};
 
@@ -102,6 +109,7 @@ export function buildSeedNamespaceConfigs(
       const typeInfo = processSeedTypeInfo(type, ns.namespace);
       types.push(typeInfo.name);
       dependencies[typeInfo.name] = typeInfo.dependencies;
+      selfRefFields[typeInfo.name] = typeInfo.selfRefFields;
       if (typeInfo.selfRefFields.length > 0) {
         selfRefTypes.push(typeInfo.name);
       }
@@ -130,6 +138,7 @@ export function buildSeedNamespaceConfigs(
       types,
       dependencies,
       selfRefTypes,
+      selfRefFields,
       requiredFields,
       omitFields,
     };

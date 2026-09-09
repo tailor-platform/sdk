@@ -149,4 +149,41 @@ describe("buildSeedNamespaceConfigs", () => {
       expect(config?.omitFields?.User).toEqual([]);
     });
   });
+
+  describe("selfRefFields", () => {
+    test("names the field a self-referencing relation is keyed through", () => {
+      const category = makeType("Category", {
+        id: { name: "id", config: { type: "string" } },
+        parentId: {
+          name: "parentId",
+          config: { type: "string" },
+          relation: {
+            targetType: "Category",
+            forwardName: "parent",
+            backwardName: "children",
+            key: "id",
+            unique: false,
+          },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [category])]);
+
+      // The seed script (bundler.ts) uses this to order same-table inserts
+      // so a row is never inserted before the row it references.
+      expect(config?.selfRefFields?.Category).toEqual(["parentId"]);
+      expect(config?.selfRefTypes).toEqual(["Category"]);
+    });
+
+    test("is empty for a table with no self-referencing fields", () => {
+      const user = makeType("User", {
+        id: { name: "id", config: { type: "string" } },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [user])]);
+
+      expect(config?.selfRefFields?.User).toEqual([]);
+      expect(config?.selfRefTypes).toEqual([]);
+    });
+  });
 });

@@ -18,6 +18,7 @@ type SeedInput = {
   data: Record<string, Record<string, unknown>[]>;
   order: string[];
   selfRefTypes: string[];
+  selfRefFields?: Record<string, string[]>;
   upsert?: boolean;
 };
 
@@ -293,6 +294,54 @@ describe("seed script upsert behavior", () => {
     expect(queries).toHaveLength(3);
     expect(queries[0]?.sql).toMatch(/^select /);
     expect(queries.slice(1).every(({ sql }) => sql.startsWith("insert"))).toBe(true);
+  });
+
+  test("orders self-referencing inserts by dependency, not file order", async () => {
+    // Dumped rows are ordered by id (a UUID), so a child can land before its
+    // parent in the file; selfRefFields must let the script reorder them.
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c2", parentId: "c1" },
+          { id: "c1", parentId: null },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries).toHaveLength(2);
+    expect(insertQueries[0]?.parameters).toContain("c1");
+    expect(insertQueries[1]?.parameters).toContain("c2");
+  });
+
+  test("falls back to file order when selfRefFields is not provided", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c1", parentId: null },
+          { id: "c2", parentId: "c1" },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries[0]?.parameters).toContain("c1");
+    expect(insertQueries[1]?.parameters).toContain("c2");
   });
 });
 

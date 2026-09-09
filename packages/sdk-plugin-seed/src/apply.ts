@@ -38,6 +38,7 @@ interface SeedNamespaceParams {
   typesToSeed: string[];
   dependencies: Record<string, string[]>;
   selfRefTypes: string[];
+  selfRefFields: Record<string, string[]>;
   requiredFields: Record<string, string[]>;
   upsert: boolean;
   configDir: string;
@@ -83,6 +84,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     typesToSeed,
     dependencies,
     selfRefTypes,
+    selfRefFields,
     requiredFields,
     upsert,
     configDir,
@@ -127,7 +129,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
       workspaceId: execution.workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: { data: chunk.data, order: chunk.order, selfRefTypes, upsert },
+      arg: { data: chunk.data, order: chunk.order, selfRefTypes, selfRefFields, upsert },
       invoker: {
         namespace: execution.authNamespace,
         machineUserName: execution.machineUserName,
@@ -574,6 +576,7 @@ export const seedApplyCommand = defineAppCommand({
         typesToSeed,
         dependencies: nsConfig.dependencies,
         selfRefTypes: nsConfig.selfRefTypes,
+        selfRefFields: nsConfig.selfRefFields ?? {},
         requiredFields: nsConfig.requiredFields,
         upsert: args.upsert,
         configDir: path.dirname(context.config.path),

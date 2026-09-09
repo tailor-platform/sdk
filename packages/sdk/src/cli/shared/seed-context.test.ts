@@ -135,6 +135,7 @@ describe("loadSeedContext", () => {
         types: ["User", "Order"],
         dependencies: { User: [], Order: ["User"] },
         selfRefTypes: ["Order"],
+        selfRefFields: { User: [], Order: ["parent"] },
         requiredFields: { User: [], Order: ["user", "parent"] },
         omitFields: { User: [], Order: [] },
       },

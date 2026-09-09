@@ -44,6 +44,7 @@ function generateSeedScriptContent(namespace: string): string {
       data: Record<string, Record<string, unknown>[]>;
       order: string[];
       selfRefTypes: string[];
+      selfRefFields?: Record<string, string[]>;
       upsert?: boolean;
     };
 
@@ -58,6 +59,73 @@ function generateSeedScriptContent(namespace: string): string {
       return new Kysely<Record<string, Record<string, unknown>>>({
         dialect: new TailordbDialect(client),
       });
+    }
+
+    /**
+     * Order records of a self-referencing table so a row referenced by
+     * another row in the same batch is always inserted first.
+     *
+     * Dumped seed data is ordered by id (a UUID), which has no relationship
+     * to parent/child order, so a naive one-by-one insert in file order can
+     * insert a child before the parent it points to. This does a Kahn
+     * topological sort over the in-batch rows using \`fields\` (the table's
+     * own self-referencing field names) as the edges; a row referencing a
+     * parent outside the batch (already applied, or null) has no edge to
+     * resolve. Rows that form a cycle (which a real hierarchy should never
+     * produce) are appended in their original order rather than dropped, so
+     * a run never silently loses data.
+     */
+    function sortBySelfReference(
+      records: Record<string, unknown>[],
+      fields: string[],
+    ): Record<string, unknown>[] {
+      if (fields.length === 0 || records.length <= 1) return records;
+
+      const byId = new Map<unknown, Record<string, unknown>>();
+      for (const record of records) byId.set(record.id, record);
+
+      const inDegree = new Map<unknown, number>();
+      const dependents = new Map<unknown, unknown[]>();
+      for (const record of records) {
+        inDegree.set(record.id, 0);
+        dependents.set(record.id, []);
+      }
+      for (const record of records) {
+        const id = record.id;
+        for (const field of fields) {
+          const parentId = record[field];
+          if (parentId === null || parentId === undefined || parentId === id) continue;
+          if (!byId.has(parentId)) continue;
+          inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
+          dependents.get(parentId)?.push(id);
+        }
+      }
+
+      const queue: unknown[] = [];
+      for (const record of records) {
+        if ((inDegree.get(record.id) ?? 0) === 0) queue.push(record.id);
+      }
+
+      const seen = new Set<unknown>();
+      const orderedIds: unknown[] = [];
+      while (queue.length > 0) {
+        const id = queue.shift();
+        if (seen.has(id)) continue;
+        seen.add(id);
+        orderedIds.push(id);
+        for (const dependentId of dependents.get(id) ?? []) {
+          const remaining = (inDegree.get(dependentId) ?? 0) - 1;
+          inDegree.set(dependentId, remaining);
+          if (remaining === 0) queue.push(dependentId);
+        }
+      }
+      for (const record of records) {
+        if (!seen.has(record.id)) orderedIds.push(record.id);
+      }
+
+      return orderedIds
+        .map((id) => byId.get(id))
+        .filter((record): record is Record<string, unknown> => record !== undefined);
     }
 
     export async function main(input: SeedInput): Promise<SeedResult> {
@@ -99,8 +167,11 @@ function generateSeedScriptContent(namespace: string): string {
           }
 
           if (hasSelfRef) {
-            // Insert one-by-one to respect self-referencing foreign key order
-            for (const record of recordsToInsert) {
+            // Insert one-by-one, in dependency order, to respect
+            // self-referencing foreign keys.
+            const selfRefFieldNames = (input.selfRefFields || {})[tableName] || [];
+            const orderedRecords = sortBySelfReference(recordsToInsert, selfRefFieldNames);
+            for (const record of orderedRecords) {
               await db.insertInto(tableName).values(record).execute();
               processed[tableName].inserted += 1;
             }
