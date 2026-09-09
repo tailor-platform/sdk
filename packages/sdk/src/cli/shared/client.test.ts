@@ -24,6 +24,7 @@ import {
   initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
+  POOLED_UPLOAD_METHODS,
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   RETRY_SAFE_CREATE_METHODS,
@@ -117,7 +118,7 @@ describe("createPooledStreamTransport", () => {
     Transport["unary"]
   >;
   const streamArgs = [
-    {},
+    { name: "UploadFile" },
     undefined,
     undefined,
     undefined,
@@ -223,6 +224,141 @@ describe("createPooledStreamTransport", () => {
 
     primary.resolve();
     await call1;
+  });
+
+  test("queues an upload beyond pool capacity instead of multiplexing it onto a busy connection", async () => {
+    const first = makeControllableTransport();
+    const second = makeControllableTransport();
+    const createAdditional = vi
+      .fn<() => Promise<Transport>>()
+      .mockResolvedValueOnce(second.transport);
+    const pooled = createPooledStreamTransport(first.transport, createAdditional, 2);
+
+    const call1 = pooled.stream(...streamArgs);
+    const call2 = pooled.stream(...streamArgs);
+    let call3Settled = false;
+    const call3 = pooled.stream(...streamArgs).then((r) => {
+      call3Settled = true;
+      return r;
+    });
+
+    // Give both in-flight calls a chance to reach their transport.stream()
+    // call without resolving either controllable transport.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Pool is at capacity (2/2, both busy): the third caller must wait
+    // rather than share either connection.
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(first.transport.stream).toHaveBeenCalledTimes(1);
+    expect(second.transport.stream).toHaveBeenCalledTimes(1);
+    expect(call3Settled).toBe(false);
+
+    first.resolve();
+    const response1 = (await call1) as unknown as MockStreamResponse;
+    await drain(response1); // releases the first connection, waking call3
+
+    const response3 = (await call3) as unknown as MockStreamResponse;
+    expect(call3Settled).toBe(true);
+    // The freed connection is reused; no third connection is created.
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(first.transport.stream).toHaveBeenCalledTimes(2);
+    await drain(response3);
+
+    second.resolve();
+    await drain((await call2) as unknown as MockStreamResponse);
+  });
+
+  test("wakes a waiting caller to retry after a competing connection attempt fails", async () => {
+    const primary = makeControllableTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi
+      .fn<() => Promise<Transport>>()
+      .mockRejectedValueOnce(new Error("connect failed"))
+      .mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary.transport, createAdditional, 2);
+
+    // Occupies the only existing (primary) connection, staying pending.
+    const call1 = pooled.stream(...streamArgs);
+    // No idle connection: triggers growth, whose only queued attempt fails.
+    const call2 = pooled.stream(...streamArgs).catch((error: unknown) => error);
+    // Arrives while call2's growth is in flight and the pool already counts
+    // as full (transports.length + pendingCreates === maxConnections): must
+    // wait rather than fail alongside call2 or share primary.
+    let call3Settled = false;
+    const call3 = pooled.stream(...streamArgs).then((r) => {
+      call3Settled = true;
+      return r;
+    });
+
+    const call2Result = await call2;
+    expect(call2Result).toBeInstanceOf(Error);
+    expect((call2Result as Error).message).toBe("connect failed");
+
+    // call2's failure must wake call3 to retry acquiring a connection,
+    // instead of leaving it stuck behind a connection attempt that will
+    // never come back (a deadlock).
+    await drain((await call3) as unknown as MockStreamResponse);
+    expect(call3Settled).toBe(true);
+    expect(createAdditional).toHaveBeenCalledTimes(2);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+
+    primary.resolve();
+    await drain((await call1) as unknown as MockStreamResponse);
+  });
+
+  test("routes a non-upload streaming RPC directly to primary, unpooled", async () => {
+    const primary = makeMockTransport();
+    const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
+    const pooled = createPooledStreamTransport(primary, createAdditional, 4);
+
+    const downloadArgs = [
+      { name: "DownloadFunctionRegistryScript" },
+      undefined,
+      undefined,
+      undefined,
+      (async function* () {})(),
+      undefined,
+    ] as unknown as Parameters<Transport["stream"]>;
+
+    await drain((await pooled.stream(...downloadArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...downloadArgs)) as unknown as MockStreamResponse);
+
+    expect(createAdditional).not.toHaveBeenCalled();
+    expect(primary.stream).toHaveBeenCalledTimes(2);
+  });
+
+  // Drift guard: every client_streaming OperatorService method must be a
+  // conscious decision — pooled (in POOLED_UPLOAD_METHODS) or explicitly
+  // exempt below — so a newly added client-streaming RPC can't silently
+  // bypass the pool by omission (or silently join it without review).
+  test("POOLED_UPLOAD_METHODS covers every client_streaming OperatorService method or is explicitly exempt", () => {
+    const EXEMPT_CLIENT_STREAMING_METHODS = new Set<string>([]);
+
+    const clientStreamingMethods = Object.values(OperatorService.method)
+      .filter((m) => m.methodKind === "client_streaming")
+      .map((m) => m.name);
+
+    // Sanity: the scan actually found the known upload RPCs.
+    expect(clientStreamingMethods).toEqual(
+      expect.arrayContaining(["CreateFunctionRegistry", "UpdateFunctionRegistry", "UploadFile"]),
+    );
+
+    const unclassified = clientStreamingMethods.filter(
+      (name) => !POOLED_UPLOAD_METHODS.has(name) && !EXEMPT_CLIENT_STREAMING_METHODS.has(name),
+    );
+    expect(unclassified).toEqual([]);
+  });
+
+  test("every POOLED_UPLOAD_METHODS entry is a real client_streaming OperatorService method", () => {
+    const realClientStreamingNames = new Set(
+      Object.values(OperatorService.method)
+        .filter((m) => m.methodKind === "client_streaming")
+        .map((m) => m.name),
+    );
+    const typos = [...POOLED_UPLOAD_METHODS].filter((name) => !realClientStreamingNames.has(name));
+    expect(typos).toEqual([]);
   });
 });
 

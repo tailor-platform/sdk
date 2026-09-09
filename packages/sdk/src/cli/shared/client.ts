@@ -12,7 +12,7 @@ import {
   type UnaryResponse,
 } from "@connectrpc/connect";
 import { z } from "zod";
-import { createApplyLimiter, resolveApplyConcurrency } from "./apply-concurrency";
+import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 import { userAgent } from "./user-agent";
@@ -162,7 +162,7 @@ export async function initOperatorClient(accessToken: string, config?: PlatformC
   const transport = createPooledStreamTransport(
     primary,
     () => createTransport(baseUrl, interceptors),
-    resolveApplyConcurrency(),
+    UPLOAD_POOL_MAX_CONNECTIONS,
   );
   return createClient(OperatorService, transport);
 }
@@ -185,79 +185,124 @@ export async function createTransport(
 }
 
 /**
- * Wrap a transport so streaming calls (function/script/static website
- * uploads) are spread across a pool of connections instead of one. Unary
- * calls always use `primary`, unaffected.
+ * RPCs that upload a request body via client streaming and are affected by
+ * the connection-pooling workaround below. Deliberately an allowlist rather
+ * than `method.methodKind === "client_streaming"`: the workaround targets
+ * outbound-DATA scheduling for uploads specifically, so a future streaming
+ * RPC (client- or server-streaming) is routed to `primary` — unaffected and
+ * unpooled — until someone consciously adds it here.
  *
- * Since Node 22.23.0/24.2.0 (nghttp2 dropped its legacy priority-tree
- * scheduler for RFC 9218, whose default urgency/incremental values make
- * serial-by-stream-ID processing the spec-recommended behavior), Node's
- * http2 client has no way for a caller to opt a stream into incremental
- * scheduling: streams sharing a connection can finish 12x+ apart in
- * wall-clock time even though aggregate throughput is unchanged. Spreading
- * streams across independent connections sidesteps that rather than fixing
- * it; see this change's changeset entry for the measurement.
- *
- * Each streaming call picks an idle connection if one exists; only when
- * every existing connection is busy does it create one more, up to
- * `poolSize` (the same apply-concurrency budget that already bounds how
- * many streaming uploads run at once — see `applyFunctionRegistry`). This
- * grows the pool to match actual concurrent demand instead of opening
- * `poolSize` connections up front on the first call.
+ * A drift guard (see client.test.ts) fails CI if any `client_streaming`
+ * OperatorService method is neither listed here nor explicitly exempt, so a
+ * newly added client-streaming RPC can't silently bypass the pool by omission.
  * @internal
- * @param primary - Transport used for unary calls and as the first stream slot
+ */
+export const POOLED_UPLOAD_METHODS: ReadonlySet<string> = new Set([
+  "CreateFunctionRegistry",
+  "UpdateFunctionRegistry",
+  "UploadFile",
+]);
+
+/**
+ * Hard cap on the number of HTTP/2 connections `createPooledStreamTransport`
+ * opens. Deliberately small and internal (not derived from
+ * `TAILOR_APPLY_CONCURRENCY`, which bounds unrelated RPC concurrency and can
+ * be set arbitrarily large by a user) rather than a public env var: the pool
+ * now queues callers past this limit instead of relying on the caller never
+ * exceeding it, so correctness does not depend on this exact number. Not
+ * validated against production connection limits — kept conservative until
+ * real-platform data says otherwise.
+ * @internal
+ */
+export const UPLOAD_POOL_MAX_CONNECTIONS = 4;
+
+/**
+ * Wrap a transport so upload RPCs (see `POOLED_UPLOAD_METHODS`) are spread
+ * across a bounded pool of connections instead of sharing one. Unary calls,
+ * and any streaming call not in `POOLED_UPLOAD_METHODS`, always use
+ * `primary`, unaffected.
+ *
+ * Since Node 22.23.0/24.2.0, nghttp2 dropped its legacy priority-tree
+ * scheduler. In our measurements this changed how Node's http2 client
+ * schedules concurrent outbound DATA streams: uploads sharing one connection
+ * can finish 12x+ apart in wall-clock time even though aggregate throughput
+ * is unchanged, and there is no request header or API that opts a stream
+ * into different client-side scheduling. Spreading uploads across
+ * independent connections sidesteps that rather than fixing it; see this
+ * change's changeset entry for the measurement.
+ *
+ * Acquiring a connection: reuse an idle one if any exists; otherwise open a
+ * new one if the pool is below `maxConnections`; otherwise wait for a
+ * connection to become idle. A connection is never reused for a second
+ * concurrent upload while the pool still has room to grow or a caller is
+ * waiting — at most one upload is ever in flight per connection, regardless
+ * of how many uploads are requested concurrently or how they're divided
+ * across call sites (independent limiters at different call sites no longer
+ * need to agree on a shared concurrency cap for this invariant to hold).
+ * @internal
+ * @param primary - Transport used for unary calls, non-upload streams, and as the first pool slot
  * @param createAdditional - Creates one more transport for the pool
- * @param poolSize - Maximum number of connections in the pool (>= 1)
+ * @param maxConnections - Maximum number of connections in the pool (>= 1)
  * @returns A transport presenting the same interface, backed by the pool
  */
 export function createPooledStreamTransport(
   primary: Transport,
   createAdditional: () => Promise<Transport>,
-  poolSize: number,
+  maxConnections: number,
 ): Transport {
   const transports: Transport[] = [primary];
-  const busyCounts: number[] = [0];
-  let growing: Promise<void> | undefined;
+  const idle: number[] = [0];
+  const waiters: Array<() => void> = [];
+  let pendingCreates = 0;
 
-  // Finds an index and marks it busy in the same synchronous step (no
-  // `await` in between) so that two `stream()` calls issued back to back
-  // (e.g. via `Promise.all(uploads.map(...))`, which starts each task
-  // synchronously) can't both claim the same idle transport before either
-  // marks it busy.
-  async function acquireTransportIndex(): Promise<number> {
-    for (;;) {
-      const idleIndex = busyCounts.findIndex((count) => count === 0);
-      if (idleIndex !== -1) {
-        busyCounts[idleIndex] = (busyCounts[idleIndex] ?? 0) + 1;
-        return idleIndex;
-      }
-      if (transports.length >= poolSize) {
-        let leastBusy = 0;
-        let leastBusyCount = busyCounts[0] ?? 0;
-        for (let i = 1; i < busyCounts.length; i++) {
-          const count = busyCounts[i] ?? 0;
-          if (count < leastBusyCount) {
-            leastBusy = i;
-            leastBusyCount = count;
-          }
+  // Finds (or creates) a connection and marks it busy in the same
+  // synchronous step (no `await` in between) so that two `stream()` calls
+  // issued back to back (e.g. via `Promise.all(uploads.map(...))`, which
+  // starts each task synchronously) can't both claim the same idle
+  // transport before either marks it busy. Growth and waiting are the only
+  // async steps; every other transition (finding an idle slot, deciding to
+  // grow, waking a waiter) happens synchronously within one of these steps.
+  function acquireTransportIndex(): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
+      function attempt(): void {
+        const idleIndex = idle.pop();
+        if (idleIndex !== undefined) {
+          resolve(idleIndex);
+          return;
         }
-        busyCounts[leastBusy] = (busyCounts[leastBusy] ?? 0) + 1;
-        return leastBusy;
+        if (transports.length + pendingCreates < maxConnections) {
+          pendingCreates++;
+          createAdditional().then(
+            (transport) => {
+              pendingCreates--;
+              const index = transports.length;
+              transports.push(transport);
+              resolve(index);
+            },
+            (error: unknown) => {
+              pendingCreates--;
+              reject(error instanceof Error ? error : new Error(String(error)));
+              // The failed connection never joins the pool, so a waiter
+              // stuck behind "pool full" would wait forever unless woken to
+              // retry (it may now see room to grow, or another release).
+              wakeOneWaiter();
+            },
+          );
+          return;
+        }
+        waiters.push(attempt);
       }
-      growing ??= createAdditional()
-        .then((transport) => {
-          transports.push(transport);
-          busyCounts.push(0);
-        })
-        .finally(() => {
-          growing = undefined;
-        });
-      await growing;
-    }
+      attempt();
+    });
+  }
+
+  function wakeOneWaiter(): void {
+    waiters.shift()?.();
   }
 
   function release(index: number): void {
-    busyCounts[index] = (busyCounts[index] ?? 0) - 1;
+    idle.push(index);
+    wakeOneWaiter();
   }
 
   return {
@@ -265,6 +310,9 @@ export function createPooledStreamTransport(
       return primary.unary(method, signal, timeoutMs, header, input, contextValues);
     },
     async stream(method, signal, timeoutMs, header, input, contextValues) {
+      if (!POOLED_UPLOAD_METHODS.has(method.name)) {
+        return primary.stream(method, signal, timeoutMs, header, input, contextValues);
+      }
       const index = await acquireTransportIndex();
       const transport = transports[index] as Transport;
       let response: StreamResponse<typeof method.input, typeof method.output>;
