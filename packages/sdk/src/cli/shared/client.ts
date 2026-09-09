@@ -262,7 +262,7 @@ export function retryInterceptor(): Interceptor {
           lastError = error;
           logger.debug(
             `retry: ${req.method.name} attempt ${i + 1} failed with ` +
-              `${connectCodeName(error)}; retrying`,
+              `${retryErrorCodeName(error)}; retrying`,
           );
           continue;
         }
@@ -296,12 +296,15 @@ export function concurrencyLimitInterceptor(): Interceptor {
 }
 
 /**
- * Human-readable name for the Connect status code of an error, for diagnostics.
- * @param error - Error thrown by a request (expected to be a ConnectError)
- * @returns The Code name (e.g., "Unavailable"), or "unknown" for non-ConnectError
+ * Human-readable name for a retried error, for diagnostics.
+ * @param error - Error thrown by a request (a ConnectError or a transport disconnect)
+ * @returns The Connect Code name (e.g., "Unavailable"), the raw transport error code
+ * (e.g., "ECONNRESET"), or "unknown" if neither applies
  */
-function connectCodeName(error: unknown): string {
-  return error instanceof ConnectError ? Code[error.code] : "unknown";
+function retryErrorCodeName(error: unknown): string {
+  if (error instanceof ConnectError) return Code[error.code];
+  if (isTransportDisconnectError(error)) return error.code;
+  return "unknown";
 }
 
 /**
@@ -423,6 +426,30 @@ function waitRetryBackoff(attempt: number) {
   return new Promise((resolve) => setTimeout(resolve, backoff));
 }
 
+// Node/undici error codes for a connection torn down mid-request. Whether the
+// request reached the server is unknown, same ambiguity as Code.Aborted/Internal,
+// so retry is scoped the same way (idempotent/no-side-effect methods only).
+const TRANSPORT_DISCONNECT_ERROR_CODES: ReadonlySet<string> = new Set([
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EPIPE",
+]);
+
+/**
+ * Whether an error is a raw Node/undici transport disconnect (not a `ConnectError`).
+ * @param error - Error thrown by the request
+ * @returns True if `error.code` is a known transport disconnect code
+ */
+function isTransportDisconnectError(error: unknown): error is Error & { code: string } {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    TRANSPORT_DISCONNECT_ERROR_CODES.has(error.code)
+  );
+}
+
 /**
  * Determine whether the given error is retriable for the method idempotency.
  * @param error - Error thrown by the request
@@ -430,8 +457,12 @@ function waitRetryBackoff(attempt: number) {
  * @returns True if the error should be retried
  */
 function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel) {
+  const isIdempotentOrSideEffectFree =
+    idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+    idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT;
+
   if (!(error instanceof ConnectError)) {
-    return false;
+    return isTransportDisconnectError(error) && isIdempotentOrSideEffectFree;
   }
 
   switch (error.code) {
@@ -440,10 +471,7 @@ function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel
       return true;
     case Code.Aborted:
     case Code.Internal:
-      return (
-        idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
-        idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT
-      );
+      return isIdempotentOrSideEffectFree;
     default:
       return false;
   }
