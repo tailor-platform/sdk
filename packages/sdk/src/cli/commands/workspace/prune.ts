@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { confirmationArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";

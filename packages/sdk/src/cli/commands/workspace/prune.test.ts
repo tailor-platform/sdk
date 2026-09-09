@@ -1,6 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import {
@@ -13,8 +13,8 @@ import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { parseAge, pruneCommand, selectPruneCandidates } from "./prune";
+import type { RunResult } from "@politty/zod";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
-import type { RunResult } from "politty";
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
