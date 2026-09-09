@@ -152,6 +152,7 @@ export type {
   WorkflowExecutionInfo,
   WorkflowJobExecutionInfo,
 } from "./commands/workflow/transform";
+export type { FunctionLogEntryInfo } from "./shared/function-execution";
 export {
   triggerExecutor,
   type TriggerExecutorTypedOptions,
