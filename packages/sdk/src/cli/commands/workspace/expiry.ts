@@ -1,4 +1,5 @@
-import type { MetadataLabelClient } from "../deploy/label";
+import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
+import { writeMetadataLabelsDirect, type MetadataLabelClient } from "../deploy/label";
 
 /** Label key recording when a workspace becomes eligible for pruning. */
 export const expiresAtLabelKey = "sdk-expires-at";
@@ -95,4 +96,89 @@ export async function fetchWorkspaceExpiry(
   } catch (error) {
     return { error: error instanceof Error ? error : new Error(String(error)) };
   }
+}
+
+/**
+ * Record when a workspace becomes prunable.
+ *
+ * Goes through the read-merge-write helper so the workspace's other labels
+ * survive: `SetMetadata` replaces the whole label map.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param expiresAt - Instant the workspace becomes prunable
+ */
+export async function writeWorkspaceExpiry(
+  client: MetadataLabelClient,
+  workspaceId: string,
+  expiresAt: Date,
+): Promise<void> {
+  await writeMetadataLabelsDirect(client, {
+    trn: workspaceTrn(workspaceId),
+    labels: { [expiresAtLabelKey]: encodeExpiresAt(expiresAt) },
+  });
+}
+
+/**
+ * Drop a workspace's recorded expiry, leaving its other labels in place.
+ *
+ * The key is removed rather than set to an empty value so nothing later reads
+ * a blank expiry as a recorded one.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ */
+export async function clearWorkspaceExpiry(
+  client: MetadataLabelClient,
+  workspaceId: string,
+): Promise<void> {
+  await writeMetadataLabelsDirect(client, {
+    trn: workspaceTrn(workspaceId),
+    remove: [expiresAtLabelKey],
+  });
+}
+
+/** How a command reports a workspace's recorded expiry. */
+export type ReportedExpiry = string | null | "invalid" | "unavailable";
+
+/**
+ * Describe an expiry state for command output.
+ *
+ * A state that could not be read reports as unavailable rather than as no
+ * expiry, so output never implies a workspace is safe from `prune --expired`
+ * when that is unknown.
+ * @param result - What reading the expiry produced
+ * @returns The value to report
+ */
+export function reportedExpiry(
+  result: { expiry: WorkspaceExpiry } | { error: Error },
+): ReportedExpiry {
+  if ("error" in result) return "unavailable";
+  switch (result.expiry.state) {
+    case "unset":
+      return null;
+    case "invalid":
+      return "invalid";
+    default:
+      return result.expiry.expiresAt.toISOString();
+  }
+}
+
+/**
+ * Read the recorded expiry of each workspace, bounded by the apply limiter.
+ * @param client - Operator client instance
+ * @param workspaceIds - Workspace IDs to read
+ * @param now - Reference time
+ * @returns Reported expiry per workspace, in the order given
+ */
+export async function fetchReportedExpiries(
+  client: MetadataLabelClient,
+  workspaceIds: readonly string[],
+  now: Date,
+): Promise<ReportedExpiry[]> {
+  const limit = createApplyLimiter();
+  return Promise.all(
+    workspaceIds.map(async (workspaceId) => {
+      const result = await limit(() => fetchWorkspaceExpiry(client, workspaceId, now));
+      return reportedExpiry(result);
+    }),
+  );
 }

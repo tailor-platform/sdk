@@ -277,6 +277,9 @@ Commands for managing workspaces and profiles.
 | [workspace list](./cli/workspace.md#workspace-list)               | List all Tailor Platform workspaces.                                                           |
 | [workspace prune](./cli/workspace.md#workspace-prune)             | Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation. |
 | [workspace restore](./cli/workspace.md#workspace-restore)         | Restore a deleted workspace                                                                    |
+| [workspace ttl](./cli/workspace.md#workspace-ttl)                 | Manage when a workspace becomes prunable.                                                      |
+| [workspace ttl clear](./cli/workspace.md#workspace-ttl-clear)     | Drop a workspace's recorded prune expiry.                                                      |
+| [workspace ttl set](./cli/workspace.md#workspace-ttl-set)         | Record when a workspace becomes prunable, replacing any expiry it already records.             |
 | [workspace user](./cli/workspace.md#workspace-user)               | Manage workspace users                                                                         |
 | [workspace user invite](./cli/workspace.md#workspace-user-invite) | Invite a user to a workspace                                                                   |
 | [workspace user list](./cli/workspace.md#workspace-user-list)     | List users in a workspace                                                                      |

@@ -710,6 +710,7 @@ describe("workspace prune command", () => {
         notExpired: [],
         noExpiry: [],
         unreadableExpiry: [],
+        expiryChanged: [],
       },
     });
   });
@@ -743,6 +744,33 @@ describe("workspace prune command", () => {
 
       expect(result.success).toBe(true);
       expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: expired.id });
+    });
+
+    test("keeps a workspace whose expiry stopped selecting it before the delete", async () => {
+      const target = workspace("ws-renewed", { createdAt: hoursAgo(99) });
+      const client = stubClient([target], { [target.id]: hoursAgo(1) });
+      // The re-read just before deleting sees a renewed expiry, as a concurrent
+      // `ttl set` would leave it.
+      client.getMetadata
+        .mockImplementationOnce(() =>
+          Promise.resolve({
+            metadata: { labels: { [expiresAtLabelKey]: encodeExpiresAt(hoursAgo(1)) } },
+          }),
+        )
+        .mockImplementation(() =>
+          Promise.resolve({
+            metadata: {
+              labels: {
+                [expiresAtLabelKey]: encodeExpiresAt(new Date(NOW.getTime() + 86_400_000)),
+              },
+            },
+          }),
+        );
+
+      const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
     });
 
     test("keeps a workspace that records no expiry", async () => {

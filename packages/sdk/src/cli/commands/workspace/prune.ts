@@ -243,6 +243,8 @@ interface PruneResult {
     noExpiry: string[];
     /** `--expired` only: kept because the recorded expiry could not be read. */
     unreadableExpiry: string[];
+    /** `--expired` only: kept because a re-read just before deleting no longer selected it. */
+    expiryChanged: string[];
   };
 }
 
@@ -263,9 +265,9 @@ export const pruneCommand = defineAppCommand({
   notes: ml`
     Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
 
-    With --expired the workspaces select themselves instead: each one is deleted only once the --stale-after expiry it recorded at creation has passed, so callers need no name or age filter. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward; --name-prefix, --name-regex, and the scope options still apply and are worth keeping in a shared organization.
+    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no name or age filter. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward; --name-prefix, --name-regex, and the scope options still apply and are worth keeping in a shared organization.
 
-    Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Give it a new expiry, or exclude it, before restoring.
+    Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
 
     Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
@@ -284,7 +286,7 @@ export const pruneCommand = defineAppCommand({
     }),
     expired: arg(z.boolean().default(false), {
       description:
-        "Select workspaces whose own --stale-after expiry has passed, instead of by name and age",
+        "Select workspaces whose own --ttl expiry has passed, instead of by name and age",
     }),
     "organization-id": arg(scopeIdArg(), {
       alias: "o",
@@ -374,6 +376,7 @@ export const pruneCommand = defineAppCommand({
         notExpired: [],
         noExpiry: [],
         unreadableExpiry: [],
+        expiryChanged: [],
       },
     };
 
@@ -460,6 +463,17 @@ export const pruneCommand = defineAppCommand({
 
     for (const workspace of result.candidates) {
       const displayName = workspaceDisplayName(workspace);
+      if (args.expired) {
+        const recheck = await fetchWorkspaceExpiry(client, workspace.id, new Date());
+        const state = "error" in recheck ? "unreadable" : recheck.expiry.state;
+        if (state !== "expired") {
+          result.skipped.expiryChanged.push(displayName);
+          logger.info(
+            `Skipped ${displayName} (${workspace.id}): its recorded expiry no longer selects it.`,
+          );
+          continue;
+        }
+      }
       try {
         await client.deleteWorkspace({ workspaceId: workspace.id });
         result.deleted.push(workspace);
