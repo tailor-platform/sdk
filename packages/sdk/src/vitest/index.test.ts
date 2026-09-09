@@ -1,18 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isAbsolute } from "node:path";
-import { aroundEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { tailorRuntime } from "./index";
 
 describe("tailorRuntime", () => {
   const ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
 
-  aroundEach(async (runTest) => {
-    const originalConfig = process.env[ENV_VAR];
-    delete process.env[ENV_VAR];
-    await runTest();
-    if (originalConfig === undefined) delete process.env[ENV_VAR];
-    else process.env[ENV_VAR] = originalConfig;
-  });
+  const configEnvOf = (test: any): string | undefined => test?.env?.[ENV_VAR];
 
   test("returns the block plugin and the environment plugin in order", () => {
     const plugins = tailorRuntime();
@@ -21,22 +15,23 @@ describe("tailorRuntime", () => {
     expect(plugins[1]?.name).toBe("tailor-runtime-environment");
   });
 
-  test("forwards options.config to the environment plugin (sets process env var)", () => {
+  test("forwards options.config to the environment plugin (seeds the test env)", () => {
     const plugins = tailorRuntime({ config: "./tailor.config.ts" });
     const envPlugin = plugins[1]!;
-    (envPlugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+    const userConfig: any = { test: { environment: "tailor-runtime" } };
+    (envPlugin.config as any).call({}, userConfig);
 
-    expect(process.env[ENV_VAR]).toBeDefined();
-    expect(isAbsolute(process.env[ENV_VAR] ?? "")).toBe(true);
-    expect(process.env[ENV_VAR]).toMatch(/tailor\.config\.ts$/);
+    expect(isAbsolute(configEnvOf(userConfig.test) ?? "")).toBe(true);
+    expect(configEnvOf(userConfig.test)).toMatch(/tailor\.config\.ts$/);
   });
 
   test("does not set the env var when options is omitted", () => {
     const plugins = tailorRuntime();
     const envPlugin = plugins[1]!;
-    (envPlugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+    const userConfig: any = { test: { environment: "tailor-runtime" } };
+    (envPlugin.config as any).call({}, userConfig);
 
-    expect(process.env[ENV_VAR]).toBeUndefined();
+    expect(configEnvOf(userConfig.test)).toBeUndefined();
   });
 
   test("environment plugin merges its setup file (so it composes with tailorRuntime() entry)", () => {
