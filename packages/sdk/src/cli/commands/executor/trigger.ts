@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/zod";
 import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { arg } from "politty";
 import { z } from "zod";
 import { durationArg, parseDuration, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";

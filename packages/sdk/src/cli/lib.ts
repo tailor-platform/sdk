@@ -8,7 +8,7 @@ await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 // code paths they call into. The politty surface is re-exported for the same
 // reason: arg metadata (aliases, env bindings, effects) lives in a politty
 // module-level registry, so registration and parsing must use one politty copy.
-export { arg, defineCommand, runCommand, runMain } from "politty";
+export { arg, defineCommand, runCommand, runMain } from "@politty/zod";
 export { logger, styles, type LogMode, type LogOptions, type OutOptions } from "./shared/logger";
 export { defineAppCommand } from "./shared/command";
 export { logBetaWarning } from "./shared/beta";

@@ -154,6 +154,9 @@ importers:
       '@clack/prompts':
         specifier: 1.7.0
         version: 1.7.0
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       execa:
         specifier: 10.0.1
         version: 10.0.1
@@ -163,9 +166,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.12.1
-        version: 0.12.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -507,6 +507,9 @@ importers:
       '@oxc-project/types':
         specifier: 0.148.0
         version: 0.148.0
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       '@secretlint/core':
         specifier: 13.0.5
         version: 13.0.5(supports-color@7.2.0)
@@ -582,9 +585,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.12.1
-        version: 0.12.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       rolldown:
         specifier: 1.2.7
         version: 1.2.7
@@ -670,6 +670,9 @@ importers:
       '@ast-grep/napi':
         specifier: 0.45.3
         version: 0.45.3
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       diff:
         specifier: 9.0.0
         version: 9.0.0
@@ -682,9 +685,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.12.1
-        version: 0.12.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       semver:
         specifier: 7.8.5
         version: 7.8.5
@@ -725,15 +725,15 @@ importers:
 
   packages/sdk-plugin-seed:
     dependencies:
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       pathe:
         specifier: 2.0.3
         version: 2.0.3
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.12.1
-        version: 0.12.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -771,6 +771,9 @@ importers:
       '@croct/json5-parser':
         specifier: 0.2.2
         version: 0.2.2
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       json5:
         specifier: 2.2.3
         version: 2.2.3
@@ -780,9 +783,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.12.1
-        version: 0.12.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -817,6 +817,9 @@ importers:
 
   packages/sdk-plugin-tailordb-erd:
     dependencies:
+      '@politty/zod':
+        specifier: 0.2.1
+        version: 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
@@ -832,9 +835,6 @@ importers:
       pkg-types:
         specifier: 2.3.2
         version: 2.3.2
-      politty:
-        specifier: 0.12.1
-        version: 0.12.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -3815,20 +3815,6 @@ packages:
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
-
-  politty@0.12.1:
-    resolution: {integrity: sha512-bGsznt/U00H0/F3W+b3jNL4DODb9ywFs8oRfgUHGDmLq3qtD/yelY5evD91D0lQ9lKvRRkZS6XeoReeNQZRcrA==}
-    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
-    hasBin: true
-    peerDependencies:
-      '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
-      '@inquirer/prompts': ^8.3.2
-      zod: ^4.2.1
-    peerDependenciesMeta:
-      '@clack/prompts':
-        optional: true
-      '@inquirer/prompts':
-        optional: true
 
   postcss-values-parser@6.0.2:
     resolution: {integrity: sha512-YLJpK0N1brcNJrs9WatuJFtHaV9q5aAOj+S4DI5S7jgHlRfm0PIbDCAFRYMQD5SHq7Fy6xsDhyutgS0QOAs0qw==}
@@ -6838,14 +6824,6 @@ snapshots:
       pathe: 2.0.3
 
   pluralize@8.0.0: {}
-
-  politty@0.12.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4):
-    dependencies:
-      '@politty/zod': 0.2.1(@clack/prompts@1.7.0)(@inquirer/prompts@8.7.1(@types/node@24.13.3))(zod@4.5.4)
-      zod: 4.5.4
-    optionalDependencies:
-      '@clack/prompts': 1.7.0
-      '@inquirer/prompts': 8.7.1(@types/node@24.13.3)
 
   postcss-values-parser@6.0.2(postcss@8.5.28):
     dependencies:

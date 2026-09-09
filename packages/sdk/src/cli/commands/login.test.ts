@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import {
   closeConnectionPool,

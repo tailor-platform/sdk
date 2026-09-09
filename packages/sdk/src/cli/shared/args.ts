@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
+import { arg } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { logger } from "./logger";

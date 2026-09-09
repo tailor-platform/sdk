@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
+import { arg } from "@politty/zod";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { deploymentArgs } from "#/cli/shared/args";

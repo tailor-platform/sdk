@@ -1,10 +1,10 @@
-import { generateCompletion } from "politty";
 import {
   CompletionDirective,
   extractCompletionData,
   generateCandidates,
+  generateCompletion,
   parseCompletionContext,
-} from "politty/completion";
+} from "@politty/zod/completion";
 import { describe, expect, test, vi } from "vitest";
 import { mainCommand } from "./main";
 
@@ -13,7 +13,7 @@ vi.mock("node:module", async (importOriginal) => ({
   register: vi.fn(),
 }));
 
-vi.mock("politty", async (importOriginal) => ({
+vi.mock("@politty/zod", async (importOriginal) => ({
   ...(await importOriginal()),
   runMain: vi.fn(),
 }));

@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
+import { defineCommand, runCommand, runMain, type AnyCommand } from "@politty/zod";
+import { withCompletionCommand } from "@politty/zod/completion";
+import { withSkillCommand } from "@politty/zod/skill";
 import { dirname, resolve } from "pathe";
 import { resolvePackageJSON } from "pkg-types";
-import { defineCommand, runCommand, runMain, type AnyCommand } from "politty";
-import { withCompletionCommand } from "politty/completion";
-import { withSkillCommand } from "politty/skill";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { authCommand } from "./commands/auth";

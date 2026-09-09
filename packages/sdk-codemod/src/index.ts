@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { arg, defineCommand, runMain } from "@politty/zod";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
-import { arg, defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { automationLevel } from "./migration-doc";
 import { allCodemods, getApplicableCodemods, resolveCodemodScript } from "./registry";
