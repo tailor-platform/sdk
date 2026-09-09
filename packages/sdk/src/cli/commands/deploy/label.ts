@@ -103,6 +103,9 @@ export function resolverTrn(workspaceId: string, namespace: string, resolverName
   return nestedResourceTrn(workspaceId, ["pipeline", namespace], ["resolver", resolverName]);
 }
 
+/** The platform rejects a `SetMetadata` write holding more labels than this. */
+export const MAX_RESOURCE_LABELS = 20;
+
 export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
 export const sdkAppIdLabelKey = "sdk-app-id";
@@ -328,13 +331,16 @@ export interface BuildMetaRequestParams {
   trn: string;
   appName: string;
   appId?: string;
+  /** Labels from `defineConfig({ metadata })`, written alongside the SDK's own. */
+  metadata?: Record<string, string>;
 }
 
 /**
  * Build metadata request with SDK labels.
  *
- * Sets only the SDK's own labels; {@link writeMetadataLabels} keeps the rest
- * from the labels it reads at write time.
+ * Sets only the SDK's own labels and the config's `metadata`;
+ * {@link writeMetadataLabels} keeps the rest from the labels it reads at write
+ * time. The SDK's labels win over a same-named `metadata` entry.
  *
  * Without an app id the id label is removed rather than merely left unset,
  * because {@link isOwnedByApp} decides ownership by that label alone: one left
@@ -344,12 +350,13 @@ export interface BuildMetaRequestParams {
  * @param params.trn - Target TRN
  * @param params.appName - Application name label
  * @param params.appId - Stable application id label (when managed by SDK)
+ * @param params.metadata - Labels from the config's `metadata`
  * @returns Metadata request
  */
 export async function buildMetaRequest(
   params: BuildMetaRequestParams,
 ): Promise<MetadataLabelWrite> {
-  const { trn, appName, appId } = params;
+  const { trn, appName, appId, metadata } = params;
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
   const sdkVersion = packageJson.version
@@ -359,6 +366,7 @@ export async function buildMetaRequest(
   return {
     trn,
     labels: {
+      ...metadata,
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
       ...(appId ? { [sdkAppIdLabelKey]: sdkAppIdLabelValue(appId) } : {}),

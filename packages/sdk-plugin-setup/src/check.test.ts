@@ -238,6 +238,7 @@ describe("checkGitHub (integration)", () => {
     branch: "main",
     gitRunner: () => "origin/main",
     loadConfigName: async () => "my-app",
+    loadConfigId: async () => undefined,
     ...overrides,
   });
 
@@ -327,6 +328,7 @@ describe("checkGitHub (integration)", () => {
       outputDir: testDir,
       gitRunner: () => "origin/main",
       loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
     });
     fs.appendFileSync(
       path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
@@ -397,6 +399,7 @@ describe("checkGitHub (integration)", () => {
       outputDir: testDir,
       gitRunner: () => "origin/main",
       loadConfigName: async () => "my-app",
+      loadConfigId: async () => undefined,
     });
     const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
     delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];

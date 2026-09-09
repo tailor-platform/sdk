@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "2.14.1",
+  "version": "2.14.2",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -198,7 +198,7 @@
     "@toiroakr/read-multiline": "0.4.1",
     "@urql/core": "6.0.3",
     "amaro": "1.1.11",
-    "confbox": "0.2.4",
+    "confbox": "0.3.1",
     "date-fns": "4.4.0",
     "es-toolkit": "1.52.0",
     "find-up-simple": "1.0.1",

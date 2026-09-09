@@ -11,6 +11,25 @@
 import { assertDefined } from "#/utils/assert";
 import { SNAPSHOT_FIELD_BOOLEAN_PROPS, type SnapshotFieldConfig } from "./snapshot-types";
 
+/**
+ * Look up a member inside a nested field by its path relative to the field.
+ * @param {SnapshotFieldConfig | undefined} field - Top-level field configuration
+ * @param {readonly string[]} path - Member path, e.g. `["geo", "lat"]`
+ * @returns {SnapshotFieldConfig | undefined} The member, or undefined when any segment is missing
+ */
+export function getNestedMember(
+  field: SnapshotFieldConfig | undefined,
+  path: readonly string[],
+): SnapshotFieldConfig | undefined {
+  return path.reduce<SnapshotFieldConfig | undefined>(
+    (current, segment) =>
+      current?.fields && Object.hasOwn(current.fields, segment)
+        ? current.fields[segment]
+        : undefined,
+    field,
+  );
+}
+
 /** A change to one member inside a nested field. */
 export type NestedMemberChange =
   | { kind: "removed"; path: string[]; before: SnapshotFieldConfig }

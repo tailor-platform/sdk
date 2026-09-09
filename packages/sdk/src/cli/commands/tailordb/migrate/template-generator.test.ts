@@ -257,6 +257,119 @@ describe("template-generator", () => {
       expect(dbTypesContent).toContain("displayName: string | null;");
     });
 
+    test("should generate a batched copy script for nested member renames", async () => {
+      const previousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            address: {
+              type: "nested",
+              required: false,
+              fields: {
+                zip: { type: "string", required: false },
+                geo: {
+                  type: "nested",
+                  required: false,
+                  array: true,
+                  fields: { lat: { type: "float", required: false } },
+                },
+              },
+            },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "User",
+            fieldName: "address",
+            before: previousSnapshot.tables.User!.fields.address!,
+            after: {
+              type: "nested",
+              required: false,
+              fields: {
+                zipCode: { type: "string", required: false },
+                geo: {
+                  type: "nested",
+                  required: false,
+                  array: true,
+                  fields: { latitude: { type: "float", required: false } },
+                },
+              },
+            },
+            memberRenames: [
+              { previousPath: ["zip"], path: ["zipCode"] },
+              { previousPath: ["geo", "lat"], path: ["geo", "latitude"] },
+            ],
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { tableName: "User", fieldName: "address.zipCode", reason: "Nested member renamed" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain(
+        "Copy renamed members inside User.address: zip → zipCode, geo.lat → geo.latitude",
+      );
+      expect(scriptContent).toContain('.select(["id", "address"])');
+      expect(scriptContent).toContain('renameNestedMember(value, ["zip"], "zipCode")');
+      expect(scriptContent).toContain('renameNestedMember(value, ["geo", "lat"], "latitude")');
+      expect(scriptContent).toContain("function renameNestedMember(");
+      expect(scriptContent).toContain('let value: unknown = row["address"];');
+      expect(scriptContent).toContain('.set({ ["address"]: value as never })');
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
+    test("keeps generated nested rename code valid for reserved-word field names", async () => {
+      const previousSnapshot = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            class: {
+              type: "nested",
+              required: false,
+              fields: { row: { type: "string", required: false } },
+            },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Item",
+            fieldName: "class",
+            before: previousSnapshot.tables.Item!.fields.class!,
+            after: {
+              type: "nested",
+              required: false,
+              fields: { trx: { type: "string", required: false } },
+            },
+            memberRenames: [{ previousPath: ["row"], path: ["trx"] }],
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ tableName: "Item", fieldName: "class.trx", reason: "renamed" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).not.toMatch(/let class\b/);
+      expect(scriptContent).toContain('let value: unknown = row["class"];');
+      expect(scriptContent).toContain('renameNestedMember(value, ["row"], "trx")');
+      expect(scriptContent).toContain('.set({ ["class"]: value as never })');
+    });
+
     test("should add a duplicate-resolution block when a rename target gains unique", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
         User: {

@@ -14,9 +14,11 @@ import { supportsInPlaceFieldTypeChange } from "./field-type-change";
 import { areOwnFieldConfigsDifferent, collectNestedMemberChanges } from "./nested-members";
 import {
   assertValidFieldRenames,
+  assertValidNestedMemberRenames,
   assertValidTypeRenames,
   isBreakingForeignKeyRetarget,
   type FieldRenameSpec,
+  type NestedMemberRenameSpec,
   type TypeRenameSpec,
 } from "./rename-detection";
 import { copySnapshotRecord, normalizeSchemaSnapshot } from "./snapshot-normalization";
@@ -229,6 +231,7 @@ function compareTypeFields(
   prevType: TailorDBSnapshotType,
   currType: TailorDBSnapshotType,
   fieldRenames: readonly FieldRenameSpec[] = [],
+  nestedMemberRenames: readonly NestedMemberRenameSpec[] = [],
 ): void {
   const prevFieldNames = new Set(Object.keys(prevType.fields));
   const currFieldNames = new Set(Object.keys(currType.fields));
@@ -316,19 +319,42 @@ function compareTypeFields(
       `field "${fieldName}" missing from currType`,
     );
 
-    if (areFieldsDifferent(prevField, currField)) {
+    if (!areFieldsDifferent(prevField, currField)) continue;
+
+    if (prevField.type !== currField.type) {
       addChange(
         ctx,
-        {
-          kind: prevField.type === currField.type ? "field_modified" : "field_type_modified",
-          tableName,
-          fieldName,
-          before: prevField,
-          after: currField,
-        },
+        { kind: "field_type_modified", tableName, fieldName, before: prevField, after: currField },
         prevField,
         currField,
       );
+      continue;
+    }
+
+    const memberRenames = nestedMemberRenames
+      .filter((rename) => rename.fieldName === fieldName)
+      .map(({ previousPath, path }) => ({ previousPath, path }));
+    addChange(
+      ctx,
+      {
+        kind: "field_modified",
+        tableName,
+        fieldName,
+        before: prevField,
+        after: currField,
+        ...(memberRenames.length > 0 && { memberRenames }),
+      },
+      prevField,
+      currField,
+    );
+    for (const rename of memberRenames) {
+      ctx.breakingChanges.push({
+        tableName,
+        fieldName: [fieldName, ...rename.path].join("."),
+        reason:
+          `Nested member renamed from ${rename.previousPath.join(".")} to ${rename.path.join(".")} ` +
+          "(existing values must be copied by the migration script)",
+      });
     }
   }
 }
@@ -891,6 +917,12 @@ export interface CompareSnapshotsOptions {
    * `table_renamed` change. Specs are validated against both snapshots.
    */
   typeRenames?: readonly TypeRenameSpec[];
+  /**
+   * Confirmed renames of members inside nested fields. Each spec is recorded on
+   * the field's `field_modified` change as a breaking `memberRenames` entry
+   * instead of a removal warning. Specs are validated against both snapshots.
+   */
+  nestedMemberRenames?: readonly NestedMemberRenameSpec[];
 }
 
 /**
@@ -912,6 +944,14 @@ export function compareSnapshots(
     const list = renamesByType.get(rename.tableName) ?? [];
     list.push(rename);
     renamesByType.set(rename.tableName, list);
+  }
+  const nestedMemberRenames = options?.nestedMemberRenames ?? [];
+  assertValidNestedMemberRenames(previous, current, nestedMemberRenames);
+  const nestedRenamesByType = new Map<string, NestedMemberRenameSpec[]>();
+  for (const rename of nestedMemberRenames) {
+    const list = nestedRenamesByType.get(rename.tableName) ?? [];
+    list.push(rename);
+    nestedRenamesByType.set(rename.tableName, list);
   }
   const typeRenames = options?.typeRenames ?? [];
   assertValidTypeRenames(previous, current, typeRenames);
@@ -1005,7 +1045,14 @@ export function compareSnapshots(
     compareTypeScripts(ctx, tableName, prevType, currType);
 
     // Compare fields
-    compareTypeFields(ctx, tableName, prevType, currType, renamesByType.get(tableName));
+    compareTypeFields(
+      ctx,
+      tableName,
+      prevType,
+      currType,
+      renamesByType.get(tableName),
+      nestedRenamesByType.get(tableName),
+    );
 
     // Compare indexes
     compareIndexes(ctx, tableName, prevType.indexes, currType.indexes);

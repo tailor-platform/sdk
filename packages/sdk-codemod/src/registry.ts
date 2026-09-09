@@ -1815,6 +1815,36 @@ export const allCodemods: CodemodPackage[] = [
       '"keyOnly") and keeps its name.',
     ].join("\n"),
   },
+  {
+    id: "v3/file-upload-encoding",
+    name: "String file uploads → explicit encoding",
+    description:
+      'String inputs to the SDK `file.upload` and generated `uploadFile` require an explicit `encoding` in v3. Add `encoding: "utf8"` to preserve the previous behavior; use `"base64"` only when decoding the input is intended. Byte inputs are unchanged. This migration requires checking the input type and regenerating file helpers, so it provides review guidance instead of rewriting calls automatically.',
+    since: "1.51.0",
+    until: "3.0.0",
+    suspiciousPatterns: [/\bupload\b/, "uploadFile"],
+    examples: [
+      {
+        before: 'await file.upload(ns, table, field, id, text, { contentType: "text/plain" });',
+        after:
+          'await file.upload(ns, table, field, id, text, { contentType: "text/plain", encoding: "utf8" });',
+      },
+    ],
+    prompt: [
+      "Inspect calls to the imported SDK file.upload (including aliases and destructured upload)",
+      "and generated uploadFile helpers, including shared wrappers and option objects.",
+      "For string inputs, add encoding: utf8 to preserve existing text storage behavior.",
+      "Choose encoding: base64 only if decoding is explicitly intended; never infer it from",
+      "the string contents or contentType. Preserve all existing upload options.",
+      "Leave byte-only inputs unchanged. For string | byte unions, supplying encoding: utf8",
+      "preserves behavior because byte input ignores encoding. Narrow shared options types",
+      "so TypeScript can see that encoding is present for strings.",
+      "Run tailor generate to regenerate uploadFile helpers instead of editing generated files.",
+      "The global tailordb.file.upload does not support this encoding option; switch to the",
+      "file import from @tailor-platform/sdk/runtime before using it.",
+      "Do not change unrelated upload APIs or already explicit encodings.",
+    ].join("\n"),
+  },
 ];
 
 /**
