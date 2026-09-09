@@ -303,7 +303,7 @@ function upload(
 ): Promise<FileUploadResponse>;
 /**
  * Upload file contents, treating strings without encoding as text.
- * @deprecated since NEXT_RELEASE — pass encoding: "utf8" for text or "base64" for Base64 strings. codemod: v3/file-upload-encoding
+ * @deprecated since 2.15.0 — pass encoding: "utf8" for text or "base64" for Base64 strings. codemod: v3/file-upload-encoding
  * @param namespace - TailorDB namespace
  * @param tableName - TailorDB table name
  * @param fieldName - File field name on the table
