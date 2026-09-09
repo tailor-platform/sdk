@@ -232,6 +232,10 @@ export const convertTypeValidateToExpr = (fn: Function): string => {
   );
 };
 
+function formatFieldLocation(context: FieldScriptContext | undefined): string {
+  return context ? `Field "${context.fieldPath.join(".")}" on table "${context.tableName}": ` : "";
+}
+
 /**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
@@ -250,15 +254,19 @@ export function parseFieldConfig(
 
   if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on table "${context.tableName}": ` +
-        `.default() cannot be used on nested inner fields`,
+      `${formatFieldLocation(context)}.default() cannot be used on nested inner fields`,
     );
   }
 
   if (context && context.fieldPath.length > 1 && metadata.hooks) {
     throw new Error(
-      `Field "${context.fieldPath.join(".")}" on table "${context.tableName}": ` +
-        `.hooks() cannot be used on nested inner fields`,
+      `${formatFieldLocation(context)}.hooks() cannot be used on nested inner fields`,
+    );
+  }
+
+  if (fieldType === "enum" && (metadata.allowedValues ?? []).length === 0) {
+    throw new Error(
+      `${formatFieldLocation(context)}enum fields must define at least one allowed value`,
     );
   }
 

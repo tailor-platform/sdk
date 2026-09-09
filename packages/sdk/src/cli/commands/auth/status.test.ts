@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadAuthStatus, writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";

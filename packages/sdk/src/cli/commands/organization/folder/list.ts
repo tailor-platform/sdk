@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { orderArg, organizationArgs, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";

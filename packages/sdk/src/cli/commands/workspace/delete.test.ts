@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";

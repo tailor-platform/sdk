@@ -1,4 +1,4 @@
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { deployCommand } from "#/cli/commands/deploy/index";

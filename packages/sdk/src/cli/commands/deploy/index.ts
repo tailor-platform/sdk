@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deployFromCLI } from "#/cli/commands/deploy/deploy";
 import { confirmationArgs, multiConfigArg, workspaceArgs } from "#/cli/shared/args";

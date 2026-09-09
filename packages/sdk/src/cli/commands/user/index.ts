@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "politty";
+import { defineCommand, runCommand } from "@politty/zod";
 import { currentCommand } from "./current";
 import { listCommand } from "./list";
 import { patCommand } from "./pat";

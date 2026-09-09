@@ -109,11 +109,19 @@ function writeSdkDependency(projectDir: string): void {
   fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(
     path.join(packageDir, "package.json"),
-    JSON.stringify({ name: "@tailor-platform/sdk", type: "module", exports: "./index.js" }),
+    JSON.stringify({
+      name: "@tailor-platform/sdk",
+      type: "module",
+      exports: { ".": "./index.js", "./runtime": "./runtime.js" },
+    }),
   );
   fs.writeFileSync(
     path.join(packageDir, "index.js"),
     "export const t = { object: () => ({ parse: ({ value }) => value }) };\n",
+  );
+  fs.writeFileSync(
+    path.join(packageDir, "runtime.js"),
+    "export const serializeDateFields = (_, value) => value;\n",
   );
 }
 

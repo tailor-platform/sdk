@@ -116,6 +116,8 @@ Negative values follow the same rule based on absolute magnitude:
 
 ### Enum Fields
 
+Enum fields must define at least one allowed value. Empty arrays are rejected during `tailor deploy` and `tailor tailordb migration generate`.
+
 ```typescript
 db.enum(["red", "green", "blue"]);
 db.enum([

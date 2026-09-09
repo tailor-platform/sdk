@@ -230,3 +230,56 @@ describe("parseFieldConfig nested inner field restrictions", () => {
     ).toThrow(".default() cannot be used on nested inner fields");
   });
 });
+
+describe("parseFieldConfig enum allowed values", () => {
+  const noValues = [] as unknown as ["x"];
+
+  test.each([
+    ["required", db.enum(noValues)],
+    ["optional", db.enum(noValues, { optional: true })],
+    ["array", db.enum(noValues, { array: true })],
+    ["missing", db.enum(undefined as unknown as ["x"])],
+  ])("throws when a %s enum defines no allowed values", (_label, field) => {
+    const type = db.table("Task", { status: field });
+
+    const schema = toSchemaOutputs({ Task: type });
+
+    expect(() =>
+      parseFieldConfig(schema.Task!.fields.status!, { tableName: "Task", fieldPath: ["status"] }),
+    ).toThrow(
+      /^Field "status" on table "Task": enum fields must define at least one allowed value$/,
+    );
+  });
+
+  test("throws without a location when no context is given", () => {
+    const type = db.table("Task", { status: db.enum(noValues) });
+
+    const schema = toSchemaOutputs({ Task: type });
+
+    expect(() => parseFieldConfig(schema.Task!.fields.status!)).toThrow(
+      /^enum fields must define at least one allowed value$/,
+    );
+  });
+
+  test("reports the nested path for an enum inside an object field", () => {
+    const type = db.table("Task", {
+      detail: db.object({ kind: db.enum(noValues) }),
+    });
+
+    const schema = toSchemaOutputs({ Task: type });
+
+    expect(() => parseTypes(schema, "default")).toThrow(
+      /^Field "detail.kind" on table "Task": enum fields must define at least one allowed value$/,
+    );
+  });
+
+  test("accepts an enum with a single allowed value", () => {
+    const type = db.table("Task", { status: db.enum(["open"], { optional: true }) });
+
+    const schema = toSchemaOutputs({ Task: type });
+
+    expect(parseFieldConfig(schema.Task!.fields.status!).allowedValues).toEqual([
+      { value: "open", description: "" },
+    ]);
+  });
+});

@@ -7,9 +7,9 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
+import { arg, extractFields, toCamelCase } from "@politty/zod";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import * as path from "pathe";
-import { arg, extractFields, toCamelCase } from "politty";
 import { z } from "zod";
 import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver/default-permission";
 import {

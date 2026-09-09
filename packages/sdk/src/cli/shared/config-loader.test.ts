@@ -25,6 +25,32 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
+  test("collects valid plugin arrays without accepting a partially invalid array", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app", db: { marker: "preserved" } };
+      export const plugins = [{ id: "first", description: "First plugin", custom: "kept" }];
+      export const plugins2 = [{ id: "second", description: "Second plugin" }];
+      export const mixed = [{ id: "discarded", description: "Valid item" }, null];
+      export const unrelated = { id: "not-an-array", description: "Ignored" };
+    `);
+
+    const { config, plugins } = await loadConfig(configPath);
+
+    expect(config.db).toEqual({ marker: "preserved" });
+    expect(plugins).toEqual([
+      { id: "first", description: "First plugin", custom: "kept" },
+      { id: "second", description: "Second plugin" },
+    ]);
+  });
+
+  test("rejects a module without a default export", async () => {
+    const configPath = writeConfig(`export const name = "test-app";`);
+
+    await expect(loadConfig(configPath)).rejects.toThrow(
+      "Invalid Tailor config module: default export not found",
+    );
+  });
+
   test("rejects a credential in env, naming the config it came from", async () => {
     const configPath = writeConfig(
       `export default { name: "test-app", env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } };`,

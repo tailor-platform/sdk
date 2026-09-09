@@ -11,16 +11,18 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import { supportsInPlaceFieldTypeChange } from "./field-type-change";
+import { areOwnFieldConfigsDifferent, collectNestedMemberChanges } from "./nested-members";
 import {
   assertValidFieldRenames,
+  assertValidNestedMemberRenames,
   assertValidTypeRenames,
   isBreakingForeignKeyRetarget,
   type FieldRenameSpec,
+  type NestedMemberRenameSpec,
   type TypeRenameSpec,
 } from "./rename-detection";
 import { copySnapshotRecord, normalizeSchemaSnapshot } from "./snapshot-normalization";
 import {
-  SNAPSHOT_FIELD_BOOLEAN_PROPS,
   type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
   type SnapshotActionPermission,
@@ -34,7 +36,11 @@ import {
   type SnapshotSettings,
   type TailorDBSnapshotType,
 } from "./snapshot-types";
-import { FIELD_REMOVED_WARNING_REASON, TABLE_REMOVED_WARNING_REASON } from "./snapshot-warnings";
+import {
+  collectNestedMemberRemovalWarnings,
+  FIELD_REMOVED_WARNING_REASON,
+  TABLE_REMOVED_WARNING_REASON,
+} from "./snapshot-warnings";
 import type { ExpandContractPlan } from "./expand-contract";
 
 // ============================================================================
@@ -48,80 +54,10 @@ import type { ExpandContractPlan } from "./expand-contract";
  * @returns {boolean} True if fields are different
  */
 function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFieldConfig): boolean {
-  // Compare required properties
-  if (oldField.type !== newField.type) return true;
-  if (oldField.required !== newField.required) return true;
-
-  // Compare optional boolean properties (default to false)
-  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
-    if ((oldField[prop] ?? false) !== (newField[prop] ?? false)) return true;
-  }
-
-  // Compare foreign key properties
-  if (oldField.foreignKeyType !== newField.foreignKeyType) return true;
-  if (oldField.foreignKeyField !== newField.foreignKeyField) return true;
-
-  if ((oldField.description ?? "") !== (newField.description ?? "")) return true;
-
-  const oldAllowed = oldField.allowedValues ?? [];
-  const newAllowed = newField.allowedValues ?? [];
-  if (oldAllowed.length !== newAllowed.length) return true;
-  const newAllowedMap = new Map(newAllowed.map((v) => [v.value, v.description]));
-  for (const v of oldAllowed) {
-    if (!newAllowedMap.has(v.value)) return true;
-    if ((v.description ?? "") !== (newAllowedMap.get(v.value) ?? "")) return true;
-  }
-
-  const oldHooks = oldField.hooks;
-  const newHooks = newField.hooks;
-  if (Boolean(oldHooks) !== Boolean(newHooks)) return true;
-  if (oldHooks && newHooks) {
-    if ((oldHooks.create?.expr ?? "") !== (newHooks.create?.expr ?? "")) return true;
-    if ((oldHooks.update?.expr ?? "") !== (newHooks.update?.expr ?? "")) return true;
-  }
-
-  const oldValidate = oldField.validate ?? [];
-  const newValidate = newField.validate ?? [];
-  if (oldValidate.length !== newValidate.length) return true;
-  for (let i = 0; i < oldValidate.length; i++) {
-    const oldV = assertDefined(oldValidate[i], `oldValidate missing index ${i}`);
-    const newV = assertDefined(newValidate[i], `newValidate missing index ${i}`);
-    if ((oldV.script?.expr ?? "") !== (newV.script?.expr ?? "")) return true;
-    if (oldV.errorMessage !== newV.errorMessage) return true;
-  }
-
-  const oldSerial = oldField.serial;
-  const newSerial = newField.serial;
-  if (Boolean(oldSerial) !== Boolean(newSerial)) return true;
-  if (oldSerial && newSerial) {
-    if (oldSerial.start !== newSerial.start) return true;
-    if (oldSerial.maxValue !== newSerial.maxValue) return true;
-    if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
-  }
-
-  if (oldField.scale !== newField.scale) return true;
-
-  if (oldField.default !== newField.default) {
-    if (typeof oldField.default !== typeof newField.default) return true;
-    if (JSON.stringify(oldField.default) !== JSON.stringify(newField.default)) return true;
-  }
-
-  const oldFields = oldField.fields ?? {};
-  const newFields = newField.fields ?? {};
-  const oldFieldNames = Object.keys(oldFields);
-  const newFieldNames = Object.keys(newFields);
-  if (oldFieldNames.length !== newFieldNames.length) return true;
-  for (const fieldName of oldFieldNames) {
-    const oldF = oldFields[fieldName];
-    const newF = newFields[fieldName];
-    if (!newF) return true;
-    if (
-      areFieldsDifferent(assertDefined(oldF, `field "${fieldName}" missing from oldFields`), newF)
-    )
-      return true;
-  }
-
-  return false;
+  return (
+    areOwnFieldConfigsDifferent(oldField, newField) ||
+    collectNestedMemberChanges(oldField, newField).length > 0
+  );
 }
 
 /**
@@ -260,6 +196,11 @@ function addChange(
 
   if (!change.fieldName) return;
 
+  // A removed nested member is data loss regardless of any breaking change on the field.
+  if (change.kind === "field_modified") {
+    ctx.warnings.push(...collectNestedMemberRemovalWarnings(change));
+  }
+
   const breakingChanges = getBreakingFieldChanges(
     change.tableName,
     change.fieldName,
@@ -290,6 +231,7 @@ function compareTypeFields(
   prevType: TailorDBSnapshotType,
   currType: TailorDBSnapshotType,
   fieldRenames: readonly FieldRenameSpec[] = [],
+  nestedMemberRenames: readonly NestedMemberRenameSpec[] = [],
 ): void {
   const prevFieldNames = new Set(Object.keys(prevType.fields));
   const currFieldNames = new Set(Object.keys(currType.fields));
@@ -377,19 +319,42 @@ function compareTypeFields(
       `field "${fieldName}" missing from currType`,
     );
 
-    if (areFieldsDifferent(prevField, currField)) {
+    if (!areFieldsDifferent(prevField, currField)) continue;
+
+    if (prevField.type !== currField.type) {
       addChange(
         ctx,
-        {
-          kind: prevField.type === currField.type ? "field_modified" : "field_type_modified",
-          tableName,
-          fieldName,
-          before: prevField,
-          after: currField,
-        },
+        { kind: "field_type_modified", tableName, fieldName, before: prevField, after: currField },
         prevField,
         currField,
       );
+      continue;
+    }
+
+    const memberRenames = nestedMemberRenames
+      .filter((rename) => rename.fieldName === fieldName)
+      .map(({ previousPath, path }) => ({ previousPath, path }));
+    addChange(
+      ctx,
+      {
+        kind: "field_modified",
+        tableName,
+        fieldName,
+        before: prevField,
+        after: currField,
+        ...(memberRenames.length > 0 && { memberRenames }),
+      },
+      prevField,
+      currField,
+    );
+    for (const rename of memberRenames) {
+      ctx.breakingChanges.push({
+        tableName,
+        fieldName: [fieldName, ...rename.path].join("."),
+        reason:
+          `Nested member renamed from ${rename.previousPath.join(".")} to ${rename.path.join(".")} ` +
+          "(existing values must be copied by the migration script)",
+      });
     }
   }
 }
@@ -952,6 +917,12 @@ export interface CompareSnapshotsOptions {
    * `table_renamed` change. Specs are validated against both snapshots.
    */
   typeRenames?: readonly TypeRenameSpec[];
+  /**
+   * Confirmed renames of members inside nested fields. Each spec is recorded on
+   * the field's `field_modified` change as a breaking `memberRenames` entry
+   * instead of a removal warning. Specs are validated against both snapshots.
+   */
+  nestedMemberRenames?: readonly NestedMemberRenameSpec[];
 }
 
 /**
@@ -973,6 +944,14 @@ export function compareSnapshots(
     const list = renamesByType.get(rename.tableName) ?? [];
     list.push(rename);
     renamesByType.set(rename.tableName, list);
+  }
+  const nestedMemberRenames = options?.nestedMemberRenames ?? [];
+  assertValidNestedMemberRenames(previous, current, nestedMemberRenames);
+  const nestedRenamesByType = new Map<string, NestedMemberRenameSpec[]>();
+  for (const rename of nestedMemberRenames) {
+    const list = nestedRenamesByType.get(rename.tableName) ?? [];
+    list.push(rename);
+    nestedRenamesByType.set(rename.tableName, list);
   }
   const typeRenames = options?.typeRenames ?? [];
   assertValidTypeRenames(previous, current, typeRenames);
@@ -1066,7 +1045,14 @@ export function compareSnapshots(
     compareTypeScripts(ctx, tableName, prevType, currType);
 
     // Compare fields
-    compareTypeFields(ctx, tableName, prevType, currType, renamesByType.get(tableName));
+    compareTypeFields(
+      ctx,
+      tableName,
+      prevType,
+      currType,
+      renamesByType.get(tableName),
+      nestedRenamesByType.get(tableName),
+    );
 
     // Compare indexes
     compareIndexes(ctx, tableName, prevType.indexes, currType.indexes);

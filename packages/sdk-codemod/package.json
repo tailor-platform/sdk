@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-codemod",
-  "version": "0.8.6",
+  "version": "0.8.8",
   "description": "Codemod runner for Tailor Platform SDK upgrades",
   "license": "MIT",
   "repository": {
@@ -27,12 +27,12 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@ast-grep/napi": "0.45.2",
+    "@ast-grep/napi": "0.45.3",
+    "@politty/zod": "0.2.1",
     "diff": "9.0.0",
     "pathe": "2.0.3",
     "picomatch": "4.0.7",
-    "pkg-types": "2.3.1",
-    "politty": "0.11.9",
+    "pkg-types": "2.3.2",
     "semver": "7.8.5",
     "zod": "4.5.4"
   },
@@ -42,9 +42,9 @@
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.8.0",
     "eslint-plugin-zod": "4.12.0",
-    "oxlint": "1.80.0",
+    "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
   },

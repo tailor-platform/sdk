@@ -25,6 +25,7 @@ import {
 } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
+import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
 import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
@@ -315,7 +316,12 @@ function normalizeComparableUserAuthPolicy(
     // every falsy local value must compare equal to the stored defaults.
     passwordMinLength: policy?.passwordMinLength || 6,
     passwordMaxLength: policy?.passwordMaxLength || 4096,
-    allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
+    // The platform lowercases and deduplicates domains before storing and echoes
+    // the normalized list back, so comparing the raw local list would report a
+    // permanent diff for an entry written in mixed case.
+    allowedEmailDomains: [
+      ...new Set((policy?.allowedEmailDomains ?? []).map((domain) => domain.toLowerCase())),
+    ].toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
     allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
@@ -508,6 +514,11 @@ async function planServices(
     if (omittedPermitLocations.length > 0) {
       logger.warn(
         `IdP service "${namespaceName}" has permission rule(s) ${omittedPermitLocations.join(", ")} in object form without an explicit "permit"; they default to "deny". Set permit: true (allow) or permit: false (deny) to silence this warning.`,
+      );
+    }
+    if (hasImplicitAllEmailDomains(userAuthPolicy)) {
+      logger.warn(
+        `IdP service "${namespaceName}" leaves userAuthPolicy.allowedEmailDomains empty, which currently allows every email domain. The platform will stop treating an empty list as "allow every domain", so set allowedEmailDomains: ["${ALL_EMAIL_DOMAINS}"] to keep that behavior, or list the domains you accept.`,
       );
     }
     const parsedPermission = parseIdPPermission(idp.permission);

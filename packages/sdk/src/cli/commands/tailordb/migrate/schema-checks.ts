@@ -34,7 +34,11 @@ import {
   type TailorDBSnapshotType,
   type NormalizedSchemaSnapshot,
 } from "./snapshot";
-import { type RemoteSchemaVerificationResult, type SchemaDrift } from "./types";
+import {
+  type RebaselinePendingInfo,
+  type RemoteSchemaVerificationResult,
+  type SchemaDrift,
+} from "./types";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
@@ -304,12 +308,19 @@ export async function verifyRemoteSchema(
       (!historyMatchesCurrent && !checkpointRepair) ||
       (remoteMigrationNumber > latestMigrationNumber && !checkpointRepair);
     if (checkpointMissingLocal) {
+      const rebaselinePending =
+        rebaseline &&
+        historyMatchesReplaced &&
+        remoteMigrationNumber < rebaseline.replacedLatestMigration
+          ? { replacedLatestMigration: rebaseline.replacedLatestMigration }
+          : undefined;
       results.push({
         namespace,
         remoteMigrationNumber,
         drifts: [],
         hasDrift: false,
         checkpointMissingLocal: true,
+        ...(rebaselinePending ? { rebaselinePending } : {}),
       });
       continue;
     }
@@ -422,6 +433,68 @@ export function logRemoteDriftGuidance(driftResults?: readonly DriftGuidanceInpu
     logger.newline();
     logger.info(
       `Every listed drift is '${MISSING_REMOTE_SCRIPT_HASH_SUFFIX}'. Run 'migration sync <N>' above to add the missing hashes.`,
+    );
+  }
+}
+
+/**
+ * Minimal per-namespace shape needed to report a missing remote checkpoint, shared by callers
+ * that hold either a full {@link RemoteSchemaVerificationResult} or a validation report's subset.
+ */
+interface CheckpointMissingGuidanceInput {
+  namespace: string;
+  remoteMigrationNumber: number;
+  rebaselinePending?: RebaselinePendingInfo;
+}
+
+type RebaselinePendingGuidanceInput = CheckpointMissingGuidanceInput & {
+  rebaselinePending: RebaselinePendingInfo;
+};
+
+function hasRebaselinePending(
+  result: CheckpointMissingGuidanceInput,
+): result is RebaselinePendingGuidanceInput {
+  return result.rebaselinePending !== undefined;
+}
+
+/**
+ * Log recovery guidance for namespaces whose remote migration checkpoint is not in the local
+ * migration history, singling out the specific "fell behind before a rebaseline" cause when
+ * present.
+ * @param {readonly CheckpointMissingGuidanceInput[]} results - Namespaces with a missing checkpoint
+ * @returns {void}
+ */
+export function logMissingCheckpointGuidance(
+  results: readonly CheckpointMissingGuidanceInput[],
+): void {
+  const pending = results.filter(hasRebaselinePending);
+  if (pending.length > 0) {
+    for (const result of pending) {
+      const target = formatMigrationNumber(result.rebaselinePending.replacedLatestMigration);
+      const current = formatMigrationNumber(result.remoteMigrationNumber);
+      logger.info(
+        `${result.namespace} fell behind before 'migration rebaseline' ran: every environment was required to already be at migration ${target} before the rebaseline, but this environment is at ${current}.`,
+      );
+    }
+    logger.newline();
+    logger.info("To recover:");
+    logger.info(
+      "  1. Restore the pre-rebaseline migrations/ directory from git history (the commit before 'migration rebaseline' ran; rebaseline preserves committed files there).",
+      { mode: "plain" },
+    );
+    logger.info(
+      "  2. Deploy this environment against that restored history until its checkpoint reaches the migration named above, running any migrate.ts scripts it still needs.",
+      { mode: "plain" },
+    );
+    logger.info(
+      "  3. Switch back to the current migration files and deploy again — the automatic checkpoint reset to the new baseline then applies.",
+      { mode: "plain" },
+    );
+  }
+  if (pending.length < results.length) {
+    if (pending.length > 0) logger.newline();
+    logger.info(
+      "Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
     );
   }
 }

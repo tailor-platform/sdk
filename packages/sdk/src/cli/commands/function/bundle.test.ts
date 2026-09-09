@@ -165,12 +165,16 @@ export function main() {
           JSON.stringify({
             name: "@tailor-platform/sdk",
             type: "module",
-            exports: { ".": "./index.js" },
+            exports: { ".": "./index.js", "./runtime": "./runtime.js" },
           }),
         );
         fs.writeFileSync(
           path.join(dependencyDir, "index.js"),
           "export const t = { object: () => ({ parse: ({ value }) => value }) };\n",
+        );
+        fs.writeFileSync(
+          path.join(dependencyDir, "runtime.js"),
+          "export const serializeDateFields = (_, value) => value;\n",
         );
         const sourceFile = path.join(projectDir, "resolver.ts");
         fs.writeFileSync(

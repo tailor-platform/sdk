@@ -1,11 +1,11 @@
 import { setTimeout } from "node:timers/promises";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { arg } from "@politty/zod";
 import {
   type FunctionExecution,
   type FunctionExecution_Status,
   FunctionExecution_Type,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { arg } from "politty";
 import { z } from "zod";
 import {
   durationArg,

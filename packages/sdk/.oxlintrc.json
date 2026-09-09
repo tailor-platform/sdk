@@ -113,6 +113,18 @@
   },
   "overrides": [
     {
+      "files": [
+        "src/cli/shared/config-loader.ts",
+        "src/cli/shared/client.ts",
+        "src/cli/commands/api/api-call.ts"
+      ],
+      "rules": {
+        "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-member-access": "error",
+        "typescript/no-unsafe-return": "error"
+      }
+    },
+    {
       "files": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
       "rules": {
         "constructor-super": "off",

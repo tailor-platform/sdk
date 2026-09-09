@@ -4,8 +4,8 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { supplier } from "../../tailordb/supplier";
 
 const schemaType = t.object({
-  ...supplier.pickFields(["id"], { optional: true }),
-  ...supplier.omitFields(["id"]),
+  ...supplier.pickFields(["id","createdAt","updatedAt"], { optional: true }),
+  ...supplier.omitFields(["id","createdAt","updatedAt"]),
 });
 
 export const hook = createTailorDBHook(supplier);

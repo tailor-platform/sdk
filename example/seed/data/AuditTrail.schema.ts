@@ -4,8 +4,8 @@ import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/t
 import { auditTrail } from "../../tailordb/auditTrail";
 
 const schemaType = t.object({
-  ...auditTrail.pickFields(["id"], { optional: true }),
-  ...auditTrail.omitFields(["id"]),
+  ...auditTrail.pickFields(["id","createdAt","updatedAt"], { optional: true }),
+  ...auditTrail.omitFields(["id","createdAt","updatedAt"]),
 });
 
 export const hook = createTailorDBHook(auditTrail);

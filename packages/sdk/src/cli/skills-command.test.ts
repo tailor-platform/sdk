@@ -1,21 +1,21 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { extractFields, isLazyCommand, runCommand } from "@politty/zod";
 import { join } from "pathe";
-import { extractFields, isLazyCommand, runCommand } from "politty";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { mainCommand } from "./main";
 import { commonArgs } from "./shared/args";
 import { logger } from "./shared/logger";
 import { tempCwd } from "./shared/test-helpers/temp-cwd";
-import type { AnyCommand, RunResult, SubCommandValue } from "politty";
+import type { AnyCommand, RunResult, SubCommandValue } from "@politty/zod";
 
 vi.mock("node:module", async () => {
   const actual = await vi.importActual("node:module");
   return { ...actual, register: vi.fn() };
 });
 
-vi.mock("politty", async () => {
-  const actual = await vi.importActual("politty");
+vi.mock("@politty/zod", async () => {
+  const actual = await vi.importActual("@politty/zod");
   return { ...actual, runMain: vi.fn() };
 });
 

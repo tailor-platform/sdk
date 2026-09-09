@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { type initOperatorClient } from "#/cli/shared/client";

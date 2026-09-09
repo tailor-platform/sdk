@@ -2,6 +2,7 @@ import { stripVTControlCharacters } from "node:util";
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { runCommand } from "@politty/zod";
 import {
   FunctionExecution_Status,
   FunctionExecution_Type,
@@ -9,7 +10,6 @@ import {
   FunctionLogEntrySchema,
   FunctionLogSeverity,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { runCommand } from "politty";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
