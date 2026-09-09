@@ -11,7 +11,7 @@ import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { buildResolverValidatedInputExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
   createTsconfigPathsPlugin,
@@ -172,7 +172,7 @@ async function bundleSingleResolver(
     contextHash,
     async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
-      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr({
+      const validatedInputExpr = buildResolverValidatedInputExpr({
         permission: resolver.permission,
         defaultPermission,
       });
@@ -180,11 +180,13 @@ async function bundleSingleResolver(
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
+        import { serializeDateFields } from "@tailor-platform/sdk/runtime";
 
         const $tailor_resolver_body = async (context) => {
           const invoker = ${INVOKER_EXPR};
-          ${guardAndInputCheckExpr}
-          return _internalResolver.body({ ...context, invoker });
+          const input = ${validatedInputExpr};
+          const result = await _internalResolver.body({ ...context, input, invoker });
+          return serializeDateFields(_internalResolver.output, result);
         };
 
         export { $tailor_resolver_body as main };

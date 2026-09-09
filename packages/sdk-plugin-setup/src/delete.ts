@@ -125,7 +125,7 @@ export async function setupDelete(options: DeleteOptions): Promise<void> {
     }
   } finally {
     if (remaining.length !== lock.targets.length) {
-      writeLock(outputDir, { version: LOCK_VERSION, targets: remaining });
+      writeLock(outputDir, { ...lock, version: LOCK_VERSION, targets: remaining });
     }
   }
 }

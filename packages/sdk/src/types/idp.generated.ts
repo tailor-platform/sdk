@@ -56,7 +56,7 @@ export type IdPUserAuthPolicy = {
   passwordMinLength?: number | undefined;
   /** Maximum password length (6-4096) */
   passwordMaxLength?: number | undefined;
-  /** Restrict registration to these email domains */
+  /** Restrict registration to these email domains. A lone * entry allows every domain */
   allowedEmailDomains?: string[] | undefined;
   /** Enable Google OAuth login */
   allowGoogleOauth?: boolean | undefined;
@@ -1367,7 +1367,7 @@ export type IdPInput = {
         passwordMinLength?: number | undefined;
         /** Maximum password length (6-4096) */
         passwordMaxLength?: number | undefined;
-        /** Restrict registration to these email domains */
+        /** Restrict registration to these email domains. A lone * entry allows every domain */
         allowedEmailDomains?: string[] | undefined;
         /** Enable Google OAuth login */
         allowGoogleOauth?: boolean | undefined;
@@ -1447,7 +1447,7 @@ export type IdP = {
         passwordMinLength?: number | undefined;
         /** Maximum password length (6-4096) */
         passwordMaxLength?: number | undefined;
-        /** Restrict registration to these email domains */
+        /** Restrict registration to these email domains. A lone * entry allows every domain */
         allowedEmailDomains?: string[] | undefined;
         /** Enable Google OAuth login */
         allowGoogleOauth?: boolean | undefined;

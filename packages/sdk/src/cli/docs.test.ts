@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
+import { assertDocMatch } from "@politty/zod/docs";
 import { format } from "oxfmt";
-import { assertDocMatch } from "politty/docs";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { mainCommand } from "./main";
@@ -16,8 +16,8 @@ vi.mock("node:module", async () => {
   return { ...actual, register: vi.fn() };
 });
 
-vi.mock("politty", async () => {
-  const actual = await vi.importActual("politty");
+vi.mock("@politty/zod", async () => {
+  const actual = await vi.importActual("@politty/zod");
   return { ...actual, runMain: vi.fn() };
 });
 

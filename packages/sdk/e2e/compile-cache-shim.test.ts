@@ -5,7 +5,7 @@
  *
  * Verifies that:
  * - `tailor`'s `bin` entry (bin/tailor.mjs) is the generated shim that
- *   enables Node's on-disk compile cache (via `politty/compile-cache`)
+ *   enables Node's on-disk compile cache (via `@politty/zod/compile-cache`)
  *   before dynamically importing the real CLI entry (dist/cli/main.mjs).
  * - The shim actually starts the CLI correctly and populates/reuses the
  *   on-disk cache across runs.
@@ -68,7 +68,7 @@ describe("compile-cache bin shim", () => {
     expect(fs.existsSync(mainPath)).toBe(true);
 
     const content = fs.readFileSync(shimPath, "utf-8");
-    expect(content).toContain('await import("politty/compile-cache")');
+    expect(content).toContain('await import("@politty/zod/compile-cache")');
     expect(content).toContain('enableCompileCache("tailor")');
     expect(content).toContain('await import("../dist/cli/main.mjs")');
   });

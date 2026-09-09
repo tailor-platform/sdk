@@ -56,8 +56,13 @@ export async function loadConfig(
   if (importNonce) {
     configUrl.searchParams.set(IMPORT_NONCE_PARAM, importNonce);
   }
-  const configModule = await import(configUrl.href);
-  if (!configModule || !configModule.default) {
+  const configModule: unknown = await import(configUrl.href);
+  if (
+    typeof configModule !== "object" ||
+    configModule === null ||
+    !("default" in configModule) ||
+    !configModule.default
+  ) {
     throw new Error("Invalid Tailor config module: default export not found");
   }
 
@@ -80,9 +85,11 @@ export async function loadConfig(
   // Collect all plugin exports (plugins, plugins2, etc.)
   const allPlugins: Plugin[] = [];
 
-  for (const value of Object.values(configModule)) {
+  const moduleExports: unknown[] = Object.values(configModule);
+  for (const value of moduleExports) {
     if (Array.isArray(value)) {
-      const pluginParsed = value.reduce(
+      const items: unknown[] = value;
+      const pluginParsed = items.reduce<{ success: boolean; items: Plugin[] }>(
         (acc, item) => {
           if (!acc.success) return acc;
 
@@ -94,7 +101,7 @@ export async function loadConfig(
           }
           return acc;
         },
-        { success: true, items: [] as Plugin[] },
+        { success: true, items: [] },
       );
       if (pluginParsed.success && pluginParsed.items.length > 0) {
         allPlugins.push(...pluginParsed.items);
@@ -104,7 +111,7 @@ export async function loadConfig(
 
   return {
     config: {
-      ...configModule.default,
+      ...appConfig,
       ...(env ? { env } : {}),
       path: resolvedPath,
     } as LoadedConfig,

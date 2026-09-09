@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
+import { arg } from "@politty/zod";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
@@ -42,7 +42,7 @@ import {
 import { generateSchemaFile } from "./template-generator";
 import { createMigrationHistoryId } from "./types";
 
-export interface RebaselineOptions {
+interface RebaselineOptions {
   configPath?: string;
   namespace?: string;
   yes?: boolean;

@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -16,7 +16,7 @@ const setTtlOptionsSchema = z.object({
   ttl: ageArg,
 });
 
-export type SetTtlOptions = z.input<typeof setTtlOptionsSchema>;
+type SetTtlOptions = z.input<typeof setTtlOptionsSchema>;
 
 /**
  * Record a workspace's prune expiry, replacing whatever it recorded before.

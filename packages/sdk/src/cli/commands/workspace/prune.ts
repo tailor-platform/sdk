@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
 import { confirmationArgs } from "#/cli/shared/args";
@@ -24,9 +24,9 @@ import {
 } from "./transform";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
-// "" (an unset CI secret) means no scope, not an invalid id. Fresh per option, like `limitArg`.
-const scopeIdArg = () =>
-  z.preprocess((value) => (value === "" ? undefined : value), z.uuid().optional());
+// "" (an unset CI secret) is kept distinct from an omitted option so the run can refuse to sweep
+// unscoped. Fresh per option, like `limitArg`.
+const scopeIdArg = () => z.union([z.literal(""), z.uuid()]).optional();
 
 // Rejects `--limit=` instead of coercing "" to 0. Single-use: politty does not clone pipe schemas per option.
 const limitArg = z.preprocess(
@@ -37,10 +37,8 @@ const limitArg = z.preprocess(
 export { parseAge };
 
 export interface PruneCriteria {
-  /** Name prefixes; a workspace matches when its name starts with any of them. */
-  namePrefixes: readonly string[];
-  /** Regex that must match the whole workspace name. */
-  nameRegex?: RegExp;
+  /** Regexes; a workspace matches when any of them matches its whole name. Empty selects every name. */
+  nameRegexes: readonly RegExp[];
   /**
    * Minimum age since creation, in milliseconds. `0` selects any age.
    * `undefined` in `--expired` mode, where the recorded expiry decides.
@@ -66,13 +64,10 @@ export interface PruneSelection {
 }
 
 function matchesName(workspace: Workspace, criteria: PruneCriteria): boolean {
-  // No filter selects everything: `--expired` reaches every workspace the
-  // caller can see, and the recorded expiry is what narrows it.
-  if (criteria.namePrefixes.length === 0 && !criteria.nameRegex) return true;
-  if (criteria.namePrefixes.some((prefix) => workspace.name.startsWith(prefix))) {
-    return true;
-  }
-  return criteria.nameRegex?.test(workspace.name) ?? false;
+  // No pattern selects everything: `--expired` reaches every workspace in scope,
+  // and the recorded expiry is what narrows it.
+  if (criteria.nameRegexes.length === 0) return true;
+  return criteria.nameRegexes.some((regex) => regex.test(workspace.name));
 }
 
 function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
@@ -221,8 +216,8 @@ function compileNameRegex(pattern: string): RegExp {
     return new RegExp(`^(?:${pattern})$`);
   } catch (error) {
     throw CLIError({
-      code: "INVALID_NAME_REGEX",
-      message: `Invalid --name-regex "${pattern}".`,
+      code: "INVALID_NAME_PATTERN",
+      message: `Invalid --name "${pattern}".`,
       details: error instanceof Error ? error.message : String(error),
     });
   }
@@ -263,22 +258,20 @@ export const pruneCommand = defineAppCommand({
   description:
     "Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation.",
   notes: ml`
-    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its name matches --name-prefix or --name-regex, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
 
-    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no name or age filter. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires --organization-id or --folder-id, and --name-prefix / --name-regex still apply on top.
+    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires --organization-id or --folder-id, and --name still applies on top.
 
     Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), and both --expired and --older-than 0s (no age check) are only accepted together with --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), both --expired and --older-than 0s (no age check) are only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
   args: z.strictObject({
-    "name-prefix": arg(z.array(z.string().min(1)).optional(), {
-      description: "Select workspaces whose name starts with this prefix (repeatable)",
-    }),
-    "name-regex": arg(z.string().min(1).optional(), {
-      description: "Select workspaces whose whole name matches this regular expression",
+    name: arg(z.array(z.string().min(1)).optional(), {
+      description:
+        "Select workspaces whose whole name matches this regular expression (repeatable)",
     }),
     "older-than": arg(ageArg.optional(), {
       description:
@@ -314,8 +307,7 @@ export const pruneCommand = defineAppCommand({
     ...confirmationArgs,
   }),
   run: async (args) => {
-    const namePrefixes = args["name-prefix"] ?? [];
-    const nameRegexPattern = args["name-regex"];
+    const namePatterns = args.name ?? [];
     const olderThan = args["older-than"];
     if (args.expired && olderThan !== undefined) {
       throw CLIError({
@@ -331,14 +323,35 @@ export const pruneCommand = defineAppCommand({
         message: "Specify --older-than, or --expired to use each workspace's recorded expiry.",
       });
     }
-    if (!args.expired && namePrefixes.length === 0 && !nameRegexPattern) {
+    if (!args.expired && namePatterns.length === 0) {
       throw CLIError({
         code: "MISSING_NAME_FILTER",
-        message: "Specify at least one of --name-prefix or --name-regex.",
+        message: "Specify at least one --name.",
         details: "Only workspaces whose name matches the filter are considered for deletion.",
       });
     }
-    if (args.expired && !args["organization-id"] && !args["folder-id"]) {
+    const emptyScopeOptions = (
+      [
+        ["--organization-id", args["organization-id"]],
+        ["--folder-id", args["folder-id"]],
+      ] as const
+    )
+      .filter(([, value]) => value === "")
+      .map(([option]) => option);
+    if (emptyScopeOptions.length > 0) {
+      throw CLIError({
+        code: "EMPTY_SCOPE",
+        message: `${emptyScopeOptions.join(" and ")} resolved to an empty value.`,
+        details:
+          "An empty scope is indistinguishable from no scope, so the sweep would cover every visible workspace. This usually means an unset CI secret.",
+        suggestion:
+          "Set the id (or its environment variable), or drop the option to sweep without a scope on purpose.",
+      });
+    }
+    const organizationId = args["organization-id"] || undefined;
+    const folderId = args["folder-id"] || undefined;
+
+    if (args.expired && !organizationId && !folderId) {
       throw CLIError({
         code: "UNSCOPED_EXPIRED",
         message: "--expired requires --organization-id or --folder-id.",
@@ -347,7 +360,7 @@ export const pruneCommand = defineAppCommand({
       });
     }
     const olderThanMs = olderThan === undefined ? undefined : parseAge(olderThan);
-    if (olderThanMs === 0 && !args["organization-id"] && !args["folder-id"]) {
+    if (olderThanMs === 0 && !organizationId && !folderId) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
         message: "--older-than 0s requires --organization-id or --folder-id.",
@@ -356,11 +369,10 @@ export const pruneCommand = defineAppCommand({
       });
     }
     const criteria: PruneCriteria = {
-      namePrefixes,
-      ...(nameRegexPattern ? { nameRegex: compileNameRegex(nameRegexPattern) } : {}),
+      nameRegexes: namePatterns.map(compileNameRegex),
       ...(olderThanMs === undefined ? {} : { olderThanMs }),
-      organizationId: args["organization-id"],
-      folderId: args["folder-id"],
+      organizationId,
+      folderId,
       exclude: new Set(args.exclude ?? []),
     };
 

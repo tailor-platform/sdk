@@ -1387,6 +1387,211 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.age!.unique).toBe(false);
   });
 
+  test("keeps removed nested members readable until the migration script completes", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: {
+          zipCode: { type: "string", required: false },
+          geo: {
+            type: "nested",
+            required: false,
+            fields: { lat: { type: "float", required: true } },
+          },
+        },
+      },
+    };
+    const before: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zip: { type: "string", required: true, description: "Postal code", index: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: {
+            lat: { type: "float", required: true },
+            lng: { type: "float", required: true },
+          },
+        },
+      },
+    };
+    const after: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zipCode: { type: "string", required: false },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { lat: { type: "float", required: true } },
+        },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        { kind: "field_modified", tableName: "User", fieldName: "address", before, after },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(Object.keys(address.fields ?? {})).toEqual(["zipCode", "geo", "zip"]);
+    expect(address.fields!.zip).toMatchObject({
+      type: "string",
+      required: true,
+      description: "Postal code",
+      index: false,
+    });
+    expect(Object.keys(address.fields!.geo!.fields ?? {})).toEqual(["lat", "lng"]);
+    expect(address.fields!.geo!.fields!.lng).toMatchObject({ type: "float", required: true });
+  });
+
+  test("relaxes the new member of a nested rename until the migration script completes", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: {
+          zipCode: { type: "string", required: true },
+          geo: {
+            type: "nested",
+            required: false,
+            fields: { latitude: { type: "float", required: true } },
+          },
+        },
+      },
+    };
+    const before: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zip: { type: "string", required: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { lat: { type: "float", required: true } },
+        },
+      },
+    };
+    const after: SnapshotFieldConfig = {
+      type: "nested",
+      required: false,
+      fields: {
+        zipCode: { type: "string", required: true },
+        geo: {
+          type: "nested",
+          required: false,
+          fields: { latitude: { type: "float", required: true } },
+        },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before,
+          after,
+          memberRenames: [
+            { previousPath: ["zip"], path: ["zipCode"] },
+            { previousPath: ["geo", "lat"], path: ["geo", "latitude"] },
+          ],
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(address.fields!.zipCode!.required).toBe(false);
+    expect(address.fields!.zip).toMatchObject({ type: "string", required: true });
+    expect(address.fields!.geo!.fields!.latitude!.required).toBe(false);
+    expect(address.fields!.geo!.fields!.lat).toMatchObject({ type: "float", required: true });
+  });
+
+  test("relaxes a unique new member of a nested rename until the migration script completes", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: { zipCode: { type: "string", required: false, unique: true } },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: {
+            type: "nested",
+            required: false,
+            fields: { zip: { type: "string", required: false } },
+          },
+          after: {
+            type: "nested",
+            required: false,
+            fields: { zipCode: { type: "string", required: false, unique: true } },
+          },
+          memberRenames: [{ previousPath: ["zip"], path: ["zipCode"] }],
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    const address = fields.address!;
+    expect(address.fields!.zipCode!.unique).toBe(false);
+    expect(address.fields!.zip).toMatchObject({ type: "string", required: false });
+  });
+
+  test("does not restore members whose parent is no longer nested", () => {
+    const fields: Record<string, ProtoField> = {
+      address: {
+        type: "nested",
+        required: false,
+        fields: { geo: { type: "string", required: false } },
+      },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "address",
+        {
+          kind: "field_modified",
+          tableName: "User",
+          fieldName: "address",
+          before: {
+            type: "nested",
+            required: false,
+            fields: {
+              geo: {
+                type: "nested",
+                required: false,
+                fields: { lat: { type: "float", required: false } },
+              },
+            },
+          },
+          after: {
+            type: "nested",
+            required: false,
+            fields: { geo: { type: "string", required: false } },
+          },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.address!.fields!.geo).toEqual({ type: "string", required: false });
+  });
+
   test("keeps the previous enum values when the target drops every value", () => {
     const fields: Record<string, ProtoField> = {
       kind: { type: "enum", required: false, allowedValues: [] },
@@ -1976,7 +2181,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: 6,
+        version: 7,
       }),
     );
     const planResult = makePlanResult(true);
@@ -1984,7 +2189,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0001" });
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /supports migration file format versions 1-5/,
+      /supports migration file format versions 1-6/,
     );
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();
@@ -2462,6 +2667,35 @@ describe("applyTailorDB migration label reconciliation", () => {
       "Remote migration checkpoint verification failed",
     );
     expect(stderr.output).toContain("not in the local migration history");
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("names the target migration when an environment fell behind before a rebaseline", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
+      },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote migration checkpoint verification failed",
+    );
+    expect(stderr.output).toContain("not in the local migration history");
+    expect(stderr.output).toContain("fell behind before 'migration rebaseline' ran");
+    expect(stderr.output).toContain("already be at migration 0005");
+    expect(stderr.output).toContain(
+      "Restore the pre-rebaseline migrations/ directory from git history",
+    );
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
 

@@ -13,7 +13,7 @@ const clearTtlOptionsSchema = z.object({
   profile: z.string().optional(),
 });
 
-export type ClearTtlOptions = z.input<typeof clearTtlOptionsSchema>;
+type ClearTtlOptions = z.input<typeof clearTtlOptionsSchema>;
 
 /**
  * Drop a workspace's recorded prune expiry.

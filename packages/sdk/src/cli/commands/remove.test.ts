@@ -1,6 +1,11 @@
-import { runCommand } from "politty";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import { runCommand } from "@politty/zod";
+import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { defineApplication } from "#/cli/services/application";
 import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { removeCommand } from "./remove";
 
@@ -196,6 +201,38 @@ describe("remove command", () => {
       'Successfully removed all resources managed by "my-app".',
     );
   });
+  test("removes by the app id recorded in the governing lock", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "remove-lock-"));
+    try {
+      const lockedId = "22222222-2222-4222-8222-222222222222";
+      fs.mkdirSync(path.join(root, ".github"));
+      fs.writeFileSync(
+        path.join(root, ".github/tailor.lock"),
+        JSON.stringify({ version: 2, targets: [], appIds: { "tailor.config.ts": lockedId } }),
+      );
+      const configPath = path.join(root, "tailor.config.ts");
+      fs.writeFileSync(configPath, "");
+      vi.mocked(loadConfig).mockResolvedValueOnce({
+        config: { name: "my-app", path: configPath },
+        plugins: [],
+      });
+      vi.mocked(initOperatorClient).mockResolvedValue({
+        listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+          policies: [],
+          nextPageToken: "",
+        })),
+      } as never);
+
+      await runCommand(removeCommand, ["--yes"]);
+
+      expect(defineApplication).toHaveBeenCalledWith({
+        config: expect.objectContaining({ id: lockedId }),
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("does not claim success when same-name resources were left behind", async () => {
     // A resource tagged with this application's name that it does not own by id
     // is skipped. Reporting success would say the workspace is clean when it is not.

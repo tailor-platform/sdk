@@ -1,5 +1,5 @@
+import { arg } from "@politty/zod";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
@@ -21,7 +21,7 @@ import {
 } from "./snapshot";
 import { MIGRATION_HISTORY_LABEL_KEY, MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
 
-export interface SetOptions {
+interface SetOptions {
   configPath?: string;
   number: string;
   namespace?: string;

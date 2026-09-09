@@ -1,4 +1,4 @@
-import { arg } from "politty";
+import { arg } from "@politty/zod";
 import { z } from "zod";
 
 type ArgsShape = Record<string, z.ZodType>;

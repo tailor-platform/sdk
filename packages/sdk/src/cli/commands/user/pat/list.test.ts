@@ -1,6 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import { runCommand } from "@politty/zod";
 import { PATScope } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken } from "#/cli/shared/context";

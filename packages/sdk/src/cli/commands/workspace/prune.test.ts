@@ -1,6 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import {
@@ -14,8 +14,8 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 import { parseAge, pruneCommand, selectPruneCandidates } from "./prune";
+import type { RunResult } from "@politty/zod";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
-import type { RunResult } from "politty";
 
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -132,12 +132,12 @@ describe("parseAge", () => {
 
 describe("selectPruneCandidates", () => {
   const baseCriteria = {
-    namePrefixes: ["e2e-ws-"],
+    nameRegexes: [/^(?:e2e-ws-.*)$/],
     olderThanMs: parseAge("24h"),
     exclude: new Set<string>(),
   };
 
-  test("keeps only workspaces matching a prefix and older than the threshold", () => {
+  test("keeps only workspaces matching a name pattern and older than the threshold", () => {
     const stale = workspace("e2e-ws-1");
     const fresh = workspace("e2e-ws-2", { createdAt: hoursAgo(1) });
     const unrelated = workspace("production");
@@ -165,27 +165,27 @@ describe("selectPruneCandidates", () => {
 
     const selection = selectPruneCandidates(
       [preview, lookalike, other],
-      { ...baseCriteria, namePrefixes: [], nameRegex: /^my-app-pr-\d+$/ },
+      { ...baseCriteria, nameRegexes: [/^(?:my-app-pr-\d+)$/] },
       NOW,
     );
 
     expect(selection.candidates).toEqual([preview]);
   });
 
-  test("matches when either a prefix or the regex matches", () => {
-    const byPrefix = workspace("e2e-ws-1");
-    const byRegex = workspace("my-app-pr-42");
+  test("matches when any of the patterns matches", () => {
+    const byFirst = workspace("e2e-ws-1");
+    const bySecond = workspace("my-app-pr-42");
 
     const selection = selectPruneCandidates(
-      [byPrefix, byRegex],
-      { ...baseCriteria, nameRegex: /^my-app-pr-\d+$/ },
+      [byFirst, bySecond],
+      { ...baseCriteria, nameRegexes: [...baseCriteria.nameRegexes, /^(?:my-app-pr-\d+)$/] },
       NOW,
     );
 
-    expect(selection.candidates).toEqual([byPrefix, byRegex]);
+    expect(selection.candidates).toEqual([byFirst, bySecond]);
   });
 
-  test("does not use substring matching for prefixes", () => {
+  test("does not match a name that only contains the pattern", () => {
     const suffixed = workspace("old-e2e-ws-1");
 
     expect(selectPruneCandidates([suffixed], baseCriteria, NOW).candidates).toEqual([]);
@@ -268,19 +268,14 @@ describe("workspace prune command", () => {
 
     const result = await runCommand(pruneCommand, ["--older-than", "24h", "--yes"]);
 
-    expectFailure(result, "--name-prefix");
+    expectFailure(result, "--name");
     expect(client.listWorkspaces).not.toHaveBeenCalled();
   });
 
   test("rejects a malformed --older-than value", async () => {
     const client = stubClient([]);
 
-    const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
-      "--older-than",
-      "24",
-    ]);
+    const result = await runCommand(pruneCommand, ["--name", "e2e-ws-.*", "--older-than", "24"]);
 
     expectFailure(result, "older-than");
     expect(client.listWorkspaces).not.toHaveBeenCalled();
@@ -290,8 +285,8 @@ describe("workspace prune command", () => {
     const client = stubClient([workspace("e2e-ws-1", { createdAt: NOW })]);
 
     const unscoped = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "0s",
       "--yes",
@@ -300,8 +295,8 @@ describe("workspace prune command", () => {
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
 
     const scoped = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "0s",
       "--organization-id",
@@ -312,11 +307,11 @@ describe("workspace prune command", () => {
     expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "id-e2e-ws-1" });
   });
 
-  test("anchors --name-regex to the whole name", async () => {
+  test("anchors --name to the whole name", async () => {
     const client = stubClient([workspace("my-app-pr-42"), workspace("my-app-pr-42-copy")]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-regex",
+      "--name",
       "my-app-pr-\\d+",
       "--older-than",
       "24h",
@@ -327,27 +322,27 @@ describe("workspace prune command", () => {
     expect(client.deleteWorkspace.mock.calls).toEqual([[{ workspaceId: "id-my-app-pr-42" }]]);
   });
 
-  test("rejects a --name-regex whose parentheses would escape the whole-name anchor", async () => {
+  test("rejects a --name whose parentheses would escape the whole-name anchor", async () => {
     const client = stubClient([workspace("production"), workspace("temp")]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-regex",
+      "--name",
       "prod)|(?:temp",
       "--older-than",
       "24h",
       "--yes",
     ]);
 
-    expectFailure(result, "--name-regex");
+    expectFailure(result, "--name");
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
   });
 
-  test("rejects an invalid --name-regex", async () => {
+  test("rejects an invalid --name", async () => {
     const client = stubClient([]);
 
-    const result = await runCommand(pruneCommand, ["--name-regex", "(", "--older-than", "1h"]);
+    const result = await runCommand(pruneCommand, ["--name", "(", "--older-than", "1h"]);
 
-    expectFailure(result, "--name-regex");
+    expectFailure(result, "--name");
     expect(client.listWorkspaces).not.toHaveBeenCalled();
   });
 
@@ -355,8 +350,8 @@ describe("workspace prune command", () => {
     const client = stubClient([workspace("e2e-ws-1"), workspace("prod")]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--dry-run",
@@ -380,12 +375,7 @@ describe("workspace prune command", () => {
     ]);
     vi.mocked(prompt.confirm).mockResolvedValue(true);
 
-    const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
-      "--older-than",
-      "24h",
-    ]);
+    const result = await runCommand(pruneCommand, ["--name", "e2e-ws-.*", "--older-than", "24h"]);
 
     expect(result.success).toBe(true);
     expect(assertWritable).toHaveBeenCalledWith({ profile: undefined });
@@ -407,8 +397,8 @@ describe("workspace prune command", () => {
     const client = stubClient([workspace("e2e-ws-1")]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -423,12 +413,7 @@ describe("workspace prune command", () => {
     const client = stubClient([workspace("e2e-ws-1")]);
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
-    const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
-      "--older-than",
-      "24h",
-    ]);
+    const result = await runCommand(pruneCommand, ["--name", "e2e-ws-.*", "--older-than", "24h"]);
 
     expect(result.success).toBe(true);
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
@@ -443,8 +428,8 @@ describe("workspace prune command", () => {
     ]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--limit",
@@ -460,8 +445,8 @@ describe("workspace prune command", () => {
     const client = stubClient([workspace("e2e-ws-1")]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--limit=",
@@ -480,8 +465,8 @@ describe("workspace prune command", () => {
     ]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--limit",
@@ -507,8 +492,8 @@ describe("workspace prune command", () => {
     const client = stubClient(workspaces);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--limit",
@@ -525,8 +510,8 @@ describe("workspace prune command", () => {
     const client = stubClient(workspaces);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -543,8 +528,8 @@ describe("workspace prune command", () => {
       .mockResolvedValueOnce({});
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -562,8 +547,8 @@ describe("workspace prune command", () => {
       .mockResolvedValueOnce({ workspaces: [workspace("e2e-ws-2")], nextPageToken: "" });
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -584,8 +569,8 @@ describe("workspace prune command", () => {
     stubClient([]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--profile",
@@ -609,8 +594,8 @@ describe("workspace prune command", () => {
     } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -631,8 +616,8 @@ describe("workspace prune command", () => {
       .mockResolvedValueOnce({});
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -644,21 +629,61 @@ describe("workspace prune command", () => {
     expect(logger.success).toHaveBeenCalledWith(expect.stringContaining("Deleted 2"));
   });
 
-  test("treats empty scope environment variables as unset", async () => {
+  test("refuses to sweep when a scope environment variable is set but empty", async () => {
     const client = stubClient([workspace("e2e-ws-a", { organizationId: ORG_B })]);
     vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", "");
-    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", "");
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expectFailure(result, "--organization-id");
+    expect(client.listWorkspaces).not.toHaveBeenCalled();
+  });
+
+  test("refuses to sweep when a scope option is passed empty", async () => {
+    const client = stubClient([workspace("e2e-ws-a")]);
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--folder-id",
+      "",
+      "--yes",
+    ]);
+
+    expectFailure(result, "--folder-id");
+    expect(client.listWorkspaces).not.toHaveBeenCalled();
+  });
+
+  test("accepts several --name patterns", async () => {
+    const client = stubClient([
+      workspace("e2e-ws-1"),
+      workspace("my-app-pr-42"),
+      workspace("production"),
+    ]);
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--name",
+      "my-app-pr-\\d+",
       "--older-than",
       "24h",
       "--yes",
     ]);
 
     expect(result.success).toBe(true);
-    expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "id-e2e-ws-a" });
+    expect(client.deleteWorkspace.mock.calls).toEqual([
+      [{ workspaceId: "id-e2e-ws-1" }],
+      [{ workspaceId: "id-my-app-pr-42" }],
+    ]);
   });
 
   test("reads the organization scope from the environment", async () => {
@@ -669,8 +694,8 @@ describe("workspace prune command", () => {
     vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", ORG_A);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -688,8 +713,8 @@ describe("workspace prune command", () => {
     ]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -719,8 +744,8 @@ describe("workspace prune command", () => {
     const client = stubClient([workspace("prod")]);
 
     const result = await runCommand(pruneCommand, [
-      "--name-prefix",
-      "e2e-ws-",
+      "--name",
+      "e2e-ws-.*",
       "--older-than",
       "24h",
       "--yes",
@@ -853,8 +878,8 @@ describe("workspace prune command", () => {
         "--expired",
         "--organization-id",
         ORG_A,
-        "--name-prefix",
-        "e2e-ws-",
+        "--name",
+        "e2e-ws-.*",
         "--yes",
       ]);
 
@@ -898,7 +923,7 @@ describe("workspace prune command", () => {
     test("requires --older-than when it is not given", async () => {
       const client = stubClient([]);
 
-      const result = await runCommand(pruneCommand, ["--name-prefix", "e2e-ws-", "--yes"]);
+      const result = await runCommand(pruneCommand, ["--name", "e2e-ws-.*", "--yes"]);
 
       expectFailure(result, "--older-than");
       expect(client.listWorkspaces).not.toHaveBeenCalled();

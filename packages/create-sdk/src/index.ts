@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { chdir } from "node:process";
 import { intro, outro } from "@clack/prompts";
+import { arg, defineCommand, runMain } from "@politty/zod";
 import pc from "picocolors";
 import { readPackageJSON } from "pkg-types";
-import { arg, defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { collectContext } from "./context";
 import { copyProject } from "./copy";

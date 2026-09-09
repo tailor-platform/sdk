@@ -19,6 +19,7 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  MAX_RESOURCE_LABELS,
   type MetadataLabelWrite,
   resourceTrn,
   sdkNameLabelKey,
@@ -351,8 +352,11 @@ export async function planApplication(
     trn: resourceTrn(workspaceId, "application", application.name),
     appName: application.name,
     appId: application.id,
+    metadata: application.config.metadata,
   });
   const existingLabels = await fetchAppLabels(client, workspaceId, application.name);
+  assertLabelBudget(application.name, existingLabels, metaRequest);
+  const metadataDetails = diffMetadataDisplay(existingLabels, application.config.metadata);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
@@ -424,19 +428,23 @@ export async function planApplication(
     if (
       owned &&
       hasMatchingSdkVersion(existingLabels, metaRequest.labels) &&
-      areApplicationsEqual(existing, desired)
+      areApplicationsEqual(existing, desired) &&
+      metadataDetails.length === 0
     ) {
       // Plan display shows this as unchanged, but apply still re-issues it.
       changeSet.unchanged.push(update);
     } else {
-      const details = diffHttpAdapterDisplay(existing.httpAdapters, httpAdapters);
+      const details = [
+        ...diffHttpAdapterDisplay(existing.httpAdapters, httpAdapters),
+        ...metadataDetails,
+      ];
       if (details.length > 0) {
         update.details = details;
       }
       changeSet.updates.push(update);
     }
   } else {
-    const details = diffHttpAdapterDisplay(undefined, httpAdapters);
+    const details = [...diffHttpAdapterDisplay(undefined, httpAdapters), ...metadataDetails];
     changeSet.creates.push({
       name: application.name,
       request,
@@ -519,6 +527,61 @@ export function diffHttpAdapterDisplay(
   return entries
     .toSorted((left, right) => left.name.localeCompare(right.name))
     .map((entry) => `${entry.symbol} ${entry.name} (httpAdapter)`);
+}
+
+/**
+ * Fail the plan when the labels this deploy would leave behind exceed the
+ * platform's per-resource limit.
+ *
+ * The `metadata` cap alone cannot catch this: a write keeps every stored label
+ * it does not name, so labels from another tool or an earlier config push are
+ * merged on top of the entries being written. Reporting it here fails the run
+ * before the application is created or updated, rather than leaving a bare
+ * `SetMetadata` rejection after the resource has already changed.
+ * @param appName - Application the labels belong to
+ * @param existingLabels - Labels currently stored on the application
+ * @param write - The metadata write planned for the application
+ */
+function assertLabelBudget(
+  appName: string,
+  existingLabels: Record<string, string> | undefined,
+  write: MetadataLabelWrite,
+): void {
+  const merged = new Set([
+    ...Object.keys(existingLabels ?? {}),
+    ...Object.keys(write.labels ?? {}),
+  ]);
+  for (const key of write.remove ?? []) {
+    merged.delete(key);
+  }
+  if (merged.size <= MAX_RESOURCE_LABELS) return;
+  const named = new Set(Object.keys(write.labels ?? {}));
+  const retained = [...merged].filter((key) => !named.has(key)).toSorted();
+  throw new Error(
+    `Application '${appName}' would store ${merged.size} labels, over the platform's limit of ${MAX_RESOURCE_LABELS}. ` +
+      `${named.size} come from this deploy and ${retained.length} are kept from earlier deploys or other tools` +
+      `${retained.length ? ` (${retained.join(", ")})` : ""}. ` +
+      `Remove entries from 'metadata' in the config, or delete labels the application no longer needs.`,
+  );
+}
+
+/**
+ * Build per-entry diff lines for the config's `metadata` labels. Labels the
+ * config does not name are kept as they are, so they never appear here.
+ * @param existingLabels - Labels currently stored on the application
+ * @param metadata - `metadata` entries from the local config
+ * @returns Indented diff lines (`+`/`~` per entry), sorted by key
+ */
+function diffMetadataDisplay(
+  existingLabels: Record<string, string> | undefined,
+  metadata: Record<string, string> | undefined,
+): string[] {
+  const existing = existingLabels ?? {};
+  const isStored = (key: string) => Object.hasOwn(existing, key);
+  return Object.entries(metadata ?? {})
+    .filter(([key, value]) => !isStored(key) || existing[key] !== value)
+    .toSorted(([left], [right]) => left.localeCompare(right))
+    .map(([key]) => `${isStored(key) ? symbols.update : symbols.create} ${key} (metadata)`);
 }
 
 function buildHttpAdapters(
