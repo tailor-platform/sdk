@@ -1,5 +1,5 @@
+import { arg } from "@politty/zod";
 import * as path from "pathe";
-import { arg } from "politty";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { deploymentArgs } from "#/cli/shared/args";

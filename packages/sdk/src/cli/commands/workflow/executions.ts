@@ -1,11 +1,11 @@
 import { create } from "@bufbuild/protobuf";
+import { arg } from "@politty/zod";
 import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
 } from "@tailor-platform/tailor-proto/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { arg } from "politty";
 import { z } from "zod";
 import {
   type Order,

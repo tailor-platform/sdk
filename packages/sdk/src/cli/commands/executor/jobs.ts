@@ -1,6 +1,7 @@
 import { setTimeout } from "timers/promises";
 import { create } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/zod";
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
@@ -12,7 +13,6 @@ import {
   FilterSchema,
   PageDirection,
 } from "@tailor-platform/tailor-proto/resource_pb";
-import { arg } from "politty";
 import { z } from "zod";
 import {
   durationArg,

@@ -1,4 +1,4 @@
-import { runCommand } from "politty";
+import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { authorizeAuthConnectionCommand } from "./authorize";
 import type * as ClientModule from "#/cli/shared/client";
