@@ -96,9 +96,16 @@ export const deleteCommand = defineAppCommand({
     }
 
     // Delete workspace
-    await client.deleteWorkspace({
-      workspaceId,
-    });
+    try {
+      await client.deleteWorkspace({
+        workspaceId,
+      });
+    } catch (error) {
+      // A failed call can still have removed the workspace server-side (a timeout after the
+      // server committed), so the local profile is cleaned up before the error propagates.
+      await removeProfilesForWorkspaces(new Set([workspaceId]));
+      throw error;
+    }
 
     const profilesToDelete = await removeProfilesForWorkspaces(new Set([workspaceId]));
 

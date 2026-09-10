@@ -1013,7 +1013,18 @@ export type TailorDBTypeRawInput = {
   name: string;
   fields: {
     [x: string]: {
-      type: string;
+      type:
+        | "uuid"
+        | "string"
+        | "boolean"
+        | "integer"
+        | "float"
+        | "decimal"
+        | "enum"
+        | "date"
+        | "datetime"
+        | "time"
+        | "nested";
       fields?: Record<string, any>;
       metadata: DBFieldMetadata;
       rawRelation?: RawRelationConfig;
@@ -1049,7 +1060,18 @@ export type TailorDBTypeRaw = {
   name: string;
   fields: {
     [x: string]: {
-      type: string;
+      type:
+        | "uuid"
+        | "string"
+        | "boolean"
+        | "integer"
+        | "float"
+        | "decimal"
+        | "enum"
+        | "date"
+        | "datetime"
+        | "time"
+        | "nested";
       fields?: Record<string, any>;
       metadata: DBFieldMetadata;
       rawRelation?: RawRelationConfig;

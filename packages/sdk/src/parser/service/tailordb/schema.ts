@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
+import { TailorFieldTypeSchema } from "../field-types";
 import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "#/parser/service/tailordb/types";
 
@@ -39,20 +40,6 @@ export const GqlOperationsSchema = z
     "Configuration for GraphQL operations on a TailorDB table.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
   )
   .transform((val) => normalizeGqlOperations(val));
-
-const TailorFieldTypeSchema = z.enum([
-  "uuid",
-  "string",
-  "boolean",
-  "integer",
-  "float",
-  "decimal",
-  "enum",
-  "date",
-  "datetime",
-  "time",
-  "nested",
-]);
 
 const AllowedValueSchema = z.strictObject({
   value: z.string(),
