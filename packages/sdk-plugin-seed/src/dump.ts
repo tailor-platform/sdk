@@ -142,7 +142,11 @@ export const seedDumpCommand = defineAppCommand({
   description: "Write the current TailorDB rows out as JSONL seed data.",
   notes:
     "The output is the same format `tailor seed apply` reads, so a dump taken before a change is " +
-    "what restores the tables after it: `tailor seed apply --truncate` puts the dumped rows back. " +
+    "what restores the tables after it: `tailor seed apply --truncate --skip-idp` puts the dumped " +
+    "rows back. `--skip-idp` matters here: this command never dumps `_User`, so without it a " +
+    "truncating apply also wipes the app's current IdP users and reseeds `_User` from whatever " +
+    "`_User.jsonl` already has on disk, which is stale the moment real users have signed up since " +
+    "that file was last written. " +
     "Fields the platform assigns rather than the row — `serial` fields — are left out, unless " +
     "another table's relation is keyed to that field: it is kept then, so the relation still " +
     "resolves instead of breaking once `apply --truncate` assigns the field a fresh value. " +

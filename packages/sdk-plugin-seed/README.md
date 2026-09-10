@@ -58,10 +58,12 @@ tailor seed dump --force User Order
 ```bash
 tailor seed dump --force
 # ... run the migration, the executor, the workflow you want to try ...
-tailor seed apply --truncate --yes
+tailor seed apply --truncate --yes --skip-idp
 ```
 
 Naming tables limits the dump to them, and `--namespace` limits it to one namespace, so a table you are about to change can be captured and put back on its own rather than resetting the whole app.
+
+**Restoring needs `--skip-idp` unless you also have a separate backup of `_User`.** A dump never captures `_User` (see below), so `tailor seed apply --truncate` without `--skip-idp` would truncate the app's _current_ IdP users and reseed `_User` from whatever `_User.jsonl` already has on disk — data the dump did not just refresh, and that may no longer match who has actually signed up. Add `--skip-idp` to the restore unless you have separately backed up and intend to restore `_User` too.
 
 Fields the platform assigns rather than the seed row — `serial` fields — are left out, unless another table's relation is keyed to that field, in which case it is kept so the relation still resolves after `apply --truncate` gives the row a fresh value. Explicit nulls are kept as-is, so a dumped line reads back the way a hand-written one does and `tailor seed validate` accepts it. Rows are read a page at a time, ordered by id, and written to disk as each page arrives rather than held in memory for the whole table; `--page-size` changes how many come back per request.
 
