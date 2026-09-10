@@ -48,7 +48,7 @@ jobs:
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 
-      - uses: tailor-platform/actions/erd-schema-export@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
+      - uses: tailor-platform/actions/erd-schema-export@a11bb7e587fe822e3e6b26ec524faf22160f9bd4 # v2.3.2
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -91,7 +91,7 @@ jobs:
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 
-      - uses: tailor-platform/actions/erd-schema-preview@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
+      - uses: tailor-platform/actions/erd-schema-preview@a11bb7e587fe822e3e6b26ec524faf22160f9bd4 # v2.3.2
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -131,7 +131,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: tailor-platform/actions/erd-schema-comment@43110f4589acc8aca1ee72243ee31c09933d402d # v2.3.1
+      - uses: tailor-platform/actions/erd-schema-comment@a11bb7e587fe822e3e6b26ec524faf22160f9bd4 # v2.3.2
         with:
           base-ref: ${{ github.event.pull_request.base.ref }}
           github-token: ${{ github.token }}
