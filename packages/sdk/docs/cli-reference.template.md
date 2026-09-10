@@ -29,7 +29,8 @@ an error object.
 
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
-(`AUTH_TOKEN_REFRESH_FAILED`). Login recovery preserves the selected profile. Permission and
+(`AUTH_TOKEN_REFRESH_FAILED`). Login recovery preserves the selected profile. For saved identities,
+the next step opens login help so you can reuse the original browser or machine-user login method. Permission and
 connection failures include guidance in `error.suggestion`; API failures also identify the operation
 and affected resources in `error.context`.
 

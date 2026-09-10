@@ -1108,7 +1108,8 @@ describe("loadAccessToken", () => {
         );
         expect(errorToJson(error).error).toMatchObject({
           code: expectedCode,
-          next: { command: "tailor", args: ["login", "--profile", "selected"] },
+          next: { command: "tailor", args: ["login", "--profile", "selected", "--help"] },
+          suggestion: expect.stringContaining("original login method"),
           context: { profile: "selected" },
         });
         expect(JSON.stringify(errorToJson(error))).not.toContain("sentinel");

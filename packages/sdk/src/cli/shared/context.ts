@@ -1021,13 +1021,13 @@ export async function fetchLatestToken(
   platformConfig?: PlatformClientConfig,
   profile?: string,
 ): Promise<{ accessToken: string; user: string }> {
-  const loginArgs = profile ? ["--profile", profile] : platformConfig ? ["--help"] : [];
+  const loginArgs = profile ? ["--profile", profile] : [];
   const loginFailure = (code: string, message: string, suggestion: string) =>
     CLIError({
       code,
       message,
       suggestion,
-      next: { command: "tailor", args: ["login", ...loginArgs] },
+      next: { command: "tailor", args: ["login", ...loginArgs, "--help"] },
       context: { profile: profile ?? null },
     });
   const { userKey: storedUser, userEntry } = findUserEntry(config, user, platformConfig);
@@ -1035,7 +1035,7 @@ export async function fetchLatestToken(
     throw loginFailure(
       "AUTH_USER_NOT_FOUND",
       `User "${user}" not found.`,
-      "Verify the selected user and log in to the same platform.",
+      "Verify the selected user and use the original login method (browser or --machine-user) on the same platform.",
     );
   }
 
@@ -1051,7 +1051,7 @@ export async function fetchLatestToken(
     throw loginFailure(
       "AUTH_TOKEN_EXPIRED",
       "Token expired.",
-      "Log in again to the same platform.",
+      "Use the original login method (browser or --machine-user) to authenticate again on the same platform.",
     );
   }
 
@@ -1067,7 +1067,7 @@ export async function fetchLatestToken(
     throw loginFailure(
       "AUTH_TOKEN_REFRESH_FAILED",
       "Failed to refresh token. Your session may have expired.",
-      "Check network connectivity and platform availability, then log in again to the same platform if needed.",
+      "Check network connectivity and platform availability, then use the original login method (browser or --machine-user) on the same platform if needed.",
     );
   }
 

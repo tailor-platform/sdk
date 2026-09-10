@@ -35,7 +35,7 @@ export function getErrorDiagnostics(error: Error): ErrorDiagnostics {
 function rpcSuggestion(code: Code): string | undefined {
   switch (code) {
     case Code.Unauthenticated:
-      return "Check the active token and profile with `tailor auth status` (include the same --profile option). For an environment token, replace TAILOR_PLATFORM_TOKEN; otherwise log in with `tailor login` using the same profile.";
+      return "Check the active token and profile with `tailor auth status` (include the same --profile option). For an environment token, replace TAILOR_PLATFORM_TOKEN; otherwise use the original browser or --machine-user login method with the same profile. See `tailor login --help`.";
     case Code.PermissionDenied:
       return "Check the active identity and profile with `tailor auth status` (include the same --profile option), then verify its workspace role and token permissions.";
     case Code.Unavailable:
