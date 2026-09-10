@@ -69,6 +69,18 @@ describe("valid-execution-policy-definition", () => {
     );
   });
 
+  test("ignores def.name on the single-policy path, which never reads it", () => {
+    expectViolation(
+      `${SINGLE}const opts = { name: "tenant-api" };\nexport const policy = defineWorkflowExecutionPolicy("BAD", opts);`,
+      RULE,
+      NAME_MESSAGE,
+    );
+    expectClean(
+      `${SINGLE}const opts = { name: "Premium" };\nexport const policy = defineWorkflowExecutionPolicy("tenant-api", opts);`,
+      RULE,
+    );
+  });
+
   test("resolves the builder parameter and const values", () => {
     expectViolation(
       `${GROUP}export const policies = defineWorkflowExecutionPolicies((d) => ({ premium: d({ name: "Premium" }) }));`,

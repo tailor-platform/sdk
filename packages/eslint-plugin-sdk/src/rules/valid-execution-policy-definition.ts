@@ -57,12 +57,7 @@ function readOptions(
   return { name, key, matchType: kind };
 }
 
-function checkPolicy(
-  context: Rule.RuleContext,
-  fallback: StaticOption,
-  options: PolicyOptions,
-): void {
-  const name = options.name ?? fallback;
+function checkPolicy(context: Rule.RuleContext, name: StaticOption, options: PolicyOptions): void {
   if (!EXECUTION_POLICY_NAME_PATTERN.test(name.value)) {
     context.report({
       node: name.node,
@@ -110,7 +105,8 @@ function checkPolicyGroup(context: Rule.RuleContext, call: AstCallExpression): v
       if (name === null || definition?.type !== "CallExpression") continue;
       if (!isBindingReference(context, unwrapExpression(definition.callee), define)) continue;
       const options = readOptions(context, definition.arguments[0]);
-      if (options !== null) checkPolicy(context, { value: name, node: property.key }, options);
+      if (options === null) continue;
+      checkPolicy(context, options.name ?? { value: name, node: property.key }, options);
     }
   }
 }
@@ -120,6 +116,8 @@ function checkSinglePolicy(context: Rule.RuleContext, call: AstCallExpression): 
   const name = staticString(resolveValue(context, nameNode));
   if (nameNode === undefined || name === null) return;
   const options = readOptions(context, call.arguments[1]);
+  // `defineWorkflowExecutionPolicy` types `def` as `Omit<ExecutionPolicyDefInput, "name">`
+  // and only ever reads the positional name, so a stray `def.name` must not override it.
   if (options !== null) checkPolicy(context, { value: name, node: nameNode }, options);
 }
 
