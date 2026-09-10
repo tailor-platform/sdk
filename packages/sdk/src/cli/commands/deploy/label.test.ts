@@ -2,9 +2,12 @@ import * as fs from "node:fs";
 import { create, createRegistry } from "@bufbuild/protobuf";
 import { usedTypes } from "@bufbuild/protobuf/reflect";
 import { createValidator } from "@bufbuild/protovalidate";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
+import { errorToJson } from "#/cli/shared/error-json";
+import { CLIError } from "#/cli/shared/errors";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import {
@@ -634,6 +637,43 @@ describe("withMetadataWriteBatch", () => {
       cause: flushError,
       errors: [applyError, flushError],
     });
+  });
+
+  test("preserves actionable causes when both apply and recovery fail", async () => {
+    const client = createClient();
+    const applyError = CLIError({
+      code: "RESOURCE_CONFLICT",
+      message: "Resource changed",
+      next: { command: "tailor", args: ["deploy", "--dry-run"] },
+      context: { resource: "Order" },
+    });
+    const flushError = new ConnectError("Service unavailable", Code.Unavailable);
+    client.bulkSetMetadata.mockRejectedValueOnce(flushError);
+    const error = await withMetadataWriteBatch(client, async (batchClient) => {
+      await writeMetadataLabels(batchClient, { trn: "trn:x", labels: { mine: "value" } });
+      throw applyError;
+    }).catch((error: unknown) => error);
+
+    expect(error).toBeInstanceOf(AggregateError);
+    expect(error).toHaveProperty("message", expect.stringContaining("tailor deploy --dry-run"));
+    expect(errorToJson(error).error).toMatchObject({
+      code: "DEPLOY_METADATA_RECOVERY_FAILED",
+      context: {
+        apply: {
+          code: "RESOURCE_CONFLICT",
+          next: applyError.next,
+          context: { resource: "Order" },
+        },
+        recovery: { code: "RPC_UNAVAILABLE" },
+      },
+    });
+    expect(errorToJson(error, { includeStack: true }).error).toMatchObject({
+      context: {
+        apply: { stack: applyError.stack },
+        recovery: { stack: flushError.stack },
+      },
+    });
+    expect(JSON.stringify(errorToJson(error))).not.toContain('"stack"');
   });
 
   test("does not issue a bulk write when a metadata read fails", async () => {

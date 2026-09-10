@@ -710,13 +710,16 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   }
   const user = profileEntry?.user ?? pfConfig.current_user;
   if (!user) {
-    throw new Error(ml`
-      Tailor Platform token not found.
-      Please specify token via TAILOR_PLATFORM_TOKEN environment variable or login using 'tailor login' command.
-    `);
+    throw CLIError({
+      code: "AUTH_TOKEN_NOT_FOUND",
+      message: "Tailor Platform token not found.",
+      suggestion: "Set TAILOR_PLATFORM_TOKEN or log in using the selected profile.",
+      next: { command: "tailor", args: ["login", ...(profile ? ["--profile", profile] : [])] },
+      context: { profile: profile ?? null },
+    });
   }
   const fromProfile = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
-  return (await fetchLatestToken(pfConfig, user, fromProfile)).accessToken;
+  return (await fetchLatestToken(pfConfig, user, fromProfile, profile)).accessToken;
 }
 
 /**
@@ -1007,6 +1010,7 @@ function shouldResolveSubjectOnRefresh(user: string, userEntry: PfUser): boolean
  * @param config - Platform config
  * @param user - User identifier
  * @param platformConfig - Optional platform connection settings
+ * @param profile - Selected profile for login recovery
  * @returns Latest access token and the canonical user ID it is stored under
  *   (the resolved subject when a legacy email key was migrated during refresh,
  *   otherwise the matching config user)
@@ -1015,13 +1019,24 @@ export async function fetchLatestToken(
   config: PfConfig,
   user: string,
   platformConfig?: PlatformClientConfig,
+  profile?: string,
 ): Promise<{ accessToken: string; user: string }> {
+  const loginArgs = profile ? ["--profile", profile] : platformConfig ? ["--help"] : [];
+  const loginFailure = (code: string, message: string, suggestion: string) =>
+    CLIError({
+      code,
+      message,
+      suggestion,
+      next: { command: "tailor", args: ["login", ...loginArgs] },
+      context: { profile: profile ?? null },
+    });
   const { userKey: storedUser, userEntry } = findUserEntry(config, user, platformConfig);
   if (!userEntry) {
-    throw new Error(ml`
-      User "${user}" not found.
-      Please verify your user name and login using 'tailor login' command.
-    `);
+    throw loginFailure(
+      "AUTH_USER_NOT_FOUND",
+      `User "${user}" not found.`,
+      "Verify the selected user and log in to the same platform.",
+    );
   }
 
   const storedConfigUser = userFromPlatformUserKey(storedUser, platformConfig);
@@ -1033,10 +1048,11 @@ export async function fetchLatestToken(
   }
 
   if (!tokens.refreshToken) {
-    throw new Error(ml`
-      Token expired.
-      Please run 'tailor login' and try again.
-    `);
+    throw loginFailure(
+      "AUTH_TOKEN_EXPIRED",
+      "Token expired.",
+      "Log in again to the same platform.",
+    );
   }
 
   const client = initOAuth2Client(platformConfig);
@@ -1048,10 +1064,11 @@ export async function fetchLatestToken(
       expiresAt: Date.parse(userEntry.token_expires_at),
     });
   } catch {
-    throw new Error(ml`
-      Failed to refresh token. Your session may have expired.
-      Please run 'tailor login' and try again.
-    `);
+    throw loginFailure(
+      "AUTH_TOKEN_REFRESH_FAILED",
+      "Failed to refresh token. Your session may have expired.",
+      "Check network connectivity and platform availability, then log in again to the same platform if needed.",
+    );
   }
 
   const newExpiresAt = new Date(

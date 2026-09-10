@@ -113,6 +113,7 @@ describe("errorToJson", () => {
       error: {
         code: "RPC_PERMISSION_DENIED",
         message: expect.stringContaining("permission denied"),
+        suggestion: expect.stringContaining("workspace role and token permissions"),
       },
     });
   });
