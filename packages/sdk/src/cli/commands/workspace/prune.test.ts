@@ -84,6 +84,14 @@ function workspace(
   } as Workspace;
 }
 
+// A workspace no organization or folder owns, which the fixture default would otherwise give one.
+function personalWorkspace(
+  name: string,
+  overrides: Parameters<typeof workspace>[1] = {},
+): Workspace {
+  return workspace(name, { ...overrides, organizationId: "", folderId: "" });
+}
+
 /**
  * Stub the metadata read behind `--expired`, keyed by workspace id.
  * @param expiries - Expiry per workspace id; an absent id records no expiry, an `Error` fails the read
@@ -210,6 +218,39 @@ describe("selectPruneCandidates", () => {
         NOW,
       ).candidates,
     ).toEqual([inScope]);
+  });
+
+  test("selects only the personal workspaces when personal is the sole scope", () => {
+    const personal = personalWorkspace("e2e-ws-a");
+    const inOrg = workspace("e2e-ws-b");
+    const inFolder = workspace("e2e-ws-c", { folderId: FOLDER_A });
+
+    expect(
+      selectPruneCandidates([personal, inOrg, inFolder], { ...baseCriteria, personal: true }, NOW)
+        .candidates,
+    ).toEqual([personal]);
+  });
+
+  test("unions the personal workspaces with an id scope instead of narrowing it", () => {
+    const personal = personalWorkspace("e2e-ws-a");
+    const inOrgA = workspace("e2e-ws-b");
+    const inOrgB = workspace("e2e-ws-c", { organizationId: ORG_B });
+
+    expect(
+      selectPruneCandidates(
+        [personal, inOrgA, inOrgB],
+        { ...baseCriteria, organizationId: ORG_A, personal: true },
+        NOW,
+      ).candidates,
+    ).toEqual([personal, inOrgA]);
+  });
+
+  test("does not treat a workspace with only a folder as personal", () => {
+    const folderOnly = workspace("e2e-ws-a", { organizationId: "", folderId: FOLDER_A });
+
+    expect(
+      selectPruneCandidates([folderOnly], { ...baseCriteria, personal: true }, NOW).candidates,
+    ).toEqual([]);
   });
 
   test("keeps excluded names even when they match", () => {
@@ -892,7 +933,7 @@ describe("workspace prune command", () => {
 
       const result = await runCommand(pruneCommand, ["--expired", "--yes"]);
 
-      expectFailure(result, "--expired requires --organization-id or --folder-id");
+      expectFailure(result, "--expired requires --organization-id, --folder-id, or --personal");
       expect(client.listWorkspaces).not.toHaveBeenCalled();
     });
 
@@ -927,6 +968,181 @@ describe("workspace prune command", () => {
 
       expectFailure(result, "--older-than");
       expect(client.listWorkspaces).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("--personal", () => {
+    test("satisfies the scope --expired requires, reaching a workspace no id scope can", async () => {
+      const target = personalWorkspace("ws-expired", { createdAt: hoursAgo(99) });
+      const client = stubClient([target], { [target.id]: hoursAgo(1) });
+
+      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
+    });
+
+    test("leaves organization-owned workspaces alone when it is the only scope", async () => {
+      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
+      const owned = workspace("ws-owned", { createdAt: hoursAgo(99) });
+      const client = stubClient([personal, owned], {
+        [personal.id]: hoursAgo(1),
+        [owned.id]: hoursAgo(1),
+      });
+
+      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: personal.id });
+    });
+
+    test("widens an organization scope to the union rather than narrowing it", async () => {
+      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
+      const inOrgA = workspace("ws-org-a", { createdAt: hoursAgo(99) });
+      const inOrgB = workspace("ws-org-b", { createdAt: hoursAgo(99), organizationId: ORG_B });
+      const client = stubClient([personal, inOrgA, inOrgB], {
+        [personal.id]: hoursAgo(1),
+        [inOrgA.id]: hoursAgo(1),
+        [inOrgB.id]: hoursAgo(1),
+      });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--personal",
+        "--organization-id",
+        ORG_A,
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledTimes(2);
+      expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: personal.id });
+      expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: inOrgA.id });
+    });
+
+    test("does not satisfy the empty-scope check on an --organization-id passed empty", async () => {
+      const client = stubClient([personalWorkspace("ws-expired", { createdAt: hoursAgo(99) })]);
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--personal",
+        "--organization-id",
+        "",
+        "--yes",
+      ]);
+
+      expectFailure(result, "--organization-id resolved to an empty value");
+      expect(client.listWorkspaces).not.toHaveBeenCalled();
+    });
+
+    test("unions with an organization scope that came from the environment", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", ORG_A);
+      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
+      const inOrgA = workspace("ws-org-a", { createdAt: hoursAgo(99) });
+      const client = stubClient([personal, inOrgA], {
+        [personal.id]: hoursAgo(1),
+        [inOrgA.id]: hoursAgo(1),
+      });
+
+      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledTimes(2);
+    });
+
+    test("still honours delete protection, --exclude, and --name", async () => {
+      const target = personalWorkspace("e2e-ws-target", { createdAt: hoursAgo(99) });
+      const excluded = personalWorkspace("e2e-ws-keep", { createdAt: hoursAgo(99) });
+      const guarded = personalWorkspace("e2e-ws-guarded", {
+        createdAt: hoursAgo(99),
+        deleteProtection: true,
+      });
+      const otherName = personalWorkspace("other-ws", { createdAt: hoursAgo(99) });
+      const client = stubClient([target, excluded, guarded, otherName], {
+        [target.id]: hoursAgo(1),
+        [excluded.id]: hoursAgo(1),
+        [guarded.id]: hoursAgo(1),
+        [otherName.id]: hoursAgo(1),
+      });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--personal",
+        "--name",
+        "e2e-ws-.*",
+        "--exclude",
+        "e2e-ws-keep",
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
+    });
+
+    test("counts as a scope for --older-than 0s as well", async () => {
+      const target = personalWorkspace("e2e-ws-1", { createdAt: NOW });
+      const client = stubClient([target]);
+
+      const result = await runCommand(pruneCommand, [
+        "--name",
+        "e2e-ws-.*",
+        "--older-than",
+        "0s",
+        "--personal",
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
+    });
+
+    test("keeps a personal workspace that records no expiry", async () => {
+      const client = stubClient([personalWorkspace("ws-personal", { createdAt: hoursAgo(99) })]);
+
+      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
+    });
+
+    test("shows which scope each candidate came from when the sweep mixes them", async () => {
+      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
+      const inOrgA = workspace("ws-org-a", { createdAt: hoursAgo(99) });
+      stubClient([personal, inOrgA], {
+        [personal.id]: hoursAgo(1),
+        [inOrgA.id]: hoursAgo(1),
+      });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--personal",
+        "--organization-id",
+        ORG_A,
+        "--dry-run",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(logger.out).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          display: expect.not.objectContaining({ organizationId: null, folderId: null }),
+        }),
+      );
+    });
+
+    test("keeps the scope columns hidden when it is the only scope", async () => {
+      const personal = personalWorkspace("ws-personal", { createdAt: hoursAgo(99) });
+      stubClient([personal], { [personal.id]: hoursAgo(1) });
+
+      const result = await runCommand(pruneCommand, ["--expired", "--personal", "--dry-run"]);
+
+      expect(result.success).toBe(true);
+      expect(logger.out).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          display: expect.objectContaining({ organizationId: null, folderId: null }),
+        }),
+      );
     });
   });
 });

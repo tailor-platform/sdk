@@ -46,6 +46,12 @@ export interface PruneCriteria {
   olderThanMs?: number;
   organizationId?: string;
   folderId?: string;
+  /**
+   * Also select workspaces belonging to no organization and no folder, which an
+   * `organizationId` / `folderId` scope can never match. Alone it selects only
+   * those; alongside a scope it widens the selection to the union of both.
+   */
+  personal?: boolean;
   /** Exact names kept even when they match. */
   exclude: ReadonlySet<string>;
 }
@@ -70,7 +76,12 @@ function matchesName(workspace: Workspace, criteria: PruneCriteria): boolean {
   return criteria.nameRegexes.some((regex) => regex.test(workspace.name));
 }
 
-function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
+// A workspace no organization or folder owns, which an id scope cannot match.
+function isPersonal(workspace: Workspace): boolean {
+  return !workspace.organizationId && !workspace.folderId;
+}
+
+function matchesIdScope(workspace: Workspace, criteria: PruneCriteria): boolean {
   if (criteria.organizationId && workspace.organizationId !== criteria.organizationId) {
     return false;
   }
@@ -78,6 +89,16 @@ function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
     return false;
   }
   return true;
+}
+
+function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
+  const hasIdScope = Boolean(criteria.organizationId || criteria.folderId);
+  // An unset id is "do not filter on it", not "match nothing", so the union is
+  // taken against a real id scope only -- `--personal` alone must narrow to the
+  // personal set rather than widen an unscoped sweep back to everything.
+  if (!hasIdScope) return criteria.personal ? isPersonal(workspace) : true;
+  if (criteria.personal && isPersonal(workspace)) return true;
+  return matchesIdScope(workspace, criteria);
 }
 
 /**
@@ -258,13 +279,15 @@ export const pruneCommand = defineAppCommand({
   description:
     "Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation.",
   notes: ml`
-    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id / --personal scope. Run with --dry-run first to see what would be deleted.
 
-    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires --organization-id or --folder-id, and --name still applies on top.
+    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires a scope, and --name still applies on top.
+
+    A workspace belonging to no organization and no folder is matched by neither --organization-id nor --folder-id, so --personal is what brings it into a sweep. It counts as a scope on its own, and alongside --organization-id / --folder-id it widens the sweep to the union of both rather than narrowing it. Scoping to it is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded -- not a risk-free narrowing. Note that --organization-id and --folder-id also read their environment variables, so --personal in an environment that sets one of those sweeps the union of the two.
 
     Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), both --expired and --older-than 0s (no age check) are only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), both --expired and --older-than 0s (no age check) are only accepted together with --organization-id, --folder-id, or --personal, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep -- --personal does not satisfy that check on an empty --organization-id or --folder-id. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
@@ -275,11 +298,15 @@ export const pruneCommand = defineAppCommand({
     }),
     "older-than": arg(ageArg.optional(), {
       description:
-        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id. Required unless --expired is given",
+        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires a scope. Required unless --expired is given",
     }),
     expired: arg(z.boolean().default(false), {
       description:
-        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-id or --folder-id",
+        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-id, --folder-id, or --personal",
+    }),
+    personal: arg(z.boolean().default(false), {
+      description:
+        "Also consider workspaces belonging to no organization and no folder, which --organization-id and --folder-id can never match. Counts as a scope",
     }),
     "organization-id": arg(scopeIdArg(), {
       alias: "o",
@@ -350,22 +377,23 @@ export const pruneCommand = defineAppCommand({
     }
     const organizationId = args["organization-id"] || undefined;
     const folderId = args["folder-id"] || undefined;
+    const scoped = Boolean(organizationId || folderId || args.personal);
 
-    if (args.expired && !organizationId && !folderId) {
+    if (args.expired && !scoped) {
       throw CLIError({
         code: "UNSCOPED_EXPIRED",
-        message: "--expired requires --organization-id or --folder-id.",
+        message: "--expired requires --organization-id, --folder-id, or --personal.",
         details:
           "The expiry lives on the workspace, and writing a workspace's metadata is a lesser permission than deleting it, so an unscoped sweep would delete on behalf of anyone able to write that metadata.",
       });
     }
     const olderThanMs = olderThan === undefined ? undefined : parseAge(olderThan);
-    if (olderThanMs === 0 && !organizationId && !folderId) {
+    if (olderThanMs === 0 && !scoped) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
-        message: "--older-than 0s requires --organization-id or --folder-id.",
+        message: "--older-than 0s requires --organization-id, --folder-id, or --personal.",
         details:
-          "Without an age check the name filter is the only guard, so the sweep must be scoped to an organization or folder.",
+          "Without an age check the name filter is the only guard, so the sweep must be scoped to an organization, a folder, or the personal workspaces.",
       });
     }
     const criteria: PruneCriteria = {
@@ -373,6 +401,7 @@ export const pruneCommand = defineAppCommand({
       ...(olderThanMs === undefined ? {} : { olderThanMs }),
       organizationId,
       folderId,
+      personal: args.personal,
       exclude: new Set(args.exclude ?? []),
     };
 
@@ -447,12 +476,14 @@ export const pruneCommand = defineAppCommand({
 
     result.candidates = await workspaceInfosWithFolderNames(client, selection.candidates);
     if (!logger.jsonMode) {
+      // Only a union sweep can mix personal and scoped workspaces, and the list
+      // is what the confirmation prompt is answered against, so show which is which.
+      const mixedScopes = args.personal && Boolean(organizationId || folderId);
       logger.out(result.candidates, {
         display: {
           name: workspaceNameTransformer,
           folderName: null,
-          organizationId: null,
-          folderId: null,
+          ...(mixedScopes ? {} : { organizationId: null, folderId: null }),
           updatedAt: null,
         },
       });
