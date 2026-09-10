@@ -24,6 +24,7 @@ import type * as ClientModule from "./client";
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
 const keyringPasswords = vi.hoisted(() => new Map<string, string>());
 const keyringSetPasswordFailure = vi.hoisted(() => ({ error: undefined as Error | undefined }));
+const keyringGetPassword = vi.hoisted(() => vi.fn<(key: string) => string | null>());
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
@@ -40,7 +41,7 @@ vi.mock("@napi-rs/keyring", () => ({
       keyringPasswords.set(this.key, password);
     }
     getPassword(): string | null {
-      return keyringPasswords.get(this.key) ?? null;
+      return keyringGetPassword(this.key);
     }
     deletePassword() {
       keyringPasswords.delete(this.key);
@@ -78,6 +79,8 @@ beforeEach(() => {
   clientMocks.refreshToken.mockReset();
   keyringPasswords.clear();
   keyringSetPasswordFailure.error = undefined;
+  keyringGetPassword.mockReset();
+  keyringGetPassword.mockImplementation((key) => keyringPasswords.get(key) ?? null);
 });
 
 describe("loadConfigPath", () => {
@@ -1275,6 +1278,60 @@ describe("saveUserTokens", () => {
     );
   });
 
+  test("uses existing keyring credentials when keyring writes are denied", async () => {
+    const config = createEmptyConfig();
+    config.users["platform-user-sub"] = {
+      storage: "keyring",
+      token_expires_at: futureDate,
+    };
+    keyringPasswords.set(
+      "tailor-platform-cli:platform-user-sub",
+      JSON.stringify({ accessToken: "existing-access-token" }),
+    );
+    keyringSetPasswordFailure.error = new Error("keyring writes denied");
+
+    await expect(fetchLatestToken(config, "platform-user-sub")).resolves.toEqual({
+      accessToken: "existing-access-token",
+      user: "platform-user-sub",
+    });
+  });
+
+  test("explains missing keyring credentials and how to recover in the current environment", async () => {
+    const config = createEmptyConfig();
+    const userEntry = {
+      storage: "keyring" as const,
+      token_expires_at: futureDate,
+    };
+    config.users["platform-user-sub"] = userEntry;
+
+    await expect(fetchLatestToken(config, "platform-user-sub")).rejects.toThrow(
+      /Credentials not found[\s\S]*missing or inaccessible[\s\S]*sandbox[\s\S]*run 'tailor login' in this environment[\s\S]*TAILOR_PLATFORM_TOKEN/,
+    );
+    expect(config.users["platform-user-sub"]).toBe(userEntry);
+  });
+
+  test("reports keyring access failures with recovery instructions and preserves the saved user", async () => {
+    const config = createEmptyConfig();
+    const userEntry = {
+      storage: "keyring" as const,
+      token_expires_at: futureDate,
+    };
+    config.users["platform-user-sub"] = userEntry;
+    const accessError = new Error("User interaction is not allowed.");
+    keyringGetPassword.mockImplementation(() => {
+      throw accessError;
+    });
+
+    await expect(fetchLatestToken(config, "platform-user-sub")).rejects.toMatchObject({
+      message: expect.stringContaining("User interaction is not allowed."),
+      cause: accessError,
+    });
+    await expect(fetchLatestToken(config, "platform-user-sub")).rejects.toThrow(
+      "run 'tailor login' in this environment",
+    );
+    expect(config.users["platform-user-sub"]).toBe(userEntry);
+  });
+
   test.each(["0", "false", "off"])(
     "ignores TAILOR_USE_KEYRING=%s and stores tokens in the OS keyring",
     async (value) => {
@@ -1319,6 +1376,31 @@ describe("saveUserTokens", () => {
       token_expires_at: futureDate,
     });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("keyring denied"));
+  });
+
+  test("keeps successfully saved credentials in the keyring without an additional read", async () => {
+    const config = createEmptyConfig();
+    keyringGetPassword.mockImplementation(() => {
+      throw new Error("User denied the additional read.");
+    });
+
+    await saveUserTokens(
+      config,
+      "platform-user-sub",
+      { accessToken: "new-access-token", refreshToken: "new-refresh-token" },
+      futureDate,
+    );
+    writePlatformConfig(config);
+
+    const savedConfig = await readPlatformConfig();
+    expect(savedConfig.users["platform-user-sub"]).toEqual({
+      storage: "keyring",
+      token_expires_at: futureDate,
+    });
+    expect(keyringGetPassword).not.toHaveBeenCalled();
+    expect(keyringPasswords.get("tailor-platform-cli:platform-user-sub")).toBe(
+      JSON.stringify({ accessToken: "new-access-token", refreshToken: "new-refresh-token" }),
+    );
   });
 
   test("deletes stale keyring tokens when falling back to the config file", async () => {
