@@ -49,6 +49,10 @@ function lint(source: string, rule: string, filename = "fixture.ts") {
   };
 }
 
+export function lintOutput(source: string, rule: string, filename?: string): string {
+  return lint(source, rule, filename).output;
+}
+
 export function expectViolation(
   source: string,
   rule: string,
@@ -59,6 +63,17 @@ export function expectViolation(
   expect({ status: result.status, output: result.output }).toMatchObject({ status: 1 });
   expect(result.output).toContain(`tailor-sdk(${rule})`);
   expect(result.output).toContain(message);
+}
+
+export function expectReportCount(
+  source: string,
+  rule: string,
+  count: number,
+  filename?: string,
+): void {
+  const output = lint(source, rule, filename).output;
+  const reports = output.split("\n").filter((line) => line.includes(`tailor-sdk(${rule})`));
+  expect({ reports: reports.length, output }).toMatchObject({ reports: count });
 }
 
 export function expectClean(source: string, rule: string, filename?: string): void {
