@@ -14,7 +14,11 @@ function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInf
   // Extract dependencies from relations (including keyOnly which only sets foreignKeyType)
   const dependencies: Set<string> = new Set();
   const selfRefFields: string[] = [];
-  const selfRefKeys: Record<string, string> = {};
+  // A null-prototype object is used because field names are user-defined and
+  // a field can be named `__proto__`: assigning that key on a plain `{}`
+  // would invoke `Object.prototype`'s `__proto__` setter instead of creating
+  // an enumerable own property, silently dropping the entry.
+  const selfRefKeys: Record<string, string> = Object.create(null);
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
     const targetType = field.relation?.targetType ?? field.config.foreignKeyType;

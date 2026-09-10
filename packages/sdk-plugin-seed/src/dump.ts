@@ -63,7 +63,11 @@ interface DumpPage {
  * @returns The row reduced to the fields seed data carries
  */
 function toSeedRow(row: Record<string, unknown>, omitFields: string[]): SeedData[string][number] {
-  const seedRow: Record<string, unknown> = {};
+  // A null-prototype object is used because field names are user-defined and
+  // this repository allows a field named `__proto__`: assigning that key on
+  // a plain `{}` would invoke `Object.prototype`'s `__proto__` setter instead
+  // of creating an enumerable own property, silently dropping the column.
+  const seedRow: Record<string, unknown> = Object.create(null);
   for (const [field, value] of Object.entries(row)) {
     if (omitFields.includes(field) || value === undefined) continue;
     seedRow[field] = value;

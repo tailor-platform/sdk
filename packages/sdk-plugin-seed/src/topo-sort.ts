@@ -109,8 +109,12 @@ export function sortRecordsBySelfReference(
 
   const seen = new Set<unknown>();
   const orderedIds: unknown[] = [];
-  while (queue.length > 0) {
-    const id = queue.shift();
+  // A head index is used instead of `queue.shift()`, which would reindex the
+  // remaining array on every dequeue and make this Kahn traversal O(n²) over
+  // a table's full record set.
+  let head = 0;
+  while (head < queue.length) {
+    const id = queue[head++];
     if (seen.has(id)) continue;
     seen.add(id);
     orderedIds.push(id);
