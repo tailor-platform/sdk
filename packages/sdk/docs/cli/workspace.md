@@ -16,15 +16,16 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                   | Description                                 |
-| ----------------------------------------- | ------------------------------------------- |
-| [`workspace app`](#workspace-app)         | Manage workspace applications               |
-| [`workspace create`](#workspace-create)   | Create a new Tailor Platform workspace.     |
-| [`workspace delete`](#workspace-delete)   | Delete a Tailor Platform workspace.         |
-| [`workspace get`](#workspace-get)         | Show detailed information about a workspace |
-| [`workspace list`](#workspace-list)       | List all Tailor Platform workspaces.        |
-| [`workspace restore`](#workspace-restore) | Restore a deleted workspace                 |
-| [`workspace user`](#workspace-user)       | Manage workspace users                      |
+| Command                                   | Description                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| [`workspace app`](#workspace-app)         | Manage workspace applications                                                    |
+| [`workspace create`](#workspace-create)   | Create a new Tailor Platform workspace.                                          |
+| [`workspace delete`](#workspace-delete)   | Delete a Tailor Platform workspace.                                              |
+| [`workspace get`](#workspace-get)         | Show detailed information about a workspace                                      |
+| [`workspace list`](#workspace-list)       | List all Tailor Platform workspaces.                                             |
+| [`workspace prune`](#workspace-prune)     | Delete stale temporary workspaces that match a name filter and an age threshold. |
+| [`workspace restore`](#workspace-restore) | Restore a deleted workspace                                                      |
+| [`workspace user`](#workspace-user)       | Manage workspace users                                                           |
 
 ### workspace app
 
@@ -169,6 +170,40 @@ tailor workspace list [options]
 | `--profile <PROFILE>` | -     | Workspace profile used for authentication and Platform selection | No       | -        | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### workspace prune
+
+Delete stale temporary workspaces that match a name filter and an age threshold.
+
+**Usage**
+
+```
+tailor workspace prune [options]
+```
+
+**Options**
+
+| Option                                | Alias | Description                                                                                                                  | Required | Default | Env                               |
+| ------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------- |
+| `--name <NAME>`                       | -     | Select workspaces whose whole name matches this regular expression (repeatable)                                              | No       | -       | -                                 |
+| `--older-than <OLDER_THAN>`           | -     | Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id | Yes      | -       | -                                 |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Only consider workspaces in this organization                                                                                | No       | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`             | -     | Only consider workspaces in this folder                                                                                      | No       | -       | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--exclude <EXCLUDE>`                 | -     | Keep a workspace with this exact name even when it matches (repeatable)                                                      | No       | -       | -                                 |
+| `--limit <LIMIT>`                     | -     | Abort when more workspaces match than this, without deleting anything. 0 removes the cap                                     | No       | `20`    | -                                 |
+| `--dry-run`                           | -     | List the workspaces that would be deleted without deleting them                                                              | No       | `false` | -                                 |
+| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                                             | No       | -       | `TAILOR_PLATFORM_PROFILE`         |
+| `--yes`                               | `-y`  | Skip confirmation prompts                                                                                                    | No       | `false` | -                                 |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+
+Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, scope, exclusion, or delete-protection criteria that selected it. Unlike `workspace delete`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with `workspace restore` for a limited time.
+
+Only workspaces visible to the current login (or the machine user in CI) are considered.
 
 ### workspace restore
 
