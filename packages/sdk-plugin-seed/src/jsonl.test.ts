@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import {
+  appendSeedDataRows,
   assertSeedDataDirectory,
+  beginSeedDataWrite,
+  commitSeedDataWrite,
   existingSeedDataFiles,
   loadSeedData,
   writeSeedData,
@@ -164,5 +167,42 @@ describe("existingSeedDataFiles", () => {
     const dir = makeDataDir({ "User.jsonl": "" });
 
     expect(existingSeedDataFiles(dir, ["User", "Order"])).toEqual(["User"]);
+  });
+});
+
+describe("beginSeedDataWrite / appendSeedDataRows / commitSeedDataWrite", () => {
+  test("streams rows through the temp file and commits them on success", () => {
+    const dir = makeDataDir({});
+
+    const tmpPath = beginSeedDataWrite(dir, "User");
+    appendSeedDataRows(tmpPath, [{ id: "u1" }]);
+    appendSeedDataRows(tmpPath, [{ id: "u2" }]);
+    const written = commitSeedDataWrite(dir, "User", tmpPath, false);
+
+    expect(written).toBe(path.join(dir, "User.jsonl"));
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: "u1" }, { id: "u2" }] });
+  });
+
+  test("without force, refuses to replace a file that already exists", () => {
+    const dir = makeDataDir({ "User.jsonl": '{"id":"stale"}\n' });
+
+    const tmpPath = beginSeedDataWrite(dir, "User");
+    appendSeedDataRows(tmpPath, [{ id: "fresh" }]);
+
+    // Guards the commit itself, not just the dump command's upfront check:
+    // a second writer that reaches this point after the first one's file
+    // already landed must still be rejected without --force.
+    expect(() => commitSeedDataWrite(dir, "User", tmpPath, false)).toThrow(/already exists/);
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: "stale" }] });
+  });
+
+  test("with force, replaces a file that already exists", () => {
+    const dir = makeDataDir({ "User.jsonl": '{"id":"stale"}\n' });
+
+    const tmpPath = beginSeedDataWrite(dir, "User");
+    appendSeedDataRows(tmpPath, [{ id: "fresh" }]);
+    commitSeedDataWrite(dir, "User", tmpPath, true);
+
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [{ id: "fresh" }] });
   });
 });

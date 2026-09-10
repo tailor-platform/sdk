@@ -308,7 +308,7 @@ export const seedDumpCommand = defineAppCommand({
                 appendSeedDataRows(tmpPath, rows);
               },
             );
-            commitSeedDataWrite(dataDir, table, tmpPath);
+            commitSeedDataWrite(dataDir, table, tmpPath, args.force);
           } catch (error) {
             discardSeedDataWrite(tmpPath);
             throw error;

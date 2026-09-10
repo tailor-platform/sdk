@@ -197,7 +197,7 @@ describe("seedDumpCommand", () => {
       { id: "u2" },
     ]);
     expect(jsonl.appendSeedDataRows).toHaveBeenNthCalledWith(2, tmpPath, [{ id: "u3" }]);
-    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledWith("/seed/data", "User", tmpPath);
+    expect(jsonl.commitSeedDataWrite).toHaveBeenCalledWith("/seed/data", "User", tmpPath, false);
   });
 
   test("writes to --out instead of the seed data directory", async () => {
@@ -208,6 +208,7 @@ describe("seedDumpCommand", () => {
       "/tmp/snapshot",
       "User",
       tmpPathFor("/tmp/snapshot", "User"),
+      false,
     );
     expect(appendedRowsFor("/tmp/snapshot", "User")).toEqual([]);
   });
@@ -232,6 +233,7 @@ describe("seedDumpCommand", () => {
       "/seed/data",
       "User",
       tmpPathFor("/seed/data", "User"),
+      true,
     );
     expect(appendedRowsFor("/seed/data", "User")).toEqual([]);
   });
@@ -343,6 +345,7 @@ describe("seedDumpCommand", () => {
       "/seed/data",
       "User",
       tmpPathFor("/seed/data", "User"),
+      false,
     );
     expect(appendedRowsFor("/seed/data", "User")).toEqual([{ id: "u1", name: "Ada" }]);
     expect(jsonl.discardSeedDataWrite).toHaveBeenCalledWith(tmpPathFor("/seed/data", "Order"));

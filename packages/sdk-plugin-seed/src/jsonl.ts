@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -157,17 +158,46 @@ export function appendSeedDataRows(tmpPath: string, rows: SeedData[string]): voi
 }
 
 /**
- * Finish a streamed write: atomically replace `<typeName>.jsonl` with the
- * temp file's contents, now that every row for the table has been written
- * successfully.
+ * Finish a streamed write: replace `<typeName>.jsonl` with the temp file's
+ * contents, now that every row for the table has been written successfully.
+ *
+ * Without `force`, this must not overwrite an existing file. The dump
+ * command's own `existingSeedDataFiles` preflight check cannot see a second
+ * dump that starts after it and reaches this point first, so the check is
+ * repeated here at commit time via `linkSync`: unlike `renameSync`, it fails
+ * atomically with `EEXIST` when the destination already exists instead of
+ * silently replacing it, closing the race for the one write that actually
+ * matters. With `force`, the destination is expected to exist and is always
+ * replaced with `renameSync`.
  * @param dataDir - Directory the entity's JSONL file lives in
  * @param typeName - Entity name the rows belong to
  * @param tmpPath - Temp file path returned by `beginSeedDataWrite`
+ * @param force - Overwrite an existing `<typeName>.jsonl` instead of failing
  * @returns Path of the entity's JSONL file
  */
-export function commitSeedDataWrite(dataDir: string, typeName: string, tmpPath: string): string {
+export function commitSeedDataWrite(
+  dataDir: string,
+  typeName: string,
+  tmpPath: string,
+  force: boolean,
+): string {
   const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
-  renameSync(tmpPath, jsonlPath);
+  if (force) {
+    renameSync(tmpPath, jsonlPath);
+    return jsonlPath;
+  }
+  try {
+    linkSync(tmpPath, jsonlPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(
+        `${jsonlPath} already exists. Pass --force to overwrite it, or --out to write elsewhere.`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+  unlinkSync(tmpPath);
   return jsonlPath;
 }
 
