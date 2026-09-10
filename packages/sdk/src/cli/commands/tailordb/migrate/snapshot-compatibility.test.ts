@@ -75,14 +75,44 @@ describe("migration file compatibility", () => {
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
       const expr = manifest.schema!.typeHook![operation]!.expr!;
       const record = { postalCode: "100", address: "Tokyo", city: "Chiyoda" };
+      const oldRecord =
+        operation === "update" ? { postalCode: "999", address: "Osaka", city: "Chuo" } : null;
 
       expect(
-        new Function("_input", "_oldRecord", "user", `return ${expr}\n`)(record, null, user),
+        new Function("_input", "_oldRecord", "user", `return ${expr}\n`)(record, oldRecord, user),
       ).toEqual({
         fullAddress: "100 Tokyo Chiyoda",
       });
     },
   );
+
+  test("preserves existing fields in legacy hooks during partial updates", () => {
+    const snapshot = loadSnapshot(path.join(fixtureDir, "0000/schema.json"));
+    const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+    const expr = manifest.schema!.typeHook!.update!.expr!;
+    const input = Object.freeze({ city: "Chiyoda" });
+    const oldRecord = Object.freeze({ postalCode: "100", address: "Tokyo", city: "Chuo" });
+
+    expect(
+      new Function("_input", "_oldRecord", "user", `return ${expr}\n`)(input, oldRecord, user),
+    ).toEqual({
+      fullAddress: "100 Tokyo Chiyoda",
+    });
+  });
+
+  test("preserves explicit nulls in legacy update hooks", () => {
+    const snapshot = loadSnapshot(path.join(fixtureDir, "0000/schema.json"));
+    const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+    const expr = manifest.schema!.typeHook!.update!.expr!;
+    const input = { city: null };
+    const oldRecord = { postalCode: "100", address: "Tokyo", city: "Chuo" };
+
+    expect(
+      new Function("_input", "_oldRecord", "user", `return ${expr}\n`)(input, oldRecord, user),
+    ).toEqual({
+      fullAddress: "100 Tokyo null",
+    });
+  });
 
   test("stops a legacy validator chain at its first failure", () => {
     const raw = readHistoricalSnapshot();

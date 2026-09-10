@@ -61,10 +61,12 @@ function normalizeField(field: SnapshotFieldConfig): SnapshotFieldConfig {
     for (const operation of ["create", "update"] as const) {
       const hook = field.hooks[operation];
       if (hook && usesLegacyData(hook.expr)) {
+        const dataExpr =
+          operation === "update" ? "Object.assign({}, _oldRecord, _input)" : "_input";
         normalized.hooks[operation] = {
           ...hook,
           expr: assertParsableExpression(
-            `((_data) => (${hook.expr}\n))(_input)`,
+            `((_data) => (${hook.expr}\n))(${dataExpr})`,
             "legacy migration hook",
           ),
         };
