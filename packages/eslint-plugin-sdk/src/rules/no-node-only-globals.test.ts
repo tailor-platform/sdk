@@ -76,6 +76,7 @@ describe("no-node-only-globals", () => {
       RULE,
     );
     expectClean(`${RESOLVER}export const value = config.process.module;`, RULE);
+    expectClean(`${RESOLVER}export const region = globalThis.process.env.REGION;`, RULE);
     expectClean(`${RESOLVER}export const value = { process: 1, Buffer: 2 };`, RULE);
     expectClean(`${RESOLVER}export type Env = typeof process.env;`, RULE);
     expectClean(`${RESOLVER}export const isNode = typeof process !== "undefined";`, RULE);
