@@ -1,19 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
-
-const TailorFieldTypeSchema = z.enum([
-  "uuid",
-  "string",
-  "boolean",
-  "integer",
-  "float",
-  "decimal",
-  "enum",
-  "date",
-  "datetime",
-  "time",
-  "nested",
-]);
+import { TailorFieldTypeSchema } from "../field-types";
 
 const AllowedValueSchema = z.strictObject({
   value: z.string().describe("The allowed value"),
