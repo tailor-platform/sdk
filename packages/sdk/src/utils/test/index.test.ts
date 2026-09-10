@@ -396,6 +396,19 @@ describe("createStandardSchema unknown fields", () => {
     expect(schema["~standard"].validate({ note: "n", seq: 3 })).toHaveProperty("value");
   });
 
+  test("accepts the id the table adds on its own", () => {
+    const result = schema["~standard"].validate({
+      id: "00000000-0000-0000-0000-000000000001",
+      note: "n",
+    });
+    expect(result).toHaveProperty("value");
+  });
+
+  test("accepts a declared nested field that is null", () => {
+    const result = schema["~standard"].validate({ note: "n", address: null, lines: null });
+    expect(result).toHaveProperty("value");
+  });
+
   test("reports an undeclared key inside a nested object", () => {
     const result = schema["~standard"].validate({ address: { city: "Tokyo", zip: "100" } });
     expect(result).toMatchObject({ issues: [{ path: ["address", "zip"] }] });

@@ -65,6 +65,39 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
       'createStandardSchema(schemaType, hook, AuditLog, { fields: ["id","action"] })',
     );
   });
+
+  test("passes every declared field name for a table-attached plugin table", () => {
+    const metadata: LinesDbMetadata = {
+      tableName: "UserChangeset",
+      exportName: "UserChangeset",
+      importPath: "",
+      fields: ["id", "recordId", "diff"],
+      optionalFields: ["id"],
+      omitFields: [],
+      foreignKeys: [],
+      indexes: [],
+      pluginSource: {
+        exportName: "UserChangeset",
+        pluginId: "changeset-plugin",
+        pluginImportPath: "@example/changeset-plugin",
+        originalFilePath: "/test/user.ts",
+        originalExportName: "user",
+        generatedTableKind: "changeset",
+      },
+    };
+
+    const source = generateLinesDbSchemaFileWithPluginAPI(metadata, {
+      configImportPath: "../../../tailor.config.ts",
+      originalImportPath: "../../tailordb/user",
+    });
+
+    expect(source).toContain(
+      'getGeneratedTable(configPath, "changeset-plugin", user, "changeset")',
+    );
+    expect(source).toContain(
+      'createStandardSchema(schemaType, hook, UserChangeset, { fields: ["id","recordId","diff"] })',
+    );
+  });
 });
 
 describe("generateLinesDbSchemaFile", () => {

@@ -239,13 +239,8 @@ export function createStandardSchema<T = Record<string, unknown>>(
           );
         }
         const result = validateHooked(hooked);
-        if (result.issues) {
-          return { issues: [...undeclared, ...result.issues] };
-        }
-        if (undeclared.length > 0) {
-          return { issues: undeclared };
-        }
-        return result;
+        const issues = [...undeclared, ...(result.issues ?? [])];
+        return issues.length > 0 ? { issues } : result;
       },
     },
   } as const satisfies StandardSchemaV1<T>;
