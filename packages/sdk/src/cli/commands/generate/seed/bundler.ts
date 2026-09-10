@@ -45,6 +45,7 @@ function generateSeedScriptContent(namespace: string): string {
       order: string[];
       selfRefTypes: string[];
       selfRefFields?: Record<string, string[]>;
+      selfRefKeys?: Record<string, Record<string, string>>;
       upsert?: boolean;
     };
 
@@ -75,21 +76,41 @@ function generateSeedScriptContent(namespace: string): string {
      * produce) are appended in their original order rather than dropped, so
      * a run never silently loses data.
      *
-     * \`record.id\` is used as the map key to resolve edges, so it must be
+     * \`record.id\` is used as the map key for the row itself, so it must be
      * present and unique across the batch. If any id is missing (allowed
      * when not using \`--upsert\`) or duplicated, the map would collapse
      * distinct rows onto the same key and silently drop them from the
      * result; fall back to the original file order instead.
+     *
+     * A self-reference field does not always hold the parent's \`id\` — a
+     * relation's \`toward.key\` (or a \`keyOnly\` relation's \`foreignKeyField\`)
+     * can target a different unique field, e.g. \`parentCode -> Category.code\`.
+     * \`fieldKeys\` names the field each self-reference field is keyed to
+     * (default \`"id"\`), so edges resolve against the right value instead of
+     * assuming every self-reference points at \`id\`.
      */
     function sortBySelfReference(
       records: Record<string, unknown>[],
       fields: string[],
+      fieldKeys: Record<string, string> = {},
     ): Record<string, unknown>[] {
       if (fields.length === 0 || records.length <= 1) return records;
 
       const byId = new Map<unknown, Record<string, unknown>>();
       for (const record of records) byId.set(record.id, record);
       if (byId.size !== records.length) return records;
+
+      const idsByKeyValue = new Map<string, Map<unknown, unknown>>();
+      for (const field of fields) {
+        const targetKey = fieldKeys[field] ?? "id";
+        if (idsByKeyValue.has(targetKey)) continue;
+        const map = new Map<unknown, unknown>();
+        for (const record of records) {
+          const keyValue = targetKey === "id" ? record.id : record[targetKey];
+          if (keyValue !== null && keyValue !== undefined) map.set(keyValue, record.id);
+        }
+        idsByKeyValue.set(targetKey, map);
+      }
 
       const inDegree = new Map<unknown, number>();
       const dependents = new Map<unknown, unknown[]>();
@@ -100,9 +121,11 @@ function generateSeedScriptContent(namespace: string): string {
       for (const record of records) {
         const id = record.id;
         for (const field of fields) {
-          const parentId = record[field];
-          if (parentId === null || parentId === undefined || parentId === id) continue;
-          if (!byId.has(parentId)) continue;
+          const refValue = record[field];
+          if (refValue === null || refValue === undefined) continue;
+          const targetKey = fieldKeys[field] ?? "id";
+          const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
+          if (parentId === undefined || parentId === id) continue;
           inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
           dependents.get(parentId)?.push(id);
         }
@@ -177,7 +200,12 @@ function generateSeedScriptContent(namespace: string): string {
             // Insert one-by-one, in dependency order, to respect
             // self-referencing foreign keys.
             const selfRefFieldNames = (input.selfRefFields || {})[tableName] || [];
-            const orderedRecords = sortBySelfReference(recordsToInsert, selfRefFieldNames);
+            const selfRefFieldKeys = (input.selfRefKeys || {})[tableName] || {};
+            const orderedRecords = sortBySelfReference(
+              recordsToInsert,
+              selfRefFieldNames,
+              selfRefFieldKeys,
+            );
             for (const record of orderedRecords) {
               await db.insertInto(tableName).values(record).execute();
               processed[tableName].inserted += 1;

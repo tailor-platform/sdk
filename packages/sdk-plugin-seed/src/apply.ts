@@ -39,6 +39,7 @@ interface SeedNamespaceParams {
   dependencies: Record<string, string[]>;
   selfRefTypes: string[];
   selfRefFields: Record<string, string[]>;
+  selfRefKeys: Record<string, Record<string, string>>;
   requiredFields: Record<string, string[]>;
   upsert: boolean;
   configDir: string;
@@ -85,6 +86,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     dependencies,
     selfRefTypes,
     selfRefFields,
+    selfRefKeys,
     requiredFields,
     upsert,
     configDir,
@@ -101,7 +103,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     const fields = selfRefFields[type];
     const records = data[type];
     if (records && fields && fields.length > 0) {
-      data[type] = sortRecordsBySelfReference(records, fields);
+      data[type] = sortRecordsBySelfReference(records, fields, selfRefKeys[type]);
     }
   }
   const processedTotals: Record<string, number> = {};
@@ -139,7 +141,14 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
       workspaceId: execution.workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: { data: chunk.data, order: chunk.order, selfRefTypes, selfRefFields, upsert },
+      arg: {
+        data: chunk.data,
+        order: chunk.order,
+        selfRefTypes,
+        selfRefFields,
+        selfRefKeys,
+        upsert,
+      },
       invoker: {
         namespace: execution.authNamespace,
         machineUserName: execution.machineUserName,
@@ -587,6 +596,7 @@ export const seedApplyCommand = defineAppCommand({
         dependencies: nsConfig.dependencies,
         selfRefTypes: nsConfig.selfRefTypes,
         selfRefFields: nsConfig.selfRefFields ?? {},
+        selfRefKeys: nsConfig.selfRefKeys ?? {},
         requiredFields: nsConfig.requiredFields,
         upsert: args.upsert,
         configDir: path.dirname(context.config.path),

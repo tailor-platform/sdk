@@ -185,5 +185,66 @@ describe("buildSeedNamespaceConfigs", () => {
       expect(config?.selfRefFields?.User).toEqual([]);
       expect(config?.selfRefTypes).toEqual([]);
     });
+
+    test("records the field a self-reference is keyed to when it isn't id", () => {
+      // A self-reference doesn't always target the row's `id` — `toward.key`
+      // can point at another unique field (e.g. `code`). The seed script
+      // needs this to resolve parent/child edges by the right value.
+      const category = makeType("Category", {
+        id: { name: "id", config: { type: "string" } },
+        code: { name: "code", config: { type: "string" } },
+        parentCode: {
+          name: "parentCode",
+          config: { type: "string" },
+          relation: {
+            targetType: "Category",
+            forwardName: "parent",
+            backwardName: "children",
+            key: "code",
+            unique: false,
+          },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [category])]);
+
+      expect(config?.selfRefKeys?.Category).toEqual({ parentCode: "code" });
+    });
+
+    test("records the foreignKeyField target for a keyOnly self-reference", () => {
+      const category = makeType("Category", {
+        id: { name: "id", config: { type: "string" } },
+        code: { name: "code", config: { type: "string" } },
+        parentCode: {
+          name: "parentCode",
+          config: { type: "string", foreignKeyType: "Category", foreignKeyField: "code" },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [category])]);
+
+      expect(config?.selfRefKeys?.Category).toEqual({ parentCode: "code" });
+    });
+
+    test("defaults a self-reference's key to id", () => {
+      const category = makeType("Category", {
+        id: { name: "id", config: { type: "string" } },
+        parentId: {
+          name: "parentId",
+          config: { type: "string" },
+          relation: {
+            targetType: "Category",
+            forwardName: "parent",
+            backwardName: "children",
+            key: "id",
+            unique: false,
+          },
+        },
+      });
+
+      const [config] = buildSeedNamespaceConfigs([makeNamespace("tailordb", [category])]);
+
+      expect(config?.selfRefKeys?.Category).toEqual({ parentId: "id" });
+    });
   });
 });

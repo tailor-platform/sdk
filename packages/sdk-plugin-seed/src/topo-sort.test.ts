@@ -85,4 +85,29 @@ describe("sortRecordsBySelfReference", () => {
     const records = [{ id: "a" }, { id: "b" }];
     expect(sortRecordsBySelfReference(records, [])).toBe(records);
   });
+
+  test("resolves edges through a non-id target key", () => {
+    // A self-reference doesn't always point at the parent's `id` — it can be
+    // keyed to another unique field (e.g. `code`). Without fieldKeys, the
+    // parentCode value would never match anything in an id-keyed lookup, so
+    // no edge would ever be found and the rows would fall back to file order.
+    const records = [
+      { id: "child-id", code: "child", parentCode: "parent" },
+      { id: "parent-id", code: "parent", parentCode: null },
+    ];
+    const sorted = sortRecordsBySelfReference(records, ["parentCode"], { parentCode: "code" });
+    expect(sorted.map((r) => r.code)).toEqual(["parent", "child"]);
+  });
+
+  test("falls back to file order for a non-id key with no fieldKeys entry", () => {
+    const records = [
+      { id: "child-id", code: "child", parentCode: "parent" },
+      { id: "parent-id", code: "parent", parentCode: null },
+    ];
+    // Without a fieldKeys entry, parentCode is (wrongly) matched against id,
+    // so neither row finds its parent and both are treated as roots — but
+    // no data is dropped.
+    const sorted = sortRecordsBySelfReference(records, ["parentCode"]);
+    expect(sorted.map((r) => r.id)).toEqual(expect.arrayContaining(["child-id", "parent-id"]));
+  });
 });

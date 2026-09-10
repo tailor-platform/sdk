@@ -19,6 +19,7 @@ type SeedInput = {
   order: string[];
   selfRefTypes: string[];
   selfRefFields?: Record<string, string[]>;
+  selfRefKeys?: Record<string, Record<string, string>>;
   upsert?: boolean;
 };
 
@@ -312,6 +313,34 @@ describe("seed script upsert behavior", () => {
       order: ["Category"],
       selfRefTypes: ["Category"],
       selfRefFields: { Category: ["parentId"] },
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries).toHaveLength(2);
+    expect(insertQueries[0]?.parameters).toContain("c1");
+    expect(insertQueries[1]?.parameters).toContain("c2");
+  });
+
+  test("orders self-referencing inserts keyed to a non-id field", async () => {
+    // A self-reference doesn't always target the parent's `id` — it can be
+    // keyed to another unique field (e.g. `code`). selfRefKeys must let the
+    // script resolve the edge through that field instead of assuming `id`.
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "row-2", code: "c2", parentCode: "c1" },
+          { id: "row-1", code: "c1", parentCode: null },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentCode"] },
+      selfRefKeys: { Category: { parentCode: "code" } },
       upsert: true,
     });
 

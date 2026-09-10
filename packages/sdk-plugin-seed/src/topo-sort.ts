@@ -41,24 +41,47 @@ export function topologicalSort(types: string[], deps: Record<string, string[]>)
  * entire table before chunking guarantees a parent always sits in the same
  * chunk as, or an earlier chunk than, every one of its children.
  *
- * `record.id` is used as the map key to resolve edges, so it must be present
- * and unique across the table's records. If any id is missing (allowed when
- * not using `--upsert`) or duplicated, the map would collapse distinct
- * records onto the same key and silently drop them from the result; fall
- * back to the original order instead so no data is lost.
+ * `record.id` is used as the map key for the row itself, so it must be
+ * present and unique across the table's records. If any id is missing
+ * (allowed when not using `--upsert`) or duplicated, the map would collapse
+ * distinct records onto the same key and silently drop them from the
+ * result; fall back to the original order instead so no data is lost.
+ *
+ * A self-reference field does not always hold the parent's `id` — a
+ * relation's `toward.key` (or a `keyOnly` relation's `foreignKeyField`) can
+ * target a different unique field, e.g. `parentCode -> Category.code`.
+ * `fieldKeys` names the field each self-reference field is keyed to (default
+ * `"id"`), so edges are resolved by matching against the right value instead
+ * of assuming every self-reference points at `id`.
  * @param records - All records for a single self-referencing table
  * @param fields - The table's own self-referencing field names
+ * @param fieldKeys - The field each self-reference field is keyed to, keyed by field name (defaults to `"id"`)
  * @returns Records reordered so parents precede their children
  */
 export function sortRecordsBySelfReference(
   records: SeedData[string],
   fields: string[],
+  fieldKeys: Record<string, string> = {},
 ): SeedData[string] {
   if (fields.length === 0 || records.length <= 1) return records;
 
   const byId = new Map<unknown, SeedData[string][number]>();
   for (const record of records) byId.set(record.id, record);
   if (byId.size !== records.length) return records;
+
+  // Build one lookup map per distinct target key used by the self-reference
+  // fields, mapping that key's value on a record to the record's own id.
+  const idsByKeyValue = new Map<string, Map<unknown, unknown>>();
+  for (const field of fields) {
+    const targetKey = fieldKeys[field] ?? "id";
+    if (idsByKeyValue.has(targetKey)) continue;
+    const map = new Map<unknown, unknown>();
+    for (const record of records) {
+      const keyValue = targetKey === "id" ? record.id : record[targetKey];
+      if (keyValue !== null && keyValue !== undefined) map.set(keyValue, record.id);
+    }
+    idsByKeyValue.set(targetKey, map);
+  }
 
   const inDegree = new Map<unknown, number>();
   const dependents = new Map<unknown, unknown[]>();
@@ -69,9 +92,11 @@ export function sortRecordsBySelfReference(
   for (const record of records) {
     const id = record.id;
     for (const field of fields) {
-      const parentId = record[field];
-      if (parentId === null || parentId === undefined || parentId === id) continue;
-      if (!byId.has(parentId)) continue;
+      const refValue = record[field];
+      if (refValue === null || refValue === undefined) continue;
+      const targetKey = fieldKeys[field] ?? "id";
+      const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
+      if (parentId === undefined || parentId === id) continue;
       inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
       dependents.get(parentId)?.push(id);
     }

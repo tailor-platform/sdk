@@ -14,6 +14,7 @@ function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInf
   // Extract dependencies from relations (including keyOnly which only sets foreignKeyType)
   const dependencies: Set<string> = new Set();
   const selfRefFields: string[] = [];
+  const selfRefKeys: Record<string, string> = {};
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
     const targetType = field.relation?.targetType ?? field.config.foreignKeyType;
@@ -21,6 +22,10 @@ function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInf
 
     if (targetType === type.name) {
       selfRefFields.push(fieldName);
+      // A relation's `toward.key` (or a keyOnly relation's foreignKeyField)
+      // can target a non-`id` unique field (e.g. `code`); default to `id`
+      // only when the field truly targets the row's id.
+      selfRefKeys[fieldName] = field.relation?.key ?? field.config.foreignKeyField ?? "id";
     } else {
       dependencies.add(targetType);
     }
@@ -31,6 +36,7 @@ function processSeedTypeInfo(type: TailorDBType, namespace: string): SeedTypeInf
     namespace,
     dependencies: Array.from(dependencies),
     selfRefFields,
+    selfRefKeys,
     dataFile: `data/${type.name}.jsonl`,
   };
 }
@@ -57,6 +63,15 @@ export interface SeedNamespaceConfig {
    * so a row is never inserted before the row it points to.
    */
   selfRefFields?: Record<string, string[]>;
+  /**
+   * The field each self-referencing field is keyed to, per table (e.g.
+   * `{ Category: { parentCode: "code" } }`). A self-reference does not
+   * always target the row's `id` — `toward.key` (or a `keyOnly` relation's
+   * `foreignKeyField`) can point at another unique field — so the seed
+   * script needs this to resolve parent/child edges by the right value
+   * instead of assuming `id`.
+   */
+  selfRefKeys?: Record<string, Record<string, string>>;
 }
 
 /**
@@ -102,6 +117,7 @@ export function buildSeedNamespaceConfigs(
     const dependencies: Record<string, string[]> = {};
     const selfRefTypes: string[] = [];
     const selfRefFields: Record<string, string[]> = {};
+    const selfRefKeys: Record<string, Record<string, string>> = {};
     const requiredFields: Record<string, string[]> = {};
     const omitFields: Record<string, string[]> = {};
 
@@ -110,6 +126,7 @@ export function buildSeedNamespaceConfigs(
       types.push(typeInfo.name);
       dependencies[typeInfo.name] = typeInfo.dependencies;
       selfRefFields[typeInfo.name] = typeInfo.selfRefFields;
+      selfRefKeys[typeInfo.name] = typeInfo.selfRefKeys;
       if (typeInfo.selfRefFields.length > 0) {
         selfRefTypes.push(typeInfo.name);
       }
@@ -139,6 +156,7 @@ export function buildSeedNamespaceConfigs(
       dependencies,
       selfRefTypes,
       selfRefFields,
+      selfRefKeys,
       requiredFields,
       omitFields,
     };
