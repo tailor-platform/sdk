@@ -392,6 +392,16 @@ describe("createStandardSchema unknown fields", () => {
     });
   });
 
+  test("names the key in the message, so an unreadable path still identifies it", () => {
+    const result = schema["~standard"].validate({ note: "n", "a.b": 1, "": 2 });
+    expect(result).toMatchObject({
+      issues: [
+        { message: expect.stringContaining('Field "a.b" is not declared'), path: ["a.b"] },
+        { message: expect.stringContaining('Field "" is not declared'), path: [""] },
+      ],
+    });
+  });
+
   test("accepts a serial field that the seed schema itself omits", () => {
     expect(schema["~standard"].validate({ note: "n", seq: 3 })).toHaveProperty("value");
   });

@@ -115,8 +115,9 @@ function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unkno
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DeclaredFields = Record<string, TailorField<any, any, any>>;
 
-const UNDECLARED_FIELD_MESSAGE =
-  "Field is not declared by the table. Remove it from the row, or add it to the table definition and run `tailor generate`.";
+function undeclaredFieldMessage(key: string): string {
+  return `Field "${key}" is not declared by the table. Remove it from the row, or add it to the table definition and run \`tailor generate\`.`;
+}
 
 const NO_EXTRA_FIELDS: ReadonlySet<string> = new Set();
 
@@ -141,7 +142,7 @@ function collectUndeclaredFieldIssues(
     // otherwise resolve to a member of `Object.prototype`.
     if (!Object.hasOwn(fields, key)) {
       if (!extraFields.has(key)) {
-        issues.push({ message: UNDECLARED_FIELD_MESSAGE, path: path.concat(key) });
+        issues.push({ message: undeclaredFieldMessage(key), path: path.concat(key) });
       }
       continue;
     }
