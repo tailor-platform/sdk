@@ -434,6 +434,22 @@ describe("createStandardSchema unknown fields", () => {
     expect(result).toMatchObject({ issues: [{ path: ["lines", "[1]", "extra"] }] });
   });
 
+  test("skips array elements that are not objects and still checks the ones that are", () => {
+    const result = schema["~standard"].validate({
+      lines: [null, "A", { kind: "B", qty: 2, extra: true }],
+    });
+    expect(result).toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["lines", "[2]", "extra"] }),
+      ]),
+    });
+    expect(
+      (result as { issues: unknown[] }).issues.filter((issue) =>
+        String((issue as { message: string }).message).includes("not declared"),
+      ),
+    ).toHaveLength(1);
+  });
+
   test("leaves a nested value of the wrong shape to the field validation", () => {
     const result = schema["~standard"].validate({ lines: "A" });
     expect(result).toMatchObject({
