@@ -113,24 +113,32 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -u
-          # The names come from `workspace list`, so they are already constrained to the
-          # platform's own charset (lowercase alphanumerics and hyphens) and need no
-          # regex escaping. `--name-regex` takes them as one alternation so a single
-          # prune call covers every selected workspace; --limit pins the expected count
-          # so a filter that widened unexpectedly aborts before deleting anything.
+          # Each --name is anchored to the whole workspace name by the CLI, so passing one
+          # per selected name deletes exactly the workspaces the select step chose. The
+          # names come from `workspace list` and stay inside the platform's own charset
+          # (lowercase alphanumerics and hyphens), so they carry no regex metacharacters;
+          # --limit pins the expected count so a filter that widened unexpectedly aborts
+          # before deleting anything.
           count=$(wc -l < /tmp/e2e-doomed.txt | tr -d ' ')
           if grep -qvE '^[a-z0-9-]+$' /tmp/e2e-doomed.txt; then
-            echo "::error::A selected workspace name left the expected charset; refusing to build a regex from it."
+            echo "::error::A selected workspace name left the expected charset; refusing to build a filter from it."
             exit 1
           fi
-          names=$(paste -sd '|' /tmp/e2e-doomed.txt)
+          name_args=()
+          while IFS= read -r name; do
+            name_args+=(--name "$name")
+          done < /tmp/e2e-doomed.txt
+          if [[ "${#name_args[@]}" -ne $((count * 2)) ]]; then
+            echo "::error::Built ${#name_args[@]} --name arguments for $count selected workspaces."
+            exit 1
+          fi
 
           # --older-than 1s excludes a workspace created during this very step;
           # every candidate here belongs to a finished run and is far older.
           if [[ "$DRY_RUN" == "true" ]]; then
             pnpm --silent tailor workspace prune \
-              --name-regex "$names" --older-than 1s --limit "$count" --dry-run --yes
+              "${name_args[@]}" --older-than 1s --limit "$count" --dry-run --yes
           else
             pnpm --silent tailor workspace prune \
-              --name-regex "$names" --older-than 1s --limit "$count" --yes
+              "${name_args[@]}" --older-than 1s --limit "$count" --yes
           fi
