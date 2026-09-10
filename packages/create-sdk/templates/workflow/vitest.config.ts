@@ -7,7 +7,6 @@ export default defineConfig({
     watch: false,
     projects: [
       {
-        extends: true,
         test: {
           name: { label: "unit", color: "blue" },
           environment: "tailor-runtime",
@@ -15,7 +14,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: { label: "e2e", color: "green" },
           include: ["e2e/**/*.test.ts"],

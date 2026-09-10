@@ -69,8 +69,10 @@ export async function captureMigrationRestrictionState(
       settingsByTable.set(type.name, {
         bulkUpsert: settings?.bulkUpsert ?? false,
         publishRecordEvents: settings?.publishRecordEvents ?? false,
-        // The proto type marks these fields required, but the platform can
-        // return a legacy record with one actually absent.
+        // Defensive: the generated client always populates these bools, so the
+        // fallbacks only guard a hand-built client and keep the shape identical
+        // to resolveMigrationSnapshotSettings, whose settings come from a
+        // MessageInitShape that declares the fields optional.
         // oxlint-disable typescript/no-unnecessary-condition
         ...(settings?.disableGqlOperations && {
           disableGqlOperations: {

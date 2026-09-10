@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.1.11
+
+### Patch Changes
+
+- [#2295](https://github.com/tailor-platform/sdk/pull/2295) [`e9ca76d`](https://github.com/tailor-platform/sdk/commit/e9ca76d8e18670ae71d1203cb930cf14f8c6e816) Thanks [@renovate](https://github.com/apps/renovate)! - Depend on `@politty/zod` directly instead of the `politty` wrapper package. `politty` re-exported everything from `@politty/zod` unchanged, so this is an internal dependency swap with no effect on CLI behavior.
+- Updated dependencies [[`c3c028d`](https://github.com/tailor-platform/sdk/commit/c3c028de654a4a6dbf9153404c083a79f89d2391), [`9b23234`](https://github.com/tailor-platform/sdk/commit/9b23234315b1bd6a42bb5e816bfcda255daefbeb), [`5168d35`](https://github.com/tailor-platform/sdk/commit/5168d35b49e9e3d691c0f2f79041b333f327ce43), [`7ad456b`](https://github.com/tailor-platform/sdk/commit/7ad456b0be1e0681f5e05aaea24b63ff5f25724d), [`6f7282d`](https://github.com/tailor-platform/sdk/commit/6f7282d46f717547b769c46a0b43c027db9b52e6), [`e174343`](https://github.com/tailor-platform/sdk/commit/e1743434890d3ebb6ddf10f4972d0a86a584d1b1), [`41b72f2`](https://github.com/tailor-platform/sdk/commit/41b72f2ec9cf59fe5c5c3ae7f54ac56a31e55b4f), [`809307c`](https://github.com/tailor-platform/sdk/commit/809307cc38f47d4733c0f25fe2d93271a43a0a99), [`e9ca76d`](https://github.com/tailor-platform/sdk/commit/e9ca76d8e18670ae71d1203cb930cf14f8c6e816), [`c986c33`](https://github.com/tailor-platform/sdk/commit/c986c33ee854198da6fb4de30276a146f14d8ddb), [`0abc437`](https://github.com/tailor-platform/sdk/commit/0abc4373c2171bca15816e96eb6fee6d178ef659), [`5a06755`](https://github.com/tailor-platform/sdk/commit/5a067550c27fc9b4bcaeac49dd70ca794085f395), [`6aecb59`](https://github.com/tailor-platform/sdk/commit/6aecb59f6bab9dead327792ef7ea8bd93e463ea8), [`c2c0d93`](https://github.com/tailor-platform/sdk/commit/c2c0d932d52759d9b7a3db3cfa3679b7ff44df80), [`ceca9f1`](https://github.com/tailor-platform/sdk/commit/ceca9f15c79d2e19ae205543703009db4ae80236)]:
+  - @tailor-platform/sdk@2.15.0
+
 ## 0.1.10
 
 ### Patch Changes

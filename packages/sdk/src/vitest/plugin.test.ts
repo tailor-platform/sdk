@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { isAbsolute } from "node:path";
-import { aroundEach, describe, expect, test } from "vitest";
+import { isAbsolute, resolve } from "node:path";
+import { describe, expect, test } from "vitest";
 import { createBlockPlugin, createEnvironmentPlugin } from "./plugin";
 
 type ImportNode = {
@@ -496,13 +496,12 @@ describe("createBlockPlugin", () => {
 describe("createEnvironmentPlugin", () => {
   const ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
 
-  aroundEach(async (runTest) => {
-    const originalConfig = process.env[ENV_VAR];
-    delete process.env[ENV_VAR];
-    await runTest();
-    if (originalConfig === undefined) delete process.env[ENV_VAR];
-    else process.env[ENV_VAR] = originalConfig;
-  });
+  // The plugin seeds the config path through Vitest's `test.env` (per project
+  // and at the root) rather than `process.env`, so each project's worker gets
+  // its own value instead of the last one resolved winning for the whole run.
+  const configEnvOf = (test: any): string | undefined => test?.env?.[ENV_VAR];
+  const projectConfigEnv = (userConfig: any, index: number): string | undefined =>
+    configEnvOf(userConfig.test.projects[index]?.test);
 
   test("rewrites top-level `environment: 'tailor-runtime'` to an absolute file path", () => {
     const plugin = createEnvironmentPlugin();
@@ -531,6 +530,133 @@ describe("createEnvironmentPlugin", () => {
     expect(userConfig.test.projects[1]!.test.environment).toBe("node");
   });
 
+  test("adds the setup file only to inline projects that select tailor-runtime", () => {
+    // Vitest 5 inline projects no longer inherit the root `setupFiles` this
+    // hook returns, so the setup file is added per project. It must not go
+    // into projects on another environment: setup.ts statically imports
+    // "node:url" and fails to load where Node builtins do not resolve
+    // (e.g. Vitest browser mode).
+    const plugin = createEnvironmentPlugin();
+    const userConfig = {
+      test: {
+        projects: [
+          { test: { environment: "tailor-runtime", name: "unit" } },
+          { test: { environment: "node", name: "e2e", setupFiles: "./e2e-setup.ts" } },
+          { test: { name: "plain", setupFiles: ["./a.ts"] } },
+          { plugins: [] },
+          "./packages/*/vitest.config.ts",
+        ],
+      },
+    };
+    applyConfig(plugin, userConfig);
+
+    const setupFilesOf = (index: number) =>
+      (userConfig.test.projects[index] as { test?: { setupFiles?: unknown } }).test?.setupFiles;
+    expect(setupFilesOf(0)).toEqual([expect.stringMatching(/setup\.mjs$/)]);
+    expect(setupFilesOf(1)).toBe("./e2e-setup.ts");
+    expect(setupFilesOf(2)).toEqual(["./a.ts"]);
+    expect(setupFilesOf(3)).toBeUndefined();
+    expect(userConfig.test.projects[4]).toBe("./packages/*/vitest.config.ts");
+  });
+
+  test("treats an inline project without its own environment as tailor-runtime when the root selects it", () => {
+    // Vitest 5 no longer propagates the plugin-rewritten root `environment`
+    // into projects that do not declare one, so the project would keep the
+    // literal "tailor-runtime" and Vitest would try to load it as a module.
+    // A string `extends` inherits from that file instead of the root, so it
+    // must be left alone. Inheriting without `extends` is Vitest 5 behavior;
+    // plugin-vitest4.test.ts covers the same config on Vitest 4.
+    const plugin = createEnvironmentPlugin();
+    const userConfig = {
+      test: {
+        environment: "tailor-runtime",
+        projects: [
+          { test: { name: "inherits" } },
+          { test: { name: "opts-out" }, extends: false },
+          { test: { name: "other-config" }, extends: "./other.config.mjs" },
+          { test: { name: "other-env", environment: "node" } },
+        ],
+      },
+    };
+    applyConfig(plugin, userConfig);
+
+    const projectTest = (index: number) =>
+      (userConfig.test.projects[index] as { test: { environment?: unknown; setupFiles?: unknown } })
+        .test;
+    expect(projectTest(0).environment).toMatch(/environment\.mjs$/);
+    expect(projectTest(0).setupFiles).toEqual([expect.stringMatching(/setup\.mjs$/)]);
+    expect(projectTest(1).environment).toBeUndefined();
+    expect(projectTest(1).setupFiles).toBeUndefined();
+    expect(projectTest(2).environment).toBeUndefined();
+    expect(projectTest(2).setupFiles).toBeUndefined();
+    expect(projectTest(3).environment).toBe("node");
+    expect(projectTest(3).setupFiles).toBeUndefined();
+  });
+
+  test("does not inject the setup file into a root config that selects another environment", () => {
+    // The fallback return must stay gated on the root's own environment
+    // selection: an unconditional return would force setup.ts (and its
+    // static "node:url" import) onto a standalone browser-mode config.
+    const plugin = createEnvironmentPlugin();
+    const userConfig: { test: { environment: string; setupFiles?: string | string[] } } = {
+      test: { environment: "browser" },
+    };
+    const merged = applyConfig(plugin, userConfig);
+
+    expect(merged.test?.setupFiles ?? []).toEqual([]);
+    expect(userConfig.test.setupFiles).toBeUndefined();
+  });
+
+  test("a sibling project re-resolving without tailor-runtime cannot disturb another project's seed", () => {
+    // Vitest 5 re-executes the root config once per inline project that needs
+    // its own Vite server. Each pass writes only into the config object it is
+    // handed, so the "e2e" pass cannot reach the seed "unit" already carries.
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    const firstPass: any = {
+      root: "/proj",
+      test: {
+        projects: [
+          { test: { environment: "tailor-runtime", name: "unit" } },
+          { test: { environment: "node", name: "e2e" } },
+        ],
+      },
+    };
+    applyConfig(plugin, firstPass);
+    expect(projectConfigEnv(firstPass, 0)).toBe(resolve("/proj", "tailor.config.ts"));
+
+    // Re-run for the "e2e" project: named, no `projects`, non-tailor env.
+    applyConfig(plugin, { root: "/proj", test: { environment: "node", name: "e2e" } });
+
+    expect(projectConfigEnv(firstPass, 0)).toBe(resolve("/proj", "tailor.config.ts"));
+  });
+
+  test("survives Vitest re-running the config for a project whose environment is already rewritten", () => {
+    // Vitest 5 re-executes the root config for inline projects that need
+    // their own Vite server: `projects` is stripped and `environment` is the
+    // absolute path from the first pass.
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    const firstPass: any = {
+      root: "/proj",
+      test: { projects: [{ test: { environment: "tailor-runtime", name: "unit" } }] },
+    };
+    applyConfig(plugin, firstPass);
+    const project = firstPass.test.projects[0]!.test as {
+      environment: string;
+      setupFiles?: string[];
+    };
+    expect(projectConfigEnv(firstPass, 0)).toBe(resolve("/proj", "tailor.config.ts"));
+
+    const secondPass: any = {
+      root: "/proj",
+      test: { environment: project.environment, setupFiles: project.setupFiles },
+    };
+    const merged = applyConfig(plugin, secondPass);
+
+    expect(configEnvOf(secondPass.test)).toBe(resolve("/proj", "tailor.config.ts"));
+    expect(merged.test?.setupFiles ?? []).toEqual([]);
+    expect(secondPass.test.setupFiles).toEqual([expect.stringMatching(/setup\.mjs$/)]);
+  });
+
   test("leaves non-tailor environments untouched", () => {
     const plugin = createEnvironmentPlugin();
     const userConfig = { test: { environment: "node" } };
@@ -539,13 +665,29 @@ describe("createEnvironmentPlugin", () => {
     expect(userConfig.test.environment).toBe("node");
   });
 
-  test("propagates options.config to process.env.__TAILOR_RUNTIME_CONFIG", () => {
+  test("propagates options.config to the root test env", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
-    applyConfig(plugin, { test: { environment: "tailor-runtime" } });
+    const userConfig: any = { test: { environment: "tailor-runtime" } };
+    applyConfig(plugin, userConfig);
 
-    expect(process.env[ENV_VAR]).toBeDefined();
-    expect(process.env[ENV_VAR]).toMatch(/tailor\.config\.ts$/);
-    expect(isAbsolute(process.env[ENV_VAR] ?? "")).toBe(true);
+    expect(configEnvOf(userConfig.test)).toMatch(/tailor\.config\.ts$/);
+    expect(isAbsolute(configEnvOf(userConfig.test) ?? "")).toBe(true);
+  });
+
+  test("never writes the config path to process.env", () => {
+    // A process-global slot is shared by every project resolved in the same
+    // parent process, so the last one to resolve would win for all workers.
+    const original = process.env[ENV_VAR];
+    delete process.env[ENV_VAR];
+    try {
+      const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+      applyConfig(plugin, { test: { environment: "tailor-runtime" } });
+
+      expect(process.env[ENV_VAR]).toBeUndefined();
+    } finally {
+      if (original === undefined) delete process.env[ENV_VAR];
+      else process.env[ENV_VAR] = original;
+    }
   });
 
   test("resolves a relative options.config against config.root, not process.cwd()", () => {
@@ -554,72 +696,86 @@ describe("createEnvironmentPlugin", () => {
     // the env var points at a file in the wrong directory.
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
     const customRoot = "/abs/custom/project-root";
-    applyConfig(plugin, { root: customRoot, test: { environment: "tailor-runtime" } });
+    const userConfig: any = { root: customRoot, test: { environment: "tailor-runtime" } };
+    applyConfig(plugin, userConfig);
 
-    expect(process.env[ENV_VAR]).toBe(`${customRoot}/tailor.config.ts`);
+    expect(configEnvOf(userConfig.test)).toBe(`${customRoot}/tailor.config.ts`);
   });
 
   test("preserves an absolute options.config regardless of config.root", () => {
     // Absolute paths must pass through `resolve` unchanged so users can pin
     // a config location explicitly.
     const plugin = createEnvironmentPlugin({ config: "/abs/elsewhere/tailor.config.ts" });
-    applyConfig(plugin, {
+    const userConfig: any = {
       root: "/abs/custom/project-root",
       test: { environment: "tailor-runtime" },
-    });
+    };
+    applyConfig(plugin, userConfig);
 
-    expect(process.env[ENV_VAR]).toBe("/abs/elsewhere/tailor.config.ts");
+    expect(configEnvOf(userConfig.test)).toBe("/abs/elsewhere/tailor.config.ts");
   });
 
   test("does not set the env var when options.config is omitted", () => {
     const plugin = createEnvironmentPlugin();
-    applyConfig(plugin, { test: { environment: "tailor-runtime" } });
+    const userConfig: any = { test: { environment: "tailor-runtime" } };
+    applyConfig(plugin, userConfig);
 
-    expect(process.env[ENV_VAR]).toBeUndefined();
+    expect(configEnvOf(userConfig.test)).toBeUndefined();
   });
 
-  test("does not set the env var when no project selects tailor-runtime (avoid leaking config across projects)", () => {
+  test("blanks the env var when the root selects another environment", () => {
+    // Setting an empty value rather than omitting the key: a stale value
+    // inherited from an outer config must be overridden, not left standing.
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
-    // Even with options.config, the env var must not be set if the user only
-    // configured non-tailor environments — otherwise it would leak into
-    // unrelated projects/runs sharing the same parent process.
-    applyConfig(plugin, { test: { environment: "node" } });
+    const userConfig: any = { test: { environment: "node" } };
+    applyConfig(plugin, userConfig);
 
-    expect(process.env[ENV_VAR]).toBeUndefined();
+    expect(configEnvOf(userConfig.test)).toBe("");
   });
 
-  test("clears a pre-existing env var when opting out (no tailor-runtime selection)", () => {
-    process.env[ENV_VAR] = "/old/stale/path.ts";
-
+  test("preserves a user-provided test.env alongside the config path", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
-    applyConfig(plugin, { test: { environment: "node" } });
+    const userConfig: any = {
+      test: { environment: "tailor-runtime", env: { MY_FLAG: "1" } },
+    };
+    applyConfig(plugin, userConfig);
 
-    // Stale value from a prior watch-mode iteration must not survive.
-    expect(process.env[ENV_VAR]).toBeUndefined();
+    expect(userConfig.test.env.MY_FLAG).toBe("1");
+    expect(configEnvOf(userConfig.test)).toMatch(/tailor\.config\.ts$/);
   });
 
-  test("clears a pre-existing env var when options.config is omitted", () => {
-    process.env[ENV_VAR] = "/old/stale/path.ts";
-
-    const plugin = createEnvironmentPlugin();
-    applyConfig(plugin, { test: { environment: "tailor-runtime" } });
-
-    expect(process.env[ENV_VAR]).toBeUndefined();
-  });
-
-  test("sets the env var when at least one project selects tailor-runtime", () => {
+  test("seeds each tailor-runtime project from its own root", () => {
+    // The config path is a per-project value: two projects with distinct
+    // roots must each resolve their own config, not share one global slot.
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
-    applyConfig(plugin, {
+    const userConfig: any = {
+      test: {
+        projects: [
+          { test: { environment: "tailor-runtime", name: "a", root: "/abs/app-a" } },
+          { test: { environment: "tailor-runtime", name: "b", root: "/abs/app-b" } },
+        ],
+      },
+    };
+    applyConfig(plugin, userConfig);
+
+    expect(projectConfigEnv(userConfig, 0)).toBe("/abs/app-a/tailor.config.ts");
+    expect(projectConfigEnv(userConfig, 1)).toBe("/abs/app-b/tailor.config.ts");
+  });
+
+  test("blanks the env var on projects that select another environment", () => {
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    const userConfig: any = {
       test: {
         projects: [
           { test: { environment: "node", name: "e2e" } },
           { test: { environment: "tailor-runtime", name: "unit" } },
         ],
       },
-    });
+    };
+    applyConfig(plugin, userConfig);
 
-    expect(process.env[ENV_VAR]).toBeDefined();
-    expect(isAbsolute(process.env[ENV_VAR] ?? "")).toBe(true);
+    expect(projectConfigEnv(userConfig, 0)).toBe("");
+    expect(isAbsolute(projectConfigEnv(userConfig, 1) ?? "")).toBe(true);
   });
 
   test("normalizes a user-provided string setupFiles into an array", () => {

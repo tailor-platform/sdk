@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -159,11 +159,6 @@ vi.mock("#/cli/shared/logger", () => ({
 vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
 
 describe("remove command", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("deletes a managed workflow execution policy when it is the only remaining resource", async () => {
     const client = {
       listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({

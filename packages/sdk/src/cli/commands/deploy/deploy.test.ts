@@ -210,14 +210,12 @@ describe("shouldForceApplyAll", () => {
   });
 
   test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
-    const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      if (trn.endsWith(":fn-a")) {
-        return Promise.resolve({
-          metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
-        });
-      }
-      return Promise.reject(new Error("unavailable"));
-    });
+    const getMetadata = vi.fn();
+    vi.when(getMetadata, { onUnmatched: () => Promise.reject(new Error("unavailable")) })
+      .calledWith(expect.objectContaining({ trn: expect.stringMatching(/:fn-a$/) }))
+      .thenResolve({
+        metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+      });
     const client = { getMetadata } as unknown as Client;
 
     const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [

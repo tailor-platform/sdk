@@ -59,7 +59,6 @@ async function getMockClient() {
 
 describe("truncate command", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     // Re-setup default mock behavior after clearAllMocks
     const { prompt } = await import("#/cli/shared/prompt");
     vi.mocked(prompt.confirm).mockResolvedValue(true);

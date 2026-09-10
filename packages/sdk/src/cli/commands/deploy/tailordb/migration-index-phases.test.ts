@@ -258,7 +258,6 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
   }
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     remoteCheckpoint.number = null;
     remoteCheckpoint.historyId = null;
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(

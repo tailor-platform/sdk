@@ -206,11 +206,6 @@ describe("planTailorDB (service level)", () => {
     } as unknown as OperatorClient;
   }
 
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("plans a migration-test baseline snapshot instead of current tables", async () => {
     const tailordb = createMockTailorDBService("tailordb");
     Object.defineProperty(tailordb, "types", {
@@ -1320,11 +1315,6 @@ describe("applyTailorDB phase separation", () => {
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
-
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
 
   test.each([
     {

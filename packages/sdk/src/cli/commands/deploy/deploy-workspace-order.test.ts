@@ -1,4 +1,4 @@
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   resolveDeployWorkspace: vi.fn(),
@@ -11,11 +11,6 @@ vi.mock("./workspace", () => ({
 import { deploy, deployFromCLI } from "./deploy";
 
 describe("deploy workspace resolution", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("validates the config before resolving or creating a workspace", async () => {
     await expect(deploy({ configPath: "configuration-that-does-not-exist.ts" })).rejects.toThrow(
       "Configuration file not found",

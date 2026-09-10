@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { describe, test, expect, vi } from "vitest";
 import { MAX_PAGE_SIZE, type OperatorClient } from "#/cli/shared/client";
 import { logger, symbols } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
@@ -145,11 +145,6 @@ describe("planWorkflow", () => {
       }),
     } as unknown as OperatorClient;
   }
-
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
 
   describe("workflow execution event publishing", () => {
     test("enables publishing for a workflow with a matching executor subscription", async () => {

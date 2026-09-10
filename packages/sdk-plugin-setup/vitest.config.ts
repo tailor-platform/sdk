@@ -24,7 +24,6 @@ export default defineConfig({
   test: {
     projects: [
       {
-        extends: true,
         test: {
           name: "unit",
           include: ["src/**/?(*.)+(spec|test).ts"],

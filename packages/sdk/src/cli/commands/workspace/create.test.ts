@@ -90,7 +90,6 @@ aroundAll(async (runSuite) => {
 
 describe("workspace create", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");

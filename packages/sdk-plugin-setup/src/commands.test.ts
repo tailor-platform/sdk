@@ -20,7 +20,6 @@ const setupCommand = defineCommand({
 
 describe("setup branch trigger branch flag", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     const originalArgv = process.argv;
     try {
       await runTest();

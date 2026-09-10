@@ -23,7 +23,6 @@ vi.mock("#/cli/shared/context", () => ({
 
 describe("open --json", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
     vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
     vi.mocked(loadConfig).mockResolvedValue({
@@ -105,7 +104,6 @@ describe("open --json", () => {
 
 describe("open with TAILOR_CONSOLE_NEXT", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
     vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
     vi.mocked(loadConfig).mockResolvedValue({

@@ -154,10 +154,10 @@ describe("resolve", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-project/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -169,17 +169,16 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves non-relative specifier via tsconfig path alias without baseUrl", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-project-no-baseurl/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -191,17 +190,16 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("falls back to tsconfig directory when baseUrl is a non-string value", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: true, paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-project-bad-baseurl/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -213,17 +211,16 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("ignores a paths alias whose target is not an array", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { paths: { "@/*": "./*" } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@/tailordb/user"));
     await expect(
       resolve(
@@ -232,17 +229,16 @@ describe("resolve", () => {
         nextResolve,
       ),
     ).rejects.toMatchObject({ code: "ERR_MODULE_NOT_FOUND" });
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("ignores non-string entries within a paths alias target array", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { paths: { "@/*": [123, "./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///malformed-paths-entry-project/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -254,17 +250,16 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves tsconfig path alias when parentURL has tailorImportNonce query string", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const nextResolve = vi
       .fn()
       .mockRejectedValueOnce(notFound("@/tailordb/user"))
@@ -275,7 +270,6 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual({ url: "file:///alias-project/tailordb/user.ts?tailorImportNonce=1" });
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("collects paths from same-directory extends (visited key tracks file path, not dir)", async () => {
@@ -283,12 +277,12 @@ describe("resolve", () => {
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
     });
     const rootConfig = JSON.stringify({ extends: "./tsconfig.base.json" });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const resolved = { url: "file:///extends-project/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -300,7 +294,6 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves child paths using the extended config's baseUrl directory, not the child config's directory", async () => {
@@ -311,12 +304,12 @@ describe("resolve", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { paths: { "@app/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@app/tailordb/user"));
     await expect(
       resolve(
@@ -329,7 +322,6 @@ describe("resolve", () => {
       expect.stringContaining("inherited-baseurl-project/shared-base/tailordb/user.ts"),
       expect.anything(),
     );
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves inherited paths using the child's own baseUrl override, not the defining config's baseUrl", async () => {
@@ -340,12 +332,12 @@ describe("resolve", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { baseUrl: "child-base" },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@shared/tailordb/user"));
     await expect(
       resolve(
@@ -358,7 +350,6 @@ describe("resolve", () => {
       expect.stringContaining("override-baseurl-project/child-base/tailordb/user.ts"),
       expect.anything(),
     );
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("replaces inherited paths instead of merging when child config defines its own paths", async () => {
@@ -369,12 +360,12 @@ describe("resolve", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { baseUrl: ".", paths: { "@child/*": ["./child-src/*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockRejectedValue(notFound("@parent/foo"));
     await expect(
       resolve(
@@ -384,7 +375,6 @@ describe("resolve", () => {
       ),
     ).rejects.toMatchObject({ code: "ERR_MODULE_NOT_FOUND" });
     expect(nextResolve).toHaveBeenCalledTimes(1);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("keeps inherited paths when child config's own paths is malformed", async () => {
@@ -395,12 +385,12 @@ describe("resolve", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { paths: true },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const resolved = { url: "file:///malformed-child-paths-project/parent-src/foo.ts" };
     const nextResolve = vi
       .fn()
@@ -412,7 +402,6 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("prefers more specific wildcard alias over less specific", async () => {
@@ -422,10 +411,10 @@ describe("resolve", () => {
         paths: { "@/*": ["./*"], "@foo/*": ["./foo-pkg/*"] },
       },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///specificity-project/foo-pkg/bar.ts" };
     const nextResolve = vi
       .fn()
@@ -441,7 +430,6 @@ describe("resolve", () => {
       expect.stringContaining("foo-pkg/bar"),
       expect.anything(),
     );
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("falls back to a less specific alias when a more specific alias's targets are all malformed", async () => {
@@ -451,10 +439,10 @@ describe("resolve", () => {
         paths: { "@app/foo/*": [123], "@app/*": ["./*"] },
       },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///empty-target-fallback-project/foo/bar.ts" };
     const nextResolve = vi
       .fn()
@@ -466,17 +454,16 @@ describe("resolve", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("does not append extensions when tsconfig path target already has a .ts extension", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/utils": ["./utils/index.ts"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///ext-project/utils/index.ts" };
     const nextResolve = vi
       .fn()
@@ -497,7 +484,6 @@ describe("resolve", () => {
       expect.stringContaining("index.ts.ts"),
       expect.anything(),
     );
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 });
 
@@ -566,10 +552,10 @@ describe("resolveSync", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-sync-project/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -583,17 +569,16 @@ describe("resolveSync", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves tsconfig path alias when parentURL has tailorImportNonce query string", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const nextResolve = vi
       .fn()
       .mockImplementationOnce(() => {
@@ -608,17 +593,16 @@ describe("resolveSync", () => {
     expect(result).toEqual({
       url: "file:///alias-sync-project/tailordb/user.ts?tailorImportNonce=1",
     });
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves non-relative specifier via tsconfig path alias without baseUrl", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-sync-project-no-baseurl/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -632,17 +616,16 @@ describe("resolveSync", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("falls back to tsconfig directory when baseUrl is a non-string value", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: true, paths: { "@/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///alias-sync-project-bad-baseurl/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -656,17 +639,16 @@ describe("resolveSync", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("ignores a paths alias whose target is not an array", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { paths: { "@/*": "./*" } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@/tailordb/user");
     });
@@ -677,17 +659,16 @@ describe("resolveSync", () => {
         nextResolve,
       ),
     ).toThrow("Cannot find '@/tailordb/user'");
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("ignores non-string entries within a paths alias target array", () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { paths: { "@/*": [123, "./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///malformed-paths-entry-sync-project/tailordb/user.ts" };
     const nextResolve = vi
       .fn()
@@ -701,7 +682,6 @@ describe("resolveSync", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves child paths using the extended config's baseUrl directory, not the child config's directory", () => {
@@ -712,12 +692,12 @@ describe("resolveSync", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { paths: { "@app/*": ["./*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@app/tailordb/user");
     });
@@ -732,7 +712,6 @@ describe("resolveSync", () => {
       expect.stringContaining("inherited-baseurl-sync-project/shared-base/tailordb/user.ts"),
       expect.anything(),
     );
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("resolves inherited paths using the child's own baseUrl override, not the defining config's baseUrl", () => {
@@ -743,12 +722,12 @@ describe("resolveSync", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { baseUrl: "child-base" },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@shared/tailordb/user");
     });
@@ -763,7 +742,6 @@ describe("resolveSync", () => {
       expect.stringContaining("override-baseurl-sync-project/child-base/tailordb/user.ts"),
       expect.anything(),
     );
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("replaces inherited paths instead of merging when child config defines its own paths", () => {
@@ -774,12 +752,12 @@ describe("resolveSync", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { baseUrl: ".", paths: { "@child/*": ["./child-src/*"] } },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const nextResolve = vi.fn().mockImplementation(() => {
       throw notFound("@parent/foo");
     });
@@ -791,7 +769,6 @@ describe("resolveSync", () => {
       ),
     ).toThrow("Cannot find '@parent/foo'");
     expect(nextResolve).toHaveBeenCalledTimes(1);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("keeps inherited paths when child config's own paths is malformed", () => {
@@ -802,12 +779,12 @@ describe("resolveSync", () => {
       extends: "./tsconfig.base.json",
       compilerOptions: { paths: true },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      const p = String(path);
-      if (p.endsWith("tsconfig.base.json")) return baseConfig;
-      if (p.endsWith("tsconfig.json")) return rootConfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigReads = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.base\.json$/), "utf-8")
+      .thenReturn(baseConfig)
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(rootConfig);
     const resolved = { url: "file:///malformed-child-paths-sync-project/parent-src/foo.ts" };
     const nextResolve = vi
       .fn()
@@ -821,7 +798,6 @@ describe("resolveSync", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 
   test("falls back to a less specific alias when a more specific alias's targets are all malformed", () => {
@@ -831,10 +807,10 @@ describe("resolveSync", () => {
         paths: { "@app/foo/*": [123], "@app/*": ["./*"] },
       },
     });
-    vi.mocked(readFileSync).mockImplementation((path) => {
-      if (String(path).endsWith("tsconfig.json")) return tsconfig;
-      return "const x: number = 1;";
-    });
+    using _tsconfigRead = vi
+      .when(vi.mocked(readFileSync))
+      .calledWith(expect.stringMatching(/tsconfig\.json$/), "utf-8")
+      .thenReturn(tsconfig);
     const resolved = { url: "file:///empty-target-fallback-sync-project/foo/bar.ts" };
     const nextResolve = vi
       .fn()
@@ -848,7 +824,6 @@ describe("resolveSync", () => {
       nextResolve,
     );
     expect(result).toEqual(resolved);
-    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;");
   });
 });
 

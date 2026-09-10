@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { aroundAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { mockTailordb, mockWorkflow } from "../mock";
 import { generateId } from "./fixtures/uses-web-crypto";
 
@@ -33,13 +33,6 @@ test("base platform globals are injected; namespace mocks install on acquire", (
   expect(g.tailor.workflow.execJobFunction).toBeTypeOf("function");
 });
 
-test("setup.ts removes performance global during test execution", () => {
-  // setup.ts deletes Vitest-host globals that are not present in the platform
-  // runtime. `performance` is removed in beforeEach and restored in
-  // afterEach, so within the test body it must be absent.
-  expect("performance" in globalThis).toBe(false);
-});
-
 test("__tailorRuntimeActive flag is set when the environment is active", () => {
   expect("__tailorRuntimeActive" in globalThis).toBe(true);
 });
@@ -55,17 +48,4 @@ test("Web Standard / ECMAScript globals remain available after whitelist cleanup
   expect(typeof Math).toBe("object");
   expect(typeof setTimeout).toBe("function");
   expect(typeof Promise).toBe("function");
-});
-
-// Verify setup.ts's afterEach actually restores `performance`. From inside a
-// test body the global is always absent (beforeEach just removed it), and
-// removeBlockedGlobals silently skips already-missing keys, so a broken
-// restore is invisible to in-test assertions. After `runSuite()` resolves,
-// the last test's afterEach chain has completed, so the code below observes
-// the post-restoration state.
-aroundAll(async (runSuite) => {
-  await runSuite();
-  if (!("performance" in globalThis)) {
-    throw new Error("performance global was not restored");
-  }
 });

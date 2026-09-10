@@ -22,6 +22,8 @@ pnpm test path/to/file.test.ts # Single file
 pnpm test -t "pattern"         # Pattern match
 ```
 
+`-t` matches against the full test name; Vitest 5 joins nested `describe`/`test` names with `>` (e.g. `-t "describe name > test name"`).
+
 ## E2E Tests
 
 E2E tests require a deployed workspace. The `globalSetup` provisions a workspace before tests run.

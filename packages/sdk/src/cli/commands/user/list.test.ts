@@ -32,7 +32,6 @@ aroundAll(async (runSuite) => {
 
 describe("user list", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     resetKeyringState();
     await runTest();
     vi.unstubAllEnvs();

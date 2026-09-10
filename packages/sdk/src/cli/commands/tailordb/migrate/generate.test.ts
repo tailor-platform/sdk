@@ -68,7 +68,6 @@ describe("tailordb migration generate with warning-tier changes", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     // A configured editor would be spawned after a migrate.ts is scaffolded
     // and block the test run.
@@ -170,7 +169,6 @@ describe("tailordb migration generate field rename preflight", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     // A configured editor would be spawned after a migrate.ts is scaffolded
     // and block the test run.
@@ -289,7 +287,6 @@ describe("tailordb migration generate with an unsupported field type change", ()
   }
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     vi.stubEnv("EDITOR", undefined);
     vi.stubEnv("VISUAL", undefined);
@@ -673,7 +670,6 @@ describe("tailordb migration generate type rename preflight", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     // A configured editor would be spawned after a migrate.ts is scaffolded
     // and block the test run.
@@ -800,7 +796,6 @@ describe("tailordb migration generate --data-only", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     // A configured editor would be spawned after a migrate.ts is scaffolded
     // and block the test run.

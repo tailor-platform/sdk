@@ -463,7 +463,6 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   }
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     remoteCheckpoint.number = 0;
     remoteCheckpoint.historyId = null;
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(

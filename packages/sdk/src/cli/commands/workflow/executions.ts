@@ -1,4 +1,5 @@
 import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import {
   Condition_Operator,
@@ -17,6 +18,11 @@ import {
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { formatKeyValueTable } from "#/cli/shared/format";
+import {
+  formatFunctionLogLines,
+  type FunctionLogEntryInfo,
+  toFunctionLogEntryInfo,
+} from "#/cli/shared/function-execution";
 import { styles, logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { waitArgs } from "./args";
@@ -61,6 +67,7 @@ export interface GetWorkflowExecutionOptions {
 export interface WorkflowExecutionDetailInfo extends WorkflowExecutionInfo {
   jobDetails?: (WorkflowJobExecutionInfo & {
     logs?: string;
+    logEntries?: FunctionLogEntryInfo[];
     result?: string;
   })[];
 }
@@ -181,22 +188,17 @@ export async function getWorkflowExecution(
     functionExecutionId: string,
   ): Promise<FunctionExecution | undefined> {
     try {
-      const filter = create(FilterSchema, {
-        condition: create(ConditionSchema, {
-          field: "id",
-          operator: Condition_Operator.EQ,
-          value: { kind: { case: "stringValue", value: functionExecutionId } },
-        }),
-      });
-
-      const response = await client.listFunctionExecutions({
+      const { execution } = await client.getFunctionExecution({
         workspaceId,
-        filter,
-        pageSize: 1,
+        executionId: functionExecutionId,
       });
-
-      return response.executions[0];
-    } catch {
+      return execution;
+    } catch (error) {
+      if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
+        logger.warn(
+          `Could not fetch logs for function execution '${functionExecutionId}': ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       return undefined;
     }
   }
@@ -226,6 +228,10 @@ export async function getWorkflowExecution(
               return {
                 ...jobInfo,
                 logs: functionExecution.logs || undefined,
+                logEntries:
+                  functionExecution.logEntries.length > 0
+                    ? functionExecution.logEntries.map(toFunctionLogEntryInfo)
+                    : undefined,
                 result: functionExecution.result || undefined,
               };
             }
@@ -295,9 +301,9 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
       logger.log(`  Started: ${formatDate(job.startedAt)}`);
       logger.log(`  Finished: ${formatDate(job.finishedAt)}`);
 
-      if (job.logs) {
+      const logLines = formatFunctionLogLines(job.logEntries, job.logs);
+      if (logLines.length > 0) {
         logger.log(styles.warning("\n  Logs:"));
-        const logLines = job.logs.split("\n");
         for (const line of logLines) {
           logger.log(`    ${line}`);
         }

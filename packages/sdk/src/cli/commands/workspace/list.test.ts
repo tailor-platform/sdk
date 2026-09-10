@@ -1,4 +1,4 @@
-import { aroundEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
 import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
@@ -16,11 +16,6 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 }));
 
 describe("listWorkspaces", () => {
-  aroundEach(async (runTest) => {
-    vi.clearAllMocks();
-    await runTest();
-  });
-
   test("uses the selected profile for authentication and Platform selection", async () => {
     const platformConfig = { platformUrl: "https://api.staging.tailor.tech" };
     const client = {

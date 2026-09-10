@@ -512,10 +512,9 @@ describe("withMetadataWriteBatch", () => {
 
   test("leaves completed bulk chunks applied when a later metadata read fails", async () => {
     const client = createClient();
-    client.getMetadata.mockImplementation(async ({ trn }: { trn: string }) => {
-      if (trn === "trn:100") throw new Error("later read failed");
-      return { metadata: { labels: {} } };
-    });
+    vi.when(client.getMetadata)
+      .calledWith({ trn: "trn:100" })
+      .thenReject(new Error("later read failed"));
 
     await expect(
       withMetadataWriteBatch(client, (batchClient) => queueMetadataWrites(batchClient, 201)),

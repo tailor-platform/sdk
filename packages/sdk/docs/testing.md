@@ -59,7 +59,7 @@ export default defineConfig({
 `tailorRuntime()` provides:
 
 1. **Node.js module blocking** — `import { randomBytes } from "node:crypto"` in production code throws an error with a suggestion for the Web Standard API alternative (`globalThis.crypto`). Test files (`*.test.ts`, `*.spec.ts`) are exempt.
-2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, `performance`, and others are removed.
+2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, and others are removed.
 3. **Platform API mocks** — the platform error classes (`TailorErrors`, `TailorDBFileError`) and `tailor.context` are always available. The other namespaces (`tailordb.Client`, `tailor.workflow`, `tailor.secretmanager`, …) are mocked when you acquire the corresponding `mockX()` — see below.
 
 ### Acquiring mocks with `using`
@@ -452,12 +452,7 @@ export default defineConfig({
   plugins: [tailorRuntime()],
   test: {
     projects: [
-      // `extends: true` is required so each project inherits the root-level
-      // `tailorRuntime()` plugin (transform hook + injected setup file).
-      // Without it, only the environment name rewrite applies — node:* import
-      // blocking and per-test global cleanup will silently not run.
       {
-        extends: true,
         test: {
           name: "unit",
           environment: "tailor-runtime",
@@ -465,7 +460,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: "e2e",
           include: ["e2e/**/*.test.ts"],
@@ -476,6 +470,8 @@ export default defineConfig({
   },
 });
 ```
+
+Inline projects inherit the root-level `tailorRuntime()` plugin by default on Vitest 5. On Vitest 4, add `extends: true` to each project; without it, `node:*` import blocking silently does not run.
 
 ### Known Limitations
 

@@ -1,13 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
+import { Code, ConnectError, type Transport, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
   closeConnectionPool,
   concurrencyLimitInterceptor,
+  createPooledStreamTransport,
   createTransport,
   errorHandlingInterceptor,
   fetchAll,
@@ -23,6 +24,7 @@ import {
   initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
+  POOLED_UPLOAD_METHODS,
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   RETRY_SAFE_CREATE_METHODS,
@@ -69,6 +71,448 @@ describe("createTransport", () => {
       interceptors: [],
     });
     expect(transport).toEqual({ type: "node-transport" });
+  });
+});
+
+describe("createPooledStreamTransport", () => {
+  type MockStreamResponse = { message: AsyncIterable<undefined> };
+
+  function makeStreamResponse(): MockStreamResponse {
+    return { message: (async function* () {})() };
+  }
+
+  function makeMockTransport(): Transport {
+    return {
+      unary: vi.fn(),
+      stream: vi.fn(() => Promise.resolve(makeStreamResponse())) as unknown as Transport["stream"],
+    };
+  }
+
+  // A transport whose stream() call stays pending until `resolve()` is
+  // called, so tests can simulate a connection that's genuinely still busy
+  // while a second, concurrent stream() call comes in.
+  function makeControllableTransport(): { transport: Transport; resolve: () => void } {
+    let resolve!: () => void;
+    const pending = new Promise<MockStreamResponse>((r) => {
+      resolve = () => r(makeStreamResponse());
+    });
+    return {
+      transport: {
+        unary: vi.fn(),
+        stream: vi.fn(() => pending) as unknown as Transport["stream"],
+      },
+      resolve,
+    };
+  }
+
+  // The real generated client always reads `message` to completion; do the
+  // same here so the pooled transport releases the connection as busy only
+  // once the "upload" is actually done.
+  async function drain(response: MockStreamResponse): Promise<void> {
+    for await (const _ of response.message) {
+      // no-op
+    }
+  }
+
+  const unaryArgs = [{}, undefined, undefined, undefined, {}, undefined] as unknown as Parameters<
+    Transport["unary"]
+  >;
+  const streamArgs = [
+    { name: "UploadFile" },
+    undefined,
+    undefined,
+    undefined,
+    (async function* () {})(),
+    undefined,
+  ] as unknown as Parameters<Transport["stream"]>;
+
+  test("unary calls always use the primary transport", async () => {
+    const primary = makeMockTransport();
+    const pooled = createPooledStreamTransport(
+      primary,
+      () => Promise.resolve(makeMockTransport()),
+      3,
+    );
+
+    await pooled.unary(...unaryArgs);
+    await pooled.unary(...unaryArgs);
+
+    expect(primary.unary).toHaveBeenCalledTimes(2);
+  });
+
+  test("a stream reuses an idle connection instead of growing the pool", async () => {
+    const primary = makeMockTransport();
+    const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
+    const pooled = createPooledStreamTransport(primary, createAdditional, 4);
+
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+
+    expect(createAdditional).not.toHaveBeenCalled();
+    expect(primary.stream).toHaveBeenCalledTimes(3);
+  });
+
+  test("grows the pool on demand only when every existing connection is busy", async () => {
+    const primary = makeControllableTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi.fn<() => Promise<Transport>>().mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary.transport, createAdditional, 2);
+
+    const call1 = pooled.stream(...streamArgs);
+    const call2 = pooled.stream(...streamArgs);
+    await call2;
+
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(primary.transport.stream).toHaveBeenCalledTimes(1);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+
+    primary.resolve();
+    await call1;
+  });
+
+  test("keeps a connection busy until its response message is fully read, not merely once stream() resolves", async () => {
+    const primary = makeMockTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi.fn<() => Promise<Transport>>().mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary, createAdditional, 2);
+
+    const response1 = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+    // stream() has resolved, but response1.message hasn't been read yet, so
+    // primary must still count as busy: this call should grow the pool
+    // rather than reuse primary.
+    await pooled.stream(...streamArgs);
+
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+
+    await drain(response1);
+  });
+
+  test.each([0, -1, 1.5, Number.NaN])(
+    "rejects a non-positive-integer maxConnections (%s) instead of deadlocking",
+    (maxConnections) => {
+      const primary = makeMockTransport();
+      expect(() =>
+        createPooledStreamTransport(
+          primary,
+          () => Promise.resolve(makeMockTransport()),
+          maxConnections,
+        ),
+      ).toThrow(/maxConnections must be a positive integer/);
+    },
+  );
+
+  test("a pool size of 1 never creates additional connections", async () => {
+    const primary = makeMockTransport();
+    const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
+    const pooled = createPooledStreamTransport(primary, createAdditional, 1);
+
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+
+    expect(createAdditional).not.toHaveBeenCalled();
+    expect(primary.stream).toHaveBeenCalledTimes(2);
+  });
+
+  test("retries growing the pool after a failed attempt instead of failing permanently", async () => {
+    const primary = makeControllableTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi
+      .fn<() => Promise<Transport>>()
+      .mockRejectedValueOnce(new Error("connect failed"))
+      .mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary.transport, createAdditional, 2);
+
+    // Occupies the only existing (primary) connection, staying pending.
+    const call1 = pooled.stream(...streamArgs);
+    // No idle connection, so this must grow the pool; the first attempt fails.
+    await expect(pooled.stream(...streamArgs)).rejects.toThrow("connect failed");
+
+    // Retries growth, which succeeds this time.
+    const call3 = pooled.stream(...streamArgs);
+    await call3;
+
+    expect(createAdditional).toHaveBeenCalledTimes(2);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+
+    primary.resolve();
+    await call1;
+  });
+
+  test("queues an upload beyond pool capacity instead of multiplexing it onto a busy connection", async () => {
+    const first = makeControllableTransport();
+    const second = makeControllableTransport();
+    const createAdditional = vi
+      .fn<() => Promise<Transport>>()
+      .mockResolvedValueOnce(second.transport);
+    const pooled = createPooledStreamTransport(first.transport, createAdditional, 2);
+
+    const call1 = pooled.stream(...streamArgs);
+    const call2 = pooled.stream(...streamArgs);
+    let call3Settled = false;
+    const call3 = pooled.stream(...streamArgs).then((r) => {
+      call3Settled = true;
+      return r;
+    });
+
+    // Give both in-flight calls a chance to reach their transport.stream()
+    // call without resolving either controllable transport.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Pool is at capacity (2/2, both busy): the third caller must wait
+    // rather than share either connection.
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(first.transport.stream).toHaveBeenCalledTimes(1);
+    expect(second.transport.stream).toHaveBeenCalledTimes(1);
+    expect(call3Settled).toBe(false);
+
+    first.resolve();
+    const response1 = (await call1) as unknown as MockStreamResponse;
+    await drain(response1); // releases the first connection, waking call3
+
+    const response3 = (await call3) as unknown as MockStreamResponse;
+    expect(call3Settled).toBe(true);
+    // The freed connection is reused; no third connection is created.
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(first.transport.stream).toHaveBeenCalledTimes(2);
+    await drain(response3);
+
+    second.resolve();
+    await drain((await call2) as unknown as MockStreamResponse);
+  });
+
+  test("wakes a waiting caller to retry after a competing connection attempt fails", async () => {
+    const primary = makeControllableTransport();
+    const second = makeMockTransport();
+    const createAdditional = vi
+      .fn<() => Promise<Transport>>()
+      .mockRejectedValueOnce(new Error("connect failed"))
+      .mockResolvedValueOnce(second);
+    const pooled = createPooledStreamTransport(primary.transport, createAdditional, 2);
+
+    // Occupies the only existing (primary) connection, staying pending.
+    const call1 = pooled.stream(...streamArgs);
+    // No idle connection: triggers growth, whose only queued attempt fails.
+    const call2 = pooled.stream(...streamArgs).catch((error: unknown) => error);
+    // Arrives while call2's growth is in flight and the pool already counts
+    // as full (transports.length + pendingCreates === maxConnections): must
+    // wait rather than fail alongside call2 or share primary.
+    let call3Settled = false;
+    const call3 = pooled.stream(...streamArgs).then((r) => {
+      call3Settled = true;
+      return r;
+    });
+
+    const call2Result = await call2;
+    expect(call2Result).toBeInstanceOf(Error);
+    expect((call2Result as Error).message).toBe("connect failed");
+
+    // call2's failure must wake call3 to retry acquiring a connection,
+    // instead of leaving it stuck behind a connection attempt that will
+    // never come back (a deadlock).
+    await drain((await call3) as unknown as MockStreamResponse);
+    expect(call3Settled).toBe(true);
+    expect(createAdditional).toHaveBeenCalledTimes(2);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+
+    primary.resolve();
+    await drain((await call1) as unknown as MockStreamResponse);
+  });
+
+  test("routes a non-upload streaming RPC directly to primary, unpooled", async () => {
+    const primary = makeMockTransport();
+    const createAdditional = vi.fn(() => Promise.resolve(makeMockTransport()));
+    const pooled = createPooledStreamTransport(primary, createAdditional, 4);
+
+    const downloadArgs = [
+      { name: "DownloadFunctionRegistryScript" },
+      undefined,
+      undefined,
+      undefined,
+      (async function* () {})(),
+      undefined,
+    ] as unknown as Parameters<Transport["stream"]>;
+
+    await drain((await pooled.stream(...downloadArgs)) as unknown as MockStreamResponse);
+    await drain((await pooled.stream(...downloadArgs)) as unknown as MockStreamResponse);
+
+    expect(createAdditional).not.toHaveBeenCalled();
+    expect(primary.stream).toHaveBeenCalledTimes(2);
+  });
+
+  test("expires a queued upload without dispatching it or blocking the next upload", async () => {
+    vi.useFakeTimers();
+    try {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+      const timedArgs = [...streamArgs] as Parameters<Transport["stream"]>;
+      timedArgs[2] = 50;
+      let timedError: unknown;
+      const timed = pooled.stream(...timedArgs).catch((error: unknown) => {
+        timedError = error;
+      });
+      const next = pooled.stream(...streamArgs);
+
+      await vi.advanceTimersByTimeAsync(50);
+      expect(timedError).toMatchObject({ code: Code.DeadlineExceeded });
+      expect(primary.stream).toHaveBeenCalledTimes(1);
+
+      await drain(first);
+      await drain((await next) as unknown as MockStreamResponse);
+      await timed;
+      expect(primary.stream).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("deducts queueing time from the timeout passed to the transport", async () => {
+    vi.useFakeTimers();
+    try {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+      const args = [...streamArgs] as Parameters<Transport["stream"]>;
+      args[2] = 50;
+      const queued = pooled.stream(...args);
+
+      await vi.advanceTimersByTimeAsync(20);
+      await drain(first);
+      await drain((await queued) as unknown as MockStreamResponse);
+
+      expect(primary.stream).toHaveBeenLastCalledWith(args[0], args[1], 30, ...args.slice(3));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test.each([undefined, 0, -1])(
+    "preserves a disabled timeout (%s) while queued",
+    async (timeoutMs) => {
+      vi.useFakeTimers();
+      try {
+        const primary = makeMockTransport();
+        const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+        const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+        const args = [...streamArgs] as Parameters<Transport["stream"]>;
+        args[2] = timeoutMs;
+        const queued = pooled.stream(...args);
+
+        await vi.advanceTimersByTimeAsync(100);
+        await drain(first);
+        await drain((await queued) as unknown as MockStreamResponse);
+
+        expect(primary.stream).toHaveBeenLastCalledWith(...args);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  test.each(["before acquisition", "after acquisition"])(
+    "rejects an upload canceled %s without consuming a pool slot",
+    async (when) => {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const controller = new AbortController();
+      const args = [...streamArgs] as Parameters<Transport["stream"]>;
+      args[1] = controller.signal;
+      if (when === "before acquisition") controller.abort();
+      const canceled = pooled.stream(...args);
+      if (when === "after acquisition") controller.abort();
+
+      await expect(canceled).rejects.toMatchObject({ code: Code.Canceled });
+      expect(primary.stream).not.toHaveBeenCalled();
+      await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+      expect(primary.stream).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("reuses a connection created after its waiting upload was canceled", async () => {
+    const primary = makeMockTransport();
+    const second = makeMockTransport();
+    let finishCreate!: (transport: Transport) => void;
+    const createAdditional = vi.fn(
+      () =>
+        new Promise<Transport>((resolve) => {
+          finishCreate = resolve;
+        }),
+    );
+    const pooled = createPooledStreamTransport(primary, createAdditional, 2);
+    const first = (await pooled.stream(...streamArgs)) as unknown as MockStreamResponse;
+    const controller = new AbortController();
+    const args = [...streamArgs] as Parameters<Transport["stream"]>;
+    args[1] = controller.signal;
+    const canceled = pooled.stream(...args);
+    const next = pooled.stream(...streamArgs);
+
+    controller.abort();
+    await expect(canceled).rejects.toMatchObject({ code: Code.Canceled });
+    finishCreate(second);
+    await drain((await next) as unknown as MockStreamResponse);
+
+    expect(createAdditional).toHaveBeenCalledTimes(1);
+    expect(second.stream).toHaveBeenCalledTimes(1);
+    await drain(first);
+  });
+
+  test("rejects a deadline reached after acquisition before dispatching the upload", async () => {
+    vi.useFakeTimers();
+    try {
+      const primary = makeMockTransport();
+      const pooled = createPooledStreamTransport(primary, () => Promise.resolve(primary), 1);
+      const args = [...streamArgs] as Parameters<Transport["stream"]>;
+      args[2] = 50;
+      const expired = pooled.stream(...args);
+      vi.advanceTimersByTime(50);
+
+      await expect(expired).rejects.toMatchObject({ code: Code.DeadlineExceeded });
+      expect(primary.stream).not.toHaveBeenCalled();
+      await drain((await pooled.stream(...streamArgs)) as unknown as MockStreamResponse);
+      expect(primary.stream).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Drift guard: every client_streaming OperatorService method must be a
+  // conscious decision — pooled (in POOLED_UPLOAD_METHODS) or explicitly
+  // exempt below — so a newly added client-streaming RPC can't silently
+  // bypass the pool by omission (or silently join it without review).
+  test("POOLED_UPLOAD_METHODS covers every client_streaming OperatorService method or is explicitly exempt", () => {
+    const EXEMPT_CLIENT_STREAMING_METHODS = new Set<string>([]);
+
+    const clientStreamingMethods = Object.values(OperatorService.method)
+      .filter((m) => m.methodKind === "client_streaming")
+      .map((m) => m.name);
+
+    // Sanity: the scan actually found the known upload RPCs.
+    expect(clientStreamingMethods).toEqual(
+      expect.arrayContaining(["CreateFunctionRegistry", "UpdateFunctionRegistry", "UploadFile"]),
+    );
+
+    const unclassified = clientStreamingMethods.filter(
+      (name) => !POOLED_UPLOAD_METHODS.has(name) && !EXEMPT_CLIENT_STREAMING_METHODS.has(name),
+    );
+    expect(unclassified).toEqual([]);
+  });
+
+  test("every POOLED_UPLOAD_METHODS entry is a real client_streaming OperatorService method", () => {
+    const realClientStreamingNames = new Set(
+      Object.values(OperatorService.method)
+        .filter((m) => m.methodKind === "client_streaming")
+        .map((m) => m.name),
+    );
+    const typos = [...POOLED_UPLOAD_METHODS].filter((name) => !realClientStreamingNames.has(name));
+    expect(typos).toEqual([]);
   });
 });
 

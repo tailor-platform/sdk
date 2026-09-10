@@ -41,7 +41,6 @@ describe("show", () => {
   };
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     vi.mocked(loadConfig).mockResolvedValue({
@@ -89,14 +88,11 @@ describe("show", () => {
   });
 
   test("omits AI Gateways that have not been deployed yet", async () => {
-    getAIGatewayMock.mockImplementation(({ aigatewayName }) => {
-      if (aigatewayName === "gateway-a") {
-        return Promise.resolve({
-          aigateway: { name: "gateway-a", url: "https://gateway-a.example.com" },
-        });
-      }
-      return Promise.reject(new ConnectError("not found", Code.NotFound));
-    });
+    vi.when(getAIGatewayMock, {
+      onUnmatched: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    })
+      .calledWith(expect.objectContaining({ aigatewayName: "gateway-a" }))
+      .thenResolve({ aigateway: { name: "gateway-a", url: "https://gateway-a.example.com" } });
 
     const info = await show();
 

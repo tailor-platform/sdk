@@ -58,7 +58,6 @@ aroundAll(async (runSuite) => {
 });
 
 aroundEach(async (runTest) => {
-  vi.clearAllMocks();
   resetKeyringState();
   vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
 
@@ -206,7 +205,6 @@ describe("profile update --machine-user", () => {
 
 describe("profile update --platform", () => {
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_URL", undefined);

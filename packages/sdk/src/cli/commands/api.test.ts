@@ -46,7 +46,6 @@ describe("api command body auto-injection", () => {
   });
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     vi.mocked(loadPlatformClientConfig).mockResolvedValue(undefined);
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     fetchMock.mockResolvedValue({

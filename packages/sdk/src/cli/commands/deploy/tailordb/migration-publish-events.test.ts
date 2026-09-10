@@ -396,7 +396,6 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   }
 
   beforeEach(() => {
-    vi.clearAllMocks();
     snapshotState.tablesByVersion = {};
     snapshotState.historyId = null;
     remoteCheckpoint.number = 0;
@@ -691,7 +690,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     );
   });
 
-  test("normalizes a captured disableGqlOperations field left undefined by the remote state", async () => {
+  test("normalizes a captured disableGqlOperations field that is not a boolean", async () => {
     const client = createMockClient({
       existingTableNames: ["Order", "Drift"],
       existingSettings: {

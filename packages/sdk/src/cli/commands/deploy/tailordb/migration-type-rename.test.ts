@@ -352,7 +352,6 @@ describe("applyTailorDB: type rename migration flow", () => {
   }
 
   aroundEach(async (runTest) => {
-    vi.clearAllMocks();
     remoteCheckpoint.number = 0;
     remoteCheckpoint.historyId = null;
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(

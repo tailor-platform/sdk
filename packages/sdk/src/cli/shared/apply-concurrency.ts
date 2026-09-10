@@ -20,6 +20,12 @@ const DEFAULT_APPLY_CONCURRENCY = 16;
  * concurrently overloads the platform, whose responses then come back as
  * `Unavailable`/`ResourceExhausted` and drive retries into the non-idempotent
  * compound-create `already_exists` race. Capping bounds the worst case.
+ *
+ * This is unrelated to the streaming-upload connection pool (see
+ * `createPooledStreamTransport` in `client.ts`), which uses its own smaller,
+ * internal connection cap: upload concurrency varies independently by call
+ * site (e.g. static website deploys upload with their own fixed concurrency),
+ * so this budget can't be assumed to bound how many uploads run at once.
  * @returns Concurrency cap (always >= 1)
  */
 export function resolveApplyConcurrency(): number {
