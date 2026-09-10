@@ -7,7 +7,8 @@
   "type": "module",
   "exports": {
     "./color": "./src/color.ts",
-    "./node-builtins": "./src/node-builtins.ts"
+    "./node-builtins": "./src/node-builtins.ts",
+    "./workflow-policy": "./src/workflow-policy.ts"
   },
   "scripts": {
     "lint": "oxlint --type-aware .",
