@@ -87,6 +87,9 @@ function stubClient(workspaces: Workspace[]) {
   const client = {
     listWorkspaces: vi.fn().mockResolvedValue({ workspaces, nextPageToken: "" }),
     getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
+    getWorkspace: vi.fn(async ({ workspaceId }: { workspaceId: string }) => ({
+      workspace: workspaces.find((candidate) => candidate.id === workspaceId),
+    })),
     deleteWorkspace: vi.fn().mockResolvedValue({}),
   };
   vi.mocked(initOperatorClient).mockResolvedValue(
@@ -711,7 +714,132 @@ describe("workspace prune command", () => {
       candidates: [expect.objectContaining({ id: "id-e2e-ws-1", name: "e2e-ws-1" })],
       deleted: [expect.objectContaining({ id: "id-e2e-ws-1" })],
       failed: [],
-      skipped: { excluded: [], deleteProtection: ["e2e-ws-protected"], unknownAge: [] },
+      skipped: {
+        excluded: [],
+        deleteProtection: ["e2e-ws-protected"],
+        unknownAge: [],
+        changed: [],
+      },
+    });
+  });
+
+  test("skips a workspace that gained delete protection after it was listed", async () => {
+    const client = stubClient([workspace("e2e-ws-1"), workspace("e2e-ws-2")]);
+    client.getWorkspace.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({
+      workspace:
+        workspaceId === "id-e2e-ws-1"
+          ? workspace("e2e-ws-1", { deleteProtection: true })
+          : workspace("e2e-ws-2"),
+    }));
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace.mock.calls).toEqual([[{ workspaceId: "id-e2e-ws-2" }]]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("e2e-ws-1"));
+  });
+
+  test("skips a workspace that moved out of the requested scope after it was listed", async () => {
+    const client = stubClient([workspace("e2e-ws-1"), workspace("e2e-ws-2")]);
+    client.getWorkspace.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({
+      workspace:
+        workspaceId === "id-e2e-ws-1"
+          ? workspace("e2e-ws-1", { organizationId: ORG_B })
+          : workspace("e2e-ws-2"),
+    }));
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--organization-id",
+      ORG_A,
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace.mock.calls).toEqual([[{ workspaceId: "id-e2e-ws-2" }]]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("e2e-ws-1"));
+  });
+
+  test("skips a workspace that was renamed out of the name filter after it was listed", async () => {
+    const client = stubClient([workspace("e2e-ws-1")]);
+    client.getWorkspace.mockResolvedValue({ workspace: workspace("kept-alive") });
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("e2e-ws-1"));
+  });
+
+  test("deletes a workspace that the re-check reports as already gone", async () => {
+    const client = stubClient([workspace("e2e-ws-1")]);
+    client.getWorkspace.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("already deleted"));
+  });
+
+  test("fails the workspace when the re-check itself errors", async () => {
+    const client = stubClient([workspace("e2e-ws-1")]);
+    client.getWorkspace.mockRejectedValue(new Error("permission denied"));
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expectFailure(result, "Failed to delete 1 workspace(s)");
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("removes local profiles for workspaces whose delete failed", async () => {
+    const client = stubClient([workspace("e2e-ws-1")]);
+    client.deleteWorkspace.mockRejectedValue(new Error("transport timeout"));
+    vi.mocked(readPlatformConfig).mockResolvedValue({
+      profiles: {
+        stale: { workspace_id: "id-e2e-ws-1" },
+        live: { workspace_id: "id-other" },
+      },
+    } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expectFailure(result, "Failed to delete 1 workspace(s)");
+    expect(writePlatformConfig).toHaveBeenCalledWith({
+      profiles: { live: { workspace_id: "id-other" } },
     });
   });
 

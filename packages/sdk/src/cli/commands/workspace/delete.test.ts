@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
+import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { deleteCommand } from "./delete";
@@ -107,5 +108,24 @@ describe("workspace delete command", () => {
 
     expect(result.error).toBe(failure);
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("removes the local profile when the delete call fails", async () => {
+    const client = stubClient();
+    vi.mocked(prompt.text).mockResolvedValue("sample-space");
+    client.deleteWorkspace.mockRejectedValue(new Error("transport timeout"));
+    vi.mocked(readPlatformConfig).mockResolvedValue({
+      profiles: {
+        stale: { workspace_id: workspaceId },
+        live: { workspace_id: "id-other" },
+      },
+    } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
+
+    const result = await runCommand(deleteCommand, ["--workspace-id", workspaceId]);
+
+    expect(result.success).toBe(false);
+    expect(writePlatformConfig).toHaveBeenCalledWith({
+      profiles: { live: { workspace_id: "id-other" } },
+    });
   });
 });

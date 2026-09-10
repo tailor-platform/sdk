@@ -97,6 +97,20 @@ function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
 }
 
 /**
+ * Re-check a candidate against the criteria that selected it.
+ * @param workspace - Workspace as it exists now
+ * @param criteria - Selection criteria the candidate was chosen with
+ * @returns Why the candidate no longer qualifies, or `undefined` when it still does
+ */
+function staleCandidateReason(workspace: Workspace, criteria: PruneCriteria): string | undefined {
+  if (workspace.deleteProtection) return "delete protection was turned on";
+  if (!matchesScope(workspace, criteria)) return "it moved outside the requested scope";
+  if (!matchesName(workspace, criteria)) return "it no longer matches the name filter";
+  if (criteria.exclude.has(workspace.name)) return "it is now excluded by --exclude";
+  return undefined;
+}
+
+/**
  * Split workspaces into the ones to delete and the matching ones that are kept.
  * @param workspaces - Workspaces visible to the caller
  * @param criteria - Selection criteria
@@ -172,11 +186,13 @@ interface PruneResult {
     excluded: string[];
     deleteProtection: string[];
     unknownAge: string[];
+    /** Candidates dropped because they changed between listing and deletion. */
+    changed: string[];
   };
 }
 
 const KEPT_REASONS: {
-  key: keyof PruneResult["skipped"];
+  key: Exclude<keyof PruneResult["skipped"], "changed">;
   selection: Exclude<keyof PruneSelection, "candidates" | "tooYoung">;
   reason: string;
 }[] = [
@@ -191,7 +207,7 @@ export const pruneCommand = defineAppCommand({
   notes: ml`
     Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, scope, exclusion, or delete-protection criteria that selected it. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
@@ -288,7 +304,7 @@ export const pruneCommand = defineAppCommand({
       candidates: [],
       deleted: [],
       failed: [],
-      skipped: { excluded: [], deleteProtection: [], unknownAge: [] },
+      skipped: { excluded: [], deleteProtection: [], unknownAge: [], changed: [] },
     };
     for (const { key, selection: group, reason } of KEPT_REASONS) {
       for (const workspace of selection[group]) {
@@ -357,6 +373,15 @@ export const pruneCommand = defineAppCommand({
     for (const workspace of result.candidates) {
       const displayName = workspaceDisplayName(workspace);
       try {
+        // The confirmation prompt leaves a window in which the workspace can change, so the
+        // criteria that selected it are re-checked against a fresh read before it is deleted.
+        const { workspace: current } = await client.getWorkspace({ workspaceId: workspace.id });
+        const staleReason = current ? staleCandidateReason(current, criteria) : undefined;
+        if (staleReason) {
+          result.skipped.changed.push(workspace.name);
+          logger.warn(`Keeping ${displayName} (${workspace.id}): ${staleReason}.`);
+          continue;
+        }
         await client.deleteWorkspace({ workspaceId: workspace.id });
         result.deleted.push(workspace);
         logger.success(`Deleted ${displayName} (${workspace.id}).`);
@@ -372,8 +397,14 @@ export const pruneCommand = defineAppCommand({
       }
     }
 
+    // A failed delete can still have removed the workspace server-side (a timeout after the
+    // server committed), so its local profile is cleaned up alongside the confirmed deletions.
     const removedProfiles = await removeProfilesForWorkspaces(
-      new Set(result.deleted.map((workspace) => workspace.id)),
+      new Set(
+        [...result.deleted, ...result.failed.map(({ workspace }) => workspace)].map(
+          (workspace) => workspace.id,
+        ),
+      ),
     );
     if (removedProfiles.length > 0) {
       logger.info(
