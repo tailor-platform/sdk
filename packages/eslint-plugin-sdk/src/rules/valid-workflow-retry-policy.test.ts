@@ -80,6 +80,36 @@ describe("valid-workflow-retry-policy", () => {
     );
   });
 
+  test("reads the last duplicate key, as the runtime does", () => {
+    expectViolation(
+      workflow(
+        '{ maxRetries: 3, maxRetries: 0, initialBackoff: "1s", maxBackoff: "30s", backoffMultiplier: 2 }',
+      ),
+      RULE,
+      "maxRetries must be an integer between 1 and 10",
+    );
+    expectViolation(
+      workflow(
+        '{ maxRetries: 3, initialBackoff: "1s", initialBackoff: "2m", maxBackoff: "30s", backoffMultiplier: 2 }',
+      ),
+      RULE,
+      "initialBackoff must be less than or equal to maxBackoff",
+    );
+    expectViolation(
+      workflow(
+        '{ maxRetries: 3, initialBackoff: "1s", maxBackoff: "30s", backoffMultiplier: 2, backoffMultiplier: 0.5 }',
+      ),
+      RULE,
+      "backoffMultiplier must be at least 1",
+    );
+    expectClean(
+      workflow(
+        '{ maxRetries: 0, maxRetries: 3, initialBackoff: "2m", initialBackoff: "1s", maxBackoff: "30s", backoffMultiplier: 2 }',
+      ),
+      RULE,
+    );
+  });
+
   test("skips a retryPolicy a later spread can override", () => {
     expectClean(
       `${HEAD}export default createWorkflow({ name: "wf", mainJob: main, retryPolicy: { maxRetries: 0, initialBackoff: "1m", maxBackoff: "1s", backoffMultiplier: 2 }, ...overrides });`,

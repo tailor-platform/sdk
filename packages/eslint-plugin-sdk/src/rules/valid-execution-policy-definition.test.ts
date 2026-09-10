@@ -81,6 +81,18 @@ describe("valid-execution-policy-definition", () => {
     );
   });
 
+  test("reads the last duplicate key, as the runtime does", () => {
+    expectViolation(
+      `${GROUP}export const policies = defineWorkflowExecutionPolicies((define) => ({ premium: define({ name: "tenant-api", name: "BAD" }) }));`,
+      RULE,
+      NAME_MESSAGE,
+    );
+    expectClean(
+      `${GROUP}export const policies = defineWorkflowExecutionPolicies((define) => ({ premium: define({ name: "BAD", name: "tenant-api" }) }));`,
+      RULE,
+    );
+  });
+
   test("resolves the builder parameter and const values", () => {
     expectViolation(
       `${GROUP}export const policies = defineWorkflowExecutionPolicies((d) => ({ premium: d({ name: "Premium" }) }));`,

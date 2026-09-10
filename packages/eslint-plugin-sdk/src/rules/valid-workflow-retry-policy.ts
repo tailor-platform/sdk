@@ -5,7 +5,7 @@ import {
   type AstProperty,
   literalProperties,
   literalProperty,
-  propertyName,
+  namedProperty,
   staticString,
   unwrapExpression,
 } from "../lib/ast.js";
@@ -31,8 +31,8 @@ function checkDuration(
   field: string,
   maxSeconds: number,
 ): Duration | null {
-  const property = properties.find((entry) => propertyName(entry) === field);
-  if (property === undefined) return null;
+  const property = namedProperty(properties, field);
+  if (property === null) return null;
   const text = staticString(resolveValue(context, property.value));
   if (text === null) return null;
   const seconds = durationToSeconds(text);
@@ -54,10 +54,10 @@ function checkRetryPolicy(context: Rule.RuleContext, node: AstNode): void {
   const properties = literalProperties(resolveValue(context, node));
   if (properties === null) return;
 
-  const maxRetries = properties.find((entry) => propertyName(entry) === "maxRetries");
+  const maxRetries = namedProperty(properties, "maxRetries");
   const retries = numberValue(context, maxRetries?.value);
   if (
-    maxRetries !== undefined &&
+    maxRetries !== null &&
     retries !== null &&
     (!Number.isInteger(retries) ||
       retries < RETRY_POLICY_LIMITS.maxRetries.min ||
@@ -66,13 +66,9 @@ function checkRetryPolicy(context: Rule.RuleContext, node: AstNode): void {
     context.report({ node: maxRetries.value, messageId: "maxRetriesRange" });
   }
 
-  const multiplier = properties.find((entry) => propertyName(entry) === "backoffMultiplier");
+  const multiplier = namedProperty(properties, "backoffMultiplier");
   const factor = numberValue(context, multiplier?.value);
-  if (
-    multiplier !== undefined &&
-    factor !== null &&
-    factor < RETRY_POLICY_LIMITS.backoffMultiplierMin
-  ) {
+  if (multiplier !== null && factor !== null && factor < RETRY_POLICY_LIMITS.backoffMultiplierMin) {
     context.report({ node: multiplier.value, messageId: "backoffMultiplierMin" });
   }
 

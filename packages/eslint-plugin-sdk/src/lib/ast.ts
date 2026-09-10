@@ -173,13 +173,20 @@ export function literalElements(node: AstNode | null | undefined): AstNode[] | n
   return elements;
 }
 
+/** The named property, taking the last duplicate key as the runtime does; null when absent. */
+export function namedProperty(
+  properties: readonly AstProperty[] | null | undefined,
+  name: string,
+): AstProperty | null {
+  return properties?.findLast((property) => propertyName(property) === name) ?? null;
+}
+
 /** One property of an object literal that carries no spread; null when unresolvable. */
 export function literalProperty(
   node: AstNode | null | undefined,
   name: string,
 ): AstProperty | null {
-  const properties = literalProperties(node);
-  return properties?.findLast((property) => propertyName(property) === name) ?? null;
+  return namedProperty(literalProperties(node), name);
 }
 
 export function propertyName(property: AstProperty): string | null {

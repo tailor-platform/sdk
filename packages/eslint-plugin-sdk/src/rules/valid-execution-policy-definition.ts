@@ -11,6 +11,7 @@ import {
   type AstNode,
   type AstProperty,
   literalProperties,
+  namedProperty,
   propertyName,
   returnStatements,
   staticString,
@@ -35,8 +36,8 @@ function staticOption(
   properties: readonly AstProperty[],
   name: string,
 ): StaticOption | null | undefined {
-  const property = properties.find((entry) => propertyName(entry) === name);
-  if (property === undefined) return undefined;
+  const property = namedProperty(properties, name);
+  if (property === null) return undefined;
   const value = staticString(resolveValue(context, property.value));
   return value === null ? null : { value, node: property.value };
 }
