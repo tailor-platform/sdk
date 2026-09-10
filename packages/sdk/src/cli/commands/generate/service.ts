@@ -180,7 +180,15 @@ export function createGenerationManager(params: {
     const plugins = generationPlugins.filter((p) => p[hookName] != null);
     if (plugins.length === 0) return;
     const results = await Promise.allSettled(
-      plugins.map((plugin) => runPluginPhaseHook(plugin, hookName)),
+      plugins.map(async (plugin) => {
+        try {
+          await runPluginPhaseHook(plugin, hookName);
+        } catch (error) {
+          logger.error(`Error processing plugin ${styles.bold(plugin.id)} (${hookName})`);
+          logger.error(String(error));
+          throw error;
+        }
+      }),
     );
     const failures = results.flatMap((result, index) =>
       result.status === "rejected"

@@ -6,6 +6,7 @@ import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vit
 import { defineApplication } from "#/cli/services/application";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
 import { createGenerationManager } from "./service";
 import type { Application } from "#/cli/services/application";
@@ -191,6 +192,47 @@ describe("GenerationManager", () => {
         "generated",
         expect.any(Function),
       );
+    });
+
+    test("reports a failed plugin while another plugin is still pending", async () => {
+      const siblingStarted = Promise.withResolvers<void>();
+      const finishSibling = Promise.withResolvers<void>();
+      const config = { ...mockConfig, db: {}, resolver: {} };
+      const manager = createGenerationManager({
+        application: defineApplication({ config }),
+        config,
+        pluginManager: new PluginManager([
+          {
+            id: "early-failure-plugin",
+            description: "Fails before its sibling completes",
+            onTailorDBReady: async () => {
+              throw new Error("early-failure-sentinel");
+            },
+          },
+          {
+            id: "pending-plugin",
+            description: "Waits for release",
+            onTailorDBReady: async () => {
+              siblingStarted.resolve();
+              await finishSibling.promise;
+              return { files: [] };
+            },
+          },
+        ]),
+      });
+      const failure = manager.generate().catch((error: unknown) => error);
+      await siblingStarted.promise;
+      try {
+        await vi.waitFor(() => {
+          expect(logger.error).toHaveBeenCalledWith(
+            expect.stringContaining("early-failure-sentinel"),
+          );
+        });
+      } finally {
+        finishSibling.resolve();
+        await failure;
+      }
+      expect(errorToJson(await failure).error.code).toBe("PLUGIN_GENERATION_FAILED");
     });
 
     test.each(["onTailorDBReady", "onResolverReady", "onExecutorReady"] as const)(

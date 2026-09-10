@@ -8,6 +8,63 @@ import { fileURLToPath } from "node:url";
 
 const script = fileURLToPath(new URL("./run-generate-with-log.mjs", import.meta.url));
 
+for (const stream of ["stdout", "stderr"]) {
+  test(`decodes split UTF-8 from ${stream} in the summary`, (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "generate-log-"));
+    t.after(() => rmSync(dir, { recursive: true }));
+    const fixture = join(dir, "split.mjs");
+    const summary = join(dir, "summary.md");
+    writeFileSync(
+      fixture,
+      `
+      const bytes = Buffer.from(["診断", process.pid].join(":"));
+      process.${stream}.write(bytes.subarray(0, 1));
+      setTimeout(() => {
+        process.${stream}.write(bytes.subarray(1));
+        process.exitCode = 7;
+      }, 100);
+    `,
+    );
+    const result = spawnSync(process.execPath, [script, process.execPath, fixture], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GENERATE_LOG_DIR: dir,
+        GENERATE_LOG_ARTIFACT: "generate-test",
+        GITHUB_STEP_SUMMARY: summary,
+      },
+    });
+    assert.equal(result.status, 7, result.stderr);
+    assert.match(result[stream], /^診断:\d+$/);
+    assert.equal(readFileSync(join(dir, "generate.log"), "utf8"), result[stream]);
+    assert.ok(readFileSync(summary, "utf8").includes(result[stream]));
+  });
+}
+
+test("records exact command argument boundaries", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "generate-log-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  const summary = join(dir, "summary.md");
+  const argv = ["bash", "-c", "exit 7"];
+  const result = spawnSync(process.execPath, [script, ...argv], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GENERATE_LOG_DIR: dir,
+      GENERATE_LOG_ARTIFACT: "generate-test",
+      GITHUB_STEP_SUMMARY: summary,
+    },
+  });
+  assert.equal(result.status, 7, result.stderr);
+  const field = readFileSync(summary, "utf8").match(
+    /Command argv \(JSON\):\n\n<pre>([^<]+)<\/pre>/,
+  );
+  assert.ok(field, "summary must label its JSON argv field");
+  const recorded = JSON.parse(field[1]);
+  assert.deepEqual(recorded, argv);
+  assert.equal(spawnSync(recorded[0], recorded.slice(1)).status, 7);
+});
+
 for (const exitCode of [0, 7]) {
   test(`captures a single invocation and preserves exit ${exitCode}`, (t) => {
     const dir = mkdtempSync(join(tmpdir(), "generate-log-"));
