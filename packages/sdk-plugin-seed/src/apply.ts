@@ -21,7 +21,7 @@ import { z } from "zod";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
-import { topologicalSort } from "./topo-sort";
+import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
 import type { OperatorClient, SeedData, SeedIdpUserContext } from "@tailor-platform/sdk/cli";
 
 interface SeedExecutionContext {
@@ -94,6 +94,16 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     requireId: upsert,
     requiredFieldsByType: upsert ? requiredFields : {},
   });
+  // Sort each self-referencing table's full record set before chunkSeedData
+  // splits it by byte size, so a table split across script executions still
+  // has its parents in the same or an earlier chunk than their children.
+  for (const type of selfRefTypes) {
+    const fields = selfRefFields[type];
+    const records = data[type];
+    if (records && fields && fields.length > 0) {
+      data[type] = sortRecordsBySelfReference(records, fields);
+    }
+  }
   const processedTotals: Record<string, number> = {};
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
