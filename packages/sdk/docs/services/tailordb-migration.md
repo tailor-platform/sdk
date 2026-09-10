@@ -281,7 +281,11 @@ export default defineConfig({
 
 Migration files are versioned independently of the SDK package. This SDK writes format version `6` and reads versions `1` through `6`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk. Format version `6` records renames of members inside nested fields (`memberRenames`); older SDK versions refuse to read it rather than deploying such a migration without the copy step.
 
+Supported histories also preserve the behavior of field hooks and validators saved by older SDKs, including access to the record and boolean validators with a separate error message. This applies to both snapshots and diffs, including nested fields. Your existing migration files can remain as generated.
+
 If a future SDK can no longer replay an old migration format, re-baseline while using an SDK version that still supports the complete history, commit the new baseline, deploy it to every environment, and then upgrade the SDK. A file from a newer unsupported format instead requires upgrading the SDK first. The CLI rejects both cases with guidance rather than attempting a best-effort replay.
+
+The SDK used for this transition must read the old history and write a baseline format that the target SDK accepts. Keep that SDK version pinned until every environment has adopted the new baseline. File-format support does not guarantee compatibility for arbitrary imports in a custom `migrate.ts`; keep its dependencies pinned and test customized scripts when upgrading.
 
 There is no migration-file conversion command. Keeping applied files unchanged preserves the record of what ran, while `migration rebaseline` provides the escape hatch when the supported replay window changes.
 

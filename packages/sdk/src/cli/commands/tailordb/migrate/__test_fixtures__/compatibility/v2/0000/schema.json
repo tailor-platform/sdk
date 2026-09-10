@@ -1,0 +1,63 @@
+{
+  "version": 2,
+  "namespace": "tailordb",
+  "createdAt": "2026-02-12T04:45:27.778Z",
+  "types": {
+    "Customer": {
+      "name": "Customer",
+      "pluralForm": "Customers",
+      "fields": {
+        "name": {
+          "type": "string",
+          "required": true,
+          "validate": [
+            {
+              "script": {
+                "expr": "(({value})=>value.length>5)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              },
+              "errorMessage": "Name must be longer than 5 characters"
+            }
+          ]
+        },
+        "city": {
+          "type": "string",
+          "required": false,
+          "validate": [
+            {
+              "script": {
+                "expr": "(({value})=>value?value.length>1:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              },
+              "errorMessage": "failed by `({value})=>value?value.length>1:true`"
+            },
+            {
+              "script": {
+                "expr": "(({value})=>value?value.length<100:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              },
+              "errorMessage": "failed by `({value})=>value?value.length<100:true`"
+            }
+          ]
+        },
+        "postalCode": {
+          "type": "string",
+          "required": true
+        },
+        "address": {
+          "type": "string",
+          "required": false
+        },
+        "fullAddress": {
+          "type": "string",
+          "required": true,
+          "hooks": {
+            "create": {
+              "expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "update": {
+              "expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            }
+          }
+        }
+      }
+    }
+  }
+}
