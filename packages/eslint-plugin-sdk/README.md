@@ -25,8 +25,12 @@ Add the plugin and its rules to `.oxlintrc.json`:
   ],
   "rules": {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-direct-exec-job-function": "warn",
     "tailor-sdk/no-execute-script-arg-stringify": "warn",
-    "tailor-sdk/no-unconditional-permit": "warn"
+    "tailor-sdk/no-job-start-outside-body": "warn",
+    "tailor-sdk/no-unconditional-permit": "warn",
+    "tailor-sdk/valid-workflow-exports": "warn",
+    "tailor-sdk/valid-workflow-job-definition": "warn"
   }
 }
 ```
@@ -114,6 +118,121 @@ export default db.type("User", fields).permission({
 
 The rule checks `.permission()` / `.gqlPermission()` on `db.type()` chains and the `permission`
 option of `defineIdp()`, including values defined as `const` in the same file.
+
+### `valid-workflow-job-definition` (warning)
+
+The build detects workflow jobs by reading `createWorkflowJob` calls statically: the options must be
+an inline object literal, `name` must be a string literal, and `body` must be an inline function
+expression. Anything else fails `tailor generate` / `tailor deploy`.
+
+Incorrect:
+
+```ts
+const options = { name: "sync", body: syncProfile };
+export const sync = createWorkflowJob(options);
+
+export const notify = createWorkflowJob({
+  name: `notify-${channel}`,
+  body: withLogging(notifyUser),
+});
+```
+
+Correct:
+
+```ts
+export const sync = createWorkflowJob({
+  name: "sync",
+  body: async (input: { userId: string }) => syncProfile(input.userId),
+});
+```
+
+### `no-job-start-outside-body` (warning)
+
+Job dependencies are collected from `.start()` calls that sit lexically inside a job's `body`. A
+call factored into a function defined outside the body is not detected and fails the build.
+
+Incorrect:
+
+```ts
+function fetchAll(ids: string[]) {
+  return ids.map((id) => fetchCustomer.start({ id }));
+}
+
+export const processOrder = createWorkflowJob({
+  name: "process-order",
+  body: (input: { customerIds: string[] }) => fetchAll(input.customerIds),
+});
+```
+
+Correct:
+
+```ts
+export const processOrder = createWorkflowJob({
+  name: "process-order",
+  body: (input: { customerIds: string[] }) => {
+    const fetchAll = (ids: string[]) => ids.map((id) => fetchCustomer.start({ id }));
+    return fetchAll(input.customerIds);
+  },
+});
+```
+
+The rule only checks `.start()` calls on a `const` initialized with `createWorkflowJob` in the same
+file. A job imported from another module cannot be told apart from an unrelated `.start()` method,
+so such calls are not reported; the build still rejects them. Test files
+that define jobs inline and start them directly can turn this rule off for `**/*.test.ts`.
+
+### `no-direct-exec-job-function` (warning)
+
+`.start()` calls are rewritten to `execJobFunction` at build time, and only those rewritten calls are
+recognized as job dependencies. Calling `execJobFunction` yourself, on the ambient `tailor.workflow`
+global or on the `workflow` value from `@tailor-platform/sdk/runtime`, drops the target job from the
+bundle; the build rejects the forms it can detect.
+
+Incorrect:
+
+```ts
+import { workflow } from "@tailor-platform/sdk/runtime";
+
+export const parent = createWorkflowJob({
+  name: "parent",
+  body: () => workflow.execJobFunction("child", {}),
+});
+```
+
+Correct:
+
+```ts
+export const parent = createWorkflowJob({
+  name: "parent",
+  body: () => child.start({}),
+});
+```
+
+### `valid-workflow-exports` (warning)
+
+The build loads a workflow file's default export as the workflow and every named export as a job. A
+`createWorkflow` result that is not the default export is never deployed, and a job that is not a
+named export is never bundled; swapping the two fails to load the file.
+
+Incorrect:
+
+```ts
+const validate = createWorkflowJob({ name: "validate", body: () => true });
+
+export const workflow = createWorkflow({ name: "orders", mainJob: validate });
+```
+
+Correct:
+
+```ts
+export const validate = createWorkflowJob({ name: "validate", body: () => true });
+
+export default createWorkflow({ name: "orders", mainJob: validate });
+```
+
+`export default workflow` and `export { job }` forms are accepted as well. Calls inside functions
+(job factories) are not checked because the exported value cannot be traced statically. Test files
+that define jobs inline without exporting them can turn this rule off for `**/*.test.ts`.
 
 The rules recognize named and namespace imports from `@tailor-platform/sdk`, including local import
 aliases. Same-named functions imported from other packages are ignored.

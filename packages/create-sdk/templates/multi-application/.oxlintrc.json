@@ -16,8 +16,12 @@
   "ignorePatterns": [".tailor/", "tailor.d.ts"],
   "rules": {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-direct-exec-job-function": "warn",
     "tailor-sdk/no-execute-script-arg-stringify": "warn",
+    "tailor-sdk/no-job-start-outside-body": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
+    "tailor-sdk/valid-workflow-exports": "warn",
+    "tailor-sdk/valid-workflow-job-definition": "warn",
     "import/default": "off",
     "import/namespace": "off",
     "import/no-duplicates": ["error", { "considerQueryString": true }],
