@@ -11,7 +11,7 @@ const schemaType = t.object({
 export const hook = createTailorDBHook(user);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook, user),
+  createStandardSchema(schemaType, hook, user, { fields: ["id","name","email","status","department","role","createdAt","updatedAt"] }),
   {
     foreignKeys: [
       {"column":"email","references":{"table":"_User","column":"name"}},

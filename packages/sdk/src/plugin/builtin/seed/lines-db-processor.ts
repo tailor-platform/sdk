@@ -29,12 +29,13 @@ export function processLinesDb(type: TailorDBType, source: TypeSourceInfoEntry):
     throw new Error(`Missing export name for table ${type.name}`);
   }
 
-  const { optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
+  const { fields, optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
 
   return {
     tableName: type.name,
     exportName: source.exportName,
     importPath: source.filePath,
+    fields,
     optionalFields,
     omitFields,
     foreignKeys,
@@ -52,12 +53,13 @@ function processLinesDbForPluginTable(
   type: TailorDBType,
   source: PluginGeneratedTableSource,
 ): LinesDbMetadata {
-  const { optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
+  const { fields, optionalFields, omitFields, indexes, foreignKeys } = extractFieldMetadata(type);
 
   return {
     tableName: type.name,
     exportName: source.exportName,
     importPath: "",
+    fields,
     optionalFields,
     omitFields,
     foreignKeys,
@@ -80,9 +82,10 @@ function isGeneratedOnCreate(field: ParsedField): boolean {
 /**
  * Extract field metadata from TailorDB table
  * @param type - Parsed TailorDB table
- * @returns Field metadata including optional fields, omit fields, indexes, and foreign keys
+ * @returns Field metadata including all fields, optional fields, omit fields, indexes, and foreign keys
  */
 function extractFieldMetadata(type: TailorDBType): {
+  fields: string[];
   optionalFields: string[];
   omitFields: string[];
   indexes: IndexDefinition[];
@@ -135,7 +138,7 @@ function extractFieldMetadata(type: TailorDBType): {
     }
   }
 
-  return { optionalFields, omitFields, indexes, foreignKeys };
+  return { fields: Object.keys(type.fields), optionalFields, omitFields, indexes, foreignKeys };
 }
 
 /**
@@ -178,7 +181,7 @@ function generateSchemaOptions(
  * @returns Schema file contents
  */
 export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath: string): string {
-  const { exportName, optionalFields, omitFields, foreignKeys, indexes } = metadata;
+  const { exportName, fields, optionalFields, omitFields, foreignKeys, indexes } = metadata;
 
   const schemaTypeCode = ml /* ts */ `
     const schemaType = t.object({
@@ -200,7 +203,7 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
     export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}, { fields: ${JSON.stringify(fields)} }),${schemaOptionsCode}
     );
 
     `;
@@ -227,8 +230,16 @@ export function generateLinesDbSchemaFileWithPluginAPI(
   metadata: LinesDbMetadata,
   params: PluginSchemaParams,
 ): string {
-  const { tableName, exportName, optionalFields, omitFields, foreignKeys, indexes, pluginSource } =
-    metadata;
+  const {
+    tableName,
+    exportName,
+    fields,
+    optionalFields,
+    omitFields,
+    foreignKeys,
+    indexes,
+    pluginSource,
+  } = metadata;
 
   if (!pluginSource) {
     throw new Error(`pluginSource is required for plugin-generated table "${tableName}"`);
@@ -263,7 +274,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}, { fields: ${JSON.stringify(fields)} }),${schemaOptionsCode}
     );
 
     `;
@@ -292,7 +303,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}, { fields: ${JSON.stringify(fields)} }),${schemaOptionsCode}
     );
 
     `;

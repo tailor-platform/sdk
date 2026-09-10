@@ -23,6 +23,8 @@ export interface LinesDbMetadata {
   tableName: string;
   exportName: string;
   importPath: string;
+  /** Every field the table declares, including fields plugins add to it */
+  fields: string[];
   optionalFields: string[];
   omitFields: string[];
   foreignKeys: ForeignKeyDefinition[];

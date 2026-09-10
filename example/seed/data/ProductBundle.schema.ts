@@ -11,5 +11,5 @@ const schemaType = t.object({
 export const hook = createTailorDBHook(productBundle);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook, productBundle),
+  createStandardSchema(schemaType, hook, productBundle, { fields: ["id","name","label","items","createdAt","updatedAt"] }),
 );

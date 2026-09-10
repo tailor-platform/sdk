@@ -46,6 +46,16 @@ tailor seed fill && tailor seed validate
 tailor seed apply --upsert
 ```
 
+## Validating seed data
+
+`tailor seed validate` checks every row against the table it seeds: field types, required fields, the table's own `validate`, and the relations between files. A row is also rejected when it carries a field the table does not declare, at the top level or inside a nested object:
+
+```
+seed/data/Company.jsonl:3 • legacyCode: Field is not declared by the table. Remove it from the row, or add it to the table definition and run `tailor generate`.
+```
+
+This is what catches seed data that has drifted from the table definition — a column that still exists in a deployed environment but was removed from `tailor.config.ts`, or a typo in a field name — before `tailor seed apply` turns it into a database error. Fields a plugin adds to the table count as declared. IdP `_User` rows are not checked this way, since their extra keys are user attributes.
+
 ## Filling in create-time values
 
 A relation in seed data points at a field of the row it references — usually its id — so a row you want to reference needs an id written in the file. `tailor seed fill` writes the value a record would get on create into the rows that are missing it, `id` by default:

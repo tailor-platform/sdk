@@ -11,5 +11,5 @@ const schemaType = t.object({
 export const hook = createTailorDBHook(auditTrail);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook, auditTrail),
+  createStandardSchema(schemaType, hook, auditTrail, { fields: ["id","action","detail","createdAt","updatedAt"] }),
 );

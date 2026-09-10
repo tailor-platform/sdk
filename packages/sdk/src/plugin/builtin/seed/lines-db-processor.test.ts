@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { generateLinesDbSchemaFileWithPluginAPI, processLinesDb } from "./lines-db-processor";
+import {
+  generateLinesDbSchemaFile,
+  generateLinesDbSchemaFileWithPluginAPI,
+  processLinesDb,
+} from "./lines-db-processor";
 import type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 import type { LinesDbMetadata } from "./types";
 
@@ -9,6 +13,7 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
       tableName: "AuditLog",
       exportName: "AuditLog",
       importPath: "",
+      fields: ["id", "action"],
       optionalFields: ["id"],
       omitFields: [],
       foreignKeys: [],
@@ -31,9 +36,77 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
     expect(source).toContain('getGeneratedTable(configPath, "audit-plugin", null, "auditLog")');
     expect(source).not.toContain(["getGenerated", "Type"].join(""));
   });
+
+  test("passes every declared field name to the seed schema", () => {
+    const metadata: LinesDbMetadata = {
+      tableName: "AuditLog",
+      exportName: "AuditLog",
+      importPath: "",
+      fields: ["id", "action"],
+      optionalFields: ["id"],
+      omitFields: [],
+      foreignKeys: [],
+      indexes: [],
+      pluginSource: {
+        exportName: "AuditLog",
+        pluginId: "audit-plugin",
+        pluginImportPath: "@example/audit-plugin",
+        originalFilePath: "",
+        originalExportName: "",
+        generatedTableKind: "auditLog",
+      },
+    };
+
+    const source = generateLinesDbSchemaFileWithPluginAPI(metadata, {
+      configImportPath: "../../../tailor.config.ts",
+    });
+
+    expect(source).toContain(
+      'createStandardSchema(schemaType, hook, AuditLog, { fields: ["id","action"] })',
+    );
+  });
+});
+
+describe("generateLinesDbSchemaFile", () => {
+  test("passes every declared field name to the seed schema", () => {
+    const source = generateLinesDbSchemaFile(
+      {
+        tableName: "User",
+        exportName: "User",
+        importPath: "../../tailordb/user",
+        fields: ["id", "name", "deletedAt"],
+        optionalFields: ["id"],
+        omitFields: [],
+        foreignKeys: [],
+        indexes: [],
+      },
+      "../../tailordb/user",
+    );
+
+    expect(source).toContain(
+      'createStandardSchema(schemaType, hook, User, { fields: ["id","name","deletedAt"] })',
+    );
+  });
 });
 
 describe("processLinesDb", () => {
+  test("lists every field of the table, serial fields included", () => {
+    const type = {
+      name: "Invoice",
+      fields: {
+        id: { config: {} },
+        number: { config: { serial: { start: 1 } } },
+        total: { config: {} },
+      },
+    } as unknown as TailorDBType;
+    const source = { filePath: "/test/invoice.ts", exportName: "Invoice" };
+
+    const metadata = processLinesDb(type, source);
+
+    expect(metadata.fields).toEqual(["id", "number", "total"]);
+    expect(metadata.omitFields).toEqual(["number"]);
+  });
+
   test("reports a missing export name for a table", () => {
     const type = {
       name: "User",
