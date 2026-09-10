@@ -19,6 +19,12 @@ tailor <command> [options]
 | `--verbose`                                 | -     | Enable verbose logging                              | No       | `false` |
 | `--json`                                    | `-j`  | Output as JSON                                      | No       | `false` |
 
+### Progress and Detailed Logs
+
+`generate` and `deploy` show service progress and failures on stderr. Pass `--verbose`
+to include individual loaded files, plugin table changes, and generated file paths.
+Generation reports completion for each plugin that finishes processing its output files.
+
 ### JSON Output
 
 For commands that return structured results, passing `--json` writes one parseable JSON document
@@ -33,6 +39,10 @@ a command failure under `--json` emits a JSON error envelope to stderr. CLI erro
 `error.code` and may include structured `error.next` and `error.context` fields for automated
 recovery. Diagnostic lines may precede the error envelope, and stdout is not guaranteed to contain
 an error object.
+
+Generation hook failures use `PLUGIN_GENERATION_FAILED`. The error includes the failed hook
+and each failing plugin's ID and error in `error.context.failures`; successful plugins are
+excluded from that list.
 
 ## Common Options
 

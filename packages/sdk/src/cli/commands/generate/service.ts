@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { stripVTControlCharacters } from "node:util";
 import * as path from "pathe";
 import {
   defineApplication,
@@ -10,6 +11,8 @@ import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type
 import { getAuthInput } from "#/cli/shared/auth-input";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { errorToJson } from "#/cli/shared/error-json";
+import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
@@ -177,19 +180,36 @@ export function createGenerationManager(params: {
     const plugins = generationPlugins.filter((p) => p[hookName] != null);
     if (plugins.length === 0) return;
     const results = await Promise.allSettled(
-      plugins.map(async (plugin) => {
-        try {
-          await runPluginPhaseHook(plugin, hookName);
-        } catch (error) {
-          logger.error(`Error processing plugin ${styles.bold(plugin.id)} (${hookName})`);
-          logger.error(String(error));
-          throw error;
-        }
-      }),
+      plugins.map((plugin) => runPluginPhaseHook(plugin, hookName)),
     );
-    const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    const failures = results.flatMap((result, index) =>
+      result.status === "rejected"
+        ? [
+            {
+              plugin: assertDefined(plugins[index], "Plugin result has no matching plugin").id,
+              reason: result.reason as unknown,
+            },
+          ]
+        : [],
+    );
     if (failures.length > 0) {
-      throw new AggregateError(failures.map((f) => f.reason));
+      throw CLIError({
+        code: "PLUGIN_GENERATION_FAILED",
+        message: `Plugin generation failed during ${hookName}.`,
+        details: failures
+          .map(
+            ({ plugin, reason }) =>
+              `${plugin}: ${isCLIError(reason) ? stripVTControlCharacters(reason.format()) : String(reason)}`,
+          )
+          .join("\n"),
+        context: {
+          hook: hookName,
+          failures: failures.map(({ plugin, reason }) => ({
+            plugin,
+            error: errorToJson(reason, { includeStack: logger.verbose }).error,
+          })),
+        },
+      });
     }
   }
 
@@ -221,7 +241,7 @@ export function createGenerationManager(params: {
               reject(err);
             } else {
               const relativePath = path.relative(process.cwd(), file.path);
-              logger.log(`${sourceId} | generate: ${styles.success(relativePath)}`);
+              logger.debug(`${sourceId} | generate: ${styles.success(relativePath)}`);
               // Set executable permission if requested
               if (file.executable) {
                 fs.chmod(file.path, 0o755, (chmodErr) => {
@@ -244,6 +264,9 @@ export function createGenerationManager(params: {
         });
       }),
     );
+    if (result.files.length > 0) {
+      logger.log(`${sourceId} | generation complete`);
+    }
   }
 
   return {
