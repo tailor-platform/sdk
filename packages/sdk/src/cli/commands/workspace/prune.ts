@@ -46,11 +46,7 @@ export interface PruneCriteria {
   olderThanMs?: number;
   organizationId?: string;
   folderId?: string;
-  /**
-   * Also select workspaces belonging to no organization and no folder, which an
-   * `organizationId` / `folderId` scope can never match. Alone it selects only
-   * those; alongside a scope it widens the selection to the union of both.
-   */
+  /** Select workspaces belonging to no organization and no folder. */
   personal?: boolean;
   /** Exact names kept even when they match. */
   exclude: ReadonlySet<string>;
@@ -92,12 +88,7 @@ function matchesIdScope(workspace: Workspace, criteria: PruneCriteria): boolean 
 }
 
 function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
-  const hasIdScope = Boolean(criteria.organizationId || criteria.folderId);
-  // An unset id is "do not filter on it", not "match nothing", so the union is
-  // taken against a real id scope only -- `--personal` alone must narrow to the
-  // personal set rather than widen an unscoped sweep back to everything.
-  if (!hasIdScope) return criteria.personal ? isPersonal(workspace) : true;
-  if (criteria.personal && isPersonal(workspace)) return true;
+  if (criteria.personal) return isPersonal(workspace);
   return matchesIdScope(workspace, criteria);
 }
 
@@ -299,7 +290,7 @@ export const pruneCommand = defineAppCommand({
 
     With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires a scope, and --name still applies on top.
 
-    A workspace belonging to no organization and no folder is matched by neither --organization-id nor --folder-id, so --personal is what brings it into a sweep. It counts as a scope on its own, and alongside --organization-id / --folder-id it widens the sweep to the union of both rather than narrowing it. Scoping to it is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded -- not a risk-free narrowing. Note that --organization-id and --folder-id also read their environment variables, so --personal in an environment that sets one of those sweeps the union of the two.
+    A workspace belonging to no organization and no folder is matched by neither --organization-id nor --folder-id, so --personal is what brings it into a sweep. It counts as a scope on its own and cannot be combined with --organization-id or --folder-id. Scoping to it is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. The same restriction applies to TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID: unset them before running with --personal.
 
     Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
 
@@ -322,7 +313,7 @@ export const pruneCommand = defineAppCommand({
     }),
     personal: arg(z.boolean().default(false), {
       description:
-        "Also consider workspaces belonging to no organization and no folder, which --organization-id and --folder-id can never match. Counts as a scope",
+        "Only consider workspaces belonging to no organization and no folder. Cannot be combined with --organization-id or --folder-id",
     }),
     "organization-id": arg(scopeIdArg(), {
       alias: "o",
@@ -393,6 +384,14 @@ export const pruneCommand = defineAppCommand({
     }
     const organizationId = args["organization-id"] || undefined;
     const folderId = args["folder-id"] || undefined;
+    if (args.personal && (organizationId || folderId)) {
+      throw CLIError({
+        code: "CONFLICTING_SCOPE",
+        message: "--personal cannot be combined with --organization-id or --folder-id.",
+        suggestion:
+          "Run personal and organization/folder sweeps separately. Unset TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID before using --personal.",
+      });
+    }
     const scoped = Boolean(organizationId || folderId || args.personal);
 
     if (args.expired && !scoped) {
@@ -493,14 +492,12 @@ export const pruneCommand = defineAppCommand({
 
     result.candidates = await workspaceInfosWithFolderNames(client, selection.candidates);
     if (!logger.jsonMode) {
-      // Only a union sweep can mix personal and scoped workspaces, and the list
-      // is what the confirmation prompt is answered against, so show which is which.
-      const mixedScopes = args.personal && Boolean(organizationId || folderId);
       logger.out(result.candidates, {
         display: {
           name: workspaceNameTransformer,
           folderName: null,
-          ...(mixedScopes ? {} : { organizationId: null, folderId: null }),
+          organizationId: null,
+          folderId: null,
           updatedAt: null,
         },
       });
