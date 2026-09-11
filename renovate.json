@@ -26,10 +26,10 @@
       "customType": "regex",
       "managerFilePatterns": ["/^packages/sdk-plugin-setup/src/templates\\.ts$/"],
       "matchStrings": [
-        "const ACTIONS_SHA = \"(?<currentDigest>[a-f0-9]+)\";\\nconst ACTIONS_VERSION = \"(?<currentValue>v[\\d.]+)\";"
+        "export const ACTIONS_SHA = \"(?<currentDigest>[a-f0-9]+)\";\\nexport const ACTIONS_VERSION = \"(?<currentValue>v[\\d.]+)\";"
       ],
       "depNameTemplate": "tailor-platform/actions",
-      "autoReplaceStringTemplate": "const ACTIONS_SHA = \"{{newDigest}}\";\nconst ACTIONS_VERSION = \"{{newValue}}\";",
+      "autoReplaceStringTemplate": "export const ACTIONS_SHA = \"{{newDigest}}\";\nexport const ACTIONS_VERSION = \"{{newValue}}\";",
       "datasourceTemplate": "github-tags"
     }
   ],

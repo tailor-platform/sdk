@@ -426,8 +426,8 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   return { content: out, generatedIds };
 }
 
-export const ACTIONS_SHA = "43110f4589acc8aca1ee72243ee31c09933d402d";
-export const ACTIONS_VERSION = "v2.3.1";
+export const ACTIONS_SHA = "a11bb7e587fe822e3e6b26ec524faf22160f9bd4";
+export const ACTIONS_VERSION = "v2.3.2";
 
 /**
  * Render the coordinator workflow that orchestrates per-app composite actions.
