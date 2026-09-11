@@ -22,7 +22,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
-import { writeMigrationTypeFiles, writePgliteSchemaFile } from "./pglite-schema-generator";
+import { tryWritePgliteSchemaFile, writeMigrationTypeFiles } from "./pglite-schema-generator";
 import {
   formatMigrationNumber,
   getMigrationFilePath,
@@ -56,7 +56,7 @@ export interface AddMigrationScriptFilesOptions {
   migrationsDir: string;
   migrationNumber: number;
   withTest?: boolean;
-  /** Whether `@electric-sql/pglite` resolves from the project; gates the PGlite test scaffold. */
+  /** Whether the project has `@electric-sql/pglite` installed; gates the PGlite test scaffold. */
   pgliteAvailable?: boolean;
 }
 
@@ -225,16 +225,15 @@ export async function addMigrationScriptFiles(
     // A script created before db.pglite.ts existed gets the schema its tests need.
     const pgliteSchemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
     if (!fs.existsSync(pgliteSchemaPath)) {
-      try {
-        result.pgliteSchemaPath = await writePgliteSchemaFile(
+      Object.assign(
+        result,
+        await tryWritePgliteSchemaFile(
           loadPreviousSnapshot(),
           diff,
           migrationsDir,
           migrationNumber,
-        );
-      } catch (error) {
-        result.pgliteSchemaError = error instanceof Error ? error.message : String(error);
-      }
+        ),
+      );
     }
   }
 

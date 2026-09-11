@@ -109,20 +109,51 @@ export interface WriteMigrationTypeFilesOptions {
   expandPlans?: readonly ExpandContractPlan[];
 }
 
-/** Files written by {@link writeMigrationTypeFiles}. */
-export interface WriteMigrationTypeFilesResult {
-  dbTypesPath: string;
+/** Outcome of writing `db.pglite.ts`: the path, or why it was skipped. */
+export interface PgliteSchemaFileResult {
   /** Undefined when the schema could not be expressed as DDL; see `pgliteSchemaError`. */
   pgliteSchemaPath?: string;
   /** Why `db.pglite.ts` was skipped */
   pgliteSchemaError?: string;
 }
 
+/** Files written by {@link writeMigrationTypeFiles}. */
+export interface WriteMigrationTypeFilesResult extends PgliteSchemaFileResult {
+  dbTypesPath: string;
+}
+
 /**
- * Write `db.ts` and `db.pglite.ts` for a migration. The types are required
- * for the script itself, so a schema the DDL generator cannot express (an
- * unknown field type, a serial format it cannot reproduce) skips only the
- * PGlite file and reports why.
+ * Write `db.pglite.ts`, reporting a schema the DDL generator cannot express
+ * (an unknown field type, a serial format it cannot reproduce) instead of
+ * failing the command that needs the other migration files.
+ * @param previousSnapshot - Schema before the migration
+ * @param diff - The migration's diff
+ * @param migrationsDir - Migrations directory path
+ * @param migrationNumber - Migration number
+ * @returns The written path, or the reason it was skipped
+ */
+export async function tryWritePgliteSchemaFile(
+  previousSnapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+  migrationsDir: string,
+  migrationNumber: number,
+): Promise<PgliteSchemaFileResult> {
+  try {
+    return {
+      pgliteSchemaPath: await writePgliteSchemaFile(
+        previousSnapshot,
+        diff,
+        migrationsDir,
+        migrationNumber,
+      ),
+    };
+  } catch (error) {
+    return { pgliteSchemaError: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Write `db.ts` and `db.pglite.ts` for a migration.
  * @param options - Snapshot, diff, and destination
  * @returns Paths of the written files
  */
@@ -137,18 +168,8 @@ export async function writeMigrationTypeFiles(
     diff,
     expandPlans,
   );
-  try {
-    const pgliteSchemaPath = await writePgliteSchemaFile(
-      previousSnapshot,
-      diff,
-      migrationsDir,
-      migrationNumber,
-    );
-    return { dbTypesPath, pgliteSchemaPath };
-  } catch (error) {
-    return {
-      dbTypesPath,
-      pgliteSchemaError: error instanceof Error ? error.message : String(error),
-    };
-  }
+  return {
+    dbTypesPath,
+    ...(await tryWritePgliteSchemaFile(previousSnapshot, diff, migrationsDir, migrationNumber)),
+  };
 }
