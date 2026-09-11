@@ -82,17 +82,21 @@ export function hasFieldShapeChange(
 }
 
 /**
- * Whether a change turns a single value into an array of the same type, which
- * the generated conversion completes on its own by wrapping each value.
+ * Whether a change turns a single value into an array whose elements accept
+ * every stored value, which the generated conversion completes on its own by
+ * wrapping each value. An enum that also drops values still needs the stored
+ * value converted before it is wrapped.
  * @param before - Previous field configuration
  * @param after - Target field configuration
- * @returns Whether only the array-ness changes
+ * @returns Whether the element domain is unchanged and only the array-ness differs
  */
 export function isSingleValueToArrayChange(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
 ): boolean {
-  return before.type === after.type && !before.array && (after.array ?? false);
+  if (before.type !== after.type || before.array || !after.array) return false;
+  const afterValues = new Set((after.allowedValues ?? []).map((v) => v.value));
+  return (before.allowedValues ?? []).every((v) => afterValues.has(v.value));
 }
 
 /** Result of checking whether a field type change can use expand-contract. */

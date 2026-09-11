@@ -388,6 +388,17 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(stderr.output).toContain('--expand-contract "User.name"');
   });
 
+  test("names the flag once when both the type and the array-ness change", async () => {
+    using stderr = captureStderr();
+    const retyped = retypedType("User", "integer");
+    retyped.fields.name!.config.array = true;
+    addNamespace(tmpDir, "tailordb", "User", retyped);
+
+    await runCommand(generateCommand, ["--yes"]);
+
+    expect(stderr.output.match(/--expand-contract "User\.name"/g)).toHaveLength(1);
+  });
+
   test("scaffolds a conversion script for the first migration only", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
 

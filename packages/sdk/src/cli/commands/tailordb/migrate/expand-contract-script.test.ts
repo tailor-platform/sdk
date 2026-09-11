@@ -102,6 +102,35 @@ describe("expand conversion script for a single value becoming an array", () => 
           })`);
   });
 
+  test("keeps the review marker when the array also drops enum values", () => {
+    const script = expandScript([
+      {
+        ...arrayPlan,
+        before: snapshotField("enum", { allowedValues: [{ value: "A" }, { value: "B" }] }),
+        after: snapshotField("enum", { array: true, allowedValues: [{ value: "A" }] }),
+      },
+    ]);
+
+    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
+  });
+
+  test("wraps an enum whose values are unchanged without asking for review", () => {
+    const script = expandScript([
+      {
+        ...arrayPlan,
+        before: snapshotField("enum", { allowedValues: [{ value: "A" }, { value: "B" }] }),
+        after: snapshotField("enum", {
+          array: true,
+          allowedValues: [{ value: "B" }, { value: "A" }],
+        }),
+      },
+    ]);
+
+    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain("const convertedValue = [sourceValue];");
+  });
+
   test("keeps the review marker when the element type changes as well", () => {
     const script = expandScript([
       { ...arrayPlan, after: snapshotField("string", { required: true, array: true }) },

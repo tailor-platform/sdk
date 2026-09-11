@@ -441,7 +441,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   );
   if (unusedExpandContracts.length > 0) {
     throw new Error(
-      `--expand-contract does not match a field whose type changed: ${unusedExpandContracts
+      `--expand-contract does not match a field whose type or array-ness changed: ${unusedExpandContracts
         .map((flag) => flag.raw)
         .join(", ")}`,
     );
@@ -1147,21 +1147,26 @@ async function generateDiffFromSnapshot(
       logger.error(`  ${change.reason}`);
     }
 
-    const convertible = unsupportedChanges.filter(
-      ({ tableName, fieldName }) =>
+    // A field whose type and array-ness both change is reported twice above.
+    const convertible = new Set<string>();
+    for (const { tableName, fieldName } of unsupportedChanges) {
+      if (
         fieldName !== undefined &&
         canConvertField({
           previous: previousSnapshot,
           current: currentSnapshot,
           tableName,
           fieldName,
-        }),
-    );
-    if (convertible.length > 0) {
+        })
+      ) {
+        convertible.add(fieldKey(tableName, fieldName));
+      }
+    }
+    if (convertible.size > 0) {
       logger.newline();
       logger.info("Convert these fields through a temporary field with:");
-      for (const { tableName, fieldName } of convertible) {
-        logger.info(`  --expand-contract "${tableName}.${fieldName}"`);
+      for (const key of convertible) {
+        logger.info(`  --expand-contract "${key}"`);
       }
     }
 
@@ -1439,7 +1444,7 @@ export const generateCommand = defineAppCommand({
     }),
     "expand-contract": arg(z.array(z.string()).optional(), {
       description:
-        'Convert a field type through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
+        'Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
     }),
   }),
   run: async (args) => {
