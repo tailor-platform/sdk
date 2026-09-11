@@ -1,5 +1,36 @@
 # @tailor-platform/sdk
 
+## 2.16.0
+
+### Minor Changes
+
+- [#2261](https://github.com/tailor-platform/sdk/pull/2261) [`a340cbf`](https://github.com/tailor-platform/sdk/commit/a340cbf51d6dcd8e38067e155f75e2f570480988) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Add `tailor seed dump`, which writes the rows currently in TailorDB out as JSONL seed data. The output is the format `tailor seed apply` reads, so a dump taken before a change is what restores the tables after it: `tailor seed apply --truncate` puts the dumped rows back. Dump every table, one namespace with `--namespace`, or the tables you name; `--out` writes the files somewhere other than the seed data directory, and existing files are only overwritten with `--force`. IdP `_User` records are not dumped.
+
+- [#2284](https://github.com/tailor-platform/sdk/pull/2284) [`347b5a1`](https://github.com/tailor-platform/sdk/commit/347b5a1f50d1ed597d64f4907b6bab0330a1c9ba) Thanks [@dqn](https://github.com/dqn)! - Add `tailor workspace prune` to delete stale temporary workspaces, such as the ones left behind by CI runs, preview deployments, or interrupted local e2e runs.
+  
+  A workspace is deleted only when its whole name matches a `--name` regular expression and it was created at least `--older-than` ago, optionally scoped with `--organization-id` / `--folder-id` and kept with `--exclude`. Delete-protected workspaces are always kept, the command aborts without deleting anything when more workspaces match than `--limit` allows or when a scope option resolves to an empty value, and `--dry-run` lists the candidates first.
+  
+  ```bash
+  tailor workspace prune --name 'e2e-ws-.*' --older-than 24h --dry-run
+  tailor workspace prune --name 'e2e-ws-.*' --older-than 24h --yes
+  ```
+
+### Patch Changes
+
+- [#2326](https://github.com/tailor-platform/sdk/pull/2326) [`a9e8b8b`](https://github.com/tailor-platform/sdk/commit/a9e8b8b01a9d4b363b4f84c5b0089179647f70eb) Thanks [@dqn](https://github.com/dqn)! - Preserve actionable authentication, permission, and connection diagnostics, including both causes when deployment and metadata recovery fail.
+
+- [#2315](https://github.com/tailor-platform/sdk/pull/2315) [`f5f82f8`](https://github.com/tailor-platform/sdk/commit/f5f82f8351b3aaf278262b3827c369d89b20f810) Thanks [@toiroakr](https://github.com/toiroakr)! - Allow the CLI to use readable keyring credentials without requiring a test write. Explain that credentials may be inaccessible in a sandbox and provide recovery instructions when keyring credentials cannot be found or read.
+
+- [#2325](https://github.com/tailor-platform/sdk/pull/2325) [`882ff68`](https://github.com/tailor-platform/sdk/commit/882ff68a1c8df95f76c23bd053dbf168a957119a) Thanks [@dqn](https://github.com/dqn)! - Move individual file loading and generation logs to verbose output while keeping progress and failures visible. Preserve failing plugin IDs, generation hooks, and causes in human-readable and JSON errors.
+
+- [#2323](https://github.com/tailor-platform/sdk/pull/2323) [`61fb8f9`](https://github.com/tailor-platform/sdk/commit/61fb8f9713c2118a896e6952b9fdeb63cce96a87) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @connectrpc to v2.2.0
+
+- [#2329](https://github.com/tailor-platform/sdk/pull/2329) [`cadee3a`](https://github.com/tailor-platform/sdk/commit/cadee3ab7955f741fc89208ff8a64f281e9539d2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.7
+
+- [#2072](https://github.com/tailor-platform/sdk/pull/2072) [`fd3595f`](https://github.com/tailor-platform/sdk/commit/fd3595f07ccb31ec280c948be481f19849a98a7f) Thanks [@toiroakr](https://github.com/toiroakr)! - Narrow the parsed TailorDB field type to the eleven field types the schema actually accepts (`uuid`, `string`, `boolean`, `integer`, `float`, `decimal`, `enum`, `date`, `datetime`, `time`, `nested`) instead of a bare string. Behavior is unchanged; the internal types now match what validation already enforced.
+
+- [#2322](https://github.com/tailor-platform/sdk/pull/2322) [`71f6134`](https://github.com/tailor-platform/sdk/commit/71f6134a34082c442f0d3bb202d9134441da0ccd) Thanks [@dqn](https://github.com/dqn)! - Enable verbose CLI diagnostics when GitHub Actions sets `RUNNER_DEBUG=1`, and include error stack traces consistently when `DEBUG=true` is set.
+
 ## 2.15.0
 
 ### Minor Changes

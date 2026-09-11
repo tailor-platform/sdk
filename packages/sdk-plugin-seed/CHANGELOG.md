@@ -1,5 +1,16 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.3.0
+
+### Minor Changes
+
+- [#2261](https://github.com/tailor-platform/sdk/pull/2261) [`a340cbf`](https://github.com/tailor-platform/sdk/commit/a340cbf51d6dcd8e38067e155f75e2f570480988) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Add `tailor seed dump`, which writes the rows currently in TailorDB out as JSONL seed data. The output is the format `tailor seed apply` reads, so a dump taken before a change is what restores the tables after it: `tailor seed apply --truncate` puts the dumped rows back. Dump every table, one namespace with `--namespace`, or the tables you name; `--out` writes the files somewhere other than the seed data directory, and existing files are only overwritten with `--force`. IdP `_User` records are not dumped.
+
+### Patch Changes
+
+- Updated dependencies [[`a9e8b8b`](https://github.com/tailor-platform/sdk/commit/a9e8b8b01a9d4b363b4f84c5b0089179647f70eb), [`f5f82f8`](https://github.com/tailor-platform/sdk/commit/f5f82f8351b3aaf278262b3827c369d89b20f810), [`882ff68`](https://github.com/tailor-platform/sdk/commit/882ff68a1c8df95f76c23bd053dbf168a957119a), [`61fb8f9`](https://github.com/tailor-platform/sdk/commit/61fb8f9713c2118a896e6952b9fdeb63cce96a87), [`cadee3a`](https://github.com/tailor-platform/sdk/commit/cadee3ab7955f741fc89208ff8a64f281e9539d2), [`a340cbf`](https://github.com/tailor-platform/sdk/commit/a340cbf51d6dcd8e38067e155f75e2f570480988), [`fd3595f`](https://github.com/tailor-platform/sdk/commit/fd3595f07ccb31ec280c948be481f19849a98a7f), [`71f6134`](https://github.com/tailor-platform/sdk/commit/71f6134a34082c442f0d3bb202d9134441da0ccd), [`347b5a1`](https://github.com/tailor-platform/sdk/commit/347b5a1f50d1ed597d64f4907b6bab0330a1c9ba)]:
+  - @tailor-platform/sdk@2.16.0
+
 ## 0.2.9
 
 ### Patch Changes
