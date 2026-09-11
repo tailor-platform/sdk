@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { PluginManager } from "./manager";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 import type { Plugin, PluginOutput, TablePluginOutput } from "#/plugin/types";
+import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
 
 // ========================================
 // Config loading and caching
@@ -376,9 +378,67 @@ async function getGeneratedTableForNamespacePlugin(
   return generatedTable as TailorAnyDBType;
 }
 
+// Cache: resolved config path -> source table -> the table with plugin fields applied.
+// Holds the pending promise so concurrent callers share one plugin run.
+const extendedTableCache = new Map<string, WeakMap<TailorAnyDBType, Promise<TailorAnyDBType>>>();
+
+/**
+ * Get a table with the fields its attached plugins add to it, as `tailor generate` sees it.
+ * The plugins attached with `.plugin()` run in order, each seeing the fields the ones before
+ * it added, and the result is cached per config path and table.
+ * The table exported from the source file is not changed; the returned table is a new object.
+ * Returns the source table itself when no plugin is attached to it, or when the config is
+ * not available (e.g. in a bundled executor on the platform server).
+ * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
+ * @param sourceTable - The TailorDB table as exported from its source file
+ * @returns The table with every plugin-added field
+ */
+export async function getExtendedTable(
+  configPath: string,
+  sourceTable: TailorAnyDBType,
+): Promise<TailorAnyDBType> {
+  if (sourceTable.plugins.length === 0) {
+    return sourceTable;
+  }
+  const resolvedPath = path.resolve(configPath);
+  let tables = extendedTableCache.get(resolvedPath);
+  if (!tables) {
+    tables = new WeakMap();
+    extendedTableCache.set(resolvedPath, tables);
+  }
+  const cached = tables.get(sourceTable);
+  if (cached) {
+    return cached;
+  }
+  const pending = applyPluginExtensions(resolvedPath, sourceTable);
+  tables.set(sourceTable, pending);
+  pending.catch(() => tables.delete(sourceTable));
+  return pending;
+}
+
+async function applyPluginExtensions(
+  configPath: string,
+  sourceTable: TailorAnyDBType,
+): Promise<TailorAnyDBType> {
+  const cache = await loadAndCacheConfig(configPath);
+  if (!cache) {
+    return sourceTable;
+  }
+  const { config, configDir, plugins } = cache;
+  const namespace = await resolveNamespaceForTable(config, configDir, sourceTable);
+  const manager = new PluginManager([...plugins.values()].map((entry) => entry.plugin));
+  const { extendedTable } = await manager.processAttachmentsForTable({
+    rawTable: sourceTable as unknown as TailorDBTypeRaw,
+    attachments: [...sourceTable.plugins],
+    namespace,
+  });
+  return (extendedTable as TailorAnyDBType | undefined) ?? sourceTable;
+}
+
 /**
  * Clear all internal caches. For testing only.
  */
 export function _clearCacheForTesting(): void {
   configCacheMap.clear();
+  extendedTableCache.clear();
 }

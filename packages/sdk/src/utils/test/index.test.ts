@@ -488,16 +488,6 @@ describe("createStandardSchema unknown fields", () => {
     expect(result).toMatchObject({ issues: [{ path: ["__proto__"] }] });
   });
 
-  test("accepts the fields named in the options on top of the table's own", () => {
-    const extended = createStandardSchema(schemaType, createTailorDBHook(type), type, {
-      fields: ["deletedAt"],
-    });
-    expect(extended["~standard"].validate({ note: "n", deletedAt: null })).toHaveProperty("value");
-    expect(extended["~standard"].validate({ note: "n", legacyCode: "X" })).toMatchObject({
-      issues: [{ path: ["legacyCode"] }],
-    });
-  });
-
   test("checks nothing when the table is not given", () => {
     const user = createStandardSchema(
       t.object({ name: t.string(), password: t.string() }),

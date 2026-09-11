@@ -119,8 +119,6 @@ function undeclaredFieldMessage(key: string): string {
   return `Field "${key}" is not declared by the table. Remove it from the row, or add it to the table definition and run \`tailor generate\`.`;
 }
 
-const NO_EXTRA_FIELDS: ReadonlySet<string> = new Set();
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -130,7 +128,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function collectUndeclaredFieldIssues(
   value: unknown,
   fields: DeclaredFields,
-  extraFields: ReadonlySet<string>,
   path: string[],
   issues: StandardSchemaV1.Issue[],
 ): void {
@@ -141,9 +138,7 @@ function collectUndeclaredFieldIssues(
     // `Object.hasOwn`, not `key in fields`: a key such as `constructor` would
     // otherwise resolve to a member of `Object.prototype`.
     if (!Object.hasOwn(fields, key)) {
-      if (!extraFields.has(key)) {
-        issues.push({ message: undeclaredFieldMessage(key), path: path.concat(key) });
-      }
+      issues.push({ message: undeclaredFieldMessage(key), path: path.concat(key) });
       continue;
     }
     const field = fields[key];
@@ -155,46 +150,28 @@ function collectUndeclaredFieldIssues(
     if (field.metadata.array) {
       if (Array.isArray(nested)) {
         nested.forEach((item, index) => {
-          collectUndeclaredFieldIssues(
-            item,
-            nestedFields,
-            NO_EXTRA_FIELDS,
-            path.concat(key, `[${index}]`),
-            issues,
-          );
+          collectUndeclaredFieldIssues(item, nestedFields, path.concat(key, `[${index}]`), issues);
         });
       }
     } else {
-      collectUndeclaredFieldIssues(nested, nestedFields, NO_EXTRA_FIELDS, path.concat(key), issues);
+      collectUndeclaredFieldIssues(nested, nestedFields, path.concat(key), issues);
     }
   }
 }
 
 /**
- * Options for {@link createStandardSchema}.
- */
-export type StandardSchemaOptions = {
-  /**
-   * Field names a row may carry on top of the table's own fields, such as the
-   * fields a plugin adds to the table when `tailor generate` runs.
-   */
-  fields?: readonly string[];
-};
-
-/**
  * Creates the standard schema definition used to validate seed rows.
  * Runs the hook, then the table's own `validate`, and the field schema only when
  * that reported nothing, so both levels of validation report as issues rather
- * than by throwing. When the table is given, a key the row carries that neither
- * the table nor `options.fields` declares is reported as an issue as well,
- * including keys inside nested objects, so a row that no longer matches the
- * table fails here instead of when it is applied.
+ * than by throwing. When the table is given, a key the row carries that the table
+ * does not declare is reported as an issue as well, including keys inside nested
+ * objects, so a row that no longer matches the table fails here instead of when
+ * it is applied.
  * @template T - The output type after validation
  * @param schemaType - TailorDB field schema for validation
  * @param hook - Hook function to transform data before validation
  * @param type - TailorDB table definition; runs its table-level `validate` and
  *   rejects fields it does not declare
- * @param options - Additional field names a row may carry
  * @returns Schema object with ~standard section for defineSchema
  */
 export function createStandardSchema<T = Record<string, unknown>>(
@@ -203,10 +180,7 @@ export function createStandardSchema<T = Record<string, unknown>>(
   hook: (data: unknown) => Partial<T>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type?: TailorDBType<any, any>,
-  options: StandardSchemaOptions = {},
 ) {
-  const extraFields = new Set(options.fields ?? []);
-
   const validateHooked = (hooked: Partial<T>): StandardSchemaV1.Result<T> => {
     const issues = typeLevelIssues(type, hooked);
     if (issues.length > 0) {
@@ -231,13 +205,7 @@ export function createStandardSchema<T = Record<string, unknown>>(
         const hooked = hook(value);
         const undeclared: StandardSchemaV1.Issue[] = [];
         if (type) {
-          collectUndeclaredFieldIssues(
-            value,
-            type.fields as DeclaredFields,
-            extraFields,
-            [],
-            undeclared,
-          );
+          collectUndeclaredFieldIssues(value, type.fields as DeclaredFields, [], undeclared);
         }
         const result = validateHooked(hooked);
         const issues = [...undeclared, ...(result.issues ?? [])];

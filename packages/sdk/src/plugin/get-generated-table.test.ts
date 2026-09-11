@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
 import { _clearCacheForTesting } from "./get-generated-table";
-import { getGeneratedTable } from "./index";
+import { getExtendedTable, getGeneratedTable } from "./index";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 
 declare global {
@@ -12,7 +12,149 @@ declare global {
   var __testProcessNamespaceCalls: string[];
   // oxlint-disable-next-line no-var
   var __testProcessTableCalls: string[];
+  // oxlint-disable-next-line no-var
+  var __testExtendCalls: string[];
 }
+
+describe("getExtendedTable", () => {
+  let configPath: string;
+  let tablePath: string;
+
+  aroundEach(async (runTest) => {
+    _clearCacheForTesting();
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-test-"));
+    configPath = path.join(tempDir, "tailor.config.mjs");
+    tablePath = path.join(tempDir, "order.mjs");
+    globalThis.__testExtendCalls = [];
+    await runTest();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const writeTable = (attachments: string) => {
+    fs.writeFileSync(
+      tablePath,
+      `import { db } from "@tailor-platform/sdk";
+export const order = db
+  .table("Order", { name: db.string() })
+  .hooks({ create: () => ({ name: "hooked" }) });
+order.plugin(${attachments});
+`,
+    );
+  };
+
+  const writeConfig = (plugins: string) => {
+    fs.writeFileSync(
+      configPath,
+      `import { db } from "@tailor-platform/sdk";
+export const plugins = [${plugins}];
+export default {
+  db: {
+    main: { files: [${JSON.stringify(tablePath)}] },
+  },
+};
+`,
+    );
+  };
+
+  const extendingPlugin = (id: string, field: string, fieldCode: string) => `{
+  id: ${JSON.stringify(id)},
+  description: "test",
+  importPath: "@test/${id}",
+  onTableLoaded({ table, tableConfig }) {
+    globalThis.__testExtendCalls.push(
+      [${JSON.stringify(id)}, Object.keys(table.fields).join(","), JSON.stringify(tableConfig)].join(":"),
+    );
+    return { extends: { fields: { ${field}: ${fieldCode} } } };
+  },
+}`;
+
+  const loadTable = async () =>
+    ((await import(pathToFileURL(tablePath).href)) as { order: TailorAnyDBType }).order;
+
+  test("returns the source table itself when no plugin is attached", async () => {
+    writeTable("{}");
+    const order = await loadTable();
+
+    const table = await getExtendedTable(path.join(path.dirname(configPath), "missing.mjs"), order);
+
+    expect(table).toBe(order);
+  });
+
+  test("applies the fields each attached plugin adds, in attachment order", async () => {
+    writeTable('{ "first": { flag: true }, "second": {} }');
+    writeConfig(
+      [
+        extendingPlugin("first", "deletedAt", "db.datetime({ optional: true })"),
+        extendingPlugin("second", "rank", "db.int()"),
+      ].join(",\n"),
+    );
+    const order = await loadTable();
+
+    const table = await getExtendedTable(configPath, order);
+
+    expect(Object.keys(table.fields)).toEqual(["id", "name", "deletedAt", "rank"]);
+    expect(Object.keys(order.fields)).toEqual(["id", "name"]);
+    expect(table.metadata.typeHook).toBe(order.metadata.typeHook);
+    expect(table.plugins).toEqual(order.plugins);
+    expect(globalThis.__testExtendCalls).toEqual([
+      'first:id,name:{"flag":true}',
+      "second:id,name,deletedAt:{}",
+    ]);
+  });
+
+  test("returns the source table when no attached plugin adds fields", async () => {
+    writeTable('{ "archiver": {} }');
+    writeConfig(`{
+  id: "archiver",
+  description: "test",
+  importPath: "@test/archiver",
+  onTableLoaded() {
+    return { tables: { archive: db.table("OrderArchive", { name: db.string() }) } };
+  },
+}`);
+    const order = await loadTable();
+
+    expect(await getExtendedTable(configPath, order)).toBe(order);
+  });
+
+  test("runs the plugins once per table, even for concurrent callers", async () => {
+    writeTable('{ "first": {} }');
+    writeConfig(extendingPlugin("first", "rank", "db.int()"));
+    const order = await loadTable();
+
+    const [a, b] = await Promise.all([
+      getExtendedTable(configPath, order),
+      getExtendedTable(configPath, order),
+    ]);
+    const c = await getExtendedTable(configPath, order);
+
+    expect(b).toBe(a);
+    expect(c).toBe(a);
+    expect(globalThis.__testExtendCalls).toHaveLength(1);
+  });
+
+  test("reports a plugin the config does not register", async () => {
+    writeTable('{ "unregistered": {} }');
+    writeConfig("");
+    const order = await loadTable();
+
+    await expect(getExtendedTable(configPath, order)).rejects.toThrow(
+      'Plugin "unregistered" not found',
+    );
+  });
+
+  test("returns the source table when the config is unavailable", async () => {
+    writeTable('{ "first": {} }');
+    const order = await loadTable();
+
+    const table = await getExtendedTable(
+      path.join(path.dirname(configPath), "missing.config.mjs"),
+      order,
+    );
+
+    expect(table).toBe(order);
+  });
+});
 
 describe("getGeneratedTable", () => {
   let configPath: string;

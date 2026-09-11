@@ -59,7 +59,7 @@ tailor seed dump --force User Order
 seed/data/Company.jsonl:3 • legacyCode: Field "legacyCode" is not declared by the table. Remove it from the row, or add it to the table definition and run `tailor generate`.
 ```
 
-This is what catches seed data that has drifted from the table definition — a column that still exists in a deployed environment but was removed from `tailor.config.ts`, or a typo in a field name — before `tailor seed apply` turns it into a database error. The check follows the generated schema files, so run `tailor generate` after changing a table. Fields a plugin adds to the table count as declared. IdP `_User` rows are not checked this way, since their extra keys are user attributes.
+This is what catches seed data that has drifted from the table definition — a column that still exists in a deployed environment but was removed from `tailor.config.ts`, or a typo in a field name — before `tailor seed apply` turns it into a database error. The check follows the generated schema files, so run `tailor generate` after changing a table or attaching a plugin to one. Fields a plugin adds to the table are validated like the table's own. IdP `_User` rows are not checked this way, since their extra keys are user attributes.
 
 ## Dumping the current data back out
 

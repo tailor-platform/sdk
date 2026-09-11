@@ -324,6 +324,37 @@ const AuditLog = await getGeneratedTable(configPath, "@example/audit-log", null,
 5. Caches the result to avoid redundant processing
 6. Returns the generated table matching the specified kind
 
+## getExtendedTable Helper
+
+A table that plugins are attached to gains the fields those plugins return in `extends.fields`, but only in the table `tailor generate` registers — the object exported from the table's source file stays as written. `getExtendedTable()` returns the table with every plugin-added field applied, so tooling that reads the table at runtime sees the same fields `tailor generate` does.
+
+```typescript
+import { join } from "node:path";
+import { getExtendedTable } from "@tailor-platform/sdk/plugin";
+import { customer } from "./tailordb/customer";
+
+const configPath = join(import.meta.dirname, "./tailor.config.ts");
+
+const extendedCustomer = await getExtendedTable(configPath, customer);
+extendedCustomer.fields.deletedAt; // added by a plugin attached with .plugin()
+```
+
+**Parameters:**
+
+- `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
+- `sourceTable`: The TailorDB table as exported from its source file
+
+**How it works:**
+
+1. Returns `sourceTable` itself when no plugin is attached to it
+2. Loads and caches the config from the given path
+3. Auto-resolves the namespace from config
+4. Calls each attached plugin's `onTableLoaded()` in the order of the `.plugin()` calls, each seeing the fields the plugins before it added
+5. Caches the result per config path and table
+6. Returns a new table with the added fields; `sourceTable` is not changed
+
+The seed schema files `tailor generate` writes for tables with plugins attached use this helper, so `tailor seed validate` checks plugin-added fields like the table's own.
+
 ## Examples
 
 ### Definition-time Plugin (Soft Delete)
@@ -646,10 +677,11 @@ of whether `.files()` or `.plugin()` was called first. `tailor generate` also re
 collision at runtime, as a backstop for any case a table's static type doesn't otherwise catch.
 
 This only affects the table's static type. The corresponding field exists on the table's
-generated schema, and on the table object's own `fields`, only after `tailor generate` actually
-applies `extends.fields`. Before that, reading an injected field directly off the table
-(`table.fields.status`) returns `undefined`, and `pickFields(["status"])` throws — call these only
-with the table's originally declared fields, not ones a plugin injects.
+generated schema, and on the table `tailor generate` registers, only once `extends.fields` is
+applied; the table object exported from the source file never gains it. Reading an injected field
+directly off that object (`table.fields.status`) returns `undefined`, and `pickFields(["status"])`
+throws — call these only with the table's originally declared fields, or load the table with
+[`getExtendedTable()`](#getextendedtable-helper) first.
 
 To keep the declared type and the runtime implementation in sync, give `Plugin`'s optional third
 type parameter the same shape and use it inside `onTableLoaded`:

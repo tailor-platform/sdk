@@ -11,7 +11,7 @@ const schemaType = t.object({
 export const hook = createTailorDBHook(user);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook, user, { fields: ["id","name","email","role","createdAt","updatedAt"] }),
+  createStandardSchema(schemaType, hook, user),
   {
     indexes: [
       {"name":"user_email_unique_idx","columns":["email"],"unique":true},
