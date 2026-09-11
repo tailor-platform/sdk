@@ -131,6 +131,22 @@ describe("expand conversion script for a single value becoming an array", () => 
     expect(script).toContain("const convertedValue = [sourceValue];");
   });
 
+  test("wraps an enum that also gains values without asking for review", () => {
+    const script = expandScript([
+      {
+        ...arrayPlan,
+        before: snapshotField("enum", { allowedValues: [{ value: "A" }] }),
+        after: snapshotField("enum", {
+          array: true,
+          allowedValues: [{ value: "A" }, { value: "B" }],
+        }),
+      },
+    ]);
+
+    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain("const convertedValue = [sourceValue];");
+  });
+
   test("keeps the review marker when the element type changes as well", () => {
     const script = expandScript([
       { ...arrayPlan, after: snapshotField("string", { required: true, array: true }) },

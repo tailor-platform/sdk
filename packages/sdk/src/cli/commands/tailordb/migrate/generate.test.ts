@@ -376,6 +376,36 @@ describe("tailordb migration generate with an unsupported field type change", ()
     expect(replayed?.tables.User?.fields.nameMigrate).toBeUndefined();
   });
 
+  test("offers the conversion interactively for a single value becoming an array", async () => {
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    const ns = addNamespace(tmpDir, "tailordb", "User", parsed);
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(ns.migrationsDir, "0002"))).toBe(true);
+  });
+
+  test("describes the array shape when asking about the conversion", async () => {
+    using stderr = captureStderr();
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    addNamespace(tmpDir, "tailordb", "User", parsed);
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    await runCommand(generateCommand, []);
+
+    expect(stderr.output).toContain(
+      "User.name changes from string to string[], which cannot be applied in one step.",
+    );
+  });
+
   test("names the flag for a single value becoming an array", async () => {
     using stderr = captureStderr();
     const parsed = parsedType("User");
