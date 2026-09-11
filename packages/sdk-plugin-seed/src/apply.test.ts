@@ -576,6 +576,64 @@ describe("seedApplyCommand", () => {
     );
   });
 
+  test("sorts a self-referencing table's full record set before it reaches chunkSeedData", async () => {
+    // Dumped rows are ordered by uuid `id`, so a child can be listed before
+    // the parent it references. chunkSeedData splits purely by byte size
+    // with no dependency awareness, and the generated script can only
+    // reorder records within a single chunk it receives — so the table must
+    // already be parent-before-child before chunking, not after.
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: undefined,
+      machineUserName: undefined,
+      namespaces: [
+        {
+          dependencies: { Category: [] },
+          namespace: "tailordb",
+          requiredFields: { Category: [] },
+          selfRefFields: { Category: ["parentId"] },
+          selfRefTypes: ["Category"],
+          types: ["Category"],
+        },
+      ],
+    });
+    jsonl.loadSeedData.mockImplementation(() => ({
+      Category: [
+        { id: "child", parentId: "parent" },
+        { id: "parent", parentId: null },
+      ],
+    }));
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["Category"],
+    });
+    sdk.chunkSeedData.mockReturnValue([
+      { data: { Category: [{ id: "parent" }, { id: "child" }] }, order: ["Category"] },
+    ]);
+    sdk.executeScript.mockResolvedValue({
+      error: undefined,
+      logs: "",
+      result:
+        '{"success":true,"processed":{"Category":{"inserted":2,"updated":0,"skipped":0}},"errors":[]}',
+      success: true,
+    });
+
+    await runApply([]);
+
+    expect(sdk.chunkSeedData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          Category: [
+            { id: "parent", parentId: null },
+            { id: "child", parentId: "parent" },
+          ],
+        },
+      }),
+    );
+  });
+
   test("deletes listed IdP users in row-count chunks and reports the total", async () => {
     const users = Array.from({ length: 30 }, (_, i) => ({ id: `id-${i}`, name: `user-${i}` }));
     sdk.executeScript.mockImplementation(
