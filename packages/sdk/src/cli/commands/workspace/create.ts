@@ -354,11 +354,9 @@ export const createCommand = defineAppCommand({
             "workspace",
             "ttl",
             "set",
-            "--workspace-id",
-            workspace.id,
             "--ttl",
             ttl.requested,
-            ...recoveryContextArgs({ profile: args.profile }),
+            ...recoveryContextArgs({ workspaceId: workspace.id, profile: args.profile }),
           ],
         },
       });

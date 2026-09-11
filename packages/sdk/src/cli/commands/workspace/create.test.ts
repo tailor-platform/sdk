@@ -374,7 +374,7 @@ describe("workspace create --ttl", () => {
     expect(isCLIError(error) && error.code).toBe("WORKSPACE_TTL_WRITE_FAILED");
     expect(isCLIError(error) && error.next).toEqual({
       command: "tailor",
-      args: ["workspace", "ttl", "set", "--workspace-id", validUUID, "--ttl", "24h"],
+      args: ["workspace", "ttl", "set", "--ttl", "24h", `--workspace-id=${validUUID}`],
     });
   });
 
@@ -413,10 +413,9 @@ describe("workspace create --ttl", () => {
       "workspace",
       "ttl",
       "set",
-      "--workspace-id",
-      validUUID,
       "--ttl",
       "24h",
+      `--workspace-id=${validUUID}`,
       "--profile=dev",
     ]);
   });
