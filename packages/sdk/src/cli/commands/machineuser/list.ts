@@ -32,6 +32,7 @@ export interface MachineUserInfo {
  * @returns Flattened machine user info
  */
 function machineUserInfo(user: MachineUser): MachineUserInfo {
+  logger.registerSecret(user.clientSecret);
   return {
     name: user.name,
     clientId: user.clientId,

@@ -199,11 +199,14 @@ describe("logger", () => {
   });
 
   describe("registerSecret", () => {
-    test("redacts a registered secret from info/warn/error/log/debug output", () => {
+    test("redacts a registered secret from info/success/warn/error/log/debug output", () => {
       logger.registerSecret("sk-live-abcdef123456");
       logger.verbose = true;
 
       expect(captureStderr(() => logger.info("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.success("token: sk-live-abcdef123456"))).toContain(
         "<redacted>",
       );
       expect(captureStderr(() => logger.warn("token: sk-live-abcdef123456"))).toContain(
@@ -222,6 +225,7 @@ describe("logger", () => {
       logger.verbose = false;
       for (const output of [
         captureStderr(() => logger.info("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.success("token: sk-live-abcdef123456")),
         captureStderr(() => logger.warn("token: sk-live-abcdef123456")),
         captureStderr(() => logger.error("token: sk-live-abcdef123456")),
         captureStderr(() => logger.log("token: sk-live-abcdef123456")),

@@ -27,6 +27,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -1363,6 +1364,7 @@ async function planOAuth2Clients(
     const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
       existingClientsMap.set(oauth2Client.name, oauth2Client);
+      logger.registerSecret(oauth2Client.clientSecret);
     });
     for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
       const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
