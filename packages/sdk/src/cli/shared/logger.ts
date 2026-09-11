@@ -96,6 +96,22 @@ export interface OutOptions {
 let _jsonMode = false;
 let _verbose = false;
 
+// Values registered via `logger.registerSecret()`, redacted from diagnostic log output
+const _secrets = new Set<string>();
+const REDACTED_PLACEHOLDER = "<redacted>";
+// Below this length, a registered value is too likely to match unrelated text.
+const MIN_SECRET_LENGTH = 4;
+
+function redactSecrets(text: string): string {
+  if (_secrets.size === 0) return text;
+  let result = text;
+  // Longest-first so a shorter registered value can't fragment a longer one that contains it.
+  for (const secret of Array.from(_secrets).toSorted((a, b) => b.length - a.length)) {
+    result = result.split(secret).join(REDACTED_PLACEHOLDER);
+  }
+  return result;
+}
+
 // Type icons for log output
 const TYPE_ICONS: Record<string, string> = {
   info: "ℹ",
@@ -165,7 +181,7 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const formattedMessage = formatWithOptions(inspectOpts, message);
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
   const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
-  process.stderr.write(renderFor(process.stderr, output));
+  process.stderr.write(renderFor(process.stderr, redactSecrets(output)));
 }
 
 /**
@@ -217,6 +233,21 @@ export const logger = {
     if (_verbose || parseBoolean(process.env.DEBUG) === true) {
       writeLog("log", styles.dim(message), { mode: "plain" });
     }
+  },
+
+  /**
+   * Registers a value to be redacted from diagnostic log output (`info`/`success`/`warn`/
+   * `error`/`log`/`debug`). Any occurrence of `value` in those log lines is replaced with
+   * `<redacted>` before it reaches stderr. Does not affect `out()`, since some commands
+   * intentionally print secret values as their primary result.
+   *
+   * Values shorter than 4 characters are ignored, since they are too likely to match
+   * unrelated text.
+   * @param value - The secret value to redact from future log output
+   */
+  registerSecret(value: string): void {
+    if (value.length < MIN_SECRET_LENGTH) return;
+    _secrets.add(value);
   },
 
   out(data: string | object | object[], options?: OutOptions): void {

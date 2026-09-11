@@ -160,6 +160,7 @@ export async function applyIdP(
           workspaceId: create.request.workspaceId,
           secretmanagerVaultName: vaultName,
         });
+        if (resp.client?.clientSecret) logger.registerSecret(resp.client.clientSecret);
         await client.createSecretManagerSecret({
           workspaceId: create.request.workspaceId,
           secretmanagerVaultName: vaultName,
@@ -660,6 +661,7 @@ async function planClients(
     const existingNameMap = new Map<string, string>();
     existingClients.forEach((client) => {
       existingNameMap.set(client.name, client.clientSecret);
+      logger.registerSecret(client.clientSecret);
     });
     for (const name of idp.clients) {
       if (existingNameMap.has(name)) {

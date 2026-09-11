@@ -22,6 +22,7 @@ import { logger, styles } from "../shared/logger";
 - `logger.log(message)` - Raw output without prefix (output to stderr)
 - `logger.debug(message)` - Debug messages in dim color (output to stderr)
 - `logger.out(data)` - Primary output for stdout (string, object, or object[])
+- `logger.registerSecret(value)` - Registers a value to be redacted (`<redacted>`) from stderr diagnostic output (`info`/`success`/`warn`/`error`/`log`/`debug`). Does not affect `out()`. Call this as soon as a secret value (token, client secret, etc.) enters the process, not at each call site that later logs it.
 
 **LogMode Options:**
 

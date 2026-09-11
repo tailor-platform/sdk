@@ -15,6 +15,7 @@ vi.mock("#/cli/shared/logger", () => ({
   logger: {
     warn: (...args: unknown[]) => mockLoggerWarn(...args),
     info: (...args: unknown[]) => mockLoggerInfo(...args),
+    registerSecret: () => {},
   },
 }));
 

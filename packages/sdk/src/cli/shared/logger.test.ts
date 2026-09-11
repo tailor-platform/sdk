@@ -8,6 +8,12 @@ function captureStdout(fn: () => void): string {
   return stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
 }
 
+function captureStderr(fn: () => void): string {
+  using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  fn();
+  return stripVTControlCharacters(stderrSpy.mock.calls.map((call) => String(call[0])).join(""));
+}
+
 describe("logger", () => {
   describe("CIPromptError", () => {
     test("has correct name and message", () => {
@@ -183,6 +189,60 @@ describe("logger", () => {
       expect(output).toContain("id");
       expect(output).not.toContain("secret");
       expect(output).not.toContain("hidden");
+    });
+
+    test("does not redact registered secrets", () => {
+      logger.registerSecret("out-should-not-redact-this-token");
+      const output = captureStdout(() => logger.out("out-should-not-redact-this-token"));
+      expect(output).toBe("out-should-not-redact-this-token\n");
+    });
+  });
+
+  describe("registerSecret", () => {
+    test("redacts a registered secret from info/warn/error/log/debug output", () => {
+      logger.registerSecret("sk-live-abcdef123456");
+      logger.verbose = true;
+
+      expect(captureStderr(() => logger.info("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.warn("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.error("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.log("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.debug("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+
+      logger.verbose = false;
+      for (const output of [
+        captureStderr(() => logger.info("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.warn("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.error("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.log("token: sk-live-abcdef123456")),
+      ]) {
+        expect(output).not.toContain("sk-live-abcdef123456");
+      }
+    });
+
+    test("ignores empty strings and values shorter than 4 characters", () => {
+      logger.registerSecret("");
+      logger.registerSecret("abc");
+      const output = captureStderr(() => logger.info("prefix abc suffix and more text"));
+      expect(output).toContain("abc");
+      expect(output).not.toContain("<redacted>");
+    });
+
+    test("redacts the longer of two overlapping registered secrets without leaving a fragment", () => {
+      logger.registerSecret("credential-outer-9f2c8b1a");
+      logger.registerSecret("outer-9f2c8b1a");
+      const output = captureStderr(() => logger.info("value=credential-outer-9f2c8b1a"));
+      expect(output).toBe("ℹ value=<redacted>\n");
     });
   });
 });
