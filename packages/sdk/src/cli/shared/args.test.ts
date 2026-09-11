@@ -10,6 +10,7 @@ import {
   durationArg,
   parseDuration,
   positiveIntArg,
+  recoveryContextArgs,
   resolveMachineUserInputSource,
   toPageDirection,
 } from "./args";
@@ -136,6 +137,27 @@ describe("loadEnvFiles", () => {
     test("handles empty arrays", () => {
       expect(() => loadEnvFiles([], [])).not.toThrow();
     });
+  });
+});
+
+describe("recoveryContextArgs", () => {
+  test("re-selects the workspace and profile the run used", () => {
+    expect(recoveryContextArgs({ workspaceId: "ws-1", profile: "dev" })).toEqual([
+      "--workspace-id=ws-1",
+      "--profile=dev",
+    ]);
+  });
+
+  test("omits what the run did not select", () => {
+    expect(recoveryContextArgs({})).toEqual([]);
+    expect(recoveryContextArgs({ profile: "dev" })).toEqual(["--profile=dev"]);
+    expect(recoveryContextArgs({ workspaceId: "ws-1", profile: "" })).toEqual([
+      "--workspace-id=ws-1",
+    ]);
+  });
+
+  test("keeps a leading-hyphen profile bound as the option value", () => {
+    expect(recoveryContextArgs({ profile: "-x" })).toEqual(["--profile=-x"]);
   });
 });
 

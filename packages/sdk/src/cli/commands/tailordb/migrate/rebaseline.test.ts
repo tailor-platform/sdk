@@ -566,8 +566,8 @@ describe("tailordb migration rebaseline", () => {
     expect(String(result.error)).toContain("tailor tailordb migration set 0");
     expect(String(result.error)).toContain("--namespace tailordb");
     expect(String(result.error)).toContain("--config");
-    expect(String(result.error)).toContain("--workspace-id 87654321-4321-4cba-8fed-210987654321");
-    expect(String(result.error)).toContain("--profile staging");
+    expect(String(result.error)).toContain("--workspace-id=87654321-4321-4cba-8fed-210987654321");
+    expect(String(result.error)).toContain("--profile=staging");
     expect(migrationDirectories()).toEqual(["0000"]);
   });
 });

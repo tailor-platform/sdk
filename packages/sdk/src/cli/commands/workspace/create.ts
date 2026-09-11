@@ -1,6 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { arg } from "@politty/zod";
 import { z } from "zod";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import {
   getOAuth2ClientId,
   getPlatformBaseUrl,
@@ -349,7 +350,16 @@ export const createCommand = defineAppCommand({
         },
         next: {
           command: "tailor",
-          args: ["workspace", "ttl", "set", "--workspace-id", workspace.id, "--ttl", ttl.requested],
+          args: [
+            "workspace",
+            "ttl",
+            "set",
+            "--workspace-id",
+            workspace.id,
+            "--ttl",
+            ttl.requested,
+            ...recoveryContextArgs({ profile: args.profile }),
+          ],
         },
       });
     }

@@ -691,7 +691,7 @@ describe("resolveDeployWorkspace", () => {
       default: true,
     });
     expect(mocks.info).toHaveBeenCalledWith(
-      `Reuse this workspace with: tailor deploy --workspace-id ${created.id}`,
+      `Reuse this workspace with: tailor deploy --workspace-id=${created.id}`,
     );
     expect(mocks.info).toHaveBeenCalledWith(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${created.id}.`);
   });
