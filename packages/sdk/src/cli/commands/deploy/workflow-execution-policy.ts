@@ -1,3 +1,7 @@
+import {
+  EXECUTION_POLICY_KEY_WILDCARD_MESSAGE,
+  toPlatformExecutionPolicyKey as toPlatformKey,
+} from "@tailor-platform/shared/workflow-policy";
 import { type OperatorClient } from "#/cli/shared/client";
 import { WorkflowJobFunctionExecutionPolicySchema } from "#/parser/service/workflow/schema";
 import { createChangeSet } from "./change-set";
@@ -86,8 +90,7 @@ function declaredKey(policy: ExecutionPolicyInstance): string {
  * @returns The platform-facing execution policy key
  */
 export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): string {
-  const key = declaredKey(policy);
-  return policy.matchType === "prefix" ? `${key}*` : key;
+  return toPlatformKey(declaredKey(policy), policy.matchType);
 }
 
 /**
@@ -99,7 +102,7 @@ export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): s
 function validatePolicy(policy: ExecutionPolicyInstance): void {
   if (declaredKey(policy).endsWith("*")) {
     throw new Error(
-      `Invalid workflow execution policy "${policy.name}": key must not end with '*'; omit the '*' and set matchType: "prefix" for wildcard policies (the SDK appends '*' automatically).`,
+      `Invalid workflow execution policy "${policy.name}": ${EXECUTION_POLICY_KEY_WILDCARD_MESSAGE}`,
     );
   }
   const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse({

@@ -183,7 +183,7 @@ export const logger = {
   },
 
   get verbose(): boolean {
-    return _verbose;
+    return _verbose || parseBoolean(process.env.DEBUG) === true || process.env.RUNNER_DEBUG === "1";
   },
   set verbose(value: boolean) {
     _verbose = value;
@@ -214,7 +214,7 @@ export const logger = {
   },
 
   debug(message: string): void {
-    if (_verbose || parseBoolean(process.env.DEBUG) === true) {
+    if (logger.verbose) {
       writeLog("log", styles.dim(message), { mode: "plain" });
     }
   },

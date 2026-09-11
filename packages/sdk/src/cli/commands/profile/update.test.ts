@@ -9,6 +9,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { updateCommand } from "./update";
+import type * as ContextModule from "#/cli/shared/context";
 
 function writeProfiles(profiles: Parameters<typeof writePlatformConfig>[0]["profiles"]) {
   writePlatformConfig({
@@ -127,6 +128,7 @@ describe("profile update --permission", () => {
       expect.anything(),
       "new@example.com",
       undefined,
+      "rw",
     );
     expect(vi.mocked(initOperatorClient)).toHaveBeenCalledTimes(1);
 
@@ -163,11 +165,29 @@ describe("profile update --permission", () => {
       expect.anything(),
       "legacy@example.com",
       undefined,
+      "rw",
     );
 
     const config = await readPlatformConfig();
     expect(config.profiles.rw?.user).toBe("platform-user-sub");
     expect(config.profiles.rw?.workspace_id).toBe(newUUID);
+  });
+
+  test("keeps the updated profile in authentication failure recovery", async () => {
+    const context = await vi.importActual<typeof ContextModule>("#/cli/shared/context");
+    vi.mocked(fetchLatestToken).mockImplementationOnce(context.fetchLatestToken);
+
+    await expect(
+      runCommand(updateCommand, ["rw", "--workspace-id", validUUID]),
+    ).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: "AUTH_USER_NOT_FOUND",
+        next: { command: "tailor", args: ["login", "--profile", "rw", "--help"] },
+        context: { profile: "rw" },
+      },
+    });
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
   });
 });
 
@@ -259,6 +279,7 @@ describe("profile update --platform", () => {
       expect.anything(),
       "u@example.com",
       expectedPlatformConfig,
+      "myprofile",
     );
     expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith(
       "mock-token",
@@ -332,11 +353,16 @@ describe("profile update --platform", () => {
 
     await runCommand(updateCommand, ["myprofile", "--platform-url", ""]);
 
-    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "u@example.com", {
-      platformUrl: "https://api.dev.tailor.tech",
-      oauth2ClientId: "dev-client",
-      consoleUrl: "https://console.dev.tailor.tech",
-    });
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "u@example.com",
+      {
+        platformUrl: "https://api.dev.tailor.tech",
+        oauth2ClientId: "dev-client",
+        consoleUrl: "https://console.dev.tailor.tech",
+      },
+      "myprofile",
+    );
     expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith("mock-token", {
       oauth2ClientId: "dev-client",
       consoleUrl: "https://console.dev.tailor.tech",

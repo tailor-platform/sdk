@@ -19,14 +19,10 @@ import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
 import { z } from "zod";
 import { selectEntities } from "./entities";
+import { parseExecutionResult } from "./execution-result";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
-import { topologicalSort } from "./topo-sort";
-import type {
-  OperatorClient,
-  ScriptExecutionResult,
-  SeedData,
-  SeedIdpUserContext,
-} from "@tailor-platform/sdk/cli";
+import { sortRecordsBySelfReference, topologicalSort } from "./topo-sort";
+import type { OperatorClient, SeedData, SeedIdpUserContext } from "@tailor-platform/sdk/cli";
 
 interface SeedExecutionContext {
   operatorClient: OperatorClient;
@@ -42,6 +38,8 @@ interface SeedNamespaceParams {
   typesToSeed: string[];
   dependencies: Record<string, string[]>;
   selfRefTypes: string[];
+  selfRefFields: Record<string, string[]>;
+  selfRefKeys: Record<string, Record<string, string>>;
   requiredFields: Record<string, string[]>;
   upsert: boolean;
   configDir: string;
@@ -59,60 +57,6 @@ function promptConfirmation(question: string): Promise<boolean> {
       resolve(answer.toLowerCase().trim() === "y");
     });
   });
-}
-
-function logExecutionLogs(logs: string | undefined, indent: string): void {
-  if (!logs) return;
-  for (const line of logs.split("\n").filter(Boolean)) {
-    logger.log(styles.dim(`${indent}${line}`));
-  }
-}
-
-function parseExecutionResult(
-  result: ScriptExecutionResult,
-  indent: string,
-): {
-  success: boolean;
-  parsed: Record<string, unknown>;
-  errors: string[];
-  outcomeUnknown: boolean;
-} {
-  logExecutionLogs(result.logs, indent);
-
-  if (!result.success) {
-    return {
-      success: false,
-      parsed: {},
-      errors: [result.error ?? "Script execution failed"],
-      outcomeUnknown: true,
-    };
-  }
-
-  let parsed: Record<string, unknown>;
-  try {
-    const value: unknown = JSON.parse(result.result || "{}");
-    parsed = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      parsed: {},
-      errors: [`Failed to parse result: ${message}`],
-      outcomeUnknown: true,
-    };
-  }
-
-  if (!parsed.success) {
-    const errors = Array.isArray(parsed.errors) ? (parsed.errors as string[]) : [];
-    return {
-      success: false,
-      parsed,
-      errors: errors.length > 0 ? errors : ["Script reported failure"],
-      outcomeUnknown: false,
-    };
-  }
-
-  return { success: true, parsed, errors: [], outcomeUnknown: false };
 }
 
 interface SeedResult {
@@ -141,6 +85,8 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     typesToSeed,
     dependencies,
     selfRefTypes,
+    selfRefFields,
+    selfRefKeys,
     requiredFields,
     upsert,
     configDir,
@@ -150,6 +96,16 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     requireId: upsert,
     requiredFieldsByType: upsert ? requiredFields : {},
   });
+  // Sort each self-referencing table's full record set before chunkSeedData
+  // splits it by byte size, so a table split across script executions still
+  // has its parents in the same or an earlier chunk than their children.
+  for (const type of selfRefTypes) {
+    const fields = selfRefFields[type];
+    const records = data[type];
+    if (records && fields && fields.length > 0) {
+      data[type] = sortRecordsBySelfReference(records, fields, selfRefKeys[type]);
+    }
+  }
   const processedTotals: Record<string, number> = {};
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
@@ -185,7 +141,14 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
       workspaceId: execution.workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: { data: chunk.data, order: chunk.order, selfRefTypes, upsert },
+      arg: {
+        data: chunk.data,
+        order: chunk.order,
+        selfRefTypes,
+        selfRefFields,
+        selfRefKeys,
+        upsert,
+      },
       invoker: {
         namespace: execution.authNamespace,
         machineUserName: execution.machineUserName,
@@ -632,6 +595,8 @@ export const seedApplyCommand = defineAppCommand({
         typesToSeed,
         dependencies: nsConfig.dependencies,
         selfRefTypes: nsConfig.selfRefTypes,
+        selfRefFields: nsConfig.selfRefFields ?? {},
+        selfRefKeys: nsConfig.selfRefKeys ?? {},
         requiredFields: nsConfig.requiredFields,
         upsert: args.upsert,
         configDir: path.dirname(context.config.path),

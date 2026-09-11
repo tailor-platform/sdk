@@ -1,3 +1,12 @@
+import {
+  DURATION_UNITS,
+  durationToSeconds,
+  EXECUTION_POLICY_KEY_MESSAGE,
+  EXECUTION_POLICY_KEY_PATTERN,
+  EXECUTION_POLICY_NAME_MESSAGE,
+  EXECUTION_POLICY_NAME_PATTERN,
+  RETRY_POLICY_LIMITS,
+} from "@tailor-platform/shared/workflow-policy";
 import { z } from "zod";
 import { functionSchema } from "../common";
 
@@ -11,47 +20,40 @@ export const WorkflowJobSchema = z.strictObject({
     .describe("Enable publishing job execution events for this job"),
 });
 
-const durationUnits = ["ms", "s", "m"] as const;
+const seconds = (duration: string): number => durationToSeconds(duration) ?? 0;
 
-const unitToSeconds: Record<(typeof durationUnits)[number], number> = {
-  ms: 1 / 1000,
-  s: 1,
-  m: 60,
-};
-
-function durationToSeconds(duration: string): number {
-  const match = duration.match(/^(\d+)(ms|s|m)$/);
-  if (!match) return 0;
-  const value = match[1];
-  const unit = match[2];
-  if (value === undefined || unit === undefined) return 0;
-  return parseInt(value, 10) * unitToSeconds[unit as (typeof durationUnits)[number]];
-}
-
-const baseDurationSchema = z.templateLiteral([z.number().int().positive(), z.enum(durationUnits)]);
+const baseDurationSchema = z.templateLiteral([z.number().int().positive(), z.enum(DURATION_UNITS)]);
 
 const durationSchema = (maxSeconds: number) =>
-  baseDurationSchema.refine((val) => durationToSeconds(val) <= maxSeconds, {
+  baseDurationSchema.refine((val) => seconds(val) <= maxSeconds, {
     message: `Duration must be at most ${maxSeconds} seconds`,
   });
 
 export const RetryPolicySchema = z
   .strictObject({
-    maxRetries: z.number().int().min(1).max(10).describe("Maximum number of retries (1-10)"),
-    initialBackoff: durationSchema(3600).describe(
+    maxRetries: z
+      .number()
+      .int()
+      .min(RETRY_POLICY_LIMITS.maxRetries.min)
+      .max(RETRY_POLICY_LIMITS.maxRetries.max)
+      .describe("Maximum number of retries (1-10)"),
+    initialBackoff: durationSchema(RETRY_POLICY_LIMITS.initialBackoffMaxSeconds).describe(
       "Initial backoff duration (e.g., '1s', '500ms', '1m', max 1h)",
     ),
-    maxBackoff: durationSchema(86400).describe(
+    maxBackoff: durationSchema(RETRY_POLICY_LIMITS.maxBackoffMaxSeconds).describe(
       "Maximum backoff duration (e.g., '30s', '5m', max 24h)",
     ),
-    backoffMultiplier: z.number().min(1).describe("Backoff multiplier (>= 1)"),
+    backoffMultiplier: z
+      .number()
+      .min(RETRY_POLICY_LIMITS.backoffMultiplierMin)
+      .describe("Backoff multiplier (>= 1)"),
   })
 
-  .refine((data) => durationToSeconds(data.initialBackoff) <= durationToSeconds(data.maxBackoff), {
+  .refine((data) => seconds(data.initialBackoff) <= seconds(data.maxBackoff), {
     message: "initialBackoff must be less than or equal to maxBackoff",
     path: ["initialBackoff"],
   })
-  .refine((data) => durationToSeconds(data.initialBackoff) > 0, {
+  .refine((data) => seconds(data.initialBackoff) > 0, {
     message: "initialBackoff must be greater than 0",
     path: ["initialBackoff"],
   });
@@ -67,18 +69,12 @@ export const ConcurrencyPolicySchema = z.strictObject({
 
 export const ExecutionPolicyNameSchema = z
   .string()
-  .regex(
-    /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
-    "Invalid execution policy name: must match [a-z0-9-] (3-63 chars; must start and end with [a-z0-9])",
-  )
+  .regex(EXECUTION_POLICY_NAME_PATTERN, EXECUTION_POLICY_NAME_MESSAGE)
   .describe("Workspace-unique execution policy name embedded in the resource TRN");
 
 export const ExecutionPolicyKeySchema = z
   .string()
-  .regex(
-    /^[a-z0-9][a-z0-9_:.-]{0,62}[a-z0-9*]$/,
-    "Invalid execution policy key: must match [a-z0-9_:.-] (2-64 chars; must start with [a-z0-9] and end with [a-z0-9] or a trailing '*')",
-  )
+  .regex(EXECUTION_POLICY_KEY_PATTERN, EXECUTION_POLICY_KEY_MESSAGE)
   .describe("Execution policy key passed to execJobFunction's executionPolicyKey option");
 
 export const WorkflowJobFunctionExecutionPolicySchema = z.strictObject({

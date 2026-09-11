@@ -46,6 +46,17 @@ includes separate `error.context.apply` and `error.context.recovery` errors, eac
 and available recovery information. Inspect the current resource state before retrying: some writes
 may have completed. `--verbose --json` additionally includes stack traces for both causes.
 
+### Verbose Output
+
+Use `--verbose` to include debug diagnostics and error stack traces. `DEBUG=true` or
+`RUNNER_DEBUG=1` also enables verbose output, including stacks in JSON errors. GitHub Actions
+sets `RUNNER_DEBUG=1` when debug logging is enabled, so the same command automatically includes
+these details in a debug run. These settings do not enable JSON output; pass `--json` separately.
+
+Capture the original failure's stderr and exit code before retrying. Argument parsing and failures
+before the CLI starts may produce plain text even with `--json`. A failed deployment may have
+already applied changes, so inspect its output before deciding to run it again.
+
 ## Common Options
 
 The following options are available for most commands:

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { afterAll, afterEach, aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
-import { bundleSeedScript } from "./bundler";
+import { bundleSeedDumpScript, bundleSeedScript } from "./bundler";
 import type * as pkgTypes from "pkg-types";
 
 type PkgTypesModule = typeof pkgTypes;
@@ -18,6 +18,8 @@ type SeedInput = {
   data: Record<string, Record<string, unknown>[]>;
   order: string[];
   selfRefTypes: string[];
+  selfRefFields?: Record<string, string[]>;
+  selfRefKeys?: Record<string, Record<string, string>>;
   upsert?: boolean;
 };
 
@@ -293,5 +295,252 @@ describe("seed script upsert behavior", () => {
     expect(queries).toHaveLength(3);
     expect(queries[0]?.sql).toMatch(/^select /);
     expect(queries.slice(1).every(({ sql }) => sql.startsWith("insert"))).toBe(true);
+  });
+
+  test("orders self-referencing inserts by dependency, not file order", async () => {
+    // Dumped rows are ordered by id (a UUID), so a child can land before its
+    // parent in the file; selfRefFields must let the script reorder them.
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c2", parentId: "c1" },
+          { id: "c1", parentId: null },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries).toHaveLength(2);
+    expect(insertQueries[0]?.parameters).toContain("c1");
+    expect(insertQueries[1]?.parameters).toContain("c2");
+  });
+
+  test("orders self-referencing inserts keyed to a non-id field", async () => {
+    // A self-reference doesn't always target the parent's `id` — it can be
+    // keyed to another unique field (e.g. `code`). selfRefKeys must let the
+    // script resolve the edge through that field instead of assuming `id`.
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "row-2", code: "c2", parentCode: "c1" },
+          { id: "row-1", code: "c1", parentCode: null },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentCode"] },
+      selfRefKeys: { Category: { parentCode: "code" } },
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries).toHaveLength(2);
+    expect(insertQueries[0]?.parameters).toContain("c1");
+    expect(insertQueries[1]?.parameters).toContain("c2");
+  });
+
+  test("falls back to file order when selfRefFields is not provided", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c1", parentId: null },
+          { id: "c2", parentId: "c1" },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries[0]?.parameters).toContain("c1");
+    expect(insertQueries[1]?.parameters).toContain("c2");
+  });
+
+  test("falls back to file order when self-referencing rows have missing or duplicate ids", async () => {
+    // Without a stable, unique id per row the topological sort can't tell
+    // rows apart, so it must not silently collapse/drop any of them.
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c1", parentId: null },
+          { id: "c1", parentId: "c1" },
+          { id: "c1", parentId: null },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+      upsert: true,
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 3, updated: 0, skipped: 0 });
+    const insertQueries = queries.filter(({ sql }) => sql.startsWith("insert"));
+    expect(insertQueries).toHaveLength(3);
+  });
+});
+
+type DumpInput = { table: string; limit: number; after?: string | null };
+
+type DumpResult = {
+  success: boolean;
+  rows: Record<string, unknown>[];
+  cursor: string | null;
+  errors: string[];
+};
+
+/**
+ * Install a `tailordb` global whose select returns the given pages in order.
+ * @param pages - Rows each successive select resolves to
+ * @returns Queries recorded so far, in execution order
+ */
+function stubTailordbReads(pages: Record<string, unknown>[][]): RecordedQuery[] {
+  const queries: RecordedQuery[] = [];
+  let call = 0;
+  vi.stubGlobal("tailordb", {
+    Client: class {
+      async connect() {}
+      async end() {}
+      async queryObject(sql: string, parameters: readonly unknown[]) {
+        queries.push({ sql, parameters });
+        const rows = pages[call++] ?? [];
+        return { rows, command: "SELECT", rowCount: rows.length };
+      }
+    },
+  });
+  return queries;
+}
+
+describe("seed dump script behavior", () => {
+  const loadDumpMain = async (namespace: string) => {
+    const { bundledCode } = await bundleSeedDumpScript(namespace);
+    const modulePath = path.join(
+      process.env.TAILOR_BUILD_OUTPUT_DIR as string,
+      `dump-main-${namespace}.mjs`,
+    );
+    fs.writeFileSync(modulePath, bundledCode);
+    return (await import(/* @vite-ignore */ modulePath)) as {
+      main: (input: DumpInput) => Promise<DumpResult>;
+    };
+  };
+
+  aroundEach(async (runTest) => {
+    const testDir = path.join(
+      TEST_BUNDLER_BASE,
+      `dump-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
+  });
+
+  aroundAll(async (runSuite) => {
+    await runSuite();
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
+  });
+
+  test("bundles a script exporting main for the requested namespace", async () => {
+    const result = await bundleSeedDumpScript("custom-namespace");
+
+    expect(result.namespace).toBe("custom-namespace");
+    expect(result.bundledCode).toContain('"custom-namespace"');
+    expect(result.bundledCode).toContain("selectAll");
+    expect(result.bundledCode).toContain("orderBy");
+  });
+
+  test("reads a page ordered by id and reports no cursor when the page is short", async () => {
+    const queries = stubTailordbReads([[{ id: "u1", name: "Alice" }]]);
+    const { main } = await loadDumpMain("tailordb");
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const result = await main({ table: "User", limit: 2 });
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.sql).toMatch(/^select \*/);
+    expect(queries[0]?.sql).toContain('order by "id" asc');
+    expect(queries[0]?.sql).not.toContain("where");
+    expect(result).toEqual({
+      success: true,
+      rows: [{ id: "u1", name: "Alice" }],
+      cursor: null,
+      errors: [],
+    });
+    expect(logSpy).toHaveBeenCalledWith("[tailordb] User: 1 rows read");
+  });
+
+  test("returns the last id as the cursor when the page is full", async () => {
+    stubTailordbReads([
+      [
+        { id: "u1", name: "Alice" },
+        { id: "u2", name: "Bob" },
+      ],
+    ]);
+    const { main } = await loadDumpMain("tailordb");
+    using _logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const result = await main({ table: "User", limit: 2 });
+
+    expect(result.cursor).toBe("u2");
+  });
+
+  test("pages after the given id", async () => {
+    const queries = stubTailordbReads([[{ id: "u3", name: "Cara" }]]);
+    const { main } = await loadDumpMain("tailordb");
+    using _logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main({ table: "User", limit: 2, after: "u2" });
+
+    expect(queries[0]?.sql).toContain('where "id" > ');
+    expect(queries[0]?.parameters).toContain("u2");
+  });
+
+  test("refuses to page a full page whose last id is not a string", async () => {
+    stubTailordbReads([[{ id: 1 }, { id: 2 }]]);
+    const { main } = await loadDumpMain("tailordb");
+    using _logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const result = await main({ table: "User", limit: 2 });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual(["cannot page rows whose id is not a string"]);
+  });
+
+  test("reports a query failure instead of throwing", async () => {
+    vi.stubGlobal("tailordb", {
+      Client: class {
+        async connect() {}
+        async end() {}
+        queryObject() {
+          return Promise.reject(new Error("relation does not exist"));
+        }
+      },
+    });
+    const { main } = await loadDumpMain("tailordb");
+    using _errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const result = await main({ table: "Ghost", limit: 2 });
+
+    expect(result.success).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.errors).toEqual(["relation does not exist"]);
   });
 });
