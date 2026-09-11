@@ -24,9 +24,9 @@ import {
 } from "./transform";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
-// "" (an unset CI secret) is kept distinct from an omitted option so the run can refuse to sweep
-// unscoped. Fresh per option, like `limitArg`.
-const scopeIdArg = () => z.union([z.literal(""), z.uuid()]).optional();
+// "" (an unset CI secret) is kept distinct from an omitted option so the run can refuse it
+// instead of sweeping a location the caller did not name. Fresh per option, like `limitArg`.
+const locationIdsArg = () => z.array(z.union([z.literal(""), z.uuid()])).optional();
 
 // Rejects `--limit=` instead of coercing "" to 0. Single-use: politty does not clone pipe schemas per option.
 const limitArg = z.preprocess(
@@ -44,10 +44,16 @@ export interface PruneCriteria {
    * `undefined` in `--expired` mode, where the recorded expiry decides.
    */
   olderThanMs?: number;
-  organizationId?: string;
-  folderId?: string;
-  /** Select workspaces belonging to no organization and no folder. */
-  personal?: boolean;
+  /**
+   * Organizations whose workspaces outside any folder are in scope.
+   * Together with `folderIds` and `personal`, each is a location; a workspace
+   * in any of them is in scope, and no location at all leaves the scope open.
+   */
+  organizationRoots: readonly string[];
+  /** Folders whose workspaces are in scope. */
+  folderIds: readonly string[];
+  /** Whether workspaces belonging to no organization and no folder are in scope. */
+  personal: boolean;
   /** Exact names kept even when they match. */
   exclude: ReadonlySet<string>;
 }
@@ -72,24 +78,21 @@ function matchesName(workspace: Workspace, criteria: PruneCriteria): boolean {
   return criteria.nameRegexes.some((regex) => regex.test(workspace.name));
 }
 
-// A workspace no organization or folder owns, which an id scope cannot match.
-function isPersonal(workspace: Workspace): boolean {
-  return !workspace.organizationId && !workspace.folderId;
+function hasLocation(criteria: PruneCriteria): boolean {
+  return (
+    criteria.organizationRoots.length > 0 || criteria.folderIds.length > 0 || criteria.personal
+  );
 }
 
-function matchesIdScope(workspace: Workspace, criteria: PruneCriteria): boolean {
-  if (criteria.organizationId && workspace.organizationId !== criteria.organizationId) {
-    return false;
-  }
-  if (criteria.folderId && workspace.folderId !== criteria.folderId) {
-    return false;
-  }
-  return true;
-}
-
+// A workspace lives in exactly one location: a folder, an organization's root
+// outside any folder, or nowhere (personal). It is in scope when that location
+// was asked for, or when no location was asked for at all.
 function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
-  if (criteria.personal) return isPersonal(workspace);
-  return matchesIdScope(workspace, criteria);
+  if (!hasLocation(criteria)) return true;
+  if (workspace.folderId) return criteria.folderIds.includes(workspace.folderId);
+  if (workspace.organizationId)
+    return criteria.organizationRoots.includes(workspace.organizationId);
+  return criteria.personal;
 }
 
 /**
@@ -286,15 +289,15 @@ export const pruneCommand = defineAppCommand({
   description:
     "Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation.",
   notes: ml`
-    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id / --personal scope. Run with --dry-run first to see what would be deleted.
+    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the requested locations. Run with --dry-run first to see what would be deleted.
 
-    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires a scope, and --name still applies on top.
+    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires at least one location, and --name still applies on top.
 
-    A workspace belonging to no organization and no folder is matched by neither --organization-id nor --folder-id, so --personal is what brings it into a sweep. It counts as a scope on its own and cannot be combined with --organization-id or --folder-id. Scoping to it is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. The same restriction applies to TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID: unset them before running with --personal.
+    Every workspace lives in exactly one location, and the location options name them explicitly: --organization-root selects the workspaces directly under an organization and none inside its folders, --folder-id selects the workspaces in one folder, and --personal selects the workspaces belonging to no organization and no folder. Each option can be given more than once, they combine as a union, and none of them is read from the environment -- a sweep covers exactly the locations spelled out on the command line. Selecting --personal is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. Without any location option, a --name / --older-than sweep considers every visible workspace.
 
     Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), both --expired and --older-than 0s (no age check) are only accepted together with --organization-id, --folder-id, or --personal, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep -- --personal does not satisfy that check on an empty --organization-id or --folder-id. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, scope, exclusion, or delete-protection criteria that selected it. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), both --expired and --older-than 0s (no age check) are only accepted together with at least one location option, and a location option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep -- even when another location is given alongside it. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, location, exclusion, or delete-protection criteria that selected it. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
@@ -305,24 +308,22 @@ export const pruneCommand = defineAppCommand({
     }),
     "older-than": arg(ageArg.optional(), {
       description:
-        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires a scope. Required unless --expired is given",
+        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires a location. Required unless --expired is given",
     }),
     expired: arg(z.boolean().default(false), {
       description:
-        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-id, --folder-id, or --personal",
+        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-root, --folder-id, or --personal",
+    }),
+    "organization-root": arg(locationIdsArg(), {
+      placeholder: "ORGANIZATION_ID",
+      description:
+        "Consider the workspaces directly under this organization, excluding those in its folders (repeatable)",
+    }),
+    "folder-id": arg(locationIdsArg(), {
+      description: "Consider the workspaces in this folder (repeatable)",
     }),
     personal: arg(z.boolean().default(false), {
-      description:
-        "Only consider workspaces belonging to no organization and no folder. Cannot be combined with --organization-id or --folder-id",
-    }),
-    "organization-id": arg(scopeIdArg(), {
-      alias: "o",
-      description: "Only consider workspaces in this organization",
-      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
-    }),
-    "folder-id": arg(scopeIdArg(), {
-      description: "Only consider workspaces in this folder",
-      env: "TAILOR_PLATFORM_FOLDER_ID",
+      description: "Consider the workspaces belonging to no organization and no folder",
     }),
     exclude: arg(z.array(z.string().min(1)).optional(), {
       description: "Keep a workspace with this exact name even when it matches (repeatable)",
@@ -364,61 +365,50 @@ export const pruneCommand = defineAppCommand({
         details: "Only workspaces whose name matches the filter are considered for deletion.",
       });
     }
-    const emptyScopeOptions = (
+    const organizationRoots = args["organization-root"] ?? [];
+    const folderIds = args["folder-id"] ?? [];
+    const emptyLocationOptions = (
       [
-        ["--organization-id", args["organization-id"]],
-        ["--folder-id", args["folder-id"]],
+        ["--organization-root", organizationRoots],
+        ["--folder-id", folderIds],
       ] as const
     )
-      .filter(([, value]) => value === "")
+      .filter(([, ids]) => ids.includes(""))
       .map(([option]) => option);
-    if (emptyScopeOptions.length > 0) {
+    if (emptyLocationOptions.length > 0) {
       throw CLIError({
         code: "EMPTY_SCOPE",
-        message: `${emptyScopeOptions.join(" and ")} resolved to an empty value.`,
+        message: `${emptyLocationOptions.join(" and ")} resolved to an empty value.`,
         details:
-          "An empty scope is indistinguishable from no scope, so the sweep would cover every visible workspace. This usually means an unset CI secret.",
-        suggestion:
-          "Set the id (or its environment variable), or drop the option to sweep without a scope on purpose.",
+          "An empty location is indistinguishable from an omitted one, so the sweep would not cover what the caller meant. This usually means an unset CI secret.",
+        suggestion: "Set the id, or drop the option on purpose.",
       });
     }
-    const organizationId = args["organization-id"] || undefined;
-    const folderId = args["folder-id"] || undefined;
-    if (args.personal && (organizationId || folderId)) {
-      throw CLIError({
-        code: "CONFLICTING_SCOPE",
-        message: "--personal cannot be combined with --organization-id or --folder-id.",
-        suggestion:
-          "Run personal and organization/folder sweeps separately. Unset TAILOR_PLATFORM_ORGANIZATION_ID and TAILOR_PLATFORM_FOLDER_ID before using --personal.",
-      });
-    }
-    const scoped = Boolean(organizationId || folderId || args.personal);
-
-    if (args.expired && !scoped) {
+    const olderThanMs = olderThan === undefined ? undefined : parseAge(olderThan);
+    const criteria: PruneCriteria = {
+      nameRegexes: namePatterns.map(compileNameRegex),
+      ...(olderThanMs === undefined ? {} : { olderThanMs }),
+      organizationRoots,
+      folderIds,
+      personal: args.personal,
+      exclude: new Set(args.exclude ?? []),
+    };
+    if (args.expired && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_EXPIRED",
-        message: "--expired requires --organization-id, --folder-id, or --personal.",
+        message: "--expired requires --organization-root, --folder-id, or --personal.",
         details:
           "The expiry lives on the workspace, and writing a workspace's metadata is a lesser permission than deleting it, so an unscoped sweep would delete on behalf of anyone able to write that metadata.",
       });
     }
-    const olderThanMs = olderThan === undefined ? undefined : parseAge(olderThan);
-    if (olderThanMs === 0 && !scoped) {
+    if (olderThanMs === 0 && !hasLocation(criteria)) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
-        message: "--older-than 0s requires --organization-id, --folder-id, or --personal.",
+        message: "--older-than 0s requires --organization-root, --folder-id, or --personal.",
         details:
-          "Without an age check the name filter is the only guard, so the sweep must be scoped to an organization, a folder, or the personal workspaces.",
+          "Without an age check the name filter is the only guard, so the sweep must name the organization roots, folders, or personal workspaces it covers.",
       });
     }
-    const criteria: PruneCriteria = {
-      nameRegexes: namePatterns.map(compileNameRegex),
-      ...(olderThanMs === undefined ? {} : { olderThanMs }),
-      organizationId,
-      folderId,
-      personal: args.personal,
-      exclude: new Set(args.exclude ?? []),
-    };
 
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({ profile: args.profile });
