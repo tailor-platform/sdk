@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
+import { db } from "#/configure/services/tailordb/index";
 import { _clearCacheForTesting } from "./get-generated-table";
 import { getExtendedTable, getGeneratedTable } from "./index";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
@@ -80,6 +81,17 @@ export default {
     expect(table).toBe(order);
   });
 
+  test("keeps the source table's type, builder methods included", async () => {
+    const order = db.table("Order", { name: db.string() });
+
+    const table = await getExtendedTable(configPath, order);
+
+    expect(table).toBe(order);
+    expectTypeOf(table).toEqualTypeOf<typeof order>();
+    expectTypeOf(table.pickFields(["name"])).toHaveProperty("name");
+    expectTypeOf(table.omitFields(["name"])).not.toHaveProperty("name");
+  });
+
   test("applies the fields each attached plugin adds, in attachment order", async () => {
     writeTable('{ "first": { flag: true }, "second": {} }');
     writeConfig(
@@ -131,6 +143,14 @@ export default {
     expect(b).toBe(a);
     expect(c).toBe(a);
     expect(globalThis.__testExtendCalls).toHaveLength(1);
+  });
+
+  test("leaves an array that mixes plugins with other values alone, as the CLI does", async () => {
+    writeTable('{ "first": {} }');
+    writeConfig(`${extendingPlugin("first", "rank", "db.int()")}, "not a plugin"`);
+    const order = await loadTable();
+
+    await expect(getExtendedTable(configPath, order)).rejects.toThrow('Plugin "first" not found');
   });
 
   test("reports a plugin the config does not register", async () => {

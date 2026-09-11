@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { pickPluginArrays } from "./guards";
 import { PluginManager } from "./manager";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 import type { Plugin, PluginOutput, TablePluginOutput } from "#/plugin/types";
@@ -23,20 +24,6 @@ interface ConfigCache {
 
 /** Cache: resolved config path -> loaded config data */
 const configCacheMap = new Map<string, ConfigCache>();
-
-/**
- * Check if a value is a Plugin instance.
- * @param value - Value to check
- * @returns True if value has the shape of Plugin
- */
-function isPlugin(value: unknown): value is Plugin {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).id === "string" &&
-    typeof (value as Record<string, unknown>).description === "string"
-  );
-}
 
 /**
  * Load and cache config module from the given path.
@@ -65,14 +52,10 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
   const configDir = path.dirname(resolvedPath);
   const plugins = new Map<string, PluginEntry>();
 
-  // Find plugin arrays from exports (definePlugins returns PluginConfig[])
-  for (const value of Object.values(configModule)) {
-    if (!Array.isArray(value)) continue;
-
-    for (const item of value) {
-      if (isPlugin(item)) {
-        plugins.set(item.id, { plugin: item, pluginConfig: item.pluginConfig });
-      }
+  for (const items of pickPluginArrays(configModule)) {
+    for (const item of items) {
+      const plugin = item as Plugin;
+      plugins.set(plugin.id, { plugin, pluginConfig: plugin.pluginConfig });
     }
   }
 
@@ -389,14 +372,15 @@ const extendedTableCache = new Map<string, WeakMap<TailorAnyDBType, Promise<Tail
  * The table exported from the source file is not changed; the returned table is a new object.
  * Returns the source table itself when no plugin is attached to it, or when the config is
  * not available (e.g. in a bundled executor on the platform server).
+ * @template T - The source table's own type, which the returned table keeps
  * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
  * @param sourceTable - The TailorDB table as exported from its source file
  * @returns The table with every plugin-added field
  */
-export async function getExtendedTable(
+export async function getExtendedTable<T extends TailorAnyDBType>(
   configPath: string,
-  sourceTable: TailorAnyDBType,
-): Promise<TailorAnyDBType> {
+  sourceTable: T,
+): Promise<T> {
   if (sourceTable.plugins.length === 0) {
     return sourceTable;
   }
@@ -408,12 +392,12 @@ export async function getExtendedTable(
   }
   const cached = tables.get(sourceTable);
   if (cached) {
-    return cached;
+    return cached as Promise<T>;
   }
   const pending = applyPluginExtensions(resolvedPath, sourceTable);
   tables.set(sourceTable, pending);
   pending.catch(() => tables.delete(sourceTable));
-  return pending;
+  return pending as Promise<T>;
 }
 
 async function applyPluginExtensions(
