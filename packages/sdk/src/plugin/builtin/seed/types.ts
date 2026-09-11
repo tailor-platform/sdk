@@ -13,6 +13,8 @@ export interface SeedTypeInfo {
   namespace: string;
   dependencies: string[];
   selfRefFields: string[];
+  /** The field each self-referencing field is keyed to (defaults to "id"). */
+  selfRefKeys: Record<string, string>;
   dataFile: string;
 }
 

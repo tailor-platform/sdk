@@ -21,6 +21,14 @@ export type SeedBundleResult = {
   typesIncluded: string[];
 };
 
+/**
+ * Result of bundling a seed dump script.
+ */
+export type SeedDumpBundleResult = {
+  namespace: string;
+  bundledCode: string;
+};
+
 const BATCH_SIZE = 100;
 
 /**
@@ -36,6 +44,8 @@ function generateSeedScriptContent(namespace: string): string {
       data: Record<string, Record<string, unknown>[]>;
       order: string[];
       selfRefTypes: string[];
+      selfRefFields?: Record<string, string[]>;
+      selfRefKeys?: Record<string, Record<string, string>>;
       upsert?: boolean;
     };
 
@@ -50,6 +60,106 @@ function generateSeedScriptContent(namespace: string): string {
       return new Kysely<Record<string, Record<string, unknown>>>({
         dialect: new TailordbDialect(client),
       });
+    }
+
+    /**
+     * Order records of a self-referencing table so a row referenced by
+     * another row in the same batch is always inserted first.
+     *
+     * Dumped seed data is ordered by id (a UUID), which has no relationship
+     * to parent/child order, so a naive one-by-one insert in file order can
+     * insert a child before the parent it points to. This does a Kahn
+     * topological sort over the in-batch rows using \`fields\` (the table's
+     * own self-referencing field names) as the edges; a row referencing a
+     * parent outside the batch (already applied, or null) has no edge to
+     * resolve. Rows that form a cycle (which a real hierarchy should never
+     * produce) are appended in their original order rather than dropped, so
+     * a run never silently loses data.
+     *
+     * \`record.id\` is used as the map key for the row itself, so it must be
+     * present and unique across the batch. If any id is missing (allowed
+     * when not using \`--upsert\`) or duplicated, the map would collapse
+     * distinct rows onto the same key and silently drop them from the
+     * result; fall back to the original file order instead.
+     *
+     * A self-reference field does not always hold the parent's \`id\` — a
+     * relation's \`toward.key\` (or a \`keyOnly\` relation's \`foreignKeyField\`)
+     * can target a different unique field, e.g. \`parentCode -> Category.code\`.
+     * \`fieldKeys\` names the field each self-reference field is keyed to
+     * (default \`"id"\`), so edges resolve against the right value instead of
+     * assuming every self-reference points at \`id\`.
+     */
+    function sortBySelfReference(
+      records: Record<string, unknown>[],
+      fields: string[],
+      fieldKeys: Record<string, string> = {},
+    ): Record<string, unknown>[] {
+      if (fields.length === 0 || records.length <= 1) return records;
+
+      const byId = new Map<unknown, Record<string, unknown>>();
+      for (const record of records) byId.set(record.id, record);
+      if (byId.size !== records.length) return records;
+
+      const idsByKeyValue = new Map<string, Map<unknown, unknown>>();
+      for (const field of fields) {
+        const targetKey = fieldKeys[field] ?? "id";
+        if (idsByKeyValue.has(targetKey)) continue;
+        const map = new Map<unknown, unknown>();
+        for (const record of records) {
+          const keyValue = targetKey === "id" ? record.id : record[targetKey];
+          if (keyValue !== null && keyValue !== undefined) map.set(keyValue, record.id);
+        }
+        idsByKeyValue.set(targetKey, map);
+      }
+
+      const inDegree = new Map<unknown, number>();
+      const dependents = new Map<unknown, unknown[]>();
+      for (const record of records) {
+        inDegree.set(record.id, 0);
+        dependents.set(record.id, []);
+      }
+      for (const record of records) {
+        const id = record.id;
+        for (const field of fields) {
+          const refValue = record[field];
+          if (refValue === null || refValue === undefined) continue;
+          const targetKey = fieldKeys[field] ?? "id";
+          const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
+          if (parentId === undefined || parentId === id) continue;
+          inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
+          dependents.get(parentId)?.push(id);
+        }
+      }
+
+      const queue: unknown[] = [];
+      for (const record of records) {
+        if ((inDegree.get(record.id) ?? 0) === 0) queue.push(record.id);
+      }
+
+      const seen = new Set<unknown>();
+      const orderedIds: unknown[] = [];
+      // A head index is used instead of \`queue.shift()\`, which would
+      // reindex the remaining array on every dequeue and make this Kahn
+      // traversal O(n²) over a large batch.
+      let head = 0;
+      while (head < queue.length) {
+        const id = queue[head++];
+        if (seen.has(id)) continue;
+        seen.add(id);
+        orderedIds.push(id);
+        for (const dependentId of dependents.get(id) ?? []) {
+          const remaining = (inDegree.get(dependentId) ?? 0) - 1;
+          inDegree.set(dependentId, remaining);
+          if (remaining === 0) queue.push(dependentId);
+        }
+      }
+      for (const record of records) {
+        if (!seen.has(record.id)) orderedIds.push(record.id);
+      }
+
+      return orderedIds
+        .map((id) => byId.get(id))
+        .filter((record): record is Record<string, unknown> => record !== undefined);
     }
 
     export async function main(input: SeedInput): Promise<SeedResult> {
@@ -91,8 +201,16 @@ function generateSeedScriptContent(namespace: string): string {
           }
 
           if (hasSelfRef) {
-            // Insert one-by-one to respect self-referencing foreign key order
-            for (const record of recordsToInsert) {
+            // Insert one-by-one, in dependency order, to respect
+            // self-referencing foreign keys.
+            const selfRefFieldNames = (input.selfRefFields || {})[tableName] || [];
+            const selfRefFieldKeys = (input.selfRefKeys || {})[tableName] || {};
+            const orderedRecords = sortBySelfReference(
+              recordsToInsert,
+              selfRefFieldNames,
+              selfRefFieldKeys,
+            );
+            for (const record of orderedRecords) {
               await db.insertInto(tableName).values(record).execute();
               processed[tableName].inserted += 1;
             }
@@ -148,6 +266,71 @@ function generateSeedScriptContent(namespace: string): string {
 }
 
 /**
+ * Generate seed dump script content for server-side execution
+ * @param namespace - TailorDB namespace
+ * @returns Generated seed dump script content
+ */
+function generateSeedDumpScriptContent(namespace: string): string {
+  return ml /* ts */ `
+    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+
+    type DumpInput = {
+      table: string;
+      limit: number;
+      after?: string | null;
+    };
+
+    type DumpResult = {
+      success: boolean;
+      rows: Record<string, unknown>[];
+      cursor: string | null;
+      errors: string[];
+    };
+
+    function getDB(namespace: string) {
+      const client = new tailordb.Client({ namespace });
+      return new Kysely<Record<string, Record<string, unknown>>>({
+        dialect: new TailordbDialect(client),
+      });
+    }
+
+    export async function main(input: DumpInput): Promise<DumpResult> {
+      const db = getDB("${namespace}");
+
+      try {
+        let query = db.selectFrom(input.table).selectAll().orderBy("id", "asc").limit(input.limit);
+        if (input.after !== null && input.after !== undefined) {
+          query = query.where("id", ">", input.after);
+        }
+        const rows = (await query.execute()) as Record<string, unknown>[];
+
+        // A full page may have more rows behind it; page again from the last id.
+        const lastRow = rows.length === input.limit ? rows[rows.length - 1] : undefined;
+        if (lastRow && typeof lastRow.id !== "string") {
+          // Paging past this row is impossible, and reporting no cursor would
+          // silently drop every row behind it.
+          // Left unprefixed with the table name: the caller (dump.ts) already
+          // prefixes every error it throws with the table.
+          const message = "cannot page rows whose id is not a string";
+          return { success: false, rows: [], cursor: null, errors: [message] };
+        }
+        const lastId = lastRow ? (lastRow.id as string) : null;
+
+        console.log(\`[${namespace}] \${input.table}: \${rows.length} rows read\`);
+
+        return { success: true, rows, cursor: lastId, errors: [] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(\`[${namespace}] \${input.table}: failed - \${message}\`);
+        // Left unprefixed with the table name: the caller (dump.ts) already
+        // prefixes every error it throws with the table.
+        return { success: false, rows: [], cursor: null, errors: [message] };
+      }
+    }
+  `;
+}
+
+/**
  * Bundle a seed script for server-side execution
  *
  * Creates an entry that:
@@ -165,15 +348,64 @@ export async function bundleSeedScript(
   tableNames: string[],
   baseDir: string = process.cwd(),
 ): Promise<SeedBundleResult> {
+  const bundledCode = await bundleGeneratedEntry({
+    entryFileName: `seed_${namespace}.entry.ts`,
+    entryContent: generateSeedScriptContent(namespace),
+    baseDir,
+  });
+
+  return {
+    namespace,
+    bundledCode,
+    typesIncluded: tableNames,
+  };
+}
+
+/**
+ * Bundle a seed dump script for server-side execution
+ *
+ * The read-only counterpart of the seed script: it selects one page of rows
+ * from a single table ordered by id, so a caller can page through a table with
+ * a keyset cursor instead of holding it all in one message.
+ * @param namespace - TailorDB namespace
+ * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses
+ * @returns Bundled seed dump script result
+ */
+export async function bundleSeedDumpScript(
+  namespace: string,
+  baseDir: string = process.cwd(),
+): Promise<SeedDumpBundleResult> {
+  const bundledCode = await bundleGeneratedEntry({
+    entryFileName: `seed_dump_${namespace}.entry.ts`,
+    entryContent: generateSeedDumpScriptContent(namespace),
+    baseDir,
+  });
+
+  return { namespace, bundledCode };
+}
+
+interface BundleGeneratedEntryParams {
+  /** File name the generated entry is written under the seed dist directory */
+  entryFileName: string;
+  /** Source of the generated entry */
+  entryContent: string;
+  /** Directory whose dependencies and tsconfig the generated entry uses */
+  baseDir: string;
+}
+
+/**
+ * Write a generated server-side entry and bundle it for script execution.
+ * @param params - Entry file name, its source, and the base directory
+ * @returns Bundled script code
+ */
+async function bundleGeneratedEntry(params: BundleGeneratedEntryParams): Promise<string> {
+  const { entryFileName, entryContent, baseDir } = params;
+
   // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");
   fs.mkdirSync(outputDir, { recursive: true });
 
-  // Entry file in output directory
-  const entryPath = path.join(outputDir, `seed_${namespace}.entry.ts`);
-
-  // Generate seed script content
-  const entryContent = generateSeedScriptContent(namespace);
+  const entryPath = path.join(outputDir, entryFileName);
   fs.writeFileSync(entryPath, entryContent);
 
   let tsconfig: string | undefined;
@@ -216,11 +448,5 @@ export async function bundleSeedScript(
   } as rolldown.BuildOptions);
   bundleLog.assertAllResolved();
 
-  const bundledCode = result.output[0].code;
-
-  return {
-    namespace,
-    bundledCode,
-    typesIncluded: tableNames,
-  };
+  return result.output[0].code;
 }
