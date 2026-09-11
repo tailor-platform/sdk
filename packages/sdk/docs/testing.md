@@ -205,11 +205,11 @@ test("upserts against real rows", async () => {
 });
 ```
 
-The generated columns follow the Kysely types, not TailorDB's storage: `text` for string and enum fields, `timestamptz` for datetime, `date` and `time` for date and time, `numeric` rounded to the configured scale for decimal, `jsonb` for nested objects (and arrays of them), Postgres arrays for other array fields. `id` is a generated `uuid` primary key, `.unique()` fields and unique `.indexes()` are enforced, so `ON CONFLICT` upserts behave, and `.default()` values become column defaults (`"now"` becomes the current time). `.serial()` fields are assigned by the database from the configured `start`, `maxValue`, and format. Relations are not enforced.
+The generated columns follow the Kysely types, not TailorDB's storage: `text` for string and enum fields, `timestamptz` for datetime, `date` and `time` for date and time, `numeric` for decimal, rounded to the configured scale and read back with exactly that many fractional digits, `jsonb` for nested objects (and arrays of them), Postgres arrays for other array fields. `id` is a generated `uuid` primary key, `.unique()` fields and unique `.indexes()` are enforced, so `ON CONFLICT` upserts behave, and `.default()` values become column defaults (`"now"` becomes the current time). `.serial()` fields are assigned by the database from the configured `start`, `maxValue`, and format. Relations are not enforced.
 
 What the script cannot reproduce:
 
-- Hooks, validations, and permissions do not run. A required field whose value only a create hook supplies is created nullable, so inserts that omit it succeed; give it a `.default()` if the test reads it back.
+- Hooks, validations, and permissions do not run. A required field whose value only its own field-level create hook supplies is created nullable, so inserts that omit it succeed; give it a `.default()` if the test reads it back. A field filled by a table-level hook stays `NOT NULL`, as its Kysely type still requires it on insert.
 - Serial formats are reproduced for a single `%d`, `%x`, or `%X` specifier with an optional zero-padded width; an octal `%o` format fails generation with an error naming the field.
 - A datetime inside a nested object reads back as a string from `jsonb`, not a `Date`.
 - On a persistent PGlite (`dataDir`), tables created by an earlier run are kept as they were; drop them or start from an empty directory after changing a table definition.
