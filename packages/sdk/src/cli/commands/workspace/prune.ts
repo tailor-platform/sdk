@@ -30,9 +30,9 @@ const ageUnitToMs = {
   d: 24 * 60 * 60 * 1000,
 } as const;
 
-// "" (an unset CI secret) is kept distinct from an omitted option so the run can refuse to sweep
-// unscoped. Fresh per option, like `limitArg`.
-const scopeIdArg = () => z.union([z.literal(""), z.uuid()]).optional();
+// "" (an unset CI secret) is kept distinct from an omitted id so the run can refuse to sweep
+// unscoped.
+const folderIdArg = z.array(z.union([z.literal(""), z.uuid()])).optional();
 
 // Rejects `--limit=` instead of coercing "" to 0. Single-use: politty does not clone pipe schemas per option.
 const limitArg = z.preprocess(
@@ -63,8 +63,9 @@ export interface PruneCriteria {
   nameRegexes: readonly RegExp[];
   /** Minimum age since creation, in milliseconds. `0` selects any age. */
   olderThanMs: number;
-  organizationId?: string;
-  folderId?: string;
+  folderIds?: ReadonlySet<string>;
+  /** Only workspaces with no organization and no folder. */
+  personal?: boolean;
   /** Exact names kept even when they match. */
   exclude: ReadonlySet<string>;
 }
@@ -87,13 +88,11 @@ function matchesName(workspace: Workspace, criteria: PruneCriteria): boolean {
 }
 
 function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
-  if (criteria.organizationId && workspace.organizationId !== criteria.organizationId) {
-    return false;
-  }
-  if (criteria.folderId && workspace.folderId !== criteria.folderId) {
-    return false;
-  }
-  return true;
+  const hasFolderScope = criteria.folderIds !== undefined && criteria.folderIds.size > 0;
+  if (!hasFolderScope && !criteria.personal) return true;
+  if (hasFolderScope && criteria.folderIds?.has(workspace.folderId)) return true;
+  if (criteria.personal && !workspace.organizationId && !workspace.folderId) return true;
+  return false;
 }
 
 /**
@@ -158,7 +157,10 @@ export function selectPruneCandidates(
 
 async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> {
   return fetchPaged(async (pageToken, pageSize) => {
-    const { workspaces, nextPageToken } = await client.listWorkspaces({ pageToken, pageSize });
+    const { workspaces, nextPageToken } = await client.listWorkspaces({
+      pageToken,
+      pageSize,
+    });
     return [workspaces, nextPageToken];
   });
 }
@@ -197,17 +199,25 @@ const KEPT_REASONS: {
   reason: string;
 }[] = [
   { key: "excluded", selection: "excluded", reason: "excluded by --exclude" },
-  { key: "deleteProtection", selection: "protectedSkipped", reason: "delete protection is on" },
-  { key: "unknownAge", selection: "missingCreateTime", reason: "creation time is unknown" },
+  {
+    key: "deleteProtection",
+    selection: "protectedSkipped",
+    reason: "delete protection is on",
+  },
+  {
+    key: "unknownAge",
+    selection: "missingCreateTime",
+    reason: "creation time is unknown",
+  },
 ];
 
 export const pruneCommand = defineAppCommand({
   name: "prune",
   description: "Delete stale temporary workspaces that match a name filter and an age threshold.",
   notes: ml`
-    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --folder-id / --personal scope. A workspace is in scope when it is in one of the given --folder-id values, or (with --personal) when it belongs to no organization and no folder; the two combine with OR. Run with --dry-run first to see what would be deleted.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, scope, exclusion, or delete-protection criteria that selected it. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), --older-than 0s (no age check) is only accepted together with --folder-id or --personal, and a --folder-id that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, scope, exclusion, or delete-protection criteria that selected it. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
@@ -218,16 +228,14 @@ export const pruneCommand = defineAppCommand({
     }),
     "older-than": arg(ageArg, {
       description:
-        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id",
+        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --folder-id or --personal",
     }),
-    "organization-id": arg(scopeIdArg(), {
-      alias: "o",
-      description: "Only consider workspaces in this organization",
-      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    "folder-id": arg(folderIdArg, {
+      description:
+        "Only consider workspaces in this folder (repeatable). Falls back to TAILOR_PLATFORM_FOLDER_ID as a single value when omitted",
     }),
-    "folder-id": arg(scopeIdArg(), {
-      description: "Only consider workspaces in this folder",
-      env: "TAILOR_PLATFORM_FOLDER_ID",
+    personal: arg(z.boolean().default(false), {
+      description: "Only consider personal workspaces, which belong to no organization or folder",
     }),
     exclude: arg(z.array(z.string().min(1)).optional(), {
       description: "Keep a workspace with this exact name even when it matches (repeatable)",
@@ -254,47 +262,52 @@ export const pruneCommand = defineAppCommand({
         details: "Only workspaces whose name matches the filter are considered for deletion.",
       });
     }
-    const emptyScopeOptions = (
-      [
-        ["--organization-id", args["organization-id"]],
-        ["--folder-id", args["folder-id"]],
-      ] as const
-    )
-      .filter(([, value]) => value === "")
-      .map(([option]) => option);
-    if (emptyScopeOptions.length > 0) {
+    const folderIdEnv = process.env.TAILOR_PLATFORM_FOLDER_ID;
+    const folderIdInputs =
+      args["folder-id"] ?? (folderIdEnv !== undefined ? [folderIdEnv] : undefined);
+    if (folderIdInputs?.includes("")) {
       throw CLIError({
         code: "EMPTY_SCOPE",
-        message: `${emptyScopeOptions.join(" and ")} resolved to an empty value.`,
+        message: "--folder-id resolved to an empty value.",
         details:
           "An empty scope is indistinguishable from no scope, so the sweep would cover every visible workspace. This usually means an unset CI secret.",
         suggestion:
-          "Set the id (or its environment variable), or drop the option to sweep without a scope on purpose.",
+          "Set the id (or TAILOR_PLATFORM_FOLDER_ID), or drop the option to sweep without a scope on purpose.",
       });
     }
-    const organizationId = args["organization-id"] || undefined;
-    const folderId = args["folder-id"] || undefined;
+    if (!folderIdArg.safeParse(folderIdInputs).success) {
+      throw CLIError({
+        code: "INVALID_FOLDER_ID",
+        message: "--folder-id must be a valid UUID.",
+        suggestion: "Check the id or TAILOR_PLATFORM_FOLDER_ID.",
+      });
+    }
+    const folderIds =
+      folderIdInputs && folderIdInputs.length > 0 ? new Set(folderIdInputs) : undefined;
+    const personal = args.personal;
 
     const olderThanMs = parseAge(args["older-than"]);
-    if (olderThanMs === 0 && !organizationId && !folderId) {
+    if (olderThanMs === 0 && !folderIds && !personal) {
       throw CLIError({
         code: "UNSCOPED_ZERO_AGE",
-        message: "--older-than 0s requires --organization-id or --folder-id.",
+        message: "--older-than 0s requires --folder-id or --personal.",
         details:
-          "Without an age check the name filter is the only guard, so the sweep must be scoped to an organization or folder.",
+          "Without an age check the name filter is the only guard, so the sweep must be scoped to a folder or to personal workspaces.",
       });
     }
     const criteria: PruneCriteria = {
       nameRegexes: namePatterns.map(compileNameRegex),
       olderThanMs,
-      organizationId,
-      folderId,
+      folderIds,
+      personal,
       exclude: new Set(args.exclude ?? []),
     };
 
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({ profile: args.profile });
-    const platformConfig = await loadPlatformClientConfig({ profile: args.profile });
+    const platformConfig = await loadPlatformClientConfig({
+      profile: args.profile,
+    });
     const client = await initOperatorClient(accessToken, platformConfig);
 
     const selection = selectPruneCandidates(await fetchAllWorkspaces(client), criteria, new Date());
@@ -304,7 +317,12 @@ export const pruneCommand = defineAppCommand({
       candidates: [],
       deleted: [],
       failed: [],
-      skipped: { excluded: [], deleteProtection: [], unknownAge: [], changed: [] },
+      skipped: {
+        excluded: [],
+        deleteProtection: [],
+        unknownAge: [],
+        changed: [],
+      },
     };
     for (const { key, selection: group, reason } of KEPT_REASONS) {
       for (const workspace of selection[group]) {
@@ -375,7 +393,9 @@ export const pruneCommand = defineAppCommand({
       try {
         // The confirmation prompt leaves a window in which the workspace can change, so the
         // criteria that selected it are re-checked against a fresh read before it is deleted.
-        const { workspace: current } = await client.getWorkspace({ workspaceId: workspace.id });
+        const { workspace: current } = await client.getWorkspace({
+          workspaceId: workspace.id,
+        });
         const staleReason = current ? staleCandidateReason(current, criteria) : undefined;
         if (staleReason) {
           result.skipped.changed.push(workspace.name);

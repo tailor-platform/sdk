@@ -61,6 +61,7 @@ const NOW = new Date("2026-09-07T12:00:00Z");
 const ORG_A = "11111111-1111-4111-8111-111111111111";
 const ORG_B = "22222222-2222-4222-8222-222222222222";
 const FOLDER_A = "33333333-3333-4333-8333-333333333333";
+const FOLDER_B = "44444444-4444-4444-8444-444444444444";
 
 function hoursAgo(hours: number): Date {
   return new Date(NOW.getTime() - hours * 3_600_000);
@@ -68,7 +69,9 @@ function hoursAgo(hours: number): Date {
 
 function workspace(
   name: string,
-  overrides: Partial<Omit<Workspace, "createTime">> & { createdAt?: Date | null } = {},
+  overrides: Partial<Omit<Workspace, "createTime">> & {
+    createdAt?: Date | null;
+  } = {},
 ): Workspace {
   const { createdAt = hoursAgo(48), ...rest } = overrides;
   return {
@@ -164,7 +167,10 @@ describe("selectPruneCandidates", () => {
 
     const selection = selectPruneCandidates(
       [byFirst, bySecond],
-      { ...baseCriteria, nameRegexes: [...baseCriteria.nameRegexes, /^(?:my-app-pr-\d+)$/] },
+      {
+        ...baseCriteria,
+        nameRegexes: [...baseCriteria.nameRegexes, /^(?:my-app-pr-\d+)$/],
+      },
       NOW,
     );
 
@@ -177,25 +183,30 @@ describe("selectPruneCandidates", () => {
     expect(selectPruneCandidates([suffixed], baseCriteria, NOW).candidates).toEqual([]);
   });
 
-  test("scopes to the organization and folder when given", () => {
-    const inScope = workspace("e2e-ws-a", { folderId: FOLDER_A });
-    const otherOrg = workspace("e2e-ws-b", { organizationId: ORG_B, folderId: FOLDER_A });
-    const otherFolder = workspace("e2e-ws-c");
+  test("scopes to the given folder ids and personal workspaces, combined with OR", () => {
+    const inFolderA = workspace("e2e-ws-a", { folderId: FOLDER_A });
+    const inFolderB = workspace("e2e-ws-b", { folderId: FOLDER_B });
+    const personalWs = workspace("e2e-ws-c", {
+      organizationId: "",
+      folderId: "",
+    });
+    const orgOnly = workspace("e2e-ws-d", { organizationId: ORG_B });
+    const workspaces = [inFolderA, inFolderB, personalWs, orgOnly];
 
     expect(
-      selectPruneCandidates(
-        [inScope, otherOrg, otherFolder],
-        { ...baseCriteria, organizationId: ORG_A },
-        NOW,
-      ).candidates,
-    ).toEqual([inScope, otherFolder]);
+      selectPruneCandidates(workspaces, { ...baseCriteria, folderIds: new Set([FOLDER_A]) }, NOW)
+        .candidates,
+    ).toEqual([inFolderA]);
+    expect(
+      selectPruneCandidates(workspaces, { ...baseCriteria, personal: true }, NOW).candidates,
+    ).toEqual([personalWs]);
     expect(
       selectPruneCandidates(
-        [inScope, otherOrg, otherFolder],
-        { ...baseCriteria, organizationId: ORG_A, folderId: FOLDER_A },
+        workspaces,
+        { ...baseCriteria, folderIds: new Set([FOLDER_A]), personal: true },
         NOW,
       ).candidates,
-    ).toEqual([inScope]);
+    ).toEqual([inFolderA, personalWs]);
   });
 
   test("keeps excluded names even when they match", () => {
@@ -213,7 +224,9 @@ describe("selectPruneCandidates", () => {
   });
 
   test("never selects delete-protected workspaces or ones without a creation time", () => {
-    const protectedWs = workspace("e2e-ws-protected", { deleteProtection: true });
+    const protectedWs = workspace("e2e-ws-protected", {
+      deleteProtection: true,
+    });
     const noCreateTime = workspace("e2e-ws-unknown-age", { createdAt: null });
 
     const selection = selectPruneCandidates([protectedWs, noCreateTime], baseCriteria, NOW);
@@ -238,7 +251,6 @@ describe("workspace prune command", () => {
     vi.clearAllMocks();
     loggerState.jsonMode = false;
     vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
-    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", undefined);
     vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     try {
@@ -267,8 +279,8 @@ describe("workspace prune command", () => {
     expect(client.listWorkspaces).not.toHaveBeenCalled();
   });
 
-  test("only accepts a zero age together with an organization or folder scope", async () => {
-    const client = stubClient([workspace("e2e-ws-1", { createdAt: NOW })]);
+  test("only accepts a zero age together with a folder or personal scope", async () => {
+    const client = stubClient([workspace("e2e-ws-1", { createdAt: NOW, folderId: FOLDER_A })]);
 
     const unscoped = await runCommand(pruneCommand, [
       "--name",
@@ -277,7 +289,7 @@ describe("workspace prune command", () => {
       "0s",
       "--yes",
     ]);
-    expectFailure(unscoped, "--organization-id");
+    expectFailure(unscoped, "--folder-id");
     expect(client.deleteWorkspace).not.toHaveBeenCalled();
 
     const scoped = await runCommand(pruneCommand, [
@@ -285,12 +297,24 @@ describe("workspace prune command", () => {
       "e2e-ws-.*",
       "--older-than",
       "0s",
-      "--organization-id",
-      ORG_A,
+      "--folder-id",
+      FOLDER_A,
       "--yes",
     ]);
     expect(scoped.success).toBe(true);
-    expect(client.deleteWorkspace).toHaveBeenCalledWith({ workspaceId: "id-e2e-ws-1" });
+    expect(client.deleteWorkspace).toHaveBeenCalledWith({
+      workspaceId: "id-e2e-ws-1",
+    });
+
+    const scopedPersonal = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "0s",
+      "--personal",
+      "--yes",
+    ]);
+    expect(scopedPersonal.success).toBe(true);
   });
 
   test("anchors --name to the whole name", async () => {
@@ -529,8 +553,14 @@ describe("workspace prune command", () => {
   test("fetches every page of the workspace list", async () => {
     const client = stubClient([]);
     client.listWorkspaces
-      .mockResolvedValueOnce({ workspaces: [workspace("e2e-ws-1")], nextPageToken: "page-2" })
-      .mockResolvedValueOnce({ workspaces: [workspace("e2e-ws-2")], nextPageToken: "" });
+      .mockResolvedValueOnce({
+        workspaces: [workspace("e2e-ws-1")],
+        nextPageToken: "page-2",
+      })
+      .mockResolvedValueOnce({
+        workspaces: [workspace("e2e-ws-2")],
+        nextPageToken: "",
+      });
 
     const result = await runCommand(pruneCommand, [
       "--name",
@@ -567,7 +597,9 @@ describe("workspace prune command", () => {
     expect(result.success).toBe(true);
     expect(assertWritable).toHaveBeenCalledWith({ profile: "staging" });
     expect(loadAccessToken).toHaveBeenCalledWith({ profile: "staging" });
-    expect(loadPlatformClientConfig).toHaveBeenCalledWith({ profile: "staging" });
+    expect(loadPlatformClientConfig).toHaveBeenCalledWith({
+      profile: "staging",
+    });
   });
 
   test("removes local profiles that pointed at the deleted workspaces", async () => {
@@ -615,9 +647,9 @@ describe("workspace prune command", () => {
     expect(logger.success).toHaveBeenCalledWith(expect.stringContaining("Deleted 2"));
   });
 
-  test("refuses to sweep when a scope environment variable is set but empty", async () => {
-    const client = stubClient([workspace("e2e-ws-a", { organizationId: ORG_B })]);
-    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", "");
+  test("refuses to sweep when the folder-id environment variable is set but empty", async () => {
+    const client = stubClient([workspace("e2e-ws-a", { folderId: FOLDER_A })]);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", "");
 
     const result = await runCommand(pruneCommand, [
       "--name",
@@ -627,7 +659,23 @@ describe("workspace prune command", () => {
       "--yes",
     ]);
 
-    expectFailure(result, "--organization-id");
+    expectFailure(result, "--folder-id");
+    expect(client.listWorkspaces).not.toHaveBeenCalled();
+  });
+
+  test("rejects an invalid folder id from the environment before listing workspaces", async () => {
+    const client = stubClient([workspace("e2e-ws-a")]);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", "not-a-uuid");
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      "--yes",
+    ]);
+
+    expectFailure(result, "--folder-id");
     expect(client.listWorkspaces).not.toHaveBeenCalled();
   });
 
@@ -672,12 +720,128 @@ describe("workspace prune command", () => {
     ]);
   });
 
-  test("reads the organization scope from the environment", async () => {
+  test.each([
+    { scope: [], expected: ["a", "b", "personal", "org-only"] },
+    { scope: ["--folder-id", FOLDER_A, "--folder-id", FOLDER_B], expected: ["a", "b"] },
+    { scope: ["--personal"], expected: ["personal"] },
+    {
+      scope: ["--folder-id", FOLDER_A, "--folder-id", FOLDER_B, "--personal"],
+      expected: ["a", "b", "personal"],
+    },
+  ])("deletes only the requested scope: $scope", async ({ scope, expected }) => {
     const client = stubClient([
-      workspace("e2e-ws-a"),
-      workspace("e2e-ws-b", { organizationId: ORG_B }),
+      workspace("e2e-ws-a", { folderId: FOLDER_A }),
+      workspace("e2e-ws-b", { organizationId: "", folderId: FOLDER_B }),
+      workspace("e2e-ws-personal", { organizationId: "", folderId: "" }),
+      workspace("e2e-ws-org-only"),
     ]);
-    vi.stubEnv("TAILOR_PLATFORM_ORGANIZATION_ID", ORG_A);
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "24h",
+      ...scope,
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace.mock.calls).toEqual(
+      expected.map((name) => [{ workspaceId: `id-e2e-ws-${name}` }]),
+    );
+  });
+
+  test.each([FOLDER_B, "", "not-a-uuid"])(
+    "explicit folder ids override the environment value %j",
+    async (folderIdEnv) => {
+      const client = stubClient([
+        workspace("e2e-ws-a", { folderId: FOLDER_A }),
+        workspace("e2e-ws-b", { folderId: FOLDER_B }),
+      ]);
+      vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", folderIdEnv);
+
+      const result = await runCommand(pruneCommand, [
+        "--name",
+        "e2e-ws-.*",
+        "--older-than",
+        "0s",
+        "--folder-id",
+        FOLDER_A,
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace.mock.calls).toEqual([[{ workspaceId: "id-e2e-ws-a" }]]);
+    },
+  );
+
+  test("rejects an empty repeated folder id even with a personal scope", async () => {
+    const client = stubClient([workspace("e2e-ws-a", { organizationId: "" })]);
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "0s",
+      "--folder-id",
+      FOLDER_A,
+      "--folder-id",
+      "",
+      "--personal",
+      "--yes",
+    ]);
+
+    expectFailure(result, "--folder-id");
+    expect(client.listWorkspaces).not.toHaveBeenCalled();
+  });
+
+  test("combines the environment folder scope with personal workspaces", async () => {
+    const client = stubClient([
+      workspace("e2e-ws-a", { folderId: FOLDER_A }),
+      workspace("e2e-ws-b", { folderId: FOLDER_B }),
+      workspace("e2e-ws-personal", { organizationId: "", createdAt: NOW }),
+    ]);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", FOLDER_A);
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "0s",
+      "--personal",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace.mock.calls).toEqual([
+      [{ workspaceId: "id-e2e-ws-a" }],
+      [{ workspaceId: "id-e2e-ws-personal" }],
+    ]);
+  });
+
+  test("keeps a personal workspace that joined an organization before deletion", async () => {
+    const client = stubClient([workspace("e2e-ws-personal", { organizationId: "" })]);
+    client.getWorkspace.mockResolvedValue({ workspace: workspace("e2e-ws-personal") });
+
+    const result = await runCommand(pruneCommand, [
+      "--name",
+      "e2e-ws-.*",
+      "--older-than",
+      "0s",
+      "--personal",
+      "--yes",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.deleteWorkspace).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("e2e-ws-personal"));
+  });
+
+  test("reads the folder scope from the environment", async () => {
+    const client = stubClient([
+      workspace("e2e-ws-a", { folderId: FOLDER_A }),
+      workspace("e2e-ws-b", { folderId: FOLDER_B }),
+    ]);
+    vi.stubEnv("TAILOR_PLATFORM_FOLDER_ID", FOLDER_A);
 
     const result = await runCommand(pruneCommand, [
       "--name",
@@ -746,12 +910,15 @@ describe("workspace prune command", () => {
   });
 
   test("skips a workspace that moved out of the requested scope after it was listed", async () => {
-    const client = stubClient([workspace("e2e-ws-1"), workspace("e2e-ws-2")]);
+    const client = stubClient([
+      workspace("e2e-ws-1", { folderId: FOLDER_A }),
+      workspace("e2e-ws-2", { folderId: FOLDER_A }),
+    ]);
     client.getWorkspace.mockImplementation(async ({ workspaceId }: { workspaceId: string }) => ({
       workspace:
         workspaceId === "id-e2e-ws-1"
-          ? workspace("e2e-ws-1", { organizationId: ORG_B })
-          : workspace("e2e-ws-2"),
+          ? workspace("e2e-ws-1", { folderId: FOLDER_B })
+          : workspace("e2e-ws-2", { folderId: FOLDER_A }),
     }));
 
     const result = await runCommand(pruneCommand, [
@@ -759,8 +926,8 @@ describe("workspace prune command", () => {
       "e2e-ws-.*",
       "--older-than",
       "24h",
-      "--organization-id",
-      ORG_A,
+      "--folder-id",
+      FOLDER_A,
       "--yes",
     ]);
 
@@ -771,7 +938,9 @@ describe("workspace prune command", () => {
 
   test("skips a workspace that was renamed out of the name filter after it was listed", async () => {
     const client = stubClient([workspace("e2e-ws-1")]);
-    client.getWorkspace.mockResolvedValue({ workspace: workspace("kept-alive") });
+    client.getWorkspace.mockResolvedValue({
+      workspace: workspace("kept-alive"),
+    });
 
     const result = await runCommand(pruneCommand, [
       "--name",
