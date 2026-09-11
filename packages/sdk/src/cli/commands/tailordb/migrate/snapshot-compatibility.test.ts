@@ -332,6 +332,42 @@ describe("migration file compatibility", () => {
     });
   });
 
+  test.each([
+    ['typeof _data !== "undefined" && _data.name', "Alice"],
+    ["typeof _data", "object"],
+  ])("preserves guarded legacy hook references in %s", (expr, expected) => {
+    const raw = readHistoricalSnapshot();
+    raw.tables.Customer!.fields = {
+      name: { type: "string", required: true },
+      label: { type: "string", required: false, hooks: { create: { expr }, update: { expr } } },
+    };
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+    for (const operation of ["create", "update"] as const) {
+      const run = new Function(
+        "_input",
+        "_oldRecord",
+        `return ${manifest.schema!.typeHook![operation]!.expr!}\n`,
+      );
+      expect(run({ name: "Alice" }, {})).toMatchObject({ label: expected });
+    }
+  });
+
+  test("preserves failures in guarded legacy validators", () => {
+    const raw = readHistoricalSnapshot();
+    raw.tables.Customer!.fields.name!.validate = [
+      {
+        script: { expr: 'typeof _data !== "undefined" && _data.enabled' },
+        errorMessage: "Record disabled",
+      },
+    ];
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    expect(validate(snapshot.tables.Customer!, { name: "Alice", enabled: false })).toEqual({
+      name: "Record disabled",
+    });
+    expect(validate(snapshot.tables.Customer!, { name: "Alice", enabled: true })).toEqual({});
+  });
+
   test("leaves current expressions and locally bound legacy-looking names unchanged", () => {
     const raw = readHistoricalSnapshot();
     raw.tables.Customer!.fields = {

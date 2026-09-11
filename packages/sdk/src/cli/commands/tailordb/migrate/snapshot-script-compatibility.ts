@@ -7,7 +7,10 @@ import type {
 } from "./snapshot-types";
 
 function usesLegacyData(expr: string): boolean {
-  return expr.includes("_data") && findUndefinedReferences(`(${expr}\n);`).has("_data");
+  return (
+    expr.includes("_data") &&
+    findUndefinedReferences(`(${expr}\n);`, { includeGuardedReferences: true }).has("_data")
+  );
 }
 
 function normalizeValidations(validations: SnapshotValidation[]): SnapshotValidation[] {
