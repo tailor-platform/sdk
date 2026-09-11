@@ -336,7 +336,9 @@ describe("db-types-generator", () => {
       ]);
       const content = fs.readFileSync(filePath, "utf-8");
 
-      expect(content).toContain("kind: ColumnType<string | null, string | null, string | null>;");
+      expect(content).toContain(
+        'kind: ColumnType<("MEETING" | "REMINDER") | null, ("MEETING" | "REMINDER") | null, ("MEETING" | "REMINDER") | null>;',
+      );
     });
 
     test("expands the Timestamp alias into the slots of a clearable datetime field", async () => {
