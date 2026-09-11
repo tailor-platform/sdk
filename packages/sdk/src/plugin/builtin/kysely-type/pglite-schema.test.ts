@@ -87,7 +87,13 @@ describe("generatePGliteSchemaModule", () => {
       { namespace: "tailordb", tables: parsed({ Invoice: invoice, EveryType: everyType }) },
       {
         namespace: "other",
-        tables: parsed({ "Tick`${x}": db.table("Tick`${x}", { v: db.string() }) }, "other"),
+        tables: parsed(
+          {
+            "Tick`${x}": db.table("Tick`${x}", { v: db.string() }),
+            Cr: db.table("Cr", { v: db.string().default("a\r\nb") }),
+          },
+          "other",
+        ),
       },
     ]);
 
@@ -105,6 +111,7 @@ describe("generatePGliteSchemaModule", () => {
     );
     expect(content).not.toContain("Invoice_idx_region_invoiceNumber");
     expect(content).toContain('  "other": `CREATE TABLE IF NOT EXISTS "Tick\\`\\${x}" (');
+    expect(content).toContain("\"v\" text NOT NULL DEFAULT 'a\\r\nb'");
     expect(content).toMatch(/\n} as const;\n$/);
   });
 });

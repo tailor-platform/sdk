@@ -22,8 +22,14 @@ export function toDDLTables(tables: Record<string, TailorDBType>): DDLTableConfi
   }));
 }
 
+// A template literal keeps line feeds but folds a carriage return into one.
 function templateLiteral(value: string): string {
-  return `\`${value.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${")}\``;
+  const escaped = value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("`", "\\`")
+    .replaceAll("${", "\\${")
+    .replaceAll("\r", "\\r");
+  return `\`${escaped}\``;
 }
 
 /**

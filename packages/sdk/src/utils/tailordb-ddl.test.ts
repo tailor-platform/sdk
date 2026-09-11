@@ -272,8 +272,19 @@ describe("generateTableDDL", () => {
       );
     });
 
+    test("hexadecimal serial formats render through to_hex, padded like %d", () => {
+      expect(columnLine({ n: { type: "string", serial: { start: 1, format: "%x" } } }, "n")).toBe(
+        '"n" text DEFAULT (to_hex(nextval(\'"Item_n_seq"\')))',
+      );
+      expect(
+        columnLine({ n: { type: "string", serial: { start: 1, format: "0x%04X" } } }, "n"),
+      ).toBe(
+        "\"n\" text DEFAULT ('0x' || translate(format('%4s', upper(to_hex(nextval('\"Item_n_seq\"')))), ' ', '0'))",
+      );
+    });
+
     test("rejects serial formats it cannot reproduce", () => {
-      for (const format of ["%x", "%o", "%X", "%d-%d", "no-specifier", "%s"]) {
+      for (const format of ["%o", "%d-%d", "no-specifier", "%s"]) {
         expect(() =>
           generateTableDDL(table({ n: { type: "string", serial: { start: 1, format } } })),
         ).toThrow(/"n"/);
@@ -309,10 +320,36 @@ describe("generateTableDDL", () => {
     expect(create).toContain('"co""l" text');
   });
 
-  test("rejects identifiers longer than Postgres allows", () => {
+  test("derived sequence and index names are shortened to fit Postgres, distinctly per source", () => {
+    const tableName = "PurchaseOrderApprovalWorkflowStepAssignment";
+    const ddl = (field: string) =>
+      generateTableDDL({
+        name: tableName,
+        fields: { id: { type: "uuid" }, [field]: { type: "string", serial: { start: 1 } } },
+        indexes: { [`${field}_by_step`]: { fields: [field, "id"], unique: true } },
+      });
+    const [sequence, create, index] = ddl("approvalSequenceNumber");
+    const sequenceName = /SEQUENCE IF NOT EXISTS "([^"]+)"/.exec(sequence!)![1]!;
+    expect(sequenceName.length).toBeLessThanOrEqual(63);
+    expect(sequenceName).toMatch(
+      /^PurchaseOrderApprovalWorkflowStepAssignment_approvalS\w*_[0-9a-f]{8}$/,
+    );
+    expect(create).toContain(`nextval('"${sequenceName}"')`);
+    expect(/INDEX IF NOT EXISTS "([^"]+)"/.exec(index!)![1]!.length).toBeLessThanOrEqual(63);
+
+    const [otherSequence] = ddl("approvalSequenceNumberOfTheSecondKind");
+    expect(otherSequence).not.toBe(sequence);
+    expect(ddl("approvalSequenceNumber")[0]).toBe(sequence);
+  });
+
+  test("table and column names are passed through untouched; Postgres truncates them consistently", () => {
     const long = "x".repeat(64);
-    expect(() => generateTableDDL({ name: long, fields: { id: { type: "uuid" } } })).toThrow(/63/);
-    expect(() => generateTableDDL(table({ [long]: { type: "string" } }))).toThrow(/63/);
+    const [create] = generateTableDDL({
+      name: long,
+      fields: { id: { type: "uuid" }, [long]: { type: "string" } },
+    });
+    expect(create).toContain(`CREATE TABLE IF NOT EXISTS "${long}"`);
+    expect(create).toContain(`"${long}" text`);
   });
 });
 

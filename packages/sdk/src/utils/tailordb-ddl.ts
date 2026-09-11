@@ -68,12 +68,26 @@ export function mapFieldTypeToPostgresType(fieldType: string): string {
 }
 
 function identifier(name: string): string {
-  if (utf8.encode(name).length > MAX_IDENTIFIER_BYTES) {
-    throw new Error(
-      `Identifier "${name}" exceeds PostgreSQL's ${MAX_IDENTIFIER_BYTES}-byte limit.`,
-    );
-  }
   return `"${name.replaceAll('"', '""')}"`;
+}
+
+function fnv1aHex(value: string): string {
+  let hash = 0x811c9dc5;
+  for (const byte of utf8.encode(value)) {
+    hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+// Postgres truncates identifiers to 63 bytes, which would let two long
+// derived names collide and `IF NOT EXISTS` skip the second. Table and
+// column names are left alone: their truncation is applied to queries too.
+function derivedIdentifier(name: string): string {
+  if (utf8.encode(name).length <= MAX_IDENTIFIER_BYTES) return identifier(name);
+  const suffix = `_${fnv1aHex(name)}`;
+  let head = name;
+  while (utf8.encode(head + suffix).length > MAX_IDENTIFIER_BYTES) head = head.slice(0, -1);
+  return identifier(head + suffix);
 }
 
 function stringLiteral(value: string): string {
@@ -138,26 +152,29 @@ interface SerialFormat {
   prefix: string;
   width: number;
   zeroPad: boolean;
+  conversion: "d" | "x" | "X";
   suffix: string;
 }
 
-// printf-style with exactly one conversion specifier; only %d is reproducible
-// as a sequence default.
+// printf-style with exactly one conversion specifier; octal has no Postgres
+// formatting function to stand in for it.
 function parseSerialFormat(format: string, label: string): SerialFormat {
   const match =
     /^(?<prefix>[^%]*)%(?<zero>0?)(?<width>\d*)(?<conversion>[a-zA-Z])(?<suffix>[^%]*)$/.exec(
       format,
     );
   const groups = match?.groups;
-  if (!groups || groups.conversion !== "d") {
+  const conversion = groups?.conversion;
+  if (!groups || (conversion !== "d" && conversion !== "x" && conversion !== "X")) {
     throw new Error(
-      `Serial format "${format}" of field ${label} is not supported; use a single %d specifier with an optional width (e.g. "INV-%05d").`,
+      `Serial format "${format}" of field ${label} is not supported; use a single %d, %x, or %X specifier with an optional width (e.g. "INV-%05d").`,
     );
   }
   return {
     prefix: groups.prefix ?? "",
     zeroPad: groups.zero === "0",
     width: groups.width ? Number(groups.width) : 0,
+    conversion,
     suffix: groups.suffix ?? "",
   };
 }
@@ -173,13 +190,20 @@ function sequenceRange(serial: NonNullable<DDLFieldConfig["serial"]>): string {
   return range.join(" ");
 }
 
+const SERIAL_CONVERSIONS: Record<SerialFormat["conversion"], (nextval: string) => string> = {
+  d: (nextval) => nextval,
+  x: (nextval) => `to_hex(${nextval})`,
+  X: (nextval) => `upper(to_hex(${nextval}))`,
+};
+
 function serialStringDefault(sequence: string, format: string | undefined, label: string): string {
-  const nextval = `nextval(${stringLiteral(identifier(sequence))})`;
+  const nextval = `nextval(${stringLiteral(derivedIdentifier(sequence))})`;
   if (format === undefined) return `(${nextval}::text)`;
-  const { prefix, width, zeroPad, suffix } = parseSerialFormat(format, label);
-  let value = `${nextval}::text`;
+  const { prefix, width, zeroPad, conversion, suffix } = parseSerialFormat(format, label);
+  const number = SERIAL_CONVERSIONS[conversion](nextval);
+  let value = conversion === "d" ? `${number}::text` : number;
   if (width > 0) {
-    value = `format('%${width}s', ${nextval})`;
+    value = `format('%${width}s', ${number})`;
     if (zeroPad) value = `translate(${value}, ' ', '0')`;
   }
   const parts = [
@@ -225,7 +249,7 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
  * `IF NOT EXISTS` would otherwise silently skip.
  * @param table - Table name, fields, and indexes
  * @returns Statements in execution order, without trailing semicolons
- * @throws If a field type, default, serial format, or identifier cannot be expressed
+ * @throws If a field type, default, or serial format cannot be expressed
  */
 export function generateTableDDL(table: DDLTableConfig): string[] {
   const tableIdentifier = identifier(table.name);
@@ -236,7 +260,7 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
     if (fieldName === "id") continue;
     if (field.serial && field.type !== "integer") {
       sequences.push(
-        `CREATE SEQUENCE IF NOT EXISTS ${identifier(sequenceName(table.name, fieldName))} ${sequenceRange(field.serial)}`,
+        `CREATE SEQUENCE IF NOT EXISTS ${derivedIdentifier(sequenceName(table.name, fieldName))} ${sequenceRange(field.serial)}`,
       );
     }
     columns.push(`  ${columnDefinition(table.name, fieldName, field)}`);
@@ -246,7 +270,7 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
     .filter(([, index]) => index.unique)
     .map(
       ([name, index]) =>
-        `CREATE UNIQUE INDEX IF NOT EXISTS ${identifier(`${table.name}_${name}_idx`)} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${derivedIdentifier(`${table.name}_${name}_idx`)} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
     );
 
   return [
