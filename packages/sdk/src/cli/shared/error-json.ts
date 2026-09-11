@@ -2,8 +2,23 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
 import { redactSecrets } from "./logger";
 
-// Free-text envelope fields that can carry a registered secret.
-const REDACTABLE_ENVELOPE_FIELDS = ["message", "details", "suggestion", "stack"] as const;
+/**
+ * Redacts registered secrets from every string found in `value`, however deeply nested —
+ * `error.context` is an arbitrary `Record<string, unknown>`, not just the known top-level
+ * string fields, so a secret could in principle reach it through a nested value.
+ * @param value - Value to redact strings within
+ * @returns `value` with every string leaf redacted
+ */
+function redactDeep(value: unknown): unknown {
+  if (typeof value === "string") return redactSecrets(value);
+  if (Array.isArray(value)) return value.map(redactDeep);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, redactDeep(entry)]),
+    );
+  }
+  return value;
+}
 
 export interface ErrorToJsonOptions {
   /** Include the original stack trace in the error envelope. */
@@ -69,10 +84,11 @@ export function errorToJson(
 /**
  * Serialize a CLI failure into the stable JSON error envelope.
  *
- * Redacts registered secrets from the envelope's free-text fields before this function's
- * own `JSON.stringify` call, rather than relying only on the redaction `logger.log()` does
- * on the final string: an upstream error message can already embed a secret in JSON-escaped
- * form (e.g. echoed back inside a JSON API error body), and stringifying the envelope would
+ * Redacts registered secrets from every string in the envelope, however deeply nested,
+ * before this function's own `JSON.stringify` call, rather than relying only on the
+ * redaction `logger.log()` does on the final string: an upstream error message (or
+ * `error.context`, an arbitrary record) can already embed a secret in JSON-escaped form
+ * (e.g. echoed back inside a JSON API error body), and stringifying the envelope would
  * escape that a second time, no longer matching a registered secret's single-level-escaped
  * form.
  * @param error - Failure to serialize
@@ -81,11 +97,7 @@ export function errorToJson(
  */
 export function serializeError(error: unknown, options?: ErrorToJsonOptions): string {
   const envelope = errorToJson(error, options);
-  const redactedError = { ...envelope.error };
-  for (const field of REDACTABLE_ENVELOPE_FIELDS) {
-    const value = redactedError[field];
-    if (typeof value === "string") redactedError[field] = redactSecrets(value);
-  }
+  const redactedError = redactDeep(envelope.error) as Record<string, unknown>;
   try {
     return JSON.stringify({ error: redactedError });
   } catch {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { serializeError } from "./error-json";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
 
 describe("serializeError", () => {
@@ -23,5 +24,19 @@ describe("serializeError", () => {
     expect(parsed.error.message).not.toContain(secret);
     expect(parsed.error.message).not.toContain("secret-with-quotes");
     expect(parsed.error.message).toContain("<redacted>");
+  });
+
+  test("redacts a secret nested inside CLIError.context, an arbitrary record", () => {
+    logger.registerSecret("nested-context-secret-value");
+    const error = CLIError({
+      message: "operation failed",
+      context: { request: { headers: { authorization: "nested-context-secret-value" } } },
+    });
+    const output = serializeError(error);
+    const parsed = JSON.parse(output) as {
+      error: { context: { request: { headers: { authorization: string } } } };
+    };
+    expect(parsed.error.context.request.headers.authorization).toBe("<redacted>");
+    expect(output).not.toContain("nested-context-secret-value");
   });
 });
