@@ -237,9 +237,10 @@ export const logger = {
 
   /**
    * Registers a value to be redacted from diagnostic log output (`info`/`success`/`warn`/
-   * `error`/`log`/`debug`). Any occurrence of `value` in those log lines is replaced with
-   * `<redacted>` before it reaches stderr. Does not affect `out()`, since some commands
-   * intentionally print secret values as their primary result.
+   * `error`/`log`/`debug`). Any occurrence of `value` — or of its JSON-string-escaped form,
+   * so a value embedded in `JSON.stringify`d output (e.g. `--json` mode error envelopes)
+   * is also caught — is replaced with `<redacted>` before it reaches stderr. Does not affect
+   * `out()`, since some commands intentionally print secret values as their primary result.
    *
    * Values shorter than 4 characters are ignored, since they are too likely to match
    * unrelated text.
@@ -248,6 +249,8 @@ export const logger = {
   registerSecret(value: string): void {
     if (value.length < MIN_SECRET_LENGTH) return;
     _secrets.add(value);
+    const jsonEscaped = JSON.stringify(value).slice(1, -1);
+    if (jsonEscaped !== value) _secrets.add(jsonEscaped);
   },
 
   out(data: string | object | object[], options?: OutOptions): void {

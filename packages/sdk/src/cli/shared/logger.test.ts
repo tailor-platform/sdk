@@ -244,5 +244,15 @@ describe("logger", () => {
       const output = captureStderr(() => logger.info("value=credential-outer-9f2c8b1a"));
       expect(output).toBe("ℹ value=<redacted>\n");
     });
+
+    test("redacts a registered secret even after JSON.stringify escapes it", () => {
+      const secret = 'a"secret-with-quotes\\and-backslashes';
+      logger.registerSecret(secret);
+      const serialized = JSON.stringify({ token: secret });
+      const output = captureStderr(() => logger.log(serialized));
+      expect(output).not.toContain(secret);
+      expect(output).not.toContain("secret-with-quotes");
+      expect(output).toContain("<redacted>");
+    });
   });
 });

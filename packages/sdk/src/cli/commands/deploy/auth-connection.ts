@@ -143,7 +143,7 @@ export async function planAuthConnections(
   for (const auth of auths) {
     for (const [name, config] of Object.entries(auth.connections)) {
       desiredConnections[name] = config;
-      if (config.clientSecret) logger.registerSecret(config.clientSecret);
+      logger.registerSecret(config.clientSecret);
     }
   }
 
