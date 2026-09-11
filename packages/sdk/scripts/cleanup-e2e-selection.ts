@@ -6,6 +6,7 @@ import type { Timestamp } from "@bufbuild/protobuf/wkt";
 /**
  * Name prefixes of the workspaces CI creates, longest first so
  * `sdk-ci-migration-` wins over `sdk-ci-`.
+ * Keep in sync with the run-id regex in .github/workflows/cleanup-e2e-workspaces.yml.
  */
 export const E2E_WORKSPACE_PREFIXES = [
   "e2e-ws-",
