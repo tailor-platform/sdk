@@ -71,3 +71,38 @@ export function isPluginExecutorWithFile(
 ): executor is PluginGeneratedExecutorWithFile {
   return "resolve" in executor && "context" in executor;
 }
+
+/**
+ * The shape every plugin instance has, whatever else it carries.
+ */
+export interface PluginShaped {
+  id: string;
+  description: string;
+}
+
+function isPluginShaped(value: unknown): value is PluginShaped {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).id === "string" &&
+    typeof (value as Record<string, unknown>).description === "string"
+  );
+}
+
+/**
+ * Picks the plugin arrays (`definePlugins()` results) out of a config module's
+ * exports. An array counts only when every item is plugin-shaped, so an array
+ * that mixes in anything else is left alone as a whole; every loader that reads
+ * plugins from a config module goes through this so they agree on which ones exist.
+ * @param configModule - The imported `tailor.config.ts` module namespace
+ * @returns The exported arrays whose items are all plugin-shaped, in export order
+ */
+export function pickPluginArrays(configModule: object): PluginShaped[][] {
+  const arrays: PluginShaped[][] = [];
+  for (const value of Object.values(configModule)) {
+    if (Array.isArray(value) && value.length > 0 && value.every(isPluginShaped)) {
+      arrays.push(value);
+    }
+  }
+  return arrays;
+}

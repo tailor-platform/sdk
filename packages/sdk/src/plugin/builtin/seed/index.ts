@@ -151,7 +151,16 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
             const typeImportPath = relativePath.replace(/\.ts$/, "").startsWith(".")
               ? relativePath.replace(/\.ts$/, "")
               : `./${relativePath.replace(/\.ts$/, "")}`;
-            const schemaContent = generateLinesDbSchemaFile(linesDb, typeImportPath);
+            // A table with plugins attached may carry fields the source file does not
+            // declare, so its schema loads the table through the config.
+            const hasPlugins = (ns.pluginAttachments.get(tableName)?.length ?? 0) > 0;
+            const configImportPath = hasPlugins
+              ? path.relative(path.dirname(schemaOutputPath), ctx.configPath)
+              : undefined;
+            const schemaContent = generateLinesDbSchemaFile(linesDb, {
+              typeImportPath,
+              configImportPath,
+            });
 
             files.push({
               path: schemaOutputPath,

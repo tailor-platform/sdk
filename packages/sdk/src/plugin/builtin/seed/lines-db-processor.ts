@@ -172,35 +172,84 @@ function generateSchemaOptions(
 }
 
 /**
- * Generates the schema file content for lines-db (for user-defined tables with import)
- * @param metadata - lines-db metadata
- * @param importPath - Import path for the TailorDB table
- * @returns Schema file contents
+ * Parameters for generating a user-defined table's schema file
  */
-export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath: string): string {
-  const { exportName, optionalFields, omitFields, foreignKeys, indexes } = metadata;
+export interface UserTableSchemaParams {
+  /** Relative import path to the table's source file */
+  typeImportPath: string;
+  /**
+   * Relative path from the schema output to tailor.config.ts. Set when plugins are
+   * attached to the table: the schema then loads the table through `getExtendedTable`
+   * so the fields those plugins add are part of the seed schema.
+   */
+  configImportPath?: string;
+}
 
-  const schemaTypeCode = ml /* ts */ `
+function generateSchemaTypeCode(
+  tableVariable: string,
+  optionalFields: string[],
+  omitFields: string[],
+): string {
+  return ml /* ts */ `
     const schemaType = t.object({
-      ...${exportName}.pickFields(${JSON.stringify(optionalFields)}, { optional: true }),
-      ...${exportName}.omitFields(${JSON.stringify([...optionalFields, ...omitFields])}),
+      ...${tableVariable}.pickFields(${JSON.stringify(optionalFields)}, { optional: true }),
+      ...${tableVariable}.omitFields(${JSON.stringify([...optionalFields, ...omitFields])}),
     });
     `;
+}
+
+/**
+ * Generates the schema file content for lines-db (for user-defined tables with import)
+ * @param metadata - lines-db metadata
+ * @param params - Import paths for the table and, when plugins are attached, the config
+ * @returns Schema file contents
+ */
+export function generateLinesDbSchemaFile(
+  metadata: LinesDbMetadata,
+  params: UserTableSchemaParams,
+): string {
+  const { exportName, optionalFields, omitFields, foreignKeys, indexes } = metadata;
+  const { typeImportPath, configImportPath } = params;
 
   const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
 
-  return ml /* ts */ `
+  if (configImportPath === undefined) {
+    return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
     import { defineSchema } from "@tailor-platform/sdk/seed";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-    import { ${exportName} } from "${importPath}";
+    import { ${exportName} } from "${typeImportPath}";
 
-    ${schemaTypeCode}
+    ${generateSchemaTypeCode(exportName, optionalFields, omitFields)}
 
     export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
+    );
+
+    `;
+  }
+
+  // The source file exports the table without the fields its plugins add, so the
+  // schema is built from the table `getExtendedTable` returns instead.
+  return ml /* ts */ `
+    import { join } from "node:path";
+    import { t } from "@tailor-platform/sdk";
+    import { getExtendedTable } from "@tailor-platform/sdk/plugin";
+    import { defineSchema } from "@tailor-platform/sdk/seed";
+    import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
+    import { ${exportName} as sourceTable } from ${JSON.stringify(typeImportPath)};
+
+    const configPath = join(import.meta.dirname, ${JSON.stringify(configImportPath)});
+    const table = await getExtendedTable(configPath, sourceTable);
+
+    ${generateSchemaTypeCode("table", optionalFields, omitFields)}
+
+    export const hook = createTailorDBHook(table);
+
+    export const schema = defineSchema(
+      createStandardSchema(schemaType, hook, table),${schemaOptionsCode}
     );
 
     `;
