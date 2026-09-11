@@ -215,8 +215,9 @@ function serialStringDefault(sequence: string, format: string | undefined, label
 }
 
 function columnDefinition(tableName: string, fieldName: string, field: DDLFieldConfig): string {
-  const label = identifier(fieldName);
-  const parts = [label, columnType(field)];
+  const column = identifier(fieldName);
+  const label = `${identifier(tableName)}.${column}`;
+  const parts = [column, columnType(field)];
 
   if (field.serial) {
     if (field.type === "integer") {

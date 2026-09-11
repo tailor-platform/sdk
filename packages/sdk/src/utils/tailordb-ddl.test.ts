@@ -161,10 +161,10 @@ describe("generateTableDDL", () => {
       ).toBe("\"ns\" integer[] NOT NULL DEFAULT '{}'::integer[]");
     });
 
-    test("rejects a default that cannot be rendered", () => {
+    test("rejects a default that cannot be rendered, naming the table and field", () => {
       expect(() =>
         columnLine({ n: { type: "integer", required: true, default: NaN } }, "n"),
-      ).toThrow(/"n"/);
+      ).toThrow(/"Item"\."n"/);
       expect(() =>
         columnLine({ s: { type: "string", required: true, default: { a: 1 } } }, "s"),
       ).toThrow(/"s"/);

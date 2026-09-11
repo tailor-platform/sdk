@@ -38,6 +38,10 @@ const invoice = db
   })
   .indexes({ fields: ["region", "email"], unique: true }, { fields: ["region", "invoiceNumber"] });
 
+const ticket = db.table("Ticket", {
+  code: db.string().serial({ start: 255, format: "T-%04X" }),
+});
+
 function parsed(
   tables: Record<string, unknown>,
   namespace = "tailordb",
@@ -145,7 +149,9 @@ describe("generated DDL on PGlite", () => {
   const pglite = new PGlite();
   // oxlint-disable-next-line typescript/no-explicit-any -- rows are asserted by shape below
   const kysely = createKyselyPGlite<any>(pglite);
-  const ddl = generateSchemaDDL(toDDLTables(parsed({ EveryType: everyType, Invoice: invoice })));
+  const ddl = generateSchemaDDL(
+    toDDLTables(parsed({ EveryType: everyType, Invoice: invoice, Ticket: ticket })),
+  );
 
   // Loading the Postgres WASM binary takes seconds when the whole suite runs.
   beforeAll(() => pglite.waitReady, 60_000);
@@ -157,7 +163,7 @@ describe("generated DDL on PGlite", () => {
     const tables = await pglite.query<{ table_name: string }>(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1",
     );
-    expect(tables.rows.map((r) => r.table_name)).toEqual(["EveryType", "Invoice"]);
+    expect(tables.rows.map((r) => r.table_name)).toEqual(["EveryType", "Invoice", "Ticket"]);
   });
 
   test("round-trips every field type through getDB-shaped inserts", async () => {
@@ -225,5 +231,12 @@ describe("generated DDL on PGlite", () => {
     await expect(
       kysely.insertInto("Invoice").values({ email: "c@example.com", region: "jp" }).execute(),
     ).resolves.toBeDefined();
+  });
+
+  test("hexadecimal serial formats are rendered by the database", async () => {
+    await kysely.insertInto("Ticket").defaultValues().execute();
+    await kysely.insertInto("Ticket").defaultValues().execute();
+    const rows = await kysely.selectFrom("Ticket").select("code").orderBy("code").execute();
+    expect(rows).toEqual([{ code: "T-00FF" }, { code: "T-0100" }]);
   });
 });
