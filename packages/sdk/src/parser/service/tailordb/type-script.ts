@@ -144,11 +144,19 @@ function buildHookObject(
     if (isNestedType(config) && config.fields) {
       const recordAccess = `${recordAccessExpr}[${key(name)}]`;
       if (config.array) {
-        const inner = buildHookObject(config.fields, "__el", "undefined", operation, true);
+        const inner = buildHookObject(
+          config.fields,
+          operation === "update" ? "(__arrInput === undefined ? {} : __el)" : "__el",
+          operation === "update" ? "(__arrInput === undefined ? __el : undefined)" : "undefined",
+          operation,
+          true,
+          "__el",
+        );
         if (inner !== null) {
-          parts.push(
-            `${key(name)}: ${recordAccess} == null ? ${recordAccess} : ${recordAccess}.map((__el) => Object.assign({}, __el, ${inner}))`,
-          );
+          const mapped = `${recordAccess}.map((__el) => Object.assign({}, __el, ${inner}))`;
+          // Replacement arrays have no element identity; only omitted arrays retain prior elements.
+          const result = operation === "update" ? `((__arrInput) => ${mapped})(${access})` : mapped;
+          parts.push(`${key(name)}: ${recordAccess} == null ? ${recordAccess} : ${result}`);
         }
       } else {
         const inner = buildHookObject(

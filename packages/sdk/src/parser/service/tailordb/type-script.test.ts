@@ -470,6 +470,32 @@ describe("buildTypeScripts", () => {
     const updateExpr = buildTypeScripts(fields).typeHook?.update?.expr ?? "";
     expect(updateExpr).not.toContain("__oldEl");
   });
+
+  test("passes omitted array values as old values to child update hooks", () => {
+    const qty = { type: "integer", hooks: { update: { expr: "_value ?? (_oldValue + 1)" } } };
+    const fields: Record<string, ScriptFieldConfig> = {
+      items: {
+        type: "nested",
+        array: true,
+        fields: {
+          qty,
+          extras: { type: "nested", array: true, fields: { qty } },
+        },
+      },
+    };
+    const expr = buildTypeScripts(fields).typeHook!.update!.expr;
+    const update = new Function("_input", "_oldRecord", `return ${expr}\n`);
+    const oldRecord = Object.freeze({
+      items: Object.freeze([
+        Object.freeze({ qty: 3, extras: Object.freeze([Object.freeze({ qty: 10 })]) }),
+      ]),
+    });
+
+    expect(update({}, oldRecord)).toEqual({ items: [{ qty: 4, extras: [{ qty: 11 }] }] });
+    expect(update({ items: [{ qty: 8, extras: [{ qty: 9 }] }] }, oldRecord)).toEqual({
+      items: [{ qty: 8, extras: [{ qty: 9 }] }],
+    });
+  });
 });
 
 describe("computeSourceScriptHash", () => {
