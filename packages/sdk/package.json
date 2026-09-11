@@ -214,7 +214,7 @@
     "p-limit": "7.3.2",
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
-    "pkg-types": "2.3.2",
+    "pkg-types": "2.3.3",
     "rolldown": "1.2.7",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
