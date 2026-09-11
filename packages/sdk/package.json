@@ -225,6 +225,7 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@opentelemetry/sdk-trace-base": "2.11.0",
     "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",
