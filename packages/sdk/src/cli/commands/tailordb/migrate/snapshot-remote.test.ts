@@ -11,6 +11,7 @@ import { describe, expect, test, aroundAll, vi } from "vitest";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import {
   loadSnapshot,
+  reconstructSnapshotFromMigrations,
   compareRemoteWithSnapshot,
   createSnapshotFromRemoteTypes,
   formatSchemaDrifts,
@@ -1416,39 +1417,34 @@ describe("snapshot", () => {
       expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(false);
     });
 
-    test("no script drift before or after replaying a legacy hook", () => {
-      const snapshot: SchemaSnapshot = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace,
-        createdAt: new Date().toISOString(),
-        tables: {
-          User: {
-            name: "User",
-            pluralForm: "Users",
-            fields: {
-              id: { type: "uuid", required: true },
-              name: {
-                type: "string",
-                required: true,
-                hooks: {
-                  create: { expr: "(({data})=>data.name)({ value: _value, data: _data })" },
-                },
-              },
-            },
-          },
-        },
+    test("no script drift before or after replaying a historical diff", () => {
+      const fixtureDir = path.join(__dirname, "__test_fixtures__/compatibility/v2");
+      const raw = JSON.parse(fs.readFileSync(path.join(fixtureDir, "0000/schema.json"), "utf8"));
+      const diff = JSON.parse(fs.readFileSync(path.join(fixtureDir, "0001/diff.json"), "utf8"));
+      const historicalFields = {
+        ...raw.types.Customer.fields,
+        name: diff.changes[0].after,
+        city: diff.changes[1].after,
+        fullAddress: diff.changes[2].after,
       };
-      const historical = buildTypeScripts(snapshot.tables.User!.fields);
-      const replayed = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.User!);
-      for (const typeHook of [historical.typeHook, replayed.schema!.typeHook]) {
+      const snapshot = reconstructSnapshotFromMigrations(fixtureDir, 1)!;
+      expect(snapshot.tables.Customer!.fields.fullAddress!.hooks).toEqual(
+        diff.changes[2].after.hooks,
+      );
+      const historical = buildTypeScripts(historicalFields);
+      const replayed = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+      for (const scripts of [historical, replayed.schema!]) {
         const remoteTypes = [
-          createMockRemoteType(
-            "User",
-            { id: { type: "uuid", required: true }, name: { type: "string", required: true } },
-            { typeHook },
-          ),
+          createMockRemoteType("Customer", historicalFields, {
+            typeHook: scripts.typeHook,
+            typeValidate: scripts.typeValidate,
+          }),
         ];
-        expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([]);
+        expect(
+          compareRemoteWithSnapshot(remoteTypes, snapshot).filter(
+            (d) => d.kind === "script_mismatch",
+          ),
+        ).toEqual([]);
       }
     });
 

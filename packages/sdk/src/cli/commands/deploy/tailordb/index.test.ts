@@ -736,8 +736,8 @@ describe("planTailorDB (service level)", () => {
       expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
 
       const validateExpr = createdType?.schema?.typeValidate?.create?.expr ?? "";
-      expect(validateExpr).toContain('__errs["profile.displayName"]');
-      expect(validateExpr).toContain('__errs["profile.contact.email"]');
+      expect(validateExpr).toContain('__errs["profile" + ".displayName"]');
+      expect(validateExpr).toContain('__errs["profile" + ".contact" + ".email"]');
       expect(validateExpr).toContain('if (typeof __r === "string")');
     });
   });

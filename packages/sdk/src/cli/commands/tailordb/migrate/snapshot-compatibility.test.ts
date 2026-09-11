@@ -240,6 +240,9 @@ describe("migration file compatibility", () => {
     ];
     raw.tables.Customer!.fields.name!.validate = validations;
     const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    expect(validate(snapshot.tables.Customer!, { name: "forbidden", city: "Tokyo" })).toEqual({
+      name: "forbidden name",
+    });
     const { filePath } = await generateSchemaFile(snapshot, testDir, 1);
     const reloaded = loadSnapshot(filePath);
 
@@ -292,6 +295,40 @@ describe("migration file compatibility", () => {
     ).toEqual({
       "profile.name": "Name must be longer than 5 characters",
       "entries[1].name": "Name must be longer than 5 characters",
+    });
+  });
+
+  test("validates legacy fields below nested arrays with complete indexed paths", () => {
+    const raw = readHistoricalSnapshot();
+    const name = raw.tables.Customer!.fields.name!;
+    raw.tables.Customer!.fields = {
+      entries: {
+        type: "nested",
+        required: false,
+        array: true,
+        fields: {
+          details: { type: "nested", required: false, fields: { name } },
+          children: { type: "nested", required: false, array: true, fields: { name } },
+        },
+      },
+    };
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    expect(
+      generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!).schema?.typeValidate
+        ?.create,
+    ).toBeDefined();
+    expect(
+      validate(snapshot.tables.Customer!, {
+        entries: [
+          {},
+          { details: { name: "x" }, children: [{ name: "long enough" }, { name: "y" }] },
+          { children: [{ name: "z" }] },
+        ],
+      }),
+    ).toEqual({
+      "entries[1].details.name": "Name must be longer than 5 characters",
+      "entries[1].children[1].name": "Name must be longer than 5 characters",
+      "entries[2].children[0].name": "Name must be longer than 5 characters",
     });
   });
 

@@ -193,26 +193,28 @@ function buildHookObject(
  * validator and records all failing messages keyed by dotted field path.
  * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
  * @param {string} accessExpr - JS expression to access the parent object
- * @param {string} keyPrefix - Dotted path prefix for error keys
+ * @param {string} keyPrefix - JavaScript expression for the error-key prefix
+ * @param {number} arrayDepth - Array nesting depth used to name index variables
  * @returns {string[]} Array of validation statement strings
  */
 function buildValidateStatements(
   fields: Record<string, ScriptFieldConfig>,
   accessExpr: string,
   keyPrefix: string,
+  arrayDepth = 0,
 ): string[] {
   const statements: string[] = [];
 
   for (const [name, config] of Object.entries(fields)) {
     const access = `${accessExpr}[${key(name)}]`;
-    const fieldPath = keyPrefix ? `${keyPrefix}.${name}` : name;
+    const fieldPath = keyPrefix ? `${keyPrefix} + ${key(`.${name}`)}` : key(name);
 
     const validators = (config.validate ?? []).filter((v) => v.script?.expr);
     if (validators.length > 0) {
       const checks = validators
         .map(
           (v) =>
-            `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${key(fieldPath)}] = __r; } }`,
+            `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${fieldPath}] = __r; } }`,
         )
         .join("\n");
       statements.push(`{ const _value = ${access};\n${checks}\n}`);
@@ -220,27 +222,21 @@ function buildValidateStatements(
 
     if (isNestedType(config) && config.fields) {
       if (config.array) {
-        const innerParts: string[] = [];
-        for (const [innerName, innerConfig] of Object.entries(config.fields)) {
-          const innerValidators = (innerConfig.validate ?? []).filter((v) => v.script?.expr);
-          if (innerValidators.length > 0) {
-            const errorKeyExpr = `${JSON.stringify(fieldPath + "[")} + __idx + ${JSON.stringify("]." + innerName)}`;
-            const checks = innerValidators
-              .map(
-                (v) =>
-                  `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${errorKeyExpr}] = __r; } }`,
-              )
-              .join("\n");
-            innerParts.push(`{ const _value = __el[${key(innerName)}];\n${checks}\n}`);
-          }
-        }
+        const indexVar = arrayDepth === 0 ? "__idx" : `__idx${arrayDepth}`;
+        const elementPath = `${fieldPath} + "[" + ${indexVar} + "]"`;
+        const innerParts = buildValidateStatements(
+          config.fields,
+          "__el",
+          elementPath,
+          arrayDepth + 1,
+        );
         if (innerParts.length > 0) {
           statements.push(
-            `(${access} || []).forEach((__el, __idx) => {\n${innerParts.join("\n")}\n});`,
+            `(${access} || []).forEach((__el, ${indexVar}) => {\n${innerParts.join("\n")}\n});`,
           );
         }
       } else {
-        const nested = buildValidateStatements(config.fields, access, fieldPath);
+        const nested = buildValidateStatements(config.fields, access, fieldPath, arrayDepth);
         if (nested.length > 0) {
           statements.push(`if (${access} != null) {\n${nested.join("\n")}\n}`);
         }

@@ -536,10 +536,10 @@ describe("snapshot-manifest", () => {
 
       // Validators are aggregated into a table-level validate script using ?? chain.
       const validateExpr = manifest.schema?.typeValidate?.create?.expr ?? "";
-      expect(validateExpr).toContain('__errs["profile.displayName"]');
+      expect(validateExpr).toContain('__errs["profile" + ".displayName"]');
       expect(validateExpr).toContain("((_value ?? '').length > 0)");
       expect(validateExpr).toContain('if (typeof __r === "string")');
-      expect(validateExpr).toContain('__errs["profile.contact.email"]');
+      expect(validateExpr).toContain('__errs["profile" + ".contact" + ".email"]');
       expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
     });
 

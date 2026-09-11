@@ -268,7 +268,9 @@ describe("buildTypeScripts", () => {
     const expr = buildTypeScripts(fields).typeValidate?.create?.expr ?? "";
     expect(expr).toContain('(_newRecord["items"] || []).forEach((__el, __idx) => {');
     expect(expr).toContain('const _value = __el["name"]');
-    expect(expr).toContain('"items[" + __idx + "].name"');
+    expect(new Function("_newRecord", `return ${expr}`)({ items: [{ name: "" }] })).toEqual({
+      "items[0].name": "required",
+    });
   });
 
   test("nested array forEach terminates with semicolon to prevent ASI with table-level validate", () => {
