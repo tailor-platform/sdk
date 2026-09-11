@@ -253,6 +253,42 @@ describe("resolveMachineUserInputSource", () => {
 });
 
 describe("createCommonArgs effects", () => {
+  test.each([
+    { runnerDebug: "1", debug: undefined, argv: [], enabled: true },
+    { runnerDebug: undefined, debug: "true", argv: [], enabled: true },
+    { runnerDebug: "0", debug: undefined, argv: ["--verbose"], enabled: true },
+    { runnerDebug: undefined, debug: undefined, argv: [], enabled: false },
+    { runnerDebug: "true", debug: "false", argv: [], enabled: false },
+  ])(
+    "resolves verbose output from $runnerDebug / $debug / $argv",
+    async ({ runnerDebug, debug, argv, enabled }) => {
+      const previousVerbose = logger.verbose;
+      using stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      vi.stubEnv("RUNNER_DEBUG", runnerDebug);
+      vi.stubEnv("DEBUG", debug);
+      try {
+        logger.verbose = false;
+        const command = defineAppCommand({
+          name: "noop",
+          description: "noop",
+          run: () => logger.debug("verbosity-sentinel"),
+        });
+        const result = await runCommand(command, argv, {
+          // Strip unknown keys the same way the CLI entrypoint parses global args.
+          globalArgs: z.object(createCommonArgs()),
+        });
+        expect(result.exitCode).toBe(0);
+        expect(logger.verbose).toBe(enabled);
+        const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
+        expect(output.includes("verbosity-sentinel")).toBe(enabled);
+        expect(stderr).toHaveBeenCalledTimes(enabled ? 1 : 0);
+      } finally {
+        vi.unstubAllEnvs();
+        logger.verbose = previousVerbose;
+      }
+    },
+  );
+
   test("--json and --verbose set the shared logger state", async () => {
     const previousJsonMode = logger.jsonMode;
     const previousVerbose = logger.verbose;

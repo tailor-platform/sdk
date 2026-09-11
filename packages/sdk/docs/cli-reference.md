@@ -34,6 +34,17 @@ a command failure under `--json` emits a JSON error envelope to stderr. CLI erro
 recovery. Diagnostic lines may precede the error envelope, and stdout is not guaranteed to contain
 an error object.
 
+### Verbose Output
+
+Use `--verbose` to include debug diagnostics and error stack traces. `DEBUG=true` or
+`RUNNER_DEBUG=1` also enables verbose output, including stacks in JSON errors. GitHub Actions
+sets `RUNNER_DEBUG=1` when debug logging is enabled, so the same command automatically includes
+these details in a debug run. These settings do not enable JSON output; pass `--json` separately.
+
+Capture the original failure's stderr and exit code before retrying. Argument parsing and failures
+before the CLI starts may produce plain text even with `--json`. A failed deployment may have
+already applied changes, so inspect its output before deciding to run it again.
+
 ## Common Options
 
 The following options are available for most commands:
