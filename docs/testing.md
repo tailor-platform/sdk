@@ -24,6 +24,14 @@ pnpm test -t "pattern"         # Pattern match
 
 `-t` matches against the full test name; Vitest 5 joins nested `describe`/`test` names with `>` (e.g. `-t "describe name > test name"`).
 
+## Migration Compatibility Tests
+
+`packages/sdk/src/cli/commands/tailordb/migrate/snapshot-compatibility.test.ts` executes hooks and validators from committed historical fixtures through the current migration reader and manifest generator. The fixtures live in `__test_fixtures__/compatibility/` beside the test; their README records provenance. Preserve the saved expressions rather than regenerating them with the current SDK.
+
+When changing the migration reader or script compiler, verify execution results as well as successful parsing. Cover snapshots and both sides of diffs, nested fields and arrays, mixed historical/current files, validator failure order, and serialization/reloading after rebaselining. Run the existing file-version rejection, replay, rebaseline, and bundler tests alongside these fixtures.
+
+Before raising the minimum supported migration format, identify a released bridge SDK that reads the complete old history and writes a baseline accepted by the target SDK. Test that transition with frozen fixtures before dropping a reader. A new format number alone cannot establish the script contract: historical writers reused format numbers across script changes.
+
 ## E2E Tests
 
 E2E tests require a deployed workspace. The `globalSetup` provisions a workspace before tests run.

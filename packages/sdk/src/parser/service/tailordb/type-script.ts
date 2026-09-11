@@ -125,6 +125,7 @@ function serializeDefault(value: unknown, fieldType: string): string {
  * @param {string} oldAccessExpr - JS expression to access the old record parent
  * @param {HookOperation} operation - Hook operation type
  * @param {boolean} nested - Whether building inside a nested field (rejects defaults)
+ * @param {string} recordAccessExpr - Parent record after applying input replacements
  * @returns {string | null} Object literal expression or null
  */
 function buildHookObject(
@@ -133,6 +134,7 @@ function buildHookObject(
   oldAccessExpr: string,
   operation: HookOperation,
   nested = false,
+  recordAccessExpr = accessExpr,
 ): string | null {
   const parts: string[] = [];
 
@@ -140,12 +142,21 @@ function buildHookObject(
     const access = `${accessExpr}[${key(name)}]`;
     const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     if (isNestedType(config) && config.fields) {
+      const recordAccess = `${recordAccessExpr}[${key(name)}]`;
       if (config.array) {
-        const inner = buildHookObject(config.fields, "__el", "undefined", operation, true);
+        const inner = buildHookObject(
+          config.fields,
+          operation === "update" ? "(__arrInput === undefined ? {} : __el)" : "__el",
+          operation === "update" ? "(__arrInput === undefined ? __el : undefined)" : "undefined",
+          operation,
+          true,
+          "__el",
+        );
         if (inner !== null) {
-          parts.push(
-            `${key(name)}: (${access} || []).map((__el) => Object.assign({}, __el, ${inner}))`,
-          );
+          const mapped = `${recordAccess}.map((__el) => Object.assign({}, __el, ${inner}))`;
+          // Replacement arrays have no element identity; only omitted arrays retain prior elements.
+          const result = operation === "update" ? `((__arrInput) => ${mapped})(${access})` : mapped;
+          parts.push(`${key(name)}: ${recordAccess} == null ? ${recordAccess} : ${result}`);
         }
       } else {
         const inner = buildHookObject(
@@ -154,9 +165,12 @@ function buildHookObject(
           oldAccess,
           operation,
           true,
+          `(${recordAccess} || {})`,
         );
         if (inner !== null) {
-          parts.push(`${key(name)}: Object.assign({}, ${access}, ${inner})`);
+          parts.push(
+            `${key(name)}: ${recordAccess} == null ? ${recordAccess} : Object.assign({}, ${recordAccess}, ${inner})`,
+          );
         }
       }
       continue;
@@ -193,26 +207,28 @@ function buildHookObject(
  * validator and records all failing messages keyed by dotted field path.
  * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
  * @param {string} accessExpr - JS expression to access the parent object
- * @param {string} keyPrefix - Dotted path prefix for error keys
+ * @param {string} keyPrefix - JavaScript expression for the error-key prefix
+ * @param {number} arrayDepth - Array nesting depth used to name index variables
  * @returns {string[]} Array of validation statement strings
  */
 function buildValidateStatements(
   fields: Record<string, ScriptFieldConfig>,
   accessExpr: string,
   keyPrefix: string,
+  arrayDepth = 0,
 ): string[] {
   const statements: string[] = [];
 
   for (const [name, config] of Object.entries(fields)) {
     const access = `${accessExpr}[${key(name)}]`;
-    const fieldPath = keyPrefix ? `${keyPrefix}.${name}` : name;
+    const fieldPath = keyPrefix ? `${keyPrefix} + ${key(`.${name}`)}` : key(name);
 
     const validators = (config.validate ?? []).filter((v) => v.script?.expr);
     if (validators.length > 0) {
       const checks = validators
         .map(
           (v) =>
-            `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${key(fieldPath)}] = __r; } }`,
+            `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${fieldPath}] = __r; } }`,
         )
         .join("\n");
       statements.push(`{ const _value = ${access};\n${checks}\n}`);
@@ -220,27 +236,21 @@ function buildValidateStatements(
 
     if (isNestedType(config) && config.fields) {
       if (config.array) {
-        const innerParts: string[] = [];
-        for (const [innerName, innerConfig] of Object.entries(config.fields)) {
-          const innerValidators = (innerConfig.validate ?? []).filter((v) => v.script?.expr);
-          if (innerValidators.length > 0) {
-            const errorKeyExpr = `${JSON.stringify(fieldPath + "[")} + __idx + ${JSON.stringify("]." + innerName)}`;
-            const checks = innerValidators
-              .map(
-                (v) =>
-                  `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${errorKeyExpr}] = __r; } }`,
-              )
-              .join("\n");
-            innerParts.push(`{ const _value = __el[${key(innerName)}];\n${checks}\n}`);
-          }
-        }
+        const indexVar = arrayDepth === 0 ? "__idx" : `__idx${arrayDepth}`;
+        const elementPath = `${fieldPath} + "[" + ${indexVar} + "]"`;
+        const innerParts = buildValidateStatements(
+          config.fields,
+          "__el",
+          elementPath,
+          arrayDepth + 1,
+        );
         if (innerParts.length > 0) {
           statements.push(
-            `(${access} || []).forEach((__el, __idx) => {\n${innerParts.join("\n")}\n});`,
+            `(${access} || []).forEach((__el, ${indexVar}) => {\n${innerParts.join("\n")}\n});`,
           );
         }
       } else {
-        const nested = buildValidateStatements(config.fields, access, fieldPath);
+        const nested = buildValidateStatements(config.fields, access, fieldPath, arrayDepth);
         if (nested.length > 0) {
           statements.push(`if (${access} != null) {\n${nested.join("\n")}\n}`);
         }
@@ -268,6 +278,13 @@ function wrapValidate(statements: string[], typeValidateExpr?: string): string {
   return `((_invoker) => { const __errs = {};${issuesFn}${principalDecl}\n${statements.join("\n")}${typeValidateStmt}\nreturn __errs; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
 }
 
+interface BuildTypeScriptsOptions {
+  typeHookExpr?: { create?: string; update?: string };
+  typeValidateExpr?: string;
+  /** Original fields to hash when execution requires compatibility transformations. */
+  sourceFields?: Record<string, ScriptFieldConfig>;
+}
+
 /**
  * Aggregate every field's create/update hook, default, and validate into
  * table-level scripts.  Hooks compute a single shared timestamp (`now`) per
@@ -280,21 +297,25 @@ function wrapValidate(statements: string[], typeValidateExpr?: string): string {
  */
 export function buildTypeScripts(
   fields: Record<string, ScriptFieldConfig>,
-  options?: {
-    typeHookExpr?: { create?: string; update?: string };
-    typeValidateExpr?: string;
-  },
+  options?: BuildTypeScriptsOptions,
 ): TypeScripts {
   const result: TypeScripts = {};
   const typeHookExpr = options?.typeHookExpr;
   const typeValidateExpr = options?.typeValidateExpr;
 
-  const hash = computeSourceScriptHash(fields, options);
+  const hash = computeSourceScriptHash(options?.sourceFields ?? fields, options);
   const hashSuffix = hash ? ` ${SOURCE_HASH_PREFIX}${hash}` : "";
 
   const hook: { create?: ScriptRef; update?: ScriptRef } = {};
   for (const operation of ["create", "update"] as const) {
-    const perFieldExpr = buildHookObject(fields, INPUT, OLD_RECORD, operation);
+    const perFieldExpr = buildHookObject(
+      fields,
+      INPUT,
+      OLD_RECORD,
+      operation,
+      false,
+      operation === "update" ? `Object.assign({}, ${OLD_RECORD}, ${INPUT})` : INPUT,
+    );
     const typeLevelExpr = typeHookExpr?.[operation];
     let expr: string | undefined;
     if (perFieldExpr !== null && typeLevelExpr) {

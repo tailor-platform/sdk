@@ -526,20 +526,18 @@ describe("snapshot-manifest", () => {
       // Hooks are aggregated into a table-level script that reconstructs nested
       // objects so unhooked siblings are preserved.
       const hookExpr = manifest.schema?.typeHook?.create?.expr ?? "";
-      expect(hookExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
+      expect(hookExpr).toContain('Object.assign({}, _input["profile"], {');
       expect(hookExpr).toContain("(_value ?? '').trim()");
       expect(hookExpr).toContain('(_input["profile"] || {})["displayName"]');
-      expect(hookExpr).toContain(
-        '"contact": Object.assign({}, (_input["profile"] || {})["contact"], {',
-      );
+      expect(hookExpr).toContain('Object.assign({}, (_input["profile"] || {})["contact"], {');
       expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
 
       // Validators are aggregated into a table-level validate script using ?? chain.
       const validateExpr = manifest.schema?.typeValidate?.create?.expr ?? "";
-      expect(validateExpr).toContain('__errs["profile.displayName"]');
+      expect(validateExpr).toContain('__errs["profile" + ".displayName"]');
       expect(validateExpr).toContain("((_value ?? '').length > 0)");
       expect(validateExpr).toContain('if (typeof __r === "string")');
-      expect(validateExpr).toContain('__errs["profile.contact.email"]');
+      expect(validateExpr).toContain('__errs["profile" + ".contact" + ".email"]');
       expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
     });
 

@@ -11,6 +11,7 @@ import { describe, expect, test, aroundAll, vi } from "vitest";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import {
   loadSnapshot,
+  reconstructSnapshotFromMigrations,
   compareRemoteWithSnapshot,
   createSnapshotFromRemoteTypes,
   formatSchemaDrifts,
@@ -19,6 +20,7 @@ import {
   type RemoteGqlPermission,
   type SchemaSnapshot,
 } from "./snapshot";
+import { generateTailorDBTypeManifestFromSnapshot } from "./snapshot-manifest";
 import { cleanupTestMigrationsBase } from "./test-helpers/snapshot-test";
 
 const TEST_MIGRATIONS_BASE = path.join(
@@ -1413,6 +1415,37 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(false);
+    });
+
+    test("no script drift before or after replaying a historical diff", () => {
+      const fixtureDir = path.join(__dirname, "__test_fixtures__/compatibility/v2");
+      const raw = JSON.parse(fs.readFileSync(path.join(fixtureDir, "0000/schema.json"), "utf8"));
+      const diff = JSON.parse(fs.readFileSync(path.join(fixtureDir, "0001/diff.json"), "utf8"));
+      const historicalFields = {
+        ...raw.types.Customer.fields,
+        name: diff.changes[0].after,
+        city: diff.changes[1].after,
+        fullAddress: diff.changes[2].after,
+      };
+      const snapshot = reconstructSnapshotFromMigrations(fixtureDir, 1)!;
+      expect(snapshot.tables.Customer!.fields.fullAddress!.hooks).toEqual(
+        diff.changes[2].after.hooks,
+      );
+      const historical = buildTypeScripts(historicalFields);
+      const replayed = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+      for (const scripts of [historical, replayed.schema!]) {
+        const remoteTypes = [
+          createMockRemoteType("Customer", historicalFields, {
+            typeHook: scripts.typeHook,
+            typeValidate: scripts.typeValidate,
+          }),
+        ];
+        expect(
+          compareRemoteWithSnapshot(remoteTypes, snapshot).filter(
+            (d) => d.kind === "script_mismatch",
+          ),
+        ).toEqual([]);
+      }
     });
 
     test("detects script drift when remote has scripts but snapshot does not", () => {
