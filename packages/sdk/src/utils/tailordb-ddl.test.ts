@@ -226,6 +226,15 @@ describe("generateTableDDL", () => {
       ).toBe("\"n\" text DEFAULT ('it''s-' || nextval('\"Item_n_seq\"')::text)");
     });
 
+    test("a unique string serial keeps its UNIQUE constraint", () => {
+      expect(
+        columnLine(
+          { n: { type: "string", required: true, unique: true, serial: { start: 1 } } },
+          "n",
+        ),
+      ).toBe('"n" text NOT NULL UNIQUE DEFAULT (nextval(\'"Item_n_seq"\')::text)');
+    });
+
     test("string serial without a format is the bare sequence value", () => {
       expect(columnLine({ n: { type: "string", serial: { start: 1 } } }, "n")).toBe(
         '"n" text DEFAULT (nextval(\'"Item_n_seq"\')::text)',

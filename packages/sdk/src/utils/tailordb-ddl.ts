@@ -25,6 +25,7 @@ export interface DDLTableConfig {
 }
 
 const MAX_IDENTIFIER_BYTES = 63;
+const utf8 = new TextEncoder();
 
 /**
  * Map a TailorDB field type to the PostgreSQL column type PGlite tests use for it.
@@ -62,7 +63,7 @@ export function mapFieldTypeToPostgresType(fieldType: string): string {
 }
 
 function identifier(name: string): string {
-  if (new TextEncoder().encode(name).length > MAX_IDENTIFIER_BYTES) {
+  if (utf8.encode(name).length > MAX_IDENTIFIER_BYTES) {
     throw new Error(
       `Identifier "${name}" exceeds PostgreSQL's ${MAX_IDENTIFIER_BYTES}-byte limit.`,
     );
@@ -190,6 +191,7 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
       return parts.join(" ");
     }
     if (field.required) parts.push("NOT NULL");
+    if (field.unique) parts.push("UNIQUE");
     parts.push(
       `DEFAULT ${serialStringDefault(sequenceName(tableName, fieldName), field.serial.format, label)}`,
     );
