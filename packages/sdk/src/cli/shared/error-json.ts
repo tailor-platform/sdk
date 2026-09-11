@@ -1,4 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import { getErrorDiagnostics } from "./error-diagnostics";
 import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
 import type { Jsonifiable } from "type-fest";
 
@@ -14,6 +15,34 @@ export interface ErrorToJsonOptions {
  * @returns JSON-compatible error envelope
  */
 export function errorToJson(
+  error: unknown,
+  options?: ErrorToJsonOptions,
+): { error: Readonly<Record<string, Jsonifiable | undefined>> } {
+  const envelope = baseErrorToJson(error, options);
+  if (!(error instanceof Error)) return envelope;
+  const { causes, context, ...diagnostics } = getErrorDiagnostics(error);
+  return {
+    error: {
+      ...envelope.error,
+      ...diagnostics,
+      ...(context || causes
+        ? {
+            context: {
+              ...context,
+              ...Object.fromEntries(
+                Object.entries(causes ?? {}).map(([phase, cause]) => [
+                  phase,
+                  errorToJson(cause, options).error,
+                ]),
+              ),
+            },
+          }
+        : {}),
+    },
+  };
+}
+
+function baseErrorToJson(
   error: unknown,
   options?: ErrorToJsonOptions,
 ): { error: Readonly<Record<string, Jsonifiable | undefined>> } {

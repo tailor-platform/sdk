@@ -127,7 +127,12 @@ export const updateCommand = defineAppCommand({
       args["platform-url"] !== undefined
     ) {
       // Check if user exists
-      const refreshed = await fetchLatestToken(config, newUser, tokenLookupPlatformConfig);
+      const refreshed = await fetchLatestToken(
+        config,
+        newUser,
+        tokenLookupPlatformConfig,
+        args.name,
+      );
       resolvedUser = refreshed.user;
 
       // Check if workspace exists

@@ -33,6 +33,18 @@ a command failure under `--json` emits a JSON error envelope to stderr. CLI erro
 recovery. Diagnostic lines may precede the error envelope, and stdout is not guaranteed to contain
 an error object.
 
+Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
+user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
+(`AUTH_TOKEN_REFRESH_FAILED`). Login recovery preserves the selected profile. For saved identities,
+the next step opens login help so you can reuse the original browser or machine-user login method. Permission and
+connection failures include guidance in `error.suggestion`; API failures also identify the operation
+and affected resources in `error.context`.
+
+If deployment fails and saving recovery metadata also fails, `DEPLOY_METADATA_RECOVERY_FAILED`
+includes separate `error.context.apply` and `error.context.recovery` errors, each retaining its code
+and available recovery information. Inspect the current resource state before retrying: some writes
+may have completed. `--verbose --json` additionally includes stack traces for both causes.
+
 Generation hook failures use `PLUGIN_GENERATION_FAILED`. The error includes the failed hook
 and each failing plugin's ID and error in `error.context.failures`; successful plugins are
 excluded from that list.

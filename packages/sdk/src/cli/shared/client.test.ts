@@ -31,6 +31,7 @@ import {
   retryInterceptor,
   type OperatorClient,
 } from "./client";
+import { errorToJson } from "./error-json";
 import { logger } from "./logger";
 
 vi.mock("@connectrpc/connect-node", () => ({
@@ -1180,6 +1181,58 @@ describe("parseMethodName", () => {
 });
 
 describe("errorHandlingInterceptor", () => {
+  test("preserves a raw disconnect for retry while exposing operation context", async () => {
+    const original = Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.getWorkspace,
+      header: new Headers(),
+      message: { id: "workspace-id" },
+    } as unknown as UnaryRequest;
+    const error = await errorHandlingInterceptor()(vi.fn().mockRejectedValue(original))(req).catch(
+      (error: unknown) => error,
+    );
+    expect(error).toBe(original);
+    expect(errorToJson(error).error).toMatchObject({
+      code: "TRANSPORT_DISCONNECTED",
+      suggestion: expect.stringContaining("before retrying"),
+      context: {
+        method: "GetWorkspace",
+        transportCode: "ECONNRESET",
+        identifiers: { id: "workspace-id" },
+      },
+    });
+  });
+
+  test.each([
+    { code: Code.Unauthenticated, stableCode: "RPC_UNAUTHENTICATED" },
+    { code: Code.PermissionDenied, stableCode: "RPC_PERMISSION_DENIED" },
+    { code: Code.Unavailable, stableCode: "RPC_UNAVAILABLE" },
+  ])("retains safe diagnostic context for $stableCode", async ({ code, stableCode }) => {
+    const req = {
+      stream: false,
+      service: OperatorService,
+      method: OperatorService.method.createTailorDBType,
+      header: new Headers(),
+      message: { workspaceId: "workspace-id", namespaceName: "db", token: "secret-sentinel" },
+    } as unknown as UnaryRequest;
+    const error = await errorHandlingInterceptor()(
+      vi.fn().mockRejectedValue(new ConnectError("failed", code)),
+    )(req).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ConnectError);
+    expect(errorToJson(error).error).toMatchObject({
+      code: stableCode,
+      suggestion: expect.any(String),
+      context: {
+        method: "CreateTailorDBType",
+        identifiers: { workspaceId: "workspace-id", namespaceName: "db" },
+      },
+    });
+    expect(JSON.stringify(errorToJson(error))).not.toContain("secret-sentinel");
+    expect(errorToJson(error).error).not.toHaveProperty("next");
+  });
+
   test("does not leak the request payload into the enhanced error message", async () => {
     const req = {
       stream: false,
