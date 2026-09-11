@@ -247,6 +247,15 @@ describe("logger", () => {
       expect(output).not.toContain("<redacted>");
     });
 
+    test("counts Unicode code points, not UTF-16 code units, against the minimum length", () => {
+      // Two emoji: 2 code points, but 4 UTF-16 code units. Must still be treated as length 2
+      // (below the minimum) rather than length 4.
+      logger.registerSecret("😀😀");
+      const output = captureStderr(() => logger.info("prefix 😀😀 suffix"));
+      expect(output).toContain("😀😀");
+      expect(output).not.toContain("<redacted>");
+    });
+
     test("redacts the longer of two overlapping registered secrets without leaving a fragment", () => {
       logger.registerSecret("credential-outer-9f2c8b1a");
       logger.registerSecret("outer-9f2c8b1a");

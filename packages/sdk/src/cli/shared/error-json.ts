@@ -1,5 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
+import { redactSecrets } from "./logger";
+
+// Free-text envelope fields that can carry a registered secret.
+const REDACTABLE_ENVELOPE_FIELDS = ["message", "details", "suggestion", "stack"] as const;
 
 export interface ErrorToJsonOptions {
   /** Include the original stack trace in the error envelope. */
@@ -64,16 +68,28 @@ export function errorToJson(
 
 /**
  * Serialize a CLI failure into the stable JSON error envelope.
+ *
+ * Redacts registered secrets from the envelope's free-text fields before this function's
+ * own `JSON.stringify` call, rather than relying only on the redaction `logger.log()` does
+ * on the final string: an upstream error message can already embed a secret in JSON-escaped
+ * form (e.g. echoed back inside a JSON API error body), and stringifying the envelope would
+ * escape that a second time, no longer matching a registered secret's single-level-escaped
+ * form.
  * @param error - Failure to serialize
  * @param options - JSON serialization options
  * @returns Serialized JSON error envelope
  */
 export function serializeError(error: unknown, options?: ErrorToJsonOptions): string {
   const envelope = errorToJson(error, options);
+  const redactedError = { ...envelope.error };
+  for (const field of REDACTABLE_ENVELOPE_FIELDS) {
+    const value = redactedError[field];
+    if (typeof value === "string") redactedError[field] = redactSecrets(value);
+  }
   try {
-    return JSON.stringify(envelope);
+    return JSON.stringify({ error: redactedError });
   } catch {
-    const fallbackError = { ...envelope.error };
+    const fallbackError = { ...redactedError };
     delete fallbackError.context;
     delete fallbackError.stack;
     return JSON.stringify({ error: fallbackError });

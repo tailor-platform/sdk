@@ -115,7 +115,7 @@ const MIN_SECRET_LENGTH = 4;
  * @param text - Text to redact
  * @returns `text` with every registered secret occurrence replaced by `<redacted>`
  */
-function redactSecrets(text: string): string {
+export function redactSecrets(text: string): string {
   if (_secrets.size === 0) return text;
 
   const spans: Array<[start: number, end: number]> = [];
@@ -286,7 +286,9 @@ export const logger = {
    * @param value - The secret value to redact from future log output
    */
   registerSecret(value: string): void {
-    if (typeof value !== "string" || value.length < MIN_SECRET_LENGTH) return;
+    // Counts Unicode code points, not UTF-16 code units, so a value made of surrogate-pair
+    // characters (e.g. emoji) isn't undercounted as longer than it actually is.
+    if (typeof value !== "string" || [...value].length < MIN_SECRET_LENGTH) return;
     _secrets.add(value);
     const jsonEscaped = JSON.stringify(value).slice(1, -1);
     if (jsonEscaped !== value) _secrets.add(jsonEscaped);
