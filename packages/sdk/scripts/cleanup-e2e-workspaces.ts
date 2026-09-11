@@ -26,29 +26,18 @@
  *   local run is never touched.
  */
 
-import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { assertDefined } from "../src/utils/assert";
-
-const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
-// Mirrors the run-id regex in .github/workflows/cleanup-e2e-workspaces.yml: the numeric segment
-// right after the prefix. "sdk-ci-migration-" must precede "sdk-ci-" so the longer prefix wins.
-const RUN_ID_PATTERN = /^(?:e2e-ws-|template-e2e-|sdk-ci-migration-|sdk-ci-)(\d+)/;
-
-interface Workspace {
-  id?: string;
-  name?: string;
-  createTime?: Timestamp;
-}
+import { selectWorkspacesToDelete, type CleanupWorkspace } from "./cleanup-e2e-selection";
 
 /**
  * Fetch all workspaces with pagination
  * @param {OperatorClient} client - Operator client
- * @returns {Promise<Workspace[]>} All workspaces
+ * @returns {Promise<CleanupWorkspace[]>} All workspaces
  */
-async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> {
-  const allWorkspaces: Workspace[] = [];
+async function fetchAllWorkspaces(client: OperatorClient): Promise<CleanupWorkspace[]> {
+  const allWorkspaces: CleanupWorkspace[] = [];
   let pageToken = "";
 
   // loop exits when the platform stops returning a page token
@@ -131,22 +120,11 @@ async function main() {
   console.log(`Total workspaces found: ${workspaces.length}\n`);
 
   // Filter e2e workspaces
-  const e2eWorkspaces = workspaces.filter((ws) => {
-    const matchesPrefix = E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix));
-    if (!matchesPrefix) return false;
-    if (localOrphans) {
-      if (ws.name && RUN_ID_PATTERN.test(ws.name)) return false;
-      const createdAt = ws.createTime ? timestampDate(ws.createTime) : undefined;
-      if (!createdAt) return false;
-      const ageHours = (Date.now() - createdAt.getTime()) / 3_600_000;
-      return ageHours >= minAgeHours;
-    }
-    // When --run-id is specified (CI), only delete workspaces from this run to avoid cross-run conflicts
-    if (runId) {
-      return ws.name?.includes(runId);
-    }
-    return true;
-  });
+  const e2eWorkspaces = selectWorkspacesToDelete(
+    workspaces,
+    { runId, localOrphans, minAgeHours },
+    new Date(),
+  );
 
   if (e2eWorkspaces.length === 0) {
     console.log("✅ No e2e workspaces found to delete.");

@@ -1,9 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import type { Jsonifiable } from "type-fest";
 
 interface ErrorDiagnostics {
   code?: string;
   suggestion?: string;
-  context?: Readonly<Record<string, unknown>>;
+  context?: Readonly<Record<string, Jsonifiable | undefined>>;
   causes?: Readonly<Record<string, unknown>>;
 }
 

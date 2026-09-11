@@ -1,8 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { errorToJson, serializeError } from "./error-json";
 import { CLIError, formatCopyableCommand, typeOnlyImportHint } from "./errors";
 import { CIPromptError } from "./logger";
+import type { Jsonifiable } from "type-fest";
 
 describe("typeOnlyImportHint", () => {
   test("suggests import type for a missing named export", () => {
@@ -47,6 +48,11 @@ describe("typeOnlyImportHint", () => {
 });
 
 describe("errorToJson", () => {
+  test("keeps diagnostic types JSON-compatible", () => {
+    expectTypeOf<CLIError["context"]>().toExtend<Jsonifiable | undefined>();
+    expectTypeOf<ReturnType<typeof errorToJson>>().toExtend<Jsonifiable>();
+  });
+
   test("preserves machine-actionable CLI error fields", () => {
     const error = CLIError({
       code: "WORKSPACE_NOT_FOUND",
@@ -79,6 +85,7 @@ describe("errorToJson", () => {
     const error = CLIError({
       code: "WORKSPACE_NOT_FOUND",
       message: "No workspaces are available.",
+      // @ts-expect-error BigInt cannot be serialized in a CLI error context.
       context: { availableRegions: 1n },
     });
 

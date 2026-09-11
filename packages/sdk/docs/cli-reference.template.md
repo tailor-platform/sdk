@@ -12,6 +12,12 @@ tailor <command> [options]
 
 {{politty:global-options}}
 
+### Progress and Detailed Logs
+
+`generate` and `deploy` show service progress and failures on stderr. Pass `--verbose`
+to include individual loaded files, plugin table changes, and generated file paths.
+Generation reports completion for each plugin that finishes processing its output files.
+
 ### JSON Output
 
 For commands that return structured results, passing `--json` writes one parseable JSON document
@@ -38,6 +44,10 @@ If deployment fails and saving recovery metadata also fails, `DEPLOY_METADATA_RE
 includes separate `error.context.apply` and `error.context.recovery` errors, each retaining its code
 and available recovery information. Inspect the current resource state before retrying: some writes
 may have completed. `--verbose --json` additionally includes stack traces for both causes.
+
+Generation hook failures use `PLUGIN_GENERATION_FAILED`. The error includes the failed hook
+and each failing plugin's ID and error in `error.context.failures`; successful plugins are
+excluded from that list.
 
 ### Verbose Output
 
