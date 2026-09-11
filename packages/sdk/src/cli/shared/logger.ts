@@ -96,6 +96,59 @@ export interface OutOptions {
 let _jsonMode = false;
 let _verbose = false;
 
+// Values registered via `logger.registerSecret()`, redacted from diagnostic log output
+const _secrets = new Set<string>();
+const REDACTED_PLACEHOLDER = "<redacted>";
+// Below this length, a registered value is too likely to match unrelated text.
+const MIN_SECRET_LENGTH = 4;
+
+/**
+ * Redacts every registered secret from `text` in a single pass over the original text.
+ *
+ * Matches are found against the original text only - never against text a previous
+ * replacement produced - and overlapping/adjacent matches (whether one secret contains
+ * another, or two secrets merely cross, e.g. registering "abcde" and "defghi" against
+ * "abcdefghi") are merged into one contiguous span before any substitution happens. This
+ * avoids two failure modes an iterative "replace one secret, then the next" approach has:
+ * a later secret re-matching inside a placeholder a previous replacement already inserted,
+ * and a crossing (non-nested) overlap leaving a fragment of one secret unredacted.
+ * @param text - Text to redact
+ * @returns `text` with every registered secret occurrence replaced by `<redacted>`
+ */
+export function redactSecrets(text: string): string {
+  if (_secrets.size === 0) return text;
+
+  const spans: Array<[start: number, end: number]> = [];
+  for (const secret of _secrets) {
+    let from = 0;
+    let index: number;
+    while ((index = text.indexOf(secret, from)) !== -1) {
+      spans.push([index, index + secret.length]);
+      from = index + 1;
+    }
+  }
+  if (spans.length === 0) return text;
+  spans.sort(([a], [b]) => a - b);
+
+  const merged: Array<[start: number, end: number]> = [];
+  for (const span of spans) {
+    const last = merged.at(-1);
+    if (last && span[0] <= last[1]) {
+      last[1] = Math.max(last[1], span[1]);
+    } else {
+      merged.push(span);
+    }
+  }
+
+  let result = "";
+  let cursor = 0;
+  for (const [start, end] of merged) {
+    result += text.slice(cursor, start) + REDACTED_PLACEHOLDER;
+    cursor = end;
+  }
+  return result + text.slice(cursor);
+}
+
 // Type icons for log output
 const TYPE_ICONS: Record<string, string> = {
   info: "ℹ",
@@ -165,7 +218,7 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const formattedMessage = formatWithOptions(inspectOpts, message);
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
   const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
-  process.stderr.write(renderFor(process.stderr, output));
+  process.stderr.write(renderFor(process.stderr, redactSecrets(output)));
 }
 
 /**
@@ -217,6 +270,28 @@ export const logger = {
     if (logger.verbose) {
       writeLog("log", styles.dim(message), { mode: "plain" });
     }
+  },
+
+  /**
+   * Registers a value to be redacted from diagnostic log output (`info`/`success`/`warn`/
+   * `error`/`log`/`debug`). Any occurrence of `value` — or of its JSON-string-escaped form,
+   * so a value embedded in `JSON.stringify`d output (e.g. `--json` mode error envelopes)
+   * is also caught — is replaced with `<redacted>` before it reaches stderr. Does not affect
+   * `out()`, since some commands intentionally print secret values as their primary result.
+   *
+   * Values shorter than 4 characters are ignored, since they are too likely to match
+   * unrelated text. A non-string value (e.g. `undefined` from an unvalidated external
+   * payload cast to a typed shape) is ignored the same way, rather than throwing, since a
+   * logging call must never be what crashes the process.
+   * @param value - The secret value to redact from future log output
+   */
+  registerSecret(value: string): void {
+    // Counts Unicode code points, not UTF-16 code units, so a value made of surrogate-pair
+    // characters (e.g. emoji) isn't undercounted as longer than it actually is.
+    if (typeof value !== "string" || [...value].length < MIN_SECRET_LENGTH) return;
+    _secrets.add(value);
+    const jsonEscaped = JSON.stringify(value).slice(1, -1);
+    if (jsonEscaped !== value) _secrets.add(jsonEscaped);
   },
 
   out(data: string | object | object[], options?: OutOptions): void {

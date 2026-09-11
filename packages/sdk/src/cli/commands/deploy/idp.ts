@@ -146,6 +146,7 @@ export async function applyIdP(
     await Promise.all([
       ...changeSet.client.creates.map(async (create) => {
         const resp = await client.createIdPClient(create.request);
+        if (resp.client?.clientSecret) logger.registerSecret(resp.client.clientSecret);
 
         // Create the secret manager vault and secret
         const vaultName = idpClientVaultName(
@@ -660,6 +661,7 @@ async function planClients(
     const existingNameMap = new Map<string, string>();
     existingClients.forEach((client) => {
       existingNameMap.set(client.name, client.clientSecret);
+      logger.registerSecret(client.clientSecret);
     });
     for (const name of idp.clients) {
       if (existingNameMap.has(name)) {

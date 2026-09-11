@@ -1068,6 +1068,7 @@ export async function resolveStaticWebsiteUrls(
  * @returns Access token
  */
 export async function fetchMachineUserToken(url: string, clientId: string, clientSecret: string) {
+  logger.registerSecret(clientSecret);
   const tokenEndpoint = new URL("/oauth2/token", url).href;
   const formData = new URLSearchParams();
   formData.append("grant_type", "client_credentials");
@@ -1099,7 +1100,9 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
     access_token: z.string(),
     expires_in: z.number(),
   });
-  return schema.parse(rawJson);
+  const token = schema.parse(rawJson);
+  logger.registerSecret(token.access_token);
+  return token;
 }
 
 function isUndiciConnectTimeout(error: unknown): boolean {
@@ -1147,10 +1150,11 @@ export async function fetchPlatformMachineUserToken(
   clientSecret: string,
   config?: PlatformClientConfig,
 ) {
+  logger.registerSecret(clientSecret);
   const server = getPlatformBaseUrl(config);
   // A new client per attempt: OAuth2Client caches its discovery promise even when
   // it rejects, so a reused client would replay the failure without re-requesting.
-  return await withConnectTimeoutRetry("platform machine user token request", () =>
+  const token = await withConnectTimeoutRetry("platform machine user token request", () =>
     new OAuth2Client({
       clientId,
       clientSecret,
@@ -1158,6 +1162,9 @@ export async function fetchPlatformMachineUserToken(
       discoveryEndpoint: oauth2DiscoveryEndpoint,
     }).clientCredentials(),
   );
+  logger.registerSecret(token.accessToken);
+  if (token.refreshToken) logger.registerSecret(token.refreshToken);
+  return token;
 }
 
 /**

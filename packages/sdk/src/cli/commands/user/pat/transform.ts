@@ -68,7 +68,7 @@ export function printCreatedToken(
   if (logger.jsonMode) {
     logger.out({ name, scopes, token });
   } else {
-    logger.log(ml`
+    logger.out(ml`
       Personal access token ${action} successfully.
 
         name: ${name}

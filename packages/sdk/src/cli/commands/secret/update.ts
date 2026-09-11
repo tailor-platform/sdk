@@ -18,6 +18,7 @@ export const updateSecretCommand = defineAppCommand({
     ...confirmationArgs,
   }),
   run: async (args) => {
+    logger.registerSecret(args.value);
     await assertWritable({ profile: args.profile });
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,

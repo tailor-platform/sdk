@@ -698,6 +698,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
   }
 
   if (envToken) {
+    logger.registerSecret(envToken);
     const platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
     rememberPlatformConfigForToken(envToken, platformConfig);
     return envToken;
@@ -732,6 +733,7 @@ export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<Aut
   }
 
   if (envToken) {
+    logger.registerSecret(envToken);
     const config = await readPlatformConfig().catch(() => undefined);
     const profileEntry = profile ? config?.profiles[profile] : undefined;
     const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
@@ -831,6 +833,18 @@ export async function loadConsoleBaseUrl(opts?: LoadConsoleBaseUrlOptions): Prom
 }
 
 /**
+ * Registers a token pair's values with the logger so they are redacted from diagnostic
+ * log output, wherever they later flow (retries, error messages, etc.). Call this as soon
+ * as a token is obtained, not just before it is persisted — code between the two points
+ * (e.g. an intervening API call) can still fail or log diagnostically.
+ * @param tokens - Access token and optional refresh token
+ */
+export function registerTokenSecrets(tokens: UserTokens): void {
+  logger.registerSecret(tokens.accessToken);
+  if (tokens.refreshToken) logger.registerSecret(tokens.refreshToken);
+}
+
+/**
  * Resolve the actual token values for a user, reading from keyring or config as appropriate.
  * @param userEntry - User entry from the config
  * @param user - User identifier
@@ -864,13 +878,16 @@ export async function resolveTokens(
         For non-interactive environments, set TAILOR_PLATFORM_TOKEN.
       `);
     }
+    registerTokenSecrets(tokens);
     return tokens;
   }
 
-  return {
+  const tokens = {
     accessToken: userEntry.access_token,
     refreshToken: userEntry.refresh_token,
   };
+  registerTokenSecrets(tokens);
+  return tokens;
 }
 
 /**
@@ -890,6 +907,7 @@ export async function saveUserTokens(
   expiresAt: string,
   opts: { platformConfig?: PlatformClientConfig; email?: string } = {},
 ): Promise<void> {
+  registerTokenSecrets(tokens);
   const userKey = platformUserKey(user, opts.platformConfig);
   const email = opts.email ?? config.users[userKey]?.email;
   if (await trySaveTokensInKeyring(userKey, tokens)) {
@@ -1053,6 +1071,10 @@ export async function fetchLatestToken(
       Please run 'tailor login' and try again.
     `);
   }
+  registerTokenSecrets({
+    accessToken: resp.accessToken,
+    refreshToken: resp.refreshToken ?? undefined,
+  });
 
   const newExpiresAt = new Date(
     assertDefined(resp.expiresAt, "token refresh response missing expiresAt"),

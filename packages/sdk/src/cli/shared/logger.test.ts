@@ -8,6 +8,12 @@ function captureStdout(fn: () => void): string {
   return stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
 }
 
+function captureStderr(fn: () => void): string {
+  using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  fn();
+  return stripVTControlCharacters(stderrSpy.mock.calls.map((call) => String(call[0])).join(""));
+}
+
 describe("logger", () => {
   describe("CIPromptError", () => {
     test("has correct name and message", () => {
@@ -183,6 +189,110 @@ describe("logger", () => {
       expect(output).toContain("id");
       expect(output).not.toContain("secret");
       expect(output).not.toContain("hidden");
+    });
+
+    test("does not redact registered secrets", () => {
+      logger.registerSecret("out-should-not-redact-this-token");
+      const output = captureStdout(() => logger.out("out-should-not-redact-this-token"));
+      expect(output).toBe("out-should-not-redact-this-token\n");
+    });
+  });
+
+  describe("registerSecret", () => {
+    test("redacts a registered secret from info/success/warn/error/log/debug output", () => {
+      logger.registerSecret("sk-live-abcdef123456");
+      logger.verbose = true;
+
+      expect(captureStderr(() => logger.info("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.success("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.warn("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.error("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.log("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+      expect(captureStderr(() => logger.debug("token: sk-live-abcdef123456"))).toContain(
+        "<redacted>",
+      );
+
+      logger.verbose = false;
+      for (const output of [
+        captureStderr(() => logger.info("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.success("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.warn("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.error("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.log("token: sk-live-abcdef123456")),
+      ]) {
+        expect(output).not.toContain("sk-live-abcdef123456");
+      }
+    });
+
+    test("ignores a non-string value instead of throwing (e.g. an unvalidated undefined field)", () => {
+      expect(() => logger.registerSecret(undefined as unknown as string)).not.toThrow();
+      expect(() => logger.registerSecret(null as unknown as string)).not.toThrow();
+    });
+
+    test("ignores empty strings and values shorter than 4 characters", () => {
+      logger.registerSecret("");
+      logger.registerSecret("abc");
+      const output = captureStderr(() => logger.info("prefix abc suffix and more text"));
+      expect(output).toContain("abc");
+      expect(output).not.toContain("<redacted>");
+    });
+
+    test("counts Unicode code points, not UTF-16 code units, against the minimum length", () => {
+      // Two emoji: 2 code points, but 4 UTF-16 code units. Must still be treated as length 2
+      // (below the minimum) rather than length 4.
+      logger.registerSecret("😀😀");
+      const output = captureStderr(() => logger.info("prefix 😀😀 suffix"));
+      expect(output).toContain("😀😀");
+      expect(output).not.toContain("<redacted>");
+    });
+
+    test("redacts the longer of two overlapping registered secrets without leaving a fragment", () => {
+      logger.registerSecret("credential-outer-9f2c8b1a");
+      logger.registerSecret("outer-9f2c8b1a");
+      const output = captureStderr(() => logger.info("value=credential-outer-9f2c8b1a"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("redacts a registered secret even after JSON.stringify escapes it", () => {
+      const secret = 'a"secret-with-quotes\\and-backslashes';
+      logger.registerSecret(secret);
+      const serialized = JSON.stringify({ token: secret });
+      const output = captureStderr(() => logger.log(serialized));
+      expect(output).not.toContain(secret);
+      expect(output).not.toContain("secret-with-quotes");
+      expect(output).toContain("<redacted>");
+    });
+
+    test("does not reprocess the placeholder when a later secret matches text inside it", () => {
+      logger.registerSecret("foo-reprocess-guard-redacted");
+      logger.registerSecret("reprocess-guard-redacted");
+      const output = captureStderr(() => logger.info("value=foo-reprocess-guard-redacted"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("merges two secrets that cross (neither contains the other) without leaking a fragment of either", () => {
+      logger.registerSecret("crossoverleftpart");
+      logger.registerSecret("leftpartcrossoverright");
+      // "leftpartcrossoverright" starts in the middle of "crossoverleftpart".
+      const output = captureStderr(() => logger.info("value=crossoverleftpartcrossoverright"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("does not leak internal redaction machinery when a registered secret happens to contain 'redact'", () => {
+      logger.registerSecret("first-registered-secret-value");
+      logger.registerSecret("REDACT");
+      const output = captureStderr(() => logger.info("value=first-registered-secret-value"));
+      expect(output).toBe("ℹ value=<redacted>\n");
     });
   });
 });

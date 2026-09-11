@@ -2,6 +2,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 import { createPatOperatorClient } from "./user";
@@ -39,6 +40,7 @@ export const updateCommand = defineAppCommand({
     if (!result.accessToken) {
       throw new Error("Failed to create personal access token");
     }
+    logger.registerSecret(result.accessToken);
 
     printCreatedToken(args.name, result.accessToken, args.write, "updated");
   },
