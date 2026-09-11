@@ -158,7 +158,10 @@ export default defineConfig({
 });
 
 export const plugins = definePlugins(
-  kyselyTypePlugin({ distPath: "./generated/tailordb.ts" }),
+  kyselyTypePlugin({
+    distPath: "./generated/tailordb.ts",
+    pgliteSchemaPath: "./generated/tailordb.pglite.ts",
+  }),
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
   fileUtilsPlugin({ distPath: "./generated/files.ts" }),
   seedPlugin({ distPath: "./seed", machineUserName: "manager-machine-user" }),

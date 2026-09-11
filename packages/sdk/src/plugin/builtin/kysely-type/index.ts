@@ -1,3 +1,4 @@
+import { generatePGliteSchemaModule } from "./pglite-schema";
 import { processKyselyType, generateUnifiedKyselyTypes } from "./type-processor";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 import type { KyselyTypeMetadata, KyselyNamespaceMetadata } from "./types";
@@ -7,6 +8,7 @@ export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 
 type KyselyTypePluginOptions = {
   distPath: string;
+  pgliteSchemaPath?: string;
 };
 
 // Register this plugin's config type under its own id, via the package's
@@ -26,6 +28,7 @@ export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
  * Plugin that generates Kysely type definitions for TailorDB tables.
  * @param options - Plugin options
  * @param options.distPath - Output file path for generated types
+ * @param options.pgliteSchemaPath - Output file path for the PGlite `CREATE TABLE` script module; omit to skip it
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function kyselyTypePlugin(
@@ -64,6 +67,14 @@ export function kyselyTypePlugin(
           path: ctx.pluginConfig.distPath,
           content,
         });
+        if (ctx.pluginConfig.pgliteSchemaPath) {
+          files.push({
+            path: ctx.pluginConfig.pgliteSchemaPath,
+            content: generatePGliteSchemaModule(
+              ctx.tailordb.filter((ns) => Object.keys(ns.tables).length > 0),
+            ),
+          });
+        }
       }
 
       return { files };
