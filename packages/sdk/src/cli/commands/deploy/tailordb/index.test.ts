@@ -731,7 +731,7 @@ describe("planTailorDB (service level)", () => {
       expect(contactEmailField?.validate ?? []).toHaveLength(0);
 
       const hookExpr = createdType?.schema?.typeHook?.create?.expr ?? "";
-      expect(hookExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
+      expect(hookExpr).toContain('Object.assign({}, _input["profile"], {');
       expect(hookExpr).toContain("(_value ?? '').trim()");
       expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
 

@@ -125,6 +125,7 @@ function serializeDefault(value: unknown, fieldType: string): string {
  * @param {string} oldAccessExpr - JS expression to access the old record parent
  * @param {HookOperation} operation - Hook operation type
  * @param {boolean} nested - Whether building inside a nested field (rejects defaults)
+ * @param {string} recordAccessExpr - Parent record after applying input replacements
  * @returns {string | null} Object literal expression or null
  */
 function buildHookObject(
@@ -133,6 +134,7 @@ function buildHookObject(
   oldAccessExpr: string,
   operation: HookOperation,
   nested = false,
+  recordAccessExpr = accessExpr,
 ): string | null {
   const parts: string[] = [];
 
@@ -140,11 +142,12 @@ function buildHookObject(
     const access = `${accessExpr}[${key(name)}]`;
     const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     if (isNestedType(config) && config.fields) {
+      const recordAccess = `${recordAccessExpr}[${key(name)}]`;
       if (config.array) {
         const inner = buildHookObject(config.fields, "__el", "undefined", operation, true);
         if (inner !== null) {
           parts.push(
-            `${key(name)}: (${access} || []).map((__el) => Object.assign({}, __el, ${inner}))`,
+            `${key(name)}: ${recordAccess} == null ? ${recordAccess} : ${recordAccess}.map((__el) => Object.assign({}, __el, ${inner}))`,
           );
         }
       } else {
@@ -154,9 +157,12 @@ function buildHookObject(
           oldAccess,
           operation,
           true,
+          `(${recordAccess} || {})`,
         );
         if (inner !== null) {
-          parts.push(`${key(name)}: Object.assign({}, ${access}, ${inner})`);
+          parts.push(
+            `${key(name)}: ${recordAccess} == null ? ${recordAccess} : Object.assign({}, ${recordAccess}, ${inner})`,
+          );
         }
       }
       continue;
@@ -294,7 +300,14 @@ export function buildTypeScripts(
 
   const hook: { create?: ScriptRef; update?: ScriptRef } = {};
   for (const operation of ["create", "update"] as const) {
-    const perFieldExpr = buildHookObject(fields, INPUT, OLD_RECORD, operation);
+    const perFieldExpr = buildHookObject(
+      fields,
+      INPUT,
+      OLD_RECORD,
+      operation,
+      false,
+      operation === "update" ? `Object.assign({}, ${OLD_RECORD}, ${INPUT})` : INPUT,
+    );
     const typeLevelExpr = typeHookExpr?.[operation];
     let expr: string | undefined;
     if (perFieldExpr !== null && typeLevelExpr) {

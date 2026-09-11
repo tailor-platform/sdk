@@ -50,33 +50,21 @@ function normalizeValidations(validations: SnapshotValidation[]): SnapshotValida
   return normalized;
 }
 
-function mergeRecordExpression(oldRecord: string, input: string): string {
-  return `(function merge(oldValue, newValue) {
-    if (newValue === undefined) return oldValue;
-    if (newValue === null || typeof newValue !== "object" || Array.isArray(newValue)
-      || Object.getPrototypeOf(newValue) !== Object.prototype) return newValue;
-    return Object.fromEntries([
-      ...Object.entries(oldValue ?? {}),
-      ...Object.entries(newValue).map(([key, value]) => [key, merge(oldValue?.[key], value)])
-    ]);
-  })(${oldRecord}, ${input})`;
-}
-
 function normalizeField(
   field: SnapshotFieldConfig,
   inputAccess: string,
-  oldAccess: string,
+  updateAccess: string,
   fieldName: string,
 ): SnapshotFieldConfig {
   const normalized = { ...field };
   if (field.fields) {
     // The script compiler binds __el while evaluating hooks in array elements.
     const nestedInput = field.array ? "__el" : `${inputAccess}?.[${JSON.stringify(fieldName)}]`;
-    const nestedOld = field.array ? "undefined" : `${oldAccess}?.[${JSON.stringify(fieldName)}]`;
+    const nestedUpdate = field.array ? "__el" : `${updateAccess}?.[${JSON.stringify(fieldName)}]`;
     normalized.fields = Object.fromEntries(
       Object.entries(field.fields).map(([name, nested]) => [
         name,
-        normalizeField(nested, nestedInput, nestedOld, name),
+        normalizeField(nested, nestedInput, nestedUpdate, name),
       ]),
     );
   }
@@ -85,8 +73,7 @@ function normalizeField(
     for (const operation of ["create", "update"] as const) {
       const hook = field.hooks[operation];
       if (hook && usesLegacyData(hook.expr)) {
-        const dataExpr =
-          operation === "update" ? mergeRecordExpression(oldAccess, inputAccess) : inputAccess;
+        const dataExpr = operation === "update" ? updateAccess : inputAccess;
         normalized.hooks[operation] = {
           ...hook,
           expr: assertParsableExpression(
@@ -116,7 +103,7 @@ export function normalizeTableScriptCompatibility(
     fields: Object.fromEntries(
       Object.entries(table.fields).map(([name, field]) => [
         name,
-        normalizeField(field, "_input", "_oldRecord", name),
+        normalizeField(field, "_input", "Object.assign({}, _oldRecord, _input)", name),
       ]),
     ),
   };

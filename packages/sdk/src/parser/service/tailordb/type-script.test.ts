@@ -125,16 +125,22 @@ describe("buildTypeScripts", () => {
     };
 
     const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
-    expect(createExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
-    expect(createExpr).toContain(
-      '"displayName": ((_value) => (_value.trim()))((_input["profile"] || {})["displayName"])',
-    );
-    expect(createExpr).toContain(
-      '"contact": Object.assign({}, (_input["profile"] || {})["contact"], {',
-    );
-    expect(createExpr).toContain(
-      '"email": ((_value) => (_value.toLowerCase()))(((_input["profile"] || {})["contact"] || {})["email"])',
-    );
+    const run = new Function("_input", `return ${createExpr}\n`);
+    expect(
+      run({
+        profile: {
+          displayName: " Alice ",
+          locale: "ja",
+          contact: { email: "A@EXAMPLE.COM", phone: "123" },
+        },
+      }),
+    ).toEqual({
+      profile: {
+        displayName: "Alice",
+        locale: "ja",
+        contact: { email: "a@example.com", phone: "123" },
+      },
+    });
   });
 
   test("applies default as ?? fallback after hook on create only", () => {

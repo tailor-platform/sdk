@@ -141,7 +141,14 @@ describe("migration file compatibility", () => {
         null,
         user,
       ),
-    ).toMatchObject({ profile: { fullAddress: "100 Tokyo Chiyoda" } });
+    ).toEqual({
+      profile: {
+        postalCode: "100",
+        address: "Tokyo",
+        city: "Chiyoda",
+        fullAddress: "100 Tokyo Chiyoda",
+      },
+    });
 
     const updateExpr = manifest.schema!.typeHook!.update!.expr!;
     const input = { profile: { city: "Chiyoda" } };
@@ -152,13 +159,15 @@ describe("migration file compatibility", () => {
         oldRecord,
         user,
       ),
-    ).toMatchObject({ profile: { fullAddress: "100 Tokyo Chiyoda" } });
+    ).toEqual({ profile: { city: "Chiyoda", fullAddress: "undefined undefined Chiyoda" } });
     expect(
       new Function("_input", "_oldRecord", "user", `return ${updateExpr}\n`)({}, oldRecord, user),
-    ).toMatchObject({ profile: { fullAddress: "100 Tokyo Chuo" } });
+    ).toEqual({
+      profile: { postalCode: "100", address: "Tokyo", city: "Chuo", fullAddress: "100 Tokyo Chuo" },
+    });
   });
 
-  test("preserves omitted nested values read by a legacy update hook", () => {
+  test("distinguishes omitted and replaced nested values read by a legacy update hook", () => {
     const raw = readHistoricalSnapshot();
     raw.tables.Customer!.fields = {
       profile: {
@@ -191,7 +200,8 @@ describe("migration file compatibility", () => {
     });
     const input = Object.freeze({ profile: Object.freeze({ city: "Chiyoda" }) });
 
-    expect(run(input, oldRecord)).toMatchObject({ label: "100 Chiyoda" });
+    expect(run({}, oldRecord)).toEqual({ label: "100 Chuo" });
+    expect(run(input, oldRecord)).toEqual({ label: "undefined Chiyoda" });
     expect(run({ profile: null }, oldRecord)).toMatchObject({ label: "cleared" });
   });
 
@@ -225,7 +235,56 @@ describe("migration file compatibility", () => {
         entries: [{ fullAddress: "100 Tokyo Chiyoda" }],
       });
     }
+    const update = new Function(
+      "_input",
+      "_oldRecord",
+      "user",
+      `return ${manifest.schema!.typeHook!.update!.expr!}\n`,
+    );
+    expect(update({}, input, user)).toEqual({
+      entries: [
+        { postalCode: "100", address: "Tokyo", city: "Chiyoda", fullAddress: "100 Tokyo Chiyoda" },
+      ],
+    });
+    expect(update({ entries: [] }, input, user)).toEqual({ entries: [] });
   });
+
+  test.each([false, true])(
+    "preserves explicit null parents of legacy hooks (array=%s)",
+    (array) => {
+      const raw = readHistoricalSnapshot();
+      raw.tables.Customer!.fields = {
+        profile: {
+          type: "nested",
+          required: false,
+          array,
+          fields: {
+            label: {
+              type: "string",
+              required: false,
+              hooks: {
+                create: { expr: "_data?.name ?? 'missing'" },
+                update: { expr: "_data?.name ?? 'missing'" },
+              },
+            },
+          },
+        },
+      };
+      const manifest = generateTailorDBTypeManifestFromSnapshot(raw.tables.Customer!);
+      for (const operation of ["create", "update"] as const) {
+        const run = new Function(
+          "_input",
+          "_oldRecord",
+          `return ${manifest.schema!.typeHook![operation]!.expr!}\n`,
+        );
+        expect(
+          run({ profile: null }, { profile: array ? [{ name: "old" }] : { name: "old" } }),
+        ).toEqual({
+          profile: null,
+        });
+      }
+    },
+  );
 
   test("preserves every validator's metadata when saving a baseline", async () => {
     const raw = readHistoricalSnapshot();
