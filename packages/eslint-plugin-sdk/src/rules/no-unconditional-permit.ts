@@ -2,6 +2,7 @@ import {
   type AstArrayExpression,
   type AstCallExpression,
   type AstNode,
+  isValueReference,
   memberName,
   objectProperty,
   unwrapExpression,
@@ -17,23 +18,6 @@ const UNSAFE_CONSTANTS: ReadonlySet<string> = new Set([
   "unsafeAllowAllGqlPermission",
   "unsafeAllowAllIdPPermission",
 ]);
-
-function isValueReference(node: IdentifierNode): boolean {
-  const parent = node.parent as AstNode;
-  switch (parent.type) {
-    case "ImportSpecifier":
-    case "ImportDefaultSpecifier":
-    case "ImportNamespaceSpecifier":
-      return false;
-    case "MemberExpression":
-    case "OptionalMemberExpression":
-      return parent.object === node || parent.computed;
-    case "Property":
-      return parent.value === node || parent.computed;
-    default:
-      return true;
-  }
-}
 
 function isDbReference(imports: ImportTracker, node: AstNode | null | undefined): boolean {
   const object = unwrapExpression(node);

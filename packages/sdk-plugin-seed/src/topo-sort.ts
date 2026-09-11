@@ -1,3 +1,5 @@
+import type { SeedData } from "@tailor-platform/sdk/cli";
+
 /**
  * Sort tables so that every table comes after the dependencies that are also in
  * the input list. Dependencies outside the list are ignored.
@@ -24,4 +26,109 @@ export function topologicalSort(types: string[], deps: Record<string, string[]>)
     visit(type);
   }
   return result;
+}
+
+/**
+ * Order a self-referencing table's full record set so a row referenced by
+ * another row is always sorted before it.
+ *
+ * `chunkSeedData` splits a table's records across multiple script executions
+ * purely by byte size, with no awareness of self-reference order. The
+ * generated seed script's own `sortBySelfReference` can only reorder the
+ * records it receives in a single execution, so a child that lands in an
+ * earlier chunk than the parent it points to is inserted with no visibility
+ * into that parent at all. Running this same topological sort over the
+ * entire table before chunking guarantees a parent always sits in the same
+ * chunk as, or an earlier chunk than, every one of its children.
+ *
+ * `record.id` is used as the map key for the row itself, so it must be
+ * present and unique across the table's records. If any id is missing
+ * (allowed when not using `--upsert`) or duplicated, the map would collapse
+ * distinct records onto the same key and silently drop them from the
+ * result; fall back to the original order instead so no data is lost.
+ *
+ * A self-reference field does not always hold the parent's `id` — a
+ * relation's `toward.key` (or a `keyOnly` relation's `foreignKeyField`) can
+ * target a different unique field, e.g. `parentCode -> Category.code`.
+ * `fieldKeys` names the field each self-reference field is keyed to (default
+ * `"id"`), so edges are resolved by matching against the right value instead
+ * of assuming every self-reference points at `id`.
+ * @param records - All records for a single self-referencing table
+ * @param fields - The table's own self-referencing field names
+ * @param fieldKeys - The field each self-reference field is keyed to, keyed by field name (defaults to `"id"`)
+ * @returns Records reordered so parents precede their children
+ */
+export function sortRecordsBySelfReference(
+  records: SeedData[string],
+  fields: string[],
+  fieldKeys: Record<string, string> = {},
+): SeedData[string] {
+  if (fields.length === 0 || records.length <= 1) return records;
+
+  const byId = new Map<unknown, SeedData[string][number]>();
+  for (const record of records) byId.set(record.id, record);
+  if (byId.size !== records.length) return records;
+
+  // Build one lookup map per distinct target key used by the self-reference
+  // fields, mapping that key's value on a record to the record's own id.
+  const idsByKeyValue = new Map<string, Map<unknown, unknown>>();
+  for (const field of fields) {
+    const targetKey = fieldKeys[field] ?? "id";
+    if (idsByKeyValue.has(targetKey)) continue;
+    const map = new Map<unknown, unknown>();
+    for (const record of records) {
+      const keyValue = targetKey === "id" ? record.id : record[targetKey];
+      if (keyValue !== null && keyValue !== undefined) map.set(keyValue, record.id);
+    }
+    idsByKeyValue.set(targetKey, map);
+  }
+
+  const inDegree = new Map<unknown, number>();
+  const dependents = new Map<unknown, unknown[]>();
+  for (const record of records) {
+    inDegree.set(record.id, 0);
+    dependents.set(record.id, []);
+  }
+  for (const record of records) {
+    const id = record.id;
+    for (const field of fields) {
+      const refValue = record[field];
+      if (refValue === null || refValue === undefined) continue;
+      const targetKey = fieldKeys[field] ?? "id";
+      const parentId = idsByKeyValue.get(targetKey)?.get(refValue);
+      if (parentId === undefined || parentId === id) continue;
+      inDegree.set(id, (inDegree.get(id) ?? 0) + 1);
+      dependents.get(parentId)?.push(id);
+    }
+  }
+
+  const queue: unknown[] = [];
+  for (const record of records) {
+    if ((inDegree.get(record.id) ?? 0) === 0) queue.push(record.id);
+  }
+
+  const seen = new Set<unknown>();
+  const orderedIds: unknown[] = [];
+  // A head index is used instead of `queue.shift()`, which would reindex the
+  // remaining array on every dequeue and make this Kahn traversal O(n²) over
+  // a table's full record set.
+  let head = 0;
+  while (head < queue.length) {
+    const id = queue[head++];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    orderedIds.push(id);
+    for (const dependentId of dependents.get(id) ?? []) {
+      const remaining = (inDegree.get(dependentId) ?? 0) - 1;
+      inDegree.set(dependentId, remaining);
+      if (remaining === 0) queue.push(dependentId);
+    }
+  }
+  for (const record of records) {
+    if (!seen.has(record.id)) orderedIds.push(record.id);
+  }
+
+  return orderedIds
+    .map((id) => byId.get(id))
+    .filter((record): record is SeedData[string][number] => record !== undefined);
 }

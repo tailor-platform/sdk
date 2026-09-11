@@ -15,6 +15,14 @@ describe("no-unconditional-permit", () => {
     );
   });
 
+  test("rejects an unsafe constant re-exported from the module", () => {
+    expectViolation(
+      'import { unsafeAllowAllTypePermission as permission } from "@tailor-platform/sdk";\nexport { permission };',
+      "no-unconditional-permit",
+      "unsafeAllowAllTypePermission grants access unconditionally",
+    );
+  });
+
   test("rejects the unsafe constants through aliases and namespaces", () => {
     expectViolation(
       'import { db, unsafeAllowAllTypePermission as allowAll } from "@tailor-platform/sdk";\nexport const user = db.type("User", {}).permission(allowAll);',

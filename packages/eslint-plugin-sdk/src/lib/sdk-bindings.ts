@@ -39,7 +39,7 @@ function findVariable(sourceCode: SourceCode, node: AstIdentifier): Scope.Variab
   return null;
 }
 
-function isBindingReference(
+export function isBindingReference(
   context: Rule.RuleContext,
   node: AstNode | null | undefined,
   binding: AstIdentifier,
@@ -52,9 +52,28 @@ function isBindingReference(
   );
 }
 
+function isDeclared(node: object): boolean {
+  return "declare" in node && node.declare === true;
+}
+
+function isValueDefinition(definition: Scope.Definition): boolean {
+  const kind: string = definition.type;
+  if (kind === "Type") return false;
+  if (
+    isDeclared(definition.node) ||
+    (definition.parent !== null && isDeclared(definition.parent))
+  ) {
+    return false;
+  }
+  if (kind !== "ImportBinding") return true;
+  const declaration = definition.parent as { importKind?: string } | null | undefined;
+  const specifier = definition.node as { importKind?: string };
+  return declaration?.importKind !== "type" && specifier.importKind !== "type";
+}
+
 export function isLocalBinding(context: Rule.RuleContext, node: AstIdentifier): boolean {
   const variable = findVariable(context.sourceCode, node);
-  return variable !== null && variable.defs.length > 0;
+  return variable?.defs.some(isValueDefinition) ?? false;
 }
 
 export function constInitializer(

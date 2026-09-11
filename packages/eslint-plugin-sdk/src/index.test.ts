@@ -14,9 +14,14 @@ describe("plugin", () => {
       "no-direct-exec-job-function",
       "no-execute-script-arg-stringify",
       "no-job-start-outside-body",
+      "no-node-builtin-imports",
+      "no-node-only-globals",
       "no-unconditional-permit",
+      "valid-execution-policy-definition",
+      "valid-resolver-permission",
       "valid-workflow-exports",
       "valid-workflow-job-definition",
+      "valid-workflow-retry-policy",
     ]);
     expect(plugin.configs.recommended.plugins?.["tailor-sdk"]).toBe(plugin);
     expect(plugin.configs.recommended.rules).toEqual({
@@ -24,9 +29,14 @@ describe("plugin", () => {
       "tailor-sdk/no-direct-exec-job-function": "warn",
       "tailor-sdk/no-execute-script-arg-stringify": "warn",
       "tailor-sdk/no-job-start-outside-body": "warn",
+      "tailor-sdk/no-node-builtin-imports": "warn",
+      "tailor-sdk/no-node-only-globals": "warn",
       "tailor-sdk/no-unconditional-permit": "warn",
+      "tailor-sdk/valid-execution-policy-definition": "warn",
+      "tailor-sdk/valid-resolver-permission": "warn",
       "tailor-sdk/valid-workflow-exports": "warn",
       "tailor-sdk/valid-workflow-job-definition": "warn",
+      "tailor-sdk/valid-workflow-retry-policy": "warn",
     });
   });
 

@@ -51,8 +51,69 @@ export function unwrapExpression(node: AstNode | null | undefined): AstNode | nu
   return current;
 }
 
+function nodeType(node: AstNode | null | undefined): string | undefined {
+  return node?.type;
+}
+
 export function parentOf(node: AstNode | null | undefined): AstNode | null {
   return (node as { parent?: AstNode } | null | undefined)?.parent ?? null;
+}
+
+export function isValueReference(node: AstIdentifier): boolean {
+  const parent = parentOf(node);
+  // `declare global {}` / `declare module "x" {}` name the augmented scope.
+  if (nodeType(parent) === "TSModuleDeclaration") return false;
+  switch (parent?.type) {
+    case "ImportSpecifier":
+    case "ImportDefaultSpecifier":
+    case "ImportNamespaceSpecifier":
+    case "LabeledStatement":
+    case "BreakStatement":
+    case "ContinueStatement":
+      return false;
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return parent.object === node || parent.computed;
+    case "Property":
+      return parent.value === node || parent.computed;
+    case "MethodDefinition":
+    case "PropertyDefinition":
+      return parent.key !== node || parent.computed;
+    case "VariableDeclarator":
+      return parent.id !== node;
+    case "FunctionDeclaration":
+    case "ClassDeclaration":
+      return parent.id !== node;
+
+    default:
+      return true;
+  }
+}
+
+const TYPE_NODE_TYPES: ReadonlySet<string> = new Set([
+  "TSClassImplements",
+  "TSDeclareFunction",
+  "TSIndexSignature",
+  "TSInterfaceDeclaration",
+  "TSInterfaceHeritage",
+  "TSMethodSignature",
+  "TSPropertySignature",
+  "TSQualifiedName",
+  "TSTypeAliasDeclaration",
+  "TSTypeAnnotation",
+  "TSTypeLiteral",
+  "TSTypeParameterDeclaration",
+  "TSTypeParameterInstantiation",
+  "TSTypePredicate",
+  "TSTypeQuery",
+  "TSTypeReference",
+]);
+
+export function isTypePosition(node: AstNode): boolean {
+  for (let current = parentOf(node); current !== null; current = parentOf(current)) {
+    if (TYPE_NODE_TYPES.has(current.type)) return true;
+  }
+  return false;
 }
 
 export function memberName(node: AstNode | null | undefined): string | null {
@@ -86,6 +147,99 @@ export function staticString(node: AstNode | null | undefined): string | null {
     return value.quasis[0]?.value.cooked ?? value.quasis[0]?.value.raw ?? null;
   }
   return null;
+}
+
+/** The object's properties when every one is a plain, non-computed property; null otherwise. */
+export function literalProperties(node: AstNode | null | undefined): AstProperty[] | null {
+  const value = unwrapExpression(node);
+  if (value?.type !== "ObjectExpression") return null;
+  const properties: AstProperty[] = [];
+  for (const property of value.properties) {
+    if (property.type !== "Property" || property.computed) return null;
+    properties.push(property);
+  }
+  return properties;
+}
+
+/** The array's elements when none is a spread or a hole; null otherwise. */
+export function literalElements(node: AstNode | null | undefined): AstNode[] | null {
+  const value = unwrapExpression(node);
+  if (value?.type !== "ArrayExpression") return null;
+  const elements: AstNode[] = [];
+  for (const element of value.elements) {
+    if (element === null || element.type === "SpreadElement") return null;
+    elements.push(element);
+  }
+  return elements;
+}
+
+/** The named property, taking the last duplicate key as the runtime does; null when absent. */
+export function namedProperty(
+  properties: readonly AstProperty[] | null | undefined,
+  name: string,
+): AstProperty | null {
+  return properties?.findLast((property) => propertyName(property) === name) ?? null;
+}
+
+/** One property of an object literal that carries no spread; null when unresolvable. */
+export function literalProperty(
+  node: AstNode | null | undefined,
+  name: string,
+): AstProperty | null {
+  return namedProperty(literalProperties(node), name);
+}
+
+export function propertyName(property: AstProperty): string | null {
+  if (property.computed) return null;
+  if (property.key.type === "Identifier") return property.key.name;
+  return property.key.type === "Literal" && typeof property.key.value === "string"
+    ? property.key.value
+    : null;
+}
+
+type AstReturnStatement = Extract<EstreeNode, { type: "ReturnStatement" }>;
+type AstStatement = Extract<EstreeNode, { type: "BlockStatement" }>["body"][number];
+
+/** Every `return` in a block, skipping nested functions' own returns. */
+export function returnStatements(block: AstNode): AstReturnStatement[] {
+  if (block.type !== "BlockStatement") return [];
+  const returns: AstReturnStatement[] = [];
+  const visitStatement = (statement: AstStatement): void => {
+    switch (statement.type) {
+      case "ReturnStatement":
+        returns.push(statement);
+        return;
+      case "BlockStatement":
+        for (const child of statement.body) visitStatement(child);
+        return;
+      case "IfStatement":
+        visitStatement(statement.consequent);
+        if (statement.alternate) visitStatement(statement.alternate);
+        return;
+      case "ForStatement":
+      case "ForInStatement":
+      case "ForOfStatement":
+      case "WhileStatement":
+      case "DoWhileStatement":
+      case "LabeledStatement":
+        visitStatement(statement.body);
+        return;
+      case "TryStatement":
+        visitStatement(statement.block);
+        if (statement.handler) visitStatement(statement.handler.body);
+        if (statement.finalizer) visitStatement(statement.finalizer);
+        return;
+      case "SwitchStatement":
+        for (const switchCase of statement.cases) {
+          for (const child of switchCase.consequent) visitStatement(child);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  for (const statement of block.body) visitStatement(statement);
+  return returns;
 }
 
 export function objectProperty(
