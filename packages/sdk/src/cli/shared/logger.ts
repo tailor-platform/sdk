@@ -99,24 +99,54 @@ let _verbose = false;
 // Values registered via `logger.registerSecret()`, redacted from diagnostic log output
 const _secrets = new Set<string>();
 const REDACTED_PLACEHOLDER = "<redacted>";
-// Placeholder used while redacting is over: distinct from REDACTED_PLACEHOLDER so a later
-// secret in the loop can never match text a previous replacement already inserted (e.g. a
-// registered secret containing "redacted" would otherwise re-match inside REDACTED_PLACEHOLDER
-// itself, turning it into "<<redacted>>"). Swapped for REDACTED_PLACEHOLDER only once, after
-// every secret has been matched against the original text.
-const REDACT_SENTINEL = "\u0000TAILOR_SDK_REDACT_SENTINEL\u0000";
 // Below this length, a registered value is too likely to match unrelated text.
 const MIN_SECRET_LENGTH = 4;
 
+/**
+ * Redacts every registered secret from `text` in a single pass over the original text.
+ *
+ * Matches are found against the original text only - never against text a previous
+ * replacement produced - and overlapping/adjacent matches (whether one secret contains
+ * another, or two secrets merely cross, e.g. registering "abcde" and "defghi" against
+ * "abcdefghi") are merged into one contiguous span before any substitution happens. This
+ * avoids two failure modes an iterative "replace one secret, then the next" approach has:
+ * a later secret re-matching inside a placeholder a previous replacement already inserted,
+ * and a crossing (non-nested) overlap leaving a fragment of one secret unredacted.
+ * @param text - Text to redact
+ * @returns `text` with every registered secret occurrence replaced by `<redacted>`
+ */
 function redactSecrets(text: string): string {
   if (_secrets.size === 0) return text;
-  let result = text;
-  // Longest-first so a shorter registered value can't fragment a longer one that contains it.
-  for (const secret of Array.from(_secrets).toSorted((a, b) => b.length - a.length)) {
-    result = result.split(secret).join(REDACT_SENTINEL);
+
+  const spans: Array<[start: number, end: number]> = [];
+  for (const secret of _secrets) {
+    let from = 0;
+    let index: number;
+    while ((index = text.indexOf(secret, from)) !== -1) {
+      spans.push([index, index + secret.length]);
+      from = index + 1;
+    }
   }
-  if (!result.includes(REDACT_SENTINEL)) return result;
-  return result.split(REDACT_SENTINEL).join(REDACTED_PLACEHOLDER);
+  if (spans.length === 0) return text;
+  spans.sort(([a], [b]) => a - b);
+
+  const merged: Array<[start: number, end: number]> = [];
+  for (const span of spans) {
+    const last = merged.at(-1);
+    if (last && span[0] <= last[1]) {
+      last[1] = Math.max(last[1], span[1]);
+    } else {
+      merged.push(span);
+    }
+  }
+
+  let result = "";
+  let cursor = 0;
+  for (const [start, end] of merged) {
+    result += text.slice(cursor, start) + REDACTED_PLACEHOLDER;
+    cursor = end;
+  }
+  return result + text.slice(cursor);
 }
 
 // Type icons for log output
@@ -250,11 +280,13 @@ export const logger = {
    * `out()`, since some commands intentionally print secret values as their primary result.
    *
    * Values shorter than 4 characters are ignored, since they are too likely to match
-   * unrelated text.
+   * unrelated text. A non-string value (e.g. `undefined` from an unvalidated external
+   * payload cast to a typed shape) is ignored the same way, rather than throwing, since a
+   * logging call must never be what crashes the process.
    * @param value - The secret value to redact from future log output
    */
   registerSecret(value: string): void {
-    if (value.length < MIN_SECRET_LENGTH) return;
+    if (typeof value !== "string" || value.length < MIN_SECRET_LENGTH) return;
     _secrets.add(value);
     const jsonEscaped = JSON.stringify(value).slice(1, -1);
     if (jsonEscaped !== value) _secrets.add(jsonEscaped);

@@ -234,6 +234,11 @@ describe("logger", () => {
       }
     });
 
+    test("ignores a non-string value instead of throwing (e.g. an unvalidated undefined field)", () => {
+      expect(() => logger.registerSecret(undefined as unknown as string)).not.toThrow();
+      expect(() => logger.registerSecret(null as unknown as string)).not.toThrow();
+    });
+
     test("ignores empty strings and values shorter than 4 characters", () => {
       logger.registerSecret("");
       logger.registerSecret("abc");
@@ -263,6 +268,21 @@ describe("logger", () => {
       logger.registerSecret("foo-reprocess-guard-redacted");
       logger.registerSecret("reprocess-guard-redacted");
       const output = captureStderr(() => logger.info("value=foo-reprocess-guard-redacted"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("merges two secrets that cross (neither contains the other) without leaking a fragment of either", () => {
+      logger.registerSecret("crossoverleftpart");
+      logger.registerSecret("leftpartcrossoverright");
+      // "leftpartcrossoverright" starts in the middle of "crossoverleftpart".
+      const output = captureStderr(() => logger.info("value=crossoverleftpartcrossoverright"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("does not leak internal redaction machinery when a registered secret happens to contain 'redact'", () => {
+      logger.registerSecret("first-registered-secret-value");
+      logger.registerSecret("REDACT");
+      const output = captureStderr(() => logger.info("value=first-registered-secret-value"));
       expect(output).toBe("ℹ value=<redacted>\n");
     });
   });
