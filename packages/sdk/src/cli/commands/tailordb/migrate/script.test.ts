@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -6,15 +7,18 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import {
   addMigrationScriptFiles,
   clearMigrationScriptSkipped,
+  isPgliteAvailable,
   markMigrationScriptSkipped,
   scriptCommand,
 } from "./script";
 import {
   formatMigrationNumber,
   loadDiff,
+  DB_PGLITE_SCHEMA_FILE_NAME,
   DB_TYPES_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
+  MIGRATE_PGLITE_TEST_FILE_NAME,
   MIGRATE_TEST_FILE_NAME,
 } from "./snapshot";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
@@ -85,6 +89,80 @@ describe("addMigrationScriptFiles", () => {
     expect(fs.existsSync(migrationFile(MIGRATE_FILE_NAME))).toBe(true);
     expect(fs.existsSync(migrationFile(DB_TYPES_FILE_NAME))).toBe(true);
     expect(fs.existsSync(migrationFile(MIGRATE_TEST_FILE_NAME))).toBe(false);
+  });
+
+  test("creates db.pglite.ts next to db.ts", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 });
+
+    expect(result.pgliteSchemaPath).toBe(migrationFile(DB_PGLITE_SCHEMA_FILE_NAME));
+    expect(fs.readFileSync(result.pgliteSchemaPath!, "utf-8")).toContain(
+      'export const pgliteSchema = {\n  "tailordb": `CREATE TABLE IF NOT EXISTS "User" (',
+    );
+  });
+
+  test("scaffolds migrate.pglite.test.ts with withTest when PGlite is installed", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      pgliteAvailable: true,
+    });
+
+    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
+    expect(result.pgliteTestPath).toBe(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME));
+    const content = fs.readFileSync(result.pgliteTestPath!, "utf-8");
+    expect(content).toContain('import { pgliteSchema } from "./db.pglite"');
+    expect(content).toContain("pglite.exec(pgliteSchema.tailordb)");
+    expect(content).toContain("createKyselyPGlite<Unmigrated<Database>>(pglite)");
+  });
+
+  test("skips the PGlite test scaffold when PGlite is not installed", async () => {
+    setupMigration();
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      pgliteAvailable: false,
+    });
+
+    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
+    expect(result.pgliteTestPath).toBeUndefined();
+    expect(fs.existsSync(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME))).toBe(false);
+  });
+
+  test("writes db.pglite.ts when adding tests to a script that predates it", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(result.dbTypesPath).toBeUndefined();
+    expect(result.pgliteSchemaPath).toBe(migrationFile(DB_PGLITE_SCHEMA_FILE_NAME));
+    expect(fs.existsSync(result.pgliteSchemaPath!)).toBe(true);
+  });
+
+  test("throws when migrate.pglite.test.ts already exists", async () => {
+    setupMigration();
+    fs.writeFileSync(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME), "// existing test");
+
+    await expect(
+      addMigrationScriptFiles({
+        migrationsDir: testDir,
+        migrationNumber: 1,
+        withTest: true,
+        pgliteAvailable: true,
+      }),
+    ).rejects.toThrow(/already exists/);
   });
 
   test("creates migrate.test.ts alongside the script with withTest", async () => {
@@ -202,6 +280,16 @@ describe("addMigrationScriptFiles", () => {
     expect(result.clearedScriptSkip).toBe(true);
     expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
     expect(loadDiff(migrationFile(DIFF_FILE_NAME)).scriptSkipped).toBeUndefined();
+  });
+});
+
+describe("isPgliteAvailable", () => {
+  test("resolves the package from a project that installs it", () => {
+    expect(isPgliteAvailable(path.join(import.meta.dirname, "migrations"))).toBe(true);
+  });
+
+  test("is false outside any project", () => {
+    expect(isPgliteAvailable(fs.mkdtempSync(path.join(os.tmpdir(), "no-pglite-")))).toBe(false);
   });
 });
 

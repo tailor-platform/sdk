@@ -740,6 +740,7 @@ describe("tailordb migration generate type rename preflight", () => {
     expect(diff.requiresMigrationScript).toBe(true);
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "migrate.ts"))).toBe(true);
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.pglite.ts"))).toBe(true);
   });
 
   test("confirms a type removal with --drop Type", async () => {
@@ -840,6 +841,7 @@ describe("tailordb migration generate --data-only", () => {
     const script = fs.readFileSync(path.join(entry.migrationsDir, "0001", "migrate.ts"), "utf8");
     expect(script).toContain("export async function main(trx: Transaction)");
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001", "db.pglite.ts"))).toBe(true);
     const replayed = reconstructSnapshotFromMigrations(entry.migrationsDir);
     expect(replayed?.tables.User?.fields.name?.type).toBe("string");
   });

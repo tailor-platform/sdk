@@ -573,6 +573,7 @@ async function generateDataOnlyMigration(
   logger.info(`  Diff file: ${result.diffFilePath}`);
   logger.info(`  Migration script: ${result.migrateFilePath}`);
   logger.info(`  DB types: ${result.dbTypesFilePath}`);
+  logPgliteSchemaResult(result);
   logger.newline();
   logger.log("This migration carries no schema changes.");
   logger.log(
@@ -580,6 +581,22 @@ async function generateDataOnlyMigration(
   );
 
   await openMigrationScriptInEditor(result.migrateFilePath);
+}
+
+/**
+ * Report where db.pglite.ts landed, or why it was skipped.
+ * @param result - Files written for the migration
+ */
+function logPgliteSchemaResult(result: {
+  pgliteSchemaFilePath?: string;
+  pgliteSchemaError?: string;
+}): void {
+  if (result.pgliteSchemaFilePath) {
+    logger.info(`  PGlite schema: ${result.pgliteSchemaFilePath}`);
+  }
+  if (result.pgliteSchemaError) {
+    logger.warn(`  PGlite schema skipped: ${result.pgliteSchemaError}`);
+  }
 }
 
 /**
@@ -1235,6 +1252,7 @@ async function generateDiffFromSnapshot(
     logger.info(`  Migration script: ${result.migrateFilePath}`);
     if (result.dbTypesFilePath) {
       logger.info(`  DB types: ${result.dbTypesFilePath}`);
+      logPgliteSchemaResult(result);
     }
     logger.newline();
     logger.log("A migration script was generated for breaking changes.");

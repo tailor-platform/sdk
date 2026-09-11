@@ -11,7 +11,7 @@ import { type NormalizedSchemaSnapshot, type SchemaSnapshot } from "./snapshot-t
  * @param {MigrationDiff} diff - Diff to apply
  * @returns {NormalizedSchemaSnapshot} Normalized snapshot after applying diff
  */
-function applyDiffToSnapshot(
+export function applyDiffToSnapshot(
   snapshot: SchemaSnapshot,
   diff: MigrationDiff,
 ): NormalizedSchemaSnapshot {

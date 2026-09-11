@@ -21,8 +21,8 @@ import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared
 import { logger, styles } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
-import { writeDbTypesFile } from "./db-types-generator";
 import { parseMigrationNumberArg } from "./migration-number";
+import { writeMigrationTypeFiles, writePgliteSchemaFile } from "./pglite-schema-generator";
 import {
   formatMigrationNumber,
   getMigrationFilePath,
@@ -30,7 +30,11 @@ import {
   reconstructSnapshotFromMigrations,
   INITIAL_SCHEMA_NUMBER,
 } from "./snapshot";
-import { generateMigrationScript, generateMigrationTestScript } from "./template-generator";
+import {
+  generateMigrationPgliteTestScript,
+  generateMigrationScript,
+  generateMigrationTestScript,
+} from "./template-generator";
 import type { ScriptSkippedInfo } from "./diff-calculator";
 
 interface ScriptOptions {
@@ -52,6 +56,8 @@ export interface AddMigrationScriptFilesOptions {
   migrationsDir: string;
   migrationNumber: number;
   withTest?: boolean;
+  /** Whether `@electric-sql/pglite` resolves from the project; gates the PGlite test scaffold. */
+  pgliteAvailable?: boolean;
 }
 
 export interface AddMigrationScriptFilesResult {
@@ -59,8 +65,14 @@ export interface AddMigrationScriptFilesResult {
   migratePath?: string;
   /** Created db.ts path; undefined when the script already existed. */
   dbTypesPath?: string;
+  /** Created db.pglite.ts path; undefined when it already existed or could not be generated. */
+  pgliteSchemaPath?: string;
+  /** Why db.pglite.ts could not be generated */
+  pgliteSchemaError?: string;
   /** Created migrate.test.ts path; undefined unless withTest was set. */
   testPath?: string;
+  /** Created migrate.pglite.test.ts path; undefined unless withTest was set and PGlite is available. */
+  pgliteTestPath?: string;
   /** True when a stale --no-script acknowledgment was cleared because migrate.ts already exists. */
   clearedScriptSkip?: boolean;
 }
@@ -130,17 +142,18 @@ export function clearMigrationScriptSkipped(diffPath: string): void {
 }
 
 /**
- * Create migration script files (migrate.ts, db.ts, and optionally migrate.test.ts)
- * in an existing migration directory. When migrate.ts already exists and withTest
- * is set, only the test file is added. An existing migrate.ts clears a stale
- * --no-script acknowledgment instead of failing.
+ * Create migration script files (migrate.ts, db.ts, db.pglite.ts, and optionally
+ * migrate.test.ts plus migrate.pglite.test.ts) in an existing migration
+ * directory. When migrate.ts already exists and withTest is set, only the test
+ * files are added, and a missing db.pglite.ts is written for them. An existing
+ * migrate.ts clears a stale --no-script acknowledgment instead of failing.
  * @param {AddMigrationScriptFilesOptions} options - Target migration and file selection
  * @returns {Promise<AddMigrationScriptFilesResult>} Paths of the created files
  */
 export async function addMigrationScriptFiles(
   options: AddMigrationScriptFilesOptions,
 ): Promise<AddMigrationScriptFilesResult> {
-  const { migrationsDir, migrationNumber, withTest = false } = options;
+  const { migrationsDir, migrationNumber, withTest = false, pgliteAvailable = false } = options;
   const label = formatMigrationNumber(migrationNumber);
 
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
@@ -167,6 +180,11 @@ export async function addMigrationScriptFiles(
   if (withTest && fs.existsSync(testPath)) {
     throw new Error(`Migration test already exists at ${testPath}.`);
   }
+  const pgliteTestPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteTest");
+  const writePgliteTest = withTest && pgliteAvailable;
+  if (writePgliteTest && fs.existsSync(pgliteTestPath)) {
+    throw new Error(`Migration test already exists at ${pgliteTestPath}.`);
+  }
 
   if (migrateExists && withTest) {
     const dbTypesPath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
@@ -178,7 +196,7 @@ export async function addMigrationScriptFiles(
     }
   }
 
-  if (!migrateExists) {
+  const loadPreviousSnapshot = () => {
     // Reconstruct the schema state immediately before this migration so that
     // db.ts has Kysely types for the previous shape of the data.
     const previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
@@ -187,24 +205,67 @@ export async function addMigrationScriptFiles(
         `Could not reconstruct previous schema for migration ${label}. Make sure migration ${INITIAL_SCHEMA_NUMBER} exists.`,
       );
     }
+    return previousSnapshot;
+  };
 
+  if (!migrateExists) {
     await fsPromises.writeFile(migratePath, generateMigrationScript(diff));
     result.migratePath = migratePath;
-    result.dbTypesPath = await writeDbTypesFile(
-      previousSnapshot,
+    const typeFiles = await writeMigrationTypeFiles({
+      previousSnapshot: loadPreviousSnapshot(),
+      diff,
       migrationsDir,
       migrationNumber,
-      diff,
-    );
+    });
+    result.dbTypesPath = typeFiles.dbTypesPath;
+    result.pgliteSchemaPath = typeFiles.pgliteSchemaPath;
+    result.pgliteSchemaError = typeFiles.pgliteSchemaError;
     clearMigrationScriptSkipped(diffPath);
+  } else if (withTest) {
+    // A script created before db.pglite.ts existed gets the schema its tests need.
+    const pgliteSchemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
+    if (!fs.existsSync(pgliteSchemaPath)) {
+      try {
+        result.pgliteSchemaPath = await writePgliteSchemaFile(
+          loadPreviousSnapshot(),
+          diff,
+          migrationsDir,
+          migrationNumber,
+        );
+      } catch (error) {
+        result.pgliteSchemaError = error instanceof Error ? error.message : String(error);
+      }
+    }
   }
 
   if (withTest) {
     await fsPromises.writeFile(testPath, generateMigrationTestScript(diff));
     result.testPath = testPath;
+    if (writePgliteTest) {
+      await fsPromises.writeFile(pgliteTestPath, generateMigrationPgliteTestScript(diff));
+      result.pgliteTestPath = pgliteTestPath;
+    }
   }
 
   return result;
+}
+
+/**
+ * Whether the project has installed `@electric-sql/pglite` for PGlite-backed
+ * tests: a `node_modules` on the way up from the migrations directory holds it.
+ * @param migrationsDir - Migrations directory of the project
+ * @returns True when the package is installed
+ */
+export function isPgliteAvailable(migrationsDir: string): boolean {
+  let dir = path.resolve(migrationsDir);
+  for (;;) {
+    if (fs.existsSync(path.join(dir, "node_modules", "@electric-sql", "pglite", "package.json"))) {
+      return true;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return false;
+    dir = parent;
+  }
 }
 
 /**
@@ -260,10 +321,12 @@ async function script(options: ScriptOptions): Promise<void> {
     throw new Error("--reason can only be used together with --no-script.");
   }
 
+  const pgliteAvailable = isPgliteAvailable(migrationsDir);
   const result = await addMigrationScriptFiles({
     migrationsDir,
     migrationNumber,
     withTest: options.withTest,
+    pgliteAvailable,
   });
 
   if (result.clearedScriptSkip) {
@@ -278,7 +341,10 @@ async function script(options: ScriptOptions): Promise<void> {
     }
   }
 
-  const added = [result.migratePath && "migration script", result.testPath && "migration test"]
+  const added = [
+    result.migratePath && "migration script",
+    result.testPath && (result.pgliteTestPath ? "migration tests" : "migration test"),
+  ]
     .filter(Boolean)
     .join(" and ");
   logger.success(
@@ -288,8 +354,21 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.info(`  Migration script: ${result.migratePath}`);
     logger.info(`  DB types: ${result.dbTypesPath}`);
   }
+  if (result.pgliteSchemaPath) {
+    logger.info(`  PGlite schema: ${result.pgliteSchemaPath}`);
+  }
+  if (result.pgliteSchemaError) {
+    logger.warn(`  PGlite schema skipped: ${result.pgliteSchemaError}`);
+  }
   if (result.testPath) {
     logger.info(`  Migration test: ${result.testPath}`);
+  }
+  if (result.pgliteTestPath) {
+    logger.info(`  PGlite test: ${result.pgliteTestPath}`);
+  } else if (result.testPath && !pgliteAvailable) {
+    logger.info(
+      "  Install @electric-sql/pglite as a devDependency to also scaffold a PGlite test (migrate.pglite.test.ts).",
+    );
   }
 
   logger.newline();
@@ -346,7 +425,7 @@ export const scriptCommand = defineAppCommand({
   name: "script",
   description:
     "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
-  notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment.`,
+  notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment, and \`--with-test\` adds only the tests (writing \`db.pglite.ts\` if it is missing). \`migrate.pglite.test.ts\` is scaffolded only when \`@electric-sql/pglite\` is installed in the project.`,
   args: z.strictObject({
     ...configArg,
     number: arg(z.string(), {
@@ -365,8 +444,7 @@ export const scriptCommand = defineAppCommand({
       description: "Reason why no migration script is needed (used with --no-script)",
     }),
     "with-test": arg(z.boolean().optional(), {
-      description:
-        "Also add a migrate.test.ts unit-test scaffold; when migrate.ts already exists, only the test is added",
+      description: "Also add the migrate.test.ts and migrate.pglite.test.ts scaffolds",
     }),
   }),
   run: async (args) => {
