@@ -110,6 +110,7 @@ jobs:
         if: steps.select.outputs.count != '0'
         working-directory: packages/sdk
         env:
+          count: ${{ steps.select.outputs.count }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -u
@@ -119,7 +120,6 @@ jobs:
           # (lowercase alphanumerics and hyphens), so they carry no regex metacharacters;
           # --limit pins the expected count so a filter that widened unexpectedly aborts
           # before deleting anything.
-          count=$(wc -l < /tmp/e2e-doomed.txt | tr -d ' ')
           if grep -qvE '^[a-z0-9-]+$' /tmp/e2e-doomed.txt; then
             echo "::error::A selected workspace name left the expected charset; refusing to build a filter from it."
             exit 1
