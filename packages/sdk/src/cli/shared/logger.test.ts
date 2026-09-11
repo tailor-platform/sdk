@@ -254,5 +254,12 @@ describe("logger", () => {
       expect(output).not.toContain("secret-with-quotes");
       expect(output).toContain("<redacted>");
     });
+
+    test("does not reprocess the placeholder when a later secret matches text inside it", () => {
+      logger.registerSecret("foo-reprocess-guard-redacted");
+      logger.registerSecret("reprocess-guard-redacted");
+      const output = captureStderr(() => logger.info("value=foo-reprocess-guard-redacted"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
   });
 });

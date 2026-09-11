@@ -834,10 +834,12 @@ export async function loadConsoleBaseUrl(opts?: LoadConsoleBaseUrlOptions): Prom
 
 /**
  * Registers a token pair's values with the logger so they are redacted from diagnostic
- * log output, wherever they later flow (retries, error messages, etc.).
+ * log output, wherever they later flow (retries, error messages, etc.). Call this as soon
+ * as a token is obtained, not just before it is persisted — code between the two points
+ * (e.g. an intervening API call) can still fail or log diagnostically.
  * @param tokens - Access token and optional refresh token
  */
-function registerTokenSecrets(tokens: UserTokens): void {
+export function registerTokenSecrets(tokens: UserTokens): void {
   logger.registerSecret(tokens.accessToken);
   if (tokens.refreshToken) logger.registerSecret(tokens.refreshToken);
 }

@@ -146,6 +146,7 @@ export async function applyIdP(
     await Promise.all([
       ...changeSet.client.creates.map(async (create) => {
         const resp = await client.createIdPClient(create.request);
+        if (resp.client?.clientSecret) logger.registerSecret(resp.client.clientSecret);
 
         // Create the secret manager vault and secret
         const vaultName = idpClientVaultName(
@@ -160,7 +161,6 @@ export async function applyIdP(
           workspaceId: create.request.workspaceId,
           secretmanagerVaultName: vaultName,
         });
-        if (resp.client?.clientSecret) logger.registerSecret(resp.client.clientSecret);
         await client.createSecretManagerSecret({
           workspaceId: create.request.workspaceId,
           secretmanagerVaultName: vaultName,

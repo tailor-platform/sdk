@@ -16,6 +16,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
   readPlatformConfig,
+  registerTokenSecrets,
   removeLegacyUserAlias,
   saveUserTokens,
   writePlatformConfig,
@@ -143,14 +144,18 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         if (!req.url?.startsWith("/callback")) {
           throw new Error("Invalid callback URL");
         }
-        const tokens = await client.authorizationCode.getTokenFromCodeRedirect(
-          `http://${req.headers.host}${req.url}`,
-          {
-            redirectUri: redirectUri,
-            state,
-            codeVerifier,
-          },
-        );
+        const callbackUrl = `http://${req.headers.host}${req.url}`;
+        const code = new URL(callbackUrl).searchParams.get("code");
+        if (code) logger.registerSecret(code);
+        const tokens = await client.authorizationCode.getTokenFromCodeRedirect(callbackUrl, {
+          redirectUri: redirectUri,
+          state,
+          codeVerifier,
+        });
+        registerTokenSecrets({
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken ?? undefined,
+        });
         const userInfo = await fetchUserInfo(tokens.accessToken, args.platformConfig);
 
         const pfConfig = await readPlatformConfig();
