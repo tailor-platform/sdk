@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { aroundEach, describe, expect, test } from "vitest";
+import { extractSourceScriptHash } from "#/parser/service/tailordb/type-script";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { loadDiff, loadSnapshot } from "./snapshot-files";
 import { generateTailorDBTypeManifestFromSnapshot } from "./snapshot-manifest";
@@ -114,6 +115,151 @@ describe("migration file compatibility", () => {
     });
   });
 
+  test("preserves legacy hook access to sibling fields when nested", () => {
+    const raw = readHistoricalSnapshot();
+    const { postalCode, address, city, fullAddress } = raw.tables.Customer!.fields;
+    raw.tables.Customer!.fields = {
+      profile: {
+        type: "nested",
+        required: false,
+        fields: {
+          postalCode: postalCode!,
+          address: address!,
+          city: city!,
+          fullAddress: fullAddress!,
+        },
+      },
+    };
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+
+    const createExpr = manifest.schema!.typeHook!.create!.expr!;
+    const createInput = { profile: { postalCode: "100", address: "Tokyo", city: "Chiyoda" } };
+    expect(
+      new Function("_input", "_oldRecord", "user", `return ${createExpr}\n`)(
+        createInput,
+        null,
+        user,
+      ),
+    ).toMatchObject({ profile: { fullAddress: "100 Tokyo Chiyoda" } });
+
+    const updateExpr = manifest.schema!.typeHook!.update!.expr!;
+    const input = { profile: { city: "Chiyoda" } };
+    const oldRecord = { profile: { postalCode: "100", address: "Tokyo", city: "Chuo" } };
+    expect(
+      new Function("_input", "_oldRecord", "user", `return ${updateExpr}\n`)(
+        input,
+        oldRecord,
+        user,
+      ),
+    ).toMatchObject({ profile: { fullAddress: "100 Tokyo Chiyoda" } });
+    expect(
+      new Function("_input", "_oldRecord", "user", `return ${updateExpr}\n`)({}, oldRecord, user),
+    ).toMatchObject({ profile: { fullAddress: "100 Tokyo Chuo" } });
+  });
+
+  test("preserves omitted nested values read by a legacy update hook", () => {
+    const raw = readHistoricalSnapshot();
+    raw.tables.Customer!.fields = {
+      profile: {
+        type: "nested",
+        required: false,
+        fields: {
+          postalCode: { type: "string", required: false },
+          city: { type: "string", required: false },
+        },
+      },
+      label: {
+        type: "string",
+        required: false,
+        hooks: {
+          update: {
+            expr: "_data.profile === null ? 'cleared' : _data.profile.postalCode + ' ' + _data.profile.city",
+          },
+        },
+      },
+    };
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+    const run = new Function(
+      "_input",
+      "_oldRecord",
+      `return ${manifest.schema!.typeHook!.update!.expr!}\n`,
+    );
+    const oldRecord = Object.freeze({
+      profile: Object.freeze({ postalCode: "100", city: "Chuo" }),
+    });
+    const input = Object.freeze({ profile: Object.freeze({ city: "Chiyoda" }) });
+
+    expect(run(input, oldRecord)).toMatchObject({ label: "100 Chiyoda" });
+    expect(run({ profile: null }, oldRecord)).toMatchObject({ label: "cleared" });
+  });
+
+  test("preserves legacy hook access to the current array element", () => {
+    const raw = readHistoricalSnapshot();
+    const { postalCode, address, city, fullAddress } = raw.tables.Customer!.fields;
+    raw.tables.Customer!.fields = {
+      entries: {
+        type: "nested",
+        required: false,
+        array: true,
+        fields: {
+          postalCode: postalCode!,
+          address: address!,
+          city: city!,
+          fullAddress: fullAddress!,
+        },
+      },
+    };
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+    const input = { entries: [{ postalCode: "100", address: "Tokyo", city: "Chiyoda" }] };
+    for (const operation of ["create", "update"] as const) {
+      const run = new Function(
+        "_input",
+        "_oldRecord",
+        "user",
+        `return ${manifest.schema!.typeHook![operation]!.expr!}\n`,
+      );
+      expect(run(input, { entries: [] }, user)).toMatchObject({
+        entries: [{ fullAddress: "100 Tokyo Chiyoda" }],
+      });
+    }
+  });
+
+  test("preserves every validator's metadata when saving a baseline", async () => {
+    const raw = readHistoricalSnapshot();
+    const first = raw.tables.Customer!.fields.name!.validate![0]!;
+    const validations = [
+      { ...first, futureMetadata: { id: "first" } },
+      {
+        script: { expr: "_data.name !== 'forbidden'", futureScriptMetadata: "second" },
+        errorMessage: "forbidden name",
+        futureMetadata: { id: "second" },
+      },
+    ];
+    raw.tables.Customer!.fields.name!.validate = validations;
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+    const { filePath } = await generateSchemaFile(snapshot, testDir, 1);
+    const reloaded = loadSnapshot(filePath);
+
+    expect(reloaded.tables.Customer!.fields.name!.validate).toEqual(
+      raw.tables.Customer!.fields.name!.validate,
+    );
+    expect(validate(reloaded.tables.Customer!, { name: "forbidden", city: "Tokyo" })).toEqual({
+      name: "forbidden name",
+    });
+  });
+
+  test("preserves the historical source hash when compiling legacy scripts", () => {
+    const snapshot = loadSnapshot(path.join(fixtureDir, "0000/schema.json"));
+    const manifest = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.Customer!);
+
+    expect(extractSourceScriptHash(manifest.schema!.typeHook!.create!.expr!)).toBe(
+      "9a8ff2388df89279",
+    );
+  });
+
   test("stops a legacy validator chain at its first failure", () => {
     const raw = readHistoricalSnapshot();
     const field = raw.tables.Customer!.fields.name!;
@@ -176,7 +322,7 @@ describe("migration file compatibility", () => {
     expect(validate(snapshot.tables.Customer!, { name: "x" })).toEqual({ name: "last error" });
   });
 
-  test("replays old and current diffs while normalizing both before and after fields", () => {
+  test("replays old and current diffs while adapting both before and after fields", () => {
     fs.cpSync(fixtureDir, testDir, { recursive: true });
     const legacy = loadDiff(path.join(testDir, "0001/diff.json"));
     for (const change of legacy.changes) {

@@ -32,6 +32,7 @@ import * as inflection from "inflection";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import { isSnapshotFieldRefOperand } from "./snapshot";
+import { normalizeTableScriptCompatibility } from "./snapshot-script-compatibility";
 import type {
   SchemaSnapshot,
   SnapshotEnumValue,
@@ -197,7 +198,9 @@ export function generateTailorDBTypeManifestFromSnapshot(
 
   // Field hooks/validators are aggregated into table-level scripts so that a
   // single shared timestamp is observed across every field in one operation.
-  const { typeHook, typeValidate } = buildTypeScripts(snapshotType.fields, {
+  const scriptTable = normalizeTableScriptCompatibility(snapshotType);
+  const { typeHook, typeValidate } = buildTypeScripts(scriptTable.fields, {
+    sourceFields: snapshotType.fields,
     typeHookExpr: snapshotType.typeHookExpr,
     typeValidateExpr: snapshotType.typeValidateExpr,
   });

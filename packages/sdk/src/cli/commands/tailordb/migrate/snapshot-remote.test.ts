@@ -19,6 +19,7 @@ import {
   type RemoteGqlPermission,
   type SchemaSnapshot,
 } from "./snapshot";
+import { generateTailorDBTypeManifestFromSnapshot } from "./snapshot-manifest";
 import { cleanupTestMigrationsBase } from "./test-helpers/snapshot-test";
 
 const TEST_MIGRATIONS_BASE = path.join(
@@ -1413,6 +1414,42 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(false);
+    });
+
+    test("no script drift before or after replaying a legacy hook", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        tables: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              name: {
+                type: "string",
+                required: true,
+                hooks: {
+                  create: { expr: "(({data})=>data.name)({ value: _value, data: _data })" },
+                },
+              },
+            },
+          },
+        },
+      };
+      const historical = buildTypeScripts(snapshot.tables.User!.fields);
+      const replayed = generateTailorDBTypeManifestFromSnapshot(snapshot.tables.User!);
+      for (const typeHook of [historical.typeHook, replayed.schema!.typeHook]) {
+        const remoteTypes = [
+          createMockRemoteType(
+            "User",
+            { id: { type: "uuid", required: true }, name: { type: "string", required: true } },
+            { typeHook },
+          ),
+        ];
+        expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([]);
+      }
     });
 
     test("detects script drift when remote has scripts but snapshot does not", () => {

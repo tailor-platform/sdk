@@ -268,6 +268,13 @@ function wrapValidate(statements: string[], typeValidateExpr?: string): string {
   return `((_invoker) => { const __errs = {};${issuesFn}${principalDecl}\n${statements.join("\n")}${typeValidateStmt}\nreturn __errs; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
 }
 
+interface BuildTypeScriptsOptions {
+  typeHookExpr?: { create?: string; update?: string };
+  typeValidateExpr?: string;
+  /** Original fields to hash when execution requires compatibility transformations. */
+  sourceFields?: Record<string, ScriptFieldConfig>;
+}
+
 /**
  * Aggregate every field's create/update hook, default, and validate into
  * table-level scripts.  Hooks compute a single shared timestamp (`now`) per
@@ -280,16 +287,13 @@ function wrapValidate(statements: string[], typeValidateExpr?: string): string {
  */
 export function buildTypeScripts(
   fields: Record<string, ScriptFieldConfig>,
-  options?: {
-    typeHookExpr?: { create?: string; update?: string };
-    typeValidateExpr?: string;
-  },
+  options?: BuildTypeScriptsOptions,
 ): TypeScripts {
   const result: TypeScripts = {};
   const typeHookExpr = options?.typeHookExpr;
   const typeValidateExpr = options?.typeValidateExpr;
 
-  const hash = computeSourceScriptHash(fields, options);
+  const hash = computeSourceScriptHash(options?.sourceFields ?? fields, options);
   const hashSuffix = hash ? ` ${SOURCE_HASH_PREFIX}${hash}` : "";
 
   const hook: { create?: ScriptRef; update?: ScriptRef } = {};

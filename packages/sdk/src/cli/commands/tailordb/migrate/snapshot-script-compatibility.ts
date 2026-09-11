@@ -1,8 +1,6 @@
 import { findUndefinedReferences } from "#/cli/shared/free-variables";
 import { assertParsableExpression } from "#/utils/script-expr";
-import type { MigrationDiff } from "./diff-calculator";
 import type {
-  SchemaSnapshot,
   SnapshotFieldConfig,
   SnapshotValidation,
   TailorDBSnapshotType,
@@ -49,11 +47,34 @@ function normalizeValidations(validations: SnapshotValidation[]): SnapshotValida
   return normalized;
 }
 
-function normalizeField(field: SnapshotFieldConfig): SnapshotFieldConfig {
+function mergeRecordExpression(oldRecord: string, input: string): string {
+  return `(function merge(oldValue, newValue) {
+    if (newValue === undefined) return oldValue;
+    if (newValue === null || typeof newValue !== "object" || Array.isArray(newValue)
+      || Object.getPrototypeOf(newValue) !== Object.prototype) return newValue;
+    return Object.fromEntries([
+      ...Object.entries(oldValue ?? {}),
+      ...Object.entries(newValue).map(([key, value]) => [key, merge(oldValue?.[key], value)])
+    ]);
+  })(${oldRecord}, ${input})`;
+}
+
+function normalizeField(
+  field: SnapshotFieldConfig,
+  inputAccess: string,
+  oldAccess: string,
+  fieldName: string,
+): SnapshotFieldConfig {
   const normalized = { ...field };
   if (field.fields) {
+    // The script compiler binds __el while evaluating hooks in array elements.
+    const nestedInput = field.array ? "__el" : `${inputAccess}?.[${JSON.stringify(fieldName)}]`;
+    const nestedOld = field.array ? "undefined" : `${oldAccess}?.[${JSON.stringify(fieldName)}]`;
     normalized.fields = Object.fromEntries(
-      Object.entries(field.fields).map(([name, nested]) => [name, normalizeField(nested)]),
+      Object.entries(field.fields).map(([name, nested]) => [
+        name,
+        normalizeField(nested, nestedInput, nestedOld, name),
+      ]),
     );
   }
   if (field.hooks) {
@@ -62,7 +83,7 @@ function normalizeField(field: SnapshotFieldConfig): SnapshotFieldConfig {
       const hook = field.hooks[operation];
       if (hook && usesLegacyData(hook.expr)) {
         const dataExpr =
-          operation === "update" ? "Object.assign({}, _oldRecord, _input)" : "_input";
+          operation === "update" ? mergeRecordExpression(oldAccess, inputAccess) : inputAccess;
         normalized.hooks[operation] = {
           ...hook,
           expr: assertParsableExpression(
@@ -79,64 +100,21 @@ function normalizeField(field: SnapshotFieldConfig): SnapshotFieldConfig {
   return normalized;
 }
 
-function normalizeTable(table: TailorDBSnapshotType): TailorDBSnapshotType {
+/**
+ * Adapt historical scripts for execution while leaving persisted metadata unchanged.
+ * @param table - Table whose field scripts will be compiled
+ * @returns Table with legacy field scripts adapted in memory
+ */
+export function normalizeTableScriptCompatibility(
+  table: TailorDBSnapshotType,
+): TailorDBSnapshotType {
   return {
     ...table,
     fields: Object.fromEntries(
-      Object.entries(table.fields).map(([name, field]) => [name, normalizeField(field)]),
+      Object.entries(table.fields).map(([name, field]) => [
+        name,
+        normalizeField(field, "_input", "_oldRecord", name),
+      ]),
     ),
-  };
-}
-
-/**
- * Adapt persisted field scripts without changing the current parser's script contract.
- * @param snapshot - Validated snapshot with current structural names
- * @returns Snapshot with legacy field scripts adapted in memory
- */
-export function normalizeSnapshotScriptCompatibility(snapshot: SchemaSnapshot): SchemaSnapshot {
-  return {
-    ...snapshot,
-    tables: Object.fromEntries(
-      Object.entries(snapshot.tables).map(([name, table]) => [name, normalizeTable(table)]),
-    ),
-  };
-}
-
-/**
- * Adapt both sides of persisted changes before replay or pre-migration planning.
- * @param diff - Validated diff with current structural names
- * @returns Diff with legacy field scripts adapted in memory
- */
-export function normalizeDiffScriptCompatibility(diff: MigrationDiff): MigrationDiff {
-  return {
-    ...diff,
-    changes: diff.changes.map((change) => {
-      switch (change.kind) {
-        case "table_added":
-          return { ...change, after: normalizeTable(change.after) };
-        case "table_removed":
-          return { ...change, before: normalizeTable(change.before) };
-        case "table_renamed":
-          return {
-            ...change,
-            before: normalizeTable(change.before),
-            after: normalizeTable(change.after),
-          };
-        case "field_added":
-          return { ...change, after: normalizeField(change.after) };
-        case "field_removed":
-          return { ...change, before: normalizeField(change.before) };
-        case "field_modified":
-        case "field_type_modified":
-        case "field_renamed":
-          return {
-            ...change,
-            before: normalizeField(change.before),
-            after: normalizeField(change.after),
-          };
-        default:
-          return change;
-      }
-    }),
   };
 }

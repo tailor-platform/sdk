@@ -11,10 +11,6 @@ import {
   normalizeSchemaSnapshot,
 } from "./snapshot-normalization";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
-import {
-  normalizeDiffScriptCompatibility,
-  normalizeSnapshotScriptCompatibility,
-} from "./snapshot-script-compatibility";
 import { type NormalizedSchemaSnapshot, type SchemaSnapshot } from "./snapshot-types";
 import { deriveWarningsFromChanges } from "./snapshot-warnings";
 
@@ -134,7 +130,7 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
     });
   }
   const snapshot = result.data;
-  return normalizeSchemaSnapshot(normalizeSnapshotScriptCompatibility(snapshot));
+  return normalizeSchemaSnapshot(snapshot);
 }
 
 /**
@@ -159,7 +155,7 @@ export function loadDiff(filePath: string): MigrationDiff {
       cause: result.error,
     });
   }
-  const parsed = normalizeDiffScriptCompatibility(result.data);
+  const parsed = result.data;
   // Backfill fields introduced after the initial diff.json schema so that older
   // migrations on disk remain readable without manual edits. A missing warnings
   // field (pre-warning-tier diff.json) is reconstructed from the recorded
