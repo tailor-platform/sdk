@@ -11,6 +11,7 @@ export interface DDLFieldConfig {
   array?: boolean;
   unique?: boolean;
   serial?: { start: number; maxValue?: number; format?: string };
+  scale?: number;
   default?: unknown;
   optionalOnCreate?: boolean;
   hooks?: { create?: unknown; update?: unknown };
@@ -25,6 +26,10 @@ export interface DDLTableConfig {
 }
 
 const MAX_IDENTIFIER_BYTES = 63;
+// The platform rounds decimals to their scale (6 unless configured); numeric
+// needs a precision to carry a scale, and the maximum leaves it unconstrained.
+const DECIMAL_PRECISION = 1000;
+const DEFAULT_DECIMAL_SCALE = 6;
 const utf8 = new TextEncoder();
 
 /**
@@ -76,7 +81,10 @@ function stringLiteral(value: string): string {
 }
 
 function columnType(field: DDLFieldConfig): string {
-  const base = mapFieldTypeToPostgresType(field.type);
+  const base =
+    field.type === "decimal"
+      ? `numeric(${DECIMAL_PRECISION}, ${field.scale ?? DEFAULT_DECIMAL_SCALE})`
+      : mapFieldTypeToPostgresType(field.type);
   return field.array && field.type !== "nested" ? `${base}[]` : base;
 }
 
@@ -212,7 +220,9 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
  * DDL statements that create one table: any sequences its string serial
  * fields draw from, the table, then its unique indexes. Every statement is
  * `IF NOT EXISTS`, so re-applying the script on a database that already
- * has the table is a no-op.
+ * has the table is a no-op. Index names end in `_idx` so they cannot take
+ * the `<table>_<column>_key` name Postgres gives a UNIQUE column, which
+ * `IF NOT EXISTS` would otherwise silently skip.
  * @param table - Table name, fields, and indexes
  * @returns Statements in execution order, without trailing semicolons
  * @throws If a field type, default, serial format, or identifier cannot be expressed
@@ -236,7 +246,7 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
     .filter(([, index]) => index.unique)
     .map(
       ([name, index]) =>
-        `CREATE UNIQUE INDEX IF NOT EXISTS ${identifier(`${table.name}_${name}`)} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${identifier(`${table.name}_${name}_idx`)} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
     );
 
   return [

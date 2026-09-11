@@ -101,7 +101,7 @@ describe("generatePGliteSchemaModule", () => {
     expect(content).toContain('"createdAt" timestamptz NOT NULL DEFAULT now()');
     expect(content).toContain('"email" text NOT NULL UNIQUE');
     expect(content).toContain(
-      'CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_idx_region_email" ON "Invoice" ("region", "email");',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_idx_region_email_idx" ON "Invoice" ("region", "email");',
     );
     expect(content).not.toContain("Invoice_idx_region_invoiceNumber");
     expect(content).toContain('  "other": `CREATE TABLE IF NOT EXISTS "Tick\\`\\${x}" (');
@@ -163,7 +163,7 @@ describe("generated DDL on PGlite", () => {
         boolField: true,
         intField: 3,
         floatField: 1.5,
-        decimalField: "12.50",
+        decimalField: "12.345",
         dateField: "2024-01-02",
         datetimeField: at,
         timeField: "12:34",
@@ -180,7 +180,7 @@ describe("generated DDL on PGlite", () => {
     expect(row.boolField).toBe(true);
     expect(row.intField).toBe(3);
     expect(row.floatField).toBe(1.5);
-    expect(row.decimalField).toBe("12.50");
+    expect(row.decimalField).toBe("12.35");
     expect(row.dateField).toEqual(new Date("2024-01-02T00:00:00.000Z"));
     expect(row.datetimeField).toEqual(at);
     expect(row.timeField).toBe("12:34:00");

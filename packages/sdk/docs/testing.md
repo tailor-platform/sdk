@@ -205,7 +205,7 @@ test("upserts against real rows", async () => {
 });
 ```
 
-The generated columns follow the Kysely types, not TailorDB's storage: `text` for string and enum fields, `timestamptz` for datetime, `date` and `time` for date and time, `numeric` for decimal, `jsonb` for nested objects (and arrays of them), Postgres arrays for other array fields. `id` is a generated `uuid` primary key, `.unique()` fields and unique `.indexes()` are enforced, so `ON CONFLICT` upserts behave, and `.default()` values become column defaults (`"now"` becomes the current time). `.serial()` fields are assigned by the database from the configured `start`, `maxValue`, and `%d` format. Relations are not enforced.
+The generated columns follow the Kysely types, not TailorDB's storage: `text` for string and enum fields, `timestamptz` for datetime, `date` and `time` for date and time, `numeric` rounded to the configured scale for decimal, `jsonb` for nested objects (and arrays of them), Postgres arrays for other array fields. `id` is a generated `uuid` primary key, `.unique()` fields and unique `.indexes()` are enforced, so `ON CONFLICT` upserts behave, and `.default()` values become column defaults (`"now"` becomes the current time). `.serial()` fields are assigned by the database from the configured `start`, `maxValue`, and `%d` format. Relations are not enforced.
 
 What the script cannot reproduce:
 

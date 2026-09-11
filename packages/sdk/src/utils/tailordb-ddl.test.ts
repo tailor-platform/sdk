@@ -63,6 +63,18 @@ describe("generateTableDDL", () => {
     expect(columnLine({ a: { type: "string" } }, "a")).toBe('"a" text');
   });
 
+  test("decimal columns round to the configured scale, six digits when omitted", () => {
+    expect(columnLine({ price: { type: "decimal", required: true } }, "price")).toBe(
+      '"price" numeric(1000, 6) NOT NULL',
+    );
+    expect(columnLine({ price: { type: "decimal", scale: 2 } }, "price")).toBe(
+      '"price" numeric(1000, 2)',
+    );
+    expect(columnLine({ prices: { type: "decimal", scale: 0, array: true } }, "prices")).toBe(
+      '"prices" numeric(1000, 0)[]',
+    );
+  });
+
   test("unique fields get a UNIQUE constraint", () => {
     expect(columnLine({ email: { type: "string", required: true, unique: true } }, "email")).toBe(
       '"email" text NOT NULL UNIQUE',
@@ -284,7 +296,7 @@ describe("generateTableDDL", () => {
     );
     expect(statements).toHaveLength(2);
     expect(statements[1]).toBe(
-      'CREATE UNIQUE INDEX IF NOT EXISTS "Item_idx_a_b" ON "Item" ("a", "b")',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "Item_idx_a_b_idx" ON "Item" ("a", "b")',
     );
   });
 
