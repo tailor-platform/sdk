@@ -490,7 +490,7 @@ Without the flag the command fails rather than converting anything, so a scripte
 
 Some changes are still rejected and need a temporary field you add yourself — add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration:
 
-- Array-to-scalar, since collapsing an array has no answer the generated script could choose for you.
+- A field that is already an array: collapsing it into a single value has no answer the generated script could choose for you, and changing its element type (`string[]` → `integer[]`) is not generated either.
 - A field that is unique, or that an index, relationship, permission, or table-level script names. Those keep pointing at the original name, which the conversion removes.
 
 ## Testing Pending Migrations
