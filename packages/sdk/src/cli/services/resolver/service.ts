@@ -39,7 +39,7 @@ export function createResolverService(
       const result = ResolverSchema.safeParse(resolverModule.default);
       if (result.success) {
         const relativePath = path.relative(process.cwd(), resolverFile);
-        logger.log(
+        logger.debug(
           `Resolver: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
         resolvers[resolverFile] = result.data;
