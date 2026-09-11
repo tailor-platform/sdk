@@ -94,7 +94,7 @@ describe("generatePGliteSchemaModule", () => {
     expect(content).toContain("DO NOT EDIT");
     expect(content).toContain("export const pgliteSchema = {");
     expect(content).toContain(
-      '  "tailordb": `CREATE SEQUENCE IF NOT EXISTS "Invoice_invoiceNumber_seq" START WITH 1000;',
+      '  "tailordb": `CREATE SEQUENCE IF NOT EXISTS "Invoice_invoiceNumber_seq" START WITH 1000 MINVALUE 1000;',
     );
     expect(content).toContain('CREATE TABLE IF NOT EXISTS "Invoice" (');
     expect(content).toContain('CREATE TABLE IF NOT EXISTS "EveryType" (');
