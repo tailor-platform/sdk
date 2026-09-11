@@ -386,7 +386,7 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Change field type (verified pair) | Yes       | Yes               | In-place for the pairs listed under [Field type changes](#field-type-changes); review the generated normalization scaffold and customize it only when existing values need transformation                                                          |
 | Change field type (other pair)    | Yes       | Yes               | Two migrations, generated together after you confirm — see [Converting a field type](#converting-a-field-type). Edit the conversion in the first; the second needs no changes.                                                                     |
 | Change array → single value       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                                        |
-| Change single value → array       | -         | -                 | **Not supported** — see [Converting a field type](#converting-a-field-type)                                                                                                                                                                        |
+| Change single value → array       | Yes       | Yes               | Two migrations, generated together after you confirm — see [Converting a field type](#converting-a-field-type). Each stored value becomes a one-element array, so the conversion needs no edits.                                                   |
 
 ### Field type changes
 
@@ -460,7 +460,7 @@ The generated `never` annotation intentionally causes a TypeScript error until y
 
 ### Converting a field type
 
-A field type change outside the verified in-place pairs — `string` → `integer`, for example — cannot be applied in one step, because the field would have to hold both shapes at once. `migration generate` offers to carry the values through a temporary field instead:
+A field type change outside the verified in-place pairs — `string` → `integer`, for example — cannot be applied in one step, because the field would have to hold both shapes at once. The same holds when a single value becomes an array (`string` → `string[]`): the stored values must be rewritten as arrays before the field can take the new shape. `migration generate` offers to carry the values through a temporary field instead:
 
 ```
 User.price changes from string to integer, which cannot be applied in one step.
@@ -469,7 +469,7 @@ User.price changes from string to integer, which cannot be applied in one step.
 
 Confirming writes two migrations:
 
-1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there.
+1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there. When only the array-ness changes (`string` → `string[]`), the conversion stores each value as a one-element array and carries no review marker; when the element type changes as well (`integer` → `string[]`), you convert the element and the script wraps it.
 2. **The rename.** Renames the temporary field back to `price`. Its copy script is complete, but this migration also carries every other schema change the same run picked up, so review it as you would any generated migration.
 
 `tailor deploy` applies both. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than converting a row twice.
@@ -490,7 +490,7 @@ Without the flag the command fails rather than converting anything, so a scripte
 
 Some changes are still rejected and need a temporary field you add yourself — add the new field, write a script that fills it and clears the old one, then remove the old field and rename the temporary one in a later migration:
 
-- Array-to-scalar and scalar-to-array, since collapsing an array has no answer the generated script could choose for you.
+- Array-to-scalar, since collapsing an array has no answer the generated script could choose for you.
 - A field that is unique, or that an index, relationship, permission, or table-level script names. Those keep pointing at the original name, which the conversion removes.
 
 ## Testing Pending Migrations

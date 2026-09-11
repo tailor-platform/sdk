@@ -1,5 +1,6 @@
 /**
- * E2E coverage for converting a field type through a generated migration pair.
+ * E2E coverage for converting a field type, and a single value into an array,
+ * through a generated migration pair.
  *
  * Deploying successfully is not sufficient evidence that a conversion worked:
  * the platform accepts some schema changes that leave stored values unreadable
@@ -99,7 +100,7 @@ describe("E2E: TailorDB expand-contract field type change", { concurrent: false 
     return configPath;
   }
 
-  function updateTypeFile(priceType: string, extraFields = ""): void {
+  function updateTypeFile(priceType: string, tagsType: string, extraFields = ""): void {
     fs.writeFileSync(
       path.join(tempDir, "tailordb", "user.ts"),
       `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
@@ -108,6 +109,7 @@ export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   price: ${priceType},
+  tags: ${tagsType},
 ${extraFields}}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
@@ -165,14 +167,14 @@ export type user = typeof user;
   }, 300000);
 
   test("seeds integer values under the original type", async () => {
-    updateTypeFile("db.int()");
+    updateTypeFile("db.int()", "db.string()");
     const configPath = createConfig();
 
     runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
     runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"]);
 
     // A schema change is what earns a migration to hang the seed script on.
-    updateTypeFile("db.int()", "  seedMarker: db.string({ optional: true }),\n");
+    updateTypeFile("db.int()", "db.string()", "  seedMarker: db.string({ optional: true }),\n");
     runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
     fs.writeFileSync(
       getMigrationFilePath(migrationsDir, 1, "migrate"),
@@ -182,8 +184,8 @@ export async function main(trx: Transaction): Promise<void> {
   await trx
     .insertInto("User")
     .values([
-      { id: "${FIRST_ID}", name: "First", email: "first@example.com", price: 1250 },
-      { id: "${SECOND_ID}", name: "Second", email: "second@example.com", price: -7 },
+      { id: "${FIRST_ID}", name: "First", email: "first@example.com", price: 1250, tags: "alpha" },
+      { id: "${SECOND_ID}", name: "Second", email: "second@example.com", price: -7, tags: "beta" },
     ])
     .execute();
 }
@@ -197,7 +199,11 @@ export async function main(trx: Transaction): Promise<void> {
   }, 900000);
 
   test("rejects the type change until the conversion is requested", async () => {
-    updateTypeFile("db.bool()", "  seedMarker: db.string({ optional: true }),\n");
+    updateTypeFile(
+      "db.bool()",
+      "db.string({ array: true })",
+      "  seedMarker: db.string({ optional: true }),\n",
+    );
     const configPath = createConfig();
 
     const result = tryCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
@@ -218,11 +224,17 @@ export async function main(trx: Transaction): Promise<void> {
       "--yes",
       "--expand-contract",
       "User.price",
+      "--expand-contract",
+      "User.tags",
     ]);
 
-    expect(fs.readFileSync(conversionScriptPath(), "utf8")).toContain(
-      MIGRATION_REVIEW_REQUIRED_MARKER,
-    );
+    const script = fs.readFileSync(conversionScriptPath(), "utf8");
+    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    // The array conversion is mechanical, so only the price conversion asks for review.
+    expect(script).toContain(`["tagsMigrate"]: convertedValue`);
+    expect(
+      script.match(new RegExp(MIGRATION_REVIEW_REQUIRED_MARKER.replaceAll(/[()]/g, "\\$&"), "g")),
+    ).toHaveLength(1);
   }, 600000);
 
   test("reports the unreviewed conversion through migration validate", async () => {
@@ -258,6 +270,7 @@ export async function main(trx: Transaction): Promise<void> {
     const configPath = createConfig();
     updateTypeFile(
       "db.bool()",
+      "db.string({ array: true })",
       "  seedMarker: db.string({ optional: true }),\n  readbackMarker: db.string({ optional: true }),\n",
     );
     runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
@@ -269,11 +282,13 @@ export async function main(trx: Transaction): Promise<void> {
 
 export async function main(trx: Transaction): Promise<void> {
   const rows = await trx.selectFrom("User").selectAll().orderBy("id", "asc").execute();
-  const seen = rows.map((row) => \`\${row.id}=\${typeof row.price}:\${String(row.price)}\`).join("|");
-  if (seen !== "${FIRST_ID}=boolean:true|${SECOND_ID}=boolean:false") {
+  const seen = rows
+    .map((row) => \`\${row.id}=\${typeof row.price}:\${String(row.price)}:\${JSON.stringify(row.tags)}\`)
+    .join("|");
+  if (seen !== '${FIRST_ID}=boolean:true:["alpha"]|${SECOND_ID}=boolean:false:["beta"]') {
     throw new Error("PROBE_MISMATCH " + seen);
   }
-  if ("priceMigrate" in rows[0]!) {
+  if ("priceMigrate" in rows[0]! || "tagsMigrate" in rows[0]!) {
     throw new Error("PROBE_TEMP_FIELD_REMAINS");
   }
 }
@@ -294,5 +309,9 @@ export async function main(trx: Transaction): Promise<void> {
 
     expect(replayed?.tables.User?.fields.price?.type).toBe("boolean");
     expect(replayed?.tables.User?.fields.priceMigrate).toBeUndefined();
+    expect(replayed?.tables.User?.fields.tags).toEqual(
+      expect.objectContaining({ type: "string", array: true }),
+    );
+    expect(replayed?.tables.User?.fields.tagsMigrate).toBeUndefined();
   });
 });

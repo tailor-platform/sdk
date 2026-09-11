@@ -494,6 +494,58 @@ describe("planExpandContract", () => {
     expect(plans[0]?.tempFieldName).toBe("priceMigrate2");
   });
 
+  test("plans a single value becoming an array, which is a field_modified change", () => {
+    const before = snapshotField("string");
+    const after = snapshotField("string", { array: true });
+    const { plans, blocked } = planExpandContract({
+      previous: snapshot({ tags: before }),
+      current: snapshot({ tags: after }),
+      diff: createMockMigrationDiff({
+        changes: [{ kind: "field_modified", tableName: "User", fieldName: "tags", before, after }],
+        breakingChanges: [
+          {
+            tableName: "User",
+            fieldName: "tags",
+            reason: "Field changed from single value to array",
+            unsupported: true,
+            showThreeStepHint: true,
+          },
+        ],
+      }),
+      confirmed: new Set(["User.tags"]),
+    });
+
+    expect(plans).toEqual([
+      expect.objectContaining({ fieldName: "tags", tempFieldName: "tagsMigrate", before, after }),
+    ]);
+    expect(blocked).toEqual([]);
+  });
+
+  test("keeps an array collapsing to a single value blocked", () => {
+    const before = snapshotField("string", { array: true });
+    const after = snapshotField("string");
+    const { plans, blocked } = planExpandContract({
+      previous: snapshot({ tags: before }),
+      current: snapshot({ tags: after }),
+      diff: createMockMigrationDiff({
+        changes: [{ kind: "field_modified", tableName: "User", fieldName: "tags", before, after }],
+        breakingChanges: [
+          {
+            tableName: "User",
+            fieldName: "tags",
+            reason: "Field changed from array to single value",
+            unsupported: true,
+            showThreeStepHint: true,
+          },
+        ],
+      }),
+      confirmed: new Set(["User.tags"]),
+    });
+
+    expect(plans).toEqual([]);
+    expect(blocked).toHaveLength(1);
+  });
+
   test("keeps unrelated unsupported changes blocked", () => {
     const { plans, blocked } = planning(
       [typeChange("price", snapshotField("integer"), snapshotField("boolean"))],

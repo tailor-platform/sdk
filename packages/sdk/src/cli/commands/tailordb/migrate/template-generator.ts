@@ -10,6 +10,7 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
+import { formatFieldShape, isSingleValueToArrayChange } from "./field-type-change";
 import { isBreakingForeignKeyRetarget } from "./rename-detection";
 import {
   DEFAULT_DECIMAL_SCALE,
@@ -722,7 +723,33 @@ function generateFieldTypeChangeScript(
   }`;
 }
 
+/**
+ * Lines that derive the value the conversion writes into the temporary field.
+ *
+ * Wrapping a single value into an array needs no decision, so only a change of
+ * the element type asks for review.
+ * @param plan - Field change carried through a temporary field
+ * @returns Script lines binding `convertedValue`
+ */
+function generateExpandConversionValue(plan: ExpandContractPlan): string {
+  if (isSingleValueToArrayChange(plan.before, plan.after)) {
+    return `        // Store the ${plan.before.type} value as the only element of the ${formatFieldShape(plan.after)} field.
+        const sourceValue = row.${plan.fieldName};
+        if (sourceValue === null) continue;
+        const convertedValue = [sourceValue];`;
+  }
+  const target = plan.after.array
+    ? `an element of the ${formatFieldShape(plan.after)} field`
+    : `the ${plan.after.type} type`;
+  return `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the conversion.
+        // Produce a value accepted by ${target} from the stored ${plan.before.type} value.
+        const sourceValue = row.${plan.fieldName};
+        const convertedValue: never = sourceValue;`;
+}
+
 function generateExpandConversionScript(plan: ExpandContractPlan): string {
+  const wrapsElement =
+    (plan.after.array ?? false) && !isSingleValueToArrayChange(plan.before, plan.after);
   return `  // Convert ${plan.tableName}.${plan.fieldName} into ${plan.tempFieldName}, which the next migration renames back to ${plan.fieldName}
   {
     let lastId: string | undefined;
@@ -740,15 +767,12 @@ function generateExpandConversionScript(plan: ExpandContractPlan): string {
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the conversion.
-        // Produce a value accepted by the ${plan.after.type} type from the stored ${plan.before.type} value.
-        const sourceValue = row.${plan.fieldName};
-        const convertedValue: never = sourceValue;
+${generateExpandConversionValue(plan)}
         // Clearing ${plan.fieldName} keeps a re-run from converting the row twice.
         await trx
           .updateTable("${plan.tableName}")
           .set({
-            [${JSON.stringify(plan.tempFieldName)}]: convertedValue,
+            [${JSON.stringify(plan.tempFieldName)}]: ${wrapsElement ? "[convertedValue]" : "convertedValue"},
             [${JSON.stringify(plan.fieldName)}]: null,
           })
           .where("id", "=", row.id)

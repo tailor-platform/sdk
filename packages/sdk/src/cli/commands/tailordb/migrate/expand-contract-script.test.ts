@@ -83,6 +83,36 @@ describe("expand conversion script", () => {
   });
 });
 
+describe("expand conversion script for a single value becoming an array", () => {
+  const arrayPlan: ExpandContractPlan = {
+    ...plan,
+    before: snapshotField("integer", { required: true }),
+    after: snapshotField("integer", { required: true, array: true }),
+  };
+
+  test("wraps the stored value without asking for review", () => {
+    const script = expandScript([arrayPlan]);
+
+    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).not.toContain(": never");
+    expect(script).toContain("const convertedValue = [sourceValue];");
+    expect(script).toContain(`.set({
+            ["priceMigrate"]: convertedValue,
+            ["price"]: null,
+          })`);
+  });
+
+  test("keeps the review marker when the element type changes as well", () => {
+    const script = expandScript([
+      { ...arrayPlan, after: snapshotField("string", { required: true, array: true }) },
+    ]);
+
+    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain("const convertedValue: never = sourceValue;");
+    expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
+  });
+});
+
 describe("db.ts for an expand migration", () => {
   const tempDirs: string[] = [];
 

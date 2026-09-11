@@ -33,9 +33,11 @@ import {
   canConvertField,
   fieldKey,
   getExpandContractEligibility,
+  isExpandContractCandidate,
   planExpandContract,
   type ExpandContractPlan,
 } from "./expand-contract";
+import { formatFieldShape, hasFieldShapeChange } from "./field-type-change";
 import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
@@ -413,7 +415,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
       const { spec } = flag;
       const before = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
       const after = currentSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
-      if (!before || !after || before.type === after.type) continue;
+      if (!before || !after || !hasFieldShapeChange(before, after)) continue;
       matchedExpandContractFlags.add(flag);
       const eligibility = getExpandContractEligibility({
         previous: previousSnapshot,
@@ -633,7 +635,7 @@ async function resolveExpandContractPlans(
 
   if (!options.yes && canPrompt()) {
     for (const change of diff.changes) {
-      if (change.kind !== "field_type_modified") continue;
+      if (!isExpandContractCandidate(change)) continue;
       const key = fieldKey(change.tableName, change.fieldName);
       if (confirmed.has(key)) continue;
       if (
@@ -649,7 +651,7 @@ async function resolveExpandContractPlans(
 
       logger.newline();
       logger.info(
-        `${change.tableName}.${change.fieldName} changes from ${change.before.type} to ${change.after.type}, which cannot be applied in one step.`,
+        `${change.tableName}.${change.fieldName} changes from ${formatFieldShape(change.before)} to ${formatFieldShape(change.after)}, which cannot be applied in one step.`,
       );
       const approved = await prompt.confirm({
         message: `Generate two migrations to convert ${change.tableName}.${change.fieldName} through a temporary field?`,

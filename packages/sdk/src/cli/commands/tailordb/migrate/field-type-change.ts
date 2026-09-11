@@ -59,6 +59,42 @@ export function supportsInPlaceFieldTypeChange(
   return !(before.unique ?? false) || after.type !== "decimal" || before.type !== "float";
 }
 
+/**
+ * Field type with its array marker, as a user would write it.
+ * @param field - Field configuration
+ * @returns The type name, suffixed with `[]` for an array field
+ */
+export function formatFieldShape(field: SnapshotFieldConfig): string {
+  return field.array ? `${field.type}[]` : field.type;
+}
+
+/**
+ * Whether a field change alters the shape its values must take.
+ * @param before - Previous field configuration
+ * @param after - Target field configuration
+ * @returns Whether the type or the array-ness differs
+ */
+export function hasFieldShapeChange(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): boolean {
+  return before.type !== after.type || (before.array ?? false) !== (after.array ?? false);
+}
+
+/**
+ * Whether a change turns a single value into an array of the same type, which
+ * the generated conversion completes on its own by wrapping each value.
+ * @param before - Previous field configuration
+ * @param after - Target field configuration
+ * @returns Whether only the array-ness changes
+ */
+export function isSingleValueToArrayChange(
+  before: SnapshotFieldConfig,
+  after: SnapshotFieldConfig,
+): boolean {
+  return before.type === after.type && !before.array && (after.array ?? false);
+}
+
 /** Result of checking whether a field type change can use expand-contract. */
 export type ExpandContractFieldChangeEligibility =
   | { eligible: true }
@@ -72,9 +108,10 @@ export type ExpandContractFieldChangeEligibility =
  * stands on its own: a serial number belongs to a sequence the copy cannot
  * reproduce, a foreign key would dangle while both fields exist, a vector
  * belongs to an index built from it, and a nested value would need its members
- * converted individually. Arrays are excluded because collapsing one into a
- * single value has no answer the generated script could choose, and unique
- * fields because the duplicate-resolution scaffold the rename half would emit
+ * converted individually. A field that is already an array is excluded because
+ * collapsing it into a single value has no answer the generated script could
+ * choose, while a single value becomes a one-element array. Unique fields are
+ * excluded because the duplicate-resolution scaffold the rename half would emit
  * only produces string values.
  * @param before - Previous field configuration
  * @param after - Target field configuration
@@ -84,7 +121,7 @@ export function getExpandContractFieldChangeEligibility(
   before: SnapshotFieldConfig,
   after: SnapshotFieldConfig,
 ): ExpandContractFieldChangeEligibility {
-  if (before.type === after.type)
+  if (!hasFieldShapeChange(before, after))
     return { eligible: false, reason: "the field type did not change" };
   if (supportsInPlaceFieldTypeChange(before, after)) {
     return {
@@ -93,7 +130,7 @@ export function getExpandContractFieldChangeEligibility(
     };
   }
   if (before.unique || after.unique) return { eligible: false, reason: "the field is unique" };
-  if (before.array || after.array) return { eligible: false, reason: "the field is an array" };
+  if (before.array) return { eligible: false, reason: "the field is an array" };
   if (before.type === "nested" || after.type === "nested") {
     return { eligible: false, reason: "the field is nested" };
   }
