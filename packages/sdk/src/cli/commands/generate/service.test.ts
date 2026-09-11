@@ -4,7 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
 import { defineApplication } from "#/cli/services/application";
-import { errorToJson } from "#/cli/shared/error-json";
+import { errorToJson, serializeError } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
@@ -276,7 +276,7 @@ describe("GenerationManager", () => {
 
         expect(isCLIError(failure)).toBe(true);
         if (!isCLIError(failure)) throw new Error("Expected structured plugin failure");
-        expect(errorToJson(failure)).toMatchObject({
+        expect(JSON.parse(serializeError(failure))).toMatchObject({
           error: {
             code: "PLUGIN_GENERATION_FAILED",
             message: `Plugin generation failed during ${hookName}.`,

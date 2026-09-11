@@ -1,5 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
+import type { Jsonifiable } from "type-fest";
 
 export interface ErrorToJsonOptions {
   /** Include the original stack trace in the error envelope. */
@@ -15,7 +16,7 @@ export interface ErrorToJsonOptions {
 export function errorToJson(
   error: unknown,
   options?: ErrorToJsonOptions,
-): { error: Readonly<Record<string, unknown>> } {
+): { error: Readonly<Record<string, Jsonifiable | undefined>> } {
   if (isCLIError(error)) {
     return {
       error: {
