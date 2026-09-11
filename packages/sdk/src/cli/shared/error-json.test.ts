@@ -39,4 +39,24 @@ describe("serializeError", () => {
     expect(parsed.error.context.request.headers.authorization).toBe("<redacted>");
     expect(output).not.toContain("nested-context-secret-value");
   });
+
+  test("falls back to dropping context/stack instead of crashing on a circular context", () => {
+    const circular: Record<string, unknown> = { name: "circular" };
+    circular.self = circular;
+    const error = CLIError({ message: "operation failed", context: circular });
+
+    expect(() => serializeError(error)).not.toThrow();
+    const parsed = JSON.parse(serializeError(error)) as { error: Record<string, unknown> };
+    expect(parsed.error.context).toBeUndefined();
+    expect(parsed.error.message).toBe("operation failed");
+  });
+
+  test("preserves a Date's normal JSON serialization inside context", () => {
+    const date = new Date("2024-01-01T00:00:00.000Z");
+    const error = CLIError({ message: "operation failed", context: { createdAt: date } });
+    const parsed = JSON.parse(serializeError(error)) as {
+      error: { context: { createdAt: string } };
+    };
+    expect(parsed.error.context.createdAt).toBe(date.toJSON());
+  });
 });

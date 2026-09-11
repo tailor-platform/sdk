@@ -3,21 +3,19 @@ import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./error
 import { redactSecrets } from "./logger";
 
 /**
- * Redacts registered secrets from every string found in `value`, however deeply nested —
- * `error.context` is an arbitrary `Record<string, unknown>`, not just the known top-level
- * string fields, so a secret could in principle reach it through a nested value.
- * @param value - Value to redact strings within
- * @returns `value` with every string leaf redacted
+ * `JSON.stringify` replacer that redacts registered secrets from every string value it
+ * walks — however deeply nested, since `error.context` is an arbitrary
+ * `Record<string, unknown>` a secret could in principle reach through a nested value.
+ * Passed as `JSON.stringify`'s second argument rather than pre-walking the envelope by
+ * hand, so `JSON.stringify`'s own handling of circular references (throws, caught by the
+ * existing fallback below) and `toJSON`-bearing values (e.g. `Date`, already converted to
+ * its string form before this replacer sees it) both keep working unmodified.
+ * @param _key - Property key being visited (unused)
+ * @param value - Property value being visited
+ * @returns `value`, redacted if it is a string
  */
-function redactDeep(value: unknown): unknown {
-  if (typeof value === "string") return redactSecrets(value);
-  if (Array.isArray(value)) return value.map(redactDeep);
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, redactDeep(entry)]),
-    );
-  }
-  return value;
+function redactStringValues(_key: string, value: unknown): unknown {
+  return typeof value === "string" ? redactSecrets(value) : value;
 }
 
 export interface ErrorToJsonOptions {
@@ -97,14 +95,13 @@ export function errorToJson(
  */
 export function serializeError(error: unknown, options?: ErrorToJsonOptions): string {
   const envelope = errorToJson(error, options);
-  const redactedError = redactDeep(envelope.error) as Record<string, unknown>;
   try {
-    return JSON.stringify({ error: redactedError });
+    return JSON.stringify(envelope, redactStringValues);
   } catch {
-    const fallbackError = { ...redactedError };
+    const fallbackError = { ...envelope.error };
     delete fallbackError.context;
     delete fallbackError.stack;
-    return JSON.stringify({ error: fallbackError });
+    return JSON.stringify({ error: fallbackError }, redactStringValues);
   }
 }
 
