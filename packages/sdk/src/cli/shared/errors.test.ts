@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { errorToJson, serializeError } from "./error-json";
 import {
   CLIError,
+  errorSummary,
   formatCopyableCommand,
   internalError,
   isCLIError,
@@ -296,5 +297,25 @@ describe("toError", () => {
     const error = toError({ status: 500 });
     expect(error.message).toBe("[object Object]");
     expect(error.cause).toEqual({ status: 500 });
+  });
+});
+
+describe("errorSummary", () => {
+  test("keeps details and suggestion for CLI errors", () => {
+    const error = CLIError({
+      code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
+      message: "Unsupported version 7.",
+      details: "Supported versions 1-6.",
+      suggestion: "Upgrade the SDK.",
+    });
+
+    expect(errorSummary(error)).toBe(
+      "Unsupported version 7.\nSupported versions 1-6.\nUpgrade the SDK.",
+    );
+  });
+
+  test("falls back to the message or string form", () => {
+    expect(errorSummary(new Error("plain"))).toBe("plain");
+    expect(errorSummary("text")).toBe("text");
   });
 });

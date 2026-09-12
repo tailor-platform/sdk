@@ -279,16 +279,10 @@ describe("tailordb migration test", () => {
       runMigrationTest({ data: "seed", profile: "staging" }, dependencies),
     ).rejects.toMatchObject({
       code: "MIGRATION_TEST_WORKSPACE_CLEANUP_FAILED",
+      suggestion: "Delete the temporary workspace manually with TAILOR_PLATFORM_PROFILE=staging.",
       next: {
         command: "tailor",
-        args: [
-          "workspace",
-          "delete",
-          "--workspace-id",
-          "44444444-4444-4444-8444-444444444444",
-          "--profile",
-          "staging",
-        ],
+        args: ["workspace", "delete", "--workspace-id", "44444444-4444-4444-8444-444444444444"],
       },
     });
   });

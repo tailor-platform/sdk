@@ -22,6 +22,7 @@ const fixture = [
   'export const timeout = new Promise((_, reject) => reject(new Error("timeout")));',
   'export const generated = `throw new Error("inside generated code")`;',
   'export const called = Error("call");',
+  "export class VersionError extends Error {}",
   "",
 ].join("\n");
 
@@ -61,6 +62,7 @@ describe("local/no-plain-error", () => {
       { rule: "local(no-plain-error)", line: 9 },
       { rule: "local(no-plain-error)", line: 11 },
       { rule: "local(no-plain-error)", line: 13 },
+      { rule: "local(no-plain-error)", line: 14 },
     ]);
   });
 

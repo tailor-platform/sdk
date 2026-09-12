@@ -7,7 +7,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { CLIError, errorSummary } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { PluginManager } from "#/plugin/manager";
@@ -357,7 +357,7 @@ async function collectValidationReports(
       unacknowledgedWarnings?.set(target.namespace, namespaceWarnings);
       checkableNamespaces.push(target);
     } catch (error) {
-      migrationFileErrors.set(target.namespace, formatReportError(error));
+      migrationFileErrors.set(target.namespace, errorSummary(error));
     }
   }
 
@@ -601,8 +601,3 @@ export const validateCommand = defineAppCommand({
     });
   },
 });
-
-function formatReportError(error: unknown): string {
-  if (isCLIError(error) && error.suggestion) return `${error.message}\n${error.suggestion}`;
-  return error instanceof Error ? error.message : String(error);
-}

@@ -6,7 +6,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
@@ -16,7 +16,7 @@ import {
   loadDiff,
   loadSnapshot,
   formatMigrationNumber,
-  UnsupportedMigrationFileVersionError,
+  MIGRATION_FILE_VERSION_UNSUPPORTED,
 } from "./snapshot";
 
 interface StatusOptions {
@@ -101,13 +101,13 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
           const diff = loadDiff(file.path);
           if (diff.description) descriptions.set(file.number, diff.description);
         } catch (error) {
-          if (error instanceof UnsupportedMigrationFileVersionError) throw error;
+          if (isCLIError(error) && error.code === MIGRATION_FILE_VERSION_UNSUPPORTED) throw error;
           // A malformed optional description must not hide migration status.
         }
       }
       localStates.set(namespace, { migrationFiles, descriptions, historyId });
     } catch (error) {
-      localFailures.set(namespace, error instanceof Error ? error.message : String(error));
+      localFailures.set(namespace, errorSummary(error));
     }
   }
 

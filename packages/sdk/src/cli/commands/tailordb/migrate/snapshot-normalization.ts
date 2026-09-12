@@ -1,4 +1,5 @@
 import * as inflection from "inflection";
+import { CLIError } from "#/cli/shared/errors";
 import {
   type DiffChangeKind,
   MIN_SUPPORTED_MIGRATION_FILE_VERSION,
@@ -17,7 +18,7 @@ import {
  */
 export const DEFAULT_DECIMAL_SCALE = 6;
 
-export class UnsupportedMigrationFileVersionError extends Error {}
+export const MIGRATION_FILE_VERSION_UNSUPPORTED = "MIGRATION_FILE_VERSION_UNSUPPORTED";
 
 export function assertSupportedMigrationFileVersion(filePath: string, raw: unknown): void {
   if (typeof raw !== "object" || raw === null || !("version" in raw)) return;
@@ -41,10 +42,12 @@ export function assertSupportedMigrationFileVersion(filePath: string, raw: unkno
   } else {
     guidance = "Restore the migration file from version control or regenerate it.";
   }
-  throw new UnsupportedMigrationFileVersionError(
-    `Unsupported migration file format version ${version} at ${filePath}. ` +
-      `This SDK supports migration file format versions ${supportedRange}. ${guidance}`,
-  );
+  throw CLIError({
+    code: MIGRATION_FILE_VERSION_UNSUPPORTED,
+    message: `Unsupported migration file format version ${version} at ${filePath}.`,
+    details: `This SDK supports migration file format versions ${supportedRange}.`,
+    suggestion: guidance,
+  });
 }
 
 /**

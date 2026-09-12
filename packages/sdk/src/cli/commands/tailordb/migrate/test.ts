@@ -121,16 +121,12 @@ export async function runMigrationTest(
         throw CLIError({
           code: "MIGRATION_TEST_WORKSPACE_CLEANUP_FAILED",
           message: `Failed to delete temporary workspace ${workspace.id}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-          suggestion: "Delete the temporary workspace manually.",
+          suggestion: options.profile
+            ? `Delete the temporary workspace manually with TAILOR_PLATFORM_PROFILE=${options.profile}.`
+            : "Delete the temporary workspace manually.",
           next: {
             command: "tailor",
-            args: [
-              "workspace",
-              "delete",
-              "--workspace-id",
-              workspace.id,
-              ...(options.profile ? ["--profile", options.profile] : []),
-            ],
+            args: ["workspace", "delete", "--workspace-id", workspace.id],
           },
           cause: cleanupError,
         });
