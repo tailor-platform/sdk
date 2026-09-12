@@ -7,6 +7,8 @@ import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { assertDefined } from "#/utils/assert";
 import type { CallExpression, ObjectExpression, ObjectProperty } from "@oxc-project/types";
 
+const SEPARATE_APP_HINT = "To use this config for a separate app, delete it.";
+
 export interface EnsureConfigIdResult {
   id: string;
   injected: boolean;
@@ -152,7 +154,7 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
       throw CLIError({
         code: "CONFIG_ID_INVALID",
         message: `'id' field in ${configPath} must be a string literal.`,
-        suggestion: "To use this config for a separate app, delete it.",
+        suggestion: SEPARATE_APP_HINT,
       });
     }
     const literalValue = (value as { value?: unknown }).value;
@@ -160,14 +162,14 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
       throw CLIError({
         code: "CONFIG_ID_INVALID",
         message: `'id' field in ${configPath} must be a non-empty string literal.`,
-        suggestion: "To use this config for a separate app, delete it.",
+        suggestion: SEPARATE_APP_HINT,
       });
     }
     if (!uuidRegex.test(literalValue)) {
       throw CLIError({
         code: "CONFIG_ID_INVALID",
         message: `'id' field in ${configPath} must be a UUID.`,
-        suggestion: "To use this config for a separate app, delete it.",
+        suggestion: SEPARATE_APP_HINT,
       });
     }
     return { id: literalValue, injected: false };
@@ -243,7 +245,7 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
     throw CLIError({
       code: "CONFIG_ID_INVALID",
       message: `'id' in ${configPath} must be a UUID.`,
-      suggestion: "To use this config for a separate app, delete it.",
+      suggestion: SEPARATE_APP_HINT,
     });
   }
 }

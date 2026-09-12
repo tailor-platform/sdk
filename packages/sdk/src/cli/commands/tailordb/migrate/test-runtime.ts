@@ -30,7 +30,7 @@ import { loadSeedContext, type SeedContext } from "#/cli/shared/seed-context";
 import { loadApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { assertDefined } from "#/utils/assert";
 import { bundleMigrationScript } from "./bundler";
-import { getNamespacesWithMigrations } from "./config";
+import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
 import { fetchRemoteMigrationNumber } from "./remote-state";
 import {
   assertValidMigrationFiles,
@@ -529,11 +529,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   const configDir = path.dirname(loaded.config.path);
   const namespaces = getNamespacesWithMigrations(loaded.config, configDir);
   if (namespaces.length === 0) {
-    throw CLIError({
-      code: "MIGRATION_CONFIG_NOT_FOUND",
-      message: "No TailorDB services with migrations configuration found.",
-      suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
-    });
+    throw migrationConfigNotFoundError();
   }
   for (const namespace of namespaces) {
     assertValidMigrationFiles(namespace.migrationsDir, namespace.namespace);

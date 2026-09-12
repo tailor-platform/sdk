@@ -9,7 +9,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { getNamespacesWithMigrations } from "./config";
+import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
 import { fetchRemoteMigrationState } from "./remote-state";
 import {
   getMigrationFiles,
@@ -60,11 +60,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
 
   if (namespacesWithMigrations.length === 0) {
-    throw CLIError({
-      code: "MIGRATION_CONFIG_NOT_FOUND",
-      message: "No TailorDB services with migrations configuration found",
-      suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
-    });
+    throw migrationConfigNotFoundError();
   }
 
   const targetNamespaces = options.namespace

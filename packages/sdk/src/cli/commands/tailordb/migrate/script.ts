@@ -21,7 +21,11 @@ import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
-import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
+import {
+  getNamespacesWithMigrations,
+  migrationConfigNotFoundError,
+  type NamespaceWithMigrations,
+} from "./config";
 import { writeDbTypesFile } from "./db-types-generator";
 import { parseMigrationNumberArg } from "./migration-number";
 import {
@@ -253,11 +257,7 @@ async function script(options: ScriptOptions): Promise<void> {
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   if (namespacesWithMigrations.length === 0) {
-    throw CLIError({
-      code: "MIGRATION_CONFIG_NOT_FOUND",
-      message: "No TailorDB services with migrations configuration found",
-      suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
-    });
+    throw migrationConfigNotFoundError();
   }
 
   const targetNamespace = resolveTargetNamespace(namespacesWithMigrations, options.namespace);

@@ -68,11 +68,7 @@ export function selectTargetNamespace(
   requested: string | undefined,
 ): NamespaceWithMigrations {
   if (namespacesWithMigrations.length === 0) {
-    throw CLIError({
-      code: "MIGRATION_CONFIG_NOT_FOUND",
-      message: "No TailorDB services with migrations configuration found",
-      suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
-    });
+    throw migrationConfigNotFoundError();
   }
   if (requested) {
     const found = namespacesWithMigrations.find((ns) => ns.namespace === requested);
@@ -93,4 +89,16 @@ export function selectTargetNamespace(
     });
   }
   return assertDefined(namespacesWithMigrations[0], "namespace with migrations missing");
+}
+
+/**
+ * Build the failure for a config without any TailorDB migration settings.
+ * @returns CLIError pointing at the migration configuration
+ */
+export function migrationConfigNotFoundError(): CLIError {
+  return CLIError({
+    code: "MIGRATION_CONFIG_NOT_FOUND",
+    message: "No TailorDB services with migrations configuration found",
+    suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
+  });
 }
