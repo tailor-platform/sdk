@@ -242,8 +242,9 @@ describe("template-generator", () => {
       const testPath = path.join(tempDir, "0001", MIGRATE_PGLITE_TEST_FILE_NAME);
       await fs.writeFile(testPath, generateMigrationPgliteTestScript(diff));
 
+      // The scaffold pulls in the vitest and PGlite typings, which takes seconds on CI.
       expect(getTypeScriptDiagnostics(testPath)).toEqual([]);
-    });
+    }, 60_000);
 
     test("should generate an unconditional batched copy script for field renames", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
