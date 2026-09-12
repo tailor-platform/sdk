@@ -516,6 +516,7 @@ export const pruneCommand = defineAppCommand({
       }
     }
 
+    const profileCleanupIds = new Set<string>();
     for (const workspace of result.candidates) {
       const displayName = workspaceDisplayName(workspace);
       try {
@@ -546,11 +547,13 @@ export const pruneCommand = defineAppCommand({
             continue;
           }
         }
+        profileCleanupIds.add(workspace.id);
         await client.deleteWorkspace({ workspaceId: workspace.id });
         result.deleted.push(workspace);
         logger.success(`Deleted ${displayName} (${workspace.id}).`);
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {
+          profileCleanupIds.add(workspace.id);
           result.deleted.push(workspace);
           logger.info(`${displayName} (${workspace.id}) was already deleted.`);
           continue;
@@ -563,13 +566,7 @@ export const pruneCommand = defineAppCommand({
 
     // A failed delete can still have removed the workspace server-side (a timeout after the
     // server committed), so its local profile is cleaned up alongside the confirmed deletions.
-    const removedProfiles = await removeProfilesForWorkspaces(
-      new Set(
-        [...result.deleted, ...result.failed.map(({ workspace }) => workspace)].map(
-          (workspace) => workspace.id,
-        ),
-      ),
-    );
+    const removedProfiles = await removeProfilesForWorkspaces(profileCleanupIds);
     if (removedProfiles.length > 0) {
       logger.info(
         `Removed ${removedProfiles.length} local profile(s) that pointed at deleted workspaces: ${removedProfiles.join(", ")}.`,

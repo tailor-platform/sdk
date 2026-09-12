@@ -1044,6 +1044,9 @@ describe("workspace prune command", () => {
     test("keeps the workspace and its profiles when the final expiry read is denied", async () => {
       const target = workspace("ws-expiry-denied");
       const client = stubClient([target], { [target.id]: hoursAgo(1) });
+      vi.mocked(readPlatformConfig).mockResolvedValue({
+        profiles: { retained: { workspace_id: target.id } },
+      } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
       client.getWorkspace.mockImplementation(async () => {
         client.getMetadata.mockRejectedValue(new ConnectError("denied", Code.PermissionDenied));
         return { workspace: target };
@@ -1057,6 +1060,26 @@ describe("workspace prune command", () => {
       ]);
 
       expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
+      expect(writePlatformConfig).not.toHaveBeenCalled();
+    });
+
+    test("keeps local profiles when the final workspace read is denied", async () => {
+      const target = workspace("ws-details-denied");
+      const client = stubClient([target], { [target.id]: hoursAgo(1) });
+      vi.mocked(readPlatformConfig).mockResolvedValue({
+        profiles: { retained: { workspace_id: target.id } },
+      } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
+      vi.mocked(prompt.confirm).mockImplementation(async () => {
+        const denied = new ConnectError("denied", Code.PermissionDenied);
+        client.getWorkspace.mockRejectedValue(denied);
+        client.getMetadata.mockRejectedValue(denied);
+        return true;
+      });
+
+      const result = await runCommand(pruneCommand, ["--expired", "--organization-root", ORG_A]);
+
+      expectFailure(result, "Failed to delete 1 workspace(s)");
       expect(client.deleteWorkspace).not.toHaveBeenCalled();
       expect(writePlatformConfig).not.toHaveBeenCalled();
     });
