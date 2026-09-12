@@ -99,7 +99,7 @@ function formatError(error: CLIError): string {
   }
 
   if (error.suggestion) {
-    parts.push(`\n  ${styles.info("Suggestion:")} ${error.suggestion}`);
+    parts.push(`\n  ${styles.info("Suggestion:")} ${error.suggestion.split("\n").join("\n  ")}`);
   }
 
   if (error.command) {

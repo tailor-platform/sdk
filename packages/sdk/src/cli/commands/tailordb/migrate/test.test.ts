@@ -270,4 +270,26 @@ describe("tailordb migration test", () => {
       /44444444-4444-4444-8444-444444444444.*delete failed/,
     );
   });
+
+  test("points at the workspace delete command for the orphaned workspace", async () => {
+    const dependencies = createDependencies([]);
+    vi.mocked(dependencies.deleteWorkspace).mockRejectedValueOnce(new Error("delete failed"));
+
+    await expect(
+      runMigrationTest({ data: "seed", profile: "staging" }, dependencies),
+    ).rejects.toMatchObject({
+      code: "MIGRATION_TEST_WORKSPACE_CLEANUP_FAILED",
+      next: {
+        command: "tailor",
+        args: [
+          "workspace",
+          "delete",
+          "--workspace-id",
+          "44444444-4444-4444-8444-444444444444",
+          "--profile",
+          "staging",
+        ],
+      },
+    });
+  });
 });

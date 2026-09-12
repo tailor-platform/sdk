@@ -225,6 +225,20 @@ describe("errorToJson", () => {
 });
 
 describe("CLIError formatting", () => {
+  test("indents every line of a multi-line suggestion", () => {
+    const error = CLIError({
+      code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
+      message: "Conflict.",
+      suggestion:
+        "Clear the acknowledgment:\n  tailor tailordb migration script 0001\nOr delete migrate.ts.",
+    });
+
+    const lines = error.format().split("\n");
+    const suggestionLineIndex = lines.findIndex((line) => line.includes("Suggestion:"));
+    expect(lines[suggestionLineIndex + 1]).toBe("    tailor tailordb migration script 0001");
+    expect(lines[suggestionLineIndex + 2]).toBe("  Or delete migrate.ts.");
+  });
+
   test("indents every line of a multi-line details string", () => {
     const error = CLIError({
       code: "DEPLOY_FAILED",
