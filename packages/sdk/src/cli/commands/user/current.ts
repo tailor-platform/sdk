@@ -6,7 +6,7 @@ import {
   platformConfigFromProfile,
   readPlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, loginNextAction } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const currentCommand = defineAppCommand({
@@ -30,7 +30,7 @@ export const currentCommand = defineAppCommand({
         code: "USER_NOT_SET",
         message: "Current user not set.",
         suggestion: "Log in first to register a user.",
-        next: { command: "tailor", args: profile ? ["login", "--profile", profile] : ["login"] },
+        next: loginNextAction(profile),
       });
     }
 
@@ -40,7 +40,7 @@ export const currentCommand = defineAppCommand({
         code: "USER_NOT_FOUND",
         message: `Current user '${currentUser}' not found in registered users.`,
         suggestion: "Log in again to register the user.",
-        next: { command: "tailor", args: profile ? ["login", "--profile", profile] : ["login"] },
+        next: loginNextAction(profile),
       });
     }
 

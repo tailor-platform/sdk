@@ -18,7 +18,7 @@ import {
   rememberPlatformConfigForToken,
   type PlatformClientConfig,
 } from "./client";
-import { CLIError } from "./errors";
+import { CLIError, loginNextAction } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -714,7 +714,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
       code: "AUTH_TOKEN_NOT_FOUND",
       message: "Tailor Platform token not found.",
       suggestion: "Set TAILOR_PLATFORM_TOKEN or log in using the selected profile.",
-      next: { command: "tailor", args: ["login", ...(profile ? ["--profile", profile] : [])] },
+      next: loginNextAction(profile),
       context: { profile: profile ?? null },
     });
   }

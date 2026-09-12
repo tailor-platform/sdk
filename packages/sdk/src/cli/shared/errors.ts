@@ -74,6 +74,15 @@ export function formatCopyableCommand(argv: readonly string[]): string {
 }
 
 /**
+ * Build the `tailor login` next action for the selected profile.
+ * @param profile - Profile the failing command ran with, if any
+ * @returns Login command scoped to that profile
+ */
+export function loginNextAction(profile: string | undefined): CLIErrorNextAction {
+  return { command: "tailor", args: profile ? ["login", "--profile", profile] : ["login"] };
+}
+
+/**
  * Format an executable and argv as a shell-safe user-facing command.
  * @param next - Executable and arguments to format
  * @returns Shell command, or an argv representation when shell quoting is unsafe

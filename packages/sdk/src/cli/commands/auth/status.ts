@@ -2,7 +2,7 @@ import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAuthStatus } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, loginNextAction } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const statusCommand = defineAppCommand({
@@ -19,7 +19,7 @@ export const statusCommand = defineAppCommand({
         code: "AUTH_NOT_AUTHENTICATED",
         message: "Not authenticated.",
         suggestion: "Log in and try again.",
-        next: { command: "tailor", args: profile ? ["login", "--profile", profile] : ["login"] },
+        next: loginNextAction(profile),
       });
     }
   },

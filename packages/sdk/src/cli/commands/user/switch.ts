@@ -8,7 +8,7 @@ import {
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, loginNextAction } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const switchCommand = defineAppCommand({
@@ -49,10 +49,7 @@ export const switchCommand = defineAppCommand({
         code: "USER_NOT_FOUND",
         message: `User "${args.user}" not found.`,
         suggestion: "Log in first to register this user.",
-        next: {
-          command: "tailor",
-          args: activeProfileName ? ["login", "--profile", activeProfileName] : ["login"],
-        },
+        next: loginNextAction(activeProfileName),
       });
     }
 

@@ -18,7 +18,7 @@ import {
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, loginNextAction } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
@@ -216,10 +216,7 @@ export const createCommand = defineAppCommand({
           code: "USER_NOT_FOUND",
           message: `User "${profileUser}" not found.`,
           suggestion: "Verify the user name and log in.",
-          next: {
-            command: "tailor",
-            args: activeProfileName ? ["login", "--profile", activeProfileName] : ["login"],
-          },
+          next: loginNextAction(activeProfileName),
         });
       }
       profileSetup = {
