@@ -85,7 +85,10 @@ describe("authconnection authorize", () => {
       json: async () => ({ authorization_endpoint: `${providerUrl}/authorize` }),
     });
     const blocker = net.createServer();
-    await new Promise<void>((resolve) => blocker.listen(0, resolve));
+    await new Promise<void>((resolve, reject) => {
+      blocker.once("error", reject);
+      blocker.listen(0, resolve);
+    });
     const { port } = blocker.address() as net.AddressInfo;
     using warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
 

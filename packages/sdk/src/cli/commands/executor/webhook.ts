@@ -1,8 +1,15 @@
 import { defineCommand, runCommand } from "@politty/zod";
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import {
+  type Order,
+  paginationArgs,
+  recoveryContextArgs,
+  toPageDirection,
+  workspaceArgs,
+} from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 
@@ -84,7 +91,12 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (!jsonOutput) {
-      logger.info('To test a webhook, run: tailor executor trigger <name> -d \'{"key":"value"}\'');
+      const context = recoveryContextArgs({
+        profile: args.profile,
+        workspaceId: args["workspace-id"],
+      });
+      const trigger = `tailor executor trigger <name> -d '{"key":"value"}'${context.length > 0 ? ` ${formatCopyableCommand(context)}` : ""}`;
+      logger.info(`To test a webhook, run: ${trigger}`);
     }
   },
 });
