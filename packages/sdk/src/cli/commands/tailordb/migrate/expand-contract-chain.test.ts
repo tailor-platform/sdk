@@ -96,6 +96,19 @@ describe("expand-contract migration chain", () => {
     expect(reconstructSnapshotFromMigrations(dir)?.tables).toEqual(current.tables);
   });
 
+  test("replays a single value becoming an array to the declared schema", () => {
+    const { previous, current, plans, expand, contract } = generatePair(
+      { price: snapshotField("integer", { required: true }) },
+      { price: snapshotField("integer", { required: true, array: true }) },
+    );
+    const dir = migrationsDir();
+    writePair(dir, previous, expand, contract);
+
+    expect(plans).toHaveLength(1);
+    expect(expand.requiresMigrationScript).toBe(true);
+    expect(reconstructSnapshotFromMigrations(dir)?.tables).toEqual(current.tables);
+  });
+
   test("replays the expand migration alone to the intermediate schema", () => {
     const { previous, intermediate, expand, contract } = generatePair(
       { price: snapshotField("integer", { required: true }) },

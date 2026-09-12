@@ -108,7 +108,8 @@ function getBreakingFieldChanges(
     });
   }
 
-  // Array property changed - unsupported (requires 3-step migration)
+  // Array property changed - never applied in place; a single value becoming
+  // an array can go through expand-contract, the reverse needs the 3-step migration
   if (oldField && newField && (oldField.array ?? false) !== (newField.array ?? false)) {
     const [fromType, toType] = oldField.array
       ? ["array", "single value"]

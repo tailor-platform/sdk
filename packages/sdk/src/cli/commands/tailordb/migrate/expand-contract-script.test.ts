@@ -83,6 +83,126 @@ describe("expand conversion script", () => {
   });
 });
 
+describe("expand conversion script for a single value becoming an array", () => {
+  const arrayPlan: ExpandContractPlan = {
+    ...plan,
+    before: snapshotField("integer", { required: true }),
+    after: snapshotField("integer", { required: true, array: true }),
+  };
+
+  test("wraps the stored value without asking for review", () => {
+    const script = expandScript([arrayPlan]);
+
+    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).not.toContain(": never");
+    expect(script).toContain("const convertedValue = [sourceValue];");
+    expect(script).toContain(`.set({
+            ["priceMigrate"]: convertedValue,
+            ["price"]: null,
+          })`);
+  });
+
+  test.each([
+    { beforeScale: 6, afterScale: 2 },
+    { beforeScale: undefined, afterScale: 2 },
+    { beforeScale: 8, afterScale: undefined },
+    { beforeScale: 6, afterScale: 0 },
+  ])(
+    "keeps review for decimal array scale $beforeScale to $afterScale",
+    ({ beforeScale, afterScale }) => {
+      const script = expandScript([
+        {
+          ...arrayPlan,
+          before: snapshotField("decimal", { scale: beforeScale }),
+          after: snapshotField("decimal", { array: true, scale: afterScale }),
+        },
+      ]);
+
+      expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+      expect(script).toContain("const convertedValue: never = sourceValue;");
+      expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
+    },
+  );
+
+  test.each([
+    { beforeScale: 2, afterScale: 6 },
+    { beforeScale: 6, afterScale: 6 },
+    { beforeScale: undefined, afterScale: 6 },
+    { beforeScale: 6, afterScale: undefined },
+    { beforeScale: undefined, afterScale: undefined },
+    { beforeScale: 0, afterScale: 0 },
+  ])(
+    "wraps decimal array scale $beforeScale to $afterScale without review",
+    ({ beforeScale, afterScale }) => {
+      const script = expandScript([
+        {
+          ...arrayPlan,
+          before: snapshotField("decimal", { scale: beforeScale }),
+          after: snapshotField("decimal", { array: true, scale: afterScale }),
+        },
+      ]);
+
+      expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+      expect(script).toContain("const convertedValue = [sourceValue];");
+    },
+  );
+
+  test("keeps the review marker when the array also drops enum values", () => {
+    const script = expandScript([
+      {
+        ...arrayPlan,
+        before: snapshotField("enum", { allowedValues: [{ value: "A" }, { value: "B" }] }),
+        after: snapshotField("enum", { array: true, allowedValues: [{ value: "A" }] }),
+      },
+    ]);
+
+    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
+  });
+
+  test("wraps an enum whose values are unchanged without asking for review", () => {
+    const script = expandScript([
+      {
+        ...arrayPlan,
+        before: snapshotField("enum", { allowedValues: [{ value: "A" }, { value: "B" }] }),
+        after: snapshotField("enum", {
+          array: true,
+          allowedValues: [{ value: "B" }, { value: "A" }],
+        }),
+      },
+    ]);
+
+    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain("const convertedValue = [sourceValue];");
+  });
+
+  test("wraps an enum that also gains values without asking for review", () => {
+    const script = expandScript([
+      {
+        ...arrayPlan,
+        before: snapshotField("enum", { allowedValues: [{ value: "A" }] }),
+        after: snapshotField("enum", {
+          array: true,
+          allowedValues: [{ value: "A" }, { value: "B" }],
+        }),
+      },
+    ]);
+
+    expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain("const convertedValue = [sourceValue];");
+  });
+
+  test("keeps the review marker when the element type changes as well", () => {
+    const script = expandScript([
+      { ...arrayPlan, after: snapshotField("string", { required: true, array: true }) },
+    ]);
+
+    expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(script).toContain("const convertedValue: never = sourceValue;");
+    expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
+  });
+});
+
 describe("db.ts for an expand migration", () => {
   const tempDirs: string[] = [];
 

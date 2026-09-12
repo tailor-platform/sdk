@@ -33,9 +33,11 @@ import {
   canConvertField,
   fieldKey,
   getExpandContractEligibility,
+  isExpandContractCandidate,
   planExpandContract,
   type ExpandContractPlan,
 } from "./expand-contract";
+import { formatFieldShape, hasFieldShapeChange } from "./field-type-change";
 import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
@@ -413,7 +415,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
       const { spec } = flag;
       const before = previousSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
       const after = currentSnapshot.tables[spec.tableName]?.fields[spec.fieldName];
-      if (!before || !after || before.type === after.type) continue;
+      if (!before || !after || !hasFieldShapeChange(before, after)) continue;
       matchedExpandContractFlags.add(flag);
       const eligibility = getExpandContractEligibility({
         previous: previousSnapshot,
@@ -439,7 +441,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
   );
   if (unusedExpandContracts.length > 0) {
     throw new Error(
-      `--expand-contract does not match a field whose type changed: ${unusedExpandContracts
+      `--expand-contract does not match a field whose type or array-ness changed: ${unusedExpandContracts
         .map((flag) => flag.raw)
         .join(", ")}`,
     );
@@ -633,7 +635,7 @@ async function resolveExpandContractPlans(
 
   if (!options.yes && canPrompt()) {
     for (const change of diff.changes) {
-      if (change.kind !== "field_type_modified") continue;
+      if (!isExpandContractCandidate(change)) continue;
       const key = fieldKey(change.tableName, change.fieldName);
       if (confirmed.has(key)) continue;
       if (
@@ -649,7 +651,7 @@ async function resolveExpandContractPlans(
 
       logger.newline();
       logger.info(
-        `${change.tableName}.${change.fieldName} changes from ${change.before.type} to ${change.after.type}, which cannot be applied in one step.`,
+        `${change.tableName}.${change.fieldName} changes from ${formatFieldShape(change.before)} to ${formatFieldShape(change.after)}, which cannot be applied in one step.`,
       );
       const approved = await prompt.confirm({
         message: `Generate two migrations to convert ${change.tableName}.${change.fieldName} through a temporary field?`,
@@ -1145,21 +1147,26 @@ async function generateDiffFromSnapshot(
       logger.error(`  ${change.reason}`);
     }
 
-    const convertible = unsupportedChanges.filter(
-      ({ tableName, fieldName }) =>
+    // A field whose type and array-ness both change is reported twice above.
+    const convertible = new Set<string>();
+    for (const { tableName, fieldName } of unsupportedChanges) {
+      if (
         fieldName !== undefined &&
         canConvertField({
           previous: previousSnapshot,
           current: currentSnapshot,
           tableName,
           fieldName,
-        }),
-    );
-    if (convertible.length > 0) {
+        })
+      ) {
+        convertible.add(fieldKey(tableName, fieldName));
+      }
+    }
+    if (convertible.size > 0) {
       logger.newline();
       logger.info("Convert these fields through a temporary field with:");
-      for (const { tableName, fieldName } of convertible) {
-        logger.info(`  --expand-contract "${tableName}.${fieldName}"`);
+      for (const key of convertible) {
+        logger.info(`  --expand-contract "${key}"`);
       }
     }
 
@@ -1437,7 +1444,7 @@ export const generateCommand = defineAppCommand({
     }),
     "expand-contract": arg(z.array(z.string()).optional(), {
       description:
-        'Convert a field type through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
+        'Convert a field type, or a single value into an array, through a temporary field (format: "Table.field"; repeatable). Generates two migrations.',
     }),
   }),
   run: async (args) => {
