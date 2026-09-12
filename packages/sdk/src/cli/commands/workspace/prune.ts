@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
+import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
 import { confirmationArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -12,6 +13,8 @@ import { profileNameSchema } from "#/cli/shared/profile-name";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
+import { ageArg, parseAge } from "./age";
+import { fetchWorkspaceExpiry, type WorkspaceExpiry } from "./expiry";
 import { removeProfilesForWorkspaces } from "./profile-cleanup";
 import {
   workspaceDisplayName,
@@ -21,18 +24,9 @@ import {
 } from "./transform";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
-const agePattern = /^(\d+)(s|m|h|d)$/;
-
-const ageUnitToMs = {
-  s: 1000,
-  m: 60 * 1000,
-  h: 60 * 60 * 1000,
-  d: 24 * 60 * 60 * 1000,
-} as const;
-
-// "" (an unset CI secret) is kept distinct from an omitted option so the run can refuse to sweep
-// unscoped. Fresh per option, like `limitArg`.
-const scopeIdArg = () => z.union([z.literal(""), z.uuid()]).optional();
+// "" (an unset CI secret) is kept distinct from an omitted option so the run can refuse it
+// instead of sweeping a location the caller did not name. Fresh per option, like `limitArg`.
+const locationIdsArg = () => z.array(z.union([z.literal(""), z.uuid()])).optional();
 
 // Rejects `--limit=` instead of coercing "" to 0. Single-use: politty does not clone pipe schemas per option.
 const limitArg = z.preprocess(
@@ -40,31 +34,26 @@ const limitArg = z.preprocess(
   z.coerce.number().int().nonnegative(),
 );
 
-const ageArg = z.string().regex(agePattern, {
-  message: "Invalid --older-than format. Expected a number with a unit: '30m', '24h', '7d'",
-});
-
-/**
- * Parse a validated age string into milliseconds.
- * @param age - Age string such as `30m`, `24h`, or `7d`
- * @returns Age in milliseconds
- */
-export function parseAge(age: string): number {
-  const match = age.match(agePattern);
-  if (!match?.[1] || !match[2]) {
-    throw new Error(`invalid age format: ${age}`);
-  }
-  const unit = match[2] as keyof typeof ageUnitToMs;
-  return parseInt(match[1], 10) * ageUnitToMs[unit];
-}
+export { parseAge };
 
 export interface PruneCriteria {
-  /** Regexes; a workspace matches when any of them matches its whole name. */
+  /** Regexes; a workspace matches when any of them matches its whole name. Empty selects every name. */
   nameRegexes: readonly RegExp[];
-  /** Minimum age since creation, in milliseconds. `0` selects any age. */
-  olderThanMs: number;
-  organizationId?: string;
-  folderId?: string;
+  /**
+   * Minimum age since creation, in milliseconds. `0` selects any age.
+   * `undefined` in `--expired` mode, where the recorded expiry decides.
+   */
+  olderThanMs?: number;
+  /**
+   * Organizations whose workspaces outside any folder are in scope.
+   * Together with `folderIds` and `personal`, each is a location; a workspace
+   * in any of them is in scope, and no location at all leaves the scope open.
+   */
+  organizationRoots: readonly string[];
+  /** Folders whose workspaces are in scope. */
+  folderIds: readonly string[];
+  /** Whether workspaces belonging to no organization and no folder are in scope. */
+  personal: boolean;
   /** Exact names kept even when they match. */
   exclude: ReadonlySet<string>;
 }
@@ -83,17 +72,27 @@ export interface PruneSelection {
 }
 
 function matchesName(workspace: Workspace, criteria: PruneCriteria): boolean {
+  // No pattern selects everything: `--expired` reaches every workspace in scope,
+  // and the recorded expiry is what narrows it.
+  if (criteria.nameRegexes.length === 0) return true;
   return criteria.nameRegexes.some((regex) => regex.test(workspace.name));
 }
 
+function hasLocation(criteria: PruneCriteria): boolean {
+  return (
+    criteria.organizationRoots.length > 0 || criteria.folderIds.length > 0 || criteria.personal
+  );
+}
+
+// A workspace lives in exactly one location: a folder, an organization's root
+// outside any folder, or nowhere (personal). It is in scope when that location
+// was asked for, or when no location was asked for at all.
 function matchesScope(workspace: Workspace, criteria: PruneCriteria): boolean {
-  if (criteria.organizationId && workspace.organizationId !== criteria.organizationId) {
-    return false;
-  }
-  if (criteria.folderId && workspace.folderId !== criteria.folderId) {
-    return false;
-  }
-  return true;
+  if (!hasLocation(criteria)) return true;
+  if (workspace.folderId) return criteria.folderIds.includes(workspace.folderId);
+  if (workspace.organizationId)
+    return criteria.organizationRoots.includes(workspace.organizationId);
+  return criteria.personal;
 }
 
 /**
@@ -129,8 +128,6 @@ export function selectPruneCandidates(
     missingCreateTime: [],
     tooYoung: [],
   };
-  const cutoff = now.getTime() - criteria.olderThanMs;
-
   for (const workspace of workspaces) {
     if (!matchesScope(workspace, criteria) || !matchesName(workspace, criteria)) continue;
     if (criteria.exclude.has(workspace.name)) {
@@ -141,19 +138,97 @@ export function selectPruneCandidates(
       selection.protectedSkipped.push(workspace);
       continue;
     }
-    const createdAt = formatTimestamp(workspace.createTime);
-    if (!createdAt) {
-      selection.missingCreateTime.push(workspace);
-      continue;
-    }
-    if (createdAt.getTime() > cutoff) {
-      selection.tooYoung.push(workspace);
-      continue;
+    // In `--expired` mode the workspace's own recorded expiry decides, so
+    // creation time is not consulted at all.
+    if (criteria.olderThanMs !== undefined) {
+      const createdAt = formatTimestamp(workspace.createTime);
+      if (!createdAt) {
+        selection.missingCreateTime.push(workspace);
+        continue;
+      }
+      if (createdAt.getTime() > now.getTime() - criteria.olderThanMs) {
+        selection.tooYoung.push(workspace);
+        continue;
+      }
     }
     selection.candidates.push(workspace);
   }
 
   return selection;
+}
+
+/** How the recorded expiry sorted the workspaces the name and scope filters kept. */
+interface ExpiryPartition {
+  /** Workspaces whose recorded expiry has passed. */
+  expired: Workspace[];
+  /** Workspaces kept because their expiry is still in the future. */
+  pending: Workspace[];
+  /** Workspaces kept because they record no expiry. */
+  unset: Workspace[];
+  /** Workspaces kept because their recorded expiry could not be read. */
+  unreadable: { workspace: Workspace; reason: string }[];
+}
+
+/**
+ * Sort workspaces by what their own labels say about when they may be pruned.
+ *
+ * Only a workspace whose recorded expiry has passed is a candidate. One that
+ * records nothing, records something unreadable, or whose read failed is kept
+ * — none of those states says the workspace may be deleted, and a failed read
+ * in particular must never be read as "no expiry recorded".
+ *
+ * The reads share the apply limiter, so a sweep over every visible workspace
+ * stays within the budget the CLI's other operator RPCs already contend for.
+ * @param client - Operator client instance
+ * @param workspaces - Workspaces the name and scope filters kept
+ * @param now - Reference time
+ * @returns The workspaces grouped by expiry state
+ */
+async function partitionByExpiry(
+  client: OperatorClient,
+  workspaces: readonly Workspace[],
+  now: Date,
+): Promise<ExpiryPartition> {
+  const limit = createApplyLimiter();
+  const results = await Promise.all(
+    workspaces.map(async (workspace) => ({
+      workspace,
+      result: await limit(() => fetchWorkspaceExpiry(client, workspace.id, now)),
+    })),
+  );
+
+  const partition: ExpiryPartition = { expired: [], pending: [], unset: [], unreadable: [] };
+  for (const { workspace, result } of results) {
+    if ("error" in result) {
+      partition.unreadable.push({ workspace, reason: result.error.message });
+      continue;
+    }
+    recordExpiryState(partition, workspace, result.expiry);
+  }
+  return partition;
+}
+
+function recordExpiryState(
+  partition: ExpiryPartition,
+  workspace: Workspace,
+  expiry: WorkspaceExpiry,
+): void {
+  switch (expiry.state) {
+    case "expired":
+      partition.expired.push(workspace);
+      return;
+    case "pending":
+      partition.pending.push(workspace);
+      return;
+    case "unset":
+      partition.unset.push(workspace);
+      return;
+    case "invalid":
+      partition.unreadable.push({
+        workspace,
+        reason: `recorded expiry "${expiry.value}" is not a value this CLI wrote`,
+      });
+  }
 }
 
 async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> {
@@ -186,6 +261,14 @@ interface PruneResult {
     excluded: string[];
     deleteProtection: string[];
     unknownAge: string[];
+    /** `--expired` only: kept because the recorded expiry has not passed. */
+    notExpired: string[];
+    /** `--expired` only: kept because no expiry is recorded. */
+    noExpiry: string[];
+    /** `--expired` only: kept because the recorded expiry could not be read. */
+    unreadableExpiry: string[];
+    /** `--expired` only: kept because a re-read just before deleting no longer selected it. */
+    expiryChanged: string[];
     /** Candidates dropped because they changed between listing and deletion. */
     changed: string[];
   };
@@ -203,11 +286,18 @@ const KEPT_REASONS: {
 
 export const pruneCommand = defineAppCommand({
   name: "prune",
-  description: "Delete stale temporary workspaces that match a name filter and an age threshold.",
+  description:
+    "Delete stale temporary workspaces, by name and age or by the expiry each recorded at creation.",
   notes: ml`
-    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the --organization-id / --folder-id scope. Run with --dry-run first to see what would be deleted.
+    Use this to reclaim workspaces left behind by CI runs, preview deployments, or interrupted local test runs. A workspace is deleted only when its whole name matches a --name pattern, it was created at least --older-than ago, and it is not excluded, delete-protected, or outside the requested locations. Run with --dry-run first to see what would be deleted.
 
-    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), --older-than 0s (no age check) is only accepted together with --organization-id or --folder-id, and a scope option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, scope, exclusion, or delete-protection criteria that selected it. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
+    With --expired the workspaces select themselves instead: each one is deleted only once the --ttl expiry it recorded at creation has passed, so callers need no --name or --older-than. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read. Because that expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward -- and writing a workspace's metadata is a lesser permission than deleting it. --expired therefore requires at least one location, and --name still applies on top.
+
+    Every workspace lives in exactly one location, and the location options name them explicitly: --organization-root selects the workspaces directly under an organization and none inside its folders, --folder-id selects the workspaces in one folder, and --personal selects the workspaces belonging to no organization and no folder. Each option can be given more than once, they combine as a union, and none of them is read from the environment -- a sweep covers exactly the locations spelled out on the command line. Selecting --personal is a deliberate choice to accept, for every organization-less workspace visible to this login, the expiry that anyone able to write a workspace's metadata may have recorded. Without any location option, a --name / --older-than sweep considers every visible workspace.
+
+    Restoring a workspace does not clear its recorded expiry, so a workspace restored after expiring is deleted again by the next --expired run. Restore it, then run \`workspace ttl set\` or \`workspace ttl clear\` before the next run — or keep it out of that run with --exclude.
+
+    Safety guards: the command aborts without deleting anything when more workspaces match than --limit allows (--dry-run still lists them all), both --expired and --older-than 0s (no age check) are only accepted together with at least one location option, and a location option that resolves to an empty value (an unset CI secret) is rejected instead of silently widening the sweep -- even when another location is given alongside it. Each workspace is re-read immediately before it is deleted and skipped when it no longer matches the name, location, exclusion, or delete-protection criteria that selected it. Unlike \`workspace delete\`, a single confirmation covers every listed candidate; pass --yes to skip it in CI. Deleted workspaces can be restored with \`workspace restore\` for a limited time.
 
     Only workspaces visible to the current login (or the machine user in CI) are considered.
   `,
@@ -216,18 +306,24 @@ export const pruneCommand = defineAppCommand({
       description:
         "Select workspaces whose whole name matches this regular expression (repeatable)",
     }),
-    "older-than": arg(ageArg, {
+    "older-than": arg(ageArg.optional(), {
       description:
-        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires --organization-id or --folder-id",
+        "Minimum age since creation, such as 30m, 24h, or 7d. 0s disables the age check and requires a location. Required unless --expired is given",
     }),
-    "organization-id": arg(scopeIdArg(), {
-      alias: "o",
-      description: "Only consider workspaces in this organization",
-      env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    expired: arg(z.boolean().default(false), {
+      description:
+        "Select workspaces whose own --ttl expiry has passed, instead of by name and age. Requires --organization-root, --folder-id, or --personal",
     }),
-    "folder-id": arg(scopeIdArg(), {
-      description: "Only consider workspaces in this folder",
-      env: "TAILOR_PLATFORM_FOLDER_ID",
+    "organization-root": arg(locationIdsArg(), {
+      placeholder: "ORGANIZATION_ID",
+      description:
+        "Consider the workspaces directly under this organization, excluding those in its folders (repeatable)",
+    }),
+    "folder-id": arg(locationIdsArg(), {
+      description: "Consider the workspaces in this folder (repeatable)",
+    }),
+    personal: arg(z.boolean().default(false), {
+      description: "Consider the workspaces belonging to no organization and no folder",
     }),
     exclude: arg(z.array(z.string().min(1)).optional(), {
       description: "Keep a workspace with this exact name even when it matches (repeatable)",
@@ -247,65 +343,115 @@ export const pruneCommand = defineAppCommand({
   }),
   run: async (args) => {
     const namePatterns = args.name ?? [];
-    if (namePatterns.length === 0) {
+    const olderThan = args["older-than"];
+    if (args.expired && olderThan !== undefined) {
+      throw CLIError({
+        code: "CONFLICTING_AGE_FILTER",
+        message: "--expired and --older-than cannot be combined.",
+        details:
+          "--expired defers to the expiry each workspace recorded at creation, which --older-than would override.",
+      });
+    }
+    if (!args.expired && olderThan === undefined) {
+      throw CLIError({
+        code: "MISSING_AGE_FILTER",
+        message: "Specify --older-than, or --expired to use each workspace's recorded expiry.",
+      });
+    }
+    if (!args.expired && namePatterns.length === 0) {
       throw CLIError({
         code: "MISSING_NAME_FILTER",
         message: "Specify at least one --name.",
         details: "Only workspaces whose name matches the filter are considered for deletion.",
       });
     }
-    const emptyScopeOptions = (
+    const organizationRoots = args["organization-root"] ?? [];
+    const folderIds = args["folder-id"] ?? [];
+    const emptyLocationOptions = (
       [
-        ["--organization-id", args["organization-id"]],
-        ["--folder-id", args["folder-id"]],
+        ["--organization-root", organizationRoots],
+        ["--folder-id", folderIds],
       ] as const
     )
-      .filter(([, value]) => value === "")
+      .filter(([, ids]) => ids.includes(""))
       .map(([option]) => option);
-    if (emptyScopeOptions.length > 0) {
+    if (emptyLocationOptions.length > 0) {
       throw CLIError({
         code: "EMPTY_SCOPE",
-        message: `${emptyScopeOptions.join(" and ")} resolved to an empty value.`,
+        message: `${emptyLocationOptions.join(" and ")} resolved to an empty value.`,
         details:
-          "An empty scope is indistinguishable from no scope, so the sweep would cover every visible workspace. This usually means an unset CI secret.",
-        suggestion:
-          "Set the id (or its environment variable), or drop the option to sweep without a scope on purpose.",
+          "An empty location is indistinguishable from an omitted one, so the sweep would not cover what the caller meant. This usually means an unset CI secret.",
+        suggestion: "Set the id, or drop the option on purpose.",
       });
     }
-    const organizationId = args["organization-id"] || undefined;
-    const folderId = args["folder-id"] || undefined;
-
-    const olderThanMs = parseAge(args["older-than"]);
-    if (olderThanMs === 0 && !organizationId && !folderId) {
-      throw CLIError({
-        code: "UNSCOPED_ZERO_AGE",
-        message: "--older-than 0s requires --organization-id or --folder-id.",
-        details:
-          "Without an age check the name filter is the only guard, so the sweep must be scoped to an organization or folder.",
-      });
-    }
+    const olderThanMs = olderThan === undefined ? undefined : parseAge(olderThan);
     const criteria: PruneCriteria = {
       nameRegexes: namePatterns.map(compileNameRegex),
-      olderThanMs,
-      organizationId,
-      folderId,
+      ...(olderThanMs === undefined ? {} : { olderThanMs }),
+      organizationRoots,
+      folderIds,
+      personal: args.personal,
       exclude: new Set(args.exclude ?? []),
     };
+    if (args.expired && !hasLocation(criteria)) {
+      throw CLIError({
+        code: "UNSCOPED_EXPIRED",
+        message: "--expired requires --organization-root, --folder-id, or --personal.",
+        details:
+          "The expiry lives on the workspace, and writing a workspace's metadata is a lesser permission than deleting it, so an unscoped sweep would delete on behalf of anyone able to write that metadata.",
+      });
+    }
+    if (olderThanMs === 0 && !hasLocation(criteria)) {
+      throw CLIError({
+        code: "UNSCOPED_ZERO_AGE",
+        message: "--older-than 0s requires --organization-root, --folder-id, or --personal.",
+        details:
+          "Without an age check the name filter is the only guard, so the sweep must name the organization roots, folders, or personal workspaces it covers.",
+      });
+    }
 
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({ profile: args.profile });
     const platformConfig = await loadPlatformClientConfig({ profile: args.profile });
     const client = await initOperatorClient(accessToken, platformConfig);
 
-    const selection = selectPruneCandidates(await fetchAllWorkspaces(client), criteria, new Date());
+    const now = new Date();
+    const selection = selectPruneCandidates(await fetchAllWorkspaces(client), criteria, now);
 
     const result: PruneResult = {
       dryRun: args["dry-run"],
       candidates: [],
       deleted: [],
       failed: [],
-      skipped: { excluded: [], deleteProtection: [], unknownAge: [], changed: [] },
+      skipped: {
+        excluded: [],
+        deleteProtection: [],
+        unknownAge: [],
+        notExpired: [],
+        noExpiry: [],
+        unreadableExpiry: [],
+        expiryChanged: [],
+        changed: [],
+      },
     };
+
+    if (args.expired) {
+      const partition = await partitionByExpiry(client, selection.candidates, now);
+      selection.candidates = partition.expired;
+      for (const workspace of partition.pending) {
+        result.skipped.notExpired.push(workspace.name);
+      }
+      for (const workspace of partition.unset) {
+        result.skipped.noExpiry.push(workspace.name);
+      }
+      for (const { workspace, reason } of partition.unreadable) {
+        result.skipped.unreadableExpiry.push(workspace.name);
+        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${reason}.`);
+      }
+      logger.info(
+        `${partition.pending.length} workspace(s) have not expired and ${partition.unset.length} record no expiry; both were kept.`,
+      );
+    }
     for (const { key, selection: group, reason } of KEPT_REASONS) {
       for (const workspace of selection[group]) {
         result.skipped[key].push(workspace.name);
@@ -370,6 +516,7 @@ export const pruneCommand = defineAppCommand({
       }
     }
 
+    const profileCleanupIds = new Set<string>();
     for (const workspace of result.candidates) {
       const displayName = workspaceDisplayName(workspace);
       try {
@@ -382,11 +529,31 @@ export const pruneCommand = defineAppCommand({
           logger.warn(`Keeping ${displayName} (${workspace.id}): ${staleReason}.`);
           continue;
         }
+        if (args.expired) {
+          const recheck = await fetchWorkspaceExpiry(client, workspace.id, new Date());
+          if (
+            "error" in recheck &&
+            recheck.error instanceof ConnectError &&
+            recheck.error.code === Code.NotFound
+          ) {
+            throw recheck.error;
+          }
+          const state = "error" in recheck ? "unreadable" : recheck.expiry.state;
+          if (state !== "expired") {
+            result.skipped.expiryChanged.push(displayName);
+            logger.info(
+              `Skipped ${displayName} (${workspace.id}): its recorded expiry no longer selects it.`,
+            );
+            continue;
+          }
+        }
+        profileCleanupIds.add(workspace.id);
         await client.deleteWorkspace({ workspaceId: workspace.id });
         result.deleted.push(workspace);
         logger.success(`Deleted ${displayName} (${workspace.id}).`);
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {
+          profileCleanupIds.add(workspace.id);
           result.deleted.push(workspace);
           logger.info(`${displayName} (${workspace.id}) was already deleted.`);
           continue;
@@ -399,13 +566,7 @@ export const pruneCommand = defineAppCommand({
 
     // A failed delete can still have removed the workspace server-side (a timeout after the
     // server committed), so its local profile is cleaned up alongside the confirmed deletions.
-    const removedProfiles = await removeProfilesForWorkspaces(
-      new Set(
-        [...result.deleted, ...result.failed.map(({ workspace }) => workspace)].map(
-          (workspace) => workspace.id,
-        ),
-      ),
-    );
+    const removedProfiles = await removeProfilesForWorkspaces(profileCleanupIds);
     if (removedProfiles.length > 0) {
       logger.info(
         `Removed ${removedProfiles.length} local profile(s) that pointed at deleted workspaces: ${removedProfiles.join(", ")}.`,

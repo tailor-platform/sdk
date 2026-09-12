@@ -4,9 +4,11 @@ import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { isCLIError } from "#/cli/shared/errors";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { createCommand, createWorkspace } from "./create";
+import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-workspace-create-${Date.now()}-${Math.random()}`);
 
@@ -48,8 +50,17 @@ function seedConfig() {
   });
 }
 
-function stubClient() {
-  vi.mocked(initOperatorClient).mockResolvedValue({
+/** A platform creation time far from the local clock, so an expiry anchored to it is unmistakable. */
+const platformCreateTime = { seconds: 1_700_000_000n, nanos: 0 };
+const platformCreatedAtMs = 1_700_000_000_000;
+
+function stubClient(
+  overrides: Partial<{
+    getMetadata: ReturnType<typeof vi.fn>;
+    setMetadata: ReturnType<typeof vi.fn>;
+  }> = {},
+) {
+  const client = {
     listAvailableWorkspaceRegions: vi.fn().mockResolvedValue({ regions: ["us-west"] }),
     createWorkspace: vi.fn().mockResolvedValue({
       workspace: {
@@ -58,11 +69,17 @@ function stubClient() {
         region: "us-west",
         organizationId: "organization-1",
         folderId: "folder-1",
-        createdAt: { seconds: 0n, nanos: 0 },
+        createTime: platformCreateTime,
       },
     }),
     getOrganizationFolder: vi.fn().mockResolvedValue({ folder: { name: "dev" } }),
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    getMetadata: overrides.getMetadata ?? vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+    setMetadata: overrides.setMetadata ?? vi.fn().mockResolvedValue({}),
+  };
+  vi.mocked(initOperatorClient).mockResolvedValue(
+    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
+  );
+  return client;
 }
 
 aroundAll(async (runSuite) => {
@@ -294,5 +311,92 @@ describe("workspace create", () => {
     // anywhere because no profile was created to attach it to.
     const config = await runCreate("--permission", "read");
     expect(Object.keys(config.profiles)).toHaveLength(0);
+  });
+});
+
+describe("workspace create --ttl", () => {
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
+    seedConfig();
+    await runTest();
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("records an expiry anchored to the platform's creation time, not the local clock", async () => {
+    const client = stubClient();
+    using _logger = silenceLogger("out", "success", "warn", "info");
+
+    const result = await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--ttl",
+      "24h",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(client.setMetadata).toHaveBeenCalledWith({
+      trn: `trn:v1:workspace:${validUUID}`,
+      labels: { [expiresAtLabelKey]: encodeExpiresAt(new Date(platformCreatedAtMs + 86_400_000)) },
+    });
+  });
+
+  test("records no expiry when --ttl is absent", async () => {
+    const client = stubClient();
+    using _logger = silenceLogger("out", "success", "warn", "info");
+
+    await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west"]);
+
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("fails when the expiry write cannot be confirmed, naming the recovery command", async () => {
+    stubClient({ setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")) });
+    using _logger = silenceLogger("out", "success", "warn", "info", "error");
+
+    const result = await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--ttl",
+      "24h",
+    ]);
+
+    expect(result.success).toBe(false);
+    const error = result.success ? undefined : result.error;
+    expect(isCLIError(error) && error.code).toBe("WORKSPACE_TTL_WRITE_FAILED");
+    expect(isCLIError(error) && error.next).toEqual({
+      command: "tailor",
+      args: ["workspace", "ttl", "set", "--workspace-id", validUUID, "--ttl", "24h"],
+    });
+  });
+
+  test("still creates the profile when the expiry write cannot be confirmed", async () => {
+    stubClient({ setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")) });
+    using _logger = silenceLogger("out", "success", "warn", "info", "error");
+
+    const result = await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--ttl",
+      "24h",
+      "--profile-name",
+      "bootstrap",
+      "--profile-user",
+      "u@example.com",
+    ]);
+
+    expect(result.success).toBe(false);
+    const config = await readPlatformConfig();
+    expect(config.profiles.bootstrap?.workspace_id).toBe(validUUID);
   });
 });
