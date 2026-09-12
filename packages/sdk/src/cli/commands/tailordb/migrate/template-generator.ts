@@ -396,9 +396,10 @@ import { main } from "./migrate";
 const pglite = new PGlite();
 const db = createKyselyPGlite<Unmigrated<Database>>(pglite);
 
+// PGlite loads Postgres on first use, which can take longer than the default hook timeout.
 beforeAll(async () => {
   await pglite.exec(${schema});
-});
+}, 60_000);
 
 afterAll(async () => {
   await db.destroy();

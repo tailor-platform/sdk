@@ -1515,6 +1515,7 @@ describe("template-generator", () => {
       expect(script).toContain('import { pgliteSchema } from "./db.pglite"');
       expect(script).toContain('import { main } from "./migrate"');
       expect(script).toContain("pglite.exec(pgliteSchema.tailordb)");
+      expect(script).toContain("}, 60_000);");
       expect(script).toContain(
         "await expect(db.transaction().execute((trx) => main(trx))).resolves.toBeUndefined()",
       );
