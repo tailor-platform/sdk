@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { runCommand } from "@politty/zod";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadAuthStatus, writePlatformConfig } from "#/cli/shared/context";
+import { isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
@@ -158,6 +159,12 @@ describe("auth status", () => {
     });
     const result = await runCommand(statusCommand, ["--profile", "staging"]);
     expect(result.success).toBe(false);
+    const error = result.success ? undefined : result.error;
+    expect(isCLIError(error) && error.code).toBe("NOT_AUTHENTICATED");
+    expect(isCLIError(error) && error.next).toEqual({
+      command: "tailor",
+      args: ["login", "--profile=staging"],
+    });
   });
 
   test("emits structured JSON without token values", async () => {

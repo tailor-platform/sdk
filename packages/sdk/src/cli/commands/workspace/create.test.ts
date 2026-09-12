@@ -374,8 +374,50 @@ describe("workspace create --ttl", () => {
     expect(isCLIError(error) && error.code).toBe("WORKSPACE_TTL_WRITE_FAILED");
     expect(isCLIError(error) && error.next).toEqual({
       command: "tailor",
-      args: ["workspace", "ttl", "set", "--workspace-id", validUUID, "--ttl", "24h"],
+      args: ["workspace", "ttl", "set", "--ttl", "24h", `--workspace-id=${validUUID}`],
     });
+  });
+
+  test("keeps the run's --profile on the recovery command", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          access_token: "mock-token",
+        },
+      },
+      profiles: { dev: { user: "u@example.com", workspace_id: validUUID } },
+      current_user: null,
+    });
+    stubClient({ setMetadata: vi.fn().mockRejectedValue(new Error("permission denied")) });
+    using _logger = silenceLogger("out", "success", "warn", "info", "error");
+
+    const result = await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--ttl",
+      "24h",
+      "--profile",
+      "dev",
+    ]);
+
+    expect(result.success).toBe(false);
+    const error = result.success ? undefined : result.error;
+    expect(isCLIError(error) && error.next?.args).toEqual([
+      "workspace",
+      "ttl",
+      "set",
+      "--ttl",
+      "24h",
+      `--workspace-id=${validUUID}`,
+      "--profile=dev",
+    ]);
   });
 
   test("still creates the profile when the expiry write cannot be confirmed", async () => {

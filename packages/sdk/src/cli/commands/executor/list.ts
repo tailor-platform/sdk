@@ -1,7 +1,14 @@
 import { z } from "zod";
-import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import {
+  type Order,
+  paginationArgs,
+  recoveryContextArgs,
+  toPageDirection,
+  workspaceArgs,
+} from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
@@ -75,7 +82,14 @@ export const listCommand = defineAppCommand({
     if (!jsonOutput) {
       const hasWebhook = executors.some((e) => e.triggerType === "webhook");
       if (hasWebhook) {
-        logger.info("To see webhook URLs, run: tailor executor webhook list");
+        const listWebhooks = formatCopyableCommand([
+          "tailor",
+          "executor",
+          "webhook",
+          "list",
+          ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+        ]);
+        logger.info(`To see webhook URLs, run: ${listWebhooks}`);
       }
     }
   },

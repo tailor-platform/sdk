@@ -6,7 +6,7 @@ import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import { confirmationArgs, deploymentArgs, recoveryContextArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -186,9 +186,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   const remoteContextArgs = [
     "--config",
     config.path,
-    "--workspace-id",
-    workspaceId,
-    ...(options.profile ? ["--profile", options.profile] : []),
+    ...recoveryContextArgs({ workspaceId, profile: options.profile }),
   ];
   const setBaselineCommand = formatNextAction({
     command: "tailor",
