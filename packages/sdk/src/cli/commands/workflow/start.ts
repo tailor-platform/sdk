@@ -13,6 +13,7 @@ import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { nameArgs, waitArgs } from "./args";
@@ -20,7 +21,7 @@ import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
 import { type WorkflowWaitUntil } from "./status";
 import {
-  getWorkflowWaitFailureMessage,
+  getWorkflowWaitFailure,
   waitForWorkflowExecution,
   type WorkflowWaitResult,
 } from "./waiter";
@@ -141,7 +142,11 @@ async function startWorkflowCore(
     };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Workflow '${workflowName}' not found.`, { cause: error });
+      throw CLIError({
+        code: "WORKFLOW_NOT_FOUND",
+        message: `Workflow '${workflowName}' not found.`,
+        cause: error,
+      });
     }
     throw error;
   }
@@ -159,7 +164,10 @@ async function resolveApplicationAuthNamespace(options: {
   });
   const authNamespace = application?.authNamespace || config.auth?.name;
   if (!authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: `Application ${config.name} does not have an auth configuration.`,
+    });
   }
   return authNamespace;
 }
@@ -180,9 +188,12 @@ export async function startWorkflowByName(
     profile: options.profile,
   });
   if (!machineUser) {
-    throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
-    );
+    throw CLIError({
+      code: "MACHINE_USER_REQUIRED",
+      message: "Machine user is required.",
+      suggestion:
+        "Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
+    });
   }
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
@@ -297,9 +308,9 @@ export const startCommand = defineAppCommand({
       } else {
         logger.out(result);
       }
-      const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
-      if (failureMessage) {
-        throw new Error(failureMessage);
+      const failure = getWorkflowWaitFailure(result, args.until);
+      if (failure) {
+        throw failure;
       }
     } else {
       logger.out({ executionId });

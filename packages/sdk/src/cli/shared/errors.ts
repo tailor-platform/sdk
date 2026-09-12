@@ -5,13 +5,15 @@ import type { Jsonifiable } from "type-fest";
  * Options for creating a CLI error
  */
 interface CLIErrorOptions {
+  /** Stable machine-readable failure code, such as `WORKSPACE_NOT_FOUND`. */
+  code: string;
   message: string;
   details?: string;
   suggestion?: string;
   command?: string;
-  code?: string;
   next?: CLIErrorNextAction;
   context?: Readonly<Record<string, Jsonifiable | undefined>>;
+  cause?: unknown;
 }
 
 export type CLIErrorNextAction = {
@@ -25,7 +27,7 @@ export type CLIErrorNextAction = {
  * CLI error interface with formatted output
  */
 export interface CLIError extends Error {
-  readonly code?: string;
+  readonly code: string;
   readonly details?: string;
   readonly suggestion?: string;
   readonly command?: string;
@@ -35,7 +37,7 @@ export interface CLIError extends Error {
 }
 
 type CLIErrorInternal = Error & {
-  code?: string;
+  code: string;
   details?: string;
   suggestion?: string;
   command?: string;
@@ -118,8 +120,11 @@ function formatError(error: CLIError): string {
  * @param options - Options to construct a CLIError
  * @returns Constructed CLIError instance
  */
-function createCLIError(options: CLIErrorOptions): CLIError {
-  const error = new Error(options.message) as CLIErrorInternal;
+export function CLIError(options: CLIErrorOptions): CLIError {
+  const error = new Error(
+    options.message,
+    options.cause === undefined ? undefined : { cause: options.cause },
+  ) as CLIErrorInternal;
   error.name = "CLIError";
   error.code = options.code;
   error.details = options.details;
@@ -141,12 +146,24 @@ export function isCLIError(error: unknown): error is CLIError {
 }
 
 /**
+ * Create an error for an SDK invariant violation that no user action can fix.
+ * The result is a plain Error, so JSON output reports it as `UNEXPECTED_ERROR`
+ * and crash reporting treats it like any other unexpected failure.
+ * @param message - Description of the violated invariant
+ * @param options - Standard Error options, such as `cause`
+ * @returns Plain Error instance
+ */
+export function internalError(message: string, options?: ErrorOptions): Error {
+  return new Error(message, options);
+}
+
+/**
  * Convert a caught value into an Error, keeping Error instances as-is
  * @param value - Caught value
- * @returns The value itself when it is an Error, otherwise an Error of its string form
+ * @returns The value itself when it is an Error, otherwise an Error of its string form with the value as `cause`
  */
 export function toError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
+  return value instanceof Error ? value : new Error(String(value), { cause: value });
 }
 
 const MISSING_NAMED_EXPORT_PATTERN = /does not provide an export named '(?!default')([^']+)'/;
@@ -168,6 +185,3 @@ export function typeOnlyImportHint(error: unknown): string | undefined {
     'Set "verbatimModuleSyntax": true in tsconfig.json to catch this at typecheck.'
   );
 }
-
-// Re-export createCLIError as CLIError for backward compatibility
-export { createCLIError as CLIError };

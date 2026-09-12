@@ -5,6 +5,7 @@ import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -81,12 +82,19 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
   // All options are mutually exclusive
   const optionCount = [hasAll, hasNamespace, hasTables].filter(Boolean).length;
   if (optionCount === 0) {
-    throw new Error("Please specify one of: --all, --namespace <name>, or table names");
+    throw CLIError({
+      code: "TRUNCATE_TARGET_REQUIRED",
+      message: "Please specify one of: --all, --namespace <name>, or table names",
+      command: "tailordb truncate",
+    });
   }
   if (optionCount > 1) {
-    throw new Error(
-      "Options --all, --namespace, and table names are mutually exclusive. Please specify only one.",
-    );
+    throw CLIError({
+      code: "TRUNCATE_OPTIONS_CONFLICT",
+      message:
+        "Options --all, --namespace, and table names are mutually exclusive. Please specify only one.",
+      command: "tailordb truncate",
+    });
   }
 
   // Validate config and get namespaces before confirmation
@@ -127,13 +135,16 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
     if (!namespaces.includes(namespace)) {
       const dbConfig = config.db?.[namespace];
       if (dbConfig && "external" in dbConfig) {
-        throw new Error(
-          `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here. Run truncate from the app that owns it.`,
-        );
+        throw CLIError({
+          code: "TAILORDB_NAMESPACE_EXTERNAL",
+          message: `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here.`,
+          suggestion: "Run truncate from the app that owns the namespace.",
+        });
       }
-      throw new Error(
-        `Namespace "${namespace}" not found in config. Available owned namespaces (external namespaces are excluded): ${namespaces.join(", ")}`,
-      );
+      throw CLIError({
+        code: "TAILORDB_NAMESPACE_NOT_FOUND",
+        message: `Namespace "${namespace}" not found in config. Available owned namespaces (external namespaces are excluded): ${namespaces.join(", ")}`,
+      });
     }
 
     if (!options.yes) {
@@ -165,9 +176,10 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<void> {
     const notFoundTables = tableNames.filter((tableName) => !tableNamespaceMap.has(tableName));
 
     if (notFoundTables.length > 0) {
-      throw new Error(
-        `The following tables were not found in any namespace: ${notFoundTables.join(", ")}`,
-      );
+      throw CLIError({
+        code: "TAILORDB_TABLE_NOT_FOUND",
+        message: `The following tables were not found in any namespace: ${notFoundTables.join(", ")}`,
+      });
     }
 
     if (!options.yes) {

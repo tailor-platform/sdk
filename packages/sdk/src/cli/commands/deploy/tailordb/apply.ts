@@ -15,6 +15,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { resourceTrn, writeMetadataLabels } from "../label";
@@ -110,7 +111,10 @@ function buildMigrationContextForScripts(
 ): MigrationContext {
   const authService = migrationContext.application.authService;
   if (!authService) {
-    throw new Error("Auth configuration is required to execute migration scripts.");
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: "Auth configuration is required to execute migration scripts.",
+    });
   }
 
   const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
@@ -147,9 +151,11 @@ async function validateTailorDBMigrationState(
       getNamespacesWithMigrations(context.config, path.dirname(context.config.path)),
     );
     if (!migrationFileStatesEqual(context.migrationFileState, currentMigrationFileState)) {
-      throw new Error(
-        "Migration files changed after deployment planning. Run the migration test again to create a fresh plan.",
-      );
+      throw CLIError({
+        code: "DEPLOY_PLAN_STALE",
+        message: "Migration files changed after deployment planning.",
+        suggestion: "Run the migration test again to create a fresh plan.",
+      });
     }
     return {
       pendingMigrations: [],
@@ -186,14 +192,18 @@ async function validateTailorDBMigrationState(
         ),
     );
   if (repairPlanChanged) {
-    throw new Error(
-      "Remote migration checkpoint repair changed after deployment planning. Run the deployment again to review the updated repair.",
-    );
+    throw CLIError({
+      code: "DEPLOY_PLAN_STALE",
+      message: "Remote migration checkpoint repair changed after deployment planning.",
+      suggestion: "Run the deployment again to review the updated repair.",
+    });
   }
   if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
-    throw new Error(
-      "Migration files changed after deployment planning. Run the deployment again to create a fresh plan.",
-    );
+    throw CLIError({
+      code: "DEPLOY_PLAN_STALE",
+      message: "Migration files changed after deployment planning.",
+      suggestion: "Run the deployment again to create a fresh plan.",
+    });
   }
   return validation;
 }
@@ -320,9 +330,10 @@ export async function applyTailorDB(
       for (const [namespace, first] of firstPendingByNamespace) {
         const snapshot = reconstructSnapshotFromMigrations(first.migrationsDir, first.number - 1);
         if (!snapshot) {
-          throw new Error(
-            `Cannot reconstruct the schema state before migration ${formatMigrationNumber(first.number)} for namespace "${namespace}"`,
-          );
+          throw CLIError({
+            code: "MIGRATION_HISTORY_INVALID",
+            message: `Cannot reconstruct the schema state before migration ${formatMigrationNumber(first.number)} for namespace "${namespace}"`,
+          });
         }
         preMigrationSnapshots.set(namespace, snapshot);
       }
@@ -530,11 +541,13 @@ export async function applyTailorDB(
                 : undefined;
             if (concurrentCheckpoint !== undefined) {
               restorationSnapshots.delete(migration.namespace);
-              throw new Error(
-                `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} advanced concurrently to ${concurrentCheckpoint}. ` +
+              throw CLIError({
+                code: "MIGRATION_CHECKPOINT_CONFLICT",
+                message:
+                  `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} advanced concurrently to ${concurrentCheckpoint}. ` +
                   "Leaving the post-migration schema unchanged and aborting this deployment.",
-                { cause: error },
-              );
+                cause: error,
+              });
             }
 
             if (remoteMigrationNumber !== migration.number) {
@@ -608,10 +621,12 @@ export async function applyTailorDB(
           if (checkpointStillOwned) continue;
 
           restorationSnapshots.delete(namespaceName);
-          const concurrencyError = new Error(
-            `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ` +
+          const concurrencyError = CLIError({
+            code: "MIGRATION_CHECKPOINT_CONFLICT",
+            message:
+              `Migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} advanced concurrently to ${describeMigrationCheckpoint(remoteState.number)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
-          );
+          });
           if (migrationFailure) {
             logger.warn(
               `${concurrencyError.message} The original migration error is reported below.`,
@@ -621,11 +636,13 @@ export async function applyTailorDB(
           }
         } catch (checkpointReadError) {
           restorationSnapshots.delete(namespaceName);
-          const ownershipError = new Error(
-            `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
+          const ownershipError = CLIError({
+            code: "MIGRATION_CHECKPOINT_UNVERIFIED",
+            message:
+              `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
               `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ` +
               "Skipping restoration for this namespace and aborting this deployment.",
-          );
+          });
           if (migrationFailure) {
             logger.warn(
               `${ownershipError.message} The original migration error is reported below.`,

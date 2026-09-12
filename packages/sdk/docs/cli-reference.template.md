@@ -28,10 +28,14 @@ Commands that only perform side effects and do not define a structured result ma
 even when `--json` is passed.
 
 Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
-a command failure under `--json` emits a JSON error envelope to stderr. CLI errors include a stable
-`error.code` and may include structured `error.next` and `error.context` fields for automated
-recovery. Diagnostic lines may precede the error envelope, and stdout is not guaranteed to contain
-an error object.
+a command failure under `--json` emits a JSON error envelope to stderr. Failures you can act on — an
+invalid or missing option, a resource that does not exist, an invalid configuration, or an unmet
+precondition — carry a stable `error.code` such as `PROFILE_NOT_FOUND`, `TAILORDB_NAMESPACE_NOT_FOUND`,
+or `MIGRATION_SCRIPT_REQUIRED`. Where a remediation exists, the envelope also includes
+`error.suggestion`, `error.help` (the `--help` invocation for the failing command), `error.next` (a
+runnable command), or `error.context`. `UNEXPECTED_ERROR` marks failures without a dedicated code,
+including SDK-internal errors. Diagnostic lines may precede the error envelope, and stdout is not
+guaranteed to contain an error object.
 
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh

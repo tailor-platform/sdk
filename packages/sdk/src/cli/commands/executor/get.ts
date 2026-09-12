@@ -4,6 +4,7 @@ import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type ExecutorInfo, toExecutorInfo } from "./transform";
@@ -42,7 +43,7 @@ async function resolveExecutor(
     name,
   });
   if (!executor) {
-    throw new Error(`Executor '${name}' not found.`);
+    throw CLIError({ code: "EXECUTOR_NOT_FOUND", message: `Executor '${name}' not found.` });
   }
   return executor;
 }
@@ -66,7 +67,11 @@ export async function getExecutor<E extends ExecutorLike>(
     return toExecutorInfo(executor);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${name}' not found.`, { cause: error });
+      throw CLIError({
+        code: "EXECUTOR_NOT_FOUND",
+        message: `Executor '${name}' not found.`,
+        cause: error,
+      });
     }
     throw error;
   }

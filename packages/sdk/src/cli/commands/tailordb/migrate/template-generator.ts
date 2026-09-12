@@ -9,6 +9,7 @@
  */
 
 import * as fs from "node:fs/promises";
+import { CLIError } from "#/cli/shared/errors";
 import { writeDbTypesFile } from "./db-types-generator";
 import { isBreakingForeignKeyRetarget } from "./rename-detection";
 import {
@@ -51,7 +52,10 @@ async function fileExists(filePath: string): Promise<boolean> {
  */
 async function ensureFileNotExists(filePath: string): Promise<void> {
   if (await fileExists(filePath)) {
-    throw new Error(`Migration file already exists: ${filePath}`);
+    throw CLIError({
+      code: "MIGRATION_FILE_EXISTS",
+      message: `Migration file already exists: ${filePath}`,
+    });
   }
 }
 

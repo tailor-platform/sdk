@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import { isCI } from "std-env";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { assertDefined } from "#/utils/assert";
@@ -130,34 +131,44 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
     return null;
   }
   if (calls.length > 1) {
-    throw new Error(`Multiple defineConfig() calls found in ${configPath}. Only one is supported.`);
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `Multiple defineConfig() calls found in ${configPath}. Only one is supported.`,
+    });
   }
 
   const { configObj } = assertDefined(calls[0], "defineConfig call site missing");
   if (!configObj) {
-    throw new Error(
-      `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
-    );
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
+    });
   }
 
   const idProp = findIdProperty(configObj);
   if (idProp) {
     const value = idProp.value;
     if (value.type !== "Literal") {
-      throw new Error(
-        `'id' field in ${configPath} must be a string literal. To use this config for a separate app, delete it.`,
-      );
+      throw CLIError({
+        code: "CONFIG_ID_INVALID",
+        message: `'id' field in ${configPath} must be a string literal.`,
+        suggestion: "To use this config for a separate app, delete it.",
+      });
     }
     const literalValue = (value as { value?: unknown }).value;
     if (typeof literalValue !== "string" || literalValue === "") {
-      throw new Error(
-        `'id' field in ${configPath} must be a non-empty string literal. To use this config for a separate app, delete it.`,
-      );
+      throw CLIError({
+        code: "CONFIG_ID_INVALID",
+        message: `'id' field in ${configPath} must be a non-empty string literal.`,
+        suggestion: "To use this config for a separate app, delete it.",
+      });
     }
     if (!uuidRegex.test(literalValue)) {
-      throw new Error(
-        `'id' field in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
-      );
+      throw CLIError({
+        code: "CONFIG_ID_INVALID",
+        message: `'id' field in ${configPath} must be a UUID.`,
+        suggestion: "To use this config for a separate app, delete it.",
+      });
     }
     return { id: literalValue, injected: false };
   }
@@ -188,13 +199,17 @@ async function readConfigId(configPath: string): Promise<{ id: string | null } |
   // Mirror ensureConfigId's shape validation so CI fails loudly on config
   // shapes whose id it cannot reliably read.
   if (calls.length > 1) {
-    throw new Error(`Multiple defineConfig() calls found in ${configPath}. Only one is supported.`);
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `Multiple defineConfig() calls found in ${configPath}. Only one is supported.`,
+    });
   }
   const { configObj } = assertDefined(calls[0], "defineConfig call site missing");
   if (!configObj) {
-    throw new Error(
-      `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
-    );
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
+    });
   }
   const idProp = findIdProperty(configObj);
   if (!idProp || idProp.value.type !== "Literal") return { id: null };
@@ -214,18 +229,22 @@ async function assertConfigIdInCI(configPath: string): Promise<void> {
     return;
   }
   if (!result.id) {
-    throw new Error(
-      `tailor.config.ts is missing an 'id'. CI does not auto-generate one ` +
-        `(each run would be treated as a separate app and break resource ownership). ` +
-        `Run 'tailor deploy' locally and commit the injected id.`,
-    );
+    throw CLIError({
+      code: "CONFIG_ID_REQUIRED_IN_CI",
+      message: "tailor.config.ts is missing an 'id'.",
+      details:
+        "CI does not auto-generate one (each run would be treated as a separate app and break resource ownership).",
+      suggestion: "Run 'tailor deploy' locally and commit the injected id.",
+    });
   }
   // Keep CI and local behavior aligned: ensureConfigId() enforces the same
   // format when injecting locally.
   if (!uuidRegex.test(result.id)) {
-    throw new Error(
-      `'id' in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
-    );
+    throw CLIError({
+      code: "CONFIG_ID_INVALID",
+      message: `'id' in ${configPath} must be a UUID.`,
+      suggestion: "To use this config for a separate app, delete it.",
+    });
   }
 }
 

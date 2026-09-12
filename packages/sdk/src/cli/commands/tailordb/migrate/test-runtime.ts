@@ -22,6 +22,7 @@ import {
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { chunkSeedData, type SeedData } from "#/cli/shared/seed-chunker";
@@ -79,15 +80,20 @@ function assertSeedDataDirectory(dataDir: string): void {
     stats = fs.statSync(dataDir);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(
-        `Seed data directory not found: ${dataDir}. Run 'tailor generate' before testing migrations.`,
-        { cause: error },
-      );
+      throw CLIError({
+        code: "SEED_DATA_NOT_FOUND",
+        message: `Seed data directory not found: ${dataDir}.`,
+        suggestion: "Generate seed data before testing migrations.",
+        cause: error,
+      });
     }
     throw error;
   }
   if (!stats.isDirectory()) {
-    throw new Error(`Seed data path is not a directory: ${dataDir}`);
+    throw CLIError({
+      code: "SEED_DATA_INVALID",
+      message: `Seed data path is not a directory: ${dataDir}`,
+    });
   }
 }
 
@@ -98,12 +104,19 @@ function assertAssertionScript(assertionPath: string): void {
     stats = fs.statSync(resolvedPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(`Migration assertion script not found: ${resolvedPath}`, { cause: error });
+      throw CLIError({
+        code: "MIGRATION_ASSERTION_SCRIPT_NOT_FOUND",
+        message: `Migration assertion script not found: ${resolvedPath}`,
+        cause: error,
+      });
     }
     throw error;
   }
   if (!stats.isFile()) {
-    throw new Error(`Migration assertion path is not a file: ${resolvedPath}`);
+    throw CLIError({
+      code: "MIGRATION_ASSERTION_SCRIPT_INVALID",
+      message: `Migration assertion path is not a file: ${resolvedPath}`,
+    });
   }
 }
 
@@ -114,9 +127,10 @@ function assertAssertionScript(assertionPath: string): void {
  */
 export function assertCloneTargetRegion(sourceRegion: string, targetRegion: string): void {
   if (sourceRegion !== targetRegion) {
-    throw new Error(
-      `Clone mode requires source and target workspaces in the same region (source: ${sourceRegion}, target: ${targetRegion}).`,
-    );
+    throw CLIError({
+      code: "MIGRATION_TEST_REGION_MISMATCH",
+      message: `Clone mode requires source and target workspaces in the same region (source: ${sourceRegion}, target: ${targetRegion}).`,
+    });
   }
 }
 
@@ -130,7 +144,11 @@ export function assertTargetWorkspaceDiffers(
   targetWorkspaceId?: string,
 ): void {
   if (targetWorkspaceId?.toLowerCase() === sourceWorkspaceId.toLowerCase()) {
-    throw new Error("The migration test target workspace must differ from the source workspace.");
+    throw CLIError({
+      code: "MIGRATION_TEST_TARGET_INVALID",
+      message: "The migration test target workspace must differ from the source workspace.",
+      command: "tailordb migration test",
+    });
   }
 }
 
@@ -147,12 +165,17 @@ export function resolveAssertionNamespace(
   const namespace =
     assertionNamespace ?? (pendingNamespaces.length === 1 ? pendingNamespaces[0] : undefined);
   if (!namespace) {
-    throw new Error(
-      "--assert-namespace is required when pending migrations span multiple namespaces.",
-    );
+    throw CLIError({
+      code: "MIGRATION_TEST_ASSERT_NAMESPACE_REQUIRED",
+      message: "--assert-namespace is required when pending migrations span multiple namespaces.",
+      command: "tailordb migration test",
+    });
   }
   if (!pendingNamespaces.includes(namespace)) {
-    throw new Error(`Assertion namespace "${namespace}" has no pending migrations.`);
+    throw CLIError({
+      code: "MIGRATION_TEST_NO_PENDING_MIGRATIONS",
+      message: `Assertion namespace "${namespace}" has no pending migrations.`,
+    });
   }
   return namespace;
 }
@@ -216,20 +239,24 @@ export async function waitForCloneApplicationData(
       return;
     }
     if (operation.status === CloneOperationStatus.FAILED) {
-      throw new Error(
-        `Application data clone failed: ${operation.errorMessage || "unknown platform error"}`,
-      );
+      throw CLIError({
+        code: "MIGRATION_TEST_CLONE_FAILED",
+        message: `Application data clone failed: ${operation.errorMessage || "unknown platform error"}`,
+      });
     }
     if (
       operation.status !== CloneOperationStatus.PENDING &&
       operation.status !== CloneOperationStatus.PROCESSING
     ) {
-      throw new Error(`Application data clone returned unexpected status ${operation.status}.`);
+      throw internalError(`Application data clone returned unexpected status ${operation.status}.`);
     }
     await delay(pollInterval);
   }
 
-  throw new Error(`Application data clone timed out after ${Math.round(timeout / 1_000)} seconds.`);
+  throw CLIError({
+    code: "MIGRATION_TEST_CLONE_TIMEOUT",
+    message: `Application data clone timed out after ${Math.round(timeout / 1_000)} seconds.`,
+  });
 }
 
 /**
@@ -264,15 +291,17 @@ export function loadSnapshotSeedData(
           try {
             value = JSON.parse(line);
           } catch (error) {
-            throw new Error(
-              `Invalid JSON in ${jsonlPath} at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-              { cause: error },
-            );
+            throw CLIError({
+              code: "SEED_DATA_INVALID",
+              message: `Invalid JSON in ${jsonlPath} at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+              cause: error,
+            });
           }
           if (value === null || typeof value !== "object" || Array.isArray(value)) {
-            throw new Error(
-              `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
-            );
+            throw CLIError({
+              code: "SEED_DATA_INVALID",
+              message: `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
+            });
           }
           const row = value as JsonObject;
           return snapshotType ? projectSeedObject(row, snapshotType.fields, new Set(["id"])) : row;
@@ -394,9 +423,11 @@ export async function assertSourceBaselineFresh(
     (check) => check.hasDrift || check.checkpointMissingLocal || check.checkpointRepair,
   );
   if (invalidRemote) {
-    throw new Error(
-      `Source namespace "${invalidRemote.namespace}" changed after migration test preparation. Run the migration test again.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_CHANGED",
+      message: `Source namespace "${invalidRemote.namespace}" changed after migration test preparation.`,
+      suggestion: "Run the migration test again.",
+    });
   }
   for (const namespace of namespaces) {
     const baseline = prepared.baselines.get(namespace.namespace);
@@ -406,9 +437,11 @@ export async function assertSourceBaselineFresh(
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
     if (migrationNumber !== baseline.migrationNumber) {
-      throw new Error(
-        `Source namespace "${namespace.namespace}" moved from migration ${baseline.migrationNumber} to ${migrationNumber ?? "none"} after migration test preparation. Run the migration test again.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_TEST_SOURCE_CHANGED",
+        message: `Source namespace "${namespace.namespace}" moved from migration ${baseline.migrationNumber} to ${migrationNumber ?? "none"} after migration test preparation.`,
+        suggestion: "Run the migration test again.",
+      });
     }
   }
   const unmigratedInputs = inputs.filter((input) => !prepared.baselines.has(input.namespace));
@@ -421,9 +454,11 @@ export async function assertSourceBaselineFresh(
       input.namespace,
     );
     if (compareSnapshots(snapshot, current).changes.length > 0) {
-      throw new Error(
-        `Source namespace "${input.namespace}" schema changed after migration test preparation. Run the migration test again.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_TEST_SOURCE_CHANGED",
+        message: `Source namespace "${input.namespace}" schema changed after migration test preparation.`,
+        suggestion: "Run the migration test again.",
+      });
     }
   }
 }
@@ -465,7 +500,10 @@ function authExecutionContext(
 ): { authNamespace: string; machineUserName: string } {
   const auth = state.loaded.application.authService;
   if (!auth) {
-    throw new Error("Auth configuration is required to execute migration test scripts.");
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: "Auth configuration is required to execute migration test scripts.",
+    });
   }
   const machineUserName =
     explicitMachineUser ??
@@ -474,9 +512,11 @@ function authExecutionContext(
       auth.config.machineUsers ? Object.keys(auth.config.machineUsers) : undefined,
     );
   if (!machineUserName) {
-    throw new Error(
-      `No machine user is available for namespace "${namespace}". Pass --machine-user or configure one in auth or db.${namespace}.migration.`,
-    );
+    throw CLIError({
+      code: "MACHINE_USER_REQUIRED",
+      message: `No machine user is available for namespace "${namespace}".`,
+      suggestion: `Pass --machine-user or configure one in auth or db.${namespace}.migration.`,
+    });
   }
   return { authNamespace: auth.config.name, machineUserName };
 }
@@ -489,7 +529,11 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   const configDir = path.dirname(loaded.config.path);
   const namespaces = getNamespacesWithMigrations(loaded.config, configDir);
   if (namespaces.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found.");
+    throw CLIError({
+      code: "MIGRATION_CONFIG_NOT_FOUND",
+      message: "No TailorDB services with migrations configuration found.",
+      suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
+    });
   }
   for (const namespace of namespaces) {
     assertValidMigrationFiles(namespace.migrationsDir, namespace.namespace);
@@ -550,15 +594,19 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     (check) => check.hasDrift || check.checkpointMissingLocal,
   );
   if (invalidRemote) {
-    throw new Error(
-      `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint. Run 'tailor tailordb migration validate' first.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_INVALID",
+      message: `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint.`,
+      suggestion: "Validate the migration history first.",
+    });
   }
   const pendingRepair = remoteChecks.find((check) => check.checkpointRepair);
   if (pendingRepair) {
-    throw new Error(
-      `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair. Run 'tailor deploy' against the source workspace first.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING",
+      message: `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair.`,
+      suggestion: "Deploy to the source workspace first.",
+    });
   }
 
   const baselines = new Map<
@@ -573,21 +621,25 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
     );
     if (migrationNumber === null) {
-      throw new Error(
-        `Source namespace "${namespace.namespace}" has no sdk-migration checkpoint. Deploy or set its migration checkpoint before testing.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_TEST_SOURCE_CHECKPOINT_MISSING",
+        message: `Source namespace "${namespace.namespace}" has no sdk-migration checkpoint.`,
+        suggestion: "Deploy or set the migration checkpoint before testing.",
+      });
     }
     const latest = getLatestMigrationNumber(namespace.migrationsDir);
     if (migrationNumber > latest) {
-      throw new Error(
-        `Source namespace "${namespace.namespace}" is at migration ${migrationNumber}, but the local history ends at ${latest}.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_TEST_SOURCE_AHEAD",
+        message: `Source namespace "${namespace.namespace}" is at migration ${migrationNumber}, but the local history ends at ${latest}.`,
+      });
     }
     const snapshot = reconstructSnapshotFromMigrations(namespace.migrationsDir, migrationNumber);
     if (!snapshot) {
-      throw new Error(
-        `No migration baseline snapshot found for namespace "${namespace.namespace}".`,
-      );
+      throw CLIError({
+        code: "MIGRATION_BASELINE_NOT_FOUND",
+        message: `No migration baseline snapshot found for namespace "${namespace.namespace}".`,
+      });
     }
     baselines.set(namespace.namespace, {
       migrationNumber,
@@ -596,7 +648,10 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     });
     const targetSnapshot = reconstructSnapshotFromMigrations(namespace.migrationsDir, latest);
     if (!targetSnapshot) {
-      throw new Error(`No target migration snapshot found for namespace "${namespace.namespace}".`);
+      throw CLIError({
+        code: "MIGRATION_TEST_SNAPSHOT_NOT_FOUND",
+        message: `No target migration snapshot found for namespace "${namespace.namespace}".`,
+      });
     }
     targetSnapshots.set(namespace.namespace, targetSnapshot);
     if (migrationNumber < latest) {
@@ -604,7 +659,10 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     }
   }
   if (pendingNamespaces.length === 0) {
-    throw new Error("No pending TailorDB migrations found in the source workspace.");
+    throw CLIError({
+      code: "MIGRATION_TEST_NO_PENDING_MIGRATIONS",
+      message: "No pending TailorDB migrations found in the source workspace.",
+    });
   }
 
   const baselineSnapshots = await createMigrationTestBaselineSnapshots({
@@ -739,13 +797,17 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
             },
           });
           if (!execution.success) {
-            throw new Error(
-              execution.error ?? `Seed execution failed for namespace "${namespace}".`,
-            );
+            throw CLIError({
+              code: "MIGRATION_TEST_SEED_FAILED",
+              message: execution.error ?? `Seed execution failed for namespace "${namespace}".`,
+            });
           }
           const result = JSON.parse(execution.result || "{}") as { success?: boolean };
           if (result.success !== true) {
-            throw new Error(`Seed execution reported failure for namespace "${namespace}".`);
+            throw CLIError({
+              code: "MIGRATION_TEST_SEED_FAILED",
+              message: `Seed execution reported failure for namespace "${namespace}".`,
+            });
           }
         }
       }
@@ -767,15 +829,17 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         operationId = response.operationId;
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.Unimplemented) {
-          throw new Error(
-            "Application data clone is not enabled for this platform. Retry with '--data seed'.",
-            { cause: error },
-          );
+          throw CLIError({
+            code: "MIGRATION_TEST_CLONE_UNAVAILABLE",
+            message: "Application data clone is not enabled for this platform.",
+            suggestion: "Retry with --data seed.",
+            cause: error,
+          });
         }
         throw error;
       }
       if (!operationId) {
-        throw new Error("Application data clone returned no operation ID.");
+        throw internalError("Application data clone returned no operation ID.");
       }
       await waitForCloneApplicationData(state.client, {
         sourceWorkspaceId,
@@ -823,9 +887,10 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         },
       });
       if (!execution.success) {
-        throw new Error(
-          execution.error ?? `Migration assertion failed for namespace "${namespace}".`,
-        );
+        throw CLIError({
+          code: "MIGRATION_TEST_ASSERTION_FAILED",
+          message: execution.error ?? `Migration assertion failed for namespace "${namespace}".`,
+        });
       }
     },
     deleteWorkspace: async (workspaceId) => {

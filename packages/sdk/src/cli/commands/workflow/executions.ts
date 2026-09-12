@@ -17,6 +17,7 @@ import {
 } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import {
   formatFunctionLogLines,
@@ -34,7 +35,7 @@ import {
   toWorkflowJobExecutionInfo,
 } from "./transform";
 import {
-  getWorkflowWaitFailureMessage,
+  getWorkflowWaitFailure,
   waitForWorkflowExecution,
   waitForWorkflowExecutionById,
   type WorkflowWaitResult,
@@ -105,9 +106,11 @@ function parseStatus(status: string): WorkflowExecution_Status {
     case "UNSPECIFIED":
       return WorkflowExecution_Status.UNSPECIFIED;
     default:
-      throw new Error(
-        `Invalid status: ${status}. Valid values: UNSPECIFIED, PENDING, PENDING_RESUME, RUNNING, SUCCESS, FAILED, PENDING_RETRY, WAITING`,
-      );
+      throw CLIError({
+        code: "WORKFLOW_STATUS_INVALID",
+        message: `Invalid status: ${status}. Valid values: UNSPECIFIED, PENDING, PENDING_RESUME, RUNNING, SUCCESS, FAILED, PENDING_RETRY, WAITING`,
+        command: "workflow executions",
+      });
   }
 }
 
@@ -213,7 +216,10 @@ export async function getWorkflowExecution(
     });
 
     if (!execution) {
-      throw new Error(`Execution '${executionId}' not found.`);
+      throw CLIError({
+        code: "WORKFLOW_EXECUTION_NOT_FOUND",
+        message: `Execution '${executionId}' not found.`,
+      });
     }
 
     const result: WorkflowExecutionDetailInfo = toWorkflowExecutionInfo(execution);
@@ -399,9 +405,9 @@ export const executionsCommand = defineAppCommand({
           logger.out(result);
         }
 
-        const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
-        if (failureMessage) {
-          throw new Error(failureMessage);
+        const failure = getWorkflowWaitFailure(result, args.until);
+        if (failure) {
+          throw failure;
         }
         return;
       }

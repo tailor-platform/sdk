@@ -6,6 +6,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations } from "./config";
@@ -59,7 +60,11 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
 
   if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
+    throw CLIError({
+      code: "MIGRATION_CONFIG_NOT_FOUND",
+      message: "No TailorDB services with migrations configuration found",
+      suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
+    });
   }
 
   const targetNamespaces = options.namespace
@@ -67,9 +72,10 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     : namespacesWithMigrations;
 
   if (targetNamespaces.length === 0) {
-    throw new Error(
-      `Namespace "${options.namespace}" not found or does not have migrations configured`,
-    );
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `Namespace "${options.namespace}" not found or does not have migrations configured`,
+    });
   }
 
   const localStates = new Map<
@@ -247,9 +253,10 @@ async function status(options: StatusOptions): Promise<void> {
   const failures = rows.filter(isStatusFailure);
   if (failures.length > 0) {
     const namespaces = failures.map((f) => f.namespace).join(", ");
-    throw new Error(
-      `Migration status check failed for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
-    );
+    throw CLIError({
+      code: "MIGRATION_STATUS_FAILED",
+      message: `Migration status check failed for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
+    });
   }
 }
 

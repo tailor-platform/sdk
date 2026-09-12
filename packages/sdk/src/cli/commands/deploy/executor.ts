@@ -18,6 +18,7 @@ import {
   requireApplicationAuthNamespace,
 } from "#/cli/shared/auth-namespace";
 import { type OperatorClient } from "#/cli/shared/client";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
@@ -347,10 +348,12 @@ function resolveSameRunNamespace(
   }
   const namespace = sameRunNamespaces.get(resourceName);
   if (!namespace) {
-    throw new Error(
-      `${resourceLabel} "${resourceName}" is defined in multiple namespaces in this deploy run. ` +
+    throw CLIError({
+      code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
+      message:
+        `${resourceLabel} "${resourceName}" is defined in multiple namespaces in this deploy run. ` +
         `Move the trigger to the application that owns it or use unique names.`,
-    );
+    });
   }
   return namespace;
 }
@@ -405,9 +408,10 @@ function resolveNamespace(params: {
     ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
     : [];
   const availableNamespaces = [...localNamespaces, ...sameRunAvailableNamespaces];
-  throw new Error(
-    `${resourceLabel} "${resourceName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
-  );
+  throw CLIError({
+    code: "DEPLOY_RESOURCE_NOT_FOUND",
+    message: `${resourceLabel} "${resourceName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
+  });
 }
 
 function resolveTailorDBNamespace(
@@ -467,22 +471,29 @@ function resolveIdpNamespace(
     const candidateNames = sameRunIdpNames ?? localIdpNames;
     if (!candidateNames.has(idpName)) {
       const available = [...candidateNames].join(", ");
-      throw new Error(
-        `Executor "${executorName}" specifies IdP "${idpName}" in its idpUser trigger, ` +
+      throw CLIError({
+        code: "EXECUTOR_IDP_NOT_FOUND",
+        message:
+          `Executor "${executorName}" specifies IdP "${idpName}" in its idpUser trigger, ` +
           `but no IdP with that name is configured. Available IdPs: ${available}`,
-      );
+      });
     }
     return idpName;
   }
   if (localIdpNames.size === 0) {
-    throw new Error(`Executor "${executorName}" uses an idpUser trigger but no IdP is configured.`);
+    throw CLIError({
+      code: "EXECUTOR_IDP_REQUIRED",
+      message: `Executor "${executorName}" uses an idpUser trigger but no IdP is configured.`,
+    });
   }
   if (localIdpNames.size > 1) {
     const available = [...localIdpNames].join(", ");
-    throw new Error(
-      `Executor "${executorName}" uses an idpUser trigger but the project defines multiple IdPs ` +
+    throw CLIError({
+      code: "EXECUTOR_IDP_AMBIGUOUS",
+      message:
+        `Executor "${executorName}" uses an idpUser trigger but the project defines multiple IdPs ` +
         `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
-    );
+    });
   }
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
@@ -619,7 +630,7 @@ function protoExecutor(
       });
       break;
     default:
-      throw new Error(`Unknown trigger: ${trigger satisfies never}`);
+      throw internalError(`Unknown trigger: ${trigger satisfies never}`);
   }
 
   const target = executor.operation;
@@ -731,7 +742,7 @@ function protoExecutor(
       break;
     }
     default:
-      throw new Error(`Unknown target: ${target satisfies never}`);
+      throw internalError(`Unknown target: ${target satisfies never}`);
   }
 
   return {

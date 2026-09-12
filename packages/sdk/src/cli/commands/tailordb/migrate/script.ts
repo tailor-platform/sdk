@@ -18,6 +18,7 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
@@ -76,33 +77,44 @@ export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): S
   const label = formatMigrationNumber(migrationNumber);
   const normalizedReason = reason.trim();
   if (!normalizedReason) {
-    throw new Error("Migration script skip reason must not be empty.");
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_REASON_REQUIRED",
+      message: "Migration script skip reason must not be empty.",
+      command: "tailordb migration script",
+    });
   }
 
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
   if (!fs.existsSync(diffPath)) {
-    throw new Error(`Migration ${label} not found in ${migrationsDir}. Expected ${diffPath}.`);
+    throw CLIError({
+      code: "MIGRATION_NOT_FOUND",
+      message: `Migration ${label} not found in ${migrationsDir}. Expected ${diffPath}.`,
+    });
   }
 
   const diff = loadDiff(diffPath);
   if (!diff.requiresMigrationScript && !diff.hasWarnings) {
-    throw new Error(
-      `Migration ${label} does not require a migration script and has no data-loss warnings; nothing to skip.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_NOT_REQUIRED",
+      message: `Migration ${label} does not require a migration script and has no data-loss warnings; nothing to skip.`,
+    });
   }
   if (diff.scriptSkipped) {
-    throw new Error(
-      `Migration ${label} already has a script skip recorded ` +
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_SKIP_EXISTS",
+      message:
+        `Migration ${label} already has a script skip recorded ` +
         `(${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason}).`,
-    );
+    });
   }
 
   const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   if (fs.existsSync(migratePath)) {
-    throw new Error(
-      `Migration script exists at ${migratePath}. ` +
-        `Delete migrate.ts first if this migration should run without a script.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_EXISTS",
+      message: `Migration script exists at ${migratePath}.`,
+      suggestion: "Delete migrate.ts first if this migration should run without a script.",
+    });
   }
 
   const scriptSkipped: ScriptSkippedInfo = {
@@ -145,7 +157,10 @@ export async function addMigrationScriptFiles(
 
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
   if (!fs.existsSync(diffPath)) {
-    throw new Error(`Migration ${label} not found in ${migrationsDir}. Expected ${diffPath}.`);
+    throw CLIError({
+      code: "MIGRATION_NOT_FOUND",
+      message: `Migration ${label} not found in ${migrationsDir}. Expected ${diffPath}.`,
+    });
   }
 
   const diff = loadDiff(diffPath);
@@ -160,21 +175,29 @@ export async function addMigrationScriptFiles(
     result.clearedScriptSkip = true;
     if (!withTest) return result;
   } else if (migrateExists && !withTest) {
-    throw new Error(`Migration script already exists at ${migratePath}.`);
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_EXISTS",
+      message: `Migration script already exists at ${migratePath}.`,
+    });
   }
 
   const testPath = getMigrationFilePath(migrationsDir, migrationNumber, "test");
   if (withTest && fs.existsSync(testPath)) {
-    throw new Error(`Migration test already exists at ${testPath}.`);
+    throw CLIError({
+      code: "MIGRATION_TEST_EXISTS",
+      message: `Migration test already exists at ${testPath}.`,
+    });
   }
 
   if (migrateExists && withTest) {
     const dbTypesPath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
     if (!fs.existsSync(dbTypesPath)) {
-      throw new Error(
-        `Generated types not found at ${dbTypesPath}. ` +
-          `The test scaffold imports Database from ./db; restore db.ts before adding a test.`,
-      );
+      throw CLIError({
+        code: "GENERATED_TYPES_NOT_FOUND",
+        message: `Generated types not found at ${dbTypesPath}.`,
+        suggestion:
+          "The test scaffold imports Database from ./db; restore db.ts before adding a test.",
+      });
     }
   }
 
@@ -183,9 +206,11 @@ export async function addMigrationScriptFiles(
     // db.ts has Kysely types for the previous shape of the data.
     const previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
     if (!previousSnapshot) {
-      throw new Error(
-        `Could not reconstruct previous schema for migration ${label}. Make sure migration ${INITIAL_SCHEMA_NUMBER} exists.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_HISTORY_INVALID",
+        message: `Could not reconstruct previous schema for migration ${label}.`,
+        suggestion: `Make sure migration ${INITIAL_SCHEMA_NUMBER} exists.`,
+      });
     }
 
     await fsPromises.writeFile(migratePath, generateMigrationScript(diff));
@@ -217,9 +242,10 @@ async function script(options: ScriptOptions): Promise<void> {
   const migrationNumber = parseMigrationNumberArg(options.number);
 
   if (migrationNumber === INITIAL_SCHEMA_NUMBER) {
-    throw new Error(
-      `Migration ${options.number} is the initial schema snapshot and cannot have a migration script.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_NOT_ALLOWED",
+      message: `Migration ${options.number} is the initial schema snapshot and cannot have a migration script.`,
+    });
   }
 
   const { config } = await loadConfig(options.configPath);
@@ -227,7 +253,11 @@ async function script(options: ScriptOptions): Promise<void> {
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
+    throw CLIError({
+      code: "MIGRATION_CONFIG_NOT_FOUND",
+      message: "No TailorDB services with migrations configuration found",
+      suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
+    });
   }
 
   const targetNamespace = resolveTargetNamespace(namespacesWithMigrations, options.namespace);
@@ -238,11 +268,19 @@ async function script(options: ScriptOptions): Promise<void> {
 
   if (options.noScript) {
     if (options.withTest) {
-      throw new Error("--with-test cannot be used together with --no-script.");
+      throw CLIError({
+        code: "MIGRATION_SCRIPT_OPTIONS_CONFLICT",
+        message: "--with-test cannot be used together with --no-script.",
+        command: "tailordb migration script",
+      });
     }
     const reason = options.reason?.trim();
     if (!reason) {
-      throw new Error("--reason is required with --no-script.");
+      throw CLIError({
+        code: "MIGRATION_SCRIPT_REASON_REQUIRED",
+        message: "--reason is required with --no-script.",
+        command: "tailordb migration script",
+      });
     }
     const scriptSkipped = markMigrationScriptSkipped({
       migrationsDir,
@@ -257,7 +295,11 @@ async function script(options: ScriptOptions): Promise<void> {
     return;
   }
   if (options.reason !== undefined) {
-    throw new Error("--reason can only be used together with --no-script.");
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_OPTIONS_CONFLICT",
+      message: "--reason can only be used together with --no-script.",
+      command: "tailordb migration script",
+    });
   }
 
   const result = await addMigrationScriptFiles({
@@ -329,7 +371,10 @@ export function resolveTargetNamespace(
 ): string {
   if (requested) {
     if (!namespacesWithMigrations.some((ns) => ns.namespace === requested)) {
-      throw new Error(`Namespace "${requested}" not found or does not have migrations configured`);
+      throw CLIError({
+        code: "TAILORDB_NAMESPACE_NOT_FOUND",
+        message: `Namespace "${requested}" not found or does not have migrations configured`,
+      });
     }
     return requested;
   }
@@ -337,9 +382,11 @@ export function resolveTargetNamespace(
     const [ns] = namespacesWithMigrations;
     return assertDefined(ns, "namespace with migrations missing").namespace;
   }
-  throw new Error(
-    `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,
-  );
+  throw CLIError({
+    code: "MIGRATION_NAMESPACE_REQUIRED",
+    message: `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,
+    command: "tailordb migration script",
+  });
 }
 
 export const scriptCommand = defineAppCommand({

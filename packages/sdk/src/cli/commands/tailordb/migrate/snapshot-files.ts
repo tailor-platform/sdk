@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { z } from "zod";
+import { CLIError } from "#/cli/shared/errors";
 import { type MigrationDiff } from "./diff-calculator";
 import { formatMigrationNumber } from "./migration-number";
 import {
@@ -120,12 +121,18 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
   try {
     raw = JSON.parse(content);
   } catch (error) {
-    throw new Error(`Invalid schema snapshot at ${filePath}: ${String(error)}`, { cause: error });
+    throw CLIError({
+      code: "MIGRATION_FILE_INVALID",
+      message: `Invalid schema snapshot at ${filePath}: ${String(error)}`,
+      cause: error,
+    });
   }
   assertSupportedMigrationFileVersion(filePath, raw);
   const result = schemaSnapshotSchema.safeParse(normalizeLegacyTablesKey(raw));
   if (!result.success) {
-    throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`, {
+    throw CLIError({
+      code: "MIGRATION_FILE_INVALID",
+      message: `Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`,
       cause: result.error,
     });
   }
@@ -144,14 +151,20 @@ export function loadDiff(filePath: string): MigrationDiff {
   try {
     raw = JSON.parse(content);
   } catch (error) {
-    throw new Error(`Invalid migration diff at ${filePath}: ${String(error)}`, { cause: error });
+    throw CLIError({
+      code: "MIGRATION_FILE_INVALID",
+      message: `Invalid migration diff at ${filePath}: ${String(error)}`,
+      cause: error,
+    });
   }
   assertSupportedMigrationFileVersion(filePath, raw);
   const result = migrationDiffSchema.safeParse(
     normalizeLegacyFieldNames(normalizeLegacyChangeKinds(raw)),
   );
   if (!result.success) {
-    throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`, {
+    throw CLIError({
+      code: "MIGRATION_FILE_INVALID",
+      message: `Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`,
       cause: result.error,
     });
   }
@@ -268,9 +281,10 @@ export function assertMigrationNumberExists(
 ): number {
   const files = getMigrationFiles(migrationsDir);
   if (migrationNumber !== 0 && !files.some((f) => f.number === migrationNumber)) {
-    throw new Error(
-      `Migration ${formatMigrationNumber(migrationNumber)} does not exist in working tree (latest is ${formatMigrationNumber(latestMigrationNumber(files))}).`,
-    );
+    throw CLIError({
+      code: "MIGRATION_NOT_FOUND",
+      message: `Migration ${formatMigrationNumber(migrationNumber)} does not exist in working tree (latest is ${formatMigrationNumber(latestMigrationNumber(files))}).`,
+    });
   }
   return latestMigrationNumber(files);
 }

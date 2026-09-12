@@ -8,6 +8,7 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { fetchAll, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -89,10 +90,12 @@ async function fetchRemoteTypes(
       return [tailordbTypes, nextPageToken];
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(
-          `Cannot sync: TailorDB namespace "${namespace}" has not been deployed yet.`,
-          { cause: error },
-        );
+        throw CLIError({
+          code: "MIGRATION_NAMESPACE_NOT_DEPLOYED",
+          message: `Cannot sync: TailorDB namespace "${namespace}" has not been deployed yet.`,
+          suggestion: "Deploy the namespace before syncing its migration history.",
+          cause: error,
+        });
       }
       throw error;
     }
@@ -131,7 +134,10 @@ async function assertMigrationsReproduceLocalTypes(
     (s) => s.namespace === target.namespace,
   );
   if (!tailordbService) {
-    throw new Error(`No TailorDB service found for namespace "${target.namespace}"`);
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `No TailorDB service found for namespace "${target.namespace}"`,
+    });
   }
   // Load every namespace (not just the target): plugin executors are
   // registered while tables load, and may trigger on the target's tables.
@@ -201,9 +207,12 @@ async function assertMigrationsReproduceLocalTypes(
     { mode: "plain" },
   );
   logger.newline();
-  throw new Error(
-    "Refusing to sync: the migration history must reproduce the current local schema before it can be applied to the remote.",
-  );
+  throw CLIError({
+    code: "MIGRATION_HISTORY_MISMATCH",
+    message:
+      "Refusing to sync: the migration history must reproduce the current local schema before it can be applied to the remote.",
+    suggestion: "Generate a migration for the pending schema changes first.",
+  });
 }
 
 /**
@@ -238,9 +247,11 @@ async function sync(options: SyncOptions): Promise<void> {
 
   const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, targetVersion);
   if (!snapshot) {
-    throw new Error(
-      `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      message: `No initial schema snapshot found in ${target.migrationsDir}. Expected 0000/schema.json.`,
+      suggestion: "Create the initial schema snapshot first.",
+    });
   }
 
   const manifestOptions = await assertMigrationsReproduceLocalTypes(loaded, target);
@@ -353,7 +364,7 @@ async function sync(options: SyncOptions): Promise<void> {
   const manifestFor = (tableName: string) => {
     const manifest = manifests.get(tableName);
     if (!manifest) {
-      throw new Error(
+      throw internalError(
         `Internal error: no manifest generated for table "${tableName}". No changes were applied.`,
       );
     }

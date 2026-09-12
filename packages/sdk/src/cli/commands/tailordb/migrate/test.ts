@@ -3,6 +3,7 @@ import { z } from "zod";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
@@ -35,15 +36,26 @@ export async function runMigrationTest(
   dependencies: MigrationTestDependencies = createMigrationTestDependencies(),
 ): Promise<MigrationTestResult> {
   if (options.targetWorkspaceId && !options.yes) {
-    throw new Error("--target-workspace-id requires --yes because the target may be overwritten.");
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--target-workspace-id requires --yes because the target may be overwritten.",
+      command: "tailordb migration test",
+    });
   }
   if (options.keep && options.targetWorkspaceId) {
-    throw new Error(
-      "--keep applies only to automatically created workspaces; a designated target is always retained.",
-    );
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message:
+        "--keep applies only to automatically created workspaces; a designated target is always retained.",
+      command: "tailordb migration test",
+    });
   }
   if (options.assertionNamespace && !options.assertionPath) {
-    throw new Error("--assert is required when --assert-namespace is provided.");
+    throw CLIError({
+      code: "MIGRATION_TEST_OPTIONS_INVALID",
+      message: "--assert is required when --assert-namespace is provided.",
+      command: "tailordb migration test",
+    });
   }
 
   const prepared = await dependencies.prepare(options);
@@ -106,10 +118,13 @@ export async function runMigrationTest(
       deleted = true;
     } catch (cleanupError) {
       if (!failed) {
-        throw new Error(
-          `Failed to delete temporary workspace ${workspace.id}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-          { cause: cleanupError },
-        );
+        throw CLIError({
+          code: "MIGRATION_TEST_WORKSPACE_CLEANUP_FAILED",
+          message: `Failed to delete temporary workspace ${workspace.id}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+          suggestion: "Delete the temporary workspace manually.",
+          next: { command: "tailor", args: ["workspace", "delete", workspace.id] },
+          cause: cleanupError,
+        });
       }
       logger.warn(
         `Failed to delete temporary workspace ${workspace.id}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,

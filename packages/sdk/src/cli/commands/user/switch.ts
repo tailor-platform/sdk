@@ -8,8 +8,8 @@ import {
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
-import ml from "#/utils/multiline";
 
 export const switchCommand = defineAppCommand({
   name: "switch",
@@ -26,24 +26,34 @@ export const switchCommand = defineAppCommand({
     const activeProfileName = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
     const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
     if (activeProfileName && !activeProfileEntry) {
-      throw new Error(`Profile "${activeProfileName}" not found`);
+      throw CLIError({
+        code: "PROFILE_NOT_FOUND",
+        message: `Profile "${activeProfileName}" not found`,
+      });
     }
     const platformConfig = activeProfileEntry
       ? platformConfigFromProfile(activeProfileEntry)
       : undefined;
 
     if (args.user.includes("|")) {
-      throw new Error(
-        `User "${args.user}" looks like a platform-scoped token key. Pass the user name without the platform URL and select the platform with TAILOR_PLATFORM_URL or a profile.`,
-      );
+      throw CLIError({
+        code: "USER_NAME_INVALID",
+        message: `User "${args.user}" looks like a platform-scoped token key. Pass the user name without the platform URL and select the platform with TAILOR_PLATFORM_URL or a profile.`,
+        command: "user switch",
+      });
     }
 
     const user = resolveConfigUser(config, args.user, platformConfig);
     if (!user) {
-      throw new Error(ml`
-        User "${args.user}" not found.
-        Please login first using 'tailor login' command to register this user.
-      `);
+      throw CLIError({
+        code: "USER_NOT_FOUND",
+        message: `User "${args.user}" not found.`,
+        suggestion: "Log in first to register this user.",
+        next: {
+          command: "tailor",
+          args: activeProfileName ? ["login", "--profile", activeProfileName] : ["login"],
+        },
+      });
     }
 
     if (activeProfileEntry) {

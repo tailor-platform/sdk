@@ -571,7 +571,10 @@ describe("tailordb migration generate nested member rename preflight", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("Possible rename(s) detected");
     expect(String(result.error)).toContain("User.address.zip → zipCode?");
-    expect(String(result.error)).toContain('"Table.field.oldMember:newMember"');
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      suggestion: expect.stringContaining('"Table.field.oldMember:newMember"'),
+    });
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
@@ -719,7 +722,10 @@ describe("tailordb migration generate type rename preflight", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("Possible rename(s) detected");
     expect(String(result.error)).toContain("- User → Person? (namespace: tailordb)");
-    expect(String(result.error)).toContain('--rename "OldTable:NewTable"');
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      suggestion: expect.stringContaining('--rename "OldTable:NewTable"'),
+    });
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
@@ -867,8 +873,11 @@ describe("tailordb migration generate --data-only", () => {
     const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toContain("schema changes");
-    expect(String(result.error)).toContain("--data-only");
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_SCHEMA_CHANGES_PENDING",
+      message: expect.stringContaining("schema changes"),
+      suggestion: expect.stringContaining("--data-only"),
+    });
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
@@ -883,7 +892,10 @@ describe("tailordb migration generate --data-only", () => {
     const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toContain("initial snapshot");
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      suggestion: expect.stringContaining("initial schema snapshot"),
+    });
     expect(fs.existsSync(path.join(migrationsDir, "0000"))).toBe(false);
   });
 

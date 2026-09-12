@@ -18,6 +18,7 @@ import {
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
@@ -53,7 +54,11 @@ export type ValidatedCreateWorkspaceOptions = z.output<typeof createWorkspaceOpt
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
   if (!availableRegions.regions.includes(region)) {
-    throw new Error(`Region must be one of: ${availableRegions.regions.join(", ")}.`);
+    throw CLIError({
+      code: "WORKSPACE_REGION_INVALID",
+      message: `Region must be one of: ${availableRegions.regions.join(", ")}.`,
+      command: "workspace create",
+    });
   }
 };
 
@@ -184,7 +189,10 @@ export const createCommand = defineAppCommand({
     if (profileName) {
       const config = await readPlatformConfig();
       if (config.profiles[profileName]) {
-        throw new Error(`Profile "${profileName}" already exists.`);
+        throw CLIError({
+          code: "PROFILE_EXISTS",
+          message: `Profile "${profileName}" already exists.`,
+        });
       }
 
       const activeProfileName = args.profile;
@@ -194,16 +202,25 @@ export const createCommand = defineAppCommand({
         : undefined;
       const profileUser = args["profile-user"] || activeProfileEntry?.user || config.current_user;
       if (!profileUser) {
-        throw new Error(
-          "Current user not found. Please login or specify --profile-user to create a profile.",
-        );
+        throw CLIError({
+          code: "USER_NOT_SET",
+          message: "Current user not found.",
+          suggestion: "Log in or specify --profile-user to create a profile.",
+          command: "workspace create",
+        });
       }
 
       const resolvedProfileUser = resolveConfigUser(config, profileUser, platformConfig);
       if (!resolvedProfileUser) {
-        throw new Error(
-          `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor login' command.`,
-        );
+        throw CLIError({
+          code: "USER_NOT_FOUND",
+          message: `User "${profileUser}" not found.`,
+          suggestion: "Verify the user name and log in.",
+          next: {
+            command: "tailor",
+            args: activeProfileName ? ["login", "--profile", activeProfileName] : ["login"],
+          },
+        });
       }
       profileSetup = {
         name: profileName,

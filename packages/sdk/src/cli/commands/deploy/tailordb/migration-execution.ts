@@ -15,6 +15,7 @@ import {
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type {
   FieldDiffChange,
@@ -159,9 +160,10 @@ export const migrationSnapshotCache = {
         migration.number,
       );
       if (!reconstructed) {
-        throw new Error(
-          `Cannot reconstruct snapshot for ${migration.namespace} migration ${migration.number}: no migrations found in ${migration.migrationsDir}`,
-        );
+        throw CLIError({
+          code: "MIGRATION_HISTORY_INVALID",
+          message: `Cannot reconstruct snapshot for ${migration.namespace} migration ${migration.number}: no migrations found in ${migration.migrationsDir}`,
+        });
       }
       snapshot = reconstructed;
       this.cache.set(key, snapshot);
@@ -586,7 +588,7 @@ async function rewriteRestrictedTables(
       await client.updateTailorDBType({ workspaceId, namespaceName, tailordbType });
     } catch (error) {
       if (!continueOnError) throw error;
-      firstError ??= error instanceof Error ? error : new Error(String(error), { cause: error });
+      firstError ??= error instanceof Error ? error : toError(error);
     }
   }
   if (firstError !== undefined) throw firstError;
@@ -709,7 +711,7 @@ export async function restoreMigrationRestrictions(
         continueOnError: true,
       });
     } catch (error) {
-      firstError ??= error instanceof Error ? error : new Error(String(error), { cause: error });
+      firstError ??= error instanceof Error ? error : toError(error);
     }
   }
   if (firstError !== undefined) throw firstError;

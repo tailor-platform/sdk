@@ -52,7 +52,11 @@ const ageArg = z.string().regex(agePattern, {
 export function parseAge(age: string): number {
   const match = age.match(agePattern);
   if (!match?.[1] || !match[2]) {
-    throw new Error(`invalid age format: ${age}`);
+    throw CLIError({
+      code: "PRUNE_AGE_INVALID",
+      message: `invalid age format: ${age}`,
+      command: "workspace prune",
+    });
   }
   const unit = match[2] as keyof typeof ageUnitToMs;
   return parseInt(match[1], 10) * ageUnitToMs[unit];
