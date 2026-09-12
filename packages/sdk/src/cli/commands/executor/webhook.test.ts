@@ -30,6 +30,7 @@ describe("executor webhook list", () => {
   });
 
   test("keeps the run's profile on the trigger hint", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
     using _stdout = captureStdout();
     using info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
 
@@ -37,11 +38,12 @@ describe("executor webhook list", () => {
 
     expect(result.success).toBe(true);
     expect(info).toHaveBeenCalledWith(
-      `To test a webhook, run: tailor executor trigger <name> -d '{"key":"value"}' --profile=dev`,
+      `To test a webhook, run: tailor executor trigger '<name>' -d '{"key":"value"}' --profile=dev`,
     );
   });
 
-  test("leaves the trigger hint bare when the run selected nothing", async () => {
+  test("leaves the trigger hint without a profile when the run selected none", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
     using _stdout = captureStdout();
     using info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
 
@@ -49,7 +51,28 @@ describe("executor webhook list", () => {
 
     expect(result.success).toBe(true);
     expect(info).toHaveBeenCalledWith(
-      `To test a webhook, run: tailor executor trigger <name> -d '{"key":"value"}'`,
+      `To test a webhook, run: tailor executor trigger '<name>' -d '{"key":"value"}'`,
+    );
+  });
+
+  test("renders the whole hint as argv when the Windows shell cannot keep the profile literal", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    using _stdout = captureStdout();
+    using info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+
+    const result = await runCommand(webhookCommand, ["list", "--profile", "dev$1"]);
+
+    expect(result.success).toBe(true);
+    expect(info).toHaveBeenCalledWith(
+      `To test a webhook, run: argv ${JSON.stringify([
+        "tailor",
+        "executor",
+        "trigger",
+        "<name>",
+        "-d",
+        '{"key":"value"}',
+        "--profile=dev$1",
+      ])}`,
     );
   });
 });

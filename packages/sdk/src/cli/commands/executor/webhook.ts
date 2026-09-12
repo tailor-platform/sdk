@@ -91,11 +91,15 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (!jsonOutput) {
-      const context = recoveryContextArgs({
-        profile: args.profile,
-        workspaceId: args["workspace-id"],
-      });
-      const trigger = `tailor executor trigger <name> -d '{"key":"value"}'${context.length > 0 ? ` ${formatCopyableCommand(context)}` : ""}`;
+      const trigger = formatCopyableCommand([
+        "tailor",
+        "executor",
+        "trigger",
+        "<name>",
+        "-d",
+        '{"key":"value"}',
+        ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+      ]);
       logger.info(`To test a webhook, run: ${trigger}`);
     }
   },
