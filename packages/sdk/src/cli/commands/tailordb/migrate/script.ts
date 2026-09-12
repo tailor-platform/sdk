@@ -177,13 +177,17 @@ export async function addMigrationScriptFiles(
   }
 
   const testPath = getMigrationFilePath(migrationsDir, migrationNumber, "test");
-  if (withTest && fs.existsSync(testPath)) {
-    throw new Error(`Migration test already exists at ${testPath}.`);
-  }
   const pgliteTestPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteTest");
-  const writePgliteTest = withTest && pgliteAvailable;
-  if (writePgliteTest && fs.existsSync(pgliteTestPath)) {
-    throw new Error(`Migration test already exists at ${pgliteTestPath}.`);
+  const pgliteSchemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
+  // Existing tests are kept; only the requested ones that are missing are added.
+  const writeUnitTest = withTest && !fs.existsSync(testPath);
+  const pgliteTestRequested = withTest && pgliteAvailable && !fs.existsSync(pgliteTestPath);
+  if (withTest && !writeUnitTest && !pgliteTestRequested) {
+    throw new Error(
+      pgliteAvailable
+        ? `Migration tests already exist at ${testPath} and ${pgliteTestPath}.`
+        : `Migration test already exists at ${testPath}.`,
+    );
   }
 
   if (migrateExists && withTest) {
@@ -196,23 +200,24 @@ export async function addMigrationScriptFiles(
     }
   }
 
-  const loadPreviousSnapshot = () => {
-    // Reconstruct the schema state immediately before this migration so that
-    // db.ts has Kysely types for the previous shape of the data.
-    const previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
-    if (!previousSnapshot) {
-      throw new Error(
-        `Could not reconstruct previous schema for migration ${label}. Make sure migration ${INITIAL_SCHEMA_NUMBER} exists.`,
-      );
-    }
-    return previousSnapshot;
-  };
+  // The schema state immediately before this migration types db.ts and shapes
+  // db.pglite.ts. Resolved before anything is written so a broken history
+  // leaves no half-created migration behind.
+  const needsPreviousSnapshot = !migrateExists || (withTest && !fs.existsSync(pgliteSchemaPath));
+  const previousSnapshot = needsPreviousSnapshot
+    ? reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1)
+    : null;
+  if (needsPreviousSnapshot && !previousSnapshot) {
+    throw new Error(
+      `Could not reconstruct previous schema for migration ${label}. Make sure migration ${INITIAL_SCHEMA_NUMBER} exists.`,
+    );
+  }
 
-  if (!migrateExists) {
+  if (!migrateExists && previousSnapshot) {
     await fsPromises.writeFile(migratePath, generateMigrationScript(diff));
     result.migratePath = migratePath;
     const typeFiles = await writeMigrationTypeFiles({
-      previousSnapshot: loadPreviousSnapshot(),
+      previousSnapshot,
       diff,
       migrationsDir,
       migrationNumber,
@@ -221,29 +226,22 @@ export async function addMigrationScriptFiles(
     result.pgliteSchemaPath = typeFiles.pgliteSchemaPath;
     result.pgliteSchemaError = typeFiles.pgliteSchemaError;
     clearMigrationScriptSkipped(diffPath);
-  } else if (withTest) {
+  } else if (withTest && previousSnapshot) {
     // A script created before db.pglite.ts existed gets the schema its tests need.
-    const pgliteSchemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
-    if (!fs.existsSync(pgliteSchemaPath)) {
-      Object.assign(
-        result,
-        await tryWritePgliteSchemaFile(
-          loadPreviousSnapshot(),
-          diff,
-          migrationsDir,
-          migrationNumber,
-        ),
-      );
-    }
+    Object.assign(
+      result,
+      await tryWritePgliteSchemaFile(previousSnapshot, diff, migrationsDir, migrationNumber),
+    );
   }
 
-  if (withTest) {
+  if (writeUnitTest) {
     await fsPromises.writeFile(testPath, generateMigrationTestScript(diff));
     result.testPath = testPath;
-    if (writePgliteTest) {
-      await fsPromises.writeFile(pgliteTestPath, generateMigrationPgliteTestScript(diff));
-      result.pgliteTestPath = pgliteTestPath;
-    }
+  }
+  // The PGlite scaffold imports ./db.pglite, so it is only written when that file exists.
+  if (pgliteTestRequested && fs.existsSync(pgliteSchemaPath)) {
+    await fsPromises.writeFile(pgliteTestPath, generateMigrationPgliteTestScript(diff));
+    result.pgliteTestPath = pgliteTestPath;
   }
 
   return result;
@@ -340,9 +338,10 @@ async function script(options: ScriptOptions): Promise<void> {
     }
   }
 
+  const testCount = [result.testPath, result.pgliteTestPath].filter(Boolean).length;
   const added = [
     result.migratePath && "migration script",
-    result.testPath && (result.pgliteTestPath ? "migration tests" : "migration test"),
+    testCount > 0 && (testCount > 1 ? "migration tests" : "migration test"),
   ]
     .filter(Boolean)
     .join(" and ");
@@ -368,6 +367,8 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.info(
       "  Install @electric-sql/pglite as a devDependency to also scaffold a PGlite test (migrate.pglite.test.ts).",
     );
+  } else if (result.testPath && result.pgliteSchemaError) {
+    logger.info("  PGlite test skipped: it needs the db.pglite.ts that could not be generated.");
   }
 
   logger.newline();
@@ -424,7 +425,7 @@ export const scriptCommand = defineAppCommand({
   name: "script",
   description:
     "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
-  notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment, and \`--with-test\` adds only the tests (writing \`db.pglite.ts\` if it is missing). \`migrate.pglite.test.ts\` is scaffolded only when \`@electric-sql/pglite\` is installed in the project.`,
+  notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment, and \`--with-test\` adds only the tests that do not exist yet (writing \`db.pglite.ts\` if it is missing). \`migrate.pglite.test.ts\` is scaffolded only when \`@electric-sql/pglite\` is installed in the project.`,
   args: z.strictObject({
     ...configArg,
     number: arg(z.string(), {

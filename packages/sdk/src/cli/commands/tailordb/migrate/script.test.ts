@@ -151,9 +151,30 @@ describe("addMigrationScriptFiles", () => {
     expect(fs.existsSync(result.pgliteSchemaPath!)).toBe(true);
   });
 
-  test("throws when migrate.pglite.test.ts already exists", async () => {
+  test("adds only the missing PGlite test when migrate.test.ts already exists", async () => {
     setupMigration();
-    fs.writeFileSync(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME), "// existing test");
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
+    fs.writeFileSync(migrationFile(MIGRATE_TEST_FILE_NAME), "// existing unit test");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      pgliteAvailable: true,
+    });
+
+    expect(result.testPath).toBeUndefined();
+    expect(result.pgliteTestPath).toBe(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME));
+    expect(fs.readFileSync(migrationFile(MIGRATE_TEST_FILE_NAME), "utf-8")).toBe(
+      "// existing unit test",
+    );
+  });
+
+  test("throws when every requested test already exists", async () => {
+    setupMigration();
+    fs.writeFileSync(migrationFile(MIGRATE_TEST_FILE_NAME), "// existing unit test");
+    fs.writeFileSync(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME), "// existing pglite test");
 
     await expect(
       addMigrationScriptFiles({
@@ -162,7 +183,61 @@ describe("addMigrationScriptFiles", () => {
         withTest: true,
         pgliteAvailable: true,
       }),
-    ).rejects.toThrow(/already exists/);
+    ).rejects.toThrow(/already exist/);
+  });
+
+  test("skips the PGlite test when db.pglite.ts could not be generated", async () => {
+    writeInitialSchema(testDir, {
+      User: {
+        ...snapshotType("User"),
+        fields: {
+          ...snapshotType("User").fields,
+          code: { type: "string", required: true, serial: { start: 1, format: "%o" } },
+        },
+      },
+    });
+    writeDiffFile(testDir, 1, createMockMigrationDiff());
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      pgliteAvailable: true,
+    });
+
+    expect(result.pgliteSchemaPath).toBeUndefined();
+    expect(result.pgliteSchemaError).toMatch(/"User"\."code"/);
+    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
+    expect(result.pgliteTestPath).toBeUndefined();
+    expect(fs.existsSync(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME))).toBe(false);
+  });
+
+  test("writes nothing when the previous schema cannot be reconstructed", async () => {
+    writeDiffFile(testDir, 1, createMockMigrationDiff());
+
+    await expect(
+      addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 }),
+    ).rejects.toThrow(/schema/);
+    expect(fs.existsSync(migrationFile(MIGRATE_FILE_NAME))).toBe(false);
+    expect(fs.existsSync(migrationFile(DB_TYPES_FILE_NAME))).toBe(false);
+  });
+
+  test("keeps an existing migrate.pglite.test.ts and adds the unit test", async () => {
+    setupMigration();
+    fs.writeFileSync(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME), "// existing pglite test");
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+      pgliteAvailable: true,
+    });
+
+    expect(result.testPath).toBe(migrationFile(MIGRATE_TEST_FILE_NAME));
+    expect(result.pgliteTestPath).toBeUndefined();
+    expect(fs.readFileSync(migrationFile(MIGRATE_PGLITE_TEST_FILE_NAME), "utf-8")).toBe(
+      "// existing pglite test",
+    );
   });
 
   test("creates migrate.test.ts alongside the script with withTest", async () => {

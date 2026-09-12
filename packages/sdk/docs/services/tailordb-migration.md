@@ -812,7 +812,7 @@ Scaffold a ready-to-fill test next to the script with:
 tailor tailordb migration script 0005 --with-test
 ```
 
-When `migrate.ts` already exists (the usual case for breaking changes, where `migration generate` creates it), the command adds only `migrate.test.ts`. Or write the test by hand:
+When `migrate.ts` already exists (the usual case for breaking changes, where `migration generate` creates it), the command adds only the tests that do not exist yet, plus a missing `db.pglite.ts`. Or write the test by hand:
 
 ```typescript
 // migrations/0005/migrate.test.ts

@@ -189,7 +189,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-When `migrate.ts` already exists, running the command clears a previously recorded `--no-script` acknowledgment, and `--with-test` adds only the tests (writing `db.pglite.ts` if it is missing). `migrate.pglite.test.ts` is scaffolded only when `@electric-sql/pglite` is installed in the project.
+When `migrate.ts` already exists, running the command clears a previously recorded `--no-script` acknowledgment, and `--with-test` adds only the tests that do not exist yet (writing `db.pglite.ts` if it is missing). `migrate.pglite.test.ts` is scaffolded only when `@electric-sql/pglite` is installed in the project.
 
 #### tailordb migration set
 
