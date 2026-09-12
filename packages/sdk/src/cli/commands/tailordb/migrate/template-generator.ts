@@ -726,8 +726,7 @@ function generateFieldTypeChangeScript(
 /**
  * Lines that derive the value the conversion writes into the temporary field.
  *
- * Wrapping a single value into an array needs no decision, so only a change of
- * the element type asks for review.
+ * Wrapping needs review when the element type changes or its accepted values narrow.
  * @param plan - Field change carried through a temporary field
  * @returns Script lines binding `convertedValue`
  */

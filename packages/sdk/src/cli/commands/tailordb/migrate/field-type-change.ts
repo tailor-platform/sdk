@@ -1,3 +1,4 @@
+import { DEFAULT_DECIMAL_SCALE } from "./snapshot-normalization";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
 /**
@@ -84,8 +85,8 @@ export function hasFieldShapeChange(
 /**
  * Whether a change turns a single value into an array whose elements accept
  * every stored value, which the generated conversion completes on its own by
- * wrapping each value. An enum that also drops values still needs the stored
- * value converted before it is wrapped.
+ * wrapping each value. Narrowing enum values or decimal scale still needs the
+ * stored value converted before it is wrapped.
  * @param before - Previous field configuration
  * @param after - Target field configuration
  * @returns Whether the element domain is unchanged and only the array-ness differs
@@ -95,6 +96,12 @@ export function isSingleValueToArrayChange(
   after: SnapshotFieldConfig,
 ): boolean {
   if (before.type !== after.type || before.array || !after.array) return false;
+  if (
+    before.type === "decimal" &&
+    (after.scale ?? DEFAULT_DECIMAL_SCALE) < (before.scale ?? DEFAULT_DECIMAL_SCALE)
+  ) {
+    return false;
+  }
   const afterValues = new Set((after.allowedValues ?? []).map((v) => v.value));
   return (before.allowedValues ?? []).every((v) => afterValues.has(v.value));
 }

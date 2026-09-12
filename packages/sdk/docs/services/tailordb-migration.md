@@ -472,6 +472,8 @@ Confirming writes two migrations:
 1. **The conversion.** Adds a temporary field (`priceMigrate`), converts each stored value into it, and clears and removes the original field. Edit the conversion expression before deploying: the generated `never` annotation fails your typecheck, and `tailordb migration validate` rejects the migration while the review marker is still there. When only the array-ness changes (`string` → `string[]`), the conversion stores each value as a one-element array and carries no review marker; when the element type changes as well (`integer` → `string[]`), you convert the element and the script wraps it.
 2. **The rename.** Renames the temporary field back to `price`. Its copy script is complete, but this migration also carries every other schema change the same run picked up, so review it as you would any generated migration.
 
+If converting to an array also reduces a decimal field's `scale` or removes enum values, the conversion keeps the review marker. Edit the element conversion to satisfy the target field before deploying.
+
 `tailor deploy` applies both. Because the conversion only touches rows whose original value is still set, a re-run resumes where it stopped rather than converting a row twice.
 
 The original field is removed in the first migration rather than the second, because the rename needs its name free. Your script can still read it while the conversion runs.

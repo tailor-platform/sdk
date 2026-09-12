@@ -102,6 +102,51 @@ describe("expand conversion script for a single value becoming an array", () => 
           })`);
   });
 
+  test.each([
+    { beforeScale: 6, afterScale: 2 },
+    { beforeScale: undefined, afterScale: 2 },
+    { beforeScale: 8, afterScale: undefined },
+    { beforeScale: 6, afterScale: 0 },
+  ])(
+    "keeps review for decimal array scale $beforeScale to $afterScale",
+    ({ beforeScale, afterScale }) => {
+      const script = expandScript([
+        {
+          ...arrayPlan,
+          before: snapshotField("decimal", { scale: beforeScale }),
+          after: snapshotField("decimal", { array: true, scale: afterScale }),
+        },
+      ]);
+
+      expect(script).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+      expect(script).toContain("const convertedValue: never = sourceValue;");
+      expect(script).toContain(`["priceMigrate"]: [convertedValue],`);
+    },
+  );
+
+  test.each([
+    { beforeScale: 2, afterScale: 6 },
+    { beforeScale: 6, afterScale: 6 },
+    { beforeScale: undefined, afterScale: 6 },
+    { beforeScale: 6, afterScale: undefined },
+    { beforeScale: undefined, afterScale: undefined },
+    { beforeScale: 0, afterScale: 0 },
+  ])(
+    "wraps decimal array scale $beforeScale to $afterScale without review",
+    ({ beforeScale, afterScale }) => {
+      const script = expandScript([
+        {
+          ...arrayPlan,
+          before: snapshotField("decimal", { scale: beforeScale }),
+          after: snapshotField("decimal", { array: true, scale: afterScale }),
+        },
+      ]);
+
+      expect(script).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+      expect(script).toContain("const convertedValue = [sourceValue];");
+    },
+  );
+
   test("keeps the review marker when the array also drops enum values", () => {
     const script = expandScript([
       {
