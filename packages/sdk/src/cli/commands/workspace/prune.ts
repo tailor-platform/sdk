@@ -518,17 +518,6 @@ export const pruneCommand = defineAppCommand({
 
     for (const workspace of result.candidates) {
       const displayName = workspaceDisplayName(workspace);
-      if (args.expired) {
-        const recheck = await fetchWorkspaceExpiry(client, workspace.id, new Date());
-        const state = "error" in recheck ? "unreadable" : recheck.expiry.state;
-        if (state !== "expired") {
-          result.skipped.expiryChanged.push(displayName);
-          logger.info(
-            `Skipped ${displayName} (${workspace.id}): its recorded expiry no longer selects it.`,
-          );
-          continue;
-        }
-      }
       try {
         // The confirmation prompt leaves a window in which the workspace can change, so the
         // criteria that selected it are re-checked against a fresh read before it is deleted.
@@ -538,6 +527,24 @@ export const pruneCommand = defineAppCommand({
           result.skipped.changed.push(workspace.name);
           logger.warn(`Keeping ${displayName} (${workspace.id}): ${staleReason}.`);
           continue;
+        }
+        if (args.expired) {
+          const recheck = await fetchWorkspaceExpiry(client, workspace.id, new Date());
+          if (
+            "error" in recheck &&
+            recheck.error instanceof ConnectError &&
+            recheck.error.code === Code.NotFound
+          ) {
+            throw recheck.error;
+          }
+          const state = "error" in recheck ? "unreadable" : recheck.expiry.state;
+          if (state !== "expired") {
+            result.skipped.expiryChanged.push(displayName);
+            logger.info(
+              `Skipped ${displayName} (${workspace.id}): its recorded expiry no longer selects it.`,
+            );
+            continue;
+          }
         }
         await client.deleteWorkspace({ workspaceId: workspace.id });
         result.deleted.push(workspace);

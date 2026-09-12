@@ -990,6 +990,77 @@ describe("workspace prune command", () => {
       expect(client.deleteWorkspace).not.toHaveBeenCalled();
     });
 
+    test("keeps a workspace renewed while its details are being re-read", async () => {
+      const target = workspace("ws-renewed-during-read");
+      const expiries = { [target.id]: hoursAgo(1) };
+      const client = stubClient([target], expiries);
+      client.getWorkspace.mockImplementation(async () => {
+        expiries[target.id] = new Date(NOW.getTime() + 86_400_000);
+        return { workspace: target };
+      });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--organization-root",
+        ORG_A,
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.getWorkspace).toHaveBeenCalledExactlyOnceWith({ workspaceId: target.id });
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
+      expect(writePlatformConfig).not.toHaveBeenCalled();
+    });
+
+    test.each(["workspace", "metadata"])(
+      "removes stale profiles when the final %s read reports NotFound",
+      async (missingAt) => {
+        const target = workspace("ws-disappeared");
+        const client = stubClient([target], { [target.id]: hoursAgo(1) });
+        vi.mocked(readPlatformConfig).mockResolvedValue({
+          profiles: {
+            stale: { workspace_id: target.id },
+            live: { workspace_id: "id-other" },
+          },
+        } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>);
+        vi.mocked(prompt.confirm).mockImplementation(async () => {
+          const missing = new ConnectError("workspace not found", Code.NotFound);
+          client.getMetadata.mockRejectedValue(missing);
+          if (missingAt === "workspace") client.getWorkspace.mockRejectedValue(missing);
+          return true;
+        });
+
+        const result = await runCommand(pruneCommand, ["--expired", "--organization-root", ORG_A]);
+
+        expect(result.success).toBe(true);
+        expect(client.deleteWorkspace).not.toHaveBeenCalled();
+        expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("already deleted"));
+        expect(writePlatformConfig).toHaveBeenCalledExactlyOnceWith({
+          profiles: { live: { workspace_id: "id-other" } },
+        });
+      },
+    );
+
+    test("keeps the workspace and its profiles when the final expiry read is denied", async () => {
+      const target = workspace("ws-expiry-denied");
+      const client = stubClient([target], { [target.id]: hoursAgo(1) });
+      client.getWorkspace.mockImplementation(async () => {
+        client.getMetadata.mockRejectedValue(new ConnectError("denied", Code.PermissionDenied));
+        return { workspace: target };
+      });
+
+      const result = await runCommand(pruneCommand, [
+        "--expired",
+        "--organization-root",
+        ORG_A,
+        "--yes",
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(client.deleteWorkspace).not.toHaveBeenCalled();
+      expect(writePlatformConfig).not.toHaveBeenCalled();
+    });
+
     test("keeps a workspace that records no expiry", async () => {
       const unlabelled = workspace("ws-unlabelled", { createdAt: hoursAgo(999) });
       const client = stubClient([unlabelled]);
