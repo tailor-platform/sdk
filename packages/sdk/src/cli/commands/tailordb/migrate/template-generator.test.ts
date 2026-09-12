@@ -8,7 +8,9 @@ import {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
+  MIGRATE_PGLITE_TEST_FILE_NAME,
   DB_TYPES_FILE_NAME,
+  DB_PGLITE_SCHEMA_FILE_NAME,
   compareSnapshots,
   getMigrationDirPath,
   normalizeSchemaSnapshot,
@@ -17,6 +19,7 @@ import {
 import {
   generateSchemaFile,
   generateDiffFiles,
+  generateMigrationPgliteTestScript,
   generateMigrationTestScript,
   migrationScriptExists,
   getMigrationScriptPath,
@@ -35,6 +38,9 @@ function getTypeScriptDiagnostics(
     paths: {
       "@tailor-platform/sdk": [path.join(packageRoot, "src/configure/index.ts")],
       "@tailor-platform/sdk/kysely": [path.join(packageRoot, "src/kysely/index.ts")],
+      "@tailor-platform/sdk/vitest": [path.join(packageRoot, "src/vitest/index.ts")],
+      "@electric-sql/pglite": [path.join(packageRoot, "node_modules/@electric-sql/pglite")],
+      vitest: [path.join(packageRoot, "node_modules/vitest")],
     },
     skipLibCheck: true,
     strict: true,
@@ -209,7 +215,36 @@ describe("template-generator", () => {
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
       expect(dbTypesContent).toContain("Transaction");
       expect(dbTypesContent).toContain("User");
+
+      expect(result.pgliteSchemaFilePath).toBe(
+        path.join(tempDir, "0001", DB_PGLITE_SCHEMA_FILE_NAME),
+      );
+      const schemaContent = await fs.readFile(result.pgliteSchemaFilePath!, "utf-8");
+      expect(schemaContent).toContain('CREATE TABLE IF NOT EXISTS "User" (');
+      expect(schemaContent).toContain('"email" text');
+      expect(schemaContent).not.toContain('"email" text NOT NULL');
     });
+
+    test("compiles the PGlite test scaffold against the generated files", async () => {
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_added",
+            tableName: "User",
+            fieldName: "email",
+            after: { type: "string", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+      await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
+      const testPath = path.join(tempDir, "0001", MIGRATE_PGLITE_TEST_FILE_NAME);
+      await fs.writeFile(testPath, generateMigrationPgliteTestScript(diff));
+
+      // The scaffold pulls in the vitest and PGlite typings, which takes seconds on CI.
+      expect(getTypeScriptDiagnostics(testPath)).toEqual([]);
+    }, 60_000);
 
     test("should generate an unconditional batched copy script for field renames", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
@@ -1466,6 +1501,34 @@ describe("template-generator", () => {
       await expect(generateDiffFiles(diff, tempDir, 1, previousSnapshot)).rejects.toThrow(
         /Migration file already exists/,
       );
+    });
+  });
+
+  describe("generateMigrationPgliteTestScript", () => {
+    test("wires PGlite, the generated schema, and the staging type together", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff());
+
+      expect(script).toContain('import { PGlite } from "@electric-sql/pglite"');
+      expect(script).toContain(
+        'import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest"',
+      );
+      expect(script).toContain('import type { Database } from "./db"');
+      expect(script).toContain('import { pgliteSchema } from "./db.pglite"');
+      expect(script).toContain('import { main } from "./migrate"');
+      expect(script).toContain("pglite.exec(pgliteSchema.tailordb)");
+      expect(script).toContain("}, 60_000);");
+      expect(script).toContain(
+        "await expect(db.transaction().execute((trx) => main(trx))).resolves.toBeUndefined()",
+      );
+      expect(script).toContain('describe("tailordb migration (PGlite)"');
+    });
+
+    test("quotes a namespace that is not an identifier", () => {
+      const script = generateMigrationPgliteTestScript(
+        createMockMigrationDiff({ namespace: "main-db" }),
+      );
+
+      expect(script).toContain('pglite.exec(pgliteSchema["main-db"])');
     });
   });
 

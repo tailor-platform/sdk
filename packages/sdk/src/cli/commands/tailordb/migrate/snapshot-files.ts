@@ -35,6 +35,10 @@ export const MIGRATE_FILE_NAME = "migrate.ts";
 export const MIGRATE_TEST_FILE_NAME = "migrate.test.ts";
 /** File name for generated DB type definitions. */
 export const DB_TYPES_FILE_NAME = "db.ts";
+/** File name for the generated PGlite schema script module. */
+export const DB_PGLITE_SCHEMA_FILE_NAME = "db.pglite.ts";
+/** File name for the migration script PGlite test. */
+export const MIGRATE_PGLITE_TEST_FILE_NAME = "migrate.pglite.test.ts";
 
 /**
  * Pattern for validating migration number format (4-digit sequential number)
@@ -48,7 +52,14 @@ export const MAX_MIGRATION_NUMBER = 9999;
 /**
  * Migration file type
  */
-export type MigrationFileType = "schema" | "diff" | "migrate" | "test" | "db";
+export type MigrationFileType =
+  | "schema"
+  | "diff"
+  | "migrate"
+  | "test"
+  | "db"
+  | "pgliteSchema"
+  | "pgliteTest";
 
 // ============================================================================
 // Migration Number Helpers
@@ -76,6 +87,8 @@ export const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
   migrate: MIGRATE_FILE_NAME,
   test: MIGRATE_TEST_FILE_NAME,
   db: DB_TYPES_FILE_NAME,
+  pgliteSchema: DB_PGLITE_SCHEMA_FILE_NAME,
+  pgliteTest: MIGRATE_PGLITE_TEST_FILE_NAME,
 };
 
 /**

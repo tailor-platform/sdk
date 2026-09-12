@@ -1,43 +1,17 @@
 import { PGlite } from "@electric-sql/pglite";
-import { sql } from "@tailor-platform/sdk/kysely";
 import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { pgliteSchema } from "./db.pglite";
 import { main } from "./migrate";
 import type { Database } from "./db";
 
-const OTHER_TABLES = [
-  "Customer",
-  "Invoice",
-  "NestedProfile",
-  "PurchaseOrder",
-  "SalesOrder",
-  "Supplier",
-  "User",
-  "UserSetting",
-] as const;
+const pglite = new PGlite();
+const db = createKyselyPGlite<Unmigrated<Database>>(pglite);
 
-const db = createKyselyPGlite<Unmigrated<Database>>(new PGlite());
-
+// PGlite loads Postgres on first use, which can take longer than the default hook timeout.
 beforeAll(async () => {
-  await sql`
-    CREATE TABLE "UserLog" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      "userID" uuid NOT NULL,
-      "message" text NOT NULL,
-      "createdAt" timestamptz NOT NULL DEFAULT now(),
-      "updatedAt" timestamptz
-    )
-  `.execute(db);
-  for (const table of OTHER_TABLES) {
-    await sql`
-      CREATE TABLE ${sql.table(table)} (
-        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "createdAt" timestamptz NOT NULL DEFAULT now(),
-        "updatedAt" timestamptz
-      )
-    `.execute(db);
-  }
-});
+  await pglite.exec(pgliteSchema.tailordb);
+}, 60_000);
 
 afterAll(async () => {
   await db.destroy();

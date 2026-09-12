@@ -6,10 +6,11 @@
  * - XXXX/diff.json - Schema diff (subsequent migrations 0001+)
  * - XXXX/migrate.ts - Data migration script (when breaking changes exist)
  * - XXXX/db.ts - Generated types for migration script
+ * - XXXX/db.pglite.ts - PGlite schema script for testing the migration script
  */
 
 import * as fs from "node:fs/promises";
-import { writeDbTypesFile } from "./db-types-generator";
+import { writeMigrationTypeFiles } from "./pglite-schema-generator";
 import { isBreakingForeignKeyRetarget } from "./rename-detection";
 import {
   DEFAULT_DECIMAL_SCALE,
@@ -64,6 +65,10 @@ interface GenerateDiffResult {
   diffFilePath: string;
   migrateFilePath?: string;
   dbTypesFilePath?: string;
+  /** Written with db.ts unless the schema cannot be expressed as DDL; see `pgliteSchemaError`. */
+  pgliteSchemaFilePath?: string;
+  /** Why db.pglite.ts was skipped */
+  pgliteSchemaError?: string;
   migrationNumber: number;
 }
 
@@ -122,6 +127,7 @@ export async function generateDiffFiles(
   const diffFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
   const migrateFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   const dbTypesFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
+  const pgliteSchemaFilePath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
 
   const writeScript = diff.requiresMigrationScript;
 
@@ -130,6 +136,7 @@ export async function generateDiffFiles(
   if (writeScript) {
     await ensureFileNotExists(migrateFilePath);
     await ensureFileNotExists(dbTypesFilePath);
+    await ensureFileNotExists(pgliteSchemaFilePath);
   }
 
   // Add description if provided
@@ -151,14 +158,16 @@ export async function generateDiffFiles(
     // Generate db.ts with types based on the PREVIOUS schema state
     // (the state before this migration runs)
     // Pass diff to generate ColumnType for optional->required fields
-    await writeDbTypesFile(
+    const typeFiles = await writeMigrationTypeFiles({
       previousSnapshot,
+      diff: diffWithDescription,
       migrationsDir,
       migrationNumber,
-      diffWithDescription,
       expandPlans,
-    );
-    result.dbTypesFilePath = dbTypesFilePath;
+    });
+    result.dbTypesFilePath = typeFiles.dbTypesPath;
+    result.pgliteSchemaFilePath = typeFiles.pgliteSchemaPath;
+    result.pgliteSchemaError = typeFiles.pgliteSchemaError;
   }
 
   return result;
@@ -180,6 +189,10 @@ interface GenerateDataOnlyFilesResult {
   diffFilePath: string;
   migrateFilePath: string;
   dbTypesFilePath: string;
+  /** Written with db.ts unless the schema cannot be expressed as DDL; see `pgliteSchemaError`. */
+  pgliteSchemaFilePath?: string;
+  /** Why db.pglite.ts was skipped */
+  pgliteSchemaError?: string;
   migrationNumber: number;
 }
 
@@ -203,13 +216,26 @@ export async function generateDataOnlyMigrationFiles(
   await ensureFileNotExists(diffFilePath);
   await ensureFileNotExists(migrateFilePath);
   await ensureFileNotExists(dbTypesFilePath);
+  await ensureFileNotExists(getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema"));
 
   const diff = description ? { ...options.diff, description } : options.diff;
   await fs.writeFile(diffFilePath, JSON.stringify(diff, null, 2));
   await fs.writeFile(migrateFilePath, generateDataOnlyMigrationScript(diff.namespace));
-  await writeDbTypesFile(snapshot, migrationsDir, migrationNumber, diff);
+  const typeFiles = await writeMigrationTypeFiles({
+    previousSnapshot: snapshot,
+    diff,
+    migrationsDir,
+    migrationNumber,
+  });
 
-  return { diffFilePath, migrateFilePath, dbTypesFilePath, migrationNumber };
+  return {
+    diffFilePath,
+    migrateFilePath,
+    dbTypesFilePath,
+    pgliteSchemaFilePath: typeFiles.pgliteSchemaPath,
+    pgliteSchemaError: typeFiles.pgliteSchemaError,
+    migrationNumber,
+  };
 }
 
 /**
@@ -338,6 +364,57 @@ describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
     expect(
       mock.executedQueries.map((query) => ({ sql: query.sql, parameters: query.parameters })),
     ).toMatchSnapshot();
+  });
+});
+`;
+}
+
+/**
+ * Generate the PGlite test file content
+ * @param {MigrationDiff} diff - Migration diff
+ * @returns {string} PGlite test file content
+ */
+export function generateMigrationPgliteTestScript(diff: MigrationDiff): string {
+  const schema = /^[A-Za-z_$][\w$]*$/.test(diff.namespace)
+    ? `pgliteSchema.${diff.namespace}`
+    : `pgliteSchema[${JSON.stringify(diff.namespace)}]`;
+  return `/**
+ * PGlite test for the ${diff.namespace} migration script.
+ *
+ * The generated db.pglite.ts creates the tables as they stand while migrate.ts
+ * runs, on an in-memory Postgres. Stage the rows the script converts, run
+ * main() inside a transaction, then assert the rows it leaves behind.
+ */
+
+import { PGlite } from "@electric-sql/pglite";
+import { createKyselyPGlite, type Unmigrated } from "@tailor-platform/sdk/vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import type { Database } from "./db";
+import { pgliteSchema } from "./db.pglite";
+import { main } from "./migrate";
+
+const pglite = new PGlite();
+const db = createKyselyPGlite<Unmigrated<Database>>(pglite);
+
+// PGlite loads Postgres on first use, which can take longer than the default hook timeout.
+beforeAll(async () => {
+  await pglite.exec(${schema});
+}, 60_000);
+
+afterAll(async () => {
+  await db.destroy();
+});
+
+describe(${JSON.stringify(`${diff.namespace} migration (PGlite)`)}, () => {
+  test("transforms the staged rows", async () => {
+    // Stage the rows the script converts:
+    // await db.insertInto("Table").values([{ field: "before" }]).execute();
+
+    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
+    await expect(db.transaction().execute((trx) => main(trx))).resolves.toBeUndefined();
+
+    // Add assertions on the rows the script leaves behind:
+    // expect(await db.selectFrom("Table").selectAll().execute()).toEqual([{ field: "after" }]);
   });
 });
 `;
