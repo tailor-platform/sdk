@@ -140,6 +140,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "workspace/app/index.ts",
   "workspace/app/health.ts",
   "workspace/app/list.ts",
+  "workspace/ttl/index.ts",
   "workspace/user/index.ts",
   "workspace/user/list.ts",
 ]);
