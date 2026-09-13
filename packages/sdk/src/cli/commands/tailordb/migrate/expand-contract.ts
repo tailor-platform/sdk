@@ -7,9 +7,9 @@
  */
 
 import { parseSync } from "oxc-parser";
-import { getExpandContractFieldChangeEligibility } from "./field-type-change";
+import { getExpandContractFieldChangeEligibility, hasFieldShapeChange } from "./field-type-change";
 import { isSnapshotFieldRefOperand } from "./snapshot-types";
-import type { BreakingChangeInfo, MigrationDiff } from "./diff-calculator";
+import type { BreakingChangeInfo, DiffChange, MigrationDiff } from "./diff-calculator";
 import type {
   SchemaSnapshot,
   SnapshotFieldConfig,
@@ -78,6 +78,28 @@ export interface PlanExpandContractOptions {
   diff: MigrationDiff;
   /** `Table.field` keys the user approved for automation. */
   confirmed: ReadonlySet<string>;
+}
+
+/** A field change that may need a temporary field to carry its values. */
+export type ExpandContractCandidateChange = Extract<
+  DiffChange,
+  { kind: "field_type_modified" | "field_modified" }
+>;
+
+/**
+ * Whether a diff change alters a field's shape, which is what a migration pair
+ * exists to carry. A type change is always one; an otherwise modified field
+ * qualifies when it turns a single value into an array.
+ * @param change - Diff change to test
+ * @returns Whether the change is worth offering a conversion for
+ */
+export function isExpandContractCandidate(
+  change: DiffChange,
+): change is ExpandContractCandidateChange {
+  return (
+    change.kind === "field_type_modified" ||
+    (change.kind === "field_modified" && hasFieldShapeChange(change.before, change.after))
+  );
 }
 
 /**
@@ -389,7 +411,7 @@ export function planExpandContract(options: PlanExpandContractOptions): ExpandCo
   const planned = new Set<string>();
 
   for (const change of diff.changes) {
-    if (change.kind !== "field_type_modified") continue;
+    if (!isExpandContractCandidate(change)) continue;
     const key = fieldKey(change.tableName, change.fieldName);
     if (!confirmed.has(key)) continue;
     if (

@@ -22,6 +22,8 @@ import {
   getMigrationScriptPath,
 } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+import type { ExpandContractPlan } from "./expand-contract";
+import type { SnapshotFieldConfig } from "./snapshot-types";
 
 const packageRoot = path.resolve(import.meta.dirname, "../../../../..");
 
@@ -1433,6 +1435,69 @@ describe("template-generator", () => {
       expect(scriptContent).not.toContain("NEW_VALUE");
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
+
+    describe("expand conversion script for a single value becoming an array", () => {
+      async function generateExpand(before: SnapshotFieldConfig, after: SnapshotFieldConfig) {
+        const plan: ExpandContractPlan = {
+          tableName: "Item",
+          fieldName: "value",
+          tempFieldName: "valueMigrate",
+          before,
+          after,
+        };
+        const snapshot = createTestSnapshot({
+          Item: { name: "Item", pluralForm: "Items", fields: { value: before } },
+        });
+        // The temporary field is optional until the rename migration, as in
+        // the intermediate snapshot generate writes.
+        const tempField = { ...after, required: false, unique: false };
+        const diff = createMockMigrationDiff({
+          changes: [
+            { kind: "field_added", tableName: "Item", fieldName: "valueMigrate", after: tempField },
+            { kind: "field_removed", tableName: "Item", fieldName: "value", before },
+          ],
+          requiresMigrationScript: true,
+        });
+        return generateDiffFiles(diff, tempDir, 1, snapshot, undefined, [plan]);
+      }
+
+      test.each([
+        ["integer", { type: "integer", required: true }],
+        ["string", { type: "string", required: false }],
+        ["datetime", { type: "datetime", required: true }],
+        ["decimal", { type: "decimal", required: true, scale: 2 }],
+        ["enum", { type: "enum", required: true, allowedValues: [{ value: "A" }, { value: "B" }] }],
+      ] satisfies [string, SnapshotFieldConfig][])(
+        "typechecks the generated %s conversion without edits",
+        async (_name, before) => {
+          const result = await generateExpand(before, { ...before, array: true });
+
+          expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+        },
+        15_000,
+      );
+
+      test("typechecks once the element conversion is filled in", async () => {
+        const result = await generateExpand(
+          { type: "integer", required: true },
+          { type: "string", required: true, array: true },
+        );
+        const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([
+          expect.objectContaining({ code: 2322 }),
+        ]);
+
+        await fs.writeFile(
+          result.migrateFilePath!,
+          scriptContent.replace(
+            "const convertedValue: never = sourceValue;",
+            "const convertedValue = String(sourceValue);",
+          ),
+        );
+        expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+      }, 15_000);
+    });
 
     test("should throw error if diff file already exists", async () => {
       const diff = createMockMigrationDiff();
