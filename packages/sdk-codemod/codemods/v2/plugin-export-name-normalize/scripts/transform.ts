@@ -81,45 +81,155 @@ function fileAlreadyBindsPlugins(root: SgNode): boolean {
 }
 
 /**
- * Whether some other declaration in the file already binds `name` (excluding the node at
- * `excludeStart`). Used to avoid renaming bare identifier usages into a binding that a
- * shadowing declaration elsewhere in the file also uses, which a plain text-match rename
- * cannot tell apart from the reference being renamed.
- * @param root - File root node
+ * Whether a parameter/catch-clause binding pattern binds `name`, recursing into
+ * destructured object/array patterns.
+ * @param pat - A pattern node (identifier, object_pattern, array_pattern, ...)
  * @param name - Binding name to look for
- * @param excludeStart - Byte offset of the node to ignore (the specifier being renamed)
- * @returns True when another declaration for `name` exists
+ * @returns True when `pat` binds `name`
  */
-function hasOtherBindingNamed(root: SgNode, name: string, excludeStart: number): boolean {
-  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const nameNode = decl.field("name");
-    if (nameNode?.kind() === "identifier" && nameNode.text() === name) return true;
+function patternBindsName(pat: SgNode, name: string): boolean {
+  const kind = pat.kind();
+  if (kind === "identifier" || kind === "shorthand_property_identifier_pattern") {
+    return pat.text() === name;
   }
-  for (const fn of root.findAll({ rule: { kind: "function_declaration" } })) {
-    if (fn.field("name")?.text() === name) return true;
+  if (
+    kind === "object_pattern" ||
+    kind === "array_pattern" ||
+    kind === "rest_pattern" ||
+    kind === "assignment_pattern"
+  ) {
+    return pat.children().some((c: SgNode) => patternBindsName(c, name));
   }
-  for (const cls of root.findAll({ rule: { kind: "class_declaration" } })) {
-    if (cls.field("name")?.text() === name) return true;
-  }
-  for (const spec of root.findAll({ rule: { kind: "import_specifier" } })) {
-    if (spec.range().start.index === excludeStart) continue;
-    const local = spec.field("alias") ?? spec.field("name");
-    if (local?.text() === name) return true;
+  if (kind === "pair_pattern") {
+    const value = pat.field("value");
+    return value ? patternBindsName(value, name) : false;
   }
   return false;
 }
 
 /**
+ * Whether `name` is bound as a function/arrow/method parameter or a catch clause parameter
+ * anywhere in the file. A rename that renames every bare identifier with a matching name
+ * must not touch a name shadowed this way — the shadowing declaration and the references
+ * inside its scope are unrelated to the binding being renamed, and a plain text-match
+ * cannot tell the two apart.
+ * @param root - File root node
+ * @param name - Binding name to look for
+ * @returns True when `name` is bound as a parameter somewhere
+ */
+function isBoundAsParameterAnywhere(root: SgNode, name: string): boolean {
+  for (const param of root.findAll({
+    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
+  })) {
+    const pat = param.field("pattern");
+    if (pat && patternBindsName(pat, name)) return true;
+  }
+  for (const formalParams of root.findAll({ rule: { kind: "formal_parameters" } })) {
+    for (const child of formalParams.children()) {
+      if (
+        (child.kind() === "identifier" ||
+          child.kind() === "object_pattern" ||
+          child.kind() === "array_pattern") &&
+        patternBindsName(child, name)
+      ) {
+        return true;
+      }
+    }
+  }
+  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
+    const single = arrow.field("parameter");
+    if (single && patternBindsName(single, name)) return true;
+  }
+  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
+    for (const child of catchClause.children()) {
+      if (patternBindsName(child, name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether some other binding in the file already uses `name` (excluding the node at
+ * `excludeStart`): a top-level variable/function/class, another import specifier, or a
+ * parameter/catch-clause pattern anywhere. A rename that also rewrites bare identifier
+ * usages must not proceed when this is true, since a plain text-match rename cannot tell
+ * a reference to the binding being renamed apart from a reference to the other one.
+ * @param root - File root node
+ * @param name - Binding name to look for
+ * @param excludeStart - Byte offset of the node being renamed, excluded from the search
+ * @returns True when another binding for `name` exists
+ */
+function hasOtherBindingNamed(root: SgNode, name: string, excludeStart: number): boolean {
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const nameNode = decl.field("name");
+    if (nameNode?.kind() !== "identifier" || nameNode.text() !== name) continue;
+    if (nameNode.range().start.index === excludeStart) continue;
+    return true;
+  }
+  for (const fn of root.findAll({ rule: { kind: "function_declaration" } })) {
+    const nameNode = fn.field("name");
+    if (nameNode?.text() !== name) continue;
+    if (nameNode.range().start.index === excludeStart) continue;
+    return true;
+  }
+  for (const cls of root.findAll({ rule: { kind: "class_declaration" } })) {
+    const nameNode = cls.field("name");
+    if (nameNode?.text() !== name) continue;
+    if (nameNode.range().start.index === excludeStart) continue;
+    return true;
+  }
+  for (const spec of root.findAll({ rule: { kind: "import_specifier" } })) {
+    const local = spec.field("alias") ?? spec.field("name");
+    if (local?.text() !== name) continue;
+    if (local.range().start.index === excludeStart) continue;
+    return true;
+  }
+  return isBoundAsParameterAnywhere(root, name);
+}
+
+/**
+ * Rename a binding's declaration/specifier node and every other bare identifier reference
+ * to it in the file (the caller has already checked, via {@link hasOtherBindingNamed}, that
+ * no shadowing binding makes this ambiguous).
+ * @param root - File root node
+ * @param declNode - The declaration/specifier name node to rename
+ * @param oldName - The binding's current name
+ * @param edits - Edit list to append to
+ */
+function renameBindingAndUsages(
+  root: SgNode,
+  declNode: SgNode,
+  oldName: string,
+  edits: Edit[],
+): void {
+  edits.push(declNode.replace("plugins"));
+  const declStart = declNode.range().start.index;
+  for (const idNode of root.findAll({
+    rule: {
+      any: [
+        { kind: "identifier", regex: `^${oldName}$` },
+        { kind: "shorthand_property_identifier", regex: `^${oldName}$` },
+      ],
+    },
+  })) {
+    if (idNode.range().start.index === declStart) continue;
+    edits.push(idNode.replace("plugins"));
+  }
+}
+
+/**
  * Normalize the plugin config export name to `plugins`:
  *
- * 1. `export const generator|generators = definePlugins(...)` → `export const plugins = ...`
+ * 1. `export const generator|generators = definePlugins(...)` → `export const plugins = ...`,
+ *    with any other same-file reference to the old name renamed to match.
  * 2. `import { generator|generators [as alias] } from ".../tailor.config"` → renamed to
  *    `plugins` (keeping any existing alias), with bare local usages renamed to match when
  *    there was no alias.
  *
- * The whole file is left untouched when it already binds `plugins` to something else, or
- * when a bare (unaliased) import's local usages cannot be told apart from an unrelated
- * same-named binding elsewhere in the file.
+ * A rename is skipped — leaving that binding (and its usages) untouched — when the file
+ * already binds `plugins` to something else, or when the old name is also bound by another
+ * declaration, import, or parameter anywhere in the file: a plain text-match rename cannot
+ * tell such a reference apart from a reference to the binding being renamed.
  * @param source - Source code to transform
  * @returns Transformed source or null if no changes needed
  */
@@ -138,7 +248,10 @@ export default function transform(source: string): string | null {
 
   for (const decl of declarators) {
     const nameNode = decl.field("name");
-    if (nameNode) edits.push(nameNode.replace("plugins"));
+    if (!nameNode) continue;
+    const oldName = nameNode.text();
+    if (hasOtherBindingNamed(tree, oldName, nameNode.range().start.index)) continue;
+    renameBindingAndUsages(tree, nameNode, oldName, edits);
   }
 
   for (const spec of importSpecifiers) {
@@ -153,22 +266,8 @@ export default function transform(source: string): string | null {
     }
 
     const oldName = importedNode.text();
-    if (hasOtherBindingNamed(tree, oldName, importedNode.range().start.index)) {
-      continue;
-    }
-
-    edits.push(importedNode.replace("plugins"));
-    for (const idNode of tree.findAll({
-      rule: {
-        any: [
-          { kind: "identifier", regex: `^${oldName}$` },
-          { kind: "shorthand_property_identifier", regex: `^${oldName}$` },
-        ],
-      },
-    })) {
-      if (idNode.range().start.index === importedNode.range().start.index) continue;
-      edits.push(idNode.replace("plugins"));
-    }
+    if (hasOtherBindingNamed(tree, oldName, importedNode.range().start.index)) continue;
+    renameBindingAndUsages(tree, importedNode, oldName, edits);
   }
 
   if (edits.length === 0) return null;
