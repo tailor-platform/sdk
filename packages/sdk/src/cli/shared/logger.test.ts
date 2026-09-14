@@ -209,24 +209,17 @@ describe("logger", () => {
       logger.registerSecret("sk-live-abcdef123456");
       logger.verbose = true;
 
-      expect(captureStderr(() => logger.info("token: sk-live-abcdef123456"))).toContain(
-        "<redacted>",
-      );
-      expect(captureStderr(() => logger.success("token: sk-live-abcdef123456"))).toContain(
-        "<redacted>",
-      );
-      expect(captureStderr(() => logger.warn("token: sk-live-abcdef123456"))).toContain(
-        "<redacted>",
-      );
-      expect(captureStderr(() => logger.error("token: sk-live-abcdef123456"))).toContain(
-        "<redacted>",
-      );
-      expect(captureStderr(() => logger.log("token: sk-live-abcdef123456"))).toContain(
-        "<redacted>",
-      );
-      expect(captureStderr(() => logger.debug("token: sk-live-abcdef123456"))).toContain(
-        "<redacted>",
-      );
+      for (const output of [
+        captureStderr(() => logger.info("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.success("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.warn("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.error("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.log("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.debug("token: sk-live-abcdef123456")),
+      ]) {
+        expect(output).toContain("<redacted>");
+        expect(output).not.toContain("sk-live-abcdef123456");
+      }
 
       logger.verbose = false;
       for (const output of [

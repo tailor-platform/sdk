@@ -1623,7 +1623,7 @@ describe("fetchPlatformMachineUserToken", () => {
 
   test("registers the client secret and access token on success", async () => {
     fetchMock.mockResolvedValueOnce(discoveryResponse()).mockResolvedValueOnce(tokenResponse());
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
 
     const token = await fetchPlatformMachineUserToken("client-id", "client-secret");
 
