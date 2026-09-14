@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { parseTypes } from "#/parser/service/tailordb/index";
-import { generateSchemaDDL } from "#/utils/tailordb-ddl";
+import { generateSchemaDDL, type DDLTableConfig } from "#/utils/tailordb-ddl";
 import { toSchemaOutputs } from "#/utils/test/internal";
 import { createKyselyPGlite } from "#/vitest/pglite-kysely";
 import { generatePGliteSchemaModule, toDDLTables } from "./pglite-schema";
@@ -104,14 +104,14 @@ describe("generatePGliteSchemaModule", () => {
     expect(content).toContain("DO NOT EDIT");
     expect(content).toContain("export const pgliteSchema = {");
     expect(content).toContain(
-      '  "tailordb": `CREATE SEQUENCE IF NOT EXISTS "Invoice_invoiceNumber_seq" START WITH 1000 MINVALUE 1000;',
+      '  "tailordb": `CREATE SEQUENCE IF NOT EXISTS "Invoice_invoiceNumber_3240f76b_seq" START WITH 1000 MINVALUE 1000;',
     );
     expect(content).toContain('CREATE TABLE IF NOT EXISTS "Invoice" (');
     expect(content).toContain('CREATE TABLE IF NOT EXISTS "EveryType" (');
     expect(content).toContain('"createdAt" timestamptz NOT NULL DEFAULT now()');
     expect(content).toContain('"email" text NOT NULL UNIQUE');
     expect(content).toContain(
-      'CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_idx_region_email_idx" ON "Invoice" ("region", "email");',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_idx_region_email_7fe66af8_idx" ON "Invoice" ("region", "email");',
     );
     expect(content).not.toContain("Invoice_idx_region_invoiceNumber");
     expect(content).toContain('  "other": `CREATE TABLE IF NOT EXISTS "Tick\\`\\${x}" (');
@@ -238,5 +238,44 @@ describe("generated DDL on PGlite", () => {
     await kysely.insertInto("Ticket").defaultValues().execute();
     const rows = await kysely.selectFrom("Ticket").select("code").orderBy("code").execute();
     expect(rows).toEqual([{ code: "T-00FF" }, { code: "T-0100" }]);
+  });
+});
+
+describe("derived DDL name collisions on PGlite", () => {
+  const pglite = new PGlite();
+  const tables: DDLTableConfig[] = [
+    {
+      name: "A_B",
+      fields: { C: { type: "string", serial: { start: 10 } } },
+      indexes: { C: { fields: ["C"], unique: true } },
+    },
+    {
+      name: "A",
+      fields: { B_C: { type: "string", serial: { start: 100 } } },
+      indexes: { B_C: { fields: ["B_C"], unique: true } },
+    },
+  ];
+  beforeAll(async () => {
+    await pglite.exec(generateSchemaDDL(tables));
+    await pglite.exec(generateSchemaDDL(tables));
+  }, 60_000);
+  afterAll(() => pglite.close());
+
+  test("keeps underscore-separated serial sources independent", async () => {
+    const first = await pglite.query('INSERT INTO "A_B" DEFAULT VALUES RETURNING "C"');
+    const second = await pglite.query('INSERT INTO "A" DEFAULT VALUES RETURNING "B_C"');
+    expect(first.rows).toEqual([{ C: "10" }]);
+    expect(second.rows).toEqual([{ B_C: "100" }]);
+  });
+
+  test("enforces both underscore-separated unique indexes", async () => {
+    await pglite.exec(`INSERT INTO "A_B" ("C") VALUES ('duplicate-first')`);
+    await expect(pglite.exec(`INSERT INTO "A_B" ("C") VALUES ('duplicate-first')`)).rejects.toThrow(
+      /unique/i,
+    );
+    await pglite.exec(`INSERT INTO "A" ("B_C") VALUES ('duplicate-second')`);
+    await expect(
+      pglite.exec(`INSERT INTO "A" ("B_C") VALUES ('duplicate-second')`),
+    ).rejects.toThrow(/unique/i);
   });
 });
