@@ -12,6 +12,7 @@ import { LinesDB, ErrorFormatter, findSchemaFile } from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join } from "pathe";
+import { physicalLineOfRecord } from "./record-lines";
 import type { JsonObject, ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
@@ -34,7 +35,13 @@ type ValidateSeedDataOptions = {
 
 type ValidateSeedResult =
   | { valid: true; output: string }
-  | { valid: false; output: string; error: string };
+  | {
+      valid: false;
+      output: string;
+      error: string;
+      /** Where the first reported error sits, for tooling that links to source. */
+      location?: { file: string; line?: number };
+    };
 
 /**
  * A JSONL seed file that received values.
@@ -167,7 +174,30 @@ export async function validateSeedData(
     valid: false,
     output: outputLines.join("\n"),
     error: formatValidationErrors(result.errors, verbose),
+    location: await firstErrorLocation(result.errors),
   };
+}
+
+/**
+ * Locate the first reported error in its own file.
+ *
+ * The validator indexes records after dropping blank lines, so the index is
+ * mapped back to a physical line; a file that cannot be re-read yields no
+ * location rather than a guessed one.
+ * @param errors - Validation errors in the order the validator reported them
+ * @returns Location of the first error, or undefined when it cannot be resolved
+ */
+async function firstErrorLocation(
+  errors: readonly ValidationErrorDetail[],
+): Promise<{ file: string; line?: number } | undefined> {
+  const first = errors[0];
+  if (!first) return undefined;
+  try {
+    const content = await readFile(first.file, "utf-8");
+    return { file: first.file, line: physicalLineOfRecord(content, first.rowIndex) };
+  } catch {
+    return { file: first.file };
+  }
 }
 
 // A row's own value for a field, or undefined when the row has none.
