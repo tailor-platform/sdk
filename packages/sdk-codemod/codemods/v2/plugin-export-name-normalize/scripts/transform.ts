@@ -63,24 +63,6 @@ function findTailorConfigGeneratorSpecifiers(root: SgNode): SgNode[] {
 }
 
 /**
- * Whether the file already binds the name `plugins`, as a top-level variable or an
- * imported (possibly aliased) specifier. Used to avoid a rename that would collide.
- * @param root - File root node
- * @returns True if a `plugins` binding already exists
- */
-function fileAlreadyBindsPlugins(root: SgNode): boolean {
-  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const nameNode = decl.field("name");
-    if (nameNode?.kind() === "identifier" && nameNode.text() === "plugins") return true;
-  }
-  for (const spec of root.findAll({ rule: { kind: "import_specifier" } })) {
-    const local = spec.field("alias") ?? spec.field("name");
-    if (local?.text() === "plugins") return true;
-  }
-  return false;
-}
-
-/**
  * Whether a parameter/catch-clause binding pattern binds `name`, recursing into
  * destructured object/array patterns.
  * @param pat - A pattern node (identifier, object_pattern, array_pattern, ...)
@@ -105,6 +87,51 @@ function patternBindsName(pat: SgNode, name: string): boolean {
     return value ? patternBindsName(value, name) : false;
   }
   return false;
+}
+
+/**
+ * Whether `name` is bound by a default or namespace (`* as name`) import clause anywhere
+ * in the file.
+ * @param root - File root node
+ * @param name - Binding name to look for
+ * @returns True when `name` is bound this way
+ */
+function isBoundByDefaultOrNamespaceImport(root: SgNode, name: string): boolean {
+  for (const clause of root.findAll({ rule: { kind: "import_clause" } })) {
+    for (const child of clause.children()) {
+      if (child.kind() === "identifier" && child.text() === name) return true;
+      if (child.kind() === "namespace_import") {
+        const ident = child.children().find((c: SgNode) => c.kind() === "identifier");
+        if (ident?.text() === name) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether the file already binds the name `plugins`, as a top-level variable (including a
+ * destructured one), a function/class declaration, or an imported (possibly aliased,
+ * default, or namespace) specifier. Used to avoid a rename that would collide.
+ * @param root - File root node
+ * @returns True if a `plugins` binding already exists
+ */
+function fileAlreadyBindsPlugins(root: SgNode): boolean {
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const nameNode = decl.field("name");
+    if (nameNode && patternBindsName(nameNode, "plugins")) return true;
+  }
+  for (const fn of root.findAll({ rule: { kind: "function_declaration" } })) {
+    if (fn.field("name")?.text() === "plugins") return true;
+  }
+  for (const cls of root.findAll({ rule: { kind: "class_declaration" } })) {
+    if (cls.field("name")?.text() === "plugins") return true;
+  }
+  for (const spec of root.findAll({ rule: { kind: "import_specifier" } })) {
+    const local = spec.field("alias") ?? spec.field("name");
+    if (local?.text() === "plugins") return true;
+  }
+  return isBoundByDefaultOrNamespaceImport(root, "plugins");
 }
 
 /**
@@ -162,9 +189,13 @@ function isBoundAsParameterAnywhere(root: SgNode, name: string): boolean {
 function hasOtherBindingNamed(root: SgNode, name: string, excludeStart: number): boolean {
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const nameNode = decl.field("name");
-    if (nameNode?.kind() !== "identifier" || nameNode.text() !== name) continue;
-    if (nameNode.range().start.index === excludeStart) continue;
-    return true;
+    if (!nameNode) continue;
+    if (nameNode.kind() === "identifier") {
+      if (nameNode.text() !== name) continue;
+      if (nameNode.range().start.index === excludeStart) continue;
+      return true;
+    }
+    if (patternBindsName(nameNode, name)) return true;
   }
   for (const fn of root.findAll({ rule: { kind: "function_declaration" } })) {
     const nameNode = fn.field("name");
@@ -184,6 +215,7 @@ function hasOtherBindingNamed(root: SgNode, name: string, excludeStart: number):
     if (local.range().start.index === excludeStart) continue;
     return true;
   }
+  if (isBoundByDefaultOrNamespaceImport(root, name)) return true;
   return isBoundAsParameterAnywhere(root, name);
 }
 
@@ -204,16 +236,18 @@ function renameBindingAndUsages(
 ): void {
   edits.push(declNode.replace("plugins"));
   const declStart = declNode.range().start.index;
-  for (const idNode of root.findAll({
-    rule: {
-      any: [
-        { kind: "identifier", regex: `^${oldName}$` },
-        { kind: "shorthand_property_identifier", regex: `^${oldName}$` },
-      ],
-    },
-  })) {
+  for (const idNode of root.findAll({ rule: { kind: "identifier", regex: `^${oldName}$` } })) {
     if (idNode.range().start.index === declStart) continue;
     edits.push(idNode.replace("plugins"));
+  }
+  // A shorthand `{ oldName }` is both the object key and the value reference; replacing the
+  // whole node would rename the key too (`{ oldName }` -> `{ plugins }`, not `{ oldName:
+  // plugins }`), silently changing the object's shape. Expand it to an explicit pair instead,
+  // so only the referenced value is renamed.
+  for (const idNode of root.findAll({
+    rule: { kind: "shorthand_property_identifier", regex: `^${oldName}$` },
+  })) {
+    edits.push(idNode.replace(`${oldName}: plugins`));
   }
 }
 
