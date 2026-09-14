@@ -58,6 +58,15 @@ describe("loadConfig", () => {
     await expect(loadConfig(configPath)).rejects.toThrow(/Invalid `plugins` export/);
   });
 
+  test("rejects a `plugins` export that is explicitly undefined", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = undefined;
+    `);
+
+    await expect(loadConfig(configPath)).rejects.toThrow(/Invalid `plugins` export/);
+  });
+
   test("rejects a `plugins` export containing an invalid item", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app" };

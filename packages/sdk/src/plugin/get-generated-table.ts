@@ -24,18 +24,31 @@ interface ConfigCache {
 /** Cache: resolved config path -> loaded config data */
 const configCacheMap = new Map<string, ConfigCache>();
 
+const OPTIONAL_HOOK_KEYS = [
+  "onTableLoaded",
+  "onNamespaceLoaded",
+  "onTailorDBReady",
+  "onResolverReady",
+  "onExecutorReady",
+] as const;
+
 /**
- * Check if a value is a Plugin instance.
+ * Check if a value is a Plugin instance. Mirrors PluginConfigSchema's shape without
+ * depending on zod, since this module must stay usable from a bundled executor.
  * @param value - Value to check
  * @returns True if value has the shape of Plugin
  */
 function isPlugin(value: unknown): value is Plugin {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).id === "string" &&
-    typeof (value as Record<string, unknown>).description === "string"
-  );
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== "string" || typeof candidate.description !== "string") return false;
+  if (candidate.importPath !== undefined && typeof candidate.importPath !== "string") return false;
+  for (const key of OPTIONAL_HOOK_KEYS) {
+    if (candidate[key] !== undefined && typeof candidate[key] !== "function") return false;
+  }
+  const hasDefinitionTimeHooks = candidate.onTableLoaded || candidate.onNamespaceLoaded;
+  if (hasDefinitionTimeHooks && typeof candidate.importPath !== "string") return false;
+  return true;
 }
 
 /**
@@ -66,8 +79,8 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
   const plugins = new Map<string, PluginEntry>();
 
   // The only export read for plugins is `plugins`, the result of definePlugins().
-  const pluginsExport: unknown = configModule.plugins;
-  if (pluginsExport !== undefined) {
+  if (Object.hasOwn(configModule, "plugins")) {
+    const pluginsExport: unknown = configModule.plugins;
     if (!Array.isArray(pluginsExport)) {
       throw new Error(
         `Invalid \`plugins\` export in "${resolvedPath}": expected an array returned by definePlugins(), got ${typeof pluginsExport}`,

@@ -84,8 +84,8 @@ export async function loadConfig(
 
   // The only export read for plugins is `plugins`, the result of definePlugins().
   const allPlugins: Plugin[] = [];
-  const pluginsExport = (configModule as Record<string, unknown>).plugins;
-  if (pluginsExport !== undefined) {
+  if (Object.hasOwn(configModule, "plugins")) {
+    const pluginsExport = (configModule as Record<string, unknown>).plugins;
     if (!Array.isArray(pluginsExport)) {
       throw new Error(
         `Invalid \`plugins\` export in ${resolvedPath}: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
