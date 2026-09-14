@@ -399,9 +399,12 @@ export const logger = {
 
   /**
    * Registers a value to be redacted from diagnostic log output (`info`/`success`/`warn`/
-   * `error`/`log`/`debug`). Any occurrence of `value` — or of its JSON-string-escaped form,
-   * so a value embedded in `JSON.stringify`d output (e.g. `--json` mode error envelopes)
-   * is also caught — is replaced with `<redacted>` before it reaches stderr. Does not affect
+   * `error`/`log`/`debug`). Any occurrence of `value` — or of its JSON-string-escaped form
+   * (so a value embedded in `JSON.stringify`d output, e.g. `--json` mode error envelopes, is
+   * also caught) or its URL-percent-encoded form (so a value that reached the process via a
+   * query string or redirect URL, e.g. an OAuth authorization code decoded from a callback
+   * URL, is still caught if that same URL — still encoded — is later echoed into a diagnostic
+   * message) — is replaced with `<redacted>` before it reaches stderr. Does not affect
    * `out()`, since some commands intentionally print secret values as their primary result.
    *
    * Values shorter than 4 characters are ignored, since they are too likely to match
@@ -418,6 +421,8 @@ export const logger = {
     _secrets.add(value);
     const jsonEscaped = JSON.stringify(value).slice(1, -1);
     if (jsonEscaped !== value) _secrets.add(jsonEscaped);
+    const urlEncoded = encodeURIComponent(value);
+    if (urlEncoded !== value) _secrets.add(urlEncoded);
     // Set#add on an already-registered value is a no-op, so this only invalidates the
     // cached automaton (see findSecretSpans) when a genuinely new secret was added.
     if (_secrets.size !== sizeBefore) _automaton = null;

@@ -272,6 +272,17 @@ describe("logger", () => {
       expect(output).toContain("<redacted>");
     });
 
+    test("redacts a registered secret's URL-percent-encoded form (e.g. a decoded OAuth code echoed back in a still-encoded callback URL)", () => {
+      const decodedCode = "abc+def/ghi";
+      const encodedCode = "abc%2Bdef%2Fghi";
+      logger.registerSecret(decodedCode);
+      const output = captureStderr(() =>
+        logger.error(`token exchange failed for callback ?code=${encodedCode}&state=xyz`),
+      );
+      expect(output).not.toContain(encodedCode);
+      expect(output).toContain("<redacted>");
+    });
+
     test("does not reprocess the placeholder when a later secret matches text inside it", () => {
       logger.registerSecret("foo-reprocess-guard-redacted");
       logger.registerSecret("reprocess-guard-redacted");
