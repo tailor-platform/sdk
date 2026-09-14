@@ -38,6 +38,7 @@ import { commonArgs } from "./shared/args";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
+import { annotateTerminalError } from "./shared/github-actions";
 import { logger, styles } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 import { dispatchPluginWithInstallHint } from "./shared/plugin";
@@ -152,6 +153,7 @@ void runMain(mainCommand, {
     }),
   cleanup: async ({ error }) => {
     if (error) {
+      let suggestion: string | undefined;
       if (logger.jsonMode) {
         logger.log(serializeError(error, { includeStack: logger.verbose }));
       } else if (isCLIError(error)) {
@@ -161,9 +163,9 @@ void runMain(mainCommand, {
         }
       } else if (error instanceof Error) {
         logger.error(error.message);
-        const hint = getErrorDiagnostics(error).suggestion ?? typeOnlyImportHint(error);
-        if (hint) {
-          logger.log(`  ${styles.info("Suggestion:")} ${hint}`);
+        suggestion = getErrorDiagnostics(error).suggestion ?? typeOnlyImportHint(error);
+        if (suggestion) {
+          logger.log(`  ${styles.info("Suggestion:")} ${suggestion}`);
         }
         if (logger.verbose && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
@@ -171,6 +173,7 @@ void runMain(mainCommand, {
       } else {
         logger.error(`Unknown error: ${error}`);
       }
+      annotateTerminalError(error, { jsonMode: logger.jsonMode, suggestion });
 
       // Report programming bugs (native error types that indicate code defects).
       // Skip domain errors like ConnectError, CIPromptError, and plain Error

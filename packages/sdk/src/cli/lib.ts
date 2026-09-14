@@ -49,6 +49,11 @@ export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { extractOwnedNamespaces } from "./shared/config";
 export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
+export {
+  annotateTerminalError,
+  type AnnotationLevel,
+  type AnnotationProperties,
+} from "./shared/github-actions";
 export { generateUserTypes } from "./shared/type-generator";
 export {
   loadTailorDBNamespaces,

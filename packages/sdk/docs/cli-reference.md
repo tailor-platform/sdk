@@ -67,6 +67,29 @@ Capture the original failure's stderr and exit code before retrying. Argument pa
 before the CLI starts may produce plain text even with `--json`. A failed deployment may have
 already applied changes, so inspect its output before deciding to run it again.
 
+### GitHub Actions Annotations
+
+When `GITHUB_ACTIONS` is exactly `true`, a command that ends in failure also writes one
+`::error::` workflow command to stderr, so the failure appears as an annotation on the run
+instead of only inside the scrolled log. The annotation repeats what the CLI already prints:
+its `title` is the error code (`AUTH_TOKEN_NOT_FOUND`, `PLUGIN_GENERATION_FAILED`, ...), and its
+body carries the same details, suggestion, and next action. Colors are stripped and newlines are
+encoded, so the annotation is a single line.
+
+Exactly one annotation is written per failed command, and only for the failure that ends it.
+Warnings and individually reported problems stay plain stderr output.
+
+Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` (also `off`, `no`, or `0`) to turn annotations off.
+They are also suppressed by `--json`, which keeps the JSON error envelope the only document the
+command adds to stderr — so a workflow step that parses `--json` output gets no annotations.
+
+An annotation does not by itself fail a step: the step still fails on the CLI's exit code, which
+is unchanged. Workflows that already echo their own `::error::` around the CLI keep working;
+those messages describe the workflow's own checks, which can fail even when the CLI succeeds.
+
+Annotations do not yet carry `file=`/`line=` source locations, and `generate` and `deploy` do not
+group their per-service progress.
+
 ## Common Options
 
 The following options are available for most commands:
@@ -116,6 +139,7 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count     |
 | `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent platform RPCs during `apply`/`deploy`. Defaults to 16                                  |
 | `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                           |
+| `TAILOR_GITHUB_ACTIONS_ANNOTATIONS`          | GitHub Actions failure annotations: `on` (default) or `off`                                           |
 | `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                      |
 | `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                            |
 

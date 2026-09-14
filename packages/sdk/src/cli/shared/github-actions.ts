@@ -1,0 +1,154 @@
+import { stripVTControlCharacters } from "node:util";
+import { isCLIError } from "./errors";
+import { parseBoolean } from "./parse-boolean";
+
+/**
+ * Properties attached to a GitHub Actions annotation.
+ *
+ * `file`/`line` are accepted but not yet populated by any CLI error; they are
+ * part of the command format so producers can add source locations later.
+ */
+export interface AnnotationProperties {
+  /** Short heading shown above the annotation body. */
+  title?: string;
+  /** Path of the file the annotation points at, relative to the workspace. */
+  file?: string;
+  /** 1-based line number within `file`. */
+  line?: number;
+}
+
+/** Annotation severities supported by the GitHub Actions runner. */
+export type AnnotationLevel = "error" | "warning" | "notice";
+
+/**
+ * Escape a workflow command message body.
+ *
+ * The runner parses commands line by line, so a literal `%` and any line
+ * break must be percent-encoded or the remainder of the message is dropped.
+ * @param value - Raw message text
+ * @returns Escaped message safe to place after `::`
+ */
+function escapeData(value: string): string {
+  return value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+}
+
+/**
+ * Escape a workflow command property value.
+ *
+ * Property values additionally delimit on `:` and `,`, so both are encoded on
+ * top of the message-body escapes.
+ * @param value - Raw property value
+ * @returns Escaped value safe to place inside the property list
+ */
+function escapeProperty(value: string): string {
+  return escapeData(value).replaceAll(":", "%3A").replaceAll(",", "%2C");
+}
+
+/**
+ * Report whether workflow commands should be written.
+ *
+ * Read at emission time rather than at import time so values loaded from
+ * `--env-file` are honored.
+ * @param jsonMode - Whether the CLI is producing a JSON document
+ * @returns True when annotations should be emitted
+ */
+export function annotationsEnabled(jsonMode: boolean): boolean {
+  if (jsonMode) return false;
+  if (process.env.GITHUB_ACTIONS !== "true") return false;
+  return parseBoolean(process.env.TAILOR_GITHUB_ACTIONS_ANNOTATIONS) !== false;
+}
+
+/**
+ * Render a GitHub Actions annotation command line.
+ * @param level - Annotation severity
+ * @param message - Annotation body
+ * @param properties - Optional title and source location
+ * @returns A single workflow command line, newline terminated
+ */
+export function formatAnnotation(
+  level: AnnotationLevel,
+  message: string,
+  properties: AnnotationProperties = {},
+): string {
+  const entries: string[] = [];
+  if (properties.title !== undefined) {
+    entries.push(`title=${escapeProperty(stripVTControlCharacters(properties.title))}`);
+  }
+  if (properties.file !== undefined) {
+    entries.push(`file=${escapeProperty(properties.file)}`);
+  }
+  if (properties.line !== undefined) {
+    entries.push(`line=${properties.line}`);
+  }
+  const propertyList = entries.length > 0 ? ` ${entries.join(",")}` : "";
+  return `::${level}${propertyList}::${escapeData(stripVTControlCharacters(message))}\n`;
+}
+
+/**
+ * Write a GitHub Actions annotation to stderr when running in a workflow.
+ *
+ * Colors are stripped unconditionally: the runner renders the annotation as
+ * text, and `FORCE_COLOR` keeps escapes alive even on a non-TTY stream.
+ * @param level - Annotation severity
+ * @param message - Annotation body
+ * @param properties - Optional title and source location
+ * @param jsonMode - Whether the CLI is producing a JSON document
+ */
+export function emitAnnotation(
+  level: AnnotationLevel,
+  message: string,
+  properties: AnnotationProperties = {},
+  jsonMode = false,
+): void {
+  if (!annotationsEnabled(jsonMode)) return;
+  process.stderr.write(formatAnnotation(level, message, properties));
+}
+
+function hasFormat(error: unknown): error is Error & { format: () => string } {
+  return error instanceof Error && typeof (error as { format?: unknown }).format === "function";
+}
+
+/**
+ * Build the annotation body and title for a terminal CLI failure.
+ *
+ * Reuses the same text the CLI already prints so the annotation and the log
+ * cannot drift: a `CLIError` renders through its own `format()`, which already
+ * carries details, suggestion, help, and the next action.
+ * @param error - Failure that ended the command
+ * @param fallbackSuggestion - Suggestion shown for a plain error, when one exists
+ * @returns Annotation body and optional title
+ */
+export function describeTerminalError(
+  error: unknown,
+  fallbackSuggestion?: string,
+): { message: string; title?: string } {
+  if (isCLIError(error)) {
+    return { message: error.format(), title: error.code ?? "CLI_ERROR" };
+  }
+  // Commands outside this package (the seed plugin's validate report) throw a
+  // plain Error carrying its own `format()`, which holds the whole report.
+  if (hasFormat(error)) {
+    return { message: error.format(), title: error.name || "Error" };
+  }
+  if (error instanceof Error) {
+    const suggestion = fallbackSuggestion ? `\nSuggestion: ${fallbackSuggestion}` : "";
+    return { message: `${error.message}${suggestion}`, title: error.name || "Error" };
+  }
+  return { message: `Unknown error: ${String(error)}`, title: "UNKNOWN_ERROR" };
+}
+
+/**
+ * Annotate the failure that ended the command, when running in GitHub Actions.
+ * @param error - Failure that ended the command
+ * @param options - JSON mode state and the suggestion shown for a plain error
+ * @param options.jsonMode - Whether the CLI is producing a JSON document
+ * @param options.suggestion - Suggestion shown for a plain error
+ */
+export function annotateTerminalError(
+  error: unknown,
+  options: { jsonMode: boolean; suggestion?: string },
+): void {
+  if (!annotationsEnabled(options.jsonMode)) return;
+  const { message, title } = describeTerminalError(error, options.suggestion);
+  emitAnnotation("error", message, { title }, options.jsonMode);
+}
