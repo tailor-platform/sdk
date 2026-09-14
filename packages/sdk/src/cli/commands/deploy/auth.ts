@@ -1153,6 +1153,7 @@ async function planMachineUsers(
   for (const namespaceName of deletedServices) {
     const existingMachineUsers = await fetchMachineUsers(namespaceName);
     existingMachineUsers.forEach((machineUser) => {
+      logger.registerSecret(machineUser.clientSecret);
       changeSet.deletes.push({
         name: machineUser.name,
         request: {
@@ -1476,6 +1477,7 @@ async function planOAuth2Clients(
   for (const namespaceName of deletedServices) {
     const existingOAuth2Clients = await fetchOAuth2Clients(namespaceName);
     existingOAuth2Clients.forEach((oauth2Client) => {
+      logger.registerSecret(oauth2Client.clientSecret);
       changeSet.deletes.push({
         name: oauth2Client.name,
         request: {

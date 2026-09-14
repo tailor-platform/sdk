@@ -711,6 +711,7 @@ async function planClients(
       deletedClientsByService[i],
       "deletedClientsByService missing entry for service index",
     ).forEach((client) => {
+      logger.registerSecret(client.clientSecret);
       changeSet.deletes.push({
         name: client.name,
         request: {

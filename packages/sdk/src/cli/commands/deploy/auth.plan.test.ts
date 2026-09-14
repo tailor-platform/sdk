@@ -244,6 +244,7 @@ function createMockClient(opts?: {
     accessTokenLifetime?: { seconds: bigint };
     refreshTokenLifetime?: { seconds: bigint };
     requireDpop: boolean;
+    clientSecret?: string;
   }>;
   authHook?: {
     scriptRef: string;
@@ -393,11 +394,39 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       machineUsers: [managerMachineUserRemote],
     });
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
 
     await planAuth(createContext(client));
 
     expect(registerSecretSpy).toHaveBeenCalledWith(managerMachineUserRemote.clientSecret);
+  });
+
+  test("registers a deleted auth service's machine user and oauth2 client secrets before scheduling removal", async () => {
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [managerMachineUserRemote],
+      oauth2Clients: [
+        {
+          ...remoteOAuth2Client({
+            redirectUris: ["https://a.example.com/callback"],
+            accessTokenLifetime: { seconds: 86400n },
+            refreshTokenLifetime: { seconds: 604800n },
+          }),
+          clientSecret: "removed-oauth2-client-secret",
+        },
+      ],
+    });
+    const application = {
+      ...createMockApplication(),
+      authService: undefined,
+    } as unknown as Application;
+
+    const result = await planAuth(createContext(client, application));
+
+    expect(result.changeSet.service.deletes.map((del) => del.name)).toContain("auth-a");
+    expect(registerSecretSpy).toHaveBeenCalledWith(managerMachineUserRemote.clientSecret);
+    expect(registerSecretSpy).toHaveBeenCalledWith("removed-oauth2-client-secret");
   });
 
   test("marks a SAML idpConfig unchanged when its remote proto materializes defaults", async () => {

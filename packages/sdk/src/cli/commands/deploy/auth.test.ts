@@ -239,7 +239,7 @@ describe("applyAuth phase separation", () => {
     vi.mocked(client.createAuthOAuth2Client).mockResolvedValue({
       oauth2Client: { name: "test-oauth2-client", clientSecret: "brand-new-oauth2-secret" },
     } as Awaited<ReturnType<OperatorClient["createAuthOAuth2Client"]>>);
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     const planResult = createMockPlanResult({
       oauth2ClientCreates: [
         {
@@ -263,7 +263,7 @@ describe("applyAuth phase separation", () => {
     vi.mocked(client.createAuthMachineUser).mockResolvedValue({
       machineUser: { name: "test-machine-user", clientSecret: "brand-new-machineuser-secret" },
     } as Awaited<ReturnType<OperatorClient["createAuthMachineUser"]>>);
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     const planResult = createMockPlanResult({
       machineUserCreates: [
         {

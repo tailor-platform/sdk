@@ -183,6 +183,25 @@ const defaultIdpClientSecret = {
 };
 
 describe("planIdP", () => {
+  test("registers a deleted service's client secret before scheduling its removal", async () => {
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
+    const client = createMockClient({
+      services: [
+        createMatchingRemoteService(),
+        { name: "idp-removed", lang: IdPLang.JA, publishEvents: true, label: appName },
+      ],
+      clients: {
+        ...defaultIdpClientSecret,
+        "idp-removed": [{ name: "old-client", clientSecret: "removed-idp-client-secret" }],
+      },
+    });
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.service.deletes.map((del) => del.name)).toContain("idp-removed");
+    expect(registerSecretSpy).toHaveBeenCalledWith("removed-idp-client-secret");
+  });
+
   test("marks idp service and client unchanged when remote state matches", async () => {
     const client = createMockClient({
       services: [createMatchingRemoteService()],

@@ -104,7 +104,7 @@ describe("authconnection authorize", () => {
       listAuthConnections: listAuthConnectionsMock,
       exchangeAuthConnectionAuthorizationCode: exchangeMock,
     });
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     openMock.mockImplementation(async (authorizeUrl: string) => {
       const state = new URL(authorizeUrl).searchParams.get("state");
       // Uses node:http directly (not the globally stubbed `fetch`, which is reserved
