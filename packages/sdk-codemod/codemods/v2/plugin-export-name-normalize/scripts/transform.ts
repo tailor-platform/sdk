@@ -1,7 +1,10 @@
+import * as fs from "node:fs";
 import { parse, Lang } from "@ast-grep/napi";
+import * as path from "pathe";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const OLD_NAMES = ["generator", "generators"] as const;
+const CONFIG_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 /**
  * Whether a call expression node is a call to `definePlugins`.
@@ -15,7 +18,25 @@ function isDefinePluginsCall(node: SgNode | null | undefined): boolean {
 }
 
 /**
- * Find `generator`/`generators` variable declarators whose value is a `definePlugins()` call.
+ * Whether a variable_declarator sits directly in a top-level `export const`/`export let`
+ * statement, as opposed to inside a function body, block, or nested initializer (e.g. a
+ * property value). Only a declarator in this position creates a module export.
+ * @param decl - The variable_declarator to check
+ * @returns True when `decl` is a top-level exported declarator
+ */
+function isTopLevelExportedDeclarator(decl: SgNode): boolean {
+  const declList = decl.parent();
+  if (!declList) return false;
+  const listKind = declList.kind();
+  if (listKind !== "lexical_declaration" && listKind !== "variable_declaration") return false;
+  const exportStmt = declList.parent();
+  if (!exportStmt || exportStmt.kind() !== "export_statement") return false;
+  return exportStmt.parent()?.kind() === "program";
+}
+
+/**
+ * Find `generator`/`generators` variable declarators whose value is a `definePlugins()` call
+ * and which are themselves a top-level module export.
  * @param root - File root node
  * @returns Matching declarators, in source order
  */
@@ -26,6 +47,7 @@ function findRenamableDeclarators(root: SgNode): SgNode[] {
     if (nameNode?.kind() !== "identifier") continue;
     if (!(OLD_NAMES as readonly string[]).includes(nameNode.text())) continue;
     if (!isDefinePluginsCall(decl.field("value"))) continue;
+    if (!isTopLevelExportedDeclarator(decl)) continue;
     result.push(decl);
   }
   return result;
@@ -42,20 +64,26 @@ function isTailorConfigImportSource(sourceText: string): boolean {
   return /(^|\/)tailor\.config$/.test(withoutExt);
 }
 
+interface TailorConfigSpecifier {
+  spec: SgNode;
+  modulePath: string;
+}
+
 /**
  * Find `import { generator[s] [as alias] }` specifiers imported from a tailor.config module.
  * @param root - File root node
- * @returns Matching import specifiers, in source order
+ * @returns Matching import specifiers with their (raw, quoted-stripped) module path, in source order
  */
-function findTailorConfigGeneratorSpecifiers(root: SgNode): SgNode[] {
-  const result: SgNode[] = [];
+function findTailorConfigGeneratorSpecifiers(root: SgNode): TailorConfigSpecifier[] {
+  const result: TailorConfigSpecifier[] = [];
   for (const stmt of root.findAll({ rule: { kind: "import_statement" } })) {
     const stringNode = stmt.find({ rule: { kind: "string" } });
     if (!stringNode || !isTailorConfigImportSource(stringNode.text())) continue;
+    const modulePath = stringNode.text().replace(/^["']|["']$/g, "");
     for (const spec of stmt.findAll({ rule: { kind: "import_specifier" } })) {
       const nameNode = spec.field("name");
       if (nameNode && (OLD_NAMES as readonly string[]).includes(nameNode.text())) {
-        result.push(spec);
+        result.push({ spec, modulePath });
       }
     }
   }
@@ -252,6 +280,98 @@ function renameBindingAndUsages(
 }
 
 /**
+ * Resolve a relative module specifier to a file on disk, trying each config extension.
+ * @param filePath - Absolute path of the file containing the import
+ * @param rawSpecifier - The import's (unquoted) module specifier
+ * @returns The resolved absolute path, or null when not relative or not found
+ */
+function resolveRelativeModule(filePath: string, rawSpecifier: string): string | null {
+  if (!rawSpecifier.startsWith(".")) return null;
+  const baseDir = path.dirname(filePath);
+  const withoutExt = rawSpecifier.replace(/\.(ts|tsx|js|mjs|cjs|mts|cts)$/, "");
+  for (const ext of CONFIG_EXTENSIONS) {
+    const candidate = path.resolve(baseDir, withoutExt + ext);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  const asIs = path.resolve(baseDir, rawSpecifier);
+  return fs.existsSync(asIs) ? asIs : null;
+}
+
+/**
+ * Whether the config module still exports `oldName` under its own name as a top-level
+ * `definePlugins()` binding (renamed or not doesn't matter here — only presence does).
+ * @param configTree - Parsed root of the config module
+ * @param oldName - Binding name to look for
+ * @returns True when `oldName` is still its own top-level export
+ */
+function stillExportsOwnName(configTree: SgNode, oldName: string): boolean {
+  return findRenamableDeclarators(configTree).some(
+    (decl) => decl.field("name")?.text() === oldName,
+  );
+}
+
+/**
+ * Whether the config module has settled on `plugins` as a top-level `definePlugins()` export.
+ * @param configTree - Parsed root of the config module
+ * @returns True when a `plugins` export of the right shape exists
+ */
+function hasSettledPluginsExport(configTree: SgNode): boolean {
+  return configTree.findAll({ rule: { kind: "variable_declarator" } }).some((decl) => {
+    const nameNode = decl.field("name");
+    return (
+      nameNode?.kind() === "identifier" &&
+      nameNode.text() === "plugins" &&
+      isDefinePluginsCall(decl.field("value")) &&
+      isTopLevelExportedDeclarator(decl)
+    );
+  });
+}
+
+/**
+ * Whether the tailor.config module an import specifier points at either already exports
+ * `plugins` (as a `definePlugins()` binding, with `oldName` no longer present under its own
+ * name), or still exports `oldName` and would itself safely rename it to `plugins` (a single
+ * matching top-level export, with no collision or shadowing binding). Renaming the importer
+ * ahead of an unverifiable or unrenameable source would import a name the source does not
+ * (yet, or ever) actually export — including the case where the source keeps `oldName` as its
+ * own export (because renaming it would collide with an unrelated existing `plugins`), which
+ * an importer must keep referring to as `oldName`, not `plugins`.
+ * @param filePath - Absolute path of the file containing the import
+ * @param modulePath - The import's (unquoted) module specifier
+ * @param oldName - The imported (remote) binding name being considered for rename
+ * @returns True when it is safe to rename this import to `plugins`
+ */
+function sourceConfigRenameIsSafe(filePath: string, modulePath: string, oldName: string): boolean {
+  const resolved = resolveRelativeModule(filePath, modulePath);
+  if (!resolved) return false;
+
+  let configSource: string;
+  try {
+    configSource = fs.readFileSync(resolved, "utf-8");
+  } catch {
+    return false;
+  }
+
+  const configTree = parse(Lang.TypeScript, configSource).root();
+
+  if (!stillExportsOwnName(configTree, oldName)) {
+    // Already migrated (or never existed under this name at all): safe only if `plugins`
+    // is the settled result.
+    return hasSettledPluginsExport(configTree);
+  }
+
+  // Still exported under the old name: safe only if that export's own rename would not
+  // itself collide (including with an unrelated existing `plugins`).
+  if (fileAlreadyBindsPlugins(configTree)) return false;
+  const matching = findRenamableDeclarators(configTree).filter(
+    (decl) => decl.field("name")?.text() === oldName,
+  );
+  if (matching.length !== 1) return false;
+  const nameNode = matching[0]!.field("name")!;
+  return !hasOtherBindingNamed(configTree, oldName, nameNode.range().start.index);
+}
+
+/**
  * Normalize the plugin config export name to `plugins`:
  *
  * 1. `export const generator|generators = definePlugins(...)` → `export const plugins = ...`,
@@ -260,14 +380,19 @@ function renameBindingAndUsages(
  *    `plugins` (keeping any existing alias), with bare local usages renamed to match when
  *    there was no alias.
  *
- * A rename is skipped — leaving that binding (and its usages) untouched — when the file
- * already binds `plugins` to something else, or when the old name is also bound by another
- * declaration, import, or parameter anywhere in the file: a plain text-match rename cannot
- * tell such a reference apart from a reference to the binding being renamed.
+ * A rename is skipped — leaving that binding (and its usages) untouched — when: the file
+ * already binds `plugins` to something else; the old name is also bound by another
+ * declaration, import, or parameter anywhere in the file (a plain text-match rename cannot
+ * tell such a reference apart from a reference to the binding being renamed); a file has more
+ * than one legacy plugin export candidate (renaming both to `plugins` would collide); or, for
+ * an import, the imported module cannot be read and confirmed to itself export `plugins`
+ * safely.
  * @param source - Source code to transform
+ * @param filePath - Absolute path of the file being transformed, used to resolve
+ *   `import { ... } from ".../tailor.config"` specifiers against the actual module on disk
  * @returns Transformed source or null if no changes needed
  */
-export default function transform(source: string): string | null {
+export default function transform(source: string, filePath?: string): string | null {
   if (!source.includes("generator")) return null;
 
   const tree = parse(Lang.TypeScript, source).root();
@@ -280,17 +405,22 @@ export default function transform(source: string): string | null {
 
   const edits: Edit[] = [];
 
-  for (const decl of declarators) {
-    const nameNode = decl.field("name");
-    if (!nameNode) continue;
+  // Two competing legacy exports (e.g. both `generator` and `generators` in one file) can't
+  // both become `plugins` without colliding; leave both for a manual merge.
+  if (declarators.length === 1) {
+    const nameNode = declarators[0]!.field("name")!;
     const oldName = nameNode.text();
-    if (hasOtherBindingNamed(tree, oldName, nameNode.range().start.index)) continue;
-    renameBindingAndUsages(tree, nameNode, oldName, edits);
+    if (!hasOtherBindingNamed(tree, oldName, nameNode.range().start.index)) {
+      renameBindingAndUsages(tree, nameNode, oldName, edits);
+    }
   }
 
-  for (const spec of importSpecifiers) {
+  for (const { spec, modulePath } of importSpecifiers) {
     const importedNode = spec.field("name");
     if (!importedNode) continue;
+    const oldName = importedNode.text();
+
+    if (!filePath || !sourceConfigRenameIsSafe(filePath, modulePath, oldName)) continue;
 
     const aliasNode = spec.field("alias");
     if (aliasNode) {
@@ -299,7 +429,6 @@ export default function transform(source: string): string | null {
       continue;
     }
 
-    const oldName = importedNode.text();
     if (hasOtherBindingNamed(tree, oldName, importedNode.range().start.index)) continue;
     renameBindingAndUsages(tree, importedNode, oldName, edits);
   }

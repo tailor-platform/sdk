@@ -24,18 +24,35 @@ const PLUGIN_MAP: Record<string, { functionName: string; importPath: string }> =
 };
 
 /**
- * Find the variable_declarator enclosing a node, stopping at the top of the file.
- * @param node - Node to walk up from
- * @returns The enclosing variable_declarator, or undefined if there is none
+ * Whether a variable_declarator sits directly in a top-level `export const`/`export let`
+ * statement, as opposed to inside a function body, block, or nested initializer (e.g. a
+ * property value). Only a declarator in this position creates a module export.
+ * @param decl - The variable_declarator to check
+ * @returns True when `decl` is a top-level exported declarator
+ */
+function isTopLevelExportedDeclarator(decl: SgNode): boolean {
+  const declList = decl.parent();
+  if (!declList) return false;
+  const listKind = declList.kind();
+  if (listKind !== "lexical_declaration" && listKind !== "variable_declaration") return false;
+  const exportStmt = declList.parent();
+  if (!exportStmt || exportStmt.kind() !== "export_statement") return false;
+  return exportStmt.parent()?.kind() === "program";
+}
+
+/**
+ * Find the variable_declarator that directly initializes a node — i.e. `node` is the
+ * declarator's `value`, not merely nested somewhere inside it (e.g. a property value in an
+ * object literal). Only matches a top-level exported declarator.
+ * @param node - Node to check
+ * @returns The declarator, or undefined if `node` is not a top-level export's direct initializer
  */
 function findEnclosingDeclarator(node: SgNode): SgNode | undefined {
-  let current: SgNode | null = node.parent();
-  while (current) {
-    if (current.kind() === "variable_declarator") return current;
-    if (current.kind() === "program") return undefined;
-    current = current.parent();
-  }
-  return undefined;
+  const parent = node.parent();
+  if (!parent || parent.kind() !== "variable_declarator") return undefined;
+  if (parent.field("value")?.range().start.index !== node.range().start.index) return undefined;
+  if (!isTopLevelExportedDeclarator(parent)) return undefined;
+  return parent;
 }
 
 /**
@@ -397,16 +414,18 @@ export default function transform(source: string): string | null {
     }
   }
 
-  if (declaratorsToRename.length > 0) {
+  // Two (or more) defineGenerators()/definePlugins() outputs in one file can't all become
+  // `plugins` without colliding; leave them all for a manual merge.
+  if (declaratorsToRename.length === 1) {
     if (fileAlreadyBindsPlugins(tree)) {
       return null;
     }
-    for (const declarator of declaratorsToRename) {
-      const nameNode = declarator.field("name");
-      if (!nameNode) continue;
+    const nameNode = declaratorsToRename[0]!.field("name");
+    if (nameNode) {
       const oldName = nameNode.text();
-      if (hasOtherBindingNamed(tree, oldName, nameNode.range().start.index)) continue;
-      renameBindingAndUsages(tree, nameNode, oldName, edits);
+      if (!hasOtherBindingNamed(tree, oldName, nameNode.range().start.index)) {
+        renameBindingAndUsages(tree, nameNode, oldName, edits);
+      }
     }
   }
 
