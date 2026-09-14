@@ -237,7 +237,9 @@ describe("createTailorDBHook", () => {
       const type = db.table("Test", {
         lines: db.object({ kind: db.string() }, { array: true }),
       });
-      expect(createTailorDBHook(type)({ lines: [item] }).lines).toEqual([item]);
+      const lines = createTailorDBHook(type)({ lines: [item] }).lines as unknown[];
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toBe(item);
     });
 
     test("passes through non-array values without recursing (so the validator surfaces a clear error)", () => {
