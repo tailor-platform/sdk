@@ -184,7 +184,7 @@ const defaultIdpClientSecret = {
 
 describe("planIdP", () => {
   test("registers a deleted service's client secret before scheduling its removal", async () => {
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
+    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     const client = createMockClient({
       services: [
         createMatchingRemoteService(),

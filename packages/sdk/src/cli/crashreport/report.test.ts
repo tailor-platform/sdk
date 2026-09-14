@@ -1,6 +1,16 @@
-import { afterEach, describe, test, expect } from "vitest";
+import * as fs from "node:fs";
+import * as path from "pathe";
+import { afterAll, afterEach, describe, test, expect, vi } from "vitest";
 import { logger, resetSecretRegistry } from "#/cli/shared/logger";
 import { buildCrashReport, type ErrorType } from "./report";
+
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-crashreport-test-${Date.now()}-${Math.random()}`);
+
+vi.mock("xdg-basedir", () => ({ xdgConfig: xdgTempDir }));
+
+afterAll(() => {
+  fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
 
 // This file runs in the shared, non-isolated "unit-core" Vitest project, so registered
 // secrets would otherwise leak into unrelated test files run in the same worker.
@@ -115,5 +125,26 @@ describe("buildCrashReport", () => {
 
     expect(report.errorMessage).not.toContain("prod-service-account-key.json");
     expect(report.errorMessage).toContain("<redacted>");
+  });
+
+  test("redacts a registered secret embedded in the current user's id or email", () => {
+    logger.registerSecret("leaked-org-slug-token");
+    const configDir = path.join(xdgTempDir, "tailor-platform");
+    const configPath = path.join(configDir, "config.yaml");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      "current_user: leaked-org-slug-token\nusers:\n  leaked-org-slug-token:\n    email: leaked-org-slug-token@example.com\n",
+    );
+    try {
+      const report = makeReport(new Error("boom"));
+
+      expect(report.userId).not.toContain("leaked-org-slug-token");
+      expect(report.userId).toBe("<redacted>");
+      expect(report.userEmail).not.toContain("leaked-org-slug-token");
+      expect(report.userEmail).toBe("<redacted>@example.com");
+    } finally {
+      fs.rmSync(configPath, { force: true });
+    }
   });
 });

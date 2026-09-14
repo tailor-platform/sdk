@@ -394,7 +394,7 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       machineUsers: [managerMachineUserRemote],
     });
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
+    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
 
     await planAuth(createContext(client));
 
@@ -402,7 +402,7 @@ describe("planAuth", () => {
   });
 
   test("registers a deleted auth service's machine user and oauth2 client secrets before scheduling removal", async () => {
-    const registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
+    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
       machineUsers: [managerMachineUserRemote],

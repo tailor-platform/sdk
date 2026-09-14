@@ -91,8 +91,8 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     errorMessage: sanitizeMessage(redactSecrets(rawMessage)),
     stackTrace: sanitizeStackTrace(redactSecrets(rawStack)),
     errorType,
-    userId: currentUser?.id ?? null,
-    userEmail: currentUser?.email ?? null,
+    userId: currentUser?.id ? redactSecrets(currentUser.id) : null,
+    userEmail: currentUser?.email ? redactSecrets(currentUser.email) : null,
   };
 }
 
