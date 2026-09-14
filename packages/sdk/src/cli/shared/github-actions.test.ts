@@ -172,6 +172,12 @@ describe("github-actions", () => {
       expect(message).toContain("Add a name");
     });
 
+    test("falls back to CLI_ERROR when a CLIError carries an empty code", () => {
+      expect(describeTerminalError(CLIError({ code: "", message: "boom" })).title).toBe(
+        "CLI_ERROR",
+      );
+    });
+
     test("falls back to Error when the error name is empty", () => {
       const error = new Error("boom");
       error.name = "";

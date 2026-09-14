@@ -130,7 +130,7 @@ export function describeTerminalError(
   fallbackSuggestion?: string,
 ): { message: string; title?: string } {
   if (isCLIError(error)) {
-    return { message: error.format(), title: error.code };
+    return { message: error.format(), title: error.code || "CLI_ERROR" };
   }
   if (error instanceof Error) {
     // Commands outside this package (the seed plugin's validate report) throw a
