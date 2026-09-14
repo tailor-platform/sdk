@@ -137,6 +137,13 @@ describe("github-actions", () => {
       expect(title).toBe("Error");
     });
 
+    test("falls back to the message when format() does not return a string", () => {
+      const error = Object.assign(new Error("fallback message"), {
+        format: () => ({ _errors: [] }),
+      });
+      expect(describeTerminalError(error).message).toBe("fallback message");
+    });
+
     test("handles a thrown non-error value", () => {
       const { message, title } = describeTerminalError("just a string");
       expect(title).toBe("UNKNOWN_ERROR");

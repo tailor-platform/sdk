@@ -87,8 +87,11 @@ export function formatAnnotation(
   return `::${level}${propertyList}::${escapeData(stripVTControlCharacters(message))}\n`;
 }
 
-function hasFormat(error: unknown): error is Error & { format: () => string } {
-  return error instanceof Error && typeof (error as { format?: unknown }).format === "function";
+function formattedMessage(error: Error): string | undefined {
+  const format = (error as { format?: unknown }).format;
+  if (typeof format !== "function") return undefined;
+  const formatted: unknown = format.call(error);
+  return typeof formatted === "string" ? formatted : undefined;
 }
 
 /**
@@ -108,12 +111,13 @@ export function describeTerminalError(
   if (isCLIError(error)) {
     return { message: error.format(), title: error.code ?? "CLI_ERROR" };
   }
-  // Commands outside this package (the seed plugin's validate report) throw a
-  // plain Error carrying its own `format()`, which holds the whole report.
-  if (hasFormat(error)) {
-    return { message: error.format(), title: error.name || "Error" };
-  }
   if (error instanceof Error) {
+    // Commands outside this package (the seed plugin's validate report) throw a
+    // plain Error carrying its own `format()`, which holds the whole report.
+    const formatted = formattedMessage(error);
+    if (formatted !== undefined) {
+      return { message: formatted, title: error.name || "Error" };
+    }
     const suggestion = fallbackSuggestion ? `\nSuggestion: ${fallbackSuggestion}` : "";
     return { message: `${error.message}${suggestion}`, title: error.name || "Error" };
   }
