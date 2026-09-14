@@ -112,15 +112,66 @@ function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unkno
   return issues;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DeclaredFields = Record<string, TailorField<any, any, any>>;
+
+function undeclaredFieldMessage(key: string): string {
+  return `Field "${key}" is not declared by the table. Remove it from the row, or add it to the table definition and run \`tailor generate\`.`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// Reads the raw row, not the hooked one: the hook only copies the declared fields,
+// so an undeclared key is gone by the time the field schema runs.
+function collectUndeclaredFieldIssues(
+  value: unknown,
+  fields: DeclaredFields,
+  path: string[],
+  issues: StandardSchemaV1.Issue[],
+): void {
+  if (!isRecord(value)) {
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    // `Object.hasOwn`, not `key in fields`: a key such as `constructor` would
+    // otherwise resolve to a member of `Object.prototype`.
+    if (!Object.hasOwn(fields, key)) {
+      issues.push({ message: undeclaredFieldMessage(key), path: path.concat(key) });
+      continue;
+    }
+    const field = fields[key];
+    if (field?.type !== "nested") {
+      continue;
+    }
+    const nested = value[key];
+    const nestedFields = field.fields as DeclaredFields;
+    if (field.metadata.array) {
+      if (Array.isArray(nested)) {
+        nested.forEach((item, index) => {
+          collectUndeclaredFieldIssues(item, nestedFields, path.concat(key, `[${index}]`), issues);
+        });
+      }
+    } else {
+      collectUndeclaredFieldIssues(nested, nestedFields, path.concat(key), issues);
+    }
+  }
+}
+
 /**
  * Creates the standard schema definition used to validate seed rows.
  * Runs the hook, then the table's own `validate`, and the field schema only when
  * that reported nothing, so both levels of validation report as issues rather
- * than by throwing.
+ * than by throwing. When the table is given, a key the row carries that the table
+ * does not declare is reported as an issue as well, including keys inside nested
+ * objects, so a row that no longer matches the table fails here instead of when
+ * it is applied.
  * @template T - The output type after validation
  * @param schemaType - TailorDB field schema for validation
  * @param hook - Hook function to transform data before validation
- * @param type - TailorDB table definition, when it carries a table-level `validate`
+ * @param type - TailorDB table definition; runs its table-level `validate` and
+ *   rejects fields it does not declare
  * @returns Schema object with ~standard section for defineSchema
  */
 export function createStandardSchema<T = Record<string, unknown>>(
@@ -130,25 +181,35 @@ export function createStandardSchema<T = Record<string, unknown>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type?: TailorDBType<any, any>,
 ) {
+  const validateHooked = (hooked: Partial<T>): StandardSchemaV1.Result<T> => {
+    const issues = typeLevelIssues(type, hooked);
+    if (issues.length > 0) {
+      return { issues };
+    }
+    const result = schemaType.parse({
+      value: hooked,
+      data: hooked,
+      invoker: null,
+    });
+    if (result.issues) {
+      return result;
+    }
+    return { value: hooked as T };
+  };
+
   return {
     "~standard": {
       version: 1,
       vendor: "@tailor-platform/sdk",
       validate: (value: unknown) => {
         const hooked = hook(value);
-        const issues = typeLevelIssues(type, hooked);
-        if (issues.length > 0) {
-          return { issues };
+        const undeclared: StandardSchemaV1.Issue[] = [];
+        if (type) {
+          collectUndeclaredFieldIssues(value, type.fields as DeclaredFields, [], undeclared);
         }
-        const result = schemaType.parse({
-          value: hooked,
-          data: hooked,
-          invoker: null,
-        });
-        if (result.issues) {
-          return result;
-        }
-        return { value: hooked as T };
+        const result = validateHooked(hooked);
+        const issues = [...undeclared, ...(result.issues ?? [])];
+        return issues.length > 0 ? { issues } : result;
       },
     },
   } as const satisfies StandardSchemaV1<T>;
