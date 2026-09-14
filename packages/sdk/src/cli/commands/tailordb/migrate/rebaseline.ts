@@ -10,7 +10,7 @@ import { confirmationArgs, deploymentArgs, recoveryContextArgs } from "#/cli/sha
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { formatNextAction } from "#/cli/shared/errors";
+import { CLIError, formatNextAction } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -132,9 +132,11 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   assertValidMigrationFiles(target.migrationsDir, target.namespace);
   const latestSnapshot = reconstructSnapshotFromMigrations(target.migrationsDir);
   if (!latestSnapshot) {
-    throw new Error(
-      `No migration history found for namespace "${target.namespace}". Run ${generateCommand} first.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_HISTORY_NOT_FOUND",
+      message: `No migration history found for namespace "${target.namespace}".`,
+      suggestion: `Run ${generateCommand} first.`,
+    });
   }
   const latestMigration = getLatestMigrationNumber(target.migrationsDir);
   const currentHistoryId =
@@ -152,7 +154,10 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     (service) => service.namespace === target.namespace,
   );
   if (!targetService) {
-    throw new Error(`No TailorDB service found for namespace "${target.namespace}"`);
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `No TailorDB service found for namespace "${target.namespace}"`,
+    });
   }
 
   const assertLocalTypesReady = (): void => {
@@ -167,9 +172,12 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
         `Migration history does not reproduce the current local schema for namespace ${styles.bold(target.namespace)}:`,
       );
       logger.log(formatMigrationDiff(localDiff));
-      throw new Error(
-        `Refusing to re-baseline: the migration history must reproduce the current local schema. Run ${generateCommand} first.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_HISTORY_MISMATCH",
+        message:
+          "Refusing to re-baseline: the migration history must reproduce the current local schema.",
+        suggestion: `Run ${generateCommand} first.`,
+      });
     }
   };
   const localSourceFiles = (): string[] => [
@@ -216,21 +224,31 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     const remoteMigration = remoteState.number;
     if (remoteMigration !== latestMigration) {
       const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);
-      throw new Error(
-        `The connected workspace must be at the latest migration ${formatMigrationNumber(latestMigration)} before re-baselining; current checkpoint is ${actual}.`,
-      );
+      throw CLIError({
+        code: "REBASELINE_CHECKPOINT_BEHIND",
+        message: `The connected workspace must be at the latest migration ${formatMigrationNumber(latestMigration)} before re-baselining; current checkpoint is ${actual}.`,
+      });
     }
     if (remoteState.historyIdInvalid) {
-      throw new Error(
-        "Refusing to re-baseline: the connected workspace has an invalid migration history marker.",
-      );
+      throw CLIError({
+        code: "REBASELINE_REMOTE_HISTORY_INVALID",
+        message:
+          "Refusing to re-baseline: the connected workspace has an invalid migration history marker.",
+      });
     }
     if (remoteState.historyId !== expectedHistoryId) {
-      throw new Error(
-        phase === "confirmation"
-          ? "The connected workspace migration history changed while waiting for confirmation. Run the command again."
-          : "Refusing to re-baseline: the connected workspace does not match the local migration history.",
-      );
+      throw phase === "confirmation"
+        ? CLIError({
+            code: "REBASELINE_STATE_CHANGED",
+            message:
+              "The connected workspace migration history changed while waiting for confirmation.",
+            suggestion: "Run the command again.",
+          })
+        : CLIError({
+            code: "REBASELINE_REMOTE_HISTORY_MISMATCH",
+            message:
+              "Refusing to re-baseline: the connected workspace does not match the local migration history.",
+          });
     }
 
     const remoteResults = await verifyRemoteSchema(client, workspaceId, [target], config, [
@@ -247,9 +265,11 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
         logger.error("Remote schema drift detected:");
         logger.log(formatRemoteVerificationResults(remoteResults));
       }
-      throw new Error(
-        "Refusing to re-baseline: the connected workspace remote schema must match the latest migration.",
-      );
+      throw CLIError({
+        code: "REBASELINE_REMOTE_SCHEMA_MISMATCH",
+        message:
+          "Refusing to re-baseline: the connected workspace remote schema must match the latest migration.",
+      });
     }
   };
 
@@ -281,12 +301,18 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   assertValidMigrationFiles(target.migrationsDir, target.namespace);
   const currentFileState = captureMigrationFileState([target])[target.namespace];
   if (currentFileState !== initialFileState) {
-    throw new Error(
-      "Migration files changed while waiting for confirmation. Run the command again.",
-    );
+    throw CLIError({
+      code: "REBASELINE_STATE_CHANGED",
+      message: "Migration files changed while waiting for confirmation.",
+      suggestion: "Run the command again.",
+    });
   }
   if (captureFileState(localSourceFiles()) !== initialLocalFileState) {
-    throw new Error("Local TailorDB table or config files changed. Run the command again.");
+    throw CLIError({
+      code: "REBASELINE_STATE_CHANGED",
+      message: "Local TailorDB table or config files changed.",
+      suggestion: "Run the command again.",
+    });
   }
   assertLocalTypesReady();
   await assertConnectedWorkspaceReady(currentHistoryId, "confirmation");
@@ -306,10 +332,13 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
       rebaselineMarker.historyId,
     );
   } catch (error) {
-    throw new Error(
-      `The local migration history was re-baselined, but the connected workspace checkpoint could not be updated. Run ${setBaselineCommand}, or run ${deployCommand} with schema checks enabled after resolving the connection error.`,
-      { cause: error },
-    );
+    throw CLIError({
+      code: "REBASELINE_CHECKPOINT_UPDATE_FAILED",
+      message:
+        "The local migration history was re-baselined, but the connected workspace checkpoint could not be updated.",
+      suggestion: `Run ${setBaselineCommand}, or run ${deployCommand} with schema checks enabled after resolving the connection error.`,
+      cause: error,
+    });
   }
 
   logger.success(

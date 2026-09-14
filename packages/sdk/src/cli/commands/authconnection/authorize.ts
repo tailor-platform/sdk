@@ -5,7 +5,7 @@ import { z } from "zod";
 import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { formatCopyableCommand, toError } from "#/cli/shared/errors";
+import { CLIError, formatCopyableCommand, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -26,12 +26,17 @@ async function fetchOIDCDiscovery(
   // A fetch failure rejects with TypeError, which the top-level handler
   // classifies as an SDK bug and crash-reports.
   const response = await fetch(url).catch((error: unknown) => {
-    throw new Error(`Failed to fetch OIDC discovery from ${url}: ${toError(error).message}`, {
+    throw CLIError({
+      code: "OIDC_DISCOVERY_FAILED",
+      message: `Failed to fetch OIDC discovery from ${url}: ${toError(error).message}`,
       cause: error,
     });
   });
   if (!response.ok) {
-    throw new Error(`Failed to fetch OIDC discovery from ${url}: ${response.status}`);
+    throw CLIError({
+      code: "OIDC_DISCOVERY_FAILED",
+      message: `Failed to fetch OIDC discovery from ${url}: ${response.status}`,
+    });
   }
   return response.json() as Promise<{
     authorization_endpoint: string;
@@ -85,11 +90,17 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
 
     const connection = connections.find((c) => c.name === args.name);
     if (!connection) {
-      throw new Error(`Auth connection "${args.name}" not found.`);
+      throw CLIError({
+        code: "AUTH_CONNECTION_NOT_FOUND",
+        message: `Auth connection "${args.name}" not found.`,
+      });
     }
 
     if (connection.config.case !== "oauth2") {
-      throw new Error(`Auth connection "${args.name}" is not an OAuth2 connection.`);
+      throw CLIError({
+        code: "AUTH_CONNECTION_NOT_OAUTH2",
+        message: `Auth connection "${args.name}" is not an OAuth2 connection.`,
+      });
     }
 
     const oauth2Config = connection.config.value;
@@ -132,15 +143,24 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           const error = url.searchParams.get("error");
 
           if (error) {
-            throw new Error(`Authorization failed: ${error}`);
+            throw CLIError({
+              code: "AUTHORIZATION_FAILED",
+              message: `Authorization failed: ${error}`,
+            });
           }
 
           if (returnedState !== state) {
-            throw new Error("State mismatch — possible CSRF attack.");
+            throw CLIError({
+              code: "AUTHORIZATION_STATE_MISMATCH",
+              message: "State mismatch — possible CSRF attack.",
+            });
           }
 
           if (!code) {
-            throw new Error("No authorization code received.");
+            throw CLIError({
+              code: "AUTHORIZATION_CODE_MISSING",
+              message: "No authorization code received.",
+            });
           }
 
           // Send authorization code to the platform for server-side token exchange
@@ -169,7 +189,12 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
       const timeout = setTimeout(
         () => {
           server.close();
-          reject(new Error("Authorization timeout exceeded (5 minutes)."));
+          reject(
+            CLIError({
+              code: "AUTHORIZATION_TIMEOUT",
+              message: "Authorization timeout exceeded (5 minutes).",
+            }),
+          );
         },
         5 * 60 * 1000,
       );

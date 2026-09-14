@@ -9,6 +9,7 @@
  * `field_renamed` / `table_renamed` change instead.
  */
 
+import { CLIError } from "#/cli/shared/errors";
 import { collectNestedMemberChanges, getNestedMember } from "./nested-members";
 import {
   SNAPSHOT_FIELD_BOOLEAN_PROPS,
@@ -177,7 +178,10 @@ export function assertValidFieldRenames(
     const label = `${tableName}.${previousFieldName}:${fieldName}`;
     for (const key of [`${tableName}.${previousFieldName}`, `${tableName}.${fieldName}`]) {
       if (seen.has(key)) {
-        throw new Error(`Field "${key}" appears in more than one rename.`);
+        throw CLIError({
+          code: "MIGRATION_RENAME_INVALID",
+          message: `Field "${key}" appears in more than one rename.`,
+        });
       }
       seen.add(key);
     }
@@ -185,39 +189,46 @@ export function assertValidFieldRenames(
     const prevType = previous.tables[tableName];
     const currType = current.tables[tableName];
     if (!prevType || !currType) {
-      throw new Error(
-        `Cannot rename ${label}: table "${tableName}" must exist in both the previous and the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: table "${tableName}" must exist in both the previous and the current schema.`,
+      });
     }
     const prevField = prevType.fields[previousFieldName];
     if (!prevField) {
-      throw new Error(
-        `Cannot rename ${label}: field "${previousFieldName}" does not exist in the previous schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: field "${previousFieldName}" does not exist in the previous schema.`,
+      });
     }
     if (currType.fields[previousFieldName]) {
-      throw new Error(
-        `Cannot rename ${label}: field "${previousFieldName}" still exists in the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: field "${previousFieldName}" still exists in the current schema.`,
+      });
     }
     const currField = currType.fields[fieldName];
     if (!currField) {
-      throw new Error(
-        `Cannot rename ${label}: field "${fieldName}" does not exist in the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: field "${fieldName}" does not exist in the current schema.`,
+      });
     }
     if (prevType.fields[fieldName]) {
-      throw new Error(
-        `Cannot rename ${label}: field "${fieldName}" already exists in the previous schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: field "${fieldName}" already exists in the previous schema.`,
+      });
     }
     if (!isRenameCompatible(prevField, currField)) {
-      throw new Error(
-        `Cannot rename ${label}: the fields are not rename-compatible ` +
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message:
+          `Cannot rename ${label}: the fields are not rename-compatible ` +
           `(the field type, array-ness, and foreign key target must match, ` +
           `enum values must not be removed, nested member names, requiredness, and types must ` +
           `match recursively, and serial fields cannot be renamed).`,
-      );
+      });
     }
   }
 }
@@ -233,12 +244,18 @@ export function parseRenameOption(value: string): FieldRenameSpec {
   const match = value.match(RENAME_OPTION_PATTERN);
   const [, tableName, previousFieldName, fieldName] = match ?? [];
   if (!tableName || !previousFieldName || !fieldName) {
-    throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField".`,
-    );
+    throw CLIError({
+      code: "MIGRATION_RENAME_FLAG_INVALID",
+      message: `Invalid --rename value "${value}". Expected format: "Table.oldField:newField".`,
+      command: "tailordb migration generate",
+    });
   }
   if (previousFieldName === fieldName) {
-    throw new Error(`Invalid --rename value "${value}": old and new field names are identical.`);
+    throw CLIError({
+      code: "MIGRATION_RENAME_FLAG_INVALID",
+      message: `Invalid --rename value "${value}": old and new field names are identical.`,
+      command: "tailordb migration generate",
+    });
   }
   return { tableName, previousFieldName, fieldName };
 }
@@ -263,7 +280,11 @@ export function parseDropOption(value: string): FieldDropSpec {
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field".`);
+    throw CLIError({
+      code: "MIGRATION_DROP_FLAG_INVALID",
+      message: `Invalid --drop value "${value}". Expected format: "Table.field".`,
+      command: "tailordb migration generate",
+    });
   }
   return { tableName, fieldName };
 }
@@ -301,7 +322,11 @@ export function parseExpandContractOption(value: string): FieldExpandContractSpe
   const match = value.match(DROP_OPTION_PATTERN);
   const [, tableName, fieldName] = match ?? [];
   if (!tableName || !fieldName) {
-    throw new Error(`Invalid --expand-contract value "${value}". Expected format: "Table.field".`);
+    throw CLIError({
+      code: "MIGRATION_EXPAND_CONTRACT_FLAG_INVALID",
+      message: `Invalid --expand-contract value "${value}". Expected format: "Table.field".`,
+      command: "tailordb migration generate",
+    });
   }
   return { tableName, fieldName };
 }
@@ -482,51 +507,62 @@ export function assertValidNestedMemberRenames(
     const label = `${previousLabel}:${path[path.length - 1] ?? ""}`;
     for (const key of [previousLabel, `${tableName}.${fieldName}.${path.join(".")}`]) {
       if (seen.has(key)) {
-        throw new Error(`Member "${key}" appears in more than one rename.`);
+        throw CLIError({
+          code: "MIGRATION_RENAME_INVALID",
+          message: `Member "${key}" appears in more than one rename.`,
+        });
       }
       seen.add(key);
     }
     if (previousPath.length === 0 || !haveSameParent(previousPath, path)) {
-      throw new Error(
-        `Cannot rename ${label}: the old and new member must share the same parent inside "${fieldName}".`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: the old and new member must share the same parent inside "${fieldName}".`,
+      });
     }
     const prevField = previous.tables[tableName]?.fields[fieldName];
     const currField = current.tables[tableName]?.fields[fieldName];
     if (prevField?.type !== "nested" || currField?.type !== "nested") {
-      throw new Error(
-        `Cannot rename ${label}: "${tableName}.${fieldName}" must be a nested field in both the previous and the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: "${tableName}.${fieldName}" must be a nested field in both the previous and the current schema.`,
+      });
     }
     const prevMember = getNestedMember(prevField, previousPath);
     if (!prevMember) {
-      throw new Error(
-        `Cannot rename ${label}: member "${previousPath.join(".")}" does not exist in the previous schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: member "${previousPath.join(".")}" does not exist in the previous schema.`,
+      });
     }
     if (getNestedMember(currField, previousPath)) {
-      throw new Error(
-        `Cannot rename ${label}: member "${previousPath.join(".")}" still exists in the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: member "${previousPath.join(".")}" still exists in the current schema.`,
+      });
     }
     const currMember = getNestedMember(currField, path);
     if (!currMember) {
-      throw new Error(
-        `Cannot rename ${label}: member "${path.join(".")}" does not exist in the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: member "${path.join(".")}" does not exist in the current schema.`,
+      });
     }
     if (getNestedMember(prevField, path)) {
-      throw new Error(
-        `Cannot rename ${label}: member "${path.join(".")}" already exists in the previous schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: member "${path.join(".")}" already exists in the previous schema.`,
+      });
     }
     if (!isNestedMemberRenameCompatible(prevMember, currMember)) {
-      throw new Error(
-        `Cannot rename ${label}: the members are not rename-compatible ` +
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message:
+          `Cannot rename ${label}: the members are not rename-compatible ` +
           `(the member type, array-ness, requiredness, foreign key target, scale, ` +
           `hooks, and validations must match, enum values must not be removed, nested members ` +
           `must match recursively, and serial members cannot be renamed).`,
-      );
+      });
     }
   }
 }
@@ -543,13 +579,19 @@ export function parseNestedMemberRenameOption(value: string): NestedMemberRename
   const match = value.match(NESTED_MEMBER_RENAME_OPTION_PATTERN);
   const [, tableName, fieldName, memberPath, newName] = match ?? [];
   if (!tableName || !fieldName || !memberPath || !newName) {
-    throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Table.field.member:newName".`,
-    );
+    throw CLIError({
+      code: "MIGRATION_RENAME_FLAG_INVALID",
+      message: `Invalid --rename value "${value}". Expected format: "Table.field.member:newName".`,
+      command: "tailordb migration generate",
+    });
   }
   const previousPath = memberPath.slice(1).split(".");
   if (previousPath[previousPath.length - 1] === newName) {
-    throw new Error(`Invalid --rename value "${value}": old and new member names are identical.`);
+    throw CLIError({
+      code: "MIGRATION_RENAME_FLAG_INVALID",
+      message: `Invalid --rename value "${value}": old and new member names are identical.`,
+      command: "tailordb migration generate",
+    });
   }
   return { tableName, fieldName, previousPath, path: [...previousPath.slice(0, -1), newName] };
 }
@@ -575,7 +617,11 @@ export function parseNestedMemberDropOption(value: string): NestedMemberDropSpec
   const match = value.match(NESTED_MEMBER_DROP_OPTION_PATTERN);
   const [, tableName, fieldName, memberPath] = match ?? [];
   if (!tableName || !fieldName || !memberPath) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field.member".`);
+    throw CLIError({
+      code: "MIGRATION_DROP_FLAG_INVALID",
+      message: `Invalid --drop value "${value}". Expected format: "Table.field.member".`,
+      command: "tailordb migration generate",
+    });
   }
   return { tableName, fieldName, path: memberPath.slice(1).split(".") };
 }
@@ -798,41 +844,50 @@ export function assertValidTypeRenames(
     const label = `${previousTableName}:${tableName}`;
     for (const key of [previousTableName, tableName]) {
       if (seen.has(key)) {
-        throw new Error(`Table "${key}" appears in more than one rename.`);
+        throw CLIError({
+          code: "MIGRATION_RENAME_INVALID",
+          message: `Table "${key}" appears in more than one rename.`,
+        });
       }
       seen.add(key);
     }
 
     const prevType = previous.tables[previousTableName];
     if (!prevType) {
-      throw new Error(
-        `Cannot rename ${label}: table "${previousTableName}" does not exist in the previous schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: table "${previousTableName}" does not exist in the previous schema.`,
+      });
     }
     if (current.tables[previousTableName]) {
-      throw new Error(
-        `Cannot rename ${label}: table "${previousTableName}" still exists in the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: table "${previousTableName}" still exists in the current schema.`,
+      });
     }
     const currType = current.tables[tableName];
     if (!currType) {
-      throw new Error(
-        `Cannot rename ${label}: table "${tableName}" does not exist in the current schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: table "${tableName}" does not exist in the current schema.`,
+      });
     }
     if (previous.tables[tableName]) {
-      throw new Error(
-        `Cannot rename ${label}: table "${tableName}" already exists in the previous schema.`,
-      );
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message: `Cannot rename ${label}: table "${tableName}" already exists in the previous schema.`,
+      });
     }
     if (!isTypeRenameCompatible(prevType, currType)) {
-      throw new Error(
-        `Cannot rename ${label}: the tables are not rename-compatible ` +
+      throw CLIError({
+        code: "MIGRATION_RENAME_INVALID",
+        message:
+          `Cannot rename ${label}: the tables are not rename-compatible ` +
           `(every field must keep its name, type, array-ness, required/unique constraints, ` +
           `foreign key target, and scale, enum values must not be removed, indexes must match, ` +
           `self-referential foreign keys must be optional, ` +
           `and tables with serial or file fields cannot be renamed).`,
-      );
+      });
     }
   }
 }
@@ -874,12 +929,18 @@ export function parseTypeRenameOption(value: string): TypeRenameSpec {
   const match = value.match(TYPE_RENAME_OPTION_PATTERN);
   const [, previousTableName, tableName] = match ?? [];
   if (!previousTableName || !tableName) {
-    throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Table.oldField:newField" or "OldTable:NewTable".`,
-    );
+    throw CLIError({
+      code: "MIGRATION_RENAME_FLAG_INVALID",
+      message: `Invalid --rename value "${value}". Expected format: "Table.oldField:newField" or "OldTable:NewTable".`,
+      command: "tailordb migration generate",
+    });
   }
   if (previousTableName === tableName) {
-    throw new Error(`Invalid --rename value "${value}": old and new table names are identical.`);
+    throw CLIError({
+      code: "MIGRATION_RENAME_FLAG_INVALID",
+      message: `Invalid --rename value "${value}": old and new table names are identical.`,
+      command: "tailordb migration generate",
+    });
   }
   return { previousTableName, tableName };
 }
@@ -903,7 +964,11 @@ export function parseTypeDropOption(value: string): TypeDropSpec {
   const match = value.match(TYPE_DROP_OPTION_PATTERN);
   const [, tableName] = match ?? [];
   if (!tableName) {
-    throw new Error(`Invalid --drop value "${value}". Expected format: "Table.field" or "Table".`);
+    throw CLIError({
+      code: "MIGRATION_DROP_FLAG_INVALID",
+      message: `Invalid --drop value "${value}". Expected format: "Table.field" or "Table".`,
+      command: "tailordb migration generate",
+    });
   }
   return { tableName };
 }

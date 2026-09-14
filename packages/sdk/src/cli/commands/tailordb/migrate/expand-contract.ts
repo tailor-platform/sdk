@@ -7,6 +7,7 @@
  */
 
 import { parseSync } from "oxc-parser";
+import { CLIError } from "#/cli/shared/errors";
 import { getExpandContractFieldChangeEligibility, hasFieldShapeChange } from "./field-type-change";
 import { isSnapshotFieldRefOperand } from "./snapshot-types";
 import type { BreakingChangeInfo, DiffChange, MigrationDiff } from "./diff-calculator";
@@ -66,9 +67,10 @@ export function buildTempFieldName(fieldName: string, taken: ReadonlySet<string>
     if (candidate.length > MAX_FIELD_NAME_LENGTH) break;
     if (!taken.has(candidate)) return candidate;
   }
-  throw new Error(
-    `Cannot derive a temporary field name for "${fieldName}": every candidate is taken or exceeds ${MAX_FIELD_NAME_LENGTH} characters.`,
-  );
+  throw CLIError({
+    code: "MIGRATION_EXPAND_CONTRACT_NAME_UNAVAILABLE",
+    message: `Cannot derive a temporary field name for "${fieldName}": every candidate is taken or exceeds ${MAX_FIELD_NAME_LENGTH} characters.`,
+  });
 }
 
 /** Inputs for {@link planExpandContract}. */

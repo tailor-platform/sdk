@@ -188,9 +188,12 @@ describe("truncate command", () => {
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
 
-      await expect(truncate({ namespace: "shared-db" })).rejects.toThrow(
-        'Namespace "shared-db" is declared as external in this app\'s config and cannot be truncated from here. Run truncate from the app that owns it.',
-      );
+      await expect(truncate({ namespace: "shared-db" })).rejects.toMatchObject({
+        code: "TAILORDB_NAMESPACE_EXTERNAL",
+        message:
+          'Namespace "shared-db" is declared as external in this app\'s config and cannot be truncated from here.',
+        suggestion: "Run truncate from the app that owns the namespace.",
+      });
     });
   });
 

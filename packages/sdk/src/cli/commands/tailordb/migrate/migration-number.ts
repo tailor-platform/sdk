@@ -1,3 +1,5 @@
+import { CLIError } from "#/cli/shared/errors";
+
 /**
  * Format migration number as 4-digit string.
  * @param num - Migration number
@@ -23,11 +25,15 @@ export function parseMigrationNumberArg(numberStr: string): number {
   if (/^(0|[1-9]\d*)$/.test(numberStr)) {
     const parsed = parseInt(numberStr, 10);
     if (parsed > 9999) {
-      throw new Error(`Migration number ${numberStr} is out of range. Expected 0-9999.`);
+      throw CLIError({
+        code: "MIGRATION_NUMBER_INVALID",
+        message: `Migration number ${numberStr} is out of range. Expected 0-9999.`,
+      });
     }
     return parsed;
   }
-  throw new Error(
-    `Invalid migration number format: ${numberStr}. Expected 4-digit format (e.g., 0001) or integer 0-9999 (e.g., 1).`,
-  );
+  throw CLIError({
+    code: "MIGRATION_NUMBER_INVALID",
+    message: `Invalid migration number format: ${numberStr}. Expected 4-digit format (e.g., 0001) or integer 0-9999 (e.g., 1).`,
+  });
 }

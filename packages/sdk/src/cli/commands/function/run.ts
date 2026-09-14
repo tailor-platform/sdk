@@ -22,6 +22,7 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { executeScript } from "#/cli/shared/script-executor";
@@ -105,7 +106,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
     // 1. Resolve and validate file path
     const filePath = path.resolve(args.file);
     if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
+      throw CLIError({ code: "FILE_NOT_FOUND", message: `File not found: ${filePath}` });
     }
 
     // 2. Load config (required)
@@ -224,7 +225,10 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
       try {
         parsedArg = JSON.parse(args.arg);
       } catch (error) {
-        throw new Error(`Invalid --arg JSON: ${error instanceof Error ? error.message : error}`, {
+        throw CLIError({
+          code: "FUNCTION_ARG_INVALID",
+          message: `Invalid --arg JSON: ${error instanceof Error ? error.message : error}`,
+          command: "function run",
           cause: error,
         });
       }
@@ -342,7 +346,11 @@ function resolveAuthNamespace(
   if (authConfig?.name) {
     return authConfig.name;
   }
-  throw new Error("Auth namespace is required. Ensure tailor.config.ts has an auth config.");
+  throw CLIError({
+    code: "AUTH_CONFIG_REQUIRED",
+    message: "Auth namespace is required.",
+    suggestion: "Ensure tailor.config.ts has an auth config.",
+  });
 }
 
 type ResolveMachineUserNameOptions = {
@@ -381,9 +389,12 @@ async function resolveMachineUserName(options: ResolveMachineUserNameOptions): P
       }
     }
   }
-  throw new Error(
-    "Machine user is required. Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
-  );
+  throw CLIError({
+    code: "MACHINE_USER_REQUIRED",
+    message: "Machine user is required.",
+    suggestion:
+      "Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
+  });
 }
 
 interface ResolveMachineUserOptions {

@@ -171,7 +171,12 @@ describe("loadScriptSchemaSnapshot", () => {
     const scriptPath = path.join(tmp.dir, "fix.ts");
     fs.writeFileSync(path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME), "{broken");
 
-    expect(() => loadScriptSchemaSnapshot(scriptPath)).toThrow(/tailor function script/);
+    expect(() => loadScriptSchemaSnapshot(scriptPath)).toThrow(
+      expect.objectContaining({
+        code: "SCRIPT_SNAPSHOT_INVALID",
+        suggestion: expect.stringMatching(/tailor function script/),
+      }),
+    );
   });
 
   test("rejects a snapshot with an unexpected shape", () => {
@@ -267,11 +272,16 @@ describe("verifyScriptSchemaSnapshot", () => {
     await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(
       /no longer matches the deployed schema/,
     );
-    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(
-      /tailor function script scripts\/fix\.ts/,
-    );
-    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(/--remote/);
-    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toThrow(/--allow-schema-drift/);
+    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toMatchObject({
+      code: "SCRIPT_SCHEMA_DRIFT",
+      suggestion: expect.stringMatching(/tailor function script scripts\/fix\.ts/),
+    });
+    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toMatchObject({
+      suggestion: expect.stringMatching(/--remote/),
+    });
+    await expect(verifyScriptSchemaSnapshot(makeOptions())).rejects.toMatchObject({
+      suggestion: expect.stringMatching(/--allow-schema-drift/),
+    });
   });
 
   test("accepts a local snapshot when the deployed schema carries the same generated contract", async () => {

@@ -3,6 +3,7 @@ import {
   toPlatformExecutionPolicyKey as toPlatformKey,
 } from "@tailor-platform/shared/workflow-policy";
 import { type OperatorClient } from "#/cli/shared/client";
+import { CLIError } from "#/cli/shared/errors";
 import { WorkflowJobFunctionExecutionPolicySchema } from "#/parser/service/workflow/schema";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -76,9 +77,10 @@ function declaredKey(policy: ExecutionPolicyInstance): string {
   if (policy.matchType === "exact") return policy.key;
   const key = (policy as unknown as { key?: string }).key;
   if (typeof key !== "string") {
-    throw new Error(
-      `Invalid workflow execution policy "${policy.name}": prefix policies must be created via defineWorkflowExecutionPolicy() or defineWorkflowExecutionPolicies(), not a hand-constructed object.`,
-    );
+    throw CLIError({
+      code: "WORKFLOW_EXECUTION_POLICY_INVALID",
+      message: `Invalid workflow execution policy "${policy.name}": prefix policies must be created via defineWorkflowExecutionPolicy() or defineWorkflowExecutionPolicies(), not a hand-constructed object.`,
+    });
   }
   return key;
 }
@@ -101,9 +103,10 @@ export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): s
  */
 function validatePolicy(policy: ExecutionPolicyInstance): void {
   if (declaredKey(policy).endsWith("*")) {
-    throw new Error(
-      `Invalid workflow execution policy "${policy.name}": ${EXECUTION_POLICY_KEY_WILDCARD_MESSAGE}`,
-    );
+    throw CLIError({
+      code: "WORKFLOW_EXECUTION_POLICY_INVALID",
+      message: `Invalid workflow execution policy "${policy.name}": ${EXECUTION_POLICY_KEY_WILDCARD_MESSAGE}`,
+    });
   }
   const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse({
     name: policy.name,
@@ -111,9 +114,10 @@ function validatePolicy(policy: ExecutionPolicyInstance): void {
     concurrencyPolicy: policy.concurrencyPolicy,
   });
   if (!parsed.success) {
-    throw new Error(
-      `Invalid workflow execution policy "${policy.name}": ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
-    );
+    throw CLIError({
+      code: "WORKFLOW_EXECUTION_POLICY_INVALID",
+      message: `Invalid workflow execution policy "${policy.name}": ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
+    });
   }
 }
 
@@ -163,9 +167,10 @@ export async function planWorkflowJobFunctionExecutionPolicy(
   const seenNames = new Set<string>();
   for (const policy of declaredList) {
     if (seenNames.has(policy.name)) {
-      throw new Error(
-        `Duplicate workflow execution policy name "${policy.name}". Each policy must have a unique name within the workspace.`,
-      );
+      throw CLIError({
+        code: "WORKFLOW_EXECUTION_POLICY_DUPLICATE",
+        message: `Duplicate workflow execution policy name "${policy.name}". Each policy must have a unique name within the workspace.`,
+      });
     }
     seenNames.add(policy.name);
 

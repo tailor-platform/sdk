@@ -24,6 +24,7 @@ import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -231,10 +232,13 @@ export const removeCommand = defineAppCommand({
           default: false,
         });
         if (!confirmed) {
-          throw new Error(ml`
+          throw CLIError({
+            code: "REMOVE_CANCELLED",
+            message: ml`
         Remove cancelled. No resources were deleted.
         To override, run again and confirm, or use --yes flag.
-      `);
+      `,
+          });
         }
       } else {
         logger.success("Removing all resources (--yes flag specified)...");

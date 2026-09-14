@@ -4,6 +4,7 @@ import { positiveIntArg } from "#/cli/shared/args";
 import { fetchAll, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { listOrganizations } from "./list";
 import type { UserOrganizationInfo } from "./transform";
@@ -132,7 +133,10 @@ export async function organizationTree(
   if (options?.organizationId) {
     orgs = (await listOrganizations()).filter((o) => o.organizationId === options.organizationId);
     if (orgs.length === 0) {
-      throw new Error(`Organization "${options.organizationId}" not found.`);
+      throw CLIError({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: `Organization "${options.organizationId}" not found.`,
+      });
     }
   } else {
     orgs = await listOrganizations();
@@ -183,7 +187,10 @@ export const treeCommand = defineAppCommand({
         (o) => o.organizationId === args["organization-id"],
       );
       if (orgs.length === 0) {
-        throw new Error(`Organization "${args["organization-id"]}" not found.`);
+        throw CLIError({
+          code: "ORGANIZATION_NOT_FOUND",
+          message: `Organization "${args["organization-id"]}" not found.`,
+        });
       }
     } else {
       orgs = await listOrganizations();
