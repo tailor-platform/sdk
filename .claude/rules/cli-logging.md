@@ -68,3 +68,57 @@ This separation allows piping data to other commands without log messages interf
 2. ✅ Use `logger` for all CLI output
 3. ✅ Use `styles` for inline text coloring
 4. ✅ Use `logger.out()` for structured data output (handles JSON mode automatically)
+
+## Output Placement: default vs `--verbose` vs `--json`
+
+The method you call decides who sees a line. `logger.debug()` is gated on `logger.verbose`
+(`--verbose`, `DEBUG`, or `RUNNER_DEBUG=1`); everything else is unconditional. `--json` is an
+orthogonal format axis, not a fourth verbosity level: it changes how `logger.out()` serializes the
+result and how a failure is rendered, and it never silences a line that would otherwise be shown.
+
+Both CLI users and coding agents read this output, and `packages/sdk/docs/cli-reference.md`
+already promises SDK users what each level contains. Treat the table below as how to keep that
+promise.
+
+| Content                                                                  | Goes to                    |
+| ------------------------------------------------------------------------ | -------------------------- |
+| The outcome, and the counts or totals that let a caller verify it        | default (`info`/`success`) |
+| A change set the user must review or approve                             | default                    |
+| Anything the user must act on: warnings, remediation flags, failed items | default (`warn`/`error`)   |
+| The requested data result                                                | `logger.out()` (stdout)    |
+| Per-item progress: each file loaded, type parsed, item skipped           | `logger.debug()`           |
+| Resolved paths, timings, extracted configuration dumps                   | `logger.debug()`           |
+| The CLI's own stack traces                                               | verbose-gated              |
+| A live feed of remote events (`--follow`, polling)                       | `mode: "stream"`           |
+
+The dividing line for per-item output is whether the reader must **act on each item**, not how
+many lines it produces. A list of every loaded table is progress, so it is verbose-only; a list of
+fields that need `--expand-contract`, or a per-resource deploy plan, is the decision the command
+exists to support, so it stays in default output however long it runs.
+
+Two things this does not cover. Inherently streaming commands (`function logs --follow`, workflow
+waiters) emit an unbounded feed by design — the per-event lines are the product. And a stack trace
+that came back from a _remote_ execution is result data the user asked for; only the CLI's own
+internal traces are verbose-gated.
+
+### Errors under `--json`
+
+A failure is serialized by `errorToJson()` into `{ error: { … } }` on stderr. Every field except
+`message` is optional, so a `throw new Error(...)` reaching the top level becomes
+`UNEXPECTED_ERROR` with the whole explanation flattened into one prose string. Callers cannot
+branch on that.
+
+When you add or touch an error a caller could plausibly recover from, throw a `CLIError` and
+split it across the envelope instead:
+
+- `code` — a specific, stable identifier for the condition. `CLIError` falls back to `CLI_ERROR`
+  when you omit it, which is only acceptable for a failure no caller would branch on. Never leave
+  a nameable condition as `UNEXPECTED_ERROR`.
+- `message` — what failed, and nothing else. No remediation prose, no embedded newlines.
+- `suggestion` — the remediation, as its own field.
+- `next` / `command` — an executable recovery action, so the caller can run it rather than parse
+  for it.
+- `context` — the machine-usable facts behind the failure (resource names, per-phase causes),
+  never secrets.
+
+Diagnostics stay on stderr in JSON mode so that stdout holds only the parseable result.
