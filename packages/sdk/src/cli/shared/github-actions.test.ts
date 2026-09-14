@@ -1,5 +1,6 @@
 import { color } from "@tailor-platform/shared/color";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { withErrorDiagnostics } from "./error-diagnostics";
 import { CLIError } from "./errors";
 import {
   annotateTerminalError,
@@ -64,6 +65,27 @@ describe("github-actions", () => {
       using argv = vi.spyOn(process, "argv", "get");
       argv.mockReturnValue(["node", "tailor", "workspace", "list", "-j"]);
       expect(annotationsEnabled(false)).toBe(false);
+    });
+
+    test.each(["--json=true", "-j=true", "--json=1"])("is off for the %s form", (flag) => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "crashreport", "send", flag]);
+      expect(annotationsEnabled(false)).toBe(false);
+    });
+
+    test("stays on for an explicitly disabled json flag", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "deploy", "--json=false"]);
+      expect(annotationsEnabled(false)).toBe(true);
+    });
+
+    test("does not treat an unrelated flag ending in json as the json flag", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "deploy", "--no-json", "--jsonish"]);
+      expect(annotationsEnabled(false)).toBe(true);
     });
 
     test("stays on when argv has no json flag", () => {
@@ -138,6 +160,19 @@ describe("github-actions", () => {
 
     test("falls back to CLI_ERROR when a CLIError carries no code", () => {
       expect(describeTerminalError(CLIError({ message: "boom" })).title).toBe("CLI_ERROR");
+    });
+
+    test("falls back to Error when the error name is empty", () => {
+      const error = new Error("boom");
+      error.name = "";
+      expect(describeTerminalError(error).title).toBe("Error");
+    });
+
+    test("prefers a diagnostics code over the error name for the title", () => {
+      const error = withErrorDiagnostics(new Error("transport gone"), {
+        code: "TRANSPORT_DISCONNECTED",
+      });
+      expect(describeTerminalError(error).title).toBe("TRANSPORT_DISCONNECTED");
     });
 
     test("uses the error name and appends the caller's suggestion for a plain error", () => {

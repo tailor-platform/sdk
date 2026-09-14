@@ -1,4 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
+import { getErrorDiagnostics } from "./error-diagnostics";
 import { isCLIError } from "./errors";
 import { parseBoolean } from "./parse-boolean";
 
@@ -53,7 +54,12 @@ function escapeProperty(value: string): string {
  * @returns True when argv carries the JSON flag
  */
 function jsonRequestedInArgv(): boolean {
-  return process.argv.slice(2).some((value) => value === "--json" || value === "-j");
+  return process.argv.slice(2).some((value) => {
+    const separator = value.indexOf("=");
+    const name = separator === -1 ? value : value.slice(0, separator);
+    if (name !== "--json" && name !== "-j") return false;
+    return separator === -1 || parseBoolean(value.slice(separator + 1)) !== false;
+  });
 }
 
 /**
@@ -126,12 +132,13 @@ export function describeTerminalError(
   if (error instanceof Error) {
     // Commands outside this package (the seed plugin's validate report) throw a
     // plain Error carrying its own `format()`, which holds the whole report.
+    const title = getErrorDiagnostics(error).code ?? (error.name || "Error");
     const formatted = formattedMessage(error);
     if (formatted !== undefined) {
-      return { message: formatted, title: error.name || "Error" };
+      return { message: formatted, title };
     }
     const suggestion = fallbackSuggestion ? `\nSuggestion: ${fallbackSuggestion}` : "";
-    return { message: `${error.message}${suggestion}`, title: error.name || "Error" };
+    return { message: `${error.message}${suggestion}`, title };
   }
   return { message: `Unknown error: ${String(error)}`, title: "UNKNOWN_ERROR" };
 }
