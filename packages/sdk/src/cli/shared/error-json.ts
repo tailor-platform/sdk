@@ -82,13 +82,20 @@ export function errorToJson(
 /**
  * Serialize a CLI failure into the stable JSON error envelope.
  *
- * Redacts registered secrets from every string in the envelope, however deeply nested,
- * before this function's own `JSON.stringify` call, rather than relying only on the
+ * Redacts registered secrets from every string *value* in the envelope, however deeply
+ * nested, before this function's own `JSON.stringify` call, rather than relying only on the
  * redaction `logger.log()` does on the final string: an upstream error message (or
  * `error.context`, an arbitrary record) can already embed a secret in JSON-escaped form
  * (e.g. echoed back inside a JSON API error body), and stringifying the envelope would
  * escape that a second time, no longer matching a registered secret's single-level-escaped
  * form.
+ *
+ * Does not cover a secret used as an object *key* (e.g. `context: { [secret]: true }`) —
+ * `JSON.stringify`'s replacer can only transform values, never rename keys. No current
+ * caller does this (`context` keys are always fixed, SDK-chosen strings), and the CLI's own
+ * `logger.log(serializeError(...))` call site is still protected regardless, since that
+ * redaction pass re-scans the fully rendered JSON text and does not distinguish key
+ * position from value position.
  * @param error - Failure to serialize
  * @param options - JSON serialization options
  * @returns Serialized JSON error envelope
