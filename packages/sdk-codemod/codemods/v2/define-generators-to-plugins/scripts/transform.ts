@@ -24,11 +24,47 @@ const PLUGIN_MAP: Record<string, { functionName: string; importPath: string }> =
 };
 
 /**
+ * Find the variable_declarator enclosing a node, stopping at the top of the file.
+ * @param node - Node to walk up from
+ * @returns The enclosing variable_declarator, or undefined if there is none
+ */
+function findEnclosingDeclarator(node: SgNode): SgNode | undefined {
+  let current: SgNode | null = node.parent();
+  while (current) {
+    if (current.kind() === "variable_declarator") return current;
+    if (current.kind() === "program") return undefined;
+    current = current.parent();
+  }
+  return undefined;
+}
+
+/**
+ * Whether the file already binds the name `plugins`, as a top-level variable or an
+ * imported (possibly aliased) specifier. Used to avoid a rename that would collide.
+ * @param root - File root node
+ * @returns True if a `plugins` binding already exists
+ */
+function fileAlreadyBindsPlugins(root: SgNode): boolean {
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const nameNode = decl.field("name");
+    if (nameNode?.kind() === "identifier" && nameNode.text() === "plugins") return true;
+  }
+  for (const spec of root.findAll({ rule: { kind: "import_specifier" } })) {
+    const idents = spec.children().filter((c: SgNode) => c.kind() === "identifier");
+    const local = idents[idents.length - 1];
+    if (local?.text() === "plugins") return true;
+  }
+  return false;
+}
+
+/**
  * Transform defineGenerators() to definePlugins():
  *
  * 1. Rename `defineGenerators` → `definePlugins` in import and call
  * 2. Transform tuple arguments `["pkg-name", config]` → `pluginFn(config)`
  * 3. Add plugin imports from their respective SDK paths
+ * 4. Rename the export variable to `plugins`, the official plugin config export name
+ *    (skipping the whole file when `plugins` is already bound to something else)
  * @param source - Source code to transform
  * @returns Transformed source or null if no changes needed
  */
@@ -169,6 +205,34 @@ export default function transform(source: string): string | null {
         }
       } else {
         edits.push(identNode.replace("definePlugins"));
+      }
+    }
+  }
+
+  // Step 4: Rename the export variable to `plugins`. Skip the whole file rather than
+  // rename into a name that already means something else here.
+  const declaratorsToRename: SgNode[] = [];
+  const seenStarts = new Set<number>();
+  for (const callNode of callNodes) {
+    const declarator = findEnclosingDeclarator(callNode);
+    if (!declarator) continue;
+    const start = declarator.range().start.index;
+    if (seenStarts.has(start)) continue;
+    seenStarts.add(start);
+    const nameNode = declarator.field("name");
+    if (nameNode?.kind() === "identifier" && nameNode.text() !== "plugins") {
+      declaratorsToRename.push(declarator);
+    }
+  }
+
+  if (declaratorsToRename.length > 0) {
+    if (fileAlreadyBindsPlugins(tree)) {
+      return null;
+    }
+    for (const declarator of declaratorsToRename) {
+      const nameNode = declarator.field("name");
+      if (nameNode) {
+        edits.push(nameNode.replace("plugins"));
       }
     }
   }
