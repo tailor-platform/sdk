@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { generatePGliteSchemaModule } from "./pglite-schema";
 import { processKyselyType, generateUnifiedKyselyTypes } from "./type-processor";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
@@ -42,6 +43,11 @@ export function kyselyTypePlugin(
     async onTailorDBReady(
       ctx: TailorDBReadyContext<KyselyTypePluginOptions>,
     ): Promise<GeneratorResult> {
+      const { distPath, pgliteSchemaPath } = ctx.pluginConfig;
+      if (pgliteSchemaPath && resolve(distPath) === resolve(pgliteSchemaPath)) {
+        throw new Error("distPath and pgliteSchemaPath must resolve to different files.");
+      }
+
       const allNamespaceData: KyselyNamespaceMetadata[] = [];
 
       for (const ns of ctx.tailordb) {

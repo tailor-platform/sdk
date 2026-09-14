@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
@@ -128,6 +129,33 @@ describe("kyselyTypePlugin pgliteSchemaPath", () => {
     const result = await kyselyTypePlugin(config).onTailorDBReady!(ctx(namespaces, config));
     expect(result.files.map((f) => f.path)).toEqual([config.distPath, config.pgliteSchemaPath]);
     expect(result.files[1]!.content).toContain("export const pgliteSchema = {");
+  });
+
+  test.each([
+    ["./generated/shared.ts", "./generated/shared.ts"],
+    ["./generated/shared.ts", "./generated/nested/../shared.ts"],
+    ["./generated/shared.ts", resolve("generated/shared.ts")],
+  ])("rejects overlapping output paths %s and %s", async (distPath, pgliteSchemaPath) => {
+    const config = { distPath, pgliteSchemaPath };
+    await expect(
+      kyselyTypePlugin(config).onTailorDBReady!(ctx(namespaces, config)),
+    ).rejects.toThrow(/distPath and pgliteSchemaPath must resolve to different files/);
+  });
+
+  test("rejects overlapping output paths even without tables", async () => {
+    const config = { distPath: "./shared.ts", pgliteSchemaPath: "./shared.ts" };
+    await expect(kyselyTypePlugin(config).onTailorDBReady!(ctx([], config))).rejects.toThrow(
+      /distPath and pgliteSchemaPath must resolve to different files/,
+    );
+  });
+
+  test("allows the same basename in different output directories", async () => {
+    const config = { distPath: "./types/shared.ts", pgliteSchemaPath: "./schema/shared.ts" };
+    const result = await kyselyTypePlugin(config).onTailorDBReady!(ctx(namespaces, config));
+    expect(result.files.map((file) => file.path)).toEqual([
+      config.distPath,
+      config.pgliteSchemaPath,
+    ]);
   });
 
   test("emits only the types when not configured", async () => {
