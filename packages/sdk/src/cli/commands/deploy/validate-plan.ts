@@ -67,6 +67,7 @@ import {
   UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
   UpdateWorkflowRequestSchema,
 } from "@tailor-platform/tailor-proto/workflow_pb";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
@@ -658,7 +659,8 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     );
   }
 
-  throw new Error(
-    `${violations.length} validation error(s) found in ${resourceNames.size} resource(s)`,
-  );
+  throw CLIError({
+    code: "DEPLOY_VALIDATION_FAILED",
+    message: `${violations.length} validation error(s) found in ${resourceNames.size} resource(s)`,
+  });
 }

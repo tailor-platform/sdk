@@ -17,6 +17,7 @@ import * as crypto from "node:crypto";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/snapshot";
 import { isNotFoundError } from "#/cli/shared/client";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { buildMetaRequest, resourceTrn, writeMetadataLabelsDirect } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -238,7 +239,9 @@ export async function executeMigrationAsWorkflow(
 
     const version = jobFunction?.version;
     if (version === undefined) {
-      throw new Error(`Temporary migration job function '${name}' was created without a version.`);
+      throw internalError(
+        `Temporary migration job function '${name}' was created without a version.`,
+      );
     }
 
     const { workflow } = await client.createWorkflow({
@@ -249,7 +252,7 @@ export async function executeMigrationAsWorkflow(
     });
     workflowId = workflow?.id;
     if (!workflowId) {
-      throw new Error(`Temporary migration workflow '${name}' was created without an id.`);
+      throw internalError(`Temporary migration workflow '${name}' was created without an id.`);
     }
     await writeMetadataLabelsDirect(
       client,
@@ -294,7 +297,10 @@ async function waitForMigrationWorkflow(
       executionId,
     });
     if (!execution) {
-      throw new Error(`Migration workflow execution '${executionId}' not found.`);
+      throw CLIError({
+        code: "WORKFLOW_EXECUTION_NOT_FOUND",
+        message: `Migration workflow execution '${executionId}' not found.`,
+      });
     }
 
     if (execution.status === WorkflowExecution_Status.SUCCESS) {

@@ -931,7 +931,10 @@ export default defineConfig({
           loadConfigId: async () => EXISTING_ID,
         }),
       ),
-    ).rejects.toThrow(/Neither can be chosen automatically/);
+    ).rejects.toMatchObject({
+      code: "APP_ID_CONFLICT",
+      suggestion: expect.stringMatching(/Neither can be chosen automatically/),
+    });
     expect(fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8")).toBe(lockBefore);
   });
 

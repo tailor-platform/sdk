@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { listCommand } from "./list";
 
 export const pluginCommand = defineCommand({
@@ -8,6 +9,6 @@ export const pluginCommand = defineCommand({
     list: listCommand,
   },
   async run() {
-    await runCommand(listCommand, []);
+    await runDefaultSubCommand(listCommand);
   },
 });

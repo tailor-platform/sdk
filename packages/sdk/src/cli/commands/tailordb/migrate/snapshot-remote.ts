@@ -16,6 +16,7 @@ import {
   type TailorDBType_Permission_Operand,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
+import { internalError } from "#/cli/shared/errors";
 import {
   computeSourceScriptHash,
   extractSourceScriptHash,
@@ -317,7 +318,7 @@ function convertRemotePermit(
 ): "allow" | "deny" {
   const converted = REMOTE_PERMISSION_PERMITS.get(permit);
   if (converted) return converted;
-  throw new Error(`Unsupported ${source} permission permit: ${permit}`);
+  throw internalError(`Unsupported ${source} permission permit: ${permit}`);
 }
 
 function convertRemoteOperator(
@@ -326,7 +327,7 @@ function convertRemoteOperator(
 ): SnapshotPermissionOperator {
   const converted = REMOTE_PERMISSION_OPERATORS.get(operator);
   if (converted) return converted;
-  throw new Error(`Unsupported ${source} permission operator: ${operator}`);
+  throw internalError(`Unsupported ${source} permission operator: ${operator}`);
 }
 
 function convertRemoteValueOperand(
@@ -344,7 +345,7 @@ function convertRemoteValueOperand(
     case "value":
       return toJson(ValueSchema, operand.kind.value) as SnapshotPermissionOperand;
     default:
-      throw new Error("Unsupported permission operand");
+      throw internalError("Unsupported permission operand");
   }
 }
 
@@ -408,7 +409,7 @@ function convertRemoteGqlAction(action: TailorDBGQLPermission_Action): SnapshotG
     case TailorDBGQLPermission_Action.BULK_UPSERT:
       return "bulkUpsert";
     default:
-      throw new Error(`Unsupported GQL permission action: ${action}`);
+      throw internalError(`Unsupported GQL permission action: ${action}`);
   }
 }
 
@@ -1114,7 +1115,7 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
       };
     default: {
       change satisfies never;
-      throw new Error("Unsupported diff change");
+      throw internalError("Unsupported diff change");
     }
   }
 }

@@ -208,7 +208,10 @@ describe("function script", () => {
     const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
 
     expect(result.success).toBe(false);
-    expect(result.error?.message).toMatch(/Scaffold --remote at a new path/);
+    expect(result.error).toMatchObject({
+      code: "SCRIPT_EXISTS",
+      suggestion: expect.stringMatching(/Scaffold --remote at a new path/),
+    });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
   });
 
@@ -222,7 +225,10 @@ describe("function script", () => {
     const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
 
     expect(result.success).toBe(false);
-    expect(result.error?.message).toMatch(/nothing to refresh/);
+    expect(result.error).toMatchObject({
+      code: "SCRIPT_EXISTS",
+      suggestion: expect.stringMatching(/nothing to refresh/),
+    });
     expect(loadTailorDBNamespaces).not.toHaveBeenCalled();
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();
   });

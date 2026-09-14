@@ -1,4 +1,5 @@
 import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration-number";
+import { CLIError } from "#/cli/shared/errors";
 import { styles, logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import ml from "#/utils/multiline";
@@ -43,7 +44,10 @@ export async function confirmMigrationCheckpointRepairs(
     default: false,
   });
   if (!confirmed) {
-    throw new Error("Apply cancelled: migration checkpoint reset was not confirmed.");
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: "Apply cancelled: migration checkpoint reset was not confirmed.",
+    });
   }
 }
 
@@ -102,10 +106,13 @@ async function confirmIdRegeneration(
     default: false,
   });
   if (!confirmed) {
-    throw new Error(ml`
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: ml`
       Apply cancelled. Resources remain tagged with the previous id.
       To override, run again and confirm, or use --yes flag.
-    `);
+    `,
+    });
   }
 }
 
@@ -136,10 +143,13 @@ async function confirmMissingConfigId(
     default: false,
   });
   if (!confirmed) {
-    throw new Error(ml`
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: ml`
       Apply cancelled. Resources remain tagged with their current id.
       Restore the app id for this config (in .github/tailor.lock, or the config's 'id') to keep owning them by id, or run again and confirm to own them by name.
-    `);
+    `,
+    });
   }
 }
 
@@ -178,10 +188,13 @@ async function confirmNameMismatch(
     default: false,
   });
   if (!confirmed) {
-    throw new Error(ml`
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: ml`
       Apply cancelled. Resources remain managed by their current applications.
       To override, run again and confirm, or use --yes flag.
-    `);
+    `,
+    });
   }
 }
 
@@ -224,10 +237,13 @@ export async function confirmUnmanagedResources(
     default: false,
   });
   if (!confirmed) {
-    throw new Error(ml`
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: ml`
       Apply cancelled. Resources remain unmanaged.
       To override, run again and confirm, or use --yes flag.
-    `);
+    `,
+    });
   }
 }
 
@@ -271,10 +287,13 @@ export async function confirmImportantResourceDeletion(
     default: false,
   });
   if (!confirmed) {
-    throw new Error(ml`
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: ml`
       Apply cancelled. Resources will not be deleted.
       To override, run again and confirm, or use --yes flag.
-    `);
+    `,
+    });
   }
 }
 
@@ -330,9 +349,12 @@ export async function confirmMissingDependentApps(
     default: false,
   });
   if (!confirmed) {
-    throw new Error(ml`
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: ml`
       Apply cancelled. Add the missing configs to --config, or set publishEvents
       explicitly on the resources that should keep publishing.
-    `);
+    `,
+    });
   }
 }

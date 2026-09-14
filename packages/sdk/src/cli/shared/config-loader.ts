@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
+import { pickPluginArrays } from "#/plugin/guards";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { installCliTailordbStub } from "./mock";
@@ -82,30 +83,13 @@ export async function loadConfig(
       )
     : undefined;
 
-  // Collect all plugin exports (plugins, plugins2, etc.)
+  // Collect all plugin exports (plugins, plugins2, etc.); an array with an
+  // item the schema rejects is left out as a whole.
   const allPlugins: Plugin[] = [];
-
-  const moduleExports: unknown[] = Object.values(configModule);
-  for (const value of moduleExports) {
-    if (Array.isArray(value)) {
-      const items: unknown[] = value;
-      const pluginParsed = items.reduce<{ success: boolean; items: Plugin[] }>(
-        (acc, item) => {
-          if (!acc.success) return acc;
-
-          const result = PluginConfigSchema.safeParse(item);
-          if (result.success) {
-            acc.items.push(result.data);
-          } else {
-            acc.success = false;
-          }
-          return acc;
-        },
-        { success: true, items: [] },
-      );
-      if (pluginParsed.success && pluginParsed.items.length > 0) {
-        allPlugins.push(...pluginParsed.items);
-      }
+  for (const items of pickPluginArrays(configModule)) {
+    const parsed = items.map((item) => PluginConfigSchema.safeParse(item));
+    if (parsed.every((result) => result.success)) {
+      allPlugins.push(...parsed.map((result) => result.data));
     }
   }
 

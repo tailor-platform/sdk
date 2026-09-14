@@ -20,11 +20,10 @@ import {
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { toError } from "#/cli/shared/errors";
+import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
-import ml from "#/utils/multiline";
 
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
@@ -104,12 +103,17 @@ function retryInstruction(mismatch: ProfileUserMismatch) {
 function profileUserMismatchError(mismatch: ProfileUserMismatch) {
   const updateCommand = profileUpdateCommand(mismatch);
   const nextStep = retryInstruction(mismatch);
-  return new Error(ml`
-    Profile "${mismatch.profile}" is configured for "${mismatch.oldUser}", but login authenticated "${mismatch.authenticatedUser}".
-    The authenticated user has been saved. To use it with this profile, run:
-      ${updateCommand}
-    ${nextStep}
-  `);
+  return CLIError({
+    code: "PROFILE_USER_MISMATCH",
+    message: `Profile "${mismatch.profile}" is configured for "${mismatch.oldUser}", but login authenticated "${mismatch.authenticatedUser}".`,
+    details: "The authenticated user has been saved.",
+    suggestion: `To use it with this profile, run:\n  ${updateCommand}\n${nextStep}`,
+    context: {
+      profile: mismatch.profile,
+      configuredUser: mismatch.oldUser,
+      authenticatedUser: mismatch.authenticatedUser,
+    },
+  });
 }
 
 function shouldUpdateCurrentUser(
@@ -129,7 +133,9 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
   const authorizeUri = await client.authorizationCode
     .getAuthorizeUri({ redirectUri, state, codeVerifier })
     .catch((error: unknown) => {
-      throw new Error(`Failed to prepare the login authorization URL: ${toError(error).message}`, {
+      throw CLIError({
+        code: "LOGIN_AUTHORIZATION_URL_FAILED",
+        message: `Failed to prepare the login authorization URL: ${toError(error).message}`,
         cause: error,
       });
     });
@@ -141,7 +147,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
     ): Promise<void> => {
       try {
         if (!req.url?.startsWith("/callback")) {
-          throw new Error("Invalid callback URL");
+          throw CLIError({ code: "LOGIN_CALLBACK_INVALID", message: "Invalid callback URL" });
         }
         const tokens = await client.authorizationCode.getTokenFromCodeRedirect(
           `http://${req.headers.host}${req.url}`,
@@ -199,7 +205,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
     const timeout = setTimeout(
       () => {
         server.close();
-        reject(new Error("Login timeout exceeded"));
+        reject(CLIError({ code: "LOGIN_TIMEOUT", message: "Login timeout exceeded" }));
       },
       5 * 60 * 1000,
     );
@@ -297,7 +303,10 @@ export const loginCommand = defineAppCommand({
         const pfConfig = await readPlatformConfig();
         const profileEntry = pfConfig.profiles[args.profile];
         if (!profileEntry) {
-          throw new Error(`Profile "${args.profile}" not found`);
+          throw CLIError({
+            code: "PROFILE_NOT_FOUND",
+            message: `Profile "${args.profile}" not found`,
+          });
         }
         platformConfig = platformConfigFromProfile(profileEntry);
         profileUser = profileEntry.user;

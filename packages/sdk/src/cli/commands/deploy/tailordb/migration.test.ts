@@ -28,6 +28,7 @@ import {
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { CLIError } from "#/cli/shared/errors";
 
 // Mock label.ts for resourceTrn
 vi.mock("../label", async (importOriginal) => ({
@@ -402,10 +403,11 @@ describe("migration", () => {
         (e: unknown) => e as Error,
       );
 
-      expect(error).not.toBeNull();
-      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
-      expect(error!.message).toContain("--no-script --reason '<reason>'");
-      expect(error!.message).toContain(`--config=${path.join("custom", "tailor.config.ts")}`);
+      expect(error).toMatchObject({ code: "MIGRATION_SCRIPT_REQUIRED" });
+      const { suggestion } = error as CLIError;
+      expect(suggestion).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(suggestion).toContain("--no-script --reason '<reason>'");
+      expect(suggestion).toContain(`--config=${path.join("custom", "tailor.config.ts")}`);
     });
 
     test("omits --config from the hint for the default config path", async () => {
@@ -431,9 +433,10 @@ describe("migration", () => {
         (e: unknown) => e as Error,
       );
 
-      expect(error).not.toBeNull();
-      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
-      expect(error!.message).not.toContain("--config");
+      expect(error).toMatchObject({ code: "MIGRATION_SCRIPT_REQUIRED" });
+      const { suggestion } = error as CLIError;
+      expect(suggestion).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(suggestion).not.toContain("--config");
     });
 
     test("throws before returning later migrations when a script is missing", async () => {
@@ -507,12 +510,13 @@ describe("migration", () => {
         (e: unknown) => e as Error,
       );
 
-      expect(error).not.toBeNull();
+      expect(error).toMatchObject({ code: "MIGRATION_SCRIPT_SKIP_CONFLICT" });
       expect(error!.message).toContain("has both a --no-script skip acknowledgment and migrate.ts");
-      expect(error!.message.split("\n")).toContain(
-        "  - Keep the script and clear the stale acknowledgment: tailor tailordb migration script 0001 --namespace tailordb",
+      const { suggestion } = error as CLIError;
+      expect(suggestion?.split("\n")).toContain(
+        "Keep the script and clear the stale acknowledgment: tailor tailordb migration script 0001 --namespace tailordb",
       );
-      expect(error!.message).toContain("delete migrate.ts");
+      expect(suggestion).toContain("delete migrate.ts");
     });
 
     test("includes breaking change migration with script", async () => {

@@ -2,7 +2,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { IN_PLACE_TYPE_CHANGES, supportsInPlaceFieldTypeChange } from "./field-type-change";
+import {
+  IN_PLACE_TYPE_CHANGES,
+  formatFieldShape,
+  getExpandContractFieldChangeEligibility,
+  supportsInPlaceFieldTypeChange,
+} from "./field-type-change";
 import { snapshotField } from "./test-helpers/schema-fixtures";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
@@ -127,5 +132,57 @@ describe("supportsInPlaceFieldTypeChange", () => {
         true,
       );
     });
+  });
+});
+
+describe("formatFieldShape", () => {
+  test("appends [] to an array field", () => {
+    expect(formatFieldShape(field("string", { array: true }))).toBe("string[]");
+    expect(formatFieldShape(field("string"))).toBe("string");
+  });
+});
+
+describe("getExpandContractFieldChangeEligibility", () => {
+  test("accepts a single value becoming an array of the same type", () => {
+    expect(
+      getExpandContractFieldChangeEligibility(field("integer"), field("integer", { array: true })),
+    ).toEqual({ eligible: true });
+  });
+
+  test("accepts a single value becoming an array of another type", () => {
+    expect(
+      getExpandContractFieldChangeEligibility(field("integer"), field("string", { array: true })),
+    ).toEqual({ eligible: true });
+  });
+
+  test("rejects an array collapsing to a single value", () => {
+    expect(
+      getExpandContractFieldChangeEligibility(field("integer", { array: true }), field("integer")),
+    ).toEqual({ eligible: false, reason: "the field is an array" });
+  });
+
+  test("rejects an array changing its element type", () => {
+    expect(
+      getExpandContractFieldChangeEligibility(
+        field("integer", { array: true }),
+        field("string", { array: true }),
+      ),
+    ).toEqual({ eligible: false, reason: "the field is an array" });
+  });
+
+  test("rejects a field whose type and array-ness are unchanged", () => {
+    expect(getExpandContractFieldChangeEligibility(field("integer"), field("integer"))).toEqual({
+      eligible: false,
+      reason: "the field type did not change",
+    });
+  });
+
+  test("still applies the other guards to a single value becoming an array", () => {
+    expect(
+      getExpandContractFieldChangeEligibility(
+        field("integer", { unique: true }),
+        field("integer", { array: true, unique: true }),
+      ),
+    ).toEqual({ eligible: false, reason: "the field is unique" });
   });
 });

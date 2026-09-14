@@ -37,7 +37,7 @@ export * from "./snapshot-migrations";
 export * from "./snapshot-local";
 export {
   DEFAULT_DECIMAL_SCALE,
-  UnsupportedMigrationFileVersionError,
+  MIGRATION_FILE_VERSION_UNSUPPORTED,
   normalizeSchemaSnapshot,
 } from "./snapshot-normalization";
 export * from "./snapshot-remote";

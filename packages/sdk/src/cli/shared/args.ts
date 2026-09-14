@@ -268,6 +268,26 @@ export function formatConfigArg(configPath?: string): string | undefined {
   return `--config=${relativeConfigPath}`;
 }
 
+/** Profile and workspace selection the current run used. */
+export interface RecoveryContext {
+  profile?: string | undefined;
+  workspaceId?: string | undefined;
+}
+
+/**
+ * Arguments that make a hinted follow-up command select the same profile and
+ * workspace as the current run. The `--option=<value>` form keeps a
+ * leading-hyphen value bound as the option value.
+ * @param {RecoveryContext} context - Profile and workspace id the current run used
+ * @returns {readonly string[]} Arguments to append to the hinted command
+ */
+export function recoveryContextArgs(context: RecoveryContext): readonly string[] {
+  return [
+    ...(context.workspaceId ? [`--workspace-id=${context.workspaceId}`] : []),
+    ...(context.profile ? [`--profile=${context.profile}`] : []),
+  ];
+}
+
 /**
  * Shared config arg for commands that accept a config file path
  */

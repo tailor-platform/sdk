@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { parseDuration } from "#/cli/shared/args";
 import { type OperatorClient, fetchAll } from "#/cli/shared/client";
-import { toError } from "#/cli/shared/errors";
+import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
@@ -588,14 +588,13 @@ export async function planWorkflow(
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
     if (!usedJobNames) {
-      throw new Error(
-        `Job "${workflow.mainJob.name}" (mainJob of workflow "${workflow.name}") was not found.\n\n` +
-          `Possible causes:\n` +
-          `  - The job is not exported as a named export\n` +
-          `  - The file containing the job is not included in workflow.files glob pattern\n\n` +
-          `Solution:\n` +
-          `  export const ${workflow.mainJob.name} = createWorkflowJob({ name: "${workflow.mainJob.name}", ... })`,
-      );
+      throw CLIError({
+        code: "WORKFLOW_MAIN_JOB_NOT_FOUND",
+        message: `Job "${workflow.mainJob.name}" (mainJob of workflow "${workflow.name}") was not found.`,
+        details:
+          "Possible causes:\n - The job is not exported as a named export\n - The file containing the job is not included in workflow.files glob pattern",
+        suggestion: `Export the job: export const ${workflow.mainJob.name} = createWorkflowJob({ name: "${workflow.mainJob.name}", ... })`,
+      });
     }
     usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
 

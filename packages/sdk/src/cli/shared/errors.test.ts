@@ -1,7 +1,15 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { errorToJson, serializeError } from "./error-json";
-import { CLIError, formatCopyableCommand, typeOnlyImportHint } from "./errors";
+import {
+  CLIError,
+  errorSummary,
+  formatCopyableCommand,
+  internalError,
+  isCLIError,
+  toError,
+  typeOnlyImportHint,
+} from "./errors";
 import { CIPromptError } from "./logger";
 import type { Jsonifiable } from "type-fest";
 
@@ -120,6 +128,7 @@ describe("errorToJson", () => {
       error: {
         code: "RPC_PERMISSION_DENIED",
         message: expect.stringContaining("permission denied"),
+        suggestion: expect.stringContaining("workspace role and token permissions"),
       },
     });
   });
@@ -127,6 +136,7 @@ describe("errorToJson", () => {
   test("uses Windows-compatible quoting for human next commands on Windows", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     const error = CLIError({
+      code: "WORKSPACE_SELECTION_REQUIRED",
       message: "Choose a workspace.",
       next: {
         command: "tailor",
@@ -148,6 +158,7 @@ describe("errorToJson", () => {
   test("renders Windows arguments with shell expansions as an argv array", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     const error = CLIError({
+      code: "WORKSPACE_SELECTION_REQUIRED",
       message: "Choose a workspace.",
       next: {
         command: "tailor",
@@ -215,8 +226,23 @@ describe("errorToJson", () => {
 });
 
 describe("CLIError formatting", () => {
+  test("indents every line of a multi-line suggestion", () => {
+    const error = CLIError({
+      code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
+      message: "Conflict.",
+      suggestion:
+        "Clear the acknowledgment:\n  tailor tailordb migration script 0001\nOr delete migrate.ts.",
+    });
+
+    const lines = error.format().split("\n");
+    const suggestionLineIndex = lines.findIndex((line) => line.includes("Suggestion:"));
+    expect(lines[suggestionLineIndex + 1]).toBe("    tailor tailordb migration script 0001");
+    expect(lines[suggestionLineIndex + 2]).toBe("  Or delete migrate.ts.");
+  });
+
   test("indents every line of a multi-line details string", () => {
     const error = CLIError({
+      code: "DEPLOY_FAILED",
       message: "Deploy failed.",
       details: "first line\nsecond line",
     });
@@ -225,5 +251,71 @@ describe("CLIError formatting", () => {
     const detailsLineIndex = lines.findIndex((line) => line.includes("Details:"));
     expect(lines[detailsLineIndex]).toContain("first line");
     expect(lines[detailsLineIndex + 1]).toMatch(/^\s{2}second line$/);
+  });
+});
+
+describe("CLIError cause", () => {
+  test("keeps the cause on the error object without serializing it", () => {
+    const cause = new Error("connection reset");
+    const error = CLIError({ code: "VAULT_NOT_FOUND", message: "Vault not found.", cause });
+
+    expect(error.cause).toBe(cause);
+    expect(errorToJson(error).error).toEqual({
+      code: "VAULT_NOT_FOUND",
+      message: "Vault not found.",
+    });
+  });
+
+  test("leaves cause unset when not provided", () => {
+    expect(Object.hasOwn(CLIError({ code: "X", message: "x" }), "cause")).toBe(false);
+  });
+});
+
+describe("internalError", () => {
+  test("is a plain Error reported as UNEXPECTED_ERROR", () => {
+    const cause = new Error("root");
+    const error = internalError("no manifest generated", { cause });
+
+    expect(error).toBeInstanceOf(Error);
+    expect(isCLIError(error)).toBe(false);
+    expect(error.name).toBe("Error");
+    expect(error.cause).toBe(cause);
+    expect(errorToJson(error).error).toEqual({
+      code: "UNEXPECTED_ERROR",
+      message: "no manifest generated",
+    });
+  });
+});
+
+describe("toError", () => {
+  test("returns Error instances unchanged", () => {
+    const error = new Error("as-is");
+    expect(toError(error)).toBe(error);
+  });
+
+  test("wraps non-Error values and keeps them as cause", () => {
+    const error = toError({ status: 500 });
+    expect(error.message).toBe("[object Object]");
+    expect(error.cause).toEqual({ status: 500 });
+  });
+});
+
+describe("errorSummary", () => {
+  test("keeps details and suggestion for CLI errors", () => {
+    const error = CLIError({
+      code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
+      message: "Unsupported version 7.",
+      details: "Supported versions 1-6.",
+      suggestion: "Upgrade the SDK.",
+    });
+
+    expect(errorSummary(error)).toBe(
+      "Unsupported version 7.\nSupported versions 1-6.\nUpgrade the SDK.",
+    );
+  });
+
+  test("falls back to the message or string form", () => {
+    expect(errorSummary(new Error("plain"))).toBe("plain");
+    expect(errorSummary("text")).toBe("text");
   });
 });

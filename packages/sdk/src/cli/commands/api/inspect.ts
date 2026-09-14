@@ -31,6 +31,7 @@ export const inspectCommand = defineAppCommand({
     const method = getMethodDescriptor(methodName);
     if (!method) {
       throw CLIError({
+        code: "API_METHOD_UNKNOWN",
         message: `unknown method: ${methodName}`,
         suggestion: "Run `tailor api list` to see available methods.",
         command: "api inspect",

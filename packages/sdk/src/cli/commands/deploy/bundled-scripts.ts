@@ -1,3 +1,4 @@
+import { CLIError } from "#/cli/shared/errors";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
 function setBundledScript(
@@ -7,7 +8,10 @@ function setBundledScript(
   kind: string,
 ): void {
   if (target.has(name)) {
-    throw new Error(`Duplicate ${kind} bundle name "${name}" across config files.`);
+    throw CLIError({
+      code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
+      message: `Duplicate ${kind} bundle name "${name}" across config files.`,
+    });
   }
   target.set(name, code);
 }

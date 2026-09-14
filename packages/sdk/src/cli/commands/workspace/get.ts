@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
+import { fetchWorkspaceExpiry, reportedExpiry, type ReportedExpiry } from "./expiry";
 import {
   workspaceDetailsWithFolderName,
   workspaceNameTransformer,
@@ -33,12 +35,17 @@ async function loadOptions(options: GetWorkspaceOptions) {
   };
 }
 
+/** A workspace's details, plus the prune expiry it records. */
+export type WorkspaceDetailsWithExpiry = WorkspaceDetails & { expiresAt: ReportedExpiry };
+
 /**
  * Get detailed information about a workspace.
  * @param options - Workspace get options
  * @returns Workspace details
  */
-export async function getWorkspace(options: GetWorkspaceOptions): Promise<WorkspaceDetails> {
+export async function getWorkspace(
+  options: GetWorkspaceOptions,
+): Promise<WorkspaceDetailsWithExpiry> {
   const { client, workspaceId } = await loadOptions(options);
 
   const response = await client.getWorkspace({
@@ -46,10 +53,18 @@ export async function getWorkspace(options: GetWorkspaceOptions): Promise<Worksp
   });
 
   if (!response.workspace) {
-    throw new Error(`Workspace "${workspaceId}" not found.`);
+    throw CLIError({
+      code: "WORKSPACE_NOT_FOUND",
+      message: `Workspace "${workspaceId}" not found.`,
+    });
   }
 
-  return workspaceDetailsWithFolderName(client, response.workspace);
+  const [details, expiry] = await Promise.all([
+    workspaceDetailsWithFolderName(client, response.workspace),
+    fetchWorkspaceExpiry(client, workspaceId, new Date()),
+  ]);
+
+  return { ...details, expiresAt: reportedExpiry(expiry) };
 }
 
 export const getCommand = defineAppCommand({

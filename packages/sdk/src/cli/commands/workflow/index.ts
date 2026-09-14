@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { executionsCommand } from "./executions";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
@@ -18,6 +19,6 @@ export const workflowCommand = defineCommand({
     resume: resumeCommand,
   },
   async run() {
-    await runCommand(listCommand, []);
+    await runDefaultSubCommand(listCommand);
   },
 });
