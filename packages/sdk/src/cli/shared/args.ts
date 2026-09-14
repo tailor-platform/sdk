@@ -196,6 +196,10 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
  */
 const OUTPUT_ENV_VAR = "TAILOR_OUTPUT";
 
+/** Name and short alias of the `--json` flag, shared by its definition and the argv scan. */
+const JSON_ARG_NAME = "json";
+const JSON_ARG_ALIAS = "j";
+
 /**
  * Whether `TAILOR_OUTPUT` selects JSON output.
  * @returns `true` when the variable is set to `json` (case-insensitive)
@@ -215,14 +219,11 @@ function outputEnvIsJson(): boolean {
  * @returns `true` when the run set `--json` / `-j` explicitly
  */
 function isJsonExplicit(args: Readonly<Record<string, unknown>>): boolean {
-  const source = (args as { $source?: (name: string) => string }).$source?.("json");
+  const source = (args as { $source?: (name: string) => string }).$source?.(JSON_ARG_NAME);
   if (source !== undefined) return source === "cli";
-  return optionTokens(process.argv.slice(2)).some(
-    (token) =>
-      token === "-j" ||
-      token.startsWith("-j=") ||
-      token === "--json" ||
-      token.startsWith("--json="),
+  const spellings = [`--${JSON_ARG_NAME}`, `-${JSON_ARG_ALIAS}`];
+  return optionTokens(process.argv.slice(2)).some((token) =>
+    spellings.some((spelling) => token === spelling || token.startsWith(`${spelling}=`)),
   );
 }
 
@@ -266,8 +267,8 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
         logger.verbose = value;
       },
     }),
-    json: arg(z.boolean().default(false), {
-      alias: "j",
+    [JSON_ARG_NAME]: arg(z.boolean().default(false), {
+      alias: JSON_ARG_ALIAS,
       description: "Output as JSON",
       effect: (value, { args }) => {
         // An explicit flag always wins; TAILOR_OUTPUT only supplies the default.
