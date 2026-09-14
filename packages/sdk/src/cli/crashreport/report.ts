@@ -4,6 +4,7 @@ import * as os from "node:os";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { xdgConfig } from "xdg-basedir";
+import { redactSecrets } from "#/cli/shared/logger";
 import { sanitizeArgv, sanitizeMessage, sanitizeStackTrace } from "./sanitize";
 
 export type ErrorType = "uncaughtException" | "unhandledRejection" | "handledError";
@@ -56,7 +57,10 @@ function parseCommand(): string {
 
 /**
  * Build a CrashReport data structure from an error and context.
- * All sensitive data is sanitized before inclusion.
+ * All sensitive data is sanitized before inclusion: known-shape secrets (UUIDs, long hex,
+ * emails, paths) are stripped by the pattern-based sanitizers below, then `redactSecrets`
+ * masks any registered secret that survives those patterns, since this report is written
+ * to a local file (and optionally sent remotely) outside the CLI's normal stderr path.
  * @param options - Error, SDK version, and crash type
  * @returns Sanitized crash report
  */
@@ -78,11 +82,11 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     osPlatform: process.platform,
     osRelease: os.release(),
     arch: process.arch,
-    command: sanitizeMessage(parseCommand()),
-    argv: sanitizeArgv(process.argv),
+    command: redactSecrets(sanitizeMessage(parseCommand())),
+    argv: sanitizeArgv(process.argv).map(redactSecrets),
     errorName,
-    errorMessage: sanitizeMessage(rawMessage),
-    stackTrace: sanitizeStackTrace(rawStack),
+    errorMessage: redactSecrets(sanitizeMessage(rawMessage)),
+    stackTrace: redactSecrets(sanitizeStackTrace(rawStack)),
     errorType,
     userId: currentUser?.id ?? null,
     userEmail: currentUser?.email ?? null,

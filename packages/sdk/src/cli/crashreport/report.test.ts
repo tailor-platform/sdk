@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { buildCrashReport, type ErrorType } from "./report";
 
 function makeReport(
@@ -70,5 +71,17 @@ describe("buildCrashReport", () => {
     const report = makeReport(new Error("test"));
 
     expect(report.osRelease).toBeTruthy();
+  });
+
+  test("redacts a registered secret that the pattern sanitizers don't recognize", () => {
+    logger.registerSecret("sk-live-crashreport-secret-value");
+    const error = new Error("request failed with token sk-live-crashreport-secret-value");
+    error.stack =
+      "Error: request failed with token sk-live-crashreport-secret-value\n    at Object.<anonymous> (/tmp/x.js:1:1)";
+    const report = makeReport(error);
+
+    expect(report.errorMessage).not.toContain("sk-live-crashreport-secret-value");
+    expect(report.errorMessage).toContain("<redacted>");
+    expect(report.stackTrace).not.toContain("sk-live-crashreport-secret-value");
   });
 });
