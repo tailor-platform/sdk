@@ -228,6 +228,13 @@ export function redactSecrets(text: string): string {
   // A match that merely overlaps one — extending outside it, e.g. a registered secret that
   // happens to be "leak<redacted>" — still has real secret content outside the placeholder
   // and must still be replaced.
+  //
+  // A registered secret wholly contained in the placeholder (up to and including a secret
+  // equal to "<redacted>" itself) is indistinguishable from the placeholder in rendered
+  // output either way: substituting REDACTED_PLACEHOLDER for text that already reads
+  // REDACTED_PLACEHOLDER is a no-op. Discarding the match here (rather than "fixing" it to
+  // substitute anyway) isn't a redaction gap — it just skips redundant work on text that's
+  // already the safe, masked form.
   const spans = findSecretSpans(text).filter(
     ([start, end]) => !protectedSpans.some(([pStart, pEnd]) => start >= pStart && end <= pEnd),
   );
