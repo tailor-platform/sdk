@@ -71,30 +71,26 @@ This separation allows piping data to other commands without log messages interf
 
 ## Output Placement: default vs `--verbose` vs `--json`
 
-The method you call decides who sees a line. `logger.debug()` is gated on `logger.verbose`
-(`--verbose`, `DEBUG`, or `RUNNER_DEBUG=1`); everything else is unconditional. `--json` is an
-orthogonal format axis, not a fourth verbosity level: it changes how `logger.out()` serializes the
-result and how a failure is rendered, and it never silences a line that would otherwise be shown.
+The method you call decides who sees a line. `logger.debug()` is gated on `logger.verbose` (see the
+Verbose Output section of `packages/sdk/docs/cli-reference.md`); everything else is unconditional.
 
-Both CLI users and coding agents read this output, and `packages/sdk/docs/cli-reference.md`
-already promises SDK users what each level contains. Treat the table below as how to keep that
-promise.
+`--json` is an orthogonal format axis, not a fourth verbosity level. It may swap a human rendering
+for its structured equivalent — a spinner, the deploy plan text, a formatted error — but it must
+never drop information the caller still needs: move that into the JSON payload or onto stderr.
 
 | Content                                                                  | Goes to                    |
 | ------------------------------------------------------------------------ | -------------------------- |
 | The outcome, and the counts or totals that let a caller verify it        | default (`info`/`success`) |
 | A change set the user must review or approve                             | default                    |
 | Anything the user must act on: warnings, remediation flags, failed items | default (`warn`/`error`)   |
-| The requested data result                                                | `logger.out()` (stdout)    |
 | Per-item progress: each file loaded, type parsed, item skipped           | `logger.debug()`           |
 | Resolved paths, timings, extracted configuration dumps                   | `logger.debug()`           |
-| The CLI's own stack traces                                               | verbose-gated              |
 | A live feed of remote events (`--follow`, polling)                       | `mode: "stream"`           |
 
-The dividing line for per-item output is whether the reader must **act on each item**, not how
-many lines it produces. A list of every loaded table is progress, so it is verbose-only; a list of
-fields that need `--expand-contract`, or a per-resource deploy plan, is the decision the command
-exists to support, so it stays in default output however long it runs.
+**Decision rule:** per-item output belongs in default when the reader must **act on each item**,
+regardless of how many lines that produces. A list of every loaded table is progress, so it is
+verbose-only; a list of fields that need `--expand-contract`, or a per-resource deploy plan, is the
+decision the command exists to support, so it stays in default output however long it runs.
 
 Two things this does not cover. Inherently streaming commands (`function logs --follow`, workflow
 waiters) emit an unbounded feed by design — the per-event lines are the product. And a stack trace
@@ -106,18 +102,18 @@ internal traces are verbose-gated.
 A failure is serialized by `errorToJson()` into `{ error: { … } }` on stderr. Every field except
 `message` is optional, so a `throw new Error(...)` reaching the top level becomes
 `UNEXPECTED_ERROR` with the whole explanation flattened into one prose string. Callers cannot
-branch on that.
+branch on that, so never leave a nameable condition to that path.
 
 When you add or touch an error a caller could plausibly recover from, throw a `CLIError` and
 split it across the envelope instead:
 
 - `code` — a specific, stable identifier for the condition. `CLIError` falls back to `CLI_ERROR`
-  when you omit it, which is only acceptable for a failure no caller would branch on. Never leave
-  a nameable condition as `UNEXPECTED_ERROR`.
+  when you omit it, which is only acceptable for a failure no caller would branch on.
 - `message` — what failed, and nothing else. No remediation prose, no embedded newlines.
 - `suggestion` — the remediation, as its own field.
-- `next` / `command` — an executable recovery action, so the caller can run it rather than parse
-  for it.
+- `next` — an executable recovery action (`{ command, args }`), so the caller can run it rather
+  than parse for it.
+- `command` — the owning command path, serialized as `error.help` pointing at its `--help`.
 - `context` — the machine-usable facts behind the failure (resource names, per-phase causes),
   never secrets.
 
