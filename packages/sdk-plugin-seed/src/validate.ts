@@ -1,20 +1,14 @@
-import * as cli from "@tailor-platform/sdk/cli";
-import {
-  loadSeedContext,
-  configArg,
-  defineAppCommand,
-  logger,
-  arg,
-} from "@tailor-platform/sdk/cli";
+import * as sdkCli from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
 
-// `withSourceLocation` reached the CLI surface after this plugin's peer range
-// opens, so an older SDK resolves without it and the error ships unlocated.
-function attachSourceLocation(error: Error, location: { file: string; line?: number }): Error {
-  return typeof cli.withSourceLocation === "function"
-    ? cli.withSourceLocation(error, location)
-    : error;
+const { loadSeedContext, configArg, defineAppCommand, logger, arg } = sdkCli;
+
+// `withSourceLocation` reached the CLI surface in a release this plugin's peer
+// range still opens below, so an older SDK resolves without it.
+function attachSourceLocation(error: Error, location: sdkCli.ErrorSourceLocation): Error {
+  const { withSourceLocation } = sdkCli as Partial<typeof sdkCli>;
+  return typeof withSourceLocation === "function" ? withSourceLocation(error, location) : error;
 }
 
 export const seedValidateCommand = defineAppCommand({
