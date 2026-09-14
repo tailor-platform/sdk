@@ -79,13 +79,9 @@ function fnv1aHex(value: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
-// Postgres truncates identifiers to 63 bytes, which would let two long
-// derived names collide and `IF NOT EXISTS` skip the second. Table and
-// column names are left alone: their truncation is applied to queries too.
-function derivedIdentifier(name: string): string {
-  if (utf8.encode(name).length <= MAX_IDENTIFIER_BYTES) return identifier(name);
-  const suffix = `_${fnv1aHex(name)}`;
-  let head = name;
+function derivedIdentifier(tableName: string, memberName: string, kind: "seq" | "idx"): string {
+  const suffix = `_${fnv1aHex(JSON.stringify([tableName, memberName, kind]))}_${kind}`;
+  let head = `${tableName}_${memberName}`;
   while (utf8.encode(head + suffix).length > MAX_IDENTIFIER_BYTES) head = head.slice(0, -1);
   return identifier(head + suffix);
 }
@@ -180,7 +176,7 @@ function parseSerialFormat(format: string, label: string): SerialFormat {
 }
 
 function sequenceName(tableName: string, fieldName: string): string {
-  return `${tableName}_${fieldName}_seq`;
+  return derivedIdentifier(tableName, fieldName, "seq");
 }
 
 // A sequence's minimum defaults to 1, which rejects a start of 0.
@@ -197,7 +193,7 @@ const SERIAL_CONVERSIONS: Record<SerialFormat["conversion"], (nextval: string) =
 };
 
 function serialStringDefault(sequence: string, format: string | undefined, label: string): string {
-  const nextval = `nextval(${stringLiteral(derivedIdentifier(sequence))})`;
+  const nextval = `nextval(${stringLiteral(sequence)})`;
   if (format === undefined) return `(${nextval}::text)`;
   const { prefix, width, zeroPad, conversion, suffix } = parseSerialFormat(format, label);
   const number = SERIAL_CONVERSIONS[conversion](nextval);
@@ -261,7 +257,7 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
     if (fieldName === "id") continue;
     if (field.serial && field.type !== "integer") {
       sequences.push(
-        `CREATE SEQUENCE IF NOT EXISTS ${derivedIdentifier(sequenceName(table.name, fieldName))} ${sequenceRange(field.serial)}`,
+        `CREATE SEQUENCE IF NOT EXISTS ${sequenceName(table.name, fieldName)} ${sequenceRange(field.serial)}`,
       );
     }
     columns.push(`  ${columnDefinition(table.name, fieldName, field)}`);
@@ -271,7 +267,7 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
     .filter(([, index]) => index.unique)
     .map(
       ([name, index]) =>
-        `CREATE UNIQUE INDEX IF NOT EXISTS ${derivedIdentifier(`${table.name}_${name}_idx`)} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${derivedIdentifier(table.name, name, "idx")} ON ${tableIdentifier} (${index.fields.map(identifier).join(", ")})`,
     );
 
   return [

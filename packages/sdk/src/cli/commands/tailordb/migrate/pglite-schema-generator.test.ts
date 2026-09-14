@@ -253,7 +253,7 @@ describe("generateMigrationPgliteSchema", () => {
     expect(content).toContain('  "tailordb": `CREATE TABLE IF NOT EXISTS "User" (');
     expect(content).toContain('"nickname" text NOT NULL UNIQUE');
     expect(content).toContain(
-      'CREATE UNIQUE INDEX IF NOT EXISTS "User_idx_name_email_idx" ON "User" ("name", "email");',
+      'CREATE UNIQUE INDEX IF NOT EXISTS "User_idx_name_email_034aa1eb_idx" ON "User" ("name", "email");',
     );
     expect(content).toMatch(/\n} as const;\n$/);
   });
