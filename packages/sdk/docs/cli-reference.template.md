@@ -27,6 +27,13 @@ human-readable text or empty stdout.
 Commands that only perform side effects and do not define a structured result may leave stdout empty
 even when `--json` is passed.
 
+Set `TAILOR_OUTPUT=json` to default every command to JSON without passing `--json` each time. This
+is intended for agents, scripts, and CI steps that parse CLI output. An explicit flag always wins,
+so `--json=false` forces table output and `TAILOR_OUTPUT=table` restores it where no flag is
+present; any other value (including unset) leaves the default unchanged. JSON mode also disables
+interactive prompts, so set the variable per invocation or per job rather than exporting it from a
+shell profile.
+
 Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
 a command failure under `--json` emits a JSON error envelope to stderr. CLI errors include a stable
 `error.code` and may include structured `error.next` and `error.context` fields for automated
