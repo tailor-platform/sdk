@@ -64,3 +64,53 @@ describe("CLI error verbosity", () => {
     20_000,
   );
 });
+
+describe("parent command shortcuts", () => {
+  function runCli(args: string[], cwd: string) {
+    return spawnSync(process.execPath, [cliEntry, ...args], {
+      cwd,
+      encoding: "utf8",
+      timeout: 15_000,
+      env: {
+        PATH: process.env.PATH,
+        HOME: cwd,
+        XDG_CONFIG_HOME: cwd,
+        XDG_CACHE_HOME: cwd,
+        XDG_STATE_HOME: cwd,
+        XDG_DATA_HOME: cwd,
+        NODE_COMPILE_CACHE: cwd,
+        TAILOR_CRASH_REPORTS_LOCAL: "off",
+        TAILOR_CRASH_REPORTS_REMOTE: "off",
+        NO_COLOR: "1",
+      },
+    });
+  }
+
+  test.each([
+    { parent: ["workspace"], explicit: ["workspace", "list"] },
+    { parent: ["workflow"], explicit: ["workflow", "list"] },
+    { parent: ["secret", "vault"], explicit: ["secret", "vault", "list"] },
+    { parent: ["workspace", "app"], explicit: ["workspace", "app", "list"] },
+  ])(
+    "propagates default subcommand failures for `$parent`",
+    ({ parent, explicit }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-parent-shortcut-");
+
+      const explicitResult = runCli([...explicit, "--json"], tmp.dir);
+      expect(explicitResult.error).toBeUndefined();
+      expect(explicitResult.status).toBe(1);
+      expect(JSON.parse(explicitResult.stderr).error).toMatchObject({
+        code: "AUTH_TOKEN_NOT_FOUND",
+      });
+
+      const parentResult = runCli([...parent, "--json"], tmp.dir);
+      expect(parentResult.error).toBeUndefined();
+      expect(parentResult.status).toBe(explicitResult.status);
+      expect(JSON.parse(parentResult.stderr)).toEqual(JSON.parse(explicitResult.stderr));
+    },
+    40_000,
+  );
+});

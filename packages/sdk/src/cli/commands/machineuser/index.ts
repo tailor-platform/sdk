@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { listCommand } from "./list";
 import { tokenCommand } from "./token";
 
@@ -10,6 +11,6 @@ export const machineuserCommand = defineCommand({
     token: tokenCommand,
   },
   async run() {
-    await runCommand(listCommand, []);
+    await runDefaultSubCommand(listCommand);
   },
 });

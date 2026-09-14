@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
 import { listCommand } from "./list";
@@ -16,6 +17,6 @@ export const profileCommand = defineCommand({
     update: updateCommand,
   },
   async run() {
-    await runCommand(listCommand, []);
+    await runDefaultSubCommand(listCommand);
   },
 });

@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { getCommand } from "./get";
 import { jobsCommand } from "./jobs";
 import { listCommand } from "./list";
@@ -16,6 +17,6 @@ export const executorCommand = defineCommand({
     webhook: webhookCommand,
   },
   async run() {
-    await runCommand(listCommand, []);
+    await runDefaultSubCommand(listCommand);
   },
 });
