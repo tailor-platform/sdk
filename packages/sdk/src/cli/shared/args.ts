@@ -206,12 +206,16 @@ function outputEnvIsJson(): boolean {
 
 /**
  * Whether `--json` was passed explicitly, which the parsed value cannot answer
- * on its own because the flag defaults to `false`.
- * @param argv - Raw CLI argv, excluding the executable and script path
- * @returns `true` when an explicit `--json` / `-j` token precedes `--`
+ * on its own because the flag defaults to `false`. Politty reports the source
+ * only when the invoked command defines no arguments of its own, so fall back
+ * to scanning the argv the process was started with.
+ * @param args - Validated global arguments for the current run
+ * @returns `true` when the run set `--json` / `-j` explicitly
  */
-function hasJsonFlag(argv: readonly string[] = process.argv.slice(2)): boolean {
-  return optionTokens(argv).some(
+function isJsonExplicit(args: Readonly<Record<string, unknown>>): boolean {
+  const source = (args as { $source?: (name: string) => string }).$source?.("json");
+  if (source !== undefined) return source === "cli";
+  return optionTokens(process.argv.slice(2)).some(
     (token) =>
       token === "-j" ||
       token.startsWith("-j=") ||
@@ -265,7 +269,7 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       description: "Output as JSON",
       effect: (value, { args }) => {
         // An explicit flag always wins; TAILOR_OUTPUT only supplies the default.
-        const json = value || (!hasJsonFlag() && outputEnvIsJson());
+        const json = value || (!isJsonExplicit(args) && outputEnvIsJson());
         logger.jsonMode = json;
         // Commands branch on the parsed value, so keep both views in step.
         (args as { json?: boolean }).json = json;
