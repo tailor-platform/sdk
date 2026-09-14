@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Fix GitHub Actions annotation titles falling back to `CLI_ERROR` only when a `CLIError`'s `code` is empty, not just when it is missing.
+Fix GitHub Actions annotation titles to fall back to `CLI_ERROR` when a `CLIError`'s `code` is an empty string, not only when it is missing entirely.
