@@ -112,15 +112,17 @@ rather than relying on the prompt being reached.
 
 ### Errors under `--json`
 
-A failure is serialized into `{ error: { … } }` on stderr. Every field except `message` is
-optional, so a `throw new Error(...)` reaching the top level becomes `UNEXPECTED_ERROR` with the
-whole explanation flattened into one prose string. Callers cannot branch on that, so never leave a
+A failure is serialized into `{ error: { … } }` on stderr. `code` and `message` are always
+present and every other field is optional, so a `throw new Error(...)` reaching the top level
+becomes `UNEXPECTED_ERROR` with the whole explanation flattened into one prose string. Callers can
+branch on that code, but it says only that the CLI did not name the condition, so never leave a
 nameable condition to that path.
 
 There are two ways to give a failure structure: throw a `CLIError` when you are raising it
 yourself, or wrap an error you did not construct with `withErrorDiagnostics()`, whose fields
-override the defaults but are limited to `code`, `suggestion`, and `context` — reach for `CLIError`
-instead when a failure needs `details`, `next`, or `command`. Split the failure across these fields:
+override the defaults but are limited to `code`, `suggestion`, `context`, and `causes` — reach for
+`CLIError` instead when a failure needs `details`, `next`, or `command`. Split the failure across
+these fields:
 
 - `code` — a specific, stable identifier for the condition. `CLIError` falls back to `CLI_ERROR`
   when you omit it, which is only acceptable for a failure no caller would branch on.
@@ -133,3 +135,6 @@ instead when a failure needs `details`, `next`, or `command`. Split the failure 
 - `command` — the owning command path, serialized as an `error.help` action targeting its `--help`.
 - `context` — the machine-usable facts behind the failure (resource names, per-phase causes),
   never secrets.
+- `causes` — `withErrorDiagnostics()` only, for a failure that aggregates others: each entry is
+  serialized as its own error envelope and merged into `context` under that key, so a caller reads
+  the nested failures instead of parsing them out of `message`.
