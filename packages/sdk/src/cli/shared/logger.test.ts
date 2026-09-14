@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
-import { describe, test, expect, vi } from "vitest";
-import { CIPromptError, formatLogLine, logger, redactSecrets } from "./logger";
+import { afterEach, describe, test, expect, vi } from "vitest";
+import { CIPromptError, formatLogLine, logger, redactSecrets, resetSecretRegistry } from "./logger";
 
 function captureStdout(fn: () => void): string {
   using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -13,6 +13,12 @@ function captureStderr(fn: () => void): string {
   fn();
   return stripVTControlCharacters(stderrSpy.mock.calls.map((call) => String(call[0])).join(""));
 }
+
+// This file runs in the shared, non-isolated "unit-core" Vitest project, so registered
+// secrets would otherwise leak into unrelated test files run in the same worker.
+afterEach(() => {
+  resetSecretRegistry();
+});
 
 describe("logger", () => {
   describe("CIPromptError", () => {

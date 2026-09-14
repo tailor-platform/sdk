@@ -253,6 +253,20 @@ export function redactSecrets(text: string): string {
   return result + text.slice(cursor);
 }
 
+/**
+ * Reset the registered-secret redaction state. Used for testing.
+ *
+ * `_secrets` is process-lifetime, module-level state with no production unregister API
+ * (a real process should never stop hiding a secret it once saw). Test files that call
+ * `logger.registerSecret()` and run in a Vitest project with `isolate: false` share this
+ * state across files, so a value registered in one file's test can still be redacted in an
+ * unrelated later file's assertions unless cleared between tests.
+ */
+export function resetSecretRegistry(): void {
+  _secrets.clear();
+  _automaton = null;
+}
+
 // Type icons for log output
 const TYPE_ICONS: Record<string, string> = {
   info: "ℹ",

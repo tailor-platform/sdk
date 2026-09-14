@@ -57,10 +57,13 @@ function parseCommand(): string {
 
 /**
  * Build a CrashReport data structure from an error and context.
- * All sensitive data is sanitized before inclusion: known-shape secrets (UUIDs, long hex,
- * emails, paths) are stripped by the pattern-based sanitizers below, then `redactSecrets`
- * masks any registered secret that survives those patterns, since this report is written
- * to a local file (and optionally sent remotely) outside the CLI's normal stderr path.
+ * All sensitive data is sanitized before inclusion: `redactSecrets` masks every registered
+ * secret first, then the pattern-based sanitizers below strip known-shape values (UUIDs,
+ * long hex, emails, paths) from what's left. `redactSecrets` must run first — the path
+ * sanitizer intentionally keeps a path's basename (e.g. `/home/user/.../key.json` becomes
+ * `<path>/key.json`), so a registered secret shaped like a path would have that basename
+ * survive if the pattern sanitizer ran on it first. This report is written to a local file
+ * (and optionally sent remotely) outside the CLI's normal stderr path.
  * @param options - Error, SDK version, and crash type
  * @returns Sanitized crash report
  */
@@ -82,11 +85,11 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     osPlatform: process.platform,
     osRelease: os.release(),
     arch: process.arch,
-    command: redactSecrets(sanitizeMessage(parseCommand())),
-    argv: sanitizeArgv(process.argv).map(redactSecrets),
+    command: sanitizeMessage(redactSecrets(parseCommand())),
+    argv: sanitizeArgv(process.argv.map(redactSecrets)),
     errorName,
-    errorMessage: redactSecrets(sanitizeMessage(rawMessage)),
-    stackTrace: redactSecrets(sanitizeStackTrace(rawStack)),
+    errorMessage: sanitizeMessage(redactSecrets(rawMessage)),
+    stackTrace: sanitizeStackTrace(redactSecrets(rawStack)),
     errorType,
     userId: currentUser?.id ?? null,
     userEmail: currentUser?.email ?? null,

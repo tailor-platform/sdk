@@ -1,7 +1,13 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { serializeError } from "./error-json";
 import { CLIError } from "./errors";
-import { logger } from "./logger";
+import { logger, resetSecretRegistry } from "./logger";
+
+// This file runs in the shared, non-isolated "unit-core" Vitest project, so registered
+// secrets would otherwise leak into unrelated test files run in the same worker.
+afterEach(() => {
+  resetSecretRegistry();
+});
 
 describe("serializeError", () => {
   test("redacts a registered secret from the error message", () => {
