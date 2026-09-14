@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
+import { PluginManager } from "#/plugin/manager";
 import { loadConfig } from "./config-loader";
 
 // Assembled at runtime: spelled out in full, this fixture is indistinguishable
@@ -25,22 +26,60 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
-  test("collects valid plugin arrays without accepting a partially invalid array", async () => {
+  test("collects plugins from the `plugins` export", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app", db: { marker: "preserved" } };
       export const plugins = [{ id: "first", description: "First plugin", custom: "kept" }];
-      export const plugins2 = [{ id: "second", description: "Second plugin" }];
-      export const mixed = [{ id: "discarded", description: "Valid item" }, null];
-      export const unrelated = { id: "not-an-array", description: "Ignored" };
     `);
 
     const { config, plugins } = await loadConfig(configPath);
 
     expect(config.db).toEqual({ marker: "preserved" });
-    expect(plugins).toEqual([
-      { id: "first", description: "First plugin", custom: "kept" },
-      { id: "second", description: "Second plugin" },
-    ]);
+    expect(plugins).toEqual([{ id: "first", description: "First plugin", custom: "kept" }]);
+  });
+
+  test("ignores array exports under any name other than `plugins`", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const zzMixed = [{ id: "discarded", description: "Valid item" }, null];
+      export const generators = [{ id: "also-discarded", description: "Legacy export name" }];
+    `);
+
+    const { plugins } = await loadConfig(configPath);
+
+    expect(plugins).toEqual([]);
+  });
+
+  test("rejects a `plugins` export that is not an array", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = { id: "not-an-array", description: "Invalid" };
+    `);
+
+    await expect(loadConfig(configPath)).rejects.toThrow(/Invalid `plugins` export/);
+  });
+
+  test("rejects a `plugins` export containing an invalid item", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = [{ id: "valid", description: "Valid item" }, null];
+    `);
+
+    await expect(loadConfig(configPath)).rejects.toThrow(/Invalid `plugins` export/);
+  });
+
+  test("rejects duplicate plugin IDs in the `plugins` export", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const plugins = [
+        { id: "dup", description: "First" },
+        { id: "dup", description: "Second" },
+      ];
+    `);
+
+    const { plugins } = await loadConfig(configPath);
+
+    expect(() => new PluginManager(plugins)).toThrow(/Duplicate plugin ID "dup"/);
   });
 
   test("rejects a module without a default export", async () => {

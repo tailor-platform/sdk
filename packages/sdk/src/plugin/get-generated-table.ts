@@ -38,7 +38,7 @@ function isPlugin(value: unknown): value is Plugin {
 
 /**
  * Load and cache config module from the given path.
- * Extracts plugins from all array exports using definePlugins() format.
+ * Reads plugins from the config module's `plugins` export (definePlugins() format).
  * Returns null if the config file does not exist (e.g., in bundled executor on platform server).
  * @param configPath - Absolute or relative path to tailor.config.ts
  * @returns Cached config data with plugins map, or null if config file is not available
@@ -63,14 +63,26 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
   const configDir = path.dirname(resolvedPath);
   const plugins = new Map<string, PluginEntry>();
 
-  // Find plugin arrays from exports (definePlugins returns PluginConfig[])
-  for (const value of Object.values(configModule)) {
-    if (!Array.isArray(value)) continue;
-
-    for (const item of value) {
-      if (isPlugin(item)) {
-        plugins.set(item.id, { plugin: item, pluginConfig: item.pluginConfig });
+  // The only export read for plugins is `plugins`, the result of definePlugins().
+  const pluginsExport: unknown = configModule.plugins;
+  if (pluginsExport !== undefined) {
+    if (!Array.isArray(pluginsExport)) {
+      throw new Error(
+        `Invalid \`plugins\` export in "${resolvedPath}": expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
+      );
+    }
+    for (const item of pluginsExport) {
+      if (!isPlugin(item)) {
+        throw new Error(
+          `Invalid \`plugins\` export in "${resolvedPath}": every item must be a plugin created by definePlugins()`,
+        );
       }
+      if (plugins.has(item.id)) {
+        throw new Error(
+          `Duplicate plugin ID "${item.id}" detected in "${resolvedPath}". Each plugin must have a unique ID.`,
+        );
+      }
+      plugins.set(item.id, { plugin: item, pluginConfig: item.pluginConfig });
     }
   }
 

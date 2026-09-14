@@ -82,30 +82,24 @@ export async function loadConfig(
       )
     : undefined;
 
-  // Collect all plugin exports (plugins, plugins2, etc.)
+  // The only export read for plugins is `plugins`, the result of definePlugins().
   const allPlugins: Plugin[] = [];
-
-  const moduleExports: unknown[] = Object.values(configModule);
-  for (const value of moduleExports) {
-    if (Array.isArray(value)) {
-      const items: unknown[] = value;
-      const pluginParsed = items.reduce<{ success: boolean; items: Plugin[] }>(
-        (acc, item) => {
-          if (!acc.success) return acc;
-
-          const result = PluginConfigSchema.safeParse(item);
-          if (result.success) {
-            acc.items.push(result.data);
-          } else {
-            acc.success = false;
-          }
-          return acc;
-        },
-        { success: true, items: [] },
+  const pluginsExport = (configModule as Record<string, unknown>).plugins;
+  if (pluginsExport !== undefined) {
+    if (!Array.isArray(pluginsExport)) {
+      throw new Error(
+        `Invalid \`plugins\` export in ${resolvedPath}: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
       );
-      if (pluginParsed.success && pluginParsed.items.length > 0) {
-        allPlugins.push(...pluginParsed.items);
+    }
+    for (const item of pluginsExport) {
+      const result = PluginConfigSchema.safeParse(item);
+      if (!result.success) {
+        const issues = result.error.issues
+          .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+          .join("\n");
+        throw new Error(`Invalid \`plugins\` export in ${resolvedPath}:\n${issues}`);
       }
+      allPlugins.push(result.data);
     }
   }
 
