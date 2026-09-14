@@ -7,11 +7,16 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError, errorSummary } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
-import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
+import {
+  getNamespacesWithMigrations,
+  migrationConfigNotFoundError,
+  type NamespaceWithMigrations,
+} from "./config";
 import {
   formatDiffSummary,
   formatMigrationDiff,
@@ -171,12 +176,12 @@ function assertMigrationScriptsReady(
     }
   }
   if (missing.length > 0) {
-    throw new Error(
-      `Migration(s) ${missing.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
-        "require a migration script but have no migrate.ts. " +
-        "Add one with 'tailor tailordb migration script <number>', or record that no script " +
-        `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_REQUIRED",
+      message: `Migration(s) ${missing.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" require a migration script but have no migrate.ts.`,
+      suggestion:
+        "Add one with 'tailor tailordb migration script <number>', or record that no script is needed with 'tailor tailordb migration script <number> --no-script --reason \"...\"'.",
+    });
   }
   if (conflicting.length > 0) {
     const clearCommands = conflicting
@@ -185,21 +190,18 @@ function assertMigrationScriptsReady(
           `  ${formatMigrationScriptCommand({ migrationNumber, namespace, configPath })}`,
       )
       .join("\n");
-    throw new Error(
-      `Migration(s) ${conflicting.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
-        "have both a --no-script skip acknowledgment and migrate.ts. " +
-        "Clear the stale acknowledgment(s):\n" +
-        `${clearCommands}\n` +
-        "Or delete migrate.ts to keep the skip.",
-    );
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
+      message: `Migration(s) ${conflicting.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" have both a --no-script skip acknowledgment and migrate.ts.`,
+      suggestion: `Clear the stale acknowledgment(s):\n${clearCommands}\nOr delete migrate.ts to keep the skip.`,
+    });
   }
   if (unreviewed.length > 0) {
-    throw new Error(
-      `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
-        "contain generated normalization logic that still requires review in migrate.ts. " +
-        `Review each ${MIGRATION_REVIEW_REQUIRED_MARKER} marker, then remove the marker and its associated ` +
-        "`never` annotation.",
-    );
+    throw CLIError({
+      code: "MIGRATION_SCRIPT_REVIEW_REQUIRED",
+      message: `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" contain generated normalization logic that still requires review in migrate.ts.`,
+      suggestion: `Review each ${MIGRATION_REVIEW_REQUIRED_MARKER} marker, then remove the marker and its associated \`never\` annotation.`,
+    });
   }
   return unacknowledgedWarnings;
 }
@@ -302,16 +304,17 @@ async function collectValidationReports(
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
+    throw migrationConfigNotFoundError();
   }
 
   const targetNamespaces = options.namespace
     ? namespacesWithMigrations.filter((ns) => ns.namespace === options.namespace)
     : namespacesWithMigrations;
   if (targetNamespaces.length === 0) {
-    throw new Error(
-      `Namespace "${options.namespace}" not found or does not have migrations configured`,
-    );
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `Namespace "${options.namespace}" not found or does not have migrations configured`,
+    });
   }
 
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
@@ -326,7 +329,10 @@ async function collectValidationReports(
   assertUniqueLocalTailorDBTypeNames({ tailorDBServices: application.tailorDBServices });
   for (const { namespace } of targetNamespaces) {
     if (!application.tailorDBServices.some((s) => s.namespace === namespace)) {
-      throw new Error(`No TailorDB service found for namespace "${namespace}"`);
+      throw CLIError({
+        code: "TAILORDB_NAMESPACE_NOT_FOUND",
+        message: `No TailorDB service found for namespace "${namespace}"`,
+      });
     }
   }
   const tailorDBInputs = application.tailorDBServices.map(toTailorDBDeployInput);
@@ -351,10 +357,7 @@ async function collectValidationReports(
       unacknowledgedWarnings?.set(target.namespace, namespaceWarnings);
       checkableNamespaces.push(target);
     } catch (error) {
-      migrationFileErrors.set(
-        target.namespace,
-        error instanceof Error ? error.message : String(error),
-      );
+      migrationFileErrors.set(target.namespace, errorSummary(error));
     }
   }
 
@@ -566,7 +569,10 @@ async function validate(options: ValidateOptions): Promise<void> {
     throw collected.remoteError;
   }
   if (invalidCount > 0) {
-    throw new Error(`Migration validation failed for ${invalidCount} namespace(s)`);
+    throw CLIError({
+      code: "MIGRATION_VALIDATION_FAILED",
+      message: `Migration validation failed for ${invalidCount} namespace(s)`,
+    });
   }
 }
 

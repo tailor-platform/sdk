@@ -8,6 +8,7 @@ import {
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type { ProfileInfo } from "./types";
 
@@ -57,7 +58,7 @@ export const updateCommand = defineAppCommand({
     // Check if profile exists
     const profile = config.profiles[args.name];
     if (!profile) {
-      throw new Error(`Profile "${args.name}" not found.`);
+      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${args.name}" not found.` });
     }
 
     // Check if at least one property is provided
@@ -71,7 +72,11 @@ export const updateCommand = defineAppCommand({
       args["oauth2-client-id"] === undefined &&
       args["console-url"] === undefined
     ) {
-      throw new Error("Please provide at least one property to update.");
+      throw CLIError({
+        code: "PROFILE_UPDATE_EMPTY",
+        message: "Please provide at least one property to update.",
+        command: "profile update",
+      });
     }
     const oldUser = profile.user;
     const newUser = args.user || oldUser;
@@ -110,11 +115,17 @@ export const updateCommand = defineAppCommand({
       !finalMachineUser
     ) {
       if (args["machine-user-override"] === "deny") {
-        throw new Error("--machine-user-override deny requires --machine-user.");
+        throw CLIError({
+          code: "PROFILE_OPTIONS_INVALID",
+          message: "--machine-user-override deny requires --machine-user.",
+          command: "profile update",
+        });
       }
-      throw new Error(
-        `Cannot clear the machine user while machine-user-override is "deny". Also pass --machine-user-override allow.`,
-      );
+      throw CLIError({
+        code: "PROFILE_OPTIONS_INVALID",
+        message: `Cannot clear the machine user while machine-user-override is "deny". Also pass --machine-user-override allow.`,
+        command: "profile update",
+      });
     }
 
     // Skip remote validation when neither user nor workspace is changing.
@@ -127,7 +138,12 @@ export const updateCommand = defineAppCommand({
       args["platform-url"] !== undefined
     ) {
       // Check if user exists
-      const refreshed = await fetchLatestToken(config, newUser, tokenLookupPlatformConfig);
+      const refreshed = await fetchLatestToken(
+        config,
+        newUser,
+        tokenLookupPlatformConfig,
+        args.name,
+      );
       resolvedUser = refreshed.user;
 
       // Check if workspace exists
@@ -141,7 +157,10 @@ export const updateCommand = defineAppCommand({
       });
       const workspace = workspaces.find((ws) => ws.id === newWorkspaceId);
       if (!workspace) {
-        throw new Error(`Workspace "${newWorkspaceId}" not found.`);
+        throw CLIError({
+          code: "WORKSPACE_NOT_FOUND",
+          message: `Workspace "${newWorkspaceId}" not found.`,
+        });
       }
     }
 

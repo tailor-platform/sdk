@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -46,7 +47,9 @@ export const deleteSecretCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Secret "${args.name}" not found in vault "${args["vault-name"]}".`, {
+        throw CLIError({
+          code: "SECRET_NOT_FOUND",
+          message: `Secret "${args.name}" not found in vault "${args["vault-name"]}".`,
           cause: error,
         });
       }

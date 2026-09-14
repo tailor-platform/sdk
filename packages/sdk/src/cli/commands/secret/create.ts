@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -46,10 +47,18 @@ export const createSecretCommand = defineAppCommand({
     } catch (error) {
       if (error instanceof ConnectError) {
         if (error.code === Code.NotFound) {
-          throw new Error(`Vault "${args["vault-name"]}" not found.`, { cause: error });
+          throw CLIError({
+            code: "VAULT_NOT_FOUND",
+            message: `Vault "${args["vault-name"]}" not found.`,
+            cause: error,
+          });
         }
         if (error.code === Code.AlreadyExists) {
-          throw new Error(`Secret "${args.name}" already exists.`, { cause: error });
+          throw CLIError({
+            code: "SECRET_EXISTS",
+            message: `Secret "${args.name}" already exists.`,
+            cause: error,
+          });
         }
       }
       throw error;

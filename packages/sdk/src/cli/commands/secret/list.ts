@@ -4,6 +4,7 @@ import { z } from "zod";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { vaultArgs } from "./args";
@@ -80,7 +81,11 @@ export const listSecretCommand = defineAppCommand({
       logger.out(secrets);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Vault "${args["vault-name"]}" not found.`, { cause: error });
+        throw CLIError({
+          code: "VAULT_NOT_FOUND",
+          message: `Vault "${args["vault-name"]}" not found.`,
+          cause: error,
+        });
       }
       throw error;
     }

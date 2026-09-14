@@ -1,5 +1,7 @@
+import { stripVTControlCharacters } from "node:util";
 import { getOrNull } from "#/cli/shared/client";
-import { toError } from "#/cli/shared/errors";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -309,11 +311,12 @@ export function dependencyLabelWrite(
   for (const [appId, reason] of dependents) {
     const key = dependedByAppLabelKey(appId, scope);
     if (!key) {
-      throw new Error(
-        `Application id "${appId}" cannot be recorded as a dependency of this deploy. ` +
-          `Ids are written by deploy as lowercase UUIDs; restore the generated value in the ` +
-          `config's "id".`,
-      );
+      throw CLIError({
+        code: "APP_ID_INVALID",
+        message: `Application id "${appId}" cannot be recorded as a dependency of this deploy.`,
+        suggestion:
+          'Ids are written by deploy as lowercase UUIDs; restore the generated value in the config\'s "id".',
+      });
     }
     labels[key] = reason;
   }
@@ -551,10 +554,20 @@ function applyMetadataLabelWrite(
 }
 
 function metadataRecoveryError(applyError: unknown, flushError: unknown): AggregateError {
-  return new AggregateError(
-    [applyError, flushError],
-    `Resource apply failed: ${toError(applyError).message}\nQueued metadata recovery failed: ${toError(flushError).message}`,
-    { cause: flushError },
+  const describeCause = (error: unknown) =>
+    isCLIError(error) ? stripVTControlCharacters(error.format()) : toError(error).message;
+  return withErrorDiagnostics(
+    new AggregateError(
+      [applyError, flushError],
+      `Resource apply failed: ${describeCause(applyError)}\nQueued metadata recovery failed: ${describeCause(flushError)}`,
+      { cause: flushError },
+    ),
+    {
+      code: "DEPLOY_METADATA_RECOVERY_FAILED",
+      suggestion:
+        "Some resources may already have changed and deployment metadata could not be saved. Inspect the current resources and resolve both failures before deploying again.",
+      causes: { apply: applyError, recovery: flushError },
+    },
   );
 }
 

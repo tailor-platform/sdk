@@ -3,6 +3,7 @@ import { folderArgs, organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -33,7 +34,10 @@ export async function getFolder(options: GetFolderOptions): Promise<FolderInfo> 
   });
 
   if (!response.folder) {
-    throw new Error(`Folder "${validated.folderId}" not found.`);
+    throw CLIError({
+      code: "FOLDER_NOT_FOUND",
+      message: `Folder "${validated.folderId}" not found.`,
+    });
   }
 
   return folderInfo(response.folder);

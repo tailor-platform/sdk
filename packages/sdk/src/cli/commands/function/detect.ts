@@ -8,6 +8,7 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
+import { CLIError } from "#/cli/shared/errors";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
@@ -117,15 +118,12 @@ export async function detectFunctionType(
     return { type: "plain", name, namedMain: true };
   }
 
-  throw new Error(
-    `Could not detect function type from ${filePath}.\n` +
-      "The file must have one of:\n" +
-      "  - A default-exported resolver (createResolver)\n" +
-      "  - A default-exported executor (createExecutor) with function/jobFunction operation\n" +
-      "  - A named-exported workflow job (createWorkflowJob)\n" +
-      "  - A default-exported function\n" +
-      '  - A named-exported "main" function',
-  );
+  throw CLIError({
+    code: "FUNCTION_TYPE_UNDETECTED",
+    message: `Could not detect function type from ${filePath}.`,
+    details:
+      'The file must have one of:\n - A default-exported resolver (createResolver)\n - A default-exported executor (createExecutor) with function/jobFunction operation\n - A named-exported workflow job (createWorkflowJob)\n - A default-exported function\n - A named-exported "main" function',
+  });
 }
 
 /**
@@ -159,7 +157,11 @@ function detectWorkflowJob(
     const match = jobs.find((j) => j.name === jobName);
     if (!match) {
       const available = jobs.map((j) => `  - "${j.name}" (export: ${j.exportName})`).join("\n");
-      throw new Error(`Workflow job "${jobName}" not found. Available jobs:\n${available}`);
+      throw CLIError({
+        code: "WORKFLOW_JOB_NOT_FOUND",
+        message: `Workflow job "${jobName}" not found.`,
+        details: `Available jobs:\n${available}`,
+      });
     }
     return { type: "workflow-job", name: match.name, exportName: match.exportName };
   }
@@ -175,7 +177,12 @@ function detectWorkflowJob(
   }
 
   const available = jobs.map((j) => `  - "${j.name}" (export: ${j.exportName})`).join("\n");
-  throw new Error(`Multiple workflow jobs found. Specify one with --name:\n${available}`);
+  throw CLIError({
+    code: "WORKFLOW_JOB_AMBIGUOUS",
+    message: "Multiple workflow jobs found.",
+    details: `Available jobs:\n${available}`,
+    suggestion: "Specify one with --name.",
+  });
 }
 
 /**

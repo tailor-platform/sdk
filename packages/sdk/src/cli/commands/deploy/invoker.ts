@@ -1,3 +1,4 @@
+import { CLIError } from "#/cli/shared/errors";
 import type { AuthInvoker } from "#/types/auth.generated";
 
 /**
@@ -20,10 +21,11 @@ export function normalizeInvoker(
   if (invoker === undefined) return undefined;
   if (typeof invoker === "string") {
     if (!authNamespace) {
-      throw new Error(
-        `${context} uses a string invoker ("${invoker}"), but no Auth service is configured. ` +
-          `Configure an Auth service before using invoker.`,
-      );
+      throw CLIError({
+        code: "INVOKER_AUTH_REQUIRED",
+        message: `${context} uses a string invoker ("${invoker}"), but no Auth service is configured.`,
+        suggestion: "Configure an Auth service before using invoker.",
+      });
     }
     return { namespace: authNamespace, machineUserName: invoker };
   }

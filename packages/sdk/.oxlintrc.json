@@ -116,10 +116,13 @@
       "files": [
         "src/cli/shared/config-loader.ts",
         "src/cli/shared/client.ts",
-        "src/cli/commands/api/api-call.ts"
+        "src/cli/commands/api/**/*.ts"
       ],
+      "excludeFiles": ["**/*.test.ts"],
       "rules": {
+        "typescript/no-unsafe-argument": "error",
         "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-call": "error",
         "typescript/no-unsafe-member-access": "error",
         "typescript/no-unsafe-return": "error"
       }
@@ -498,6 +501,12 @@
       }
     },
     {
+      "files": ["src/cli/commands/**/*.ts"],
+      "rules": {
+        "local/no-plain-error": "error"
+      }
+    },
+    {
       "files": ["**/*.test.ts"],
       "rules": {
         "no-restricted-imports": "off",
@@ -507,7 +516,8 @@
     {
       "files": ["**/*.test.ts", "e2e/**/*.ts", "**/__test_fixtures__/**"],
       "rules": {
-        "typescript/no-non-null-assertion": "off"
+        "typescript/no-non-null-assertion": "off",
+        "local/no-plain-error": "off"
       }
     }
   ],

@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { CLIError } from "#/cli/shared/errors";
 import { type MigrationDiff } from "./diff-calculator";
 import { formatMigrationNumber } from "./migration-number";
 import { INITIAL_SCHEMA_NUMBER, getMigrationFiles, loadDiff, loadSnapshot } from "./snapshot-files";
@@ -262,11 +263,12 @@ export function reconstructSnapshotFromMigrations(
   // Find the initial schema file (should be 0000/schema.json)
   const schemaFile = files.find((f) => f.type === "schema" && f.number === INITIAL_SCHEMA_NUMBER);
   if (!schemaFile) {
-    throw new Error(
-      `No initial schema file found in ${migrationsDir}. Expected ${formatMigrationNumber(
+    throw CLIError({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      message: `No initial schema file found in ${migrationsDir}. Expected ${formatMigrationNumber(
         INITIAL_SCHEMA_NUMBER,
       )}/schema.json`,
-    );
+    });
   }
 
   let snapshot = loadSnapshot(schemaFile.path);
@@ -415,8 +417,9 @@ export function assertValidMigrationFiles(migrationsDir: string, namespace: stri
   const errors = validateMigrationFiles(migrationsDir);
   if (errors.length > 0) {
     const errorMessages = errors.map((e) => `  - ${e.message}`).join("\n");
-    throw new Error(
-      `Migration file validation failed for namespace "${namespace}":\n${errorMessages}`,
-    );
+    throw CLIError({
+      code: "MIGRATION_FILES_INVALID",
+      message: `Migration file validation failed for namespace "${namespace}":\n${errorMessages}`,
+    });
   }
 }

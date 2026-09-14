@@ -307,3 +307,41 @@ describe("derived DDL name collisions on PGlite", () => {
     ).rejects.toThrow(/unique/i);
   });
 });
+
+describe("sequence ownership on PGlite", () => {
+  const pglite = new PGlite();
+  const ddl = generateSchemaDDL(toDDLTables(parsed({ Ticket: ticket })));
+
+  beforeAll(() => pglite.waitReady, 60_000);
+  afterAll(() => pglite.close());
+
+  const nextCode = async () => {
+    const { rows } = await pglite.query<{ code: string }>(
+      'INSERT INTO "Ticket" DEFAULT VALUES RETURNING "code"',
+    );
+    return rows[0]!.code;
+  };
+
+  test("TRUNCATE ... RESTART IDENTITY resets a string serial to its start", async () => {
+    await pglite.exec(ddl);
+    expect(await nextCode()).toBe("T-00FF");
+    expect(await nextCode()).toBe("T-0100");
+
+    await pglite.exec('TRUNCATE "Ticket" RESTART IDENTITY');
+    expect(await nextCode()).toBe("T-00FF");
+  });
+
+  test("dropping the table drops its sequence, so re-applying restarts from the start", async () => {
+    await pglite.exec(ddl);
+    await nextCode();
+
+    await pglite.exec('DROP TABLE "Ticket"');
+    const { rows } = await pglite.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM pg_class WHERE relkind = 'S'",
+    );
+    expect(rows[0]!.count).toBe(0);
+
+    await pglite.exec(ddl);
+    expect(await nextCode()).toBe("T-00FF");
+  });
+});

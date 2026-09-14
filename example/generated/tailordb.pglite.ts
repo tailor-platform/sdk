@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS "Invoice" (
   "createdAt" timestamptz NOT NULL DEFAULT now(),
   "updatedAt" timestamptz NOT NULL DEFAULT now()
 );
+ALTER SEQUENCE "Invoice_invoiceNumber_3240f76b_seq" OWNED BY "Invoice"."invoiceNumber";
 
 CREATE TABLE IF NOT EXISTS "NestedProfile" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

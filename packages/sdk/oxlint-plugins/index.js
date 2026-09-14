@@ -81,6 +81,44 @@ function functionParamSlots(node) {
 export default {
   meta: { name: "local" },
   rules: {
+    // CLI command modules must fail through CLIError({ code, ... }) so `--json`
+    // output carries a stable code, or through internalError() for SDK
+    // invariant violations. A bare `new Error()` surfaces as UNEXPECTED_ERROR.
+    "no-plain-error": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban `new Error()` and Error subclasses in CLI command modules in favour of CLIError({ code }) or internalError().",
+        },
+        messages: {
+          plainError:
+            "Use CLIError({ code, ... }) for user-actionable failures or internalError() for SDK invariant violations; a plain Error is reported as UNEXPECTED_ERROR under --json.",
+          errorSubclass:
+            "Do not subclass Error in CLI command modules; throw CLIError({ code, ... }) and branch on error.code instead.",
+        },
+        schema: [],
+      },
+      create(context) {
+        function check(node) {
+          if (node.callee.type === "Identifier" && node.callee.name === "Error") {
+            context.report({ node, messageId: "plainError" });
+          }
+        }
+        function checkClass(node) {
+          if (node.superClass?.type === "Identifier" && node.superClass.name === "Error") {
+            context.report({ node: node.superClass, messageId: "errorSubclass" });
+          }
+        }
+        return {
+          NewExpression: check,
+          CallExpression: check,
+          ClassDeclaration: checkClass,
+          ClassExpression: checkClass,
+        };
+      },
+    },
+
     "no-deprecated-type-matcher": {
       meta: {
         type: "problem",

@@ -10,6 +10,11 @@ import type {
   TailorTypeGqlPermission,
 } from "#/configure/services/tailordb/permission";
 import type {
+  TailorAnyDBField,
+  TypeHook,
+  TypeValidateFn,
+} from "#/configure/services/tailordb/types";
+import type {
   DependencyKind,
   Plugin,
   PluginAttachment,
@@ -666,6 +671,15 @@ function copyMetadataToExtendedTable(
       unique: def.unique,
     }));
     result = result.indexes(...indexDefs);
+  }
+
+  if (metadata.typeHook) {
+    result = result.hooks(metadata.typeHook as TypeHook<Record<string, TailorAnyDBField>>);
+  }
+  if (metadata.typeValidate) {
+    result = result.validate(
+      metadata.typeValidate as TypeValidateFn<Record<string, TailorAnyDBField>>,
+    );
   }
 
   // Copy plugins (but don't re-process them)

@@ -13,6 +13,7 @@ import {
 } from "@connectrpc/connect";
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
+import { withErrorDiagnostics } from "./error-diagnostics";
 import { logger } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 import { userAgent } from "./user-agent";
@@ -726,15 +727,32 @@ export function errorHandlingInterceptor(): Interceptor {
     } catch (error) {
       if (error instanceof ConnectError) {
         const { operation, resourceType } = parseMethodName(req.method.name);
-        const identity = formatRequestIdentity(req.message, req.method.name);
+        const identifiers = requestIdentifiers(req.message, req.method.name);
+        const parts = Object.entries(identifiers).map(([key, value]) => `${key}: ${value}`);
+        const identity = parts.length === 0 ? "" : ` (${parts.join(", ")})`;
 
         // Re-throw as ConnectError with enhanced message to avoid re-wrapping
         // Use rawMessage to avoid duplicating the error code prefix
-        throw new ConnectError(
-          `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
-          error.code,
-          error.metadata,
+        throw withErrorDiagnostics(
+          new ConnectError(
+            `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
+            error.code,
+            error.metadata,
+          ),
+          { context: { method: req.method.name, identifiers } },
         );
+      }
+      if (isTransportDisconnectError(error)) {
+        throw withErrorDiagnostics(error, {
+          code: "TRANSPORT_DISCONNECTED",
+          suggestion:
+            "Check network connectivity and platform availability. A write may already have completed; inspect the current resource state before retrying.",
+          context: {
+            method: req.method.name,
+            transportCode: error.code,
+            identifiers: requestIdentifiers(req.message, req.method.name),
+          },
+        });
       }
       throw error;
     }
@@ -798,22 +816,22 @@ function isIdentityKey(key: string, methodName: string): boolean {
 }
 
 /**
- * Format an allowlisted identity suffix for enhanced error messages.
+ * Extract allowlisted resource identifiers for error diagnostics.
  *
  * Only resource identifiers are included — the rest of the request payload
  * can carry credentials and must never reach terminal or CI logs.
  * @param message - Request message to extract identifiers from
  * @param methodName - RPC method name used to resolve method-scoped identifiers
- * @returns Identity suffix like " (namespaceName: x, type.name: y)", or an empty string
+ * @returns Resource identifiers keyed by request field
  */
-function formatRequestIdentity(message: unknown, methodName: string): string {
+function requestIdentifiers(message: unknown, methodName: string): Record<string, string> {
   if (typeof message !== "object" || message === null) {
-    return "";
+    return {};
   }
-  const parts: string[] = [];
+  const identifiers: Record<string, string> = {};
   for (const [key, value] of Object.entries(message)) {
     if (typeof value === "string" && value !== "" && isIdentityKey(key, methodName)) {
-      parts.push(`${key}: ${value}`);
+      identifiers[key] = value;
     } else if (
       !key.startsWith("$") &&
       value !== null &&
@@ -823,11 +841,11 @@ function formatRequestIdentity(message: unknown, methodName: string): string {
     ) {
       const nestedName = (value as Record<string, unknown>)[NESTED_IDENTITY_KEY];
       if (typeof nestedName === "string" && nestedName !== "") {
-        parts.push(`${key}.${NESTED_IDENTITY_KEY}: ${nestedName}`);
+        identifiers[`${key}.${NESTED_IDENTITY_KEY}`] = nestedName;
       }
     }
   }
-  return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
+  return identifiers;
 }
 
 export const MAX_PAGE_SIZE = 1000;

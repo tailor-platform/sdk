@@ -369,3 +369,132 @@ describe("createStandardSchema", () => {
     expect(result).toHaveProperty("value");
   });
 });
+
+describe("createStandardSchema unknown fields", () => {
+  const type = db.table("Order", {
+    note: db.string({ optional: true }),
+    seq: db.int().serial({ start: 1 }),
+    lines: db.object({ kind: db.string(), qty: db.int() }, { optional: true, array: true }),
+    address: db.object({ city: db.string({ optional: true }) }, { optional: true }),
+  });
+  const schemaType = t.object({
+    id: t.uuid(),
+    note: t.string({ optional: true }),
+    lines: t.object({ kind: t.string(), qty: t.int() }, { optional: true, array: true }),
+    address: t.object({ city: t.string({ optional: true }) }, { optional: true }),
+  });
+  const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+
+  test("reports a top-level key the table does not declare", () => {
+    const result = schema["~standard"].validate({ note: "n", legacyCode: "X" });
+    expect(result).toMatchObject({
+      issues: [{ message: expect.stringContaining("not declared"), path: ["legacyCode"] }],
+    });
+  });
+
+  test("names the key in the message, so an unreadable path still identifies it", () => {
+    const result = schema["~standard"].validate({ note: "n", "a.b": 1, "": 2 });
+    expect(result).toMatchObject({
+      issues: [
+        { message: expect.stringContaining('Field "a.b" is not declared'), path: ["a.b"] },
+        { message: expect.stringContaining('Field "" is not declared'), path: [""] },
+      ],
+    });
+  });
+
+  test("accepts a serial field that the seed schema itself omits", () => {
+    expect(schema["~standard"].validate({ note: "n", seq: 3 })).toHaveProperty("value");
+  });
+
+  test("accepts the id the table adds on its own", () => {
+    const result = schema["~standard"].validate({
+      id: "00000000-0000-0000-0000-000000000001",
+      note: "n",
+    });
+    expect(result).toHaveProperty("value");
+  });
+
+  test("accepts a declared nested field that is null", () => {
+    const result = schema["~standard"].validate({ note: "n", address: null, lines: null });
+    expect(result).toHaveProperty("value");
+  });
+
+  test("reports an undeclared key inside a nested object", () => {
+    const result = schema["~standard"].validate({ address: { city: "Tokyo", zip: "100" } });
+    expect(result).toMatchObject({ issues: [{ path: ["address", "zip"] }] });
+  });
+
+  test("reports an undeclared key inside a nested array element by index", () => {
+    const result = schema["~standard"].validate({
+      lines: [
+        { kind: "A", qty: 1 },
+        { kind: "B", qty: 2, extra: true },
+      ],
+    });
+    expect(result).toMatchObject({ issues: [{ path: ["lines", "[1]", "extra"] }] });
+  });
+
+  test("skips array elements that are not objects and still checks the ones that are", () => {
+    const result = schema["~standard"].validate({
+      lines: [null, "A", { kind: "B", qty: 2, extra: true }],
+    });
+    expect(result).toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["lines", "[2]", "extra"] }),
+      ]),
+    });
+    expect(
+      (result as { issues: unknown[] }).issues.filter((issue) =>
+        String((issue as { message: string }).message).includes("not declared"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("leaves a nested value of the wrong shape to the field validation", () => {
+    const result = schema["~standard"].validate({ lines: "A" });
+    expect(result).toMatchObject({
+      issues: [{ message: "Expected an array", path: ["lines"] }],
+    });
+  });
+
+  test("reports undeclared keys together with the field issues of the same row", () => {
+    const result = schema["~standard"].validate({ note: 42, legacyCode: "X" });
+    expect(result).toMatchObject({
+      issues: [{ path: ["legacyCode"] }, { path: ["note"] }],
+    });
+  });
+
+  test("reports undeclared keys together with a table-level validate failure", () => {
+    const range = db
+      .table("Range", { start: db.int(), end: db.int() })
+      .validate(({ newRecord }, issues) => {
+        if (newRecord.start > newRecord.end) {
+          issues("start", "start must be <= end");
+        }
+      });
+    const rangeSchema = createStandardSchema(
+      t.object({ id: t.uuid(), start: t.int(), end: t.int() }),
+      createTailorDBHook(range),
+      range,
+    );
+    const result = rangeSchema["~standard"].validate({ start: 10, end: 5, legacyCode: "X" });
+    expect(result).toMatchObject({
+      issues: [{ path: ["legacyCode"] }, { message: "start must be <= end", path: ["start"] }],
+    });
+  });
+
+  test("reports a key spelled like an Object member as undeclared", () => {
+    const result = schema["~standard"].validate(JSON.parse('{"note":"n","__proto__":{}}'));
+    expect(result).toMatchObject({ issues: [{ path: ["__proto__"] }] });
+  });
+
+  test("checks nothing when the table is not given", () => {
+    const user = createStandardSchema(
+      t.object({ name: t.string(), password: t.string() }),
+      (data: unknown) => data as Record<string, unknown>,
+    );
+    expect(
+      user["~standard"].validate({ name: "alice", password: "pw", attributes: { role: "x" } }),
+    ).toHaveProperty("value");
+  });
+});

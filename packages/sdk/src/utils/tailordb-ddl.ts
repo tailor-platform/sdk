@@ -239,11 +239,14 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
 
 /**
  * DDL statements that create one table: any sequences its string serial
- * fields draw from, the table, then its unique indexes. Every statement is
- * `IF NOT EXISTS`, so re-applying the script on a database that already
- * has the table is a no-op. Index names end in `_idx` so they cannot take
- * the `<table>_<column>_key` name Postgres gives a UNIQUE column, which
- * `IF NOT EXISTS` would otherwise silently skip.
+ * fields draw from, the table, the sequences' ownership of their columns,
+ * then its unique indexes. Every statement is `IF NOT EXISTS` or otherwise
+ * idempotent, so re-applying the script on a database that already has the
+ * table is a no-op. Owning a sequence makes `DROP TABLE` drop it and
+ * `TRUNCATE ... RESTART IDENTITY` reset it to the configured start. Index
+ * names end in `_idx` so they cannot take the `<table>_<column>_key` name
+ * Postgres gives a UNIQUE column, which `IF NOT EXISTS` would otherwise
+ * silently skip.
  * @param table - Table name, fields, and indexes
  * @returns Statements in execution order, without trailing semicolons
  * @throws If a field type, default, or serial format cannot be expressed
@@ -251,13 +254,16 @@ function columnDefinition(tableName: string, fieldName: string, field: DDLFieldC
 export function generateTableDDL(table: DDLTableConfig): string[] {
   const tableIdentifier = identifier(table.name);
   const sequences: string[] = [];
+  const ownerships: string[] = [];
   const columns = [`  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid()`];
 
   for (const [fieldName, field] of Object.entries(table.fields)) {
     if (fieldName === "id") continue;
     if (field.serial && field.type !== "integer") {
-      sequences.push(
-        `CREATE SEQUENCE IF NOT EXISTS ${sequenceName(table.name, fieldName)} ${sequenceRange(field.serial)}`,
+      const sequence = sequenceName(table.name, fieldName);
+      sequences.push(`CREATE SEQUENCE IF NOT EXISTS ${sequence} ${sequenceRange(field.serial)}`);
+      ownerships.push(
+        `ALTER SEQUENCE ${sequence} OWNED BY ${tableIdentifier}.${identifier(fieldName)}`,
       );
     }
     columns.push(`  ${columnDefinition(table.name, fieldName, field)}`);
@@ -273,6 +279,7 @@ export function generateTableDDL(table: DDLTableConfig): string[] {
   return [
     ...sequences,
     `CREATE TABLE IF NOT EXISTS ${tableIdentifier} (\n${columns.join(",\n")}\n)`,
+    ...ownerships,
     ...indexes,
   ];
 }

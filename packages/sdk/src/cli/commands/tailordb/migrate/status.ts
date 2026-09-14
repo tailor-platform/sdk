@@ -6,16 +6,17 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { getNamespacesWithMigrations } from "./config";
+import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
 import { fetchRemoteMigrationState } from "./remote-state";
 import {
   getMigrationFiles,
   loadDiff,
   loadSnapshot,
   formatMigrationNumber,
-  UnsupportedMigrationFileVersionError,
+  MIGRATION_FILE_VERSION_UNSUPPORTED,
 } from "./snapshot";
 
 interface StatusOptions {
@@ -59,7 +60,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
 
   if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
+    throw migrationConfigNotFoundError();
   }
 
   const targetNamespaces = options.namespace
@@ -67,9 +68,10 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     : namespacesWithMigrations;
 
   if (targetNamespaces.length === 0) {
-    throw new Error(
-      `Namespace "${options.namespace}" not found or does not have migrations configured`,
-    );
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `Namespace "${options.namespace}" not found or does not have migrations configured`,
+    });
   }
 
   const localStates = new Map<
@@ -99,13 +101,13 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
           const diff = loadDiff(file.path);
           if (diff.description) descriptions.set(file.number, diff.description);
         } catch (error) {
-          if (error instanceof UnsupportedMigrationFileVersionError) throw error;
+          if (isCLIError(error) && error.code === MIGRATION_FILE_VERSION_UNSUPPORTED) throw error;
           // A malformed optional description must not hide migration status.
         }
       }
       localStates.set(namespace, { migrationFiles, descriptions, historyId });
     } catch (error) {
-      localFailures.set(namespace, error instanceof Error ? error.message : String(error));
+      localFailures.set(namespace, errorSummary(error));
     }
   }
 
@@ -247,9 +249,10 @@ async function status(options: StatusOptions): Promise<void> {
   const failures = rows.filter(isStatusFailure);
   if (failures.length > 0) {
     const namespaces = failures.map((f) => f.namespace).join(", ");
-    throw new Error(
-      `Migration status check failed for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
-    );
+    throw CLIError({
+      code: "MIGRATION_STATUS_FAILED",
+      message: `Migration status check failed for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
+    });
   }
 }
 
