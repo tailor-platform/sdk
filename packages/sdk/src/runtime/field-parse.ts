@@ -12,6 +12,19 @@ const regex = {
   decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
+/**
+ * Whether a value is an acceptable shape for a nested field. Runtime input may
+ * not match the declared field type, so anything this rejects is reported
+ * against the field rather than recursed into.
+ * @param value - The value to check
+ * @returns `true` when the value is a plain object the parser recurses into
+ */
+export function isNestedObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" && value !== null && !Array.isArray(value) && !(value instanceof Date)
+  );
+}
+
 export type FieldParseArgs = {
   value: unknown;
   data: unknown;
@@ -135,15 +148,7 @@ function validateBaseValue<T extends TailorFieldType>(args: FieldValidationArgs<
       break;
 
     case "nested": {
-      // Runtime input may not match the declared field type.
-      // oxlint-disable typescript/no-unnecessary-condition
-      if (
-        typeof value !== "object" ||
-        value === null ||
-        Array.isArray(value) ||
-        value instanceof Date
-      ) {
-        // oxlint-enable typescript/no-unnecessary-condition
+      if (!isNestedObject(value)) {
         issues.push({
           message: `Expected an object: received ${String(value)}`,
           path,
@@ -153,7 +158,7 @@ function validateBaseValue<T extends TailorFieldType>(args: FieldValidationArgs<
 
       let nestedBaseValid = true;
       for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-        const fieldValue = (value as Record<string, unknown>)[fieldName];
+        const fieldValue = value[fieldName];
         if (
           !validateBaseField({
             ...args,

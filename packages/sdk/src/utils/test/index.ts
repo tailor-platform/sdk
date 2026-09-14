@@ -1,3 +1,4 @@
+import { isNestedObject } from "#/runtime/field-parse";
 import type { output } from "#/configure/index";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { TailorField } from "#/configure/types/type";
@@ -123,13 +124,6 @@ function undeclaredFieldMessage(key: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-// Mirrors what the field parser accepts for a nested field, so a value it would
-// reject reaches it unchanged instead of being materialized into an object whose
-// children are then reported as missing.
-function isNestedObject(value: unknown): value is Record<string, unknown> {
-  return isRecord(value) && !(value instanceof Date);
 }
 
 // Reads the raw row, not the hooked one: the hook only copies the declared fields,
