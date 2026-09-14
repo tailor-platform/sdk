@@ -180,7 +180,8 @@ Resolution rules:
   globally installed one.
 - **Place global flags after the plugin command.** Only the arguments following the plugin name are
   forwarded; a global flag placed before it (e.g. `tailor --json tailordb erd export`) is consumed by
-  the host CLI and does not reach the plugin. Write `tailor tailordb erd export --json` instead.
+  the host CLI and does not reach the plugin. Write `tailor tailordb erd export --json` instead, or
+  set `TAILOR_OUTPUT=json`, which plugins inherit from the environment.
 
 Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
 `node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is
