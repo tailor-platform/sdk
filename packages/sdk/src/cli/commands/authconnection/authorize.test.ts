@@ -1,4 +1,5 @@
 import * as http from "node:http";
+import * as net from "node:net";
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
@@ -137,5 +138,41 @@ describe("authconnection authorize", () => {
       authorizationCode: "test-authorization-code",
       redirectUri: "http://localhost:8080/callback",
     });
+  });
+
+  test("names the run's profile and workspace in the Console fallback when the callback port is taken", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ authorization_endpoint: `${providerUrl}/authorize` }),
+    });
+    const blocker = net.createServer();
+    await new Promise<void>((resolve, reject) => {
+      blocker.once("error", reject);
+      blocker.listen(0, resolve);
+    });
+    const { port } = blocker.address() as net.AddressInfo;
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+
+    try {
+      const result = await runCommand(authorizeAuthConnectionCommand, [
+        "--name",
+        "my-connection",
+        "--port",
+        String(port),
+        "--profile",
+        "dev",
+        "--workspace-id",
+        "workspace-id",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "tailor authconnection open --workspace-id=workspace-id --profile=dev",
+        ),
+      );
+    } finally {
+      await new Promise<void>((resolve) => blocker.close(() => resolve()));
+    }
   });
 });

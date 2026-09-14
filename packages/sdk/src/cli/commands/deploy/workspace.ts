@@ -1,12 +1,13 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { basename } from "pathe";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { getPlatformBaseUrl, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import {
   loadAccessToken,
   loadPlatformClientConfig,
   tryLoadWorkspaceId,
 } from "#/cli/shared/context";
-import { CLIError, type CLIErrorNextAction } from "#/cli/shared/errors";
+import { CLIError, type CLIErrorNextAction, formatCopyableCommand } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import {
@@ -177,7 +178,10 @@ async function rememberWorkspaceContext(
         message: "The workspace selection could not be saved for every configuration file.",
         details: error instanceof Error ? error.message : String(error),
         suggestion: "Fix project state permissions, then rerun deploy with the workspace ID.",
-        next: executableAction([...deployArgs(options), "--workspace-id", context.workspaceId]),
+        next: executableAction([
+          ...deployArgs(options),
+          ...recoveryContextArgs({ workspaceId: context.workspaceId }),
+        ]),
         context: {
           workspaceId: context.workspaceId,
           configPaths: options.contextTargets?.map(({ configPath }) => configPath),
@@ -379,7 +383,13 @@ async function createWorkspace(
     options,
   );
   logger.success(`Created workspace: ${workspaceLabel(workspace)}`);
-  logger.info(`Reuse this workspace with: tailor deploy --workspace-id ${workspace.id}`);
+  logger.info(
+    `Reuse this workspace with: ${formatCopyableCommand([
+      "tailor",
+      "deploy",
+      ...recoveryContextArgs({ workspaceId: workspace.id, profile: options.profile }),
+    ])}`,
+  );
   logger.info(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${workspace.id}.`);
   return { client, workspaceId: workspace.id };
 }

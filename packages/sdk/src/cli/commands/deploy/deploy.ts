@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { logger } from "#/cli/shared/logger";
@@ -262,7 +263,7 @@ function recoveryEnvironmentArgs(
     ...(cliContext?.envFileIfExists
       ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
       : []),
-    ...(options?.profile ? ["--profile", options.profile] : []),
+    ...recoveryContextArgs({ profile: options?.profile }),
   ];
 }
 
