@@ -123,3 +123,17 @@ test("still detects a runtime dependency change in a single-document pre-pnpm-12
   const stdout = run(dir, pnpm11Lockfile("0.28.1"), pnpm11Lockfile("0.28.2"));
   assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
 });
+
+// The pnpm 12 upgrade PR itself is the real-world shape of this comparison:
+// a single-document base snapshot against a two-document head snapshot.
+test("reports no changes when the pnpm-11 base and pnpm-12 head have the same dependencies", () => {
+  const dir = setUp();
+  const stdout = run(dir, pnpm11Lockfile("0.28.1"), pnpm12Lockfile("0.28.1"));
+  assert.match(stdout, /No runtime dependency changes/);
+});
+
+test("detects a runtime dependency change between a pnpm-11 base and a pnpm-12 head", () => {
+  const dir = setUp();
+  const stdout = run(dir, pnpm11Lockfile("0.28.1"), pnpm12Lockfile("0.28.2"));
+  assert.match(stdout, /Runtime dependency changes detected in: @scope\/foo/);
+});

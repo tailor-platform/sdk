@@ -10,10 +10,12 @@ on:
     paths:
       - .github/scripts/lockfile-runtime-diff.mjs
       - .github/scripts/lockfile-runtime-diff.test.mjs
+      - .github/workflows/lockfile-runtime-diff.yml
   pull_request:
     paths:
       - .github/scripts/lockfile-runtime-diff.mjs
       - .github/scripts/lockfile-runtime-diff.test.mjs
+      - .github/workflows/lockfile-runtime-diff.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
