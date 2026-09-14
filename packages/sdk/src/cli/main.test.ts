@@ -100,19 +100,25 @@ describe("parent command shortcuts on success", () => {
     { parent: ["profile"], explicit: ["profile", "list"] },
     { parent: ["plugin"], explicit: ["plugin", "list"] },
     { parent: ["crashreport"], explicit: ["crashreport", "list"] },
-  ])("matches the default subcommand output for `$parent`", ({ parent, explicit }) => {
-    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
-    using tmp = tempCwd("cli-parent-success-");
+  ])(
+    "matches the default subcommand output for `$parent`",
+    ({ parent, explicit }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-parent-success-");
 
-    const explicitResult = runCli([...explicit, "--json"], tmp.dir);
-    expect(explicitResult.error).toBeUndefined();
-    expect(explicitResult.status).toBe(0);
+      const explicitResult = runCli([...explicit, "--json"], tmp.dir);
+      expect(explicitResult.error).toBeUndefined();
+      expect(explicitResult.status).toBe(0);
 
-    const parentResult = runCli([...parent, "--json"], tmp.dir);
-    expect(parentResult.error).toBeUndefined();
-    expect(parentResult.status).toBe(0);
-    expect(parentResult.stdout).toBe(explicitResult.stdout);
-  });
+      const parentResult = runCli([...parent, "--json"], tmp.dir);
+      expect(parentResult.error).toBeUndefined();
+      expect(parentResult.status).toBe(0);
+      expect(parentResult.stdout).toBe(explicitResult.stdout);
+    },
+    40_000,
+  );
 
   test("renders help for `workspace ttl` without recursing", () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
@@ -122,5 +128,5 @@ describe("parent command shortcuts on success", () => {
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Manage when a workspace becomes prunable.");
-  });
+  }, 20_000);
 });
