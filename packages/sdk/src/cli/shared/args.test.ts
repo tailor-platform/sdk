@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { runCommand } from "@politty/zod";
+import { arg, runCommand } from "@politty/zod";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { describe, expect, aroundEach, test, vi } from "vitest";
@@ -430,6 +430,45 @@ describe("createCommonArgs effects", () => {
       logger.jsonMode = previousJsonMode;
     }
   });
+
+  test.each([
+    { output: "json", argv: [] as string[], expected: true },
+    { output: "json", argv: ["--json=false"], expected: false },
+    { output: "table", argv: ["--json"], expected: true },
+  ])(
+    "resolves the output mode for commands with their own args ($output, $argv)",
+    async ({ output, argv, expected }) => {
+      const previousJsonMode = logger.jsonMode;
+      const previousArgv = process.argv;
+      vi.stubEnv("TAILOR_OUTPUT", output);
+      let seen: unknown;
+      try {
+        logger.jsonMode = false;
+        // The CLI entrypoint runs through runMain, which reads process.argv.
+        process.argv = [previousArgv[0] as string, "tailor", ...argv];
+        const command = defineAppCommand({
+          name: "noop",
+          description: "noop",
+          // strip unknown keys
+          args: z.object({ name: arg(z.string().optional(), { description: "Name" }) }),
+          run: (args) => {
+            seen = (args as { json?: boolean }).json;
+          },
+        });
+        const result = await runCommand(command, argv, {
+          // Strip unknown keys the same way the CLI entrypoint parses global args.
+          globalArgs: z.object(createCommonArgs()),
+        });
+        expect(result.exitCode).toBe(0);
+        expect(seen).toBe(expected);
+        expect(logger.jsonMode).toBe(expected);
+      } finally {
+        process.argv = previousArgv;
+        vi.unstubAllEnvs();
+        logger.jsonMode = previousJsonMode;
+      }
+    },
+  );
 
   test("verboseAlias adds a short alias for --verbose", async () => {
     const previousVerbose = logger.verbose;

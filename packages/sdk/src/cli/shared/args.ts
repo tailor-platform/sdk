@@ -208,7 +208,9 @@ function outputEnvIsJson(): boolean {
  * Whether `--json` was passed explicitly, which the parsed value cannot answer
  * on its own because the flag defaults to `false`. Politty reports the source
  * only when the invoked command defines no arguments of its own, so fall back
- * to scanning the argv the process was started with.
+ * to scanning the argv the process was started with. Every CLI entrypoint runs
+ * through `runMain`, so the fallback only misreads a `runCommand` caller that
+ * passes arguments the process was not started with.
  * @param args - Validated global arguments for the current run
  * @returns `true` when the run set `--json` / `-j` explicitly
  */
