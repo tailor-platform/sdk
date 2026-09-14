@@ -3,6 +3,7 @@
  */
 
 import * as path from "pathe";
+import { CLIError } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
 import type { AppConfig } from "#/configure/config/types";
 
@@ -67,21 +68,37 @@ export function selectTargetNamespace(
   requested: string | undefined,
 ): NamespaceWithMigrations {
   if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
+    throw migrationConfigNotFoundError();
   }
   if (requested) {
     const found = namespacesWithMigrations.find((ns) => ns.namespace === requested);
     if (!found) {
-      throw new Error(`Namespace "${requested}" not found or does not have migrations configured`);
+      throw CLIError({
+        code: "TAILORDB_NAMESPACE_NOT_FOUND",
+        message: `Namespace "${requested}" not found or does not have migrations configured`,
+      });
     }
     return found;
   }
   if (namespacesWithMigrations.length > 1) {
-    throw new Error(
-      `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations
+    throw CLIError({
+      code: "MIGRATION_NAMESPACE_REQUIRED",
+      message: `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations
         .map((ns) => ns.namespace)
         .join(", ")}`,
-    );
+    });
   }
   return assertDefined(namespacesWithMigrations[0], "namespace with migrations missing");
+}
+
+/**
+ * Build the failure for a config without any TailorDB migration settings.
+ * @returns CLIError pointing at the migration configuration
+ */
+export function migrationConfigNotFoundError(): CLIError {
+  return CLIError({
+    code: "MIGRATION_CONFIG_NOT_FOUND",
+    message: "No TailorDB services with migrations configuration found",
+    suggestion: "Configure `migration` on the TailorDB service in tailor.config.ts.",
+  });
 }

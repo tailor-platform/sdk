@@ -28,10 +28,14 @@ Commands that only perform side effects and do not define a structured result ma
 even when `--json` is passed.
 
 Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
-a command failure under `--json` emits a JSON error envelope to stderr. CLI errors include a stable
-`error.code` and may include structured `error.next` and `error.context` fields for automated
-recovery. Diagnostic lines may precede the error envelope, and stdout is not guaranteed to contain
-an error object.
+a command failure under `--json` emits a JSON error envelope to stderr. Failures you can act on — an
+invalid or missing option, a resource that does not exist, an invalid configuration, or an unmet
+precondition — carry a stable `error.code` such as `PROFILE_NOT_FOUND`, `TAILORDB_NAMESPACE_NOT_FOUND`,
+or `MIGRATION_SCRIPT_REQUIRED`. Where a remediation exists, the envelope also includes
+`error.suggestion`, `error.help` (the `--help` invocation for the failing command), `error.next` (a
+runnable command), or `error.context`. `UNEXPECTED_ERROR` marks failures without a dedicated code,
+including SDK-internal errors. Diagnostic lines may precede the error envelope, and stdout is not
+guaranteed to contain an error object.
 
 Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`), a missing saved
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
@@ -59,6 +63,33 @@ these details in a debug run. These settings do not enable JSON output; pass `--
 Capture the original failure's stderr and exit code before retrying. Argument parsing and failures
 before the CLI starts may produce plain text even with `--json`. A failed deployment may have
 already applied changes, so inspect its output before deciding to run it again.
+
+### GitHub Actions Annotations
+
+When `GITHUB_ACTIONS` is exactly `true`, a command that ends in failure also writes one
+`::error::` workflow command to stderr, so the failure appears as an annotation on the run
+instead of only inside the scrolled log. The annotation repeats what the CLI already prints:
+its `title` is the error code (`AUTH_TOKEN_NOT_FOUND`, `PLUGIN_GENERATION_FAILED`, ...), and its
+body carries the same details, suggestion, and next action. Colors are stripped and newlines are
+encoded, so the annotation is a single line.
+
+Exactly one annotation is written per failed command, and only for the failure that ends it.
+Warnings and individually reported problems stay plain stderr output. The bundled CLI plugins
+(`seed`, `setup`, `tailordb-erd`) annotate their failures the same way. A command that exits
+without reporting through the CLI's error path, such as one relaying a failed remote execution,
+writes no annotation.
+
+Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` (also `off`, `no`, or `0`) to turn annotations off.
+Passing `--json` also suppresses them, so a workflow step that parses `--json` output gets only the
+error envelope on stderr. The flag is honored even when the command fails during argument parsing,
+before the envelope itself becomes available.
+
+An annotation does not by itself fail a step: the step still fails on the CLI's exit code, which
+is unchanged. Workflows that already echo their own `::error::` around the CLI keep working;
+those messages describe the workflow's own checks, which can fail even when the CLI succeeds.
+
+Annotations do not yet carry `file=`/`line=` source locations, and `generate` and `deploy` do not
+group their per-service progress.
 
 ## Common Options
 
@@ -109,6 +140,7 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count     |
 | `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent platform RPCs during `apply`/`deploy`. Defaults to 16                                  |
 | `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                           |
+| `TAILOR_GITHUB_ACTIONS_ANNOTATIONS`          | GitHub Actions failure annotations: `on` (default) or `off`                                           |
 | `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                      |
 | `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                            |
 

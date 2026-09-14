@@ -8,6 +8,7 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "pathe";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import {
   getPluginImportBaseDirs,
@@ -374,7 +375,7 @@ function generateTriggerCode(trigger: PluginTriggerConfig): string {
   }`;
 
     default:
-      throw new Error(`Unknown trigger kind: ${(trigger as PluginTriggerConfig).kind}`);
+      throw internalError(`Unknown trigger kind: ${(trigger as PluginTriggerConfig).kind}`);
   }
 }
 
@@ -416,7 +417,7 @@ function generateOperationCode(operation: PluginOperationConfig): string {
   }`;
 
     default:
-      throw new Error(`Unknown operation kind: ${(operation as PluginOperationConfig).kind}`);
+      throw internalError(`Unknown operation kind: ${(operation as PluginOperationConfig).kind}`);
   }
 }
 
@@ -456,11 +457,13 @@ function resolveExecutorImportPath(
 
   const pluginBaseDir = resolvePluginBaseDir(pluginImportPath, baseDirs);
   if (!pluginBaseDir) {
-    throw new Error(
-      `Unable to resolve plugin import base for "${pluginImportPath}". ` +
-        `Tried base dirs: ${baseDirs.join(", ") || "(none)"}. ` +
-        `Use an absolute import specifier in resolve(), or ensure the plugin path is resolvable.`,
-    );
+    throw CLIError({
+      code: "PLUGIN_IMPORT_UNRESOLVED",
+      message: `Unable to resolve plugin import base for "${pluginImportPath}".`,
+      details: `Tried base dirs: ${baseDirs.join(", ") || "(none)"}.`,
+      suggestion:
+        "Use an absolute import specifier in resolve(), or ensure the plugin path is resolvable.",
+    });
   }
 
   const absolutePath = path.resolve(pluginBaseDir, specifier);
@@ -481,9 +484,10 @@ function extractDynamicImportSpecifier(resolve: () => Promise<{ default: unknown
   const source = resolve.toString();
   const match = source.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
   if (!match) {
-    throw new Error(
-      `resolve() must return a dynamic import, e.g. \`async () => await import("./executors/on-create")\`.`,
-    );
+    throw CLIError({
+      code: "PLUGIN_RESOLVE_INVALID",
+      message: `resolve() must return a dynamic import, e.g. \`async () => await import("./executors/on-create")\`.`,
+    });
   }
   return assertDefined(match[1], "dynamic import specifier capture group missing");
 }
@@ -545,7 +549,10 @@ function sanitizeExecutorFileName(executorName: string): string {
   const withoutExtension = baseName.replace(/\.[^/.]+$/, "");
   const sanitized = withoutExtension.replace(/[^a-zA-Z0-9_-]/g, "-");
   if (!sanitized) {
-    throw new Error(`Invalid executor name: "${executorName}"`);
+    throw CLIError({
+      code: "PLUGIN_EXECUTOR_NAME_INVALID",
+      message: `Invalid executor name: "${executorName}"`,
+    });
   }
   return sanitized;
 }

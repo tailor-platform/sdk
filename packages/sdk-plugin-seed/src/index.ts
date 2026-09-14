@@ -2,6 +2,7 @@
 
 import { fileURLToPath } from "node:url";
 import {
+  annotateTerminalError,
   serializeError,
   createCommonArgs,
   logger,
@@ -59,5 +60,6 @@ void runMain(mainCommand, {
     if (!logger.jsonMode && error instanceof Error && error.stack) {
       logger.debug(`\nStack trace:\n${error.stack}`);
     }
+    annotateTerminalError(error, { jsonMode: logger.jsonMode });
   },
 });

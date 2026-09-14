@@ -19,6 +19,7 @@ import {
   formatMigrationNumber,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { detectPendingMigrations } from "./migration";
 import type {
@@ -98,7 +99,12 @@ export async function validateAndDetectMigrations(
         logger.newline();
         logger.info("Run 'tailor tailordb migration generate' to create migration files.");
         logger.info("Or use '--no-schema-check' to skip this check.");
-        throw new Error("Schema migration check failed");
+        throw CLIError({
+          code: "MIGRATION_SCHEMA_CHECK_FAILED",
+          message: "Schema migration check failed",
+          suggestion:
+            "Run 'tailor tailordb migration generate' to create migration files, or use --no-schema-check to skip this check.",
+        });
       }
 
       // 2. Check remote schema vs local snapshot (new check)
@@ -126,7 +132,10 @@ export async function validateAndDetectMigrations(
         }
         logger.newline();
         logMissingCheckpointGuidance(missingCheckpointResults);
-        throw new Error("Remote migration checkpoint verification failed");
+        throw CLIError({
+          code: "MIGRATION_CHECKPOINT_UNKNOWN",
+          message: "Remote migration checkpoint verification failed",
+        });
       }
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
 
@@ -137,7 +146,10 @@ export async function validateAndDetectMigrations(
         logRemoteDriftGuidance(remoteVerificationResults);
         logger.newline();
         logger.info("Use '--no-schema-check' to skip this check (not recommended).");
-        throw new Error("Remote schema verification failed");
+        throw CLIError({
+          code: "MIGRATION_REMOTE_DRIFT",
+          message: "Remote schema verification failed",
+        });
       }
       for (const repair of checkpointRepairs) {
         logger.warn(

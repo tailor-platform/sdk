@@ -1,5 +1,15 @@
 # @tailor-platform/create-sdk
 
+## 2.16.0
+
+### Minor Changes
+
+- [#2313](https://github.com/tailor-platform/sdk/pull/2313) [`9817890`](https://github.com/tailor-platform/sdk/commit/98178900a5208a734fb3977eeab94fa103cce6c3) Thanks [@dqn](https://github.com/dqn)! - Add two lint rules that flag, in files defining a resolver, executor, workflow job, or HTTP adapter, the Node-only globals (`no-node-only-globals`) and Node built-in module imports (`no-node-builtin-imports`) that the Tailor Platform runtime does not provide. Both print the same suggested alternative the build does, and both leave configuration, scripts, and tests alone. Enabled in newly scaffolded projects.
+
+- [#2314](https://github.com/tailor-platform/sdk/pull/2314) [`8351e86`](https://github.com/tailor-platform/sdk/commit/8351e866d65a07109b965f11f56d55d8207fbe2c) Thanks [@dqn](https://github.com/dqn)! - Add three lint rules that check literal values against constraints the build otherwise validates only at `tailor generate` / `tailor deploy` time: `valid-execution-policy-definition` (a workflow execution policy `name` or `key` outside the platform grammar), `valid-workflow-retry-policy` (a `retryPolicy` outside the platform limits, such as `initialBackoff` greater than `maxBackoff`), and `valid-resolver-permission` (a permission with no `permit: true` policy, or a condition that does not compare exactly one `user` operand to a string or a boolean). Values the rules cannot resolve to literals are left to the build. Enabled in newly scaffolded projects.
+
+- [#2312](https://github.com/tailor-platform/sdk/pull/2312) [`c2ae1ac`](https://github.com/tailor-platform/sdk/commit/c2ae1acd688dd13df0a0d21d8d76ebc756415ab4) Thanks [@dqn](https://github.com/dqn)! - Add lint rules that catch workflow mistakes the build otherwise reports only at `tailor generate` / `tailor deploy` time: `valid-workflow-job-definition` (a `createWorkflowJob` `name` that is not a string literal or a `body` that is not an inline function), `no-job-start-outside-body` (a job's `.start()` called outside any job body in the same file), `no-direct-exec-job-function` (calling `execJobFunction` directly instead of `.start()`), and `valid-workflow-exports` (a `createWorkflow` result that is not the default export, or a job that is not a named export). Enabled in newly scaffolded projects.
+
 ## 2.15.0
 
 ### Patch Changes

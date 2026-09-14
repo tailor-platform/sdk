@@ -1,5 +1,6 @@
 import { getPlatformBaseUrl, userAgent, type PlatformClientConfig } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 
 export interface ApiCallOptions {
   profile?: string;
@@ -58,7 +59,11 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
   const data: unknown = await response.json();
 
   if (!response.ok) {
-    throw new Error(`API call failed (${response.status}): ${JSON.stringify(data)}`);
+    throw CLIError({
+      code: "API_REQUEST_FAILED",
+      message: `API call failed (${response.status}): ${JSON.stringify(data)}`,
+      context: { status: response.status },
+    });
   }
 
   return {

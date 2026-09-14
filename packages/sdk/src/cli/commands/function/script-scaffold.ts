@@ -28,7 +28,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
-import { formatCopyableCommand } from "#/cli/shared/errors";
+import { CLIError, formatCopyableCommand, internalError } from "#/cli/shared/errors";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import {
   generateUnifiedKyselyTypes,
@@ -83,7 +83,7 @@ export function isGeneratedScriptDbTypes(content: string): boolean {
 export function assertGeneratedTypeScript(filePath: string, content: string): void {
   const { errors } = parseSync(path.basename(filePath), content);
   if (errors.length > 0) {
-    throw new Error(
+    throw internalError(
       `Generated ${filePath} does not parse as TypeScript: ${errors
         .map((error) => error.message)
         .join("; ")}`,
@@ -156,11 +156,12 @@ export function loadScriptSchemaSnapshot(scriptPath: string): ScriptSchemaSnapsh
   try {
     parsed = JSON.parse(fs.readFileSync(snapshotPath, "utf-8"));
   } catch (error) {
-    throw new Error(
-      `Failed to parse schema snapshot ${snapshotPath}: ${error instanceof Error ? error.message : error}. ` +
-        "Re-run `tailor function script` to regenerate it.",
-      { cause: error },
-    );
+    throw CLIError({
+      code: "SCRIPT_SNAPSHOT_INVALID",
+      message: `Failed to parse schema snapshot ${snapshotPath}: ${error instanceof Error ? error.message : error}.`,
+      suggestion: "Re-run `tailor function script` to regenerate it.",
+      cause: error,
+    });
   }
   const candidate = parsed as Record<string, unknown> | null;
   if (
@@ -191,10 +192,11 @@ export function loadScriptSchemaSnapshot(scriptPath: string): ScriptSchemaSnapsh
 }
 
 function unexpectedSnapshotShapeError(snapshotPath: string): Error {
-  return new Error(
-    `Schema snapshot ${snapshotPath} has an unexpected shape. ` +
-      "Re-run `tailor function script` to regenerate it.",
-  );
+  return CLIError({
+    code: "SCRIPT_SNAPSHOT_INVALID",
+    message: `Schema snapshot ${snapshotPath} has an unexpected shape.`,
+    suggestion: "Re-run `tailor function script` to regenerate it.",
+  });
 }
 
 /** Options for {@link verifyScriptSchemaSnapshot}. */
@@ -367,9 +369,10 @@ function schemaDriftError(
     "--allow-schema-drift",
     ...contextFlags,
   ]);
-  return new Error(
-    `Schema drift detected: ${SCRIPT_SNAPSHOT_FILE_NAME} next to the script no longer matches ${target}.\n\n` +
-      `${formatMigrationDiff(diff)}\n\n` +
-      `Refresh the generated types with ${rescaffold}, or run anyway with ${override}.`,
-  );
+  return CLIError({
+    code: "SCRIPT_SCHEMA_DRIFT",
+    message: `Schema drift detected: ${SCRIPT_SNAPSHOT_FILE_NAME} next to the script no longer matches ${target}.`,
+    details: formatMigrationDiff(diff),
+    suggestion: `Refresh the generated types with ${rescaffold}, or run anyway with ${override}.`,
+  });
 }

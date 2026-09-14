@@ -3,6 +3,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { statusLabels } from "./status";
@@ -32,7 +33,7 @@ export const domainGetCommand = defineAppCommand({
       });
 
       if (!customDomain) {
-        throw new Error(notFoundErrorMessage);
+        throw CLIError({ code: "STATIC_WEBSITE_DOMAIN_NOT_FOUND", message: notFoundErrorMessage });
       }
 
       const info = {
@@ -48,7 +49,11 @@ export const domainGetCommand = defineAppCommand({
       logger.out(info);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(notFoundErrorMessage, { cause: error });
+        throw CLIError({
+          code: "STATIC_WEBSITE_DOMAIN_NOT_FOUND",
+          message: notFoundErrorMessage,
+          cause: error,
+        });
       }
       throw error;
     }

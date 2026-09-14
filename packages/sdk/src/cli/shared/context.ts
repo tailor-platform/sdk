@@ -7,7 +7,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import { type MachineUserInputSource } from "./args";
+import { type MachineUserInputSource, recoveryContextArgs } from "./args";
 import {
   defaultPlatformBaseUrl,
   fetchUserInfo,
@@ -715,7 +715,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
       code: "AUTH_TOKEN_NOT_FOUND",
       message: "Tailor Platform token not found.",
       suggestion: "Set TAILOR_PLATFORM_TOKEN or log in using the selected profile.",
-      next: { command: "tailor", args: ["login", ...(profile ? ["--profile", profile] : [])] },
+      next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile })] },
       context: { profile: profile ?? null },
     });
   }

@@ -10,6 +10,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { symbols } from "#/cli/shared/logger";
 import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
 import { assertDefined } from "#/utils/assert";
@@ -557,12 +558,13 @@ function assertLabelBudget(
   if (merged.size <= MAX_RESOURCE_LABELS) return;
   const named = new Set(Object.keys(write.labels ?? {}));
   const retained = [...merged].filter((key) => !named.has(key)).toSorted();
-  throw new Error(
-    `Application '${appName}' would store ${merged.size} labels, over the platform's limit of ${MAX_RESOURCE_LABELS}. ` +
-      `${named.size} come from this deploy and ${retained.length} are kept from earlier deploys or other tools` +
-      `${retained.length ? ` (${retained.join(", ")})` : ""}. ` +
-      `Remove entries from 'metadata' in the config, or delete labels the application no longer needs.`,
-  );
+  throw CLIError({
+    code: "DEPLOY_LABEL_LIMIT_EXCEEDED",
+    message: `Application '${appName}' would store ${merged.size} labels, over the platform's limit of ${MAX_RESOURCE_LABELS}.`,
+    details: `${named.size} come from this deploy and ${retained.length} are kept from earlier deploys or other tools${retained.length ? ` (${retained.join(", ")})` : ""}.`,
+    suggestion:
+      "Remove entries from 'metadata' in the config, or delete labels the application no longer needs.",
+  });
 }
 
 /**
@@ -595,7 +597,7 @@ function buildHttpAdapters(
   return adapters.map((loaded) => {
     const inputScript = httpAdapterBuildResult?.bundledInputs.get(loaded.adapter.name);
     if (!inputScript) {
-      throw new Error(
+      throw internalError(
         `HTTP adapter "${loaded.adapter.name}" was loaded but no bundled input script is available`,
       );
     }
@@ -603,7 +605,7 @@ function buildHttpAdapters(
     if (loaded.hasOutput) {
       const bundled = httpAdapterBuildResult?.bundledOutputs.get(loaded.adapter.name);
       if (!bundled) {
-        throw new Error(
+        throw internalError(
           `HTTP adapter "${loaded.adapter.name}" declares an output handler but no bundled output script is available`,
         );
       }
@@ -642,7 +644,7 @@ function protoSubgraph(
       serviceType = Subgraph_ServiceType.AUTH;
       break;
     default:
-      throw new Error(`Unknown subgraph type: ${subgraph.Type}`);
+      throw internalError(`Unknown subgraph type: ${subgraph.Type}`);
   }
   return {
     serviceType,

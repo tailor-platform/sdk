@@ -6,6 +6,7 @@ import {
   readPlatformConfig,
   resolveUserTokenKey,
 } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 
@@ -24,7 +25,7 @@ function activeCurrentUserKey(config: PlatformConfig, activeProfile?: string): s
   }
   const profile = config.profiles[activeProfile];
   if (!profile) {
-    throw new Error(`Profile "${activeProfile}" not found`);
+    throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${activeProfile}" not found` });
   }
   return resolveUserTokenKey(config, profile.user, platformConfigFromProfile(profile));
 }

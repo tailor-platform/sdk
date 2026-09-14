@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { getOrNull } from "#/cli/shared/client";
 import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { isCLIError, toError } from "#/cli/shared/errors";
+import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -311,11 +311,12 @@ export function dependencyLabelWrite(
   for (const [appId, reason] of dependents) {
     const key = dependedByAppLabelKey(appId, scope);
     if (!key) {
-      throw new Error(
-        `Application id "${appId}" cannot be recorded as a dependency of this deploy. ` +
-          `Ids are written by deploy as lowercase UUIDs; restore the generated value in the ` +
-          `config's "id".`,
-      );
+      throw CLIError({
+        code: "APP_ID_INVALID",
+        message: `Application id "${appId}" cannot be recorded as a dependency of this deploy.`,
+        suggestion:
+          'Ids are written by deploy as lowercase UUIDs; restore the generated value in the config\'s "id".',
+      });
     }
     labels[key] = reason;
   }

@@ -1,4 +1,5 @@
 import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
+import { toError } from "#/cli/shared/errors";
 import { writeMetadataLabelsDirect, type MetadataLabelClient } from "../deploy/label";
 
 /** Label key recording when a workspace becomes eligible for pruning. */
@@ -94,7 +95,7 @@ export async function fetchWorkspaceExpiry(
     const response = await client.getMetadata({ trn: workspaceTrn(workspaceId) });
     return { expiry: readWorkspaceExpiry(response.metadata?.labels, now) };
   } catch (error) {
-    return { error: error instanceof Error ? error : new Error(String(error)) };
+    return { error: toError(error) };
   }
 }
 

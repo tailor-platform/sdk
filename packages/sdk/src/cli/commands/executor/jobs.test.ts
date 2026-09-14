@@ -8,7 +8,7 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
-import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
+import { getExecutorWaitFailure, getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
 import type { ExecutorJob } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
@@ -165,6 +165,11 @@ describe("watchExecutorJob", () => {
         status: "SUCCESS",
       },
     });
+    expect(getExecutorWaitFailure(result)).toMatchObject({
+      code: "WORKFLOW_EXECUTION_FAILED",
+      message: "Workflow execution 'workflow-execution-1' failed.",
+      context: { jobId: "job-1", workflowExecutionId: "workflow-execution-1" },
+    });
     expect(getExecutorWaitFailureMessage(result)).toBe(
       "Workflow execution 'workflow-execution-1' failed.",
     );
@@ -211,8 +216,10 @@ describe("watchExecutorJob", () => {
         status: "SUCCESS",
       },
     });
-    expect(getExecutorWaitFailureMessage(result)).toBe(
-      "Function execution 'function-execution-1' was canceled.",
-    );
+    expect(getExecutorWaitFailure(result)).toMatchObject({
+      code: "FUNCTION_EXECUTION_CANCELED",
+      message: "Function execution 'function-execution-1' was canceled.",
+      context: { jobId: "job-1", functionExecutionId: "function-execution-1" },
+    });
   });
 });

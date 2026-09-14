@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
 import { confirmationArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
@@ -44,7 +45,11 @@ export const deleteCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Vault "${args.name}" not found.`, { cause: error });
+        throw CLIError({
+          code: "VAULT_NOT_FOUND",
+          message: `Vault "${args.name}" not found.`,
+          cause: error,
+        });
       }
       throw error;
     }

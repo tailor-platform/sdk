@@ -35,6 +35,7 @@ describe("serializeError", () => {
   test("redacts a secret nested inside CLIError.context, an arbitrary record", () => {
     logger.registerSecret("nested-context-secret-value");
     const error = CLIError({
+      code: "TEST_ERROR",
       message: "operation failed",
       context: { request: { headers: { authorization: "nested-context-secret-value" } } },
     });
@@ -50,6 +51,7 @@ describe("serializeError", () => {
     const circular: Record<string, unknown> = { name: "circular" };
     circular.self = circular;
     const error = CLIError({
+      code: "TEST_ERROR",
       message: "operation failed",
       context: circular as unknown as CLIError["context"],
     });
@@ -69,6 +71,7 @@ describe("serializeError", () => {
     const secret = "1234567890";
     logger.registerSecret(secret);
     const error = CLIError({
+      code: "TEST_ERROR",
       message: "operation failed",
       context: { retryAfterSeconds: 1234567890 },
     });
@@ -89,6 +92,7 @@ describe("serializeError", () => {
     const secret = "null";
     logger.registerSecret(secret);
     const error = CLIError({
+      code: "TEST_ERROR",
       message: "operation failed",
       context: { cursor: null },
     });
@@ -103,7 +107,11 @@ describe("serializeError", () => {
 
   test("preserves a Date's normal JSON serialization inside context", () => {
     const date = new Date("2024-01-01T00:00:00.000Z");
-    const error = CLIError({ message: "operation failed", context: { createdAt: date } });
+    const error = CLIError({
+      code: "TEST_ERROR",
+      message: "operation failed",
+      context: { createdAt: date },
+    });
     const parsed = JSON.parse(serializeError(error)) as {
       error: { context: { createdAt: string } };
     };

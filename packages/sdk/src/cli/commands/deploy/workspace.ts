@@ -7,7 +7,12 @@ import {
   loadPlatformClientConfig,
   tryLoadWorkspaceId,
 } from "#/cli/shared/context";
-import { CLIError, type CLIErrorNextAction, formatCopyableCommand } from "#/cli/shared/errors";
+import {
+  CLIError,
+  type CLIErrorNextAction,
+  formatCopyableCommand,
+  internalError,
+} from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import {
@@ -154,11 +159,12 @@ async function persistWorkspaceContext(
   );
   const failures = results.filter((result) => result.status === "rejected");
   if (failures.length > 0) {
-    throw new Error(
-      failures
+    throw CLIError({
+      code: "WORKSPACE_CONTEXT_SAVE_FAILED",
+      message: failures
         .map(({ reason }) => (reason instanceof Error ? reason.message : String(reason)))
         .join("; "),
-    );
+    });
   }
 }
 
@@ -244,7 +250,7 @@ async function chooseWorkspace(
     return createWorkspaceForDeploy(client, platformUrl, options);
   }
   const workspace = workspaces.find(({ id }) => id === workspaceId);
-  if (!workspace) throw new Error("Selected workspace was not found");
+  if (!workspace) throw internalError("Selected workspace was not found");
   return useWorkspace(client, platformUrl, workspace, options);
 }
 
@@ -300,7 +306,7 @@ async function createWorkspace(
     }
   }
 
-  if (!name || !region) throw new Error("Workspace creation options were not resolved");
+  if (!name || !region) throw internalError("Workspace creation options were not resolved");
 
   let validated = validatedOptions;
   if (!validated) {
@@ -629,7 +635,7 @@ export async function resolveDeployWorkspace(
 
   if (workspaces.length === 1) {
     const [workspace] = workspaces;
-    if (!workspace) throw new Error("Workspace discovery returned an invalid result");
+    if (!workspace) throw internalError("Workspace discovery returned an invalid result");
 
     if (options.createWorkspace && !workspaceMatchesRequestedIdentity(workspace, options)) {
       throw CLIError({
@@ -678,5 +684,5 @@ export async function resolveDeployWorkspace(
     return chooseWorkspace(client, platformUrl, workspaces, options);
   }
 
-  throw new Error("Workspace discovery returned an invalid result");
+  throw internalError("Workspace discovery returned an invalid result");
 }

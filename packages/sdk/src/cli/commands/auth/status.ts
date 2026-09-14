@@ -18,6 +18,7 @@ export const statusCommand = defineAppCommand({
       throw CLIError({
         code: "NOT_AUTHENTICATED",
         message: "Not authenticated.",
+        suggestion: "Log in and try again.",
         next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile })] },
       });
     }

@@ -3,6 +3,7 @@ import { organizationArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
@@ -31,7 +32,10 @@ export async function getOrganization(options: GetOrganizationOptions): Promise<
   });
 
   if (!response.organization) {
-    throw new Error(`Organization "${validated.organizationId}" not found.`);
+    throw CLIError({
+      code: "ORGANIZATION_NOT_FOUND",
+      message: `Organization "${validated.organizationId}" not found.`,
+    });
   }
 
   return organizationInfo(response.organization);

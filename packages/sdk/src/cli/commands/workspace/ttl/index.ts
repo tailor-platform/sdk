@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { clearCommand } from "./clear";
 import { setCommand } from "./set";
 
@@ -10,6 +11,6 @@ export const ttlCommand = defineCommand({
     clear: clearCommand,
   },
   async run() {
-    await runCommand(ttlCommand, ["--help"]);
+    await runDefaultSubCommand(ttlCommand, ["--help"]);
   },
 });

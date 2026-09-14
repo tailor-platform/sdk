@@ -9,6 +9,7 @@ import { workspaceArgs } from "#/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { createProgress, withTimeout } from "#/cli/shared/progress";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -49,7 +50,7 @@ export async function deployStaticWebsite(
   });
 
   if (!deploymentId) {
-    throw new Error("createDeployment returned empty deploymentId");
+    throw internalError("createDeployment returned empty deploymentId");
   }
 
   const skippedFiles = await uploadDirectory(
@@ -66,7 +67,7 @@ export async function deployStaticWebsite(
   });
 
   if (!url) {
-    throw new Error("publishDeployment returned empty url");
+    throw internalError("publishDeployment returned empty url");
   }
 
   return { url, skippedFiles };
@@ -257,7 +258,10 @@ export const deployCommand = defineAppCommand({
     });
 
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-      throw new Error(`Directory not found or not a directory: ${dir}`);
+      throw CLIError({
+        code: "DIRECTORY_NOT_FOUND",
+        message: `Directory not found or not a directory: ${dir}`,
+      });
     }
 
     const { url, skippedFiles } = await withTimeout(
