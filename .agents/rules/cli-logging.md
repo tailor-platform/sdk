@@ -117,10 +117,10 @@ optional, so a `throw new Error(...)` reaching the top level becomes `UNEXPECTED
 whole explanation flattened into one prose string. Callers cannot branch on that, so never leave a
 nameable condition to that path.
 
-There are two ways to give a failure structure. Throw a `CLIError` when you are raising it
-yourself; wrap an error you did not construct — a `ConnectError`, an `AggregateError` — with
-`withErrorDiagnostics()`, whose fields override the defaults. Either way, split the failure across
-these fields instead of one prose blob:
+There are two ways to give a failure structure: throw a `CLIError` when you are raising it
+yourself, or wrap an error you did not construct with `withErrorDiagnostics()`, whose fields
+override the defaults but are limited to `code`, `suggestion`, and `context` — reach for `CLIError`
+instead when a failure needs `details`, `next`, or `command`. Split the failure across these fields:
 
 - `code` — a specific, stable identifier for the condition. `CLIError` falls back to `CLI_ERROR`
   when you omit it, which is only acceptable for a failure no caller would branch on.
