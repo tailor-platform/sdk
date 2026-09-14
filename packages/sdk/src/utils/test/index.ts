@@ -1,3 +1,4 @@
+import { isNestedObject } from "#/runtime/field-parse";
 import type { output } from "#/configure/index";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { TailorField } from "#/configure/types/type";
@@ -45,9 +46,11 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const nestedHook = createTailorDBHook({ fields: field.fields } as any);
           if (field.metadata.array) {
-            hookedValue = Array.isArray(input) ? input.map((item) => nestedHook(item, now)) : input;
+            hookedValue = Array.isArray(input)
+              ? input.map((item) => (isNestedObject(item) ? nestedHook(item, now) : item))
+              : input;
           } else {
-            hookedValue = nestedHook(input, now);
+            hookedValue = isNestedObject(input) ? nestedHook(input, now) : input;
           }
         } else if (field.metadata.hooks?.create) {
           hookedValue = field.metadata.hooks.create({ input, invoker: null, now });
