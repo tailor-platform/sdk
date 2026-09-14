@@ -1,6 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { workspaceArgs } from "#/cli/shared/args";
+import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
@@ -8,7 +8,7 @@ import {
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError, loginNextAction } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const switchCommand = defineAppCommand({
@@ -49,7 +49,10 @@ export const switchCommand = defineAppCommand({
         code: "USER_NOT_FOUND",
         message: `User "${args.user}" not found.`,
         suggestion: "Log in first to register this user.",
-        next: loginNextAction(activeProfileName),
+        next: {
+          command: "tailor",
+          args: ["login", ...recoveryContextArgs({ profile: activeProfileName })],
+        },
       });
     }
 

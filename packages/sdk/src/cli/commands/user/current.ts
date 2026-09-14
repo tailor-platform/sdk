@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { workspaceArgs } from "#/cli/shared/args";
+import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
   platformConfigFromProfile,
   readPlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError, loginNextAction } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const currentCommand = defineAppCommand({
@@ -30,7 +30,7 @@ export const currentCommand = defineAppCommand({
         code: "USER_NOT_SET",
         message: "Current user not set.",
         suggestion: "Log in first to register a user.",
-        next: loginNextAction(profile),
+        next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile })] },
       });
     }
 
@@ -40,7 +40,7 @@ export const currentCommand = defineAppCommand({
         code: "USER_NOT_FOUND",
         message: `Current user '${currentUser}' not found in registered users.`,
         suggestion: "Log in again to register the user.",
-        next: loginNextAction(profile),
+        next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile })] },
       });
     }
 

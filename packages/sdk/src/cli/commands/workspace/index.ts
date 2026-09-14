@@ -6,6 +6,7 @@ import { getCommand } from "./get";
 import { listCommand } from "./list";
 import { pruneCommand } from "./prune";
 import { restoreCommand } from "./restore";
+import { ttlCommand } from "./ttl";
 import { userCommand } from "./user";
 
 export const workspaceCommand = defineCommand({
@@ -19,6 +20,7 @@ export const workspaceCommand = defineCommand({
     list: listCommand,
     prune: pruneCommand,
     restore: restoreCommand,
+    ttl: ttlCommand,
     user: userCommand,
   },
   async run() {

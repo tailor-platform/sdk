@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { workspaceArgs } from "#/cli/shared/args";
+import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAuthStatus } from "#/cli/shared/context";
-import { CLIError, loginNextAction } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const statusCommand = defineAppCommand({
@@ -16,10 +16,10 @@ export const statusCommand = defineAppCommand({
     logger.out(status);
     if (!status.authenticated) {
       throw CLIError({
-        code: "AUTH_NOT_AUTHENTICATED",
+        code: "NOT_AUTHENTICATED",
         message: "Not authenticated.",
         suggestion: "Log in and try again.",
-        next: loginNextAction(profile),
+        next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile })] },
       });
     }
   },

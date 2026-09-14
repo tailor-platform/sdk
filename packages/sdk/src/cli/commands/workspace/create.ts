@@ -1,5 +1,7 @@
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { arg } from "@politty/zod";
 import { z } from "zod";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import {
   getOAuth2ClientId,
   getPlatformBaseUrl,
@@ -18,13 +20,15 @@ import {
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
-import { CLIError, loginNextAction } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
+import { ageArg, parseAge } from "./age";
+import { writeWorkspaceExpiry } from "./expiry";
 import {
   workspaceDisplayName,
   workspaceInfoWithFolderName,
@@ -32,6 +36,7 @@ import {
   type WorkspaceInfo,
 } from "./transform";
 import type { ProfileInfo } from "../profile";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 /**
  * Schema for workspace creation options
@@ -45,11 +50,15 @@ const createWorkspaceOptionsSchema = z.object({
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
   folderId: z.uuid().optional(),
+  ttl: ageArg.optional(),
   profile: profileNameSchema.optional(),
 });
 
 export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
 export type ValidatedCreateWorkspaceOptions = z.output<typeof createWorkspaceOptionsSchema>;
+
+/** A created workspace, plus how recording its prune expiry went when one was requested. */
+export type CreatedWorkspaceInfo = WorkspaceInfo & { ttl?: TtlWriteResult };
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
@@ -84,7 +93,9 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
  * @param options - Workspace creation options
  * @returns Created workspace info
  */
-export async function createWorkspace(options: CreateWorkspaceOptions): Promise<WorkspaceInfo> {
+export async function createWorkspace(
+  options: CreateWorkspaceOptions,
+): Promise<CreatedWorkspaceInfo> {
   const validated = validateCreateWorkspaceOptions(options);
   const accessToken = await loadAccessToken({ profile: validated.profile });
   const platformConfig = await loadPlatformClientConfig({ profile: validated.profile });
@@ -102,7 +113,7 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
 export async function createValidatedWorkspaceWithClient(
   client: OperatorClient,
   options: ValidatedCreateWorkspaceOptions,
-): Promise<WorkspaceInfo> {
+): Promise<CreatedWorkspaceInfo> {
   // Create workspace
   const resp = await client.createWorkspace({
     workspaceName: options.name,
@@ -112,10 +123,60 @@ export async function createValidatedWorkspaceWithClient(
     folderId: options.folderId,
   });
 
-  return workspaceInfoWithFolderName(
-    client,
-    assertDefined(resp.workspace, "createWorkspace response missing workspace"),
-  );
+  const workspace = assertDefined(resp.workspace, "createWorkspace response missing workspace");
+  const ttl =
+    options.ttl === undefined
+      ? undefined
+      : await recordTtl(client, workspace.id, options.ttl, workspace.createTime);
+
+  const info = await workspaceInfoWithFolderName(client, workspace);
+  return ttl ? { ...info, ttl } : info;
+}
+
+/** Outcome of recording a created workspace's prune expiry. */
+export type TtlWriteResult =
+  | { state: "written"; expiresAt: Date }
+  | { state: "unconfirmed"; expiresAt: Date; requested: string; message: string };
+
+/**
+ * Record when a freshly created workspace becomes prunable.
+ *
+ * The expiry is anchored to the platform's own `createTime` so the creating
+ * machine's clock cannot shift it, and stored as an absolute instant so a
+ * later change to `createTime` cannot reinterpret it. When the platform
+ * reports no `createTime`, the local clock stands in.
+ *
+ * The workspace already exists by the time this runs, so a failure is
+ * returned rather than thrown: the caller still has a workspace to report and
+ * a profile to create, and its recovery step is `workspace ttl set`, not
+ * creating the workspace again.
+ * @param client - Authenticated Operator client
+ * @param workspaceId - Created workspace ID
+ * @param ttl - Duration after creation, such as `24h`
+ * @param createTime - Creation time reported by the platform
+ * @returns Whether the expiry is known to have been recorded
+ */
+async function recordTtl(
+  client: OperatorClient,
+  workspaceId: string,
+  ttl: string,
+  createTime: Timestamp | undefined,
+): Promise<TtlWriteResult> {
+  const createdAt = createTime ? timestampDate(createTime) : new Date();
+  const expiresAt = new Date(createdAt.getTime() + parseAge(ttl));
+  try {
+    await writeWorkspaceExpiry(client, workspaceId, expiresAt);
+    return { state: "written", expiresAt };
+  } catch (error) {
+    // The write may still have landed on the platform, so this reports an
+    // unconfirmed expiry rather than asserting the workspace records none.
+    return {
+      state: "unconfirmed",
+      expiresAt,
+      requested: ttl,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**
@@ -158,6 +219,10 @@ export const createCommand = defineAppCommand({
       alias: "f",
       description: "Folder ID to workspace associate with",
       env: "TAILOR_PLATFORM_FOLDER_ID",
+    }),
+    ttl: arg(ageArg.optional(), {
+      description:
+        "Record on the workspace itself when it becomes prunable, such as 30m, 24h, or 7d. `workspace prune --expired` deletes it once that has passed",
     }),
     "profile-name": arg(z.string().optional(), {
       alias: "p",
@@ -216,7 +281,10 @@ export const createCommand = defineAppCommand({
           code: "USER_NOT_FOUND",
           message: `User "${profileUser}" not found.`,
           suggestion: "Verify the user name and log in.",
-          next: loginNextAction(activeProfileName),
+          next: {
+            command: "tailor",
+            args: ["login", ...recoveryContextArgs({ profile: activeProfileName })],
+          },
         });
       }
       profileSetup = {
@@ -233,6 +301,7 @@ export const createCommand = defineAppCommand({
       deleteProtection: args["delete-protection"],
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
+      ttl: args.ttl,
       profile: args.profile,
     });
 
@@ -264,19 +333,49 @@ export const createCommand = defineAppCommand({
       }
     }
 
+    const { ttl, ...workspaceOutput } = workspace;
     if (!args.json) {
       logger.success(`Workspace "${workspaceDisplayName(workspace)}" created successfully.`);
+      if (ttl?.state === "written") {
+        logger.info(`Workspace becomes prunable at ${ttl.expiresAt.toISOString()}.`);
+      }
     }
 
     if (args.json && profileInfo) {
-      logger.out({ ...workspace, profile: profileInfo });
-      return;
+      logger.out({ ...workspaceOutput, profile: profileInfo });
+    } else {
+      logger.out(workspaceOutput, {
+        display: { name: workspaceNameTransformer, folderName: null },
+      });
+      if (profileInfo) {
+        logger.out("Profile:");
+        logger.out(profileInfo);
+      }
     }
 
-    logger.out(workspace, { display: { name: workspaceNameTransformer, folderName: null } });
-    if (profileInfo) {
-      logger.out("Profile:");
-      logger.out(profileInfo);
+    if (ttl?.state === "unconfirmed") {
+      throw CLIError({
+        code: "WORKSPACE_TTL_WRITE_FAILED",
+        message: `Workspace "${workspaceDisplayName(workspace)}" was created, but --ttl could not be confirmed: ${ttl.message}`,
+        details:
+          "The workspace exists. Whether it records the expiry is unknown — the write may have landed. Set the expiry again to be sure.",
+        context: {
+          workspaceId: workspace.id,
+          requestedExpiresAt: ttl.expiresAt.toISOString(),
+          ...(profileInfo ? { profileCreated: profileInfo.name } : {}),
+        },
+        next: {
+          command: "tailor",
+          args: [
+            "workspace",
+            "ttl",
+            "set",
+            "--ttl",
+            ttl.requested,
+            ...recoveryContextArgs({ workspaceId: workspace.id, profile: args.profile }),
+          ],
+        },
+      });
     }
   },
 });
