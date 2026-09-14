@@ -309,6 +309,19 @@ export default { db: { main: { files: [] } } };
       );
     });
 
+    test("rejects a `plugins` export that is explicitly undefined", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = undefined;
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "anything", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
     test("rejects a `plugins` export containing an invalid item", async () => {
       fs.writeFileSync(
         configPath,
