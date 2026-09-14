@@ -313,6 +313,19 @@ describe("generateTableDDL", () => {
     );
   });
 
+  test("string serial sequences are owned by their column so dropping the table drops them", () => {
+    const statements = generateTableDDL(table({ n: { type: "string", serial: { start: 1 } } }));
+    expect(statements).toContain('ALTER SEQUENCE "Item_n_88d982cf_seq" OWNED BY "Item"."n"');
+    expect(statements.indexOf('ALTER SEQUENCE "Item_n_88d982cf_seq" OWNED BY "Item"."n"')).toBe(
+      statements.findIndex((statement) => statement.startsWith("CREATE TABLE")) + 1,
+    );
+  });
+
+  test("integer serials use an identity column, which needs no ALTER SEQUENCE", () => {
+    const statements = generateTableDDL(table({ n: { type: "integer", serial: { start: 1 } } }));
+    expect(statements.some((statement) => statement.startsWith("ALTER SEQUENCE"))).toBe(false);
+  });
+
   test("identifiers are double-quoted with embedded quotes doubled", () => {
     const [create] = generateTableDDL({
       name: 'We"ird',
@@ -330,7 +343,7 @@ describe("generateTableDDL", () => {
         fields: { id: { type: "uuid" }, [field]: { type: "string", serial: { start: 1 } } },
         indexes: { [`${field}_by_step`]: { fields: [field, "id"], unique: true } },
       });
-    const [sequence, create, index] = ddl("approvalSequenceNumber");
+    const [sequence, create, , index] = ddl("approvalSequenceNumber");
     const sequenceName = /SEQUENCE IF NOT EXISTS "([^"]+)"/.exec(sequence!)![1]!;
     expect(sequenceName.length).toBeLessThanOrEqual(63);
     expect(sequenceName).toMatch(/_[0-9a-f]{8}_seq$/);
@@ -367,6 +380,7 @@ describe("generateSchemaDDL", () => {
         '  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),',
         '  "n" text DEFAULT (nextval(\'"A_n_baa9714b_seq"\')::text)',
         ");",
+        'ALTER SEQUENCE "A_n_baa9714b_seq" OWNED BY "A"."n";',
         "",
         'CREATE TABLE IF NOT EXISTS "B" (',
         '  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid()',
