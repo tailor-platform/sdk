@@ -82,6 +82,25 @@ describe("serializeError", () => {
     expect(() => JSON.parse(afterOuterPass)).not.toThrow();
   });
 
+  test("redacts a registered secret that coincides with an unrelated null in context, keeping the envelope valid JSON", () => {
+    // A secret literally equal to "null" is degenerate (real secrets aren't the word
+    // "null"), but it still clears the 4-character registration minimum, so the same
+    // bare-token corruption that a numeric collision causes must be prevented here too.
+    const secret = "null";
+    logger.registerSecret(secret);
+    const error = CLIError({
+      message: "operation failed",
+      context: { cursor: null },
+    });
+
+    const output = serializeError(error);
+    const parsed = JSON.parse(output) as { error: { context: { cursor: string } } };
+    expect(parsed.error.context.cursor).toBe("<redacted>");
+
+    const afterOuterPass = redactSecrets(output);
+    expect(() => JSON.parse(afterOuterPass)).not.toThrow();
+  });
+
   test("preserves a Date's normal JSON serialization inside context", () => {
     const date = new Date("2024-01-01T00:00:00.000Z");
     const error = CLIError({ message: "operation failed", context: { createdAt: date } });
