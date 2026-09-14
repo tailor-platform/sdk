@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, test, expect } from "vitest";
-import { physicalLineOfRecord } from "./record-lines";
+import { firstErrorLocation, physicalLineOfRecord } from "./record-lines";
+import type { ValidationErrorDetail } from "@toiroakr/lines-db";
 
 describe("physicalLineOfRecord", () => {
   test("maps records to their own lines when the file has no blank lines", () => {
@@ -65,5 +69,65 @@ describe("physicalLineOfRecord", () => {
   test("returns undefined for an empty file", () => {
     expect(physicalLineOfRecord("", 0)).toBeUndefined();
     expect(physicalLineOfRecord("\n\n", 0)).toBeUndefined();
+  });
+});
+
+describe("firstErrorLocation", () => {
+  const detail = (file: string, rowIndex: number): ValidationErrorDetail => ({
+    file,
+    rowIndex,
+    tableName: "T",
+    issues: [],
+  });
+
+  test("returns undefined when nothing failed", async () => {
+    await expect(firstErrorLocation([])).resolves.toBeUndefined();
+  });
+
+  test("points at the first error's physical line, counting blank lines", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "seed-loc-"));
+    try {
+      const file = join(dir, "T.jsonl");
+      // record 1 sits on physical line 3, because line 2 is blank
+      writeFileSync(file, '{"a":1}\n\n{"a":2}\n');
+      await expect(firstErrorLocation([detail(file, 1)])).resolves.toEqual({ file, line: 3 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("reports the first error's own file, not a later one", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "seed-loc-"));
+    try {
+      const first = join(dir, "A.jsonl");
+      const second = join(dir, "B.jsonl");
+      writeFileSync(first, '{"a":1}\n');
+      writeFileSync(second, '{"b":1}\n');
+      await expect(firstErrorLocation([detail(first, 0), detail(second, 0)])).resolves.toEqual({
+        file: first,
+        line: 1,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps the file and drops the line when it cannot be read", async () => {
+    const missing = join(tmpdir(), "seed-loc-missing", "gone.jsonl");
+    await expect(firstErrorLocation([detail(missing, 0)])).resolves.toEqual({ file: missing });
+  });
+
+  test("keeps the file and drops the line when the record index is past the end", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "seed-loc-"));
+    try {
+      const file = join(dir, "T.jsonl");
+      writeFileSync(file, '{"a":1}\n');
+      await expect(firstErrorLocation([detail(file, 9)])).resolves.toEqual({
+        file,
+        line: undefined,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

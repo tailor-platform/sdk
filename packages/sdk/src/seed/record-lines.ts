@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import type { ValidationErrorDetail } from "@toiroakr/lines-db";
+
 /**
  * Resolve the 1-based physical line a JSONL record occupies.
  *
@@ -17,4 +20,26 @@ export function physicalLineOfRecord(content: string, recordIndex: number): numb
     remaining -= 1;
   }
   return undefined;
+}
+
+/**
+ * Locate the first reported error in its own file.
+ *
+ * Errors are reported per record, so the index is mapped back to a physical
+ * line; a file that cannot be re-read yields the file alone rather than a
+ * guessed line.
+ * @param errors - Validation errors in the order the validator reported them
+ * @returns Location of the first error, or undefined when there is none
+ */
+export async function firstErrorLocation(
+  errors: readonly ValidationErrorDetail[],
+): Promise<{ file: string; line?: number } | undefined> {
+  const first = errors[0];
+  if (!first) return undefined;
+  try {
+    const content = await readFile(first.file, "utf-8");
+    return { file: first.file, line: physicalLineOfRecord(content, first.rowIndex) };
+  } catch {
+    return { file: first.file };
+  }
 }
