@@ -477,9 +477,6 @@ importers:
       '@connectrpc/connect-node':
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.14.1)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.14.1))
-      '@electric-sql/pglite':
-        specifier: '>=0.2.0'
-        version: 0.5.8
       '@inquirer/core':
         specifier: 12.0.2
         version: 12.0.2(@types/node@24.13.3)
@@ -616,6 +613,9 @@ importers:
         specifier: 4.5.4
         version: 4.5.4
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: 0.5.8
+        version: 0.5.8
       '@opentelemetry/sdk-trace-base':
         specifier: 2.11.0
         version: 2.11.0(@opentelemetry/api@1.9.1)

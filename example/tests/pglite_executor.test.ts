@@ -3,29 +3,12 @@ import { mockTailordbWithPGlite } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import userRecordLog from "../executors/userRecordLog";
 import { getDB } from "../generated/tailordb";
+import { pgliteSchema } from "../generated/tailordb.pglite";
 
 const pglite = new PGlite();
 
 beforeAll(async () => {
-  await pglite.exec(`
-    CREATE TABLE "User" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      "name" text NOT NULL,
-      "email" text NOT NULL,
-      "status" text,
-      "department" text,
-      "role" text NOT NULL,
-      "createdAt" timestamptz NOT NULL DEFAULT now(),
-      "updatedAt" timestamptz NOT NULL DEFAULT now()
-    );
-    CREATE TABLE "UserLog" (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      "userID" uuid NOT NULL,
-      "message" text NOT NULL,
-      "createdAt" timestamptz NOT NULL DEFAULT now(),
-      "updatedAt" timestamptz NOT NULL DEFAULT now()
-    );
-  `);
+  await pglite.exec(pgliteSchema.tailordb);
 });
 
 afterAll(async () => {
