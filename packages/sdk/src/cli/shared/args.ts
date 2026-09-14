@@ -176,6 +176,44 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 // Argument Definitions
 // ============================================================================
 
+/**
+ * Environment variable selecting the default output format for every command.
+ *
+ * Set `TAILOR_OUTPUT=json` in agent and automation contexts so the CLI emits
+ * JSON without passing `--json` on every call. An explicit `--json` always
+ * wins, so `TAILOR_OUTPUT=table` restores table output only where no flag is
+ * present. Because JSON mode also suppresses interactive prompts, prefer
+ * setting this per invocation over exporting it from a shell profile.
+ */
+const OUTPUT_ENV_VAR = "TAILOR_OUTPUT";
+
+/**
+ * Whether `TAILOR_OUTPUT` selects JSON output.
+ * @returns `true` when the variable is set to `json` (case-insensitive)
+ */
+function outputEnvIsJson(): boolean {
+  return process.env[OUTPUT_ENV_VAR]?.trim().toLowerCase() === "json";
+}
+
+/**
+ * Whether `--json` was passed explicitly. The parsed value alone cannot answer
+ * this: the flag defaults to `false`, and politty only exposes `$source` to a
+ * global effect when the invoked command defines no arguments of its own.
+ * @param argv - Raw CLI argv, excluding the executable and script path
+ * @returns `true` when an explicit `--json` / `-j` token precedes `--`
+ */
+function hasJsonFlag(argv: readonly string[] = process.argv.slice(2)): boolean {
+  const separator = argv.indexOf("--");
+  const optionArgs = argv.slice(0, separator === -1 ? argv.length : separator);
+  return optionArgs.some(
+    (token) =>
+      token === "-j" ||
+      token.startsWith("-j=") ||
+      token === "--json" ||
+      token.startsWith("--json="),
+  );
+}
+
 interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
   verboseAlias?: string;
@@ -220,7 +258,10 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       alias: "j",
       description: "Output as JSON",
       effect: (value) => {
-        logger.jsonMode = value;
+        // An explicit flag always wins; TAILOR_OUTPUT only supplies the default.
+        // `value` is `false` both when `--json` is absent and when it is
+        // negated, so the raw argv decides whether the flag was passed at all.
+        logger.jsonMode = value || (!hasJsonFlag() && outputEnvIsJson());
       },
     }),
   } satisfies ArgsShape;
