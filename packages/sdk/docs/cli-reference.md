@@ -77,7 +77,10 @@ body carries the same details, suggestion, and next action. Colors are stripped 
 encoded, so the annotation is a single line.
 
 Exactly one annotation is written per failed command, and only for the failure that ends it.
-Warnings and individually reported problems stay plain stderr output.
+Warnings and individually reported problems stay plain stderr output. The bundled CLI plugins
+(`seed`, `setup`, `tailordb-erd`) annotate their failures the same way. A command that exits
+without reporting through the CLI's error path, such as one relaying a failed remote execution,
+writes no annotation.
 
 Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` (also `off`, `no`, or `0`) to turn annotations off.
 Passing `--json` also suppresses them, so a workflow step that parses `--json` output gets only the
