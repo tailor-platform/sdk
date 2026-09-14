@@ -35,6 +35,7 @@ import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs } from "./shared/args";
+import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
 import { logger, styles } from "./shared/logger";
@@ -160,7 +161,7 @@ void runMain(mainCommand, {
         }
       } else if (error instanceof Error) {
         logger.error(error.message);
-        const hint = typeOnlyImportHint(error);
+        const hint = getErrorDiagnostics(error).suggestion ?? typeOnlyImportHint(error);
         if (hint) {
           logger.log(`  ${styles.info("Suggestion:")} ${hint}`);
         }

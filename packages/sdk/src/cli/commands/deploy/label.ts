@@ -1,5 +1,7 @@
+import { stripVTControlCharacters } from "node:util";
 import { getOrNull } from "#/cli/shared/client";
-import { toError } from "#/cli/shared/errors";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { isCLIError, toError } from "#/cli/shared/errors";
 import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -551,10 +553,20 @@ function applyMetadataLabelWrite(
 }
 
 function metadataRecoveryError(applyError: unknown, flushError: unknown): AggregateError {
-  return new AggregateError(
-    [applyError, flushError],
-    `Resource apply failed: ${toError(applyError).message}\nQueued metadata recovery failed: ${toError(flushError).message}`,
-    { cause: flushError },
+  const describeCause = (error: unknown) =>
+    isCLIError(error) ? stripVTControlCharacters(error.format()) : toError(error).message;
+  return withErrorDiagnostics(
+    new AggregateError(
+      [applyError, flushError],
+      `Resource apply failed: ${describeCause(applyError)}\nQueued metadata recovery failed: ${describeCause(flushError)}`,
+      { cause: flushError },
+    ),
+    {
+      code: "DEPLOY_METADATA_RECOVERY_FAILED",
+      suggestion:
+        "Some resources may already have changed and deployment metadata could not be saved. Inspect the current resources and resolve both failures before deploying again.",
+      causes: { apply: applyError, recovery: flushError },
+    },
   );
 }
 

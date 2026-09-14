@@ -1,4 +1,5 @@
 import { styles } from "./logger";
+import type { Jsonifiable } from "type-fest";
 
 /**
  * Options for creating a CLI error
@@ -10,15 +11,15 @@ interface CLIErrorOptions {
   command?: string;
   code?: string;
   next?: CLIErrorNextAction;
-  context?: Readonly<Record<string, unknown>>;
+  context?: Readonly<Record<string, Jsonifiable | undefined>>;
 }
 
-export interface CLIErrorNextAction {
+export type CLIErrorNextAction = {
   /** Executable name, such as `tailor`. */
   command: string;
   /** Arguments passed directly to the executable. */
   args: readonly string[];
-}
+};
 
 /**
  * CLI error interface with formatted output
@@ -29,7 +30,7 @@ export interface CLIError extends Error {
   readonly suggestion?: string;
   readonly command?: string;
   readonly next?: CLIErrorNextAction;
-  readonly context?: Readonly<Record<string, unknown>>;
+  readonly context?: Readonly<Record<string, Jsonifiable | undefined>>;
   format(): string;
 }
 
@@ -39,7 +40,7 @@ type CLIErrorInternal = Error & {
   suggestion?: string;
   command?: string;
   next?: CLIErrorNextAction;
-  context?: Readonly<Record<string, unknown>>;
+  context?: Readonly<Record<string, Jsonifiable | undefined>>;
   format(): string;
 };
 

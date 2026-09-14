@@ -63,7 +63,7 @@ export function createHttpAdapterService(
       logger.log(`Found ${styles.highlight(adapters.length.toString())} HTTP adapters`);
       for (const { adapter, sourceFile } of adapters) {
         const relativePath = path.relative(process.cwd(), sourceFile);
-        logger.log(
+        logger.debug(
           `HTTP adapter: ${styles.successBright(
             `"${adapter.name}"`,
           )} loaded from ${styles.path(relativePath)}`,

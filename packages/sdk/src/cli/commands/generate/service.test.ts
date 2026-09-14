@@ -1,8 +1,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
 import { defineApplication } from "#/cli/services/application";
+import { errorToJson, serializeError } from "#/cli/shared/error-json";
+import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
 import { createGenerationManager } from "./service";
 import type { Application } from "#/cli/services/application";
@@ -189,6 +193,126 @@ describe("GenerationManager", () => {
         expect.any(Function),
       );
     });
+
+    test("reports a failed plugin while another plugin is still pending", async () => {
+      const siblingStarted = Promise.withResolvers<void>();
+      const finishSibling = Promise.withResolvers<void>();
+      const config = { ...mockConfig, db: {}, resolver: {} };
+      const manager = createGenerationManager({
+        application: defineApplication({ config }),
+        config,
+        pluginManager: new PluginManager([
+          {
+            id: "early-failure-plugin",
+            description: "Fails before its sibling completes",
+            onTailorDBReady: async () => {
+              throw new Error("early-failure-sentinel");
+            },
+          },
+          {
+            id: "pending-plugin",
+            description: "Waits for release",
+            onTailorDBReady: async () => {
+              siblingStarted.resolve();
+              await finishSibling.promise;
+              return { files: [] };
+            },
+          },
+        ]),
+      });
+      const failure = manager.generate().catch((error: unknown) => error);
+      await siblingStarted.promise;
+      try {
+        await vi.waitFor(() => {
+          expect(logger.error).toHaveBeenCalledWith(
+            expect.stringContaining("early-failure-sentinel"),
+          );
+        });
+      } finally {
+        finishSibling.resolve();
+        await failure;
+      }
+      expect(errorToJson(await failure).error.code).toBe("PLUGIN_GENERATION_FAILED");
+    });
+
+    test.each(["onTailorDBReady", "onResolverReady", "onExecutorReady"] as const)(
+      "preserves plugin failures from %s in human and JSON diagnostics",
+      async (hookName) => {
+        const config = { ...mockConfig, db: {}, resolver: {} };
+        const firstError = CLIError({
+          code: "PLUGIN_INPUT_MISSING",
+          message: "Missing first-plugin input",
+          suggestion: "Create the input file.",
+          next: { command: "tailor", args: ["generate"] },
+          context: { file: "plugin-input.json" },
+        });
+        const secondError = new ConnectError("Second-plugin access denied", Code.PermissionDenied);
+        const firstHook = vi.fn(async () => {
+          await Promise.resolve();
+          throw firstError;
+        });
+        const successfulHook = vi.fn(async () => ({ files: [] }));
+        const secondHook = vi.fn(async () => {
+          throw secondError;
+        });
+        const stringHook = vi.fn().mockRejectedValue("Third-plugin string failure");
+        const plugins: Plugin[] = [
+          { id: "first-plugin", description: "First", [hookName]: firstHook },
+          { id: "successful-plugin", description: "Successful", [hookName]: successfulHook },
+          { id: "second-plugin", description: "Second", [hookName]: secondHook },
+          { id: "third-plugin", description: "Third", [hookName]: stringHook },
+        ];
+        const manager = createGenerationManager({
+          application: defineApplication({ config }),
+          config,
+          pluginManager: new PluginManager(plugins),
+        });
+        const failure = await manager.generate().then(
+          () => {
+            throw new Error("Expected plugin generation to fail");
+          },
+          (error: unknown) => error,
+        );
+
+        expect(isCLIError(failure)).toBe(true);
+        if (!isCLIError(failure)) throw new Error("Expected structured plugin failure");
+        expect(JSON.parse(serializeError(failure))).toMatchObject({
+          error: {
+            code: "PLUGIN_GENERATION_FAILED",
+            message: `Plugin generation failed during ${hookName}.`,
+            context: {
+              hook: hookName,
+              failures: [
+                { plugin: "first-plugin", error: errorToJson(firstError).error },
+                { plugin: "second-plugin", error: errorToJson(secondError).error },
+                {
+                  plugin: "third-plugin",
+                  error: { code: "UNKNOWN_ERROR", message: "Third-plugin string failure" },
+                },
+              ],
+            },
+          },
+        });
+        const humanOutput = failure.format();
+        for (const marker of [
+          hookName,
+          "first-plugin",
+          firstError.message,
+          "Create the input file.",
+          "tailor generate",
+          "second-plugin",
+          secondError.message,
+          "third-plugin",
+          "Third-plugin string failure",
+        ]) {
+          expect(humanOutput).toContain(marker);
+        }
+        expect(humanOutput).not.toContain("successful-plugin");
+        for (const hook of [firstHook, successfulHook, secondHook, stringHook]) {
+          expect(hook).toHaveBeenCalledOnce();
+        }
+      },
+    );
 
     test("rejects duplicate TailorDB table names between namespaces", async () => {
       const duplicateApp = applicationWithTailorDBServices(mockConfig, [

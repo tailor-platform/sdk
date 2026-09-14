@@ -250,11 +250,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     }
     for (const ev of events) {
       if (ev.kind === "extended") {
-        logger.log(
+        logger.debug(
           `  Extended: ${styles.success(ev.tableName)} with ${styles.highlight(ev.fieldCount.toString())} fields by plugin ${styles.info(ev.pluginId)}`,
         );
       } else {
-        logger.log(
+        logger.debug(
           `  Generated: ${styles.success(ev.tableName)} by plugin ${styles.info(ev.pluginId)}`,
         );
       }
@@ -282,7 +282,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         }
 
         const relativePath = path.relative(process.cwd(), typeFile);
-        logger.log(
+        logger.debug(
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
         await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig);
@@ -298,7 +298,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         };
         if (rawType.plugins && Array.isArray(rawType.plugins) && rawType.plugins.length > 0) {
           pluginAttachments.set(rawType.name, [...rawType.plugins]);
-          logger.log(
+          logger.debug(
             `  Plugin attachments: ${styles.info(rawType.plugins.map((p) => p.pluginId).join(", "))}`,
           );
 
@@ -411,7 +411,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         };
         registerRawType(pluginGeneratedKey, table.name, table, sourceInfo);
 
-        logger.log(
+        logger.debug(
           `  Generated: ${styles.success(table.name)} by namespace plugin ${styles.info(pluginId)}`,
         );
       }

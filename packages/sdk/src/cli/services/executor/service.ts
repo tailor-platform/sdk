@@ -61,7 +61,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
       const result = ExecutorSchema.safeParse(stripExecutorTriggerArgs(executorModule.default));
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
-        logger.log(
+        logger.debug(
           `Executor: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
         executors[executorFile] = result.data;

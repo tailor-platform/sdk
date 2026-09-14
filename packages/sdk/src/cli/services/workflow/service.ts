@@ -101,7 +101,7 @@ export function createWorkflowService(params: CreateWorkflowServiceParams): Work
       logger.log(`Found ${styles.highlight(fileCount.toString())} workflow files`);
       for (const { workflow, sourceFile } of workflowSources) {
         const relativePath = path.relative(process.cwd(), sourceFile);
-        logger.log(
+        logger.debug(
           `Workflow: ${styles.successBright(`"${workflow.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
       }
