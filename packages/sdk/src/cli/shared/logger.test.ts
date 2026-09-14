@@ -308,9 +308,11 @@ describe("logger", () => {
 
     test("does not leak internal redaction machinery when a registered secret happens to contain 'redact'", () => {
       logger.registerSecret("first-registered-secret-value");
-      logger.registerSecret("REDACT");
-      const output = captureStderr(() => logger.info("value=first-registered-secret-value"));
-      expect(output).toBe("ℹ value=<redacted>\n");
+      logger.registerSecret("redact");
+      const output = captureStderr(() =>
+        logger.info("value=<redacted> first-registered-secret-value"),
+      );
+      expect(output).toBe("ℹ value=<redacted> <redacted>\n");
     });
 
     test("finds a newly registered secret even though the earlier one already triggered a redaction", () => {
