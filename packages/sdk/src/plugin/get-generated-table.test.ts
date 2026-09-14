@@ -280,4 +280,62 @@ export default {
 
     expect(table).toMatchObject({ name: "__placeholder_auditLog__", fields: {} });
   });
+
+  describe("plugin export selection", () => {
+    test("ignores array exports under any name other than `plugins`", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const zzMixed = [{ id: "ignored", description: "test" }];
+export const generators = [{ id: "also-ignored", description: "test" }];
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "ignored", null, "auditLog")).rejects.toThrow(
+        /Plugin "ignored" not found/,
+      );
+    });
+
+    test("rejects a `plugins` export that is not an array", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = { id: "not-an-array", description: "test" };
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "not-an-array", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("rejects a `plugins` export containing an invalid item", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{ id: "valid", description: "test" }, { no: "shape" }];
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "valid", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("rejects duplicate plugin IDs in the `plugins` export", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [
+  { id: "dup", description: "first" },
+  { id: "dup", description: "second" },
+];
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "dup", null, "auditLog")).rejects.toThrow(
+        /Duplicate plugin ID "dup"/,
+      );
+    });
+  });
 });
