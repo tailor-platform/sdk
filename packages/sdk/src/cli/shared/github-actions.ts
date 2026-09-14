@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 import { isAbsolute, relative, resolve, sep } from "pathe";
 import {
@@ -85,19 +86,37 @@ export function annotationsEnabled(jsonMode: boolean): boolean {
 }
 
 /**
+ * Resolve a path through any symlinks on the way to it.
+ *
+ * A runner can export `GITHUB_WORKSPACE` through a symlink while paths arrive
+ * already resolved, which leaves two spellings of one location. A path that
+ * does not exist keeps its lexical form.
+ * @param value - Path to resolve
+ * @returns Real path, or the resolved lexical path when it cannot be read
+ */
+function realPath(value: string): string {
+  try {
+    return realpathSync(resolve(value));
+  } catch {
+    return resolve(value);
+  }
+}
+
+/**
  * Render a path the way GitHub Actions resolves annotation locations.
  *
  * Steps run with `working-directory` set, so a cwd-relative path points at the
  * wrong file; the runner resolves annotation paths against the workspace root.
  * Containment is decided by the relative path rather than a prefix match, so a
- * sibling such as `/repo-other` is not read as living inside `/repo`.
+ * sibling such as `/repo-other` is not read as living inside `/repo`, and both
+ * sides are resolved through symlinks so one location has one spelling.
  * @param file - Absolute path to the file the failure points at
  * @returns Workspace-relative path, or undefined when it lies outside
  */
 export function workspaceRelativePath(file: string): string | undefined {
   const workspace = process.env.GITHUB_WORKSPACE;
   if (!workspace || !isAbsolute(file)) return undefined;
-  const rel = relative(resolve(workspace), resolve(file));
+  const rel = relative(realPath(workspace), realPath(file));
   if (rel === "" || isAbsolute(rel)) return undefined;
   const segments = rel.split(sep);
   // A leading ".." segment means the file escapes the workspace; a directory

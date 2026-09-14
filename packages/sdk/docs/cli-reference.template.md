@@ -93,6 +93,10 @@ offending JSONL file and line, and a rejected config reports its file. Locations
 relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a location rather than with
 a path the runner cannot resolve.
 
+For a JSONL file containing a blank line, the annotation's line and the line printed in the report
+text differ: the annotation counts every line in the file, while the printed line counts only the
+records. The annotation points at the row as an editor numbers it.
+
 `generate` and `deploy` do not group their per-service progress.
 
 ## Common Options

@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { color } from "@tailor-platform/shared/color";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { withErrorDiagnostics } from "./error-diagnostics";
@@ -322,6 +325,22 @@ describe("github-actions", () => {
     test("emits forward slashes regardless of input separators", () => {
       process.env.GITHUB_WORKSPACE = "/repo";
       expect(workspaceRelativePath("/repo/src/nested/a.ts")).toBe("src/nested/a.ts");
+    });
+
+    test("resolves a workspace reached through a symlink", () => {
+      const base = mkdtempSync(join(tmpdir(), "ga-ws-"));
+      try {
+        const real = join(base, "ws");
+        mkdirSync(join(real, "data"), { recursive: true });
+        const link = join(base, "wslink");
+        symlinkSync(real, link);
+        const file = join(real, "data", "User.jsonl");
+        writeFileSync(file, "{}\n");
+        process.env.GITHUB_WORKSPACE = link;
+        expect(workspaceRelativePath(file)).toBe("data/User.jsonl");
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
     });
 
     test("keeps a directory whose name merely starts with dots", () => {
