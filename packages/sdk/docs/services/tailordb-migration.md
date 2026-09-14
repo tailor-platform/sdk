@@ -891,6 +891,10 @@ describe("0005 add required email", () => {
 });
 ```
 
+Pass nested field values as JavaScript objects or arrays of objects, without `JSON.stringify`.
+Generated migration types use `Record<string, unknown>` for each nested object so scripts can
+work with both old and new members during a migration; narrow member values before using them.
+
 Two caveats keep this from replacing a scratch workspace:
 
 - PGlite runs full PostgreSQL, while TailorDB supports [a subset of it](https://docs.tailor.tech/guides/function/accessing-tailordb#supported-sql-queries) — a statement that passes here can still be rejected on deploy.

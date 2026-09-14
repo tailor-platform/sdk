@@ -1,8 +1,13 @@
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
+import { PGlite } from "@electric-sql/pglite";
 import * as path from "pathe";
 import { describe, expect, test, aroundEach, aroundAll } from "vitest";
+import { createKyselyPGlite } from "#/vitest/pglite-kysely";
 import { writeDbTypesFile } from "./db-types-generator";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
+import { writePgliteSchemaFile } from "./pglite-schema-generator";
 import {
   formatMigrationNumber,
   getMigrationDirPath,
@@ -169,7 +174,7 @@ describe("db-types-generator", () => {
         ],
       },
       {
-        testName: "generates string types for nested fields",
+        testName: "generates object types for nested fields",
         tableName: "Profile",
         fields: {
           details: {
@@ -180,7 +185,7 @@ describe("db-types-generator", () => {
             },
           },
         },
-        expectedContains: ["details: string;"],
+        expectedContains: ["details: Record<string, unknown>;"],
       },
     ])("$testName", async ({ tableName, fields, expectedContains }) => {
       const snapshot = createMockSnapshot({ [tableName]: { fields } });
@@ -194,6 +199,101 @@ describe("db-types-generator", () => {
   });
 
   describe("writeDbTypesFile with array fields", () => {
+    test("accepts nested objects and arrays while rejecting JSON strings", async () => {
+      const nested: SnapshotFieldConfig = {
+        type: "nested",
+        required: true,
+        fields: { city: { type: "string", required: true } },
+      };
+      const snapshot = createMockSnapshot({
+        Profile: {
+          fields: {
+            details: nested,
+            history: { ...nested, array: true },
+            optional: { ...nested, required: false },
+            optionalHistory: { ...nested, array: true, required: false },
+          },
+        },
+      });
+      const { filePath } = await generateContent(snapshot);
+      const migrationDir = path.dirname(filePath);
+      const packageRoot = path.resolve(__dirname, "../../../../..");
+      fs.writeFileSync(
+        path.join(migrationDir, "writes.ts"),
+        `import type { Transaction } from "./db";
+export async function main(trx: Transaction): Promise<void> {
+  await trx.insertInto("Profile").values({
+    details: { city: "Tokyo", oldMember: "kept during migration" },
+    history: [{ city: "Osaka" }], optional: null, optionalHistory: null,
+  }).execute();
+  await trx.updateTable("Profile").set({
+    details: { city: "Kyoto" }, history: [],
+    optional: { city: "Kobe" }, optionalHistory: [{ city: "Nara" }],
+  }).execute();
+}
+export async function rejectedWrites(trx: Transaction): Promise<void> {
+  // @ts-expect-error JSON strings are not nested objects.
+  await trx.updateTable("Profile").set({ details: '{"city":"Tokyo"}' }).execute();
+  // @ts-expect-error JSON strings are not nested object arrays.
+  await trx.updateTable("Profile").set({ history: ['{"city":"Tokyo"}'] }).execute();
+  // @ts-expect-error A nested array must be an array, not one object.
+  await trx.updateTable("Profile").set({ history: { city: "Tokyo" } }).execute();
+}
+`,
+      );
+      const configPath = path.join(migrationDir, "tsconfig.json");
+      fs.writeFileSync(
+        configPath,
+        JSON.stringify({
+          extends: path.join(packageRoot, "tsconfig.json"),
+          compilerOptions: { incremental: false, types: ["node"] },
+          files: ["db.ts", "writes.ts", path.join(packageRoot, "src/runtime/globals.ts")],
+          include: [],
+        }),
+      );
+      const result = spawnSync(
+        path.join(packageRoot, "node_modules/.bin/tsc"),
+        ["--noEmit", "--project", configPath],
+        { cwd: packageRoot, encoding: "utf8" },
+      );
+      expect(result.error).toBeUndefined();
+      expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({
+        status: 0,
+        output: "",
+      });
+      const schemaPath = await writePgliteSchemaFile(
+        snapshot,
+        createMockMigrationDiff({ changes: [] }),
+        testDir,
+        1,
+      );
+      const { pgliteSchema } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(schemaPath, "utf8"))).toString("base64")}`
+      );
+      const { main } = await import(
+        `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(path.join(migrationDir, "writes.ts"), "utf8"))).toString("base64")}`
+      );
+      const pglite = new PGlite();
+      const db = createKyselyPGlite(pglite);
+      try {
+        await pglite.exec(pgliteSchema.tailordb);
+        await db.transaction().execute(main);
+        const result = await pglite.query(
+          'SELECT "details", "history", "optional", "optionalHistory" FROM "Profile"',
+        );
+        expect(result.rows).toEqual([
+          {
+            details: { city: "Kyoto" },
+            history: [],
+            optional: { city: "Kobe" },
+            optionalHistory: [{ city: "Nara" }],
+          },
+        ]);
+      } finally {
+        await db.destroy();
+      }
+    }, 60_000);
+
     test("generates types with array fields", async () => {
       const snapshot = createMockSnapshot({
         Document: {

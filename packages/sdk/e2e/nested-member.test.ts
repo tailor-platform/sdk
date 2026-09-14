@@ -11,9 +11,11 @@
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PGlite } from "@electric-sql/pglite";
 import { describe, test, expect, aroundAll } from "vitest";
 import {
   getMigrationFilePath,
@@ -22,6 +24,7 @@ import {
 } from "../src/cli/commands/tailordb/migrate/snapshot";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+import { createKyselyPGlite } from "../src/vitest/pglite-kysely";
 import {
   resolveE2ERunId,
   resolveE2EWorkspaceRegion,
@@ -93,6 +96,7 @@ export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   address: db.object({ city: db.string(), ${zipMember}: db.string() }, { optional: true }),
+  addressHistory: db.object({ city: db.string(), zip: db.string() }, { array: true, optional: true }),
 ${extraFields}}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
@@ -152,17 +156,17 @@ export type user = typeof user;
     const tailorPlatformDir = path.join(nodeModulesDir, "@tailor-platform");
     fs.mkdirSync(tailorPlatformDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(tailorPlatformDir, "sdk"));
-    const monorepoNodeModules = path.resolve(sdkRoot, "../..", "node_modules");
-    fs.symlinkSync(path.join(monorepoNodeModules, "kysely"), path.join(nodeModulesDir, "kysely"));
+    const sdkNodeModules = path.join(sdkRoot, "node_modules");
+    fs.symlinkSync(path.join(sdkNodeModules, "kysely"), path.join(nodeModulesDir, "kysely"));
     fs.symlinkSync(
-      path.join(monorepoNodeModules, "@tailor-platform", "function-kysely-tailordb"),
+      path.join(sdkNodeModules, "@tailor-platform", "function-kysely-tailordb"),
       path.join(tailorPlatformDir, "function-kysely-tailordb"),
     );
 
     await runSuite();
   }, 300000);
 
-  test("seeds rows with the original nested member", async () => {
+  test("writes nested objects and arrays through the same migration on PGlite and TailorDB", async () => {
     updateTypeFile("zip");
     const configPath = createConfig();
 
@@ -172,8 +176,10 @@ export type user = typeof user;
     // A schema change is what earns a migration to hang the seed script on.
     updateTypeFile("zip", "  seedMarker: db.string({ optional: true }),\n");
     runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
+    const migrationNumber = latestMigrationNumber();
+    const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
     fs.writeFileSync(
-      getMigrationFilePath(migrationsDir, latestMigrationNumber(), "migrate"),
+      scriptPath,
       `import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
@@ -184,19 +190,50 @@ export async function main(trx: Transaction): Promise<void> {
         id: "${FIRST_ID}",
         name: "First",
         email: "first@example.com",
-        address: { city: "Tokyo", zip: "150-0001" } as never,
+        address: { city: "Tokyo", zip: "150-0001" },
+        addressHistory: [{ city: "Kyoto", zip: "600-0001" }],
       },
       {
         id: "${SECOND_ID}",
         name: "Second",
         email: "second@example.com",
-        address: { city: "Osaka", zip: "530-0001" } as never,
+        address: null,
+        addressHistory: null,
       },
     ])
     .execute();
+  await trx.updateTable("User").set({
+    address: { city: "Osaka", zip: "530-0001" },
+    addressHistory: [],
+  }).where("id", "=", "${SECOND_ID}").execute();
+  const rows = await trx.selectFrom("User")
+    .select(["id", "address", "addressHistory"]).orderBy("id").execute();
+  const first = rows[0];
+  const second = rows[1];
+  if (rows.length !== 2 || first?.address?.city !== "Tokyo" ||
+      !Array.isArray(first.addressHistory) || first.addressHistory.length !== 1 ||
+      first.addressHistory[0]?.city !== "Kyoto" || second?.address?.city !== "Osaka" ||
+      !Array.isArray(second.addressHistory) || second.addressHistory.length !== 0) {
+    throw new Error("Nested write parity failed: " + JSON.stringify(rows));
+  }
 }
 `,
     );
+    const schemaPath = getMigrationFilePath(migrationsDir, migrationNumber, "pgliteSchema");
+    const { pgliteSchema } = await import(
+      `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(schemaPath, "utf8"))).toString("base64")}`
+    );
+    const { main } = await import(
+      `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(fs.readFileSync(scriptPath, "utf8"))).toString("base64")}`
+    );
+    const pglite = new PGlite();
+    const db = createKyselyPGlite(pglite);
+    try {
+      await pglite.exec(pgliteSchema[tailordbName]);
+      await db.transaction().execute(main);
+    } finally {
+      await db.destroy();
+    }
     runCli(["deploy", "--config", configPath, "--workspace-id", workspaceId, "--yes"]);
 
     expect(await nestedMemberNames()).toEqual(["city", "zip"]);
