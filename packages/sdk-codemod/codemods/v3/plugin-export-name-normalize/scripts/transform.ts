@@ -110,6 +110,10 @@ function patternBindsName(pat: SgNode, name: string): boolean {
   ) {
     return pat.children().some((c: SgNode) => patternBindsName(c, name));
   }
+  if (kind === "object_assignment_pattern") {
+    const left = pat.field("left");
+    return left ? patternBindsName(left, name) : false;
+  }
   if (kind === "pair_pattern") {
     const value = pat.field("value");
     return value ? patternBindsName(value, name) : false;
@@ -159,7 +163,10 @@ function fileAlreadyBindsPlugins(root: SgNode): boolean {
     const local = spec.field("alias") ?? spec.field("name");
     if (local?.text() === "plugins") return true;
   }
-  return isBoundByDefaultOrNamespaceImport(root, "plugins");
+  return (
+    isBoundByDefaultOrNamespaceImport(root, "plugins") ||
+    isBoundAsParameterAnywhere(root, "plugins")
+  );
 }
 
 /**
@@ -266,6 +273,7 @@ function renameBindingAndUsages(
   const declStart = declNode.range().start.index;
   for (const idNode of root.findAll({ rule: { kind: "identifier", regex: `^${oldName}$` } })) {
     if (idNode.range().start.index === declStart) continue;
+    if (idNode.parent()?.kind() === "import_specifier") continue;
     edits.push(idNode.replace("plugins"));
   }
   // A shorthand `{ oldName }` is both the object key and the value reference; replacing the
@@ -363,9 +371,7 @@ function sourceConfigRenameIsSafe(filePath: string, modulePath: string, oldName:
   // Still exported under the old name: safe only if that export's own rename would not
   // itself collide (including with an unrelated existing `plugins`).
   if (fileAlreadyBindsPlugins(configTree)) return false;
-  const matching = findRenamableDeclarators(configTree).filter(
-    (decl) => decl.field("name")?.text() === oldName,
-  );
+  const matching = findRenamableDeclarators(configTree);
   if (matching.length !== 1) return false;
   const nameNode = matching[0]!.field("name")!;
   return !hasOtherBindingNamed(configTree, oldName, nameNode.range().start.index);

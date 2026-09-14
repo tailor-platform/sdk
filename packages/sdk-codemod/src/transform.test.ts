@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
+import migrateGenerators from "../codemods/v2/define-generators-to-plugins/scripts/transform";
+import normalizePluginExport from "../codemods/v3/plugin-export-name-normalize/scripts/transform";
 import type { TransformFn } from "./runner";
 
 const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
@@ -59,12 +62,80 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test("preserves imports when multiple legacy exports prevent config normalization", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-normalize-"));
+    try {
+      const config = `import { definePlugins } from "@tailor-platform/sdk";
+export const generator = definePlugins();
+export const generators = definePlugins();
+`;
+      const configPath = path.join(dir, "tailor.config.ts");
+      fs.writeFileSync(configPath, config);
+      expect(normalizePluginExport(config, configPath)).toBeNull();
+      const consumer = `import { generator } from "./tailor.config";
+console.log(generator);
+`;
+      expect(normalizePluginExport(consumer, path.join(dir, "consumer.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    { define: "defineGenerators", transform: migrateGenerators },
+    { define: "definePlugins", transform: normalizePluginExport },
+  ])("$define preserves remote names in unrelated aliased imports", ({ define, transform }) => {
+    const source = `import { ${define} } from "@tailor-platform/sdk";
+import { generators as unrelated } from "./other";
+export const generators = ${define}();
+console.log(generators, unrelated);
+`;
+    const expected = `import { definePlugins } from "@tailor-platform/sdk";
+import { generators as unrelated } from "./other";
+export const plugins = definePlugins();
+console.log(plugins, unrelated);
+`;
+    expect(transform(source)).toBe(expected);
+  });
+
+  test.each([
+    { define: "defineGenerators", transform: migrateGenerators },
+    { define: "definePlugins", transform: normalizePluginExport },
+  ])("$define preserves defaulted destructuring bindings", ({ define, transform }) => {
+    const source = `import { ${define} } from "@tailor-platform/sdk";
+export const generators = ${define}();
+function read(value: { generators?: unknown[] }) {
+  const { generators = [] } = value;
+  return generators;
+}
+`;
+    const expected = `import { definePlugins } from "@tailor-platform/sdk";
+export const generators = definePlugins();
+function read(value: { generators?: unknown[] }) {
+  const { generators = [] } = value;
+  return generators;
+}
+`;
+    expect(transform(source) ?? source).toBe(expected);
+  });
+
+  test.each([
+    { define: "defineGenerators", transform: migrateGenerators },
+    { define: "definePlugins", transform: normalizePluginExport },
+  ])("$define preserves references when plugins is a parameter", ({ define, transform }) => {
+    const source = `import { ${define} } from "@tailor-platform/sdk";
+export const generators = ${define}();
+export function read(plugins: unknown) { return generators; }
+`;
+    expect(transform(source)).toBeNull();
+  });
+
   test("v2/define-generators-to-plugins transforms correctly", async () => {
     await expect(runFixtureCases("v2/define-generators-to-plugins")).resolves.toBeUndefined();
   });
 
-  test("v2/plugin-export-name-normalize transforms correctly", async () => {
-    await expect(runFixtureCases("v2/plugin-export-name-normalize")).resolves.toBeUndefined();
+  test("v3/plugin-export-name-normalize transforms correctly", async () => {
+    await expect(runFixtureCases("v3/plugin-export-name-normalize")).resolves.toBeUndefined();
   });
 
   test("v2/plugin-cli-import transforms correctly", async () => {
