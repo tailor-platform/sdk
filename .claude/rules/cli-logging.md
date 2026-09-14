@@ -74,47 +74,67 @@ This separation allows piping data to other commands without log messages interf
 The method you call decides who sees a line. `logger.debug()` is gated on `logger.verbose` (see the
 Verbose Output section of `packages/sdk/docs/cli-reference.md`); everything else is unconditional.
 
-`--json` is an orthogonal format axis, not a fourth verbosity level. It may swap a human rendering
-for its structured equivalent — a spinner, the deploy plan text, a formatted error — but it must
-never drop information the caller still needs: move that into the JSON payload or onto stderr.
+`--json` is an orthogonal format axis, not a fourth verbosity level. It swaps a human rendering for
+its structured equivalent — the deploy plan text, a formatted error. Aim to keep the two paths
+informationally equal: when you add something to the human path, give it a JSON counterpart rather
+than leaving the machine caller worse off. Some paths do not meet that bar yet (a real deploy's
+`--json` reports only a summary, and `function logs --json` omits the sourcemapped stack), so treat
+it as the target for new work, not as a description of today's output.
 
-| Content                                                                  | Goes to                    |
-| ------------------------------------------------------------------------ | -------------------------- |
-| The outcome, and the counts or totals that let a caller verify it        | default (`info`/`success`) |
-| A change set the user must review or approve                             | default                    |
-| Anything the user must act on: warnings, remediation flags, failed items | default (`warn`/`error`)   |
-| Per-item progress: each file loaded, type parsed, item skipped           | `logger.debug()`           |
-| Resolved paths, timings, extracted configuration dumps                   | `logger.debug()`           |
-| A live feed of remote events (`--follow`, polling)                       | `mode: "stream"`           |
+Decide the stream first: if the line is the command's primary result, it is `logger.out()` on
+stdout and none of the rows below apply. They cover stderr diagnostics only. "Default" below means
+"not verbose-gated", not "call `info()`".
 
-**Decision rule:** per-item output belongs in default when the reader must **act on each item**,
-regardless of how many lines that produces. A list of every loaded table is progress, so it is
-verbose-only; a list of fields that need `--expand-contract`, or a per-resource deploy plan, is the
-decision the command exists to support, so it stays in default output however long it runs.
+| Content                                                                  | Goes to                     |
+| ------------------------------------------------------------------------ | --------------------------- |
+| The command's primary result data                                        | `logger.out()` (stdout)     |
+| The outcome, and the counts or totals that let a caller verify it        | default (`info`/`success`)  |
+| A change set the user must review or approve                             | default                     |
+| Anything the user must act on: warnings, remediation flags, failed items | default (`warn`/`error`)    |
+| Indented detail lines under a preceding heading                          | `logger.log()` (plain mode) |
+| Stability notices: beta, deprecation, upcoming removal                   | default (`warn`), once      |
+| Per-item progress: each file loaded, type parsed, item skipped           | `logger.debug()`            |
+| Resolved paths, timings, extracted configuration dumps                   | `logger.debug()`            |
+| Status transitions while polling or following                            | `mode: "stream"`            |
 
-Two things this does not cover. Inherently streaming commands (`function logs --follow`, workflow
-waiters) emit an unbounded feed by design — the per-event lines are the product. And a stack trace
-that came back from a _remote_ execution is result data the user asked for; only the CLI's own
-internal traces are verbose-gated.
+**Decision rule:** keep per-item output in default only when omitting that specific item would
+change what the user does next. A line the user cannot act on is progress even when it is a
+`warn` — an unblocking validator failure stays a warning because the deploy continues, while a
+list of fields needing `--expand-contract`, or a per-resource deploy plan, is the decision the
+command exists to support and stays in default output however long it runs.
+
+Three things this does not cover. Inherently streaming commands (`function logs --follow`,
+workflow waiters) emit an unbounded feed by design — the per-event lines are the product, carried
+by `logger.log()` because they already have their own remote timestamps; reserve `mode: "stream"`
+for the surrounding status changes. A stack trace that came back from a _remote_ execution is
+result data the user asked for; only the CLI's own internal traces are verbose-gated. And spinners
+and progress meters are TTY affordances rather than a level: they self-disable off a TTY, so never
+let one carry information that is not also emitted as a line.
+
+Interactive prompts are not an output level either. `canPrompt()` is false under `--json`, in CI,
+and on non-TTY stdin, so every prompt needs a non-interactive path (an explicit option or `--yes`)
+rather than relying on the prompt being reached.
 
 ### Errors under `--json`
 
-A failure is serialized by `errorToJson()` into `{ error: { … } }` on stderr. Every field except
-`message` is optional, so a `throw new Error(...)` reaching the top level becomes
-`UNEXPECTED_ERROR` with the whole explanation flattened into one prose string. Callers cannot
-branch on that, so never leave a nameable condition to that path.
+A failure is serialized into `{ error: { … } }` on stderr. Every field except `message` is
+optional, so a `throw new Error(...)` reaching the top level becomes `UNEXPECTED_ERROR` with the
+whole explanation flattened into one prose string. Callers cannot branch on that, so never leave a
+nameable condition to that path.
 
-When you add or touch an error a caller could plausibly recover from, throw a `CLIError` and
-split it across the envelope instead:
+There are two ways to give a failure structure. Throw a `CLIError` when you are raising it
+yourself; wrap an error you did not construct — a `ConnectError`, an `AggregateError` — with
+`withErrorDiagnostics()`, whose fields override the defaults. Either way, split the failure across
+these fields instead of one prose blob:
 
 - `code` — a specific, stable identifier for the condition. `CLIError` falls back to `CLI_ERROR`
   when you omit it, which is only acceptable for a failure no caller would branch on.
-- `message` — what failed, and nothing else. No remediation prose, no embedded newlines.
+- `message` — what failed, and nothing else; keep remediation out of it. Multiple independent
+  failures may span lines, but do not use it for anything the fields below own.
 - `suggestion` — the remediation, as its own field.
+- `details` — supplementary prose that does not belong in `message`.
 - `next` — an executable recovery action (`{ command, args }`), so the caller can run it rather
   than parse for it.
-- `command` — the owning command path, serialized as `error.help` pointing at its `--help`.
+- `command` — the owning command path, serialized as an `error.help` action targeting its `--help`.
 - `context` — the machine-usable facts behind the failure (resource names, per-phase causes),
   never secrets.
-
-Diagnostics stay on stderr in JSON mode so that stdout holds only the parseable result.
