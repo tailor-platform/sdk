@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { describe, test, expect, aroundAll } from "vitest";
 import {
+  formatMigrationNumber,
   getMigrationFilePath,
   getMigrationFiles,
   loadDiff,
@@ -177,6 +178,14 @@ export type user = typeof user;
     updateTypeFile("zip", "  seedMarker: db.string({ optional: true }),\n");
     runCli(["tailordb", "migration", "generate", "--config", configPath, "--yes"]);
     const migrationNumber = latestMigrationNumber();
+    runCli([
+      "tailordb",
+      "migration",
+      "script",
+      formatMigrationNumber(migrationNumber),
+      "--config",
+      configPath,
+    ]);
     const scriptPath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
     fs.writeFileSync(
       scriptPath,
