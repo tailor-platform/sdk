@@ -87,7 +87,7 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     arch: process.arch,
     command: sanitizeMessage(redactSecrets(parseCommand())),
     argv: sanitizeArgv(process.argv.map(redactSecrets)),
-    errorName,
+    errorName: redactSecrets(errorName),
     errorMessage: sanitizeMessage(redactSecrets(rawMessage)),
     stackTrace: sanitizeStackTrace(redactSecrets(rawStack)),
     errorType,

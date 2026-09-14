@@ -89,6 +89,16 @@ describe("buildCrashReport", () => {
     expect(report.osRelease).toBeTruthy();
   });
 
+  test("redacts a registered secret embedded in the error name", () => {
+    logger.registerSecret("leaked-error-name-secret");
+    const error = new Error("boom");
+    error.name = "CustomError-leaked-error-name-secret";
+    const report = makeReport(error);
+
+    expect(report.errorName).not.toContain("leaked-error-name-secret");
+    expect(report.errorName).toBe("CustomError-<redacted>");
+  });
+
   test("redacts a registered secret that the pattern sanitizers don't recognize", () => {
     logger.registerSecret("sk-live-crashreport-secret-value");
     const error = new Error("request failed with token sk-live-crashreport-secret-value");
