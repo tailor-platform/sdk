@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { serializeError } from "./error-json";
 import { CLIError } from "./errors";
-import { logger, resetSecretRegistry } from "./logger";
+import { logger, redactSecrets, resetSecretRegistry } from "./logger";
 
 // This file runs in the shared, non-isolated "unit-core" Vitest project, so registered
 // secrets would otherwise leak into unrelated test files run in the same worker.
@@ -58,6 +58,28 @@ describe("serializeError", () => {
     const parsed = JSON.parse(serializeError(error)) as { error: Record<string, unknown> };
     expect(parsed.error.context).toBeUndefined();
     expect(parsed.error.message).toBe("operation failed");
+  });
+
+  test("redacts a registered secret that coincides with an unrelated number in context, keeping the envelope valid JSON", () => {
+    // A registered secret that happens to be a purely-numeric string (e.g. a numeric PIN)
+    // could otherwise collide with an unrelated bare (unquoted) number elsewhere in the
+    // envelope. If serializeError() left that number untouched, the outer, structure-unaware
+    // redactSecrets() pass that logger.log() applies to the fully rendered `--json` output
+    // would replace it with an unquoted `<redacted>` token, corrupting the JSON.
+    const secret = "1234567890";
+    logger.registerSecret(secret);
+    const error = CLIError({
+      message: "operation failed",
+      context: { retryAfterSeconds: 1234567890 },
+    });
+
+    const output = serializeError(error);
+    expect(output).not.toContain(secret);
+    const parsed = JSON.parse(output) as { error: { context: { retryAfterSeconds: string } } };
+    expect(parsed.error.context.retryAfterSeconds).toBe("<redacted>");
+
+    const afterOuterPass = redactSecrets(output);
+    expect(() => JSON.parse(afterOuterPass)).not.toThrow();
   });
 
   test("preserves a Date's normal JSON serialization inside context", () => {

@@ -5,19 +5,31 @@ import { redactSecrets } from "./logger";
 import type { Jsonifiable } from "type-fest";
 
 /**
- * `JSON.stringify` replacer that redacts registered secrets from every string value it
- * walks — however deeply nested, since `error.context` is an arbitrary
+ * `JSON.stringify` replacer that redacts registered secrets from every string or numeric
+ * value it walks — however deeply nested, since `error.context` is an arbitrary
  * `Record<string, unknown>` a secret could in principle reach through a nested value.
  * Passed as `JSON.stringify`'s second argument rather than pre-walking the envelope by
  * hand, so `JSON.stringify`'s own handling of circular references (throws, caught by the
  * existing fallback below) and `toJSON`-bearing values (e.g. `Date`, already converted to
  * its string form before this replacer sees it) both keep working unmodified.
+ *
+ * A number is redacted through its decimal string form, matching a registered secret that
+ * happens to be a numeric string (e.g. a numeric PIN). Returning that string in place of the
+ * number keeps `JSON.stringify` quoting it correctly, so the envelope stays valid JSON even
+ * where the outer, structure-unaware `redactSecrets()` pass `logger.log()` applies later
+ * would otherwise turn a bare matching number into an unquoted `<redacted>` token.
  * @param _key - Property key being visited (unused)
  * @param value - Property value being visited
- * @returns `value`, redacted if it is a string
+ * @returns `value`, redacted if it is a string or number
  */
 function redactStringValues(_key: string, value: unknown): unknown {
-  return typeof value === "string" ? redactSecrets(value) : value;
+  if (typeof value === "string") return redactSecrets(value);
+  if (typeof value === "number") {
+    const text = String(value);
+    const redacted = redactSecrets(text);
+    return redacted === text ? value : redacted;
+  }
+  return value;
 }
 
 export interface ErrorToJsonOptions {
@@ -112,13 +124,17 @@ function baseErrorToJson(
 /**
  * Serialize a CLI failure into the stable JSON error envelope.
  *
- * Redacts registered secrets from every string *value* in the envelope, however deeply
- * nested, before this function's own `JSON.stringify` call, rather than relying only on the
- * redaction `logger.log()` does on the final string: an upstream error message (or
+ * Redacts registered secrets from every string or numeric *value* in the envelope, however
+ * deeply nested, before this function's own `JSON.stringify` call, rather than relying only
+ * on the redaction `logger.log()` does on the final string: an upstream error message (or
  * `error.context`, an arbitrary record) can already embed a secret in JSON-escaped form
  * (e.g. echoed back inside a JSON API error body), and stringifying the envelope would
  * escape that a second time, no longer matching a registered secret's single-level-escaped
- * form.
+ * form. Redacting numbers here also matters because the later, structure-unaware
+ * `redactSecrets()` pass over the fully rendered JSON text cannot tell a bare numeric token
+ * apart from a JSON string, so a secret whose value coincides with an unrelated number
+ * elsewhere in the envelope would otherwise become an unquoted `<redacted>` and break the
+ * output as JSON.
  *
  * Does not cover a secret used as an object *key* (e.g. `context: { [secret]: true }`) —
  * `JSON.stringify`'s replacer can only transform values, never rename keys. No current
