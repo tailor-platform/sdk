@@ -7,6 +7,7 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { PluginGeneratedTableInfo, PluginTableGenerationResult } from "#/plugin/manager";
@@ -53,12 +54,14 @@ export function generatePluginTableFiles(
   for (const info of tables) {
     const existing = seenTableNames.get(info.table.name);
     if (existing) {
-      throw new Error(
-        `Duplicate plugin-generated table name "${info.table.name}" detected. ` +
+      throw CLIError({
+        code: "PLUGIN_TABLE_NAME_DUPLICATE",
+        message:
+          `Duplicate plugin-generated table name "${info.table.name}" detected. ` +
           `First: plugin "${existing.pluginId}" (kind: "${existing.kind}", source: "${existing.sourceTableName}"), ` +
           `Second: plugin "${info.pluginId}" (kind: "${info.kind}", source: "${info.sourceTableName}"). ` +
           `Plugin-generated table names must be unique.`,
-      );
+      });
     }
     seenTableNames.set(info.table.name, info);
 

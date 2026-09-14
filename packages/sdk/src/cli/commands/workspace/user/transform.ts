@@ -1,4 +1,5 @@
 import { WorkspacePlatformUserRole } from "@tailor-platform/tailor-proto/workspace_resource_pb";
+import { CLIError } from "#/cli/shared/errors";
 import type { WorkspacePlatformUser } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 export interface UserInfo {
@@ -29,7 +30,10 @@ export const stringToRole = (role: string): WorkspacePlatformUserRole => {
     case "viewer":
       return WorkspacePlatformUserRole.VIEWER;
     default:
-      throw new Error(`Invalid role: ${role}. Valid roles: admin, editor, viewer`);
+      throw CLIError({
+        code: "WORKSPACE_ROLE_INVALID",
+        message: `Invalid role: ${role}. Valid roles: admin, editor, viewer`,
+      });
   }
 };
 

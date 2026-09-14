@@ -11,6 +11,7 @@ import {
   readPlatformConfig,
   writePlatformConfig,
 } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const logoutCommand = defineAppCommand({
@@ -28,7 +29,7 @@ export const logoutCommand = defineAppCommand({
     const pfConfig = await readPlatformConfig();
     const profileEntry = profile ? pfConfig.profiles[profile] : undefined;
     if (profile && !profileEntry) {
-      throw new Error(`Profile "${profile}" not found`);
+      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profile}" not found` });
     }
     const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
     const currentUser = profileEntry ? profileEntry.user : pfConfig.current_user;

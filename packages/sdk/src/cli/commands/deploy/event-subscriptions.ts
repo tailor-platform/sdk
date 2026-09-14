@@ -1,3 +1,4 @@
+import { CLIError } from "#/cli/shared/errors";
 import {
   eventSourceLabel,
   publishEventsConflict,
@@ -150,7 +151,10 @@ export function collectEventSubscriptions(
       }
       const [owner] = owners;
       if (!owner) {
-        throw new Error(missingOwnerMessage(executor.name, lookup, subscriber));
+        throw CLIError({
+          code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
+          message: missingOwnerMessage(executor.name, lookup, subscriber),
+        });
       }
       subscriptions.push({
         ...entry,
@@ -744,12 +748,11 @@ export function assertRecordableDependencies(
       appId === undefined
         ? `Call defineConfig() inline in ${subscriber.config.path} so deploy can manage its "id".`
         : `Restore the generated value in ${subscriber.config.path}'s "id".`;
-    throw new Error(
-      `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
-        `${owner.config.path}, which would enable event publishing on it for this deploy only. ` +
-        `${cause} — so deploy cannot record which config the dependency belongs to, and ` +
-        `deploying ${owner.config.path} alone later would turn publishing back off without ` +
-        `asking.\n\n${fix}`,
-    );
+    throw CLIError({
+      code: "EVENT_SUBSCRIPTION_OWNER_UNRECORDED",
+      message: `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ${owner.config.path}, which would enable event publishing on it for this deploy only. ${cause} — so deploy cannot record which config the dependency belongs to.`,
+      details: `Deploying ${owner.config.path} alone later would turn publishing back off without asking.`,
+      suggestion: fix,
+    });
   }
 }

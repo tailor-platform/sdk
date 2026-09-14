@@ -357,6 +357,78 @@ describe("tailordb migration generate with an unsupported field type change", ()
     ]);
   });
 
+  test("converts a single value into an array through the same pair", async () => {
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    const ns = addNamespace(tmpDir, "tailordb", "User", parsed);
+
+    const result = await runCommand(generateCommand, ["--yes", "--expand-contract", "User.name"]);
+
+    expect(result.success).toBe(true);
+    const expandScript = fs.readFileSync(path.join(ns.migrationsDir, "0001", "migrate.ts"), "utf8");
+    expect(expandScript).toContain("const convertedValue = [sourceValue];");
+    expect(expandScript).not.toContain("TODO(tailor-migration-review)");
+    const replayed = reconstructSnapshotFromMigrations(ns.migrationsDir);
+    expect(replayed?.tables.User?.fields.name).toEqual(
+      expect.objectContaining({ type: "string", array: true }),
+    );
+    expect(replayed?.tables.User?.fields.nameMigrate).toBeUndefined();
+  });
+
+  test("offers the conversion interactively for a single value becoming an array", async () => {
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    const ns = addNamespace(tmpDir, "tailordb", "User", parsed);
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    const result = await runCommand(generateCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(ns.migrationsDir, "0002"))).toBe(true);
+  });
+
+  test("describes the array shape when asking about the conversion", async () => {
+    using stderr = captureStderr();
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    addNamespace(tmpDir, "tailordb", "User", parsed);
+    vi.mocked(canPrompt).mockReturnValue(true);
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    await runCommand(generateCommand, []);
+
+    expect(stderr.output).toContain(
+      "User.name changes from string to string[], which cannot be applied in one step.",
+    );
+  });
+
+  test("names the flag for a single value becoming an array", async () => {
+    using stderr = captureStderr();
+    const parsed = parsedType("User");
+    const field = parsed.fields.name!;
+    parsed.fields.name = { ...field, config: { ...field.config, array: true } };
+    addNamespace(tmpDir, "tailordb", "User", parsed);
+
+    await runCommand(generateCommand, ["--yes"]);
+
+    expect(stderr.output).toContain('--expand-contract "User.name"');
+  });
+
+  test("names the flag once when both the type and the array-ness change", async () => {
+    using stderr = captureStderr();
+    const retyped = retypedType("User", "integer");
+    retyped.fields.name!.config.array = true;
+    addNamespace(tmpDir, "tailordb", "User", retyped);
+
+    await runCommand(generateCommand, ["--yes"]);
+
+    expect(stderr.output.match(/--expand-contract "User\.name"/g)).toHaveLength(1);
+  });
+
   test("scaffolds a conversion script for the first migration only", async () => {
     const ns = addNamespace(tmpDir, "tailordb", "User", retypedType("User", "integer"));
 
@@ -571,7 +643,10 @@ describe("tailordb migration generate nested member rename preflight", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("Possible rename(s) detected");
     expect(String(result.error)).toContain("User.address.zip → zipCode?");
-    expect(String(result.error)).toContain('"Table.field.oldMember:newMember"');
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      suggestion: expect.stringContaining('"Table.field.oldMember:newMember"'),
+    });
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
@@ -719,7 +794,10 @@ describe("tailordb migration generate type rename preflight", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toContain("Possible rename(s) detected");
     expect(String(result.error)).toContain("- User → Person? (namespace: tailordb)");
-    expect(String(result.error)).toContain('--rename "OldTable:NewTable"');
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      suggestion: expect.stringContaining('--rename "OldTable:NewTable"'),
+    });
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
@@ -867,8 +945,11 @@ describe("tailordb migration generate --data-only", () => {
     const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toContain("schema changes");
-    expect(String(result.error)).toContain("--data-only");
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_SCHEMA_CHANGES_PENDING",
+      message: expect.stringContaining("schema changes"),
+      suggestion: expect.stringContaining("--data-only"),
+    });
     expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
   });
 
@@ -883,7 +964,10 @@ describe("tailordb migration generate --data-only", () => {
     const result = await runCommand(generateCommand, ["--data-only", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toContain("initial snapshot");
+    expect(result.error).toMatchObject({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      suggestion: expect.stringContaining("initial schema snapshot"),
+    });
     expect(fs.existsSync(path.join(migrationsDir, "0000"))).toBe(false);
   });
 

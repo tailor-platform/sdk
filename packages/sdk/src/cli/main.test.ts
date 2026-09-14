@@ -8,6 +8,27 @@ import { tempCwd } from "./shared/test-helpers/temp-cwd";
 const cliEntry = fileURLToPath(new URL("../../bin/tailor.mjs", import.meta.url));
 const builtEntry = fileURLToPath(new URL("../../dist/cli/main.mjs", import.meta.url));
 
+function runCli(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}) {
+  return spawnSync(process.execPath, [cliEntry, ...args], {
+    cwd,
+    encoding: "utf8",
+    timeout: 15_000,
+    env: {
+      PATH: process.env.PATH,
+      HOME: cwd,
+      XDG_CONFIG_HOME: cwd,
+      XDG_CACHE_HOME: cwd,
+      XDG_STATE_HOME: cwd,
+      XDG_DATA_HOME: cwd,
+      NODE_COMPILE_CACHE: cwd,
+      TAILOR_CRASH_REPORTS_LOCAL: "off",
+      TAILOR_CRASH_REPORTS_REMOTE: "off",
+      NO_COLOR: "1",
+      ...extraEnv,
+    },
+  });
+}
+
 describe("CLI error verbosity", () => {
   test.each([
     { name: "default", extraEnv: {}, args: [], stack: false },
@@ -24,28 +45,7 @@ describe("CLI error verbosity", () => {
       const config = path.join(tmp.dir, "missing.config.ts");
       expect(existsSync(config)).toBe(false);
 
-      const result = spawnSync(
-        process.execPath,
-        [cliEntry, "generate", "--json", "--config", config, ...args],
-        {
-          cwd: tmp.dir,
-          encoding: "utf8",
-          timeout: 15_000,
-          env: {
-            PATH: process.env.PATH,
-            HOME: tmp.dir,
-            XDG_CONFIG_HOME: tmp.dir,
-            XDG_CACHE_HOME: tmp.dir,
-            XDG_STATE_HOME: tmp.dir,
-            XDG_DATA_HOME: tmp.dir,
-            NODE_COMPILE_CACHE: tmp.dir,
-            TAILOR_CRASH_REPORTS_LOCAL: "off",
-            TAILOR_CRASH_REPORTS_REMOTE: "off",
-            NO_COLOR: "1",
-            ...extraEnv,
-          },
-        },
-      );
+      const result = runCli(["generate", "--json", "--config", config, ...args], tmp.dir, extraEnv);
 
       expect(result.error).toBeUndefined();
       expect(result.signal).toBeNull();
@@ -63,4 +63,70 @@ describe("CLI error verbosity", () => {
     },
     20_000,
   );
+});
+
+describe("parent command shortcuts", () => {
+  test.each([
+    { parent: ["workspace"], explicit: ["workspace", "list"] },
+    { parent: ["workflow"], explicit: ["workflow", "list"] },
+    { parent: ["secret", "vault"], explicit: ["secret", "vault", "list"] },
+    { parent: ["workspace", "app"], explicit: ["workspace", "app", "list"] },
+  ])(
+    "propagates default subcommand failures for `$parent`",
+    ({ parent, explicit }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-parent-shortcut-");
+
+      const explicitResult = runCli([...explicit, "--json"], tmp.dir);
+      expect(explicitResult.error).toBeUndefined();
+      expect(explicitResult.status).toBe(1);
+      expect(JSON.parse(explicitResult.stderr).error).toMatchObject({
+        code: "AUTH_TOKEN_NOT_FOUND",
+      });
+
+      const parentResult = runCli([...parent, "--json"], tmp.dir);
+      expect(parentResult.error).toBeUndefined();
+      expect(parentResult.status).toBe(explicitResult.status);
+      expect(JSON.parse(parentResult.stderr)).toEqual(JSON.parse(explicitResult.stderr));
+    },
+    40_000,
+  );
+});
+
+describe("parent command shortcuts on success", () => {
+  test.each([
+    { parent: ["profile"], explicit: ["profile", "list"] },
+    { parent: ["plugin"], explicit: ["plugin", "list"] },
+    { parent: ["crashreport"], explicit: ["crashreport", "list"] },
+  ])(
+    "matches the default subcommand output for `$parent`",
+    ({ parent, explicit }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-parent-success-");
+
+      const explicitResult = runCli([...explicit, "--json"], tmp.dir);
+      expect(explicitResult.error).toBeUndefined();
+      expect(explicitResult.status).toBe(0);
+
+      const parentResult = runCli([...parent, "--json"], tmp.dir);
+      expect(parentResult.error).toBeUndefined();
+      expect(parentResult.status).toBe(0);
+      expect(parentResult.stdout).toBe(explicitResult.stdout);
+    },
+    40_000,
+  );
+
+  test("renders help for `workspace ttl` without recursing", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-parent-ttl-");
+
+    const result = runCli(["workspace", "ttl"], tmp.dir);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Manage when a workspace becomes prunable.");
+  }, 20_000);
 });

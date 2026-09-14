@@ -5,7 +5,7 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import {
-  getWorkflowWaitFailureMessage,
+  getWorkflowWaitFailure,
   waitForWorkflowExecution,
   type WorkflowWaitResult,
 } from "./waiter";
@@ -88,7 +88,7 @@ describe("waitForWorkflowExecution", () => {
 
     expect(result.status).toBe("RUNNING");
     expect(result.statusClass).toBe("suspended");
-    expect(getWorkflowWaitFailureMessage(result, "suspended")).toBeUndefined();
+    expect(getWorkflowWaitFailure(result, "suspended")).toBeUndefined();
   });
 
   test("retries retryable poll failures", async () => {
@@ -121,6 +121,10 @@ describe("waitForWorkflowExecution", () => {
       lastError: null,
     } satisfies Partial<WorkflowWaitResult>);
     expect(result.attempts).toBeGreaterThan(0);
-    expect(getWorkflowWaitFailureMessage(result, "success")).toContain("Timed out");
+    expect(getWorkflowWaitFailure(result, "success")).toMatchObject({
+      code: "WORKFLOW_WAIT_TIMEOUT",
+      message: expect.stringContaining("Timed out"),
+      context: { executionId: "execution-1", status: "PENDING" },
+    });
   });
 });

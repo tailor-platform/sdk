@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
-import { createCommonArgs, logger, defineCommand, runMain } from "@tailor-platform/sdk/cli";
+import {
+  annotateTerminalError,
+  createCommonArgs,
+  logger,
+  defineCommand,
+  runMain,
+} from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
@@ -52,5 +58,6 @@ void runMain(mainCommand, {
     if (error instanceof Error && error.stack) {
       logger.debug(`\nStack trace:\n${error.stack}`);
     }
+    annotateTerminalError(error, { jsonMode: logger.jsonMode });
   },
 });

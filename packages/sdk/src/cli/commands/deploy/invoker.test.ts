@@ -24,7 +24,11 @@ describe("normalizeInvoker", () => {
 
   test("throws when string invoker is given without an authNamespace", () => {
     expect(() => normalizeInvoker("kiosk", undefined, 'Resolver "foo"')).toThrow(
-      /Resolver "foo".*Configure an Auth service before using invoker/,
+      expect.objectContaining({
+        code: "INVOKER_AUTH_REQUIRED",
+        message: expect.stringContaining('Resolver "foo"'),
+        suggestion: "Configure an Auth service before using invoker.",
+      }),
     );
   });
 });

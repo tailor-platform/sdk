@@ -6,6 +6,7 @@ import { createCacheManager } from "#/cli/cache/manager";
 import { loadApplication, type Application } from "#/cli/services/application";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadConfigPath } from "#/cli/shared/context";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
@@ -69,7 +70,11 @@ export function parseDeployConfigPaths(configPath?: string): Array<string | unde
 
   const configPaths = rawConfigPath.split(",").map((entry) => entry.trim());
   if (configPaths.some((entry) => entry.length === 0)) {
-    throw new Error("--config must contain one or more non-empty config paths.");
+    throw CLIError({
+      code: "DEPLOY_CONFIG_REQUIRED",
+      message: "--config must contain one or more non-empty config paths.",
+      command: "deploy",
+    });
   }
   return configPaths;
 }
@@ -240,7 +245,7 @@ export async function buildDeploymentTargets(
     (providedLoadedConfigs.length !== configPaths.length ||
       configPaths.some((_, index) => providedLoadedConfigs[index] === undefined))
   ) {
-    throw new Error("loadedConfigs must contain exactly one entry for every configPath");
+    throw internalError("loadedConfigs must contain exactly one entry for every configPath");
   }
   const loadedConfigs =
     buildTarget === undefined && providedLoadedConfigs === undefined

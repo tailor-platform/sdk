@@ -3,6 +3,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -51,13 +52,13 @@ export async function getFunctionRegistry(
     });
 
     if (!response.function) {
-      throw new Error(notFoundErrorMessage);
+      throw CLIError({ code: "FUNCTION_NOT_FOUND", message: notFoundErrorMessage });
     }
 
     return functionRegistryInfo(response.function);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(notFoundErrorMessage, { cause: error });
+      throw CLIError({ code: "FUNCTION_NOT_FOUND", message: notFoundErrorMessage, cause: error });
     }
     throw error;
   }

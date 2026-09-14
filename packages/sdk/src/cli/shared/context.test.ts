@@ -16,6 +16,7 @@ import {
   tryLoadWorkspaceId,
   writePlatformConfig,
 } from "./context";
+import { errorToJson } from "./error-json";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { isKeyringAvailable, resetKeyringState } from "./token-store";
@@ -1073,8 +1074,55 @@ describe("loadAccessToken", () => {
   });
 
   describe("error case: no token source", () => {
+    test.each([
+      { reason: "expired", refreshToken: undefined, expectedCode: "AUTH_TOKEN_EXPIRED" },
+      {
+        reason: "refresh failed",
+        refreshToken: "refresh-sentinel",
+        expectedCode: "AUTH_TOKEN_REFRESH_FAILED",
+      },
+    ])(
+      "keeps the selected profile in diagnostics when $reason",
+      async ({ refreshToken, expectedCode }) => {
+        writePlatformConfig({
+          version: 3,
+          min_sdk_version: "2.0.0",
+          users: {
+            user: {
+              storage: "file",
+              access_token: "token-sentinel",
+              refresh_token: refreshToken,
+              token_expires_at: "2000-01-01T00:00:00.000Z",
+            },
+          },
+          profiles: {
+            selected: { user: "user", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+          },
+          current_user: "user",
+        });
+        clientMocks.refreshToken.mockRejectedValue(
+          new Error("transport failure with refresh-sentinel"),
+        );
+        const error = await loadAccessToken({ profile: "selected" }).catch(
+          (error: unknown) => error,
+        );
+        expect(errorToJson(error).error).toMatchObject({
+          code: expectedCode,
+          next: { command: "tailor", args: ["login", "--profile", "selected", "--help"] },
+          suggestion: expect.stringContaining("original login method"),
+          context: { profile: "selected" },
+        });
+        expect(JSON.stringify(errorToJson(error))).not.toContain("sentinel");
+      },
+    );
+
     test("throws error when no token source is available", async () => {
       await expect(loadAccessToken()).rejects.toThrow("Tailor Platform token not found");
+      const error = await loadAccessToken().catch((error: unknown) => error);
+      expect(errorToJson(error).error).toMatchObject({
+        code: "AUTH_TOKEN_NOT_FOUND",
+        next: { command: "tailor", args: ["login"] },
+      });
     });
   });
 });

@@ -9,6 +9,7 @@ import { fetchMachineUserToken } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 
@@ -39,9 +40,13 @@ async function getMachineUserTokenInternal(
     profile: options.profile,
   });
   if (!name) {
-    throw new Error(
-      "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
-    );
+    throw CLIError({
+      code: "MACHINE_USER_REQUIRED",
+      message: "Machine user is required.",
+      suggestion:
+        "Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
+      command: "machineuser token",
+    });
   }
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
@@ -56,7 +61,10 @@ async function getMachineUserTokenInternal(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: `Application ${config.name} does not have an auth configuration.`,
+    });
   }
 
   // Get machine user
@@ -66,7 +74,7 @@ async function getMachineUserTokenInternal(
     name,
   });
   if (!machineUser) {
-    throw new Error(`Machine user ${name} not found.`);
+    throw CLIError({ code: "MACHINE_USER_NOT_FOUND", message: `Machine user ${name} not found.` });
   }
 
   // Fetch machine user token

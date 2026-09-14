@@ -6,6 +6,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { profileNameSchema } from "#/cli/shared/profile-name";
+import { fetchReportedExpiries, type ReportedExpiry } from "./expiry";
 import {
   workspaceInfosWithFolderNames,
   workspaceNameTransformer,
@@ -18,6 +19,9 @@ export interface ListWorkspacesOptions {
   profile?: string;
 }
 
+/** A listed workspace, plus the prune expiry it records. */
+export type WorkspaceInfoWithExpiry = WorkspaceInfo & { expiresAt: ReportedExpiry };
+
 /**
  * List workspaces with an optional order and limit.
  * @param options - Workspace listing options
@@ -29,6 +33,33 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
   const platformConfig = await loadPlatformClientConfig({ profile });
   const client = await initOperatorClient(accessToken, platformConfig);
   return listWorkspacesWithClient(client, options);
+}
+
+/**
+ * List workspaces along with the prune expiry each one records.
+ *
+ * The expiries are read per workspace, so this stays out of the plain listing
+ * path that deploy uses to pick a workspace.
+ * @param options - Workspace listing options
+ * @returns List of workspaces, each carrying its recorded expiry
+ */
+export async function listWorkspacesWithExpiry(
+  options?: ListWorkspacesOptions,
+): Promise<WorkspaceInfoWithExpiry[]> {
+  const profile = profileNameSchema.optional().parse(options?.profile);
+  const accessToken = await loadAccessToken({ profile });
+  const platformConfig = await loadPlatformClientConfig({ profile });
+  const client = await initOperatorClient(accessToken, platformConfig);
+  const workspaces = await listWorkspacesWithClient(client, options);
+  const expiries = await fetchReportedExpiries(
+    client,
+    workspaces.map(({ id }) => id),
+    new Date(),
+  );
+  return workspaces.map((workspace, index) => {
+    const expiresAt = expiries[index];
+    return { ...workspace, expiresAt: expiresAt === undefined ? "unavailable" : expiresAt };
+  });
 }
 
 /**
@@ -68,7 +99,7 @@ export const listCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    const workspaces = await listWorkspaces({
+    const workspaces = await listWorkspacesWithExpiry({
       order: args.order,
       limit: args.limit,
       profile: args.profile,

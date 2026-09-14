@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type { ProfileInfo } from "./types";
 
@@ -50,14 +51,18 @@ export const createCommand = defineAppCommand({
   }),
   run: async (args) => {
     if (args["machine-user-override"] === "deny" && !args["machine-user"]) {
-      throw new Error("--machine-user-override deny requires --machine-user.");
+      throw CLIError({
+        code: "PROFILE_OPTIONS_INVALID",
+        message: "--machine-user-override deny requires --machine-user.",
+        command: "profile create",
+      });
     }
 
     const config = await readPlatformConfig();
 
     // Check if profile already exists
     if (config.profiles[args.name]) {
-      throw new Error(`Profile "${args.name}" already exists.`);
+      throw CLIError({ code: "PROFILE_EXISTS", message: `Profile "${args.name}" already exists.` });
     }
 
     // Check if user exists
@@ -86,7 +91,10 @@ export const createCommand = defineAppCommand({
 
     const workspace = workspaces.find((ws) => ws.id === args["workspace-id"]);
     if (!workspace) {
-      throw new Error(`Workspace "${args["workspace-id"]}" not found.`);
+      throw CLIError({
+        code: "WORKSPACE_NOT_FOUND",
+        message: `Workspace "${args["workspace-id"]}" not found.`,
+      });
     }
 
     // Create new profile

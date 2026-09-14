@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { currentCommand } from "./current";
 import { listCommand } from "./list";
 import { patCommand } from "./pat";
@@ -14,6 +15,6 @@ export const userCommand = defineCommand({
     pat: patCommand,
   },
   async run() {
-    await runCommand(listCommand, []);
+    await runDefaultSubCommand(listCommand);
   },
 });

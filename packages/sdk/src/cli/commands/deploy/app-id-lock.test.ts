@@ -387,7 +387,12 @@ describe("app-id-lock", () => {
           entries: [{ configPath, configId: undefined }],
           mode: "require",
         }),
-      ).rejects.toThrow(/Run 'tailor deploy' locally.*apps\/old\/tailor.config.ts.*re-key/s);
+      ).rejects.toMatchObject({
+        code: "CONFIG_ID_REQUIRED_IN_CI",
+        suggestion: expect.stringMatching(
+          /Run 'tailor deploy' locally.*apps\/old\/tailor.config.ts.*re-key/s,
+        ),
+      });
     });
 
     test("re-keys a single orphaned entry when the user confirms the move", async () => {
@@ -449,7 +454,10 @@ describe("app-id-lock", () => {
           entries: [{ configPath, configId: undefined }],
           mode: "write",
         }),
-      ).rejects.toThrow(/re-key/);
+      ).rejects.toMatchObject({
+        code: "APP_ID_NOT_RECORDED",
+        suggestion: expect.stringMatching(/re-key/),
+      });
       expect(prompt.confirm).not.toHaveBeenCalled();
     });
 
@@ -464,7 +472,12 @@ describe("app-id-lock", () => {
           entries: [{ configPath, configId: undefined }],
           mode: "write",
         }),
-      ).rejects.toThrow(/apps\/old\/tailor.config.ts, apps\/older\/tailor.config.ts/);
+      ).rejects.toMatchObject({
+        code: "APP_ID_NOT_RECORDED",
+        suggestion: expect.stringMatching(
+          /apps\/old\/tailor.config.ts, apps\/older\/tailor.config.ts/,
+        ),
+      });
       expect(prompt.confirm).not.toHaveBeenCalled();
     });
 

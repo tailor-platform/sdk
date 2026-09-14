@@ -1,4 +1,5 @@
-import { defineCommand, runCommand } from "@politty/zod";
+import { defineCommand } from "@politty/zod";
+import { runDefaultSubCommand } from "#/cli/shared/command";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
 
@@ -10,6 +11,6 @@ export const oauth2clientCommand = defineCommand({
     get: getCommand,
   },
   async run() {
-    await runCommand(listCommand, []);
+    await runDefaultSubCommand(listCommand);
   },
 });

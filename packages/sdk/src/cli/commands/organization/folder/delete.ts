@@ -4,6 +4,7 @@ import { confirmationArgs, folderArgs, organizationArgs } from "#/cli/shared/arg
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { prompt } from "#/cli/shared/prompt";
@@ -56,12 +57,19 @@ export const deleteCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Folder "${args["folder-id"]}" not found.`, { cause: error });
+        throw CLIError({
+          code: "FOLDER_NOT_FOUND",
+          message: `Folder "${args["folder-id"]}" not found.`,
+          cause: error,
+        });
       }
       throw error;
     }
     if (!response.folder) {
-      throw new Error(`Folder "${args["folder-id"]}" not found.`);
+      throw CLIError({
+        code: "FOLDER_NOT_FOUND",
+        message: `Folder "${args["folder-id"]}" not found.`,
+      });
     }
     const folderName = response.folder.name;
 

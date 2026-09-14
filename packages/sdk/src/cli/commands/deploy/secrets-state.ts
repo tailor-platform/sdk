@@ -12,6 +12,7 @@ import pLimit, { type LimitFunction } from "p-limit";
 import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 // strip unknown keys
@@ -71,7 +72,9 @@ function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsSt
 
 function applicationStateKey(scope: SecretsStateScope): string {
   if (!scope.applicationId) {
-    throw new Error(`Application "${scope.applicationName}" has no stable id for secrets state`);
+    throw internalError(
+      `Application "${scope.applicationName}" has no stable id for secrets state`,
+    );
   }
   return `id:${scope.applicationId}`;
 }
@@ -213,11 +216,13 @@ async function acquireFileLock(lockPath: string): Promise<string> {
       continue;
     }
     if (Date.now() >= deadline) {
-      throw new Error(
-        "Timed out waiting for another deploy to the same workspace and application to finish. " +
-          "Wait for it to complete and retry; an interrupted deploy recovers automatically " +
-          "within a minute.",
-      );
+      throw CLIError({
+        code: "DEPLOY_LOCK_TIMEOUT",
+        message:
+          "Timed out waiting for another deploy to the same workspace and application to finish.",
+        suggestion:
+          "Wait for it to complete and retry; an interrupted deploy recovers automatically within a minute.",
+      });
     }
     await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
   }

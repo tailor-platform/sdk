@@ -18,7 +18,7 @@ import { workspaceArgs, configArg, DEFAULT_CONFIG_PATH } from "#/cli/shared/args
 import { defineAppCommand } from "#/cli/shared/command";
 import { extractAllNamespaces, extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
-import { formatCopyableCommand } from "#/cli/shared/errors";
+import { CLIError, formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -79,26 +79,34 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
   run: async (args) => {
     const filePath = path.resolve(args.file);
     if (!filePath.endsWith(".ts")) {
-      throw new Error(`Script path must end with .ts: ${args.file}`);
+      throw CLIError({
+        code: "SCRIPT_PATH_INVALID",
+        message: `Script path must end with .ts: ${args.file}`,
+        command: "function script",
+      });
     }
     const scriptDir = path.dirname(filePath);
     const scriptExists = fs.existsSync(filePath);
     const dbTypesPath = path.join(scriptDir, SCRIPT_DB_TYPES_FILE_NAME);
     const snapshotPath = path.join(scriptDir, SCRIPT_SNAPSHOT_FILE_NAME);
     if (filePath === dbTypesPath) {
-      throw new Error(
-        `${SCRIPT_DB_TYPES_FILE_NAME} is reserved for the generated Kysely types written next to the script. Choose a different script file name.`,
-      );
+      throw CLIError({
+        code: "SCRIPT_PATH_INVALID",
+        message: `${SCRIPT_DB_TYPES_FILE_NAME} is reserved for the generated Kysely types written next to the script. Choose a different script file name.`,
+        command: "function script",
+      });
     }
 
     const { config, plugins } = await loadConfig(args.config);
     const kyselyPlugin = plugins.find((plugin) => plugin.id === KyselyGeneratorID);
     const hasSnapshotSidecar = fs.existsSync(snapshotPath);
     if (args.remote && kyselyPlugin !== undefined && scriptExists && !hasSnapshotSidecar) {
-      throw new Error(
-        `Script already exists: ${path.relative(process.cwd(), filePath)}. ` +
+      throw CLIError({
+        code: "SCRIPT_EXISTS",
+        message: `Script already exists: ${path.relative(process.cwd(), filePath)}.`,
+        suggestion:
           "Scaffold --remote at a new path so the generated script imports its script-scoped db.ts.",
-      );
+      });
     }
     // A directory that already carries a snapshot sidecar keeps using
     // script-scoped generated types, even when the project has since
@@ -120,10 +128,11 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       remote: args.remote,
     });
     if (existingSidecarNamespace !== undefined && existingSidecarNamespace !== namespace) {
-      throw new Error(
-        `This directory's generated types target namespace "${existingSidecarNamespace}" (${SCRIPT_SNAPSHOT_FILE_NAME}). ` +
-          `Scaffold scripts for namespace "${namespace}" in a separate directory.`,
-      );
+      throw CLIError({
+        code: "SCRIPT_NAMESPACE_MISMATCH",
+        message: `This directory's generated types target namespace "${existingSidecarNamespace}" (${SCRIPT_SNAPSHOT_FILE_NAME}).`,
+        suggestion: `Scaffold scripts for namespace "${namespace}" in a separate directory.`,
+      });
     }
 
     const created: string[] = [];
@@ -132,10 +141,12 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
 
     if (!useGeneratedDbTypes) {
       if (scriptExists) {
-        throw new Error(
-          `Script already exists: ${path.relative(process.cwd(), filePath)}. ` +
+        throw CLIError({
+          code: "SCRIPT_EXISTS",
+          message: `Script already exists: ${path.relative(process.cwd(), filePath)}.`,
+          suggestion:
             "It imports the project's generated Kysely types, so there is nothing to refresh.",
-        );
+        });
       }
       const generatedTypesPath = resolveKyselyTypesPath(plugins);
       getDBImportPath = toImportSpecifier(path.relative(scriptDir, generatedTypesPath));
@@ -168,16 +179,21 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
         const sourceDescription = args.remote
           ? `deployed tables in workspace ${assertDefined(resolvedWorkspaceId, "workspace ID")}`
           : "locally defined tables";
-        throw new Error(`Namespace "${namespace}" has no ${sourceDescription}.`);
+        throw CLIError({
+          code: "SCRIPT_SCHEMA_NOT_FOUND",
+          message: `Namespace "${namespace}" has no ${sourceDescription}.`,
+        });
       }
 
       if (fs.existsSync(dbTypesPath)) {
         const existing = fs.readFileSync(dbTypesPath, "utf-8");
         if (!isGeneratedScriptDbTypes(existing)) {
-          throw new Error(
-            `Refusing to overwrite ${path.relative(process.cwd(), dbTypesPath)}: ` +
+          throw CLIError({
+            code: "GENERATED_TYPES_NOT_OWNED",
+            message:
+              `Refusing to overwrite ${path.relative(process.cwd(), dbTypesPath)}: ` +
               "it was not generated by `tailor function script`.",
-          );
+          });
         }
       }
       const dbTypesContent = generateScriptDbTypes(snapshot);
@@ -254,16 +270,22 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
 
   if (explicit) {
     if (!remote && !ownedNamespaces.includes(explicit)) {
-      throw new Error(`Namespace "${explicit}" is not owned by the config and requires --remote.`);
+      throw CLIError({
+        code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
+        message: `Namespace "${explicit}" is not owned by the config and requires --remote.`,
+        command: "function script",
+      });
     }
     return explicit;
   }
 
   if (sidecarNamespace !== undefined) {
     if (!remote && !ownedNamespaces.includes(sidecarNamespace)) {
-      throw new Error(
-        `Namespace "${sidecarNamespace}" is not owned by the config and requires --remote.`,
-      );
+      throw CLIError({
+        code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
+        message: `Namespace "${sidecarNamespace}" is not owned by the config and requires --remote.`,
+        command: "function script",
+      });
     }
     return sidecarNamespace;
   }
@@ -273,16 +295,22 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
     if (namespace !== undefined) return namespace;
   }
   if (configured.length > 1) {
-    throw new Error(
-      `Multiple TailorDB namespaces are defined (${configured.join(", ")}). Specify one with --namespace.`,
-    );
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_REQUIRED",
+      message: `Multiple TailorDB namespaces are defined (${configured.join(", ")}). Specify one with --namespace.`,
+      command: "function script",
+    });
   }
   if (!remote && allNamespaces.length > 0) {
-    throw new Error(
-      `No owned TailorDB namespace is defined in the config. External namespaces require --remote: ${allNamespaces.join(", ")}.`,
-    );
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_CONFIGURED",
+      message: `No owned TailorDB namespace is defined in the config. External namespaces require --remote: ${allNamespaces.join(", ")}.`,
+    });
   }
-  throw new Error("No TailorDB namespace is defined in the config.");
+  throw CLIError({
+    code: "TAILORDB_NAMESPACE_NOT_CONFIGURED",
+    message: "No TailorDB namespace is defined in the config.",
+  });
 }
 
 /**
@@ -296,7 +324,10 @@ function resolveKyselyTypesPath(plugins: readonly Plugin[]): string {
   const distPath =
     resolvePluginConfig(plugins, KyselyGeneratorID)?.distPath ?? DEFAULT_KYSELY_TYPES_DIST_PATH;
   if (distPath.length === 0) {
-    throw new Error("kyselyTypePlugin is configured without a distPath; cannot locate getDB().");
+    throw CLIError({
+      code: "KYSELY_TYPE_PLUGIN_INVALID",
+      message: "kyselyTypePlugin is configured without a distPath; cannot locate getDB().",
+    });
   }
   return path.resolve(distPath);
 }

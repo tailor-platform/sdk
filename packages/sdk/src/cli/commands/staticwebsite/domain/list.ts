@@ -3,6 +3,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { statusLabels } from "./status";
@@ -49,7 +50,11 @@ export const domainListCommand = defineAppCommand({
       logger.out(formatted);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Static website "${args.name}" not found.`, { cause: error });
+        throw CLIError({
+          code: "STATIC_WEBSITE_NOT_FOUND",
+          message: `Static website "${args.name}" not found.`,
+          cause: error,
+        });
       }
       throw error;
     }

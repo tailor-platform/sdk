@@ -23,6 +23,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { ALL_EMAIL_DOMAINS, hasImplicitAllEmailDomains } from "#/parser/service/idp/email-domains";
@@ -81,11 +82,11 @@ async function resolveServiceReturnOrigins(
   // for CORS but would silently clear an authoritative field here (UpdateIdP is
   // a full replacement, and `enable_mfa: true` requires ≥1 origin). Fail fast.
   if (resolved.length !== originals.length) {
-    throw new Error(
-      `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins: ` +
-        `${originals.length - resolved.length} of ${originals.length} entries could not be resolved. ` +
-        `Check that each "<name>:url" entry refers to a deployed static website.`,
-    );
+    throw CLIError({
+      code: "IDP_RETURN_ORIGIN_UNRESOLVED",
+      message: `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins: ${originals.length - resolved.length} of ${originals.length} entries could not be resolved.`,
+      suggestion: 'Check that each "<name>:url" entry refers to a deployed static website.',
+    });
   }
   policy.allowedReturnOrigins = resolved;
 }
@@ -778,7 +779,7 @@ function protoIdPPolicy(
       permit = IdPPermissionPermit.DENY;
       break;
     default:
-      throw new Error(`Unknown permission: ${policy.permit satisfies never}`);
+      throw internalError(`Unknown permission: ${policy.permit satisfies never}`);
   }
   return {
     conditions: policy.conditions.map((cond) => protoIdPCondition(cond)),
@@ -809,7 +810,7 @@ function protoIdPCondition(
       op = IdPPermissionOperator.NIN;
       break;
     default:
-      throw new Error(`Unknown operator: ${operator satisfies never}`);
+      throw internalError(`Unknown operator: ${operator satisfies never}`);
   }
   return {
     left: l,
@@ -831,7 +832,7 @@ function protoIdPOperand(
     } else if ("oldIdpUser" in operand) {
       return { kind: { case: "oldIdpUserField", value: operand.oldIdpUser } };
     } else {
-      throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
+      throw internalError(`Unknown operand: ${JSON.stringify(operand)}`);
     }
   }
 

@@ -29,6 +29,7 @@ import {
   sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
 import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { spinner } from "#/cli/shared/spinner";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
@@ -160,22 +161,20 @@ export async function detectPendingMigrations(
       const hasScript = fs.existsSync(scriptPath);
       if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
         const commandOptions = { migrationNumber: file.number, namespace, configPath };
-        throw new Error(
-          `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
-            `To resolve, either:\n` +
-            `  - Add a script: ${formatMigrationScriptCommand(commandOptions)}\n` +
-            `  - Or record that no script is needed: ${formatMigrationScriptCommand({ ...commandOptions, noScript: true })}`,
-        );
+        throw CLIError({
+          code: "MIGRATION_SCRIPT_REQUIRED",
+          message: `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.`,
+          suggestion: `Add a script: ${formatMigrationScriptCommand(commandOptions)}\nOr record that no script is needed: ${formatMigrationScriptCommand({ ...commandOptions, noScript: true })}`,
+        });
       }
       if (diff.scriptSkipped) {
         const migrationLabel = `${namespace}/${formatMigrationNumber(file.number)}`;
         if (hasScript) {
-          throw new Error(
-            `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.\n` +
-              `To resolve, either:\n` +
-              `  - Keep the script and clear the stale acknowledgment: ${formatMigrationScriptCommand({ migrationNumber: file.number, namespace, configPath })}\n` +
-              `  - Or keep the skip: delete migrate.ts`,
-          );
+          throw CLIError({
+            code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
+            message: `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.`,
+            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptCommand({ migrationNumber: file.number, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
+          });
         }
         logger.info(
           `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
@@ -305,10 +304,12 @@ export async function executeMigrations(
     // Get machine user name for this namespace
     const machineUserName = getMigrationMachineUser(migrationConfig, context.machineUsers);
     if (!machineUserName) {
-      throw new Error(
-        `No machine user available for migration execution in namespace '${namespace}'. ` +
+      throw CLIError({
+        code: "MACHINE_USER_REQUIRED",
+        message: `No machine user available for migration execution in namespace '${namespace}'.`,
+        suggestion:
           "Either configure 'migration.machineUser' in db config or define machine users in auth config.",
-      );
+      });
     }
 
     const invoker = create(AuthInvokerSchema, {
@@ -348,7 +349,7 @@ export async function executeMigrations(
         if (result.logs) {
           logger.error(`Logs:\n${result.logs}`);
         }
-        throw new Error(result.error ?? "Migration failed");
+        throw CLIError({ code: "MIGRATION_FAILED", message: result.error ?? "Migration failed" });
       }
     }
   }
