@@ -45,6 +45,18 @@ function escapeProperty(value: string): string {
 }
 
 /**
+ * Report whether `--json` was requested on the command line.
+ *
+ * A failure during argument validation ends the command before the `--json`
+ * effect sets the logger's mode, so the flag is read from argv to keep the
+ * envelope the only document such a run adds to stderr.
+ * @returns True when argv carries the JSON flag
+ */
+function jsonRequestedInArgv(): boolean {
+  return process.argv.slice(2).some((value) => value === "--json" || value === "-j");
+}
+
+/**
  * Report whether workflow commands should be written.
  *
  * Read at emission time rather than at import time so values loaded from
@@ -53,7 +65,7 @@ function escapeProperty(value: string): string {
  * @returns True when annotations should be emitted
  */
 export function annotationsEnabled(jsonMode: boolean): boolean {
-  if (jsonMode) return false;
+  if (jsonMode || jsonRequestedInArgv()) return false;
   if (process.env.GITHUB_ACTIONS !== "true") return false;
   return parseBoolean(process.env.TAILOR_GITHUB_ACTIONS_ANNOTATIONS) !== false;
 }

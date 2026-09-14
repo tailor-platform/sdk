@@ -52,6 +52,27 @@ describe("github-actions", () => {
       expect(annotationsEnabled(false)).toBe(false);
     });
 
+    test("is off when --json is in argv but its effect has not run yet", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "crashreport", "send", "--json"]);
+      expect(annotationsEnabled(false)).toBe(false);
+    });
+
+    test("is off for the -j alias in argv", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "workspace", "list", "-j"]);
+      expect(annotationsEnabled(false)).toBe(false);
+    });
+
+    test("stays on when argv has no json flag", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "deploy", "--yes"]);
+      expect(annotationsEnabled(false)).toBe(true);
+    });
+
     test("stays on for an unrecognized disable value", () => {
       process.env.GITHUB_ACTIONS = "true";
       process.env.TAILOR_GITHUB_ACTIONS_ANNOTATIONS = "maybe";
