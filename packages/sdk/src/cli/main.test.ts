@@ -8,6 +8,27 @@ import { tempCwd } from "./shared/test-helpers/temp-cwd";
 const cliEntry = fileURLToPath(new URL("../../bin/tailor.mjs", import.meta.url));
 const builtEntry = fileURLToPath(new URL("../../dist/cli/main.mjs", import.meta.url));
 
+function runCli(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}) {
+  return spawnSync(process.execPath, [cliEntry, ...args], {
+    cwd,
+    encoding: "utf8",
+    timeout: 15_000,
+    env: {
+      PATH: process.env.PATH,
+      HOME: cwd,
+      XDG_CONFIG_HOME: cwd,
+      XDG_CACHE_HOME: cwd,
+      XDG_STATE_HOME: cwd,
+      XDG_DATA_HOME: cwd,
+      NODE_COMPILE_CACHE: cwd,
+      TAILOR_CRASH_REPORTS_LOCAL: "off",
+      TAILOR_CRASH_REPORTS_REMOTE: "off",
+      NO_COLOR: "1",
+      ...extraEnv,
+    },
+  });
+}
+
 describe("CLI error verbosity", () => {
   test.each([
     { name: "default", extraEnv: {}, args: [], stack: false },
@@ -24,28 +45,7 @@ describe("CLI error verbosity", () => {
       const config = path.join(tmp.dir, "missing.config.ts");
       expect(existsSync(config)).toBe(false);
 
-      const result = spawnSync(
-        process.execPath,
-        [cliEntry, "generate", "--json", "--config", config, ...args],
-        {
-          cwd: tmp.dir,
-          encoding: "utf8",
-          timeout: 15_000,
-          env: {
-            PATH: process.env.PATH,
-            HOME: tmp.dir,
-            XDG_CONFIG_HOME: tmp.dir,
-            XDG_CACHE_HOME: tmp.dir,
-            XDG_STATE_HOME: tmp.dir,
-            XDG_DATA_HOME: tmp.dir,
-            NODE_COMPILE_CACHE: tmp.dir,
-            TAILOR_CRASH_REPORTS_LOCAL: "off",
-            TAILOR_CRASH_REPORTS_REMOTE: "off",
-            NO_COLOR: "1",
-            ...extraEnv,
-          },
-        },
-      );
+      const result = runCli(["generate", "--json", "--config", config, ...args], tmp.dir, extraEnv);
 
       expect(result.error).toBeUndefined();
       expect(result.signal).toBeNull();
@@ -66,26 +66,6 @@ describe("CLI error verbosity", () => {
 });
 
 describe("parent command shortcuts", () => {
-  function runCli(args: string[], cwd: string) {
-    return spawnSync(process.execPath, [cliEntry, ...args], {
-      cwd,
-      encoding: "utf8",
-      timeout: 15_000,
-      env: {
-        PATH: process.env.PATH,
-        HOME: cwd,
-        XDG_CONFIG_HOME: cwd,
-        XDG_CACHE_HOME: cwd,
-        XDG_STATE_HOME: cwd,
-        XDG_DATA_HOME: cwd,
-        NODE_COMPILE_CACHE: cwd,
-        TAILOR_CRASH_REPORTS_LOCAL: "off",
-        TAILOR_CRASH_REPORTS_REMOTE: "off",
-        NO_COLOR: "1",
-      },
-    });
-  }
-
   test.each([
     { parent: ["workspace"], explicit: ["workspace", "list"] },
     { parent: ["workflow"], explicit: ["workflow", "list"] },
