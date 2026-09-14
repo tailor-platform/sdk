@@ -2,10 +2,10 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import open from "open";
 import { z } from "zod";
-import { workspaceArgs } from "#/cli/shared/args";
+import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { toError } from "#/cli/shared/errors";
+import { formatCopyableCommand, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -62,6 +62,12 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
+    const consoleFallback = formatCopyableCommand([
+      "tailor",
+      "authconnection",
+      "open",
+      ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+    ]);
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],
@@ -186,7 +192,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         logger.warn(
           `Could not start the local callback server on port ${args.port}${code ? ` (${code})` : ""}.\n` +
             `${portHint}\n` +
-            `  tailor authconnection open`,
+            `  ${consoleFallback}`,
         );
         reject(err);
       });
@@ -200,7 +206,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         );
         logger.info(
           `If this flow doesn't complete, you can authorize via the Console instead:\n` +
-            `  tailor authconnection open`,
+            `  ${consoleFallback}`,
         );
         if (!args["no-browser"]) {
           try {
