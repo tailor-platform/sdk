@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { PluginManager } from "#/plugin/manager";
 import { loadConfig } from "./config-loader";
 
 // Assembled at runtime: spelled out in full, this fixture is indistinguishable
@@ -77,9 +76,7 @@ describe("loadConfig", () => {
       ];
     `);
 
-    const { plugins } = await loadConfig(configPath);
-
-    expect(() => new PluginManager(plugins)).toThrow(/Duplicate plugin ID "dup"/);
+    await expect(loadConfig(configPath)).rejects.toThrow(/Duplicate plugin ID "dup"/);
   });
 
   test("rejects a module without a default export", async () => {

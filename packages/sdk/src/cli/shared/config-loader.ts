@@ -91,6 +91,7 @@ export async function loadConfig(
         `Invalid \`plugins\` export in ${resolvedPath}: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
       );
     }
+    const seenIds = new Set<string>();
     for (const item of pluginsExport) {
       const result = PluginConfigSchema.safeParse(item);
       if (!result.success) {
@@ -99,6 +100,12 @@ export async function loadConfig(
           .join("\n");
         throw new Error(`Invalid \`plugins\` export in ${resolvedPath}:\n${issues}`);
       }
+      if (seenIds.has(result.data.id)) {
+        throw new Error(
+          `Duplicate plugin ID "${result.data.id}" detected. Each plugin must have a unique ID.`,
+        );
+      }
+      seenIds.add(result.data.id);
       allPlugins.push(result.data);
     }
   }
