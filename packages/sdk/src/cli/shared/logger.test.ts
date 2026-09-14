@@ -291,6 +291,13 @@ describe("logger", () => {
       expect(redactSecrets(oncePassed)).toBe("value=<redacted>");
     });
 
+    test("still redacts a secret that merely overlaps a placeholder rather than sitting wholly inside it", () => {
+      // The idempotency guard above must only discard matches wholly inside a placeholder.
+      // A secret like "leak<redacted>" extends outside one and must still be caught.
+      logger.registerSecret("leak<redacted>");
+      expect(redactSecrets("value=leak<redacted>")).toBe("value=<redacted>");
+    });
+
     test("merges two secrets that cross (neither contains the other) without leaking a fragment of either", () => {
       logger.registerSecret("crossoverleftpart");
       logger.registerSecret("leftpartcrossoverright");

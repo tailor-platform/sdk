@@ -146,9 +146,12 @@ function buildAutomaton(secrets: ReadonlySet<string>): TrieNode {
     node.outputs.push(secret);
   }
 
+  // A head index instead of Array#shift(): shift() re-indexes every remaining element on
+  // each call, which would make this loop quadratic in the number of trie nodes rather than
+  // the linear BFS this is meant to be.
   const queue: TrieNode[] = [...root.children.values()];
-  while (queue.length > 0) {
-    const parent = queue.shift() as TrieNode;
+  for (let head = 0; head < queue.length; head++) {
+    const parent = queue[head] as TrieNode;
     for (const [ch, child] of parent.children) {
       let fail = parent.fail;
       while (fail !== root && !fail.children.has(ch)) fail = fail.fail;
@@ -220,8 +223,13 @@ export function redactSecrets(text: string): string {
     from = index + REDACTED_PLACEHOLDER.length;
   }
 
+  // Only a match wholly inside a protected placeholder is discarded (it can only be the
+  // placeholder's own text, e.g. a registered secret that is a substring of "redacted").
+  // A match that merely overlaps one — extending outside it, e.g. a registered secret that
+  // happens to be "leak<redacted>" — still has real secret content outside the placeholder
+  // and must still be replaced.
   const spans = findSecretSpans(text).filter(
-    ([start, end]) => !protectedSpans.some(([pStart, pEnd]) => start < pEnd && end > pStart),
+    ([start, end]) => !protectedSpans.some(([pStart, pEnd]) => start >= pStart && end <= pEnd),
   );
   if (spans.length === 0) return text;
   spans.sort(([a], [b]) => a - b);
