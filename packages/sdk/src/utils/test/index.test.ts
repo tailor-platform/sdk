@@ -229,6 +229,17 @@ describe("createTailorDBHook", () => {
       expect(createTailorDBHook(type)(data).lines).toBe(expected);
     });
 
+    test.each([
+      ["a string", "X"],
+      ["null", null],
+      ["a Date", new Date("2026-01-01T00:00:00.000Z")],
+    ])("passes through %s as an element without recursing", (_label, item) => {
+      const type = db.table("Test", {
+        lines: db.object({ kind: db.string() }, { array: true }),
+      });
+      expect(createTailorDBHook(type)({ lines: [item] }).lines).toEqual([item]);
+    });
+
     test("passes through non-array values without recursing (so the validator surfaces a clear error)", () => {
       const type = db.table("Test", {
         lines: db.object({ kind: db.string() }, { array: true }),

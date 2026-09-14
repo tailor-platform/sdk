@@ -45,7 +45,9 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const nestedHook = createTailorDBHook({ fields: field.fields } as any);
           if (field.metadata.array) {
-            hookedValue = Array.isArray(input) ? input.map((item) => nestedHook(item, now)) : input;
+            hookedValue = Array.isArray(input)
+              ? input.map((item) => (isNestedObject(item) ? nestedHook(item, now) : item))
+              : input;
           } else {
             hookedValue = isNestedObject(input) ? nestedHook(input, now) : input;
           }
