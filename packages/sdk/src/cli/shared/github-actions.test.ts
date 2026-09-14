@@ -5,7 +5,6 @@ import {
   annotateTerminalError,
   annotationsEnabled,
   describeTerminalError,
-  emitAnnotation,
   formatAnnotation,
 } from "./github-actions";
 
@@ -98,24 +97,6 @@ describe("github-actions", () => {
 
     test("emits a notice level", () => {
       expect(formatAnnotation("notice", "hi")).toBe("::notice::hi\n");
-    });
-  });
-
-  describe("emitAnnotation", () => {
-    test("writes nothing outside GitHub Actions", () => {
-      expect(captureStderr(() => emitAnnotation("error", "boom"))).toBe("");
-    });
-
-    test("writes the command line inside GitHub Actions", () => {
-      process.env.GITHUB_ACTIONS = "true";
-      expect(captureStderr(() => emitAnnotation("error", "boom", { title: "CODE" }))).toBe(
-        "::error title=CODE::boom\n",
-      );
-    });
-
-    test("writes nothing under JSON mode", () => {
-      process.env.GITHUB_ACTIONS = "true";
-      expect(captureStderr(() => emitAnnotation("error", "boom", {}, true))).toBe("");
     });
   });
 

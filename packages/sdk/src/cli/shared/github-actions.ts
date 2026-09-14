@@ -60,6 +60,9 @@ export function annotationsEnabled(jsonMode: boolean): boolean {
 
 /**
  * Render a GitHub Actions annotation command line.
+ *
+ * Colors are stripped unconditionally: the runner renders the annotation as
+ * text, and `FORCE_COLOR` keeps escapes alive even on a non-TTY stream.
  * @param level - Annotation severity
  * @param message - Annotation body
  * @param properties - Optional title and source location
@@ -82,26 +85,6 @@ export function formatAnnotation(
   }
   const propertyList = entries.length > 0 ? ` ${entries.join(",")}` : "";
   return `::${level}${propertyList}::${escapeData(stripVTControlCharacters(message))}\n`;
-}
-
-/**
- * Write a GitHub Actions annotation to stderr when running in a workflow.
- *
- * Colors are stripped unconditionally: the runner renders the annotation as
- * text, and `FORCE_COLOR` keeps escapes alive even on a non-TTY stream.
- * @param level - Annotation severity
- * @param message - Annotation body
- * @param properties - Optional title and source location
- * @param jsonMode - Whether the CLI is producing a JSON document
- */
-export function emitAnnotation(
-  level: AnnotationLevel,
-  message: string,
-  properties: AnnotationProperties = {},
-  jsonMode = false,
-): void {
-  if (!annotationsEnabled(jsonMode)) return;
-  process.stderr.write(formatAnnotation(level, message, properties));
 }
 
 function hasFormat(error: unknown): error is Error & { format: () => string } {
@@ -150,5 +133,5 @@ export function annotateTerminalError(
 ): void {
   if (!annotationsEnabled(options.jsonMode)) return;
   const { message, title } = describeTerminalError(error, options.suggestion);
-  emitAnnotation("error", message, { title }, options.jsonMode);
+  process.stderr.write(formatAnnotation("error", message, { title }));
 }
