@@ -1,5 +1,18 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.3.0
+
+### Minor Changes
+
+- [#2345](https://github.com/tailor-platform/sdk/pull/2345) [`ceca2f4`](https://github.com/tailor-platform/sdk/commit/ceca2f44d1b9924bead28bd09289b02a99e3a463) Thanks [@dqn](https://github.com/dqn)! - Surface command failures as GitHub Actions annotations. When `GITHUB_ACTIONS=true`, a failing `tailor` command writes one `::error::` workflow command carrying the error code, details, suggestion, and next action, so the failure shows on the run instead of only in the scrolled log. Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` to turn it off; `--json` suppresses it.
+
+- [#2261](https://github.com/tailor-platform/sdk/pull/2261) [`a340cbf`](https://github.com/tailor-platform/sdk/commit/a340cbf51d6dcd8e38067e155f75e2f570480988) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Add `tailor seed dump`, which writes the rows currently in TailorDB out as JSONL seed data. The output is the format `tailor seed apply` reads, so a dump taken before a change is what restores the tables after it: `tailor seed apply --truncate` puts the dumped rows back. Dump every table, one namespace with `--namespace`, or the tables you name; `--out` writes the files somewhere other than the seed data directory, and existing files are only overwritten with `--force`. IdP `_User` records are not dumped.
+
+### Patch Changes
+
+- Updated dependencies [[`a9e8b8b`](https://github.com/tailor-platform/sdk/commit/a9e8b8b01a9d4b363b4f84c5b0089179647f70eb), [`2003497`](https://github.com/tailor-platform/sdk/commit/20034971cc0754407e2b7f387fcfe2e12529a5e2), [`2beebd0`](https://github.com/tailor-platform/sdk/commit/2beebd0273f37e839127a0f2c53361e44a8202de), [`f5f82f8`](https://github.com/tailor-platform/sdk/commit/f5f82f8351b3aaf278262b3827c369d89b20f810), [`ddcecce`](https://github.com/tailor-platform/sdk/commit/ddceccebe40751f074dd9f5c3a0d875c91e9f1fe), [`ceca2f4`](https://github.com/tailor-platform/sdk/commit/ceca2f44d1b9924bead28bd09289b02a99e3a463), [`94b4286`](https://github.com/tailor-platform/sdk/commit/94b42863d21ba39ee34f87d678a1c56edff0f862), [`e010f8b`](https://github.com/tailor-platform/sdk/commit/e010f8bcdccc3cbecf12ef8062a51d5a95c41026), [`882ff68`](https://github.com/tailor-platform/sdk/commit/882ff68a1c8df95f76c23bd053dbf168a957119a), [`8c4e4a2`](https://github.com/tailor-platform/sdk/commit/8c4e4a27dc928f784eae82353eb8c7811e86d635), [`61fb8f9`](https://github.com/tailor-platform/sdk/commit/61fb8f9713c2118a896e6952b9fdeb63cce96a87), [`cadee3a`](https://github.com/tailor-platform/sdk/commit/cadee3ab7955f741fc89208ff8a64f281e9539d2), [`a340cbf`](https://github.com/tailor-platform/sdk/commit/a340cbf51d6dcd8e38067e155f75e2f570480988), [`964c86e`](https://github.com/tailor-platform/sdk/commit/964c86e013b39d4dbfd97a7ad6e7956b0972acae), [`fd3595f`](https://github.com/tailor-platform/sdk/commit/fd3595f07ccb31ec280c948be481f19849a98a7f), [`71f6134`](https://github.com/tailor-platform/sdk/commit/71f6134a34082c442f0d3bb202d9134441da0ccd), [`347b5a1`](https://github.com/tailor-platform/sdk/commit/347b5a1f50d1ed597d64f4907b6bab0330a1c9ba), [`503f88c`](https://github.com/tailor-platform/sdk/commit/503f88cb4bb7da9fb5a954aa2181991daa23e71e)]:
+  - @tailor-platform/sdk@2.16.0
+
 ## 0.2.9
 
 ### Patch Changes
