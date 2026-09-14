@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { resolve } from "pathe";
 import { generatePGliteSchemaModule } from "./pglite-schema";
 import { processKyselyType, generateUnifiedKyselyTypes } from "./type-processor";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
