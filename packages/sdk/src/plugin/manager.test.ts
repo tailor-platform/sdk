@@ -99,6 +99,27 @@ describe("PluginManager", () => {
     expect(extended.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
   });
 
+  test("preserves table-level hooks and validate when extending tables", () => {
+    const manager = new PluginManager();
+    const original = db
+      .table("Order", { name: db.string(), note: db.string({ optional: true }) })
+      .hooks({ create: () => ({ note: "created" }) })
+      .validate(({ newRecord }, issues) => {
+        if (newRecord.name === "") {
+          issues("name", "name is required");
+        }
+      });
+
+    const extended = manager.extendTable({
+      originalTable: original,
+      extendFields: { age: db.int() },
+      pluginId: "extender",
+    });
+
+    expect(extended.metadata.typeHook).toBe(original.metadata.typeHook);
+    expect(extended.metadata.typeValidate).toBe(original.metadata.typeValidate);
+  });
+
   test("rejects an extended field name that collides with an existing .files() key", () => {
     const manager = new PluginManager();
     const original = db.table("Order", { name: db.string() }).files({ status: "receipt" });
