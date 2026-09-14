@@ -93,9 +93,18 @@ export function toPageDirection(order: Order | undefined): PageDirection | undef
   return order === "asc" ? PageDirection.ASC : PageDirection.DESC;
 }
 
+/**
+ * Drop the arguments after `--`, which belong to the invoked program.
+ * @param argv - Raw CLI argv, excluding the executable and script path
+ * @returns The tokens the CLI itself parses as options
+ */
+function optionTokens(argv: readonly string[]): readonly string[] {
+  const separator = argv.indexOf("--");
+  return separator === -1 ? argv : argv.slice(0, separator);
+}
+
 function hasMachineUserFlag(argv: readonly string[]): boolean {
-  const optionArgs = argv.slice(0, argv.indexOf("--") === -1 ? argv.length : argv.indexOf("--"));
-  return optionArgs.some(
+  return optionTokens(argv).some(
     (token) =>
       token === "-m" ||
       token.startsWith("-m=") ||
@@ -196,16 +205,13 @@ function outputEnvIsJson(): boolean {
 }
 
 /**
- * Whether `--json` was passed explicitly. The parsed value alone cannot answer
- * this: the flag defaults to `false`, and politty only exposes `$source` to a
- * global effect when the invoked command defines no arguments of its own.
+ * Whether `--json` was passed explicitly, which the parsed value cannot answer
+ * on its own because the flag defaults to `false`.
  * @param argv - Raw CLI argv, excluding the executable and script path
  * @returns `true` when an explicit `--json` / `-j` token precedes `--`
  */
 function hasJsonFlag(argv: readonly string[] = process.argv.slice(2)): boolean {
-  const separator = argv.indexOf("--");
-  const optionArgs = argv.slice(0, separator === -1 ? argv.length : separator);
-  return optionArgs.some(
+  return optionTokens(argv).some(
     (token) =>
       token === "-j" ||
       token.startsWith("-j=") ||
@@ -259,8 +265,6 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       description: "Output as JSON",
       effect: (value) => {
         // An explicit flag always wins; TAILOR_OUTPUT only supplies the default.
-        // `value` is `false` both when `--json` is absent and when it is
-        // negated, so the raw argv decides whether the flag was passed at all.
         logger.jsonMode = value || (!hasJsonFlag() && outputEnvIsJson());
       },
     }),
