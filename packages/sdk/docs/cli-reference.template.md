@@ -225,7 +225,8 @@ Resolution rules:
   then forwarded, so when the same flag appears on both sides the later one wins. A flag the host
   does not define — including one only some commands declare, such as `--profile` — still has to be
   typed after the plugin's own subcommand. `--help` and `--version` are answered by the host CLI and
-  never dispatch a plugin.
+  never dispatch a plugin. Setting `TAILOR_OUTPUT=json` also works, which plugins inherit from the
+  environment.
 
 Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
 `node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is
