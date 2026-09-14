@@ -263,9 +263,12 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
     json: arg(z.boolean().default(false), {
       alias: "j",
       description: "Output as JSON",
-      effect: (value) => {
+      effect: (value, { args }) => {
         // An explicit flag always wins; TAILOR_OUTPUT only supplies the default.
-        logger.jsonMode = value || (!hasJsonFlag() && outputEnvIsJson());
+        const json = value || (!hasJsonFlag() && outputEnvIsJson());
+        logger.jsonMode = json;
+        // Commands branch on the parsed value, so keep both views in step.
+        (args as { json?: boolean }).json = json;
       },
     }),
   } satisfies ArgsShape;
