@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { defineCommand, runCommand, runMain, type AnyCommand } from "@politty/zod";
+import { defineCommand, runMain, type AnyCommand } from "@politty/zod";
 import { withCompletionCommand } from "@politty/zod/completion";
 import { withSkillCommand } from "@politty/zod/skill";
 import { dirname, resolve } from "pathe";
@@ -35,6 +35,7 @@ import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs } from "./shared/args";
+import { runDefaultSubCommand } from "./shared/command";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
@@ -62,10 +63,7 @@ function defaultSkillsRunToAdd(command: AnyCommand): AnyCommand {
   return {
     ...command,
     async run() {
-      const result = await runCommand(add, []);
-      if (!result.success) {
-        throw result.error;
-      }
+      await runDefaultSubCommand(add);
     },
   };
 }
