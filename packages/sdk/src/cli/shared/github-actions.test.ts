@@ -88,6 +88,20 @@ describe("github-actions", () => {
       expect(annotationsEnabled(false)).toBe(true);
     });
 
+    test("stays on when json appears only after the end-of-options separator", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "workspace", "list", "--", "--json"]);
+      expect(annotationsEnabled(false)).toBe(true);
+    });
+
+    test("is off for a real json flag preceding the separator", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      using argv = vi.spyOn(process, "argv", "get");
+      argv.mockReturnValue(["node", "tailor", "seed", "validate", "--json", "--", "zzz"]);
+      expect(annotationsEnabled(false)).toBe(false);
+    });
+
     test("stays on when argv has no json flag", () => {
       process.env.GITHUB_ACTIONS = "true";
       using argv = vi.spyOn(process, "argv", "get");

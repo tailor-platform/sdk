@@ -49,16 +49,19 @@ function escapeProperty(value: string): string {
  * Report whether `--json` was requested on the command line.
  *
  * A failure during argument validation ends the command before the `--json`
- * effect sets the logger's mode, so the flag is read from argv to keep the
- * envelope the only document such a run adds to stderr.
- * @returns True when argv carries the JSON flag
+ * effect sets the logger's mode, so the flag is read from argv instead.
+ * Tokens after `--` are positional values, never flags.
+ * @returns True when argv requests JSON output
  */
 function jsonRequestedInArgv(): boolean {
-  return process.argv.slice(2).some((value) => {
-    const separator = value.indexOf("=");
-    const name = separator === -1 ? value : value.slice(0, separator);
+  const args = process.argv.slice(2);
+  const separator = args.indexOf("--");
+  const options = separator === -1 ? args : args.slice(0, separator);
+  return options.some((value) => {
+    const assignment = value.indexOf("=");
+    const name = assignment === -1 ? value : value.slice(0, assignment);
     if (name !== "--json" && name !== "-j") return false;
-    return separator === -1 || parseBoolean(value.slice(separator + 1)) !== false;
+    return assignment === -1 || parseBoolean(value.slice(assignment + 1)) !== false;
   });
 }
 

@@ -73,8 +73,9 @@ Exactly one annotation is written per failed command, and only for the failure t
 Warnings and individually reported problems stay plain stderr output.
 
 Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` (also `off`, `no`, or `0`) to turn annotations off.
-They are also suppressed by `--json`, which keeps the JSON error envelope the only document the
-command adds to stderr — so a workflow step that parses `--json` output gets no annotations.
+Passing `--json` also suppresses them, so a workflow step that parses `--json` output gets only the
+error envelope on stderr. The flag is honored even when the command fails during argument parsing,
+before the envelope itself becomes available.
 
 An annotation does not by itself fail a step: the step still fails on the CLI's exit code, which
 is unchanged. Workflows that already echo their own `::error::` around the CLI keep working;
