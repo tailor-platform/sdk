@@ -202,15 +202,17 @@ jobs:
         working-directory: /tmp/test-init-app
         env:
           PM: ${{ matrix.pm }}
-          EXPECTED_SDK_URL: ${{ needs.publish.outputs.sdk_url }}
         run: |
-          # pnpm 12 fails to parse an allowBuilds key containing the pkg.pr.new
-          # URL (it embeds its own "@name@sha", so the key has two "@"s), so
-          # this test project allows all builds instead of allow-listing the SDK.
+          # pnpm 12 requires build scripts to be explicitly allowed, and can't
+          # reference a pkg.pr.new URL in that allowlist (ERR_PNPM_INVALID_VERSION_UNION,
+          # since the URL embeds its own "@name@sha"). Skip all build scripts
+          # and run only the SDK's own postinstall, which is what this test needs.
           if [ "$PM" = "pnpm" ]; then
-            printf 'dangerouslyAllowAllBuilds: true\n' >> pnpm-workspace.yaml
+            pnpm install --ignore-scripts
+            node node_modules/@tailor-platform/sdk/postinstall.mjs
+          else
+            $PM install
           fi
-          $PM install
 
       - name: Verify SDK installed
         env:
