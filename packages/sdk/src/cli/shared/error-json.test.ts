@@ -43,7 +43,10 @@ describe("serializeError", () => {
   test("falls back to dropping context/stack instead of crashing on a circular context", () => {
     const circular: Record<string, unknown> = { name: "circular" };
     circular.self = circular;
-    const error = CLIError({ message: "operation failed", context: circular });
+    const error = CLIError({
+      message: "operation failed",
+      context: circular as unknown as CLIError["context"],
+    });
 
     expect(() => serializeError(error)).not.toThrow();
     const parsed = JSON.parse(serializeError(error)) as { error: Record<string, unknown> };
