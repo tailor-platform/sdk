@@ -78,6 +78,8 @@ export interface AddMigrationScriptFilesResult {
   testPath?: string;
   /** Created migrate.pglite.test.ts path; undefined unless withTest was set and PGlite is available. */
   pgliteTestPath?: string;
+  /** True when this run was asked for a PGlite test that migrate.pglite.test.ts did not already have. */
+  pgliteTestRequested?: boolean;
   /** True when a stale --no-script acknowledgment was cleared because migrate.ts already exists. */
   clearedScriptSkip?: boolean;
 }
@@ -265,6 +267,7 @@ export async function addMigrationScriptFiles(
     await fsPromises.writeFile(testPath, generateMigrationTestScript(diff));
     result.testPath = testPath;
   }
+  result.pgliteTestRequested = pgliteTestRequested;
   // The PGlite scaffold imports ./db.pglite, so it is only written when that file exists.
   if (pgliteTestRequested && fs.existsSync(pgliteSchemaPath)) {
     await fsPromises.writeFile(pgliteTestPath, generateMigrationPgliteTestScript(diff));
@@ -370,7 +373,7 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.success(
       `Cleared the stale script skip record for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
     );
-    if (!result.testPath) {
+    if (!result.testPath && !result.pgliteTestRequested) {
       logger.info(
         `  Migration script: ${getMigrationFilePath(migrationsDir, migrationNumber, "migrate")}`,
       );
@@ -385,9 +388,12 @@ async function script(options: ScriptOptions): Promise<void> {
   ]
     .filter(Boolean)
     .join(" and ");
-  logger.success(
-    `Added ${added} for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
-  );
+  const target = `for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`;
+  if (added) {
+    logger.success(`Added ${added} ${target}`);
+  } else {
+    logger.warn(`Added no files ${target}`);
+  }
   if (result.migratePath) {
     logger.info(`  Migration script: ${result.migratePath}`);
     logger.info(`  DB types: ${result.dbTypesPath}`);
@@ -407,7 +413,7 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.info(
       "  Install @electric-sql/pglite as a devDependency to also scaffold a PGlite test (migrate.pglite.test.ts).",
     );
-  } else if (result.testPath && result.pgliteSchemaError) {
+  } else if (result.pgliteTestRequested && result.pgliteSchemaError) {
     logger.info("  PGlite test skipped: it needs the db.pglite.ts that could not be generated.");
   }
 

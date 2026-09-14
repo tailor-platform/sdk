@@ -548,6 +548,36 @@ describe("script command with an existing migrate.ts", () => {
     expect(fs.readFileSync(migratePath, "utf-8")).toBe(migrateContent);
   });
 
+  test("explains why the PGlite test is missing when only it was requested", async () => {
+    const stderr: string[] = [];
+    vi.mocked(process.stderr.write).mockImplementation((chunk) => {
+      stderr.push(String(chunk));
+      return true;
+    });
+    writeInitialSchema(testDir, {
+      User: {
+        ...snapshotType("User"),
+        fields: {
+          ...snapshotType("User").fields,
+          code: { type: "string", required: true, serial: { start: 1, format: "%o" } },
+        },
+      },
+    });
+    writeDiffFile(testDir, 1, createMockMigrationDiff());
+    writeMigrateFile(testDir, 1);
+    const migDir = path.join(testDir, formatMigrationNumber(1));
+    fs.writeFileSync(path.join(migDir, DB_TYPES_FILE_NAME), "export interface Database {}\n");
+    fs.writeFileSync(path.join(migDir, MIGRATE_TEST_FILE_NAME), "// existing unit test");
+    const pgliteDir = path.join(testDir, "node_modules", "@electric-sql", "pglite");
+    fs.mkdirSync(pgliteDir, { recursive: true });
+    fs.writeFileSync(path.join(pgliteDir, "package.json"), '{"name":"@electric-sql/pglite"}');
+
+    const result = await runCommand(scriptCommand, ["0001", "--with-test"]);
+
+    expect(result.success).toBe(true);
+    expect(stderr.join("")).toMatch(/PGlite test skipped/);
+  });
+
   test("still rejects when no skip record exists", async () => {
     writeDiffFile(
       testDir,
