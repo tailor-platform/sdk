@@ -401,11 +401,12 @@ export const logger = {
    * Registers a value to be redacted from diagnostic log output (`info`/`success`/`warn`/
    * `error`/`log`/`debug`). Any occurrence of `value` — or of its JSON-string-escaped form
    * (so a value embedded in `JSON.stringify`d output, e.g. `--json` mode error envelopes, is
-   * also caught) or its URL-percent-encoded form (so a value that reached the process via a
-   * query string or redirect URL, e.g. an OAuth authorization code decoded from a callback
-   * URL, is still caught if that same URL — still encoded — is later echoed into a diagnostic
-   * message) — is replaced with `<redacted>` before it reaches stderr. Does not affect
-   * `out()`, since some commands intentionally print secret values as their primary result.
+   * also caught) or its `application/x-www-form-urlencoded` form (so a value that reached the
+   * process via a URL query string, e.g. an OAuth authorization code decoded from a callback
+   * URL via `URLSearchParams`, is still caught if that same URL — still encoded — is later
+   * echoed into a diagnostic message) — is replaced with `<redacted>` before it reaches
+   * stderr. Does not affect `out()`, since some commands intentionally print secret values as
+   * their primary result.
    *
    * Values shorter than 4 characters are ignored, since they are too likely to match
    * unrelated text. A non-string value (e.g. `undefined` from an unvalidated external
@@ -421,8 +422,13 @@ export const logger = {
     _secrets.add(value);
     const jsonEscaped = JSON.stringify(value).slice(1, -1);
     if (jsonEscaped !== value) _secrets.add(jsonEscaped);
-    const urlEncoded = encodeURIComponent(value);
-    if (urlEncoded !== value) _secrets.add(urlEncoded);
+    // Uses URLSearchParams rather than encodeURIComponent: form-urlencoding (what
+    // URLSearchParams produces, and what a URL query string actually contains) encodes a
+    // space as "+", not "%20", and unlike encodeURIComponent it never throws on a lone
+    // surrogate (invalid UTF-16) — it substitutes U+FFFD instead, matching how the URL
+    // itself would already have encoded that same malformed input.
+    const formEncoded = new URLSearchParams([["v", value]]).toString().slice(2);
+    if (formEncoded !== value) _secrets.add(formEncoded);
     // Set#add on an already-registered value is a no-op, so this only invalidates the
     // cached automaton (see findSecretSpans) when a genuinely new secret was added.
     if (_secrets.size !== sizeBefore) _automaton = null;

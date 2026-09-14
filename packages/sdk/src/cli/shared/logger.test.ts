@@ -272,7 +272,7 @@ describe("logger", () => {
       expect(output).toContain("<redacted>");
     });
 
-    test("redacts a registered secret's URL-percent-encoded form (e.g. a decoded OAuth code echoed back in a still-encoded callback URL)", () => {
+    test("redacts a registered secret's form-urlencoded form (e.g. a decoded OAuth code echoed back in a still-encoded callback URL)", () => {
       const decodedCode = "abc+def/ghi";
       const encodedCode = "abc%2Bdef%2Fghi";
       logger.registerSecret(decodedCode);
@@ -280,6 +280,24 @@ describe("logger", () => {
         logger.error(`token exchange failed for callback ?code=${encodedCode}&state=xyz`),
       );
       expect(output).not.toContain(encodedCode);
+      expect(output).toContain("<redacted>");
+    });
+
+    test("redacts a space in a registered secret's form-urlencoded form as '+', not '%20' (matching what a URL query string actually contains)", () => {
+      const decodedValue = "a secret value";
+      logger.registerSecret(decodedValue);
+      const output = captureStderr(() =>
+        logger.error("callback failed for ?code=a+secret+value&state=xyz"),
+      );
+      expect(output).not.toContain("a+secret+value");
+      expect(output).toContain("<redacted>");
+    });
+
+    test("does not throw when registering a value containing a lone UTF-16 surrogate", () => {
+      // encodeURIComponent would throw URIError here; URLSearchParams substitutes U+FFFD
+      // instead, so registration (and every later log call) must keep working.
+      expect(() => logger.registerSecret("lone-surrogate-\uD800-value")).not.toThrow();
+      const output = captureStderr(() => logger.error("value: lone-surrogate-\uD800-value"));
       expect(output).toContain("<redacted>");
     });
 
