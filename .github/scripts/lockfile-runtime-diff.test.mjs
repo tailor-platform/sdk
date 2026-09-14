@@ -96,9 +96,13 @@ function run(dir, before, after) {
   const afterPath = join(dir, "pnpm-lock.yaml");
   writeFileSync(beforePath, before);
   writeFileSync(afterPath, after);
+  // Drop GITHUB_OUTPUT so a run inside this workflow's own CI step doesn't
+  // have the script under test append to the real step output file.
+  const { GITHUB_OUTPUT: _githubOutput, ...env } = process.env;
   return execFileSync(process.execPath, [SCRIPT, "--before", beforePath, "--after", afterPath], {
     cwd: dir,
     encoding: "utf8",
+    env,
   });
 }
 
