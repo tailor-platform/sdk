@@ -324,6 +324,11 @@ describe("github-actions", () => {
       expect(workspaceRelativePath("/repo/src/nested/a.ts")).toBe("src/nested/a.ts");
     });
 
+    test("keeps a directory whose name merely starts with dots", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/repo/..data/a.ts")).toBe("..data/a.ts");
+    });
+
     test("resolves dot segments before deciding containment", () => {
       process.env.GITHUB_WORKSPACE = "/repo";
       expect(workspaceRelativePath("/repo/src/../src/a.ts")).toBe("src/a.ts");

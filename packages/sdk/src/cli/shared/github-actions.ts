@@ -98,8 +98,12 @@ export function workspaceRelativePath(file: string): string | undefined {
   const workspace = process.env.GITHUB_WORKSPACE;
   if (!workspace || !isAbsolute(file)) return undefined;
   const rel = relative(resolve(workspace), resolve(file));
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined;
-  return rel.split(sep).join("/");
+  if (rel === "" || isAbsolute(rel)) return undefined;
+  const segments = rel.split(sep);
+  // A leading ".." segment means the file escapes the workspace; a directory
+  // merely named "..data" does not.
+  if (segments[0] === "..") return undefined;
+  return segments.join("/");
 }
 
 /**
