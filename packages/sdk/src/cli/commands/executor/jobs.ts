@@ -25,6 +25,7 @@ import {
 } from "#/cli/shared/args";
 import { fetchAll, fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import {
   colorizeFunctionExecutionStatus,
@@ -181,7 +182,11 @@ export async function listExecutorJobs<E extends ExecutorLike>(
     return jobs.map(toExecutorJobListInfo);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${executorName}' not found.`, { cause: error });
+      throw CLIError({
+        code: "EXECUTOR_NOT_FOUND",
+        message: `Executor '${executorName}' not found.`,
+        cause: error,
+      });
     }
     throw error;
   }
@@ -209,7 +214,10 @@ export async function getExecutorJob<E extends ExecutorLike>(
     });
 
     if (!job) {
-      throw new Error(`Job '${options.jobId}' not found.`);
+      throw CLIError({
+        code: "EXECUTOR_JOB_NOT_FOUND",
+        message: `Job '${options.jobId}' not found.`,
+      });
     }
 
     const jobInfo = toExecutorJobInfo(job);
@@ -235,7 +243,9 @@ export async function getExecutorJob<E extends ExecutorLike>(
     return jobInfo;
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Job '${options.jobId}' not found for executor '${executorName}'.`, {
+      throw CLIError({
+        code: "EXECUTOR_JOB_NOT_FOUND",
+        message: `Job '${options.jobId}' not found for executor '${executorName}'.`,
         cause: error,
       });
     }
@@ -309,7 +319,10 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     });
 
     if (!executor) {
-      throw new Error(`Executor '${executorName}' not found.`);
+      throw CLIError({
+        code: "EXECUTOR_NOT_FOUND",
+        message: `Executor '${executorName}' not found.`,
+      });
     }
 
     const targetType = executor.targetType;
@@ -336,7 +349,10 @@ export async function watchExecutorJob<E extends ExecutorLike>(
 
         job = response.job;
         if (!job) {
-          throw new Error(`Job '${options.jobId}' not found.`);
+          throw CLIError({
+            code: "EXECUTOR_JOB_NOT_FOUND",
+            message: `Job '${options.jobId}' not found.`,
+          });
         }
         lastError = null;
 
@@ -513,7 +529,10 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                   });
 
                   if (!execution) {
-                    throw new Error(`Function execution '${operationReference}' not found.`);
+                    throw CLIError({
+                      code: "FUNCTION_EXECUTION_NOT_FOUND",
+                      message: `Function execution '${operationReference}' not found.`,
+                    });
                   }
 
                   lastError = null;
@@ -598,27 +617,62 @@ export async function watchExecutorJob<E extends ExecutorLike>(
 }
 
 /**
+ * Build the failure for an executor job wait result.
+ * @param result - Executor job wait result
+ * @returns Coded failure, or undefined when the wait succeeded
+ */
+export function getExecutorWaitFailure(result: WatchExecutorJobResult): CLIError | undefined {
+  const context = {
+    jobId: result.job.id,
+    status: result.job.status,
+    workflowExecutionId: result.workflowExecutionId,
+    functionExecutionId: result.functionExecutionId,
+  };
+  if (result.timedOut) {
+    return CLIError({
+      code: "EXECUTOR_WAIT_TIMEOUT",
+      message: `Timed out waiting for executor job '${result.job.id}'. Last status: ${result.job.status}.`,
+      context,
+    });
+  }
+  if (result.job.status === "FAILED" || result.job.status === "CANCELED") {
+    return CLIError({
+      code: "EXECUTOR_JOB_FAILED",
+      message: `Executor job '${result.job.id}' completed with status ${result.job.status}.`,
+      context,
+    });
+  }
+  if (result.workflowStatus === "FAILED") {
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_FAILED",
+      message: `Workflow execution '${result.workflowExecutionId}' failed.`,
+      context,
+    });
+  }
+  if (result.functionStatus === "FAILED") {
+    return CLIError({
+      code: "FUNCTION_EXECUTION_FAILED",
+      message: `Function execution '${result.functionExecutionId}' failed.`,
+      context,
+    });
+  }
+  if (result.functionStatus === "CANCELED") {
+    return CLIError({
+      code: "FUNCTION_EXECUTION_CANCELED",
+      message: `Function execution '${result.functionExecutionId}' was canceled.`,
+      context,
+    });
+  }
+  return undefined;
+}
+
+/**
  * Build a user-facing failure message for an executor job wait result.
  * @param result - Executor job wait result
  * @returns Failure message, or undefined when the wait succeeded
  */
 export function getExecutorWaitFailureMessage(result: WatchExecutorJobResult): string | undefined {
-  if (result.timedOut) {
-    return `Timed out waiting for executor job '${result.job.id}'. Last status: ${result.job.status}.`;
-  }
-  if (result.job.status === "FAILED" || result.job.status === "CANCELED") {
-    return `Executor job '${result.job.id}' completed with status ${result.job.status}.`;
-  }
-  if (result.workflowStatus === "FAILED") {
-    return `Workflow execution '${result.workflowExecutionId}' failed.`;
-  }
-  if (result.functionStatus === "FAILED") {
-    return `Function execution '${result.functionExecutionId}' failed.`;
-  }
-  if (result.functionStatus === "CANCELED") {
-    return `Function execution '${result.functionExecutionId}' was canceled.`;
-  }
-  return undefined;
+  return getExecutorWaitFailure(result)?.message;
 }
 
 function printJobWithAttempts(job: ExecutorJobDetailInfo): void {
@@ -779,9 +833,9 @@ export const jobsCommand = defineAppCommand({
         } else {
           logger.out(result);
         }
-        const failureMessage = getExecutorWaitFailureMessage(result);
-        if (failureMessage) {
-          throw new Error(failureMessage);
+        const failure = getExecutorWaitFailure(result);
+        if (failure) {
+          throw failure;
         }
         return;
       }

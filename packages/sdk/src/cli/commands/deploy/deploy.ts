@@ -5,6 +5,7 @@ import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailor
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
@@ -332,10 +333,12 @@ export function collectExternalAuthIdpConfigNames(
     const { name } = authService.config;
     const idpConfigName = authService.config.idProvider?.name;
     if (idpConfigNames.has(name) && idpConfigNames.get(name) !== idpConfigName) {
-      throw new Error(
-        `Auth namespace "${name}" is defined by multiple config files with different IdP configs. ` +
+      throw CLIError({
+        code: "AUTH_NAMESPACE_CONFLICT",
+        message:
+          `Auth namespace "${name}" is defined by multiple config files with different IdP configs. ` +
           `Auth namespace names must be unique across all configs in a single deploy.`,
-      );
+      });
     }
     idpConfigNames.set(name, idpConfigName);
   }
@@ -694,7 +697,7 @@ async function deployInternal(
     // function registry. To test a function locally, use `function run`
     // with a .ts source file instead of a pre-bundled .js file.
 
-    if (!workspace) throw new Error("Workspace was not resolved");
+    if (!workspace) throw internalError("Workspace was not resolved");
     const { client, workspaceId } = workspace;
 
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));

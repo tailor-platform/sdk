@@ -67,6 +67,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   const targetVersion = await detectInstalledVersion(projectRoot);
   if (!targetVersion) {
     throw CLIError({
+      code: "UPGRADE_SDK_VERSION_UNDETECTED",
       message: `Could not detect installed @tailor-platform/sdk version in ${projectRoot}`,
       suggestion:
         "Ensure @tailor-platform/sdk is installed. Run 'pnpm install' or 'npm install' first.",
@@ -112,6 +113,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
 
   if (result.error) {
     throw CLIError({
+      code: "UPGRADE_CODEMOD_SPAWN_FAILED",
       message: `Failed to run @tailor-platform/sdk-codemod: ${result.error.message}`,
       suggestion: "Ensure npx is available and the network is accessible.",
       command: "upgrade",
@@ -121,6 +123,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   // Check for non-zero exit without a launch error (e.g. registry/auth/network failures)
   if (result.status !== 0 && !result.stdout.trim()) {
     throw CLIError({
+      code: "UPGRADE_CODEMOD_FAILED",
       message: `@tailor-platform/sdk-codemod exited with code ${result.status}`,
       details: result.stderr.trim() || "(no stderr output)",
       suggestion:
@@ -143,6 +146,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     output = JSON.parse(result.stdout);
   } catch {
     throw CLIError({
+      code: "UPGRADE_CODEMOD_OUTPUT_INVALID",
       message: "Failed to parse output from @tailor-platform/sdk-codemod",
       details: result.stdout || "(empty stdout)",
       suggestion: "This is likely a bug. Please report it.",
@@ -158,6 +162,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
 
   if (output.errors.length > 0) {
     throw CLIError({
+      code: "UPGRADE_COMPLETED_WITH_ERRORS",
       message: `Upgrade completed with ${output.errors.length} error(s)`,
       suggestion: "Review the errors above and re-run the upgrade after fixing the issues.",
       command: "upgrade",

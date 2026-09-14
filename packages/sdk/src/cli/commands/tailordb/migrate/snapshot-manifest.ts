@@ -29,6 +29,7 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import { isSnapshotFieldRefOperand } from "./snapshot";
@@ -408,7 +409,7 @@ function convertActionPermissionToProto(
       permit = TailorDBType_Permission_Permit.DENY;
       break;
     default:
-      throw new Error(`Unknown permission: ${policy.permit satisfies never}`);
+      throw internalError(`Unknown permission: ${policy.permit satisfies never}`);
   }
 
   return {
@@ -452,7 +453,7 @@ function convertConditionToProto(
       op = TailorDBType_Permission_Operator.NHAS_ANY;
       break;
     default:
-      throw new Error(`Unknown operator: ${operator satisfies never}`);
+      throw internalError(`Unknown operator: ${operator satisfies never}`);
   }
 
   return {
@@ -484,7 +485,7 @@ function convertOperandToProto(
       return { kind: { case: "oldRecordField", value: operand.oldRecord } };
     }
     operand satisfies never;
-    throw new Error(`Unknown field-ref operand shape: ${JSON.stringify(operand)}`);
+    throw internalError(`Unknown field-ref operand shape: ${JSON.stringify(operand)}`);
   }
 
   return {
@@ -612,7 +613,7 @@ function protoGqlPolicy(
         actions.push(TailorDBGQLPermission_Action.BULK_UPSERT);
         break;
       default:
-        throw new Error(`Unknown action: ${action satisfies never}`);
+        throw internalError(`Unknown action: ${action satisfies never}`);
     }
   }
   let permit: TailorDBGQLPermission_Permit;
@@ -624,7 +625,7 @@ function protoGqlPolicy(
       permit = TailorDBGQLPermission_Permit.DENY;
       break;
     default:
-      throw new Error(`Unknown permission: ${policy.permit satisfies never}`);
+      throw internalError(`Unknown permission: ${policy.permit satisfies never}`);
   }
   return {
     conditions: policy.conditions.map((cond) => protoGqlCondition(cond)),
@@ -662,7 +663,7 @@ function protoGqlCondition(
       op = TailorDBGQLPermission_Operator.NHAS_ANY;
       break;
     default:
-      throw new Error(`Unknown operator: ${operator satisfies never}`);
+      throw internalError(`Unknown operator: ${operator satisfies never}`);
   }
   return {
     left: l,
@@ -678,10 +679,11 @@ function protoGqlOperand(
     if ("user" in operand) {
       return { kind: { case: "userField", value: operand.user } };
     }
-    throw new Error(
-      `Unsupported field-ref operand in GQL permission: ${JSON.stringify(operand)} ` +
-        `— GQL permissions only support { user } field references`,
-    );
+    throw CLIError({
+      code: "TAILORDB_PERMISSION_OPERAND_UNSUPPORTED",
+      message: `Unsupported field-ref operand in GQL permission: ${JSON.stringify(operand)}.`,
+      suggestion: "GQL permissions only support { user } field references.",
+    });
   }
 
   return {

@@ -49,7 +49,7 @@ function baseErrorToJson(
   if (isCLIError(error)) {
     return {
       error: {
-        code: error.code ?? "CLI_ERROR",
+        code: error.code || "CLI_ERROR",
         message: error.message,
         ...(error.details ? { details: error.details } : {}),
         ...(error.suggestion ? { suggestion: error.suggestion } : {}),

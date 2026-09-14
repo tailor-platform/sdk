@@ -8,8 +8,15 @@ import {
   initOAuth2Client,
 } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { isCLIError } from "#/cli/shared/errors";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
+
+function failureText(result: { error?: Error }): string {
+  const { error } = result;
+  if (!isCLIError(error)) return error?.message ?? "";
+  return [error.message, error.details, error.suggestion].filter(Boolean).join("\n");
+}
 
 const xdgTempDir = vi.hoisted(() => `/tmp/sdk-login-test-${Date.now()}-${Math.random()}`);
 const openMock = vi.hoisted(() => vi.fn());
@@ -95,18 +102,12 @@ describe("login --profile", () => {
     expect(fetchPlatformMachineUserToken).toHaveBeenCalledWith("machine-client", "secret", {
       platformUrl: "https://api.dev.tailor.tech",
     });
-    expect((result as { error?: Error }).error?.message).toContain(
+    expect(failureText(result)).toContain(
       'Profile "dev" is configured for "u@example.com", but login authenticated "machine-client".',
     );
-    expect((result as { error?: Error }).error?.message).toContain(
-      "tailor profile update --user 'machine-client' -- 'dev'",
-    );
-    expect((result as { error?: Error }).error?.message).toContain(
-      "Then retry the original machine-user login command.",
-    );
-    expect((result as { error?: Error }).error?.message).not.toContain(
-      "tailor login --profile 'dev'",
-    );
+    expect(failureText(result)).toContain("tailor profile update --user 'machine-client' -- 'dev'");
+    expect(failureText(result)).toContain("Then retry the original machine-user login command.");
+    expect(failureText(result)).not.toContain("tailor login --profile 'dev'");
 
     const pfConfig = await readPlatformConfig();
     expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
@@ -150,16 +151,14 @@ describe("login --profile", () => {
     expect(fetchUserInfo).toHaveBeenCalledWith("browser-token", {
       platformUrl: "https://api.dev.tailor.tech",
     });
-    expect((result as { error?: Error }).error?.message).toContain(
+    expect(failureText(result)).toContain(
       'Profile "dev" is configured for "u@example.com", but login authenticated "browser@example.com".',
     );
-    expect((result as { error?: Error }).error?.message).toContain(
+    expect(failureText(result)).toContain(
       "tailor profile update --user 'browser@example.com' -- 'dev'",
     );
-    expect((result as { error?: Error }).error?.message).toContain(
-      "Then run:\n  tailor login --profile 'dev'",
-    );
-    expect((result as { error?: Error }).error?.message).not.toContain(
+    expect(failureText(result)).toContain("Then run:\n  tailor login --profile 'dev'");
+    expect(failureText(result)).not.toContain(
       "Then retry the original machine-user login command.",
     );
 
@@ -216,12 +215,10 @@ describe("login --profile", () => {
     ]);
 
     expect(result.success).toBe(false);
-    expect((result as { error?: Error }).error?.message).toContain(
+    expect(failureText(result)).toContain(
       "tailor profile update --user 'machine client; echo nope' -- 'dev profile'",
     );
-    expect((result as { error?: Error }).error?.message).toContain(
-      "Then retry the original machine-user login command.",
-    );
+    expect(failureText(result)).toContain("Then retry the original machine-user login command.");
   });
 
   test("terminates profile update flags before profile names that start with a dash", async () => {
@@ -254,10 +251,10 @@ describe("login --profile", () => {
     ]);
 
     expect(result.success).toBe(false);
-    expect((result as { error?: Error }).error?.message).toContain(
+    expect(failureText(result)).toContain(
       "tailor profile update --user 'machine-client' -- '-dev'",
     );
-    expect((result as { error?: Error }).error?.message).not.toContain(
+    expect(failureText(result)).not.toContain(
       "tailor profile update '-dev' --user 'machine-client'",
     );
   });
@@ -283,15 +280,9 @@ describe("login --profile", () => {
       ]);
 
       expect(result.success).toBe(false);
-      expect((result as { error?: Error }).error?.message).toContain(
-        "tailor profile update --user machine-client -- dev",
-      );
-      expect((result as { error?: Error }).error?.message).toContain(
-        "Then retry the original machine-user login command.",
-      );
-      expect((result as { error?: Error }).error?.message).not.toContain(
-        "tailor login --profile dev",
-      );
+      expect(failureText(result)).toContain("tailor profile update --user machine-client -- dev");
+      expect(failureText(result)).toContain("Then retry the original machine-user login command.");
+      expect(failureText(result)).not.toContain("tailor login --profile dev");
     } finally {
       if (platformDescriptor) {
         Object.defineProperty(process, "platform", platformDescriptor);
@@ -333,14 +324,12 @@ describe("login --profile", () => {
       ]);
 
       expect(result.success).toBe(false);
-      expect((result as { error?: Error }).error?.message).toContain(
+      expect(failureText(result)).toContain(
         "tailor profile update --user <authenticated-user> -- <profile>",
       );
-      expect((result as { error?: Error }).error?.message).toContain('profile = "%USERNAME%"');
-      expect((result as { error?: Error }).error?.message).toContain(
-        'authenticated user = "machine-client"',
-      );
-      expect((result as { error?: Error }).error?.message).not.toContain(
+      expect(failureText(result)).toContain('profile = "%USERNAME%"');
+      expect(failureText(result)).toContain('authenticated user = "machine-client"');
+      expect(failureText(result)).not.toContain(
         "tailor profile update %USERNAME% --user machine-client",
       );
     } finally {

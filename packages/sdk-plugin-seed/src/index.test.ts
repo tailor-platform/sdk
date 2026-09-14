@@ -8,7 +8,7 @@ const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const cliEntry = path.join(packageRoot, "bin/cli.mjs");
 const CLI_TEST_TIMEOUT_MS = 15_000;
 
-function runCli(args: string[]) {
+function runCli(args: string[], extraEnv: Record<string, string> = {}) {
   if (!existsSync(path.join(packageRoot, "dist/index.js"))) {
     throw new Error(
       "packages/sdk-plugin-seed is not built. Run `pnpm --filter @tailor-platform/sdk-plugin-seed build` first.",
@@ -17,7 +17,9 @@ function runCli(args: string[]) {
   return spawnSync(process.execPath, [cliEntry, ...args], {
     cwd: packageRoot,
     encoding: "utf8",
-    env: { ...process.env, FORCE_COLOR: "0" },
+    // Allowlisted so the runner's own GITHUB_ACTIONS, DEBUG, and RUNNER_DEBUG
+    // cannot add annotation or stack-trace lines to the asserted output.
+    env: { PATH: process.env.PATH, FORCE_COLOR: "0", ...extraEnv },
   });
 }
 
@@ -101,6 +103,24 @@ describe("seed CLI JSON errors", () => {
       expect(result.stderr.trim()).toBe(
         `✖ Configuration file not found: ${path.resolve(configPath)}`,
       );
+    },
+    CLI_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "annotates the failure once under GitHub Actions",
+    () => {
+      const configPath = fileURLToPath(new URL("__fixtures__/missing.config.ts", import.meta.url));
+
+      const result = runCli(["validate", "--config", configPath], { GITHUB_ACTIONS: "true" });
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr.match(/^::error/gm)).toHaveLength(1);
+      expect(result.stderr.trim().split(/\r?\n/)).toEqual([
+        `✖ Configuration file not found: ${path.resolve(configPath)}`,
+        `::error title=Error::Configuration file not found: ${path.resolve(configPath)}`,
+      ]);
     },
     CLI_TEST_TIMEOUT_MS,
   );

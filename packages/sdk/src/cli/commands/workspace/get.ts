@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -52,7 +53,10 @@ export async function getWorkspace(
   });
 
   if (!response.workspace) {
-    throw new Error(`Workspace "${workspaceId}" not found.`);
+    throw CLIError({
+      code: "WORKSPACE_NOT_FOUND",
+      message: `Workspace "${workspaceId}" not found.`,
+    });
   }
 
   const [details, expiry] = await Promise.all([

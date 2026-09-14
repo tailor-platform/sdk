@@ -2,6 +2,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 
 export const deleteCommand = defineAppCommand({
@@ -18,7 +19,7 @@ export const deleteCommand = defineAppCommand({
 
     // Check if profile exists
     if (!config.profiles[args.name]) {
-      throw new Error(`Profile "${args.name}" not found.`);
+      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${args.name}" not found.` });
     }
 
     // Delete profile

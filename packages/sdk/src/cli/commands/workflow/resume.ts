@@ -3,12 +3,13 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { parseDuration, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { waitForExecution, type WaitOptions } from "./start";
-import { getWorkflowWaitFailureMessage, type WorkflowWaitResult } from "./waiter";
+import { getWorkflowWaitFailure, type WorkflowWaitResult } from "./waiter";
 
 export interface ResumeWorkflowOptions {
   executionId: string;
@@ -57,10 +58,16 @@ export async function resumeWorkflow(
   } catch (error) {
     if (error instanceof ConnectError) {
       if (error.code === Code.NotFound) {
-        throw new Error(`Execution '${options.executionId}' not found.`, { cause: error });
+        throw CLIError({
+          code: "WORKFLOW_EXECUTION_NOT_FOUND",
+          message: `Execution '${options.executionId}' not found.`,
+          cause: error,
+        });
       }
       if (error.code === Code.FailedPrecondition) {
-        throw new Error(`Execution '${options.executionId}' is not in a resumable state.`, {
+        throw CLIError({
+          code: "WORKFLOW_EXECUTION_NOT_RESUMABLE",
+          message: `Execution '${options.executionId}' is not in a resumable state.`,
           cause: error,
         });
       }
@@ -118,9 +125,9 @@ export const resumeCommand = defineAppCommand({
       } else {
         logger.out(result);
       }
-      const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
-      if (failureMessage) {
-        throw new Error(failureMessage);
+      const failure = getWorkflowWaitFailure(result, args.until);
+      if (failure) {
+        throw failure;
       }
     } else {
       logger.out({ executionId });

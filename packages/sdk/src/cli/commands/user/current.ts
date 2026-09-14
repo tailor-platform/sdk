@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { workspaceArgs } from "#/cli/shared/args";
+import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
   platformConfigFromProfile,
   readPlatformConfig,
 } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
-import ml from "#/utils/multiline";
 
 export const currentCommand = defineAppCommand({
   name: "current",
@@ -18,7 +18,7 @@ export const currentCommand = defineAppCommand({
     const profile = args.profile || process.env.TAILOR_PLATFORM_PROFILE;
     const profileEntry = profile ? config.profiles[profile] : undefined;
     if (profile && !profileEntry) {
-      throw new Error(`Profile "${profile}" not found`);
+      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${profile}" not found` });
     }
     const platformConfig = profileEntry ? platformConfigFromProfile(profileEntry) : undefined;
     const currentUser = profile ? (profileEntry?.user ?? null) : config.current_user;
@@ -26,18 +26,22 @@ export const currentCommand = defineAppCommand({
 
     // Check if current user is set
     if (!currentUser) {
-      throw new Error(ml`
-        Current user not set.
-        Please login first using 'tailor login' command to register a user.
-      `);
+      throw CLIError({
+        code: "USER_NOT_SET",
+        message: "Current user not set.",
+        suggestion: "Log in first to register a user.",
+        next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile })] },
+      });
     }
 
     // Check if user exists
     if (!hasUserTokenEntry(config, currentUser, platformConfig)) {
-      throw new Error(ml`
-        Current user '${currentUser}' not found in registered users.
-        Please login again using 'tailor login' command to register the user.
-      `);
+      throw CLIError({
+        code: "USER_NOT_FOUND",
+        message: `Current user '${currentUser}' not found in registered users.`,
+        suggestion: "Log in again to register the user.",
+        next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile })] },
+      });
     }
 
     if (jsonOutput) {

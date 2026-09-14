@@ -4,6 +4,7 @@ import { z } from "zod";
 import { deploymentArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
@@ -35,7 +36,10 @@ export async function getOAuth2Client(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: `Application ${config.name} does not have an auth configuration.`,
+    });
   }
 
   try {
@@ -50,7 +54,11 @@ export async function getOAuth2Client(
     );
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`OAuth2 client '${options.name}' not found.`, { cause: error });
+      throw CLIError({
+        code: "OAUTH2_CLIENT_NOT_FOUND",
+        message: `OAuth2 client '${options.name}' not found.`,
+        cause: error,
+      });
     }
     throw error;
   }

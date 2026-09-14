@@ -23,6 +23,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { byName } from "#/cli/shared/apply-concurrency";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { CLIError } from "#/cli/shared/errors";
 import {
   assertNoPublishEventsConflict,
   publishEventsConflict,
@@ -113,9 +114,10 @@ export async function planTailorDB(context: PlanContext) {
   if (migrationTestSnapshots) {
     for (const namespace of migrationTestSnapshots.keys()) {
       if (!tailordbs.some((tailordb) => tailordb.namespace === namespace)) {
-        throw new Error(
-          `Migration test snapshot targets unknown TailorDB namespace "${namespace}".`,
-        );
+        throw CLIError({
+          code: "MIGRATION_TEST_SNAPSHOT_INVALID",
+          message: `Migration test snapshot targets unknown TailorDB namespace "${namespace}".`,
+        });
       }
     }
     const namespaceByType = new Map<string, string>();
@@ -123,9 +125,10 @@ export async function planTailorDB(context: PlanContext) {
       for (const tableName of Object.keys(tailordb.types)) {
         const existingNamespace = namespaceByType.get(tableName);
         if (existingNamespace) {
-          throw new Error(
-            `Migration test snapshot has duplicate TailorDB table name "${tableName}" in namespaces "${existingNamespace}" and "${tailordb.namespace}".`,
-          );
+          throw CLIError({
+            code: "MIGRATION_TEST_SNAPSHOT_INVALID",
+            message: `Migration test snapshot has duplicate TailorDB table name "${tableName}" in namespaces "${existingNamespace}" and "${tailordb.namespace}".`,
+          });
         }
         namespaceByType.set(tableName, tailordb.namespace);
       }

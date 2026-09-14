@@ -16,6 +16,7 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
@@ -253,7 +254,11 @@ export async function generate(options: GenerateOptions): Promise<void> {
     typeDropFlags.length > 0 ||
     nestedDropFlags.length > 0;
   if (options.init && (hasRenameOrDropFlags || expandContractFlags.length > 0)) {
-    throw new Error("--rename, --drop, and --expand-contract cannot be used together with --init.");
+    throw CLIError({
+      code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
+      message: "--rename, --drop, and --expand-contract cannot be used together with --init.",
+      command: "tailordb migration generate",
+    });
   }
   const droppedFieldKeys = new Set(
     dropFlags.map(({ spec }) => `${spec.tableName}.${spec.fieldName}`),
@@ -262,36 +267,46 @@ export async function generate(options: GenerateOptions): Promise<void> {
     droppedFieldKeys.has(`${spec.tableName}.${spec.previousFieldName}`),
   );
   if (conflictingFlags.length > 0) {
-    throw new Error(
-      `--rename and --drop conflict for: ${conflictingFlags
+    throw CLIError({
+      code: "MIGRATION_RENAME_DROP_CONFLICT",
+      message: `--rename and --drop conflict for: ${conflictingFlags
         .map(({ spec }) => `${spec.tableName}.${spec.previousFieldName}`)
         .join(", ")}`,
-    );
+      command: "tailordb migration generate",
+    });
   }
   const droppedMemberKeys = new Set(nestedDropFlags.map(({ spec }) => nestedMemberKey(spec)));
   const conflictingNestedFlags = nestedRenameFlags.filter(({ spec }) =>
     droppedMemberKeys.has(nestedMemberKey({ ...spec, path: spec.previousPath })),
   );
   if (conflictingNestedFlags.length > 0) {
-    throw new Error(
-      `--rename and --drop conflict for: ${conflictingNestedFlags
+    throw CLIError({
+      code: "MIGRATION_RENAME_DROP_CONFLICT",
+      message: `--rename and --drop conflict for: ${conflictingNestedFlags
         .map(({ spec }) => nestedMemberKey({ ...spec, path: spec.previousPath }))
         .join(", ")}`,
-    );
+      command: "tailordb migration generate",
+    });
   }
   const droppedTypeNames = new Set(typeDropFlags.map(({ spec }) => spec.tableName));
   const conflictingTypeFlags = typeRenameFlags.filter(({ spec }) =>
     droppedTypeNames.has(spec.previousTableName),
   );
   if (conflictingTypeFlags.length > 0) {
-    throw new Error(
-      `--rename and --drop conflict for: ${conflictingTypeFlags
+    throw CLIError({
+      code: "MIGRATION_RENAME_DROP_CONFLICT",
+      message: `--rename and --drop conflict for: ${conflictingTypeFlags
         .map(({ spec }) => spec.previousTableName)
         .join(", ")}`,
-    );
+      command: "tailordb migration generate",
+    });
   }
   if (options.namespace !== undefined && !options.dataOnly) {
-    throw new Error("--namespace can only be used together with --data-only.");
+    throw CLIError({
+      code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
+      message: "--namespace can only be used together with --data-only.",
+      command: "tailordb migration generate",
+    });
   }
   // A data-only migration must not carry schema changes, so every flag that
   // shapes a schema diff is meaningless with it
@@ -299,9 +314,12 @@ export async function generate(options: GenerateOptions): Promise<void> {
     options.dataOnly &&
     (options.init || hasRenameOrDropFlags || expandContractFlags.length > 0)
   ) {
-    throw new Error(
-      "--init, --rename, --drop, and --expand-contract cannot be used together with --data-only.",
-    );
+    throw CLIError({
+      code: "MIGRATION_GENERATE_OPTIONS_CONFLICT",
+      message:
+        "--init, --rename, --drop, and --expand-contract cannot be used together with --data-only.",
+      command: "tailordb migration generate",
+    });
   }
 
   const dataOnlyTargetNamespace = options.dataOnly
@@ -440,14 +458,19 @@ export async function generate(options: GenerateOptions): Promise<void> {
     (flag) => !matchedExpandContractFlags.has(flag),
   );
   if (unusedExpandContracts.length > 0) {
-    throw new Error(
-      `--expand-contract does not match a field whose type or array-ness changed: ${unusedExpandContracts
+    throw CLIError({
+      code: "MIGRATION_EXPAND_CONTRACT_UNMATCHED",
+      message: `--expand-contract does not match a field whose type or array-ness changed: ${unusedExpandContracts
         .map((flag) => flag.raw)
         .join(", ")}`,
-    );
+      command: "tailordb migration generate",
+    });
   }
   if (ineligibleExpandContracts.length > 0) {
-    throw new Error(ineligibleExpandContracts.join("\n"));
+    throw CLIError({
+      code: "MIGRATION_EXPAND_CONTRACT_INELIGIBLE",
+      message: ineligibleExpandContracts.join("\n"),
+    });
   }
 
   // Resolve renames for every namespace before any migration file is written,
@@ -492,13 +515,13 @@ export async function generate(options: GenerateOptions): Promise<void> {
           `  - ${label} → ${targets.join(", ")}? (namespace: ${namespace})`,
       )
       .join("\n");
-    throw new Error(
-      `Possible rename(s) detected:\n${details}\n` +
-        'Re-run with --rename "Table.oldField:newField" (field), --rename "OldTable:NewTable" (table), ' +
-        'or --rename "Table.field.oldMember:newMember" (nested member) ' +
-        "to record a rename and scaffold a data copy script, " +
-        'or --drop "Table.field" / --drop "Table" / --drop "Table.field.member" to confirm the removal.',
-    );
+    throw CLIError({
+      code: "MIGRATION_RENAME_UNRESOLVED",
+      message: `Possible rename(s) detected:\n${details}`,
+      suggestion:
+        'Re-run with --rename "Table.oldField:newField" (field), --rename "OldTable:NewTable" (table), or --rename "Table.field.oldMember:newMember" (nested member) to record a rename and scaffold a data copy script, or --drop "Table.field" / --drop "Table" / --drop "Table.field.member" to confirm the removal.',
+      command: "tailordb migration generate",
+    });
   }
 
   for (const {
@@ -539,14 +562,18 @@ async function generateDataOnlyMigration(
 ): Promise<void> {
   const generation = generations.find((g) => g.namespace === namespace);
   if (!generation) {
-    throw new Error(`No TailorDB service found for namespace "${namespace}"`);
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: `No TailorDB service found for namespace "${namespace}"`,
+    });
   }
   const { migrationsDir, previousSnapshot, currentSnapshot } = generation;
   if (!previousSnapshot) {
-    throw new Error(
-      `Namespace "${namespace}" has no migration baseline. ` +
-        "Run 'tailor tailordb migration generate' first to create the initial snapshot.",
-    );
+    throw CLIError({
+      code: "MIGRATION_BASELINE_NOT_FOUND",
+      message: `Namespace "${namespace}" has no migration baseline.`,
+      suggestion: "Create the initial schema snapshot first.",
+    });
   }
 
   const diff = compareSnapshots(previousSnapshot, currentSnapshot);
@@ -554,10 +581,11 @@ async function generateDataOnlyMigration(
     logger.newline();
     logger.log(formatMigrationDiff(diff));
     logger.newline();
-    throw new Error(
-      `Namespace "${namespace}" has schema changes that are not in migration files. ` +
-        "Generate the schema migration first by running without --data-only.",
-    );
+    throw CLIError({
+      code: "MIGRATION_SCHEMA_CHANGES_PENDING",
+      message: `Namespace "${namespace}" has schema changes that are not in migration files.`,
+      suggestion: "Generate the schema migration first by running without --data-only.",
+    });
   }
 
   const migrationNumber = getNextMigrationNumber(migrationsDir);
@@ -765,7 +793,11 @@ function matchFlagsToNamespaces<S>(
   }
   const unused = flags.filter((flag) => !matched.has(flag));
   if (unused.length > 0) {
-    throw new Error(`${unmatchedError}: ${unused.map((flag) => flag.raw).join(", ")}`);
+    throw CLIError({
+      code: "MIGRATION_FLAG_UNMATCHED",
+      message: `${unmatchedError}: ${unused.map((flag) => flag.raw).join(", ")}`,
+      command: "tailordb migration generate",
+    });
   }
   return specsByNamespace;
 }
@@ -1181,7 +1213,10 @@ async function generateDiffFromSnapshot(
     const details = unsupportedChanges
       .map((c) => `  - ${c.tableName}.${c.fieldName}: ${c.reason}`)
       .join("\n");
-    throw new Error(`Unsupported schema changes detected:\n${details}`);
+    throw CLIError({
+      code: "MIGRATION_UNSUPPORTED_SCHEMA_CHANGE",
+      message: `Unsupported schema changes detected:\n${details}`,
+    });
   }
 
   // Warn about breaking changes
@@ -1318,9 +1353,11 @@ async function generateExpandContractMigrations(
 
   const expandNumber = getNextMigrationNumber(migrationsDir);
   if (expandNumber + 1 > MAX_MIGRATION_NUMBER) {
-    throw new Error(
-      `Converting a field type needs two migration numbers, and ${formatMigrationNumber(MAX_MIGRATION_NUMBER)} is the last one available. Re-baseline the history first.`,
-    );
+    throw CLIError({
+      code: "MIGRATION_NUMBER_EXHAUSTED",
+      message: `Converting a field type needs two migration numbers, and ${formatMigrationNumber(MAX_MIGRATION_NUMBER)} is the last one available.`,
+      suggestion: "Re-baseline the migration history first.",
+    });
   }
   const expand = await generateDiffFiles(
     expandDiff,

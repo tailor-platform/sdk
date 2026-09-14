@@ -258,6 +258,9 @@ describe("user list", () => {
     const result = await runCommand(userCommand, ["list", "--profile", "missing"]);
 
     expect(result.success).toBe(false);
-    expect(result.error).toEqual(new Error('Profile "missing" not found'));
+    expect(result.error).toMatchObject({
+      code: "PROFILE_NOT_FOUND",
+      message: 'Profile "missing" not found',
+    });
   });
 });

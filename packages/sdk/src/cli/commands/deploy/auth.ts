@@ -27,6 +27,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -736,7 +737,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
         config: {},
       };
     default:
-      throw new Error(`Unexpected idp kind: ${idpConfig satisfies never}`);
+      throw internalError(`Unexpected idp kind: ${idpConfig satisfies never}`);
   }
 }
 
@@ -747,9 +748,11 @@ async function protoBuiltinIdPConfig(
 ): Promise<MessageInitShape<typeof AuthIDPConfig_ConfigSchema>> {
   const config = await tryProtoBuiltinIdPConfig(client, workspaceId, builtinIdPConfig);
   if (!config) {
-    throw new Error(
-      `Built-in IdP "${builtinIdPConfig.namespace}" not found. Please ensure that idp is configured correctly.`,
-    );
+    throw CLIError({
+      code: "IDP_NOT_FOUND",
+      message: `Built-in IdP "${builtinIdPConfig.namespace}" not found.`,
+      suggestion: "Ensure that idp is configured correctly.",
+    });
   }
   return config;
 }
@@ -1486,7 +1489,7 @@ function protoOAuth2Client(
         case "refresh_token":
           return AuthOAuth2Client_GrantType.REFRESH_TOKEN;
         default:
-          throw new Error(`Unknown OAuth2 client grant type: ${grantType satisfies never}`);
+          throw internalError(`Unknown OAuth2 client grant type: ${grantType satisfies never}`);
       }
     }),
     redirectUris: oauth2Client.redirectURIs,
@@ -1597,7 +1600,7 @@ function protoSCIMConfig(scimConfig: SCIMConfig): MessageInitShape<typeof AuthSC
       authorizationType = AuthSCIMConfig_AuthorizationType.OAUTH2;
       break;
     default:
-      throw new Error(
+      throw internalError(
         `Unknown SCIM authorization type: ${scimConfig.authorization.type satisfies never}`,
       );
   }
@@ -1745,7 +1748,7 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
       typ = AuthSCIMAttribute_Type.COMPLEX;
       break;
     default:
-      throw new Error(`Unknown SCIM attribute type: ${attr.type satisfies never}`);
+      throw internalError(`Unknown SCIM attribute type: ${attr.type satisfies never}`);
   }
   let mutability;
   if (attr.mutability) {
@@ -1760,7 +1763,9 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
         mutability = AuthSCIMAttribute_Mutability.WRITE_ONLY;
         break;
       default:
-        throw new Error(`Unknown SCIM attribute mutability: ${attr.mutability satisfies never}`);
+        throw internalError(
+          `Unknown SCIM attribute mutability: ${attr.mutability satisfies never}`,
+        );
     }
   }
   let uniqueness;
@@ -1776,7 +1781,9 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
         uniqueness = AuthSCIMAttribute_Uniqueness.GLOBAL;
         break;
       default:
-        throw new Error(`Unknown SCIM attribute uniqueness: ${attr.uniqueness satisfies never}`);
+        throw internalError(
+          `Unknown SCIM attribute uniqueness: ${attr.uniqueness satisfies never}`,
+        );
     }
   }
   return {

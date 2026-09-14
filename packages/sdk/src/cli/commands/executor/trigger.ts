@@ -4,10 +4,11 @@ import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_reso
 import { z } from "zod";
 import { durationArg, parseDuration, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
+import { getExecutorWaitFailure, watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
 import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "#/types/executor.generated";
 import type { JsonObject } from "@bufbuild/protobuf";
@@ -22,7 +23,11 @@ const jsonDataArg = z
     try {
       return JSON.parse(val) as unknown;
     } catch {
-      throw new Error(`Invalid JSON data: ${val}. Please provide a valid JSON string.`);
+      throw CLIError({
+        code: "EXECUTOR_DATA_INVALID",
+        message: `Invalid JSON data: ${val}. Please provide a valid JSON string.`,
+        command: "executor trigger",
+      });
     }
   })
   .refine((v): v is JsonObject => typeof v === "object" && v !== null && !Array.isArray(v), {
@@ -103,10 +108,18 @@ async function triggerExecutorByName(
     return { jobId: response.jobId };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${options.executorName}' not found.`, { cause: error });
+      throw CLIError({
+        code: "EXECUTOR_NOT_FOUND",
+        message: `Executor '${options.executorName}' not found.`,
+        cause: error,
+      });
     }
     if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-      throw new Error(`Invalid argument: ${error.message}`, { cause: error });
+      throw CLIError({
+        code: "EXECUTOR_ARGUMENT_INVALID",
+        message: `Invalid argument: ${error.message}`,
+        cause: error,
+      });
     }
     throw error;
   }
@@ -121,10 +134,12 @@ export async function triggerExecutor<E extends ManualTriggerExecutor>(
   options: TriggerExecutorTypedOptions<E>,
 ): Promise<TriggerExecutorResult> {
   if (options.executor.trigger.kind !== "incomingWebhook" && options.payload !== undefined) {
-    throw new Error(
-      `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
+    throw CLIError({
+      code: "EXECUTOR_TRIGGER_UNSUPPORTED",
+      message:
+        `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
         `The payload is only available for 'incomingWebhook' trigger type.`,
-    );
+    });
   }
 
   return await triggerExecutorByName({
@@ -213,23 +228,31 @@ The \`--logs\` option displays logs from the downstream execution when available
     });
 
     if (!executor) {
-      throw new Error(`Executor '${args.executorName}' not found.`);
+      throw CLIError({
+        code: "EXECUTOR_NOT_FOUND",
+        message: `Executor '${args.executorName}' not found.`,
+      });
     }
 
     // EVENT trigger type cannot be triggered manually
     if (executor.triggerType === ExecutorTriggerType.EVENT) {
-      throw new Error(
-        `Executor '${args.executorName}' has '${executorTriggerTypeToString(executor.triggerType)}' trigger type and cannot be triggered manually. ` +
+      throw CLIError({
+        code: "EXECUTOR_TRIGGER_UNSUPPORTED",
+        message:
+          `Executor '${args.executorName}' has '${executorTriggerTypeToString(executor.triggerType)}' trigger type and cannot be triggered manually. ` +
           `Only executors with 'INCOMING_WEBHOOK' or 'SCHEDULE' triggers can be triggered manually.`,
-      );
+      });
     }
 
     // SCHEDULE trigger type does not accept --data or --header options
     if (executor.triggerType === ExecutorTriggerType.SCHEDULE && (args.data || args.header)) {
-      throw new Error(
-        `Executor '${args.executorName}' has 'SCHEDULE' trigger type. ` +
+      throw CLIError({
+        code: "EXECUTOR_TRIGGER_OPTIONS_INVALID",
+        message:
+          `Executor '${args.executorName}' has 'SCHEDULE' trigger type. ` +
           `The --data and --header options are only available for 'INCOMING_WEBHOOK' trigger type.`,
-      );
+        command: "executor trigger",
+      });
     }
 
     let payload: JsonObject | undefined;
@@ -332,9 +355,9 @@ The \`--logs\` option displays logs from the downstream execution when available
       } else {
         logger.out(watchResult);
       }
-      const failureMessage = getExecutorWaitFailureMessage(watchResult);
-      if (failureMessage) {
-        throw new Error(failureMessage);
+      const failure = getExecutorWaitFailure(watchResult);
+      if (failure) {
+        throw failure;
       }
     }
   },

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { isCI } from "std-env";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
@@ -45,9 +46,10 @@ function assertSafeLockPath(root: string): void {
   for (const relativePath of [".github", TAILOR_LOCK_FILENAME]) {
     try {
       if (fs.lstatSync(path.join(root, relativePath)).isSymbolicLink()) {
-        throw new Error(
-          `Refusing to use ${TAILOR_LOCK_FILENAME}: "${relativePath}" is a symbolic link.`,
-        );
+        throw CLIError({
+          code: "APP_ID_LOCK_INVALID",
+          message: `Refusing to use ${TAILOR_LOCK_FILENAME}: "${relativePath}" is a symbolic link.`,
+        });
       }
     } catch (error) {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") continue;
@@ -68,31 +70,36 @@ function assertSafeLockPath(root: string): void {
 export function parseAppIds(value: unknown): AppIds {
   if (value === undefined) return {};
   if (!isPlainObject(value)) {
-    throw new Error(
-      `${TAILOR_LOCK_FILENAME} has an invalid 'appIds' section: expected an object mapping ` +
-        `config paths to app ids. ${restoreHint}`,
-    );
+    throw CLIError({
+      code: "APP_ID_LOCK_INVALID",
+      message: `${TAILOR_LOCK_FILENAME} has an invalid 'appIds' section: expected an object mapping config paths to app ids.`,
+      suggestion: restoreHint,
+    });
   }
   const owners = new Map<string, string>();
   for (const [key, id] of Object.entries(value)) {
     if (!isRepositoryRelativeKey(key)) {
-      throw new Error(
-        `${TAILOR_LOCK_FILENAME} 'appIds' key "${key}" must be a repository-relative config path ` +
-          `(no absolute paths, "..", or backslashes). ${restoreHint}`,
-      );
+      throw CLIError({
+        code: "APP_ID_LOCK_INVALID",
+        message: `${TAILOR_LOCK_FILENAME} 'appIds' key "${key}" must be a repository-relative config path (no absolute paths, "..", or backslashes).`,
+        suggestion: restoreHint,
+      });
     }
     if (typeof id !== "string" || !uuidRegex.test(id)) {
-      throw new Error(
-        `${TAILOR_LOCK_FILENAME} 'appIds' entry for "${key}" must be a UUID. ${restoreHint}`,
-      );
+      throw CLIError({
+        code: "APP_ID_LOCK_INVALID",
+        message: `${TAILOR_LOCK_FILENAME} 'appIds' entry for "${key}" must be a UUID.`,
+        suggestion: restoreHint,
+      });
     }
     const owner = owners.get(id.toLowerCase());
     if (owner !== undefined) {
-      throw new Error(
-        `${TAILOR_LOCK_FILENAME} records the same app id "${id}" for "${owner}" and "${key}". ` +
-          "Each config needs its own app id: delete the entry of the copied config so the next " +
-          "local deploy assigns a fresh one.",
-      );
+      throw CLIError({
+        code: "APP_ID_CONFLICT",
+        message: `${TAILOR_LOCK_FILENAME} records the same app id "${id}" for "${owner}" and "${key}".`,
+        suggestion:
+          "Each config needs its own app id: delete the entry of the copied config so the next local deploy assigns a fresh one.",
+      });
     }
     owners.set(id.toLowerCase(), key);
   }
@@ -107,22 +114,36 @@ function readRawLock(root: string): RawLock | null {
   try {
     text = fs.readFileSync(file, "utf-8");
   } catch (cause) {
-    throw new Error(`${TAILOR_LOCK_FILENAME} under ${root} could not be read.`, { cause });
+    throw CLIError({
+      code: "APP_ID_LOCK_UNREADABLE",
+      message: `${TAILOR_LOCK_FILENAME} under ${root} could not be read.`,
+      cause,
+    });
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch (cause) {
-    throw new Error(`${TAILOR_LOCK_FILENAME} is not valid JSON. ${restoreHint}`, { cause });
+    throw CLIError({
+      code: "APP_ID_LOCK_INVALID",
+      message: `${TAILOR_LOCK_FILENAME} is not valid JSON.`,
+      suggestion: restoreHint,
+      cause,
+    });
   }
   if (!isPlainObject(parsed) || typeof parsed.version !== "number") {
-    throw new Error(`${TAILOR_LOCK_FILENAME} has no valid 'version' field. ${restoreHint}`);
+    throw CLIError({
+      code: "APP_ID_LOCK_INVALID",
+      message: `${TAILOR_LOCK_FILENAME} has no valid 'version' field.`,
+      suggestion: restoreHint,
+    });
   }
   if (parsed.version > TAILOR_LOCK_VERSION) {
-    throw new Error(
-      `${TAILOR_LOCK_FILENAME} was written by a newer SDK (lock version ${String(parsed.version)}). ` +
-        "Update @tailor-platform/sdk and @tailor-platform/sdk-plugin-setup to continue.",
-    );
+    throw CLIError({
+      code: "APP_ID_LOCK_VERSION_UNSUPPORTED",
+      message: `${TAILOR_LOCK_FILENAME} was written by a newer SDK (lock version ${String(parsed.version)}).`,
+      suggestion: "Update @tailor-platform/sdk and @tailor-platform/sdk-plugin-setup to continue.",
+    });
   }
   return parsed as RawLock;
 }
@@ -166,9 +187,10 @@ export function findAppIdLock(configPath: string): AppIdLock | null {
 export function appIdLockKey(root: string, configPath: string): string {
   const key = path.relative(root, configPath);
   if (!isRepositoryRelativeKey(key)) {
-    throw new Error(
-      `${configPath} is outside the repository that holds ${TAILOR_LOCK_FILENAME} (${root}).`,
-    );
+    throw CLIError({
+      code: "CONFIG_OUTSIDE_REPOSITORY",
+      message: `${configPath} is outside the repository that holds ${TAILOR_LOCK_FILENAME} (${root}).`,
+    });
   }
   return key;
 }
@@ -247,17 +269,24 @@ function rekeyInstructions(orphans: readonly string[]): string {
 }
 
 function missingInCIError(keys: readonly string[], orphans: readonly string[]): Error {
-  let message =
-    `No app id is recorded for ${keys.join(", ")} in ${TAILOR_LOCK_FILENAME}, and the config ` +
-    "has no 'id'. CI does not generate one (each run would be treated as a separate app and " +
-    `break resource ownership). Run 'tailor deploy' locally and commit ${TAILOR_LOCK_FILENAME}.`;
-  if (orphans.length > 0) message += ` ${rekeyInstructions(orphans)}`;
-  return new Error(message);
+  let suggestion = `Run 'tailor deploy' locally and commit ${TAILOR_LOCK_FILENAME}.`;
+  if (orphans.length > 0) suggestion += ` ${rekeyInstructions(orphans)}`;
+  return CLIError({
+    code: "CONFIG_ID_REQUIRED_IN_CI",
+    message: `No app id is recorded for ${keys.join(", ")} in ${TAILOR_LOCK_FILENAME}, and the config has no 'id'.`,
+    details:
+      "CI does not generate one (each run would be treated as a separate app and break resource ownership).",
+    suggestion,
+  });
 }
 
 async function confirmMove(from: string, to: string): Promise<boolean> {
   if (!canPrompt()) {
-    throw new Error(`No app id is recorded for ${to}. ${rekeyInstructions([from])}`);
+    throw CLIError({
+      code: "APP_ID_NOT_RECORDED",
+      message: `No app id is recorded for ${to}.`,
+      suggestion: rekeyInstructions([from]),
+    });
   }
   logger.warn(
     `${TAILOR_LOCK_FILENAME} records an app id for ${from}, which no longer exists, ` +
@@ -298,11 +327,12 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     const recorded = appIds[key];
     if (recorded !== undefined) {
       if (configId !== undefined && configId.toLowerCase() !== recorded.toLowerCase()) {
-        throw new Error(
-          `${TAILOR_LOCK_FILENAME} records app id "${recorded}" for ${key}, but the config's 'id' ` +
-            `is "${configId}". Neither can be chosen automatically: remove the 'id' from the ` +
-            "config to keep the recorded id, or replace the recorded value with the config's id.",
-        );
+        throw CLIError({
+          code: "APP_ID_CONFLICT",
+          message: `${TAILOR_LOCK_FILENAME} records app id "${recorded}" for ${key}, but the config's 'id' is "${configId}".`,
+          suggestion:
+            "Neither can be chosen automatically: remove the 'id' from the config to keep the recorded id, or replace the recorded value with the config's id.",
+        });
       }
       const removeConfigId = configId !== undefined && mode === "write";
       if (configId !== undefined && !removeConfigId) warnConfigStillCarriesId(key);
@@ -311,17 +341,21 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     }
     if (configId !== undefined) {
       if (!uuidRegex.test(configId)) {
-        throw new Error(
-          `'id' in ${configPath} must be a UUID. To use this config for a separate app, delete it.`,
-        );
+        throw CLIError({
+          code: "CONFIG_ID_INVALID",
+          message: `'id' in ${configPath} must be a UUID.`,
+          suggestion: "To use this config for a separate app, delete it.",
+        });
       }
       const owner = claimed.get(configId.toLowerCase());
       const movedFrom = owner !== undefined && owner !== key && !exists(owner) ? owner : undefined;
       if (owner !== undefined && owner !== key && movedFrom === undefined) {
-        throw new Error(
-          `${configPath} carries the app id already recorded for ${owner} in ${TAILOR_LOCK_FILENAME}. ` +
+        throw CLIError({
+          code: "APP_ID_CONFLICT",
+          message: `${configPath} carries the app id already recorded for ${owner} in ${TAILOR_LOCK_FILENAME}.`,
+          suggestion:
             "If this config was copied from that app, delete its 'id' so it gets a fresh one.",
-        );
+        });
       }
       claimed.set(configId.toLowerCase(), key);
       const removeConfigId = mode === "write";
@@ -365,7 +399,11 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     const key = assertDefined(keys[0], "key missing");
     if (await confirmMove(from, key)) moved = { from, key };
   } else if (orphans.length > 0) {
-    throw new Error(`No app id is recorded for ${keys.join(", ")}. ${rekeyInstructions(orphans)}`);
+    throw CLIError({
+      code: "APP_ID_NOT_RECORDED",
+      message: `No app id is recorded for ${keys.join(", ")}.`,
+      suggestion: rekeyInstructions(orphans),
+    });
   }
 
   for (const { index, configPath, key } of unresolved) {
@@ -414,9 +452,11 @@ export function writeAppIds(params: WriteAppIdsParams): void {
   const { lock, appIds } = params;
   const raw = readRawLock(lock.root);
   if (raw === null) {
-    throw new Error(
-      `${TAILOR_LOCK_FILENAME} does not exist under ${lock.root}. Run 'tailor setup' to create it.`,
-    );
+    throw CLIError({
+      code: "APP_ID_LOCK_NOT_FOUND",
+      message: `${TAILOR_LOCK_FILENAME} does not exist under ${lock.root}.`,
+      suggestion: "Create it with 'tailor setup'.",
+    });
   }
   const merged: Record<string, string> = { ...parseAppIds(raw.appIds) };
   for (const key of Object.keys(lock.appIds)) {

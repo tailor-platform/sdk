@@ -16,6 +16,7 @@ import {
 } from "#/cli/shared/args";
 import { fetchPaged, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { formatKeyValueTable } from "#/cli/shared/format";
 import {
   colorizeFunctionExecutionStatus,
@@ -246,7 +247,10 @@ async function fetchFunctionExecution(
     { signal: options.signal },
   );
   if (!execution) {
-    throw new Error(`Function execution '${options.executionId}' not found.`);
+    throw CLIError({
+      code: "FUNCTION_EXECUTION_NOT_FOUND",
+      message: `Function execution '${options.executionId}' not found.`,
+    });
   }
   return execution;
 }
@@ -292,9 +296,10 @@ async function followFunctionExecution(
   const timeoutError = (): Error => {
     const lastStatusText =
       lastStatus === undefined ? "unknown" : functionExecutionStatusToString(lastStatus);
-    return new Error(
-      `Timed out waiting for function execution '${options.executionId}' to complete. Last status: ${lastStatusText}.`,
-    );
+    return CLIError({
+      code: "FUNCTION_EXECUTION_TIMEOUT",
+      message: `Timed out waiting for function execution '${options.executionId}' to complete. Last status: ${lastStatusText}.`,
+    });
   };
   const sleep = async (): Promise<void> => {
     const remaining = remainingMs();
@@ -494,7 +499,11 @@ Stack traces are mapped only when the execution includes a content hash for the 
   }),
   run: async (args) => {
     if (args.follow && !args.executionId) {
-      throw new Error("--follow requires an execution ID.");
+      throw CLIError({
+        code: "FUNCTION_LOGS_OPTIONS_INVALID",
+        message: "--follow requires an execution ID.",
+        command: "function logs",
+      });
     }
 
     const { client, workspaceId } = await loadOperatorWorkspaceContext({

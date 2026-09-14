@@ -1,3 +1,4 @@
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
 import type { HasName } from "./change-set";
@@ -42,9 +43,10 @@ export function assertUniqueGlobalResourceNames(
     for (const target of targets) {
       for (const name of check.namesOf(target)) {
         if (seen.has(name)) {
-          throw new Error(
-            `Duplicate ${check.resourceLabel} name "${name}" across config files. ${check.resourceLabel} names must be unique across all configs in a single deploy.`,
-          );
+          throw CLIError({
+            code: "DEPLOY_DUPLICATE_RESOURCE_NAME",
+            message: `Duplicate ${check.resourceLabel} name "${name}" across config files. ${check.resourceLabel} names must be unique across all configs in a single deploy.`,
+          });
         }
         seen.add(name);
       }

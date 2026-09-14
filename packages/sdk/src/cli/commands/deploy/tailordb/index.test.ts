@@ -2178,9 +2178,10 @@ describe("applyTailorDB migration label reconciliation", () => {
     addSentinelTypeCreate(planResult);
     const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0001" });
 
-    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /supports migration file format versions 1-6/,
-    );
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
+      code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
+      details: expect.stringMatching(/supports migration file format versions 1-6/),
+    });
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();
     expect(setMetadata).not.toHaveBeenCalled();

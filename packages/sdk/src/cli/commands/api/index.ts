@@ -5,6 +5,7 @@ import { configArg, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
@@ -99,7 +100,11 @@ function coerceFieldValue(field: DescField | undefined, raw: string): unknown {
   if (field && field.fieldKind === "scalar" && field.scalar === ScalarType.BOOL) {
     if (raw === "true") return true;
     if (raw === "false") return false;
-    throw new Error(`Invalid value for bool field: '${raw}'. Expected 'true' or 'false'.`);
+    throw CLIError({
+      code: "API_FIELD_VALUE_INVALID",
+      message: `Invalid value for bool field: '${raw}'. Expected 'true' or 'false'.`,
+      command: "api",
+    });
   }
   return raw;
 }
@@ -257,7 +262,11 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
 
     if (args.field && args.field.length > 0) {
       if (!parsedBody) {
-        throw new Error("--field requires --body to be a JSON object (or omitted).");
+        throw CLIError({
+          code: "API_OPTIONS_INVALID",
+          message: "--field requires --body to be a JSON object (or omitted).",
+          command: "api",
+        });
       }
       for (const f of args.field) {
         const leaf = method ? resolveLeafField(method.input, f.path) : undefined;

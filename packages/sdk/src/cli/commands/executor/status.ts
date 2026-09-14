@@ -3,6 +3,7 @@ import {
   ExecutorTargetType,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { CLIError } from "#/cli/shared/errors";
 import { styles } from "#/cli/shared/logger";
 
 // ============================================================================
@@ -111,9 +112,10 @@ export function parseExecutorJobStatus(status: string): ExecutorJobStatus {
     case "CANCELED":
       return ExecutorJobStatus.CANCELED;
     default:
-      throw new Error(
-        `Invalid status: ${status}. Valid values: PENDING, RUNNING, SUCCESS, FAILED, CANCELED`,
-      );
+      throw CLIError({
+        code: "EXECUTOR_STATUS_INVALID",
+        message: `Invalid status: ${status}. Valid values: PENDING, RUNNING, SUCCESS, FAILED, CANCELED`,
+      });
   }
 }
 

@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -28,7 +29,11 @@ export const createCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
-        throw new Error(`Vault "${args.name}" already exists.`, { cause: error });
+        throw CLIError({
+          code: "VAULT_EXISTS",
+          message: `Vault "${args.name}" already exists.`,
+          cause: error,
+        });
       }
       throw error;
     }

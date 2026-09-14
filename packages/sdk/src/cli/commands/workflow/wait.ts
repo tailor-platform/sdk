@@ -6,7 +6,7 @@ import { logger } from "#/cli/shared/logger";
 import { workflowWaitControlArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import {
-  getWorkflowWaitFailureMessage,
+  getWorkflowWaitFailure,
   waitForWorkflowExecutionById,
   type WaitWorkflowExecutionOptions,
   type WorkflowWaitResult,
@@ -113,9 +113,9 @@ export const waitCommand = defineAppCommand({
       logger.out(output);
     }
 
-    const failureMessage = getWorkflowWaitFailureMessage(result, args.until);
-    if (failureMessage) {
-      throw new Error(failureMessage);
+    const failure = getWorkflowWaitFailure(result, args.until);
+    if (failure) {
+      throw failure;
     }
   },
 });

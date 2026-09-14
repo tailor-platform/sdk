@@ -3,6 +3,7 @@ import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/c
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
@@ -34,7 +35,10 @@ export async function listOAuth2Clients(
     applicationName: config.name,
   });
   if (!application?.authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: `Application ${config.name} does not have an auth configuration.`,
+    });
   }
 
   const pageDirection = toPageDirection(options?.order);

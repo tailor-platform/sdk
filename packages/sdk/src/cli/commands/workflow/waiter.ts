@@ -4,6 +4,7 @@ import {
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { type initOperatorClient } from "#/cli/shared/client";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { spinner } from "#/cli/shared/spinner";
@@ -172,7 +173,10 @@ export async function waitForWorkflowExecution(
 
         if (!execution) {
           sp?.fail(`Execution '${options.executionId}' not found.`);
-          throw new Error(`Execution '${options.executionId}' not found.`);
+          throw CLIError({
+            code: "WORKFLOW_EXECUTION_NOT_FOUND",
+            message: `Execution '${options.executionId}' not found.`,
+          });
         }
 
         lastExecution = execution;
@@ -297,26 +301,43 @@ export async function waitForWorkflowExecutionById(
 }
 
 /**
- * Build a user-facing failure message for a workflow wait result.
+ * Build the failure for a workflow wait result.
  * @param result - Workflow wait result
  * @param until - Requested wait target
- * @returns Failure message, or undefined when the wait succeeded
+ * @returns Coded failure, or undefined when the wait succeeded
  */
-export function getWorkflowWaitFailureMessage(
+export function getWorkflowWaitFailure(
   result: WorkflowWaitResult,
   until: WorkflowWaitUntil,
-): string | undefined {
+): CLIError | undefined {
+  const context = { executionId: result.id, status: result.status };
   if (result.timedOut) {
-    return `Timed out waiting for workflow execution '${result.id}' to reach ${until}. Last status: ${result.status}.`;
+    return CLIError({
+      code: "WORKFLOW_WAIT_TIMEOUT",
+      message: `Timed out waiting for workflow execution '${result.id}' to reach ${until}. Last status: ${result.status}.`,
+      context,
+    });
   }
   if (result.status === "FAILED") {
-    return `Workflow execution '${result.id}' failed.`;
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_FAILED",
+      message: `Workflow execution '${result.id}' failed.`,
+      context,
+    });
   }
   if (until === "success" && result.statusClass !== "success") {
-    return `Workflow execution '${result.id}' reached ${result.status} before success.`;
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_NOT_SUCCESSFUL",
+      message: `Workflow execution '${result.id}' reached ${result.status} before success.`,
+      context,
+    });
   }
   if (until === "suspended" && result.statusClass !== "suspended") {
-    return `Workflow execution '${result.id}' reached ${result.status} before suspension.`;
+    return CLIError({
+      code: "WORKFLOW_EXECUTION_NOT_SUSPENDED",
+      message: `Workflow execution '${result.id}' reached ${result.status} before suspension.`,
+      context,
+    });
   }
   return undefined;
 }
