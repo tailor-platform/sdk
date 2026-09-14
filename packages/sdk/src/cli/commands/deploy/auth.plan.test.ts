@@ -68,6 +68,7 @@ const managerMachineUserRemote = {
     department: fromJson(ValueSchema, "sales"),
     role: fromJson(ValueSchema, "manager"),
   },
+  clientSecret: "manager-machine-user-remote-secret",
 };
 
 function createMockApplication(): Application {
@@ -232,6 +233,7 @@ function createMockClient(opts?: {
     name: string;
     attributes: string[];
     attributeMap: Record<string, ReturnType<typeof fromJson<typeof ValueSchema>>>;
+    clientSecret?: string;
   }>;
   oauth2Clients?: Array<{
     name: string;
@@ -384,6 +386,18 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("registers an existing machine user's secret fetched during planning", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [managerMachineUserRemote],
+    });
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+
+    await planAuth(createContext(client));
+
+    expect(registerSecretSpy).toHaveBeenCalledWith(managerMachineUserRemote.clientSecret);
   });
 
   test("marks a SAML idpConfig unchanged when its remote proto materializes defaults", async () => {

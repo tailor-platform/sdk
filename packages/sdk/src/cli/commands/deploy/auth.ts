@@ -1095,6 +1095,7 @@ async function planMachineUsers(
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
       existingMap.set(machineUser.name, machineUser);
+      logger.registerSecret(machineUser.clientSecret);
     });
     for (const machineUsername of Object.keys(config.machineUsers ?? {})) {
       const machineUser = config.machineUsers?.[machineUsername];
