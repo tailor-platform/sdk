@@ -1,5 +1,10 @@
 import { stripVTControlCharacters } from "node:util";
-import { getErrorDiagnostics } from "./error-diagnostics";
+import { isAbsolute, relative, resolve, sep } from "pathe";
+import {
+  getErrorDiagnostics,
+  withErrorDiagnostics,
+  type ErrorSourceLocation,
+} from "./error-diagnostics";
 import { isCLIError } from "./errors";
 import { parseBoolean } from "./parse-boolean";
 
@@ -80,6 +85,24 @@ export function annotationsEnabled(jsonMode: boolean): boolean {
 }
 
 /**
+ * Render a path the way GitHub Actions resolves annotation locations.
+ *
+ * Steps run with `working-directory` set, so a cwd-relative path points at the
+ * wrong file; the runner resolves annotation paths against the workspace root.
+ * Containment is decided by the relative path rather than a prefix match, so a
+ * sibling such as `/repo-other` is not read as living inside `/repo`.
+ * @param file - Absolute path to the file the failure points at
+ * @returns Workspace-relative path, or undefined when it lies outside
+ */
+export function workspaceRelativePath(file: string): string | undefined {
+  const workspace = process.env.GITHUB_WORKSPACE;
+  if (!workspace || !isAbsolute(file)) return undefined;
+  const rel = relative(resolve(workspace), resolve(file));
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return undefined;
+  return rel.split(sep).join("/");
+}
+
+/**
  * Render a GitHub Actions annotation command line.
  *
  * Colors are stripped unconditionally: the runner renders the annotation as
@@ -147,6 +170,19 @@ export function describeTerminalError(
 }
 
 /**
+ * Attach the source location a failure points at.
+ *
+ * Consumed when the command's failure is annotated; the error is otherwise
+ * unchanged, so its message and formatting stay the caller's own.
+ * @param error - Failure to annotate
+ * @param location - Absolute file, and the 1-based line when known
+ * @returns The same error
+ */
+export function withSourceLocation<T extends Error>(error: T, location: ErrorSourceLocation): T {
+  return withErrorDiagnostics(error, { location });
+}
+
+/**
  * Annotate the failure that ended the command, when running in GitHub Actions.
  * @param error - Failure that ended the command
  * @param options - JSON mode state and the suggestion shown for a plain error
@@ -159,5 +195,22 @@ export function annotateTerminalError(
 ): void {
   if (!annotationsEnabled(options.jsonMode)) return;
   const { message, title } = describeTerminalError(error, options.suggestion);
-  process.stderr.write(formatAnnotation("error", message, { title }));
+  process.stderr.write(formatAnnotation("error", message, { title, ...sourceLocation(error) }));
+}
+
+/**
+ * Read an error's source location as annotation properties.
+ *
+ * A location outside the workspace is dropped rather than guessed at, so the
+ * annotation still reports the failure without pointing at the wrong file.
+ * @param error - Failure that ended the command
+ * @returns `file`/`line` properties, or an empty object when unavailable
+ */
+function sourceLocation(error: unknown): { file?: string; line?: number } {
+  if (!(error instanceof Error)) return {};
+  const location = getErrorDiagnostics(error).location;
+  if (!location) return {};
+  const file = workspaceRelativePath(location.file);
+  if (file === undefined) return {};
+  return location.line === undefined ? { file } : { file, line: location.line };
 }

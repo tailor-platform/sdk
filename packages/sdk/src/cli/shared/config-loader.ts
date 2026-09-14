@@ -6,6 +6,7 @@ import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { pickPluginArrays } from "#/plugin/guards";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
+import { withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
@@ -72,7 +73,9 @@ export async function loadConfig(
     const issues = validated.error.issues
       .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("\n");
-    throw new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`);
+    throw withErrorDiagnostics(new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`), {
+      location: { file: resolvedPath },
+    });
   }
 
   const appConfig = configModule.default as AppConfig;

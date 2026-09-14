@@ -1,3 +1,4 @@
+import * as cli from "@tailor-platform/sdk/cli";
 import {
   loadSeedContext,
   configArg,
@@ -7,6 +8,14 @@ import {
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
+
+// `withSourceLocation` reached the CLI surface after this plugin's peer range
+// opens, so an older SDK resolves without it and the error ships unlocated.
+function attachSourceLocation(error: Error, location: { file: string; line?: number }): Error {
+  return typeof cli.withSourceLocation === "function"
+    ? cli.withSourceLocation(error, location)
+    : error;
+}
 
 export const seedValidateCommand = defineAppCommand({
   name: "validate",
@@ -43,7 +52,7 @@ export const seedValidateCommand = defineAppCommand({
       // the CLI from printing an error marker in front of them.
       const error = new Error(result.error) as Error & { format: () => string };
       error.format = () => result.error;
-      throw error;
+      throw result.location ? attachSourceLocation(error, result.location) : error;
     }
   },
 });
