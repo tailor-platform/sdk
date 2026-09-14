@@ -136,6 +136,30 @@ describe("createTailorDBHook", () => {
       const result = createTailorDBHook(type)({ user: { name: "alice" } });
       expect(result.user).toMatchObject({ name: "hooked:alice" });
     });
+
+    test.each([
+      ["passes through null for an optional nested field", { address: null }, null],
+      ["passes through undefined for an omitted optional nested field", {}, undefined],
+    ])("%s", (_label, data, expected) => {
+      const type = db.table("Test", {
+        address: db.object({ city: db.string() }, { optional: true }),
+      });
+      expect(createTailorDBHook(type)(data).address).toBe(expected);
+    });
+
+    test.each([
+      ["a string", "X"],
+      ["an array", [{ city: "Tokyo" }]],
+      ["a Date", new Date("2026-01-01T00:00:00.000Z")],
+    ])(
+      "passes through %s without recursing (so the validator surfaces a clear error)",
+      (_label, bogus) => {
+        const type = db.table("Test", { address: db.object({ city: db.string() }) });
+        // Recursing would turn the value into an object of the nested fields, leaving
+        // downstream validation unable to report "Expected an object".
+        expect(createTailorDBHook(type)({ address: bogus }).address).toBe(bogus);
+      },
+    );
   });
 
   describe("nested object array field", () => {
@@ -367,6 +391,47 @@ describe("createStandardSchema", () => {
     // to the field rather than to `Object.prototype.toString`.
     const result = schema["~standard"].validate({ name: "alice" });
     expect(result).toHaveProperty("value");
+  });
+
+  describe("optional nested object", () => {
+    const buildSchema = () => {
+      const type = db.table("Order", {
+        address: db.object({ city: db.string() }, { optional: true }),
+      });
+      const schemaType = t.object({
+        id: t.uuid(),
+        address: t.object({ city: t.string() }, { optional: true }),
+      });
+      return createStandardSchema(schemaType, createTailorDBHook(type), type);
+    };
+
+    test.each([
+      ["omitted", {}],
+      ["null", { address: null }],
+    ])("accepts a row that leaves the field %s", (_label, data) => {
+      expect(buildSchema()["~standard"].validate(data)).toHaveProperty("value");
+    });
+
+    test.each([
+      ["a string", "Tokyo"],
+      ["a Date", new Date("2026-01-01T00:00:00.000Z")],
+    ])("reports the wrong shape when the field is given %s", (_label, value) => {
+      const result = buildSchema()["~standard"].validate({ address: value });
+      expect(result).toMatchObject({
+        issues: [{ message: expect.stringContaining("Expected an object"), path: ["address"] }],
+      });
+    });
+  });
+
+  describe("required nested object", () => {
+    test("reports the field itself, not its children, when the row omits it", () => {
+      const type = db.table("Order", { address: db.object({ city: db.string() }) });
+      const schemaType = t.object({ id: t.uuid(), address: t.object({ city: t.string() }) });
+      const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+      expect(schema["~standard"].validate({})).toMatchObject({
+        issues: [{ message: "Required field is missing", path: ["address"] }],
+      });
+    });
   });
 });
 

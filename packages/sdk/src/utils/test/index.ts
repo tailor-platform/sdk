@@ -47,7 +47,11 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           if (field.metadata.array) {
             hookedValue = Array.isArray(input) ? input.map((item) => nestedHook(item, now)) : input;
           } else {
-            hookedValue = nestedHook(input, now);
+            // Only what the field parser accepts as a nested object: anything else
+            // has to reach it unchanged so it reports the shape rather than the
+            // children of an object materialized here.
+            hookedValue =
+              isRecord(input) && !(input instanceof Date) ? nestedHook(input, now) : input;
           }
         } else if (field.metadata.hooks?.create) {
           hookedValue = field.metadata.hooks.create({ input, invoker: null, now });
