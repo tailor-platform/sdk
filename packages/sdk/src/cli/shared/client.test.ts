@@ -1481,10 +1481,13 @@ describe("fetchMachineUserToken", () => {
       json: () =>
         Promise.resolve({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 }),
     });
+    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
 
     const result = await fetchMachineUserToken("https://example.com", "client-id", "client-secret");
 
     expect(result).toEqual({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 });
+    expect(registerSecretSpy).toHaveBeenCalledWith("client-secret");
+    expect(registerSecretSpy).toHaveBeenCalledWith("token-1");
   });
 
   test("retries a connection timeout after 500ms", async () => {
@@ -1616,6 +1619,17 @@ describe("fetchPlatformMachineUserToken", () => {
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
     }
+  });
+
+  test("registers the client secret and access token on success", async () => {
+    fetchMock.mockResolvedValueOnce(discoveryResponse()).mockResolvedValueOnce(tokenResponse());
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+
+    const token = await fetchPlatformMachineUserToken("client-id", "client-secret");
+
+    expect(token.accessToken).toBe("token-1");
+    expect(registerSecretSpy).toHaveBeenCalledWith("client-secret");
+    expect(registerSecretSpy).toHaveBeenCalledWith("token-1");
   });
 
   test("retries a connection timeout on the discovery request after 500ms", async () => {
