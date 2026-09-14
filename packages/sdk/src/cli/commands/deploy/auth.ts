@@ -131,12 +131,20 @@ export async function applyAuth(
 
   const applyMachineUsers = async () => {
     await Promise.all([
-      ...changeSet.machineUser.creates.map((create) =>
-        client.createAuthMachineUser(create.request),
-      ),
-      ...changeSet.machineUser.updates.map((update) =>
-        client.updateAuthMachineUser(update.request),
-      ),
+      ...changeSet.machineUser.creates.map(async (create) => {
+        const created = await client.createAuthMachineUser(create.request);
+        if (created.machineUser?.clientSecret) {
+          logger.registerSecret(created.machineUser.clientSecret);
+        }
+        return created;
+      }),
+      ...changeSet.machineUser.updates.map(async (update) => {
+        const updated = await client.updateAuthMachineUser(update.request);
+        if (updated.machineUser?.clientSecret) {
+          logger.registerSecret(updated.machineUser.clientSecret);
+        }
+        return updated;
+      }),
     ]);
   };
 
@@ -212,7 +220,11 @@ export async function applyAuth(
           oauth2Client.redirectUris,
           "OAuth2 redirect URIs",
         );
-        return client.createAuthOAuth2Client(create.request);
+        const created = await client.createAuthOAuth2Client(create.request);
+        if (created.oauth2Client?.clientSecret) {
+          logger.registerSecret(created.oauth2Client.clientSecret);
+        }
+        return created;
       }),
       ...changeSet.oauth2Client.updates.map(async (update) => {
         const oauth2Client = assertDefined(
@@ -225,7 +237,11 @@ export async function applyAuth(
           oauth2Client.redirectUris,
           "OAuth2 redirect URIs",
         );
-        return client.updateAuthOAuth2Client(update.request);
+        const updated = await client.updateAuthOAuth2Client(update.request);
+        if (updated.oauth2Client?.clientSecret) {
+          logger.registerSecret(updated.oauth2Client.clientSecret);
+        }
+        return updated;
       }),
     ]);
 
@@ -241,7 +257,10 @@ export async function applyAuth(
         replaceOauth2Client.redirectUris,
         "OAuth2 redirect URIs",
       );
-      await client.createAuthOAuth2Client(replace.createRequest);
+      const replaced = await client.createAuthOAuth2Client(replace.createRequest);
+      if (replaced.oauth2Client?.clientSecret) {
+        logger.registerSecret(replaced.oauth2Client.clientSecret);
+      }
     }
 
     await Promise.all([

@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
 import { describe, test, expect, vi } from "vitest";
-import { CIPromptError, formatLogLine, logger } from "./logger";
+import { CIPromptError, formatLogLine, logger, redactSecrets } from "./logger";
 
 function captureStdout(fn: () => void): string {
   using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -280,6 +280,17 @@ describe("logger", () => {
       expect(output).toBe("ℹ value=<redacted>\n");
     });
 
+    test("is idempotent: a later-registered secret matching text inside an existing placeholder is left alone", () => {
+      // Simulates passing an already-redacted string (e.g. a --json error envelope built by
+      // serializeError) through a diagnostic log call, which redacts a second time.
+      logger.registerSecret("first-pass-secret-value");
+      const oncePassed = redactSecrets("value=first-pass-secret-value");
+      expect(oncePassed).toBe("value=<redacted>");
+
+      logger.registerSecret("redact");
+      expect(redactSecrets(oncePassed)).toBe("value=<redacted>");
+    });
+
     test("merges two secrets that cross (neither contains the other) without leaking a fragment of either", () => {
       logger.registerSecret("crossoverleftpart");
       logger.registerSecret("leftpartcrossoverright");
@@ -293,6 +304,27 @@ describe("logger", () => {
       logger.registerSecret("REDACT");
       const output = captureStderr(() => logger.info("value=first-registered-secret-value"));
       expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("finds a newly registered secret even though the earlier one already triggered a redaction", () => {
+      // The multi-pattern matcher is cached and only rebuilt when a genuinely new secret is
+      // registered (see registerSecret's automaton invalidation) — this exercises both the
+      // "before invalidation" and "after invalidation" paths against the same matcher.
+      logger.registerSecret("cache-invalidation-first-secret");
+      expect(captureStderr(() => logger.info("cache-invalidation-first-secret"))).toContain(
+        "<redacted>",
+      );
+
+      logger.registerSecret("cache-invalidation-second-secret");
+      const output = captureStderr(() => logger.info("cache-invalidation-second-secret"));
+      expect(output).toContain("<redacted>");
+      expect(output).not.toContain("cache-invalidation-second-secret");
+
+      // Re-registering the first secret (no-op on the underlying Set) must not stop the
+      // second secret from still being found by the cached matcher.
+      logger.registerSecret("cache-invalidation-first-secret");
+      const stillWorks = captureStderr(() => logger.info("cache-invalidation-second-secret"));
+      expect(stillWorks).not.toContain("cache-invalidation-second-secret");
     });
   });
 });

@@ -1,4 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { applyAuth, type planAuth } from "./auth";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -53,7 +54,13 @@ describe("applyAuth phase separation", () => {
     };
   }
 
-  function createMockPlanResult(opts?: { oauth2ClientReplaces?: OAuth2ClientReplace[] }) {
+  type CreateEntry = { name: string; request: Record<string, unknown> };
+
+  function createMockPlanResult(opts?: {
+    oauth2ClientReplaces?: OAuth2ClientReplace[];
+    oauth2ClientCreates?: CreateEntry[];
+    machineUserCreates?: CreateEntry[];
+  }) {
     return {
       changeSet: {
         service: deletableChangeSet("Auth Services", "test-auth", {
@@ -79,11 +86,14 @@ describe("applyAuth phase separation", () => {
           namespaceName: "test-auth",
           name: "test-tenant-config",
         }),
-        machineUser: deletableChangeSet("Auth Machine Users", "test-machine-user", {
-          workspaceId: "test-workspace",
-          namespaceName: "test-auth",
-          name: "test-machine-user",
-        }),
+        machineUser: {
+          ...deletableChangeSet("Auth Machine Users", "test-machine-user", {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            name: "test-machine-user",
+          }),
+          creates: opts?.machineUserCreates ?? [],
+        },
         authHook: deletableChangeSet("Auth Hooks", "test-auth/before-login", {
           workspaceId: "test-workspace",
           namespaceName: "test-auth",
@@ -95,6 +105,7 @@ describe("applyAuth phase separation", () => {
             namespaceName: "test-auth",
             name: "test-oauth2-client",
           }),
+          creates: opts?.oauth2ClientCreates ?? [],
           replaces: opts?.oauth2ClientReplaces ?? [],
         },
         scim: deletableChangeSet("Auth SCIM Configs", "test-scim-config", {
@@ -221,5 +232,53 @@ describe("applyAuth phase separation", () => {
     });
     // Create should not be called in delete-resources phase
     expect(client.createAuthOAuth2Client).not.toHaveBeenCalled();
+  });
+
+  test("registers a newly created OAuth2 client's server-generated secret", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.createAuthOAuth2Client).mockResolvedValue({
+      oauth2Client: { name: "test-oauth2-client", clientSecret: "brand-new-oauth2-secret" },
+    } as Awaited<ReturnType<OperatorClient["createAuthOAuth2Client"]>>);
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+    const planResult = createMockPlanResult({
+      oauth2ClientCreates: [
+        {
+          name: "test-oauth2-client",
+          request: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            oauth2Client: { name: "test-oauth2-client", redirectUris: [] },
+          },
+        },
+      ],
+    });
+
+    await applyAuth(client, planResult, "create-update");
+
+    expect(registerSecretSpy).toHaveBeenCalledWith("brand-new-oauth2-secret");
+  });
+
+  test("registers a newly created machine user's server-generated secret", async () => {
+    const client = createMockClientWithSpies();
+    vi.mocked(client.createAuthMachineUser).mockResolvedValue({
+      machineUser: { name: "test-machine-user", clientSecret: "brand-new-machineuser-secret" },
+    } as Awaited<ReturnType<OperatorClient["createAuthMachineUser"]>>);
+    const registerSecretSpy = vi.spyOn(logger, "registerSecret");
+    const planResult = createMockPlanResult({
+      machineUserCreates: [
+        {
+          name: "test-machine-user",
+          request: {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            name: "test-machine-user",
+          },
+        },
+      ],
+    });
+
+    await applyAuth(client, planResult, "create-update");
+
+    expect(registerSecretSpy).toHaveBeenCalledWith("brand-new-machineuser-secret");
   });
 });

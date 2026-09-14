@@ -103,6 +103,95 @@ const REDACTED_PLACEHOLDER = "<redacted>";
 const MIN_SECRET_LENGTH = 4;
 
 /**
+ * Aho-Corasick trie node. Indexed by individual UTF-16 code units (not Unicode code
+ * points), matching how `string.indexOf`/`.slice` already index this file's strings — a
+ * surrogate-pair character occupies two nodes, same as it occupies two `string` indices.
+ */
+interface TrieNode {
+  children: Map<string, TrieNode>;
+  fail: TrieNode;
+  /** Secrets ending at this node, including those reached via `fail` links (precomputed). */
+  outputs: string[];
+}
+
+/**
+ * Builds a multi-pattern matcher for every registered secret, so `findSecretSpans` below
+ * can find all of their occurrences in one pass over the text (`O(text.length + matches)`)
+ * instead of scanning the full text once per registered secret. Rebuilt only when
+ * `registerSecret` adds a genuinely new value (see `_automaton` below), so its
+ * `O(total secret length)` construction cost is amortized across every log line redacted
+ * while the secret set doesn't change.
+ * @param secrets - Currently registered secrets
+ * @returns Root of the built trie
+ */
+function buildAutomaton(secrets: ReadonlySet<string>): TrieNode {
+  const root: TrieNode = {
+    children: new Map(),
+    fail: undefined as unknown as TrieNode,
+    outputs: [],
+  };
+  root.fail = root;
+
+  for (const secret of secrets) {
+    let node = root;
+    for (let i = 0; i < secret.length; i++) {
+      const ch = secret[i] as string;
+      let next = node.children.get(ch);
+      if (!next) {
+        next = { children: new Map(), fail: root, outputs: [] };
+        node.children.set(ch, next);
+      }
+      node = next;
+    }
+    node.outputs.push(secret);
+  }
+
+  const queue: TrieNode[] = [...root.children.values()];
+  while (queue.length > 0) {
+    const parent = queue.shift() as TrieNode;
+    for (const [ch, child] of parent.children) {
+      let fail = parent.fail;
+      while (fail !== root && !fail.children.has(ch)) fail = fail.fail;
+      child.fail = fail.children.get(ch) ?? root;
+      child.outputs = child.outputs.concat(child.fail.outputs);
+      queue.push(child);
+    }
+  }
+  return root;
+}
+
+// Cached automaton for the current `_secrets` contents; `null` means rebuild on next use.
+// Invalidated only when `registerSecret` actually grows `_secrets` (Set#add on an existing
+// value is a no-op), so re-registering an already-known secret never triggers a rebuild.
+let _automaton: TrieNode | null = null;
+
+function getAutomaton(): TrieNode {
+  _automaton ??= buildAutomaton(_secrets);
+  return _automaton;
+}
+
+/**
+ * Finds every occurrence of every registered secret in `text`, including overlapping ones,
+ * in a single pass over `text` via the Aho-Corasick automaton.
+ * @param text - Text to search
+ * @returns Match spans as `[start, end)` pairs, in the order found
+ */
+function findSecretSpans(text: string): Array<[start: number, end: number]> {
+  const spans: Array<[start: number, end: number]> = [];
+  const root = getAutomaton();
+  let node = root;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i] as string;
+    while (node !== root && !node.children.has(ch)) node = node.fail;
+    node = node.children.get(ch) ?? root;
+    for (const secret of node.outputs) {
+      spans.push([i + 1 - secret.length, i + 1]);
+    }
+  }
+  return spans;
+}
+
+/**
  * Redacts every registered secret from `text` in a single pass over the original text.
  *
  * Matches are found against the original text only - never against text a previous
@@ -112,21 +201,28 @@ const MIN_SECRET_LENGTH = 4;
  * avoids two failure modes an iterative "replace one secret, then the next" approach has:
  * a later secret re-matching inside a placeholder a previous replacement already inserted,
  * and a crossing (non-nested) overlap leaving a fragment of one secret unredacted.
+ *
+ * Idempotent: a match that falls inside an occurrence of `<redacted>` already present in
+ * `text` is discarded rather than substituted again. Without this, calling this function
+ * twice on the same text (which happens whenever something already redacted, such as a
+ * `--json` error envelope, is later passed to a diagnostic log call) could corrupt the
+ * placeholder itself if a registered secret happens to be one of its substrings (e.g. a
+ * secret literally containing "redact").
  * @param text - Text to redact
  * @returns `text` with every registered secret occurrence replaced by `<redacted>`
  */
 export function redactSecrets(text: string): string {
   if (_secrets.size === 0) return text;
 
-  const spans: Array<[start: number, end: number]> = [];
-  for (const secret of _secrets) {
-    let from = 0;
-    let index: number;
-    while ((index = text.indexOf(secret, from)) !== -1) {
-      spans.push([index, index + secret.length]);
-      from = index + 1;
-    }
+  const protectedSpans: Array<[start: number, end: number]> = [];
+  for (let from = 0, index: number; (index = text.indexOf(REDACTED_PLACEHOLDER, from)) !== -1;) {
+    protectedSpans.push([index, index + REDACTED_PLACEHOLDER.length]);
+    from = index + REDACTED_PLACEHOLDER.length;
   }
+
+  const spans = findSecretSpans(text).filter(
+    ([start, end]) => !protectedSpans.some(([pStart, pEnd]) => start < pEnd && end > pStart),
+  );
   if (spans.length === 0) return text;
   spans.sort(([a], [b]) => a - b);
 
@@ -289,9 +385,13 @@ export const logger = {
     // Counts Unicode code points, not UTF-16 code units, so a value made of surrogate-pair
     // characters (e.g. emoji) isn't undercounted as longer than it actually is.
     if (typeof value !== "string" || [...value].length < MIN_SECRET_LENGTH) return;
+    const sizeBefore = _secrets.size;
     _secrets.add(value);
     const jsonEscaped = JSON.stringify(value).slice(1, -1);
     if (jsonEscaped !== value) _secrets.add(jsonEscaped);
+    // Set#add on an already-registered value is a no-op, so this only invalidates the
+    // cached automaton (see findSecretSpans) when a genuinely new secret was added.
+    if (_secrets.size !== sizeBefore) _automaton = null;
   },
 
   out(data: string | object | object[], options?: OutOptions): void {
