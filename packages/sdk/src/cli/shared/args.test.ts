@@ -365,6 +365,43 @@ describe("createCommonArgs effects", () => {
     },
   );
 
+  test.each([
+    { output: "json", argv: [] as string[], expected: true },
+    { output: "table", argv: [] as string[], expected: false },
+    { output: undefined, argv: [] as string[], expected: false },
+    { output: "json", argv: ["--json=false"], expected: false },
+    { output: "table", argv: ["--json"], expected: true },
+  ])(
+    "passes the resolved output mode to commands as args.json ($output, $argv)",
+    async ({ output, argv, expected }) => {
+      const previousJsonMode = logger.jsonMode;
+      const previousArgv = process.argv;
+      vi.stubEnv("TAILOR_OUTPUT", output);
+      let seen: unknown;
+      try {
+        logger.jsonMode = false;
+        process.argv = [previousArgv[0] as string, "tailor", ...argv];
+        const command = defineAppCommand({
+          name: "noop",
+          description: "noop",
+          run: (args) => {
+            seen = (args as { json?: boolean }).json;
+          },
+        });
+        const result = await runCommand(command, argv, {
+          // Strip unknown keys the same way the CLI entrypoint parses global args.
+          globalArgs: z.object(createCommonArgs()),
+        });
+        expect(result.exitCode).toBe(0);
+        expect(seen).toBe(expected);
+      } finally {
+        process.argv = previousArgv;
+        vi.unstubAllEnvs();
+        logger.jsonMode = previousJsonMode;
+      }
+    },
+  );
+
   test("verboseAlias adds a short alias for --verbose", async () => {
     const previousVerbose = logger.verbose;
     try {
