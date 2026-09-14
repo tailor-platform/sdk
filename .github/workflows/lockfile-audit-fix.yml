@@ -7,10 +7,9 @@ name: Lockfile Audit Auto-fix
 # regression-only check in lockfile-audit.yml), while still keeping
 # pnpm-lock.yaml free of known-vulnerable dependency versions.
 #
-# Also prunes pnpm-workspace.yaml of policy entries that have outlived their
-# purpose (see lockfile-audit-fix-normalize.mjs for what qualifies). Nothing
-# else, Renovate included, ever removes them, so those lists only grow over
-# time unless swept here.
+# The audit, fix, verification, and pnpm-workspace.yaml policy pruning are
+# all delegated to the lockfile-audit-fix action; this workflow only turns
+# its outputs into a changeset and a pull request.
 #
 # When the resulting change only touches devDependencies and/or that pruning,
 # no published package's consumers are affected, so the PR gets the
@@ -51,122 +50,12 @@ jobs:
         with:
           node-version: "24.21.0"
 
-      - name: Snapshot lockfile before fix
-        run: cp pnpm-lock.yaml /tmp/lockfile-before-fix.yaml
-
-      - name: Record pre-fix advisories
-        run: pnpm audit --audit-level=moderate --json > /tmp/before-audit.json || true
-
-      # "update" mode patches vulnerable versions directly in the lockfile and
-      # always leaves it installable, but can silently stop short: a package
-      # with two advisories at different patched-version thresholds (seen
-      # with fast-uri/GHSA-v2hh-gcrm-f6hx) gets bumped to the version that
-      # clears only the first one. "override" mode reaches further but can
-      # emit overlapping override/minimumReleaseAgeExclude ranges for the
-      # same package, which makes the following `pnpm install` hard-fail
-      # with ERR_PNPM_NO_MATURE_MATCHING_VERSION. So: try update, then try
-      # override on top of it, and roll back to the update-only result if
-      # override leaves the lockfile uninstallable.
-      - name: Attempt automatic fix (update mode)
-        run: pnpm audit --fix update --ignore-registry-errors || true
-
-      - name: Attempt automatic fix (override fallback)
-        run: |
-          cp pnpm-lock.yaml /tmp/lock-safe.yaml
-          cp pnpm-workspace.yaml /tmp/workspace-safe.yaml
-
-          pnpm audit --fix override --ignore-registry-errors || true
-
-          # Dedupe/prune before installing: this is also what makes the
-          # overlapping-range case above actually installable in the first
-          # place, not just cosmetic cleanup.
-          node .github/scripts/lockfile-audit-fix-normalize.mjs | tee -a /tmp/normalize.log
-
-          if pnpm install > /tmp/install.log 2>&1; then
-            echo "Override fallback applied cleanly."
-          else
-            echo "::warning::pnpm install failed after the override fallback; reverting to the update-mode-only result."
-            cat /tmp/install.log
-            cp /tmp/lock-safe.yaml pnpm-lock.yaml
-            cp /tmp/workspace-safe.yaml pnpm-workspace.yaml
-            node .github/scripts/lockfile-audit-fix-normalize.mjs | tee -a /tmp/normalize.log
-            # Pruning an orphaned override edits pnpm-workspace.yaml, which
-            # leaves the restored lockfile's `overrides:` snapshot stale — a
-            # frozen install legitimately fails there and has to be redone
-            # unfrozen, or the two files get committed out of sync. The
-            # unfrozen retry is not allowed to fail quietly: at that point the
-            # workspace really is uninstallable and must not reach a PR.
-            pnpm install --frozen-lockfile || pnpm install
-          fi
-
-      - name: Check for lockfile changes
-        id: diff
-        run: |
-          if git diff --quiet -- pnpm-lock.yaml pnpm-workspace.yaml; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Determine changeset requirement
-        if: steps.diff.outputs.changed == 'true'
-        id: changeset_check
-        uses: $/.github/actions/skip-changeset-check
-        with:
-          before-lockfile: /tmp/lockfile-before-fix.yaml
-
-      - name: Summarize fixed advisories
-        if: steps.diff.outputs.changed == 'true'
-        id: summary
-        run: |
-          pnpm audit --audit-level=moderate --json > /tmp/after-audit.json || true
-          jq -r '.advisories[]?.github_advisory_id // empty' /tmp/before-audit.json | sort -u > /tmp/before-ids.txt
-          jq -r '.advisories[]?.github_advisory_id // empty' /tmp/after-audit.json | sort -u > /tmp/after-ids.txt
-          FIXED_IDS=$(comm -23 /tmp/before-ids.txt /tmp/after-ids.txt)
-          REMAINING=$(jq '[.metadata.vulnerabilities[]] | add // 0' /tmp/after-audit.json)
-          {
-            echo "body<<BODY_EOF"
-            echo "Automated fix from the daily lockfile audit (\`pnpm audit --fix\`)."
-            if [ -n "$FIXED_IDS" ]; then
-              echo ""
-              echo "Fixed advisories:"
-              while IFS= read -r id; do
-                [ -z "$id" ] && continue
-                jq -r --arg id "$id" \
-                  '.advisories[] | select(.github_advisory_id == $id) | "- [\(.github_advisory_id)](https://github.com/advisories/\(.github_advisory_id)): \(.title) (`\(.module_name)`, severity: \(.severity))"' \
-                  /tmp/before-audit.json
-              done <<< "$FIXED_IDS"
-            fi
-            if [ "$REMAINING" != "0" ]; then
-              echo ""
-              echo "$REMAINING advisories remain and could not be auto-fixed (no compatible patched version in range, or still blocked by \`minimumReleaseAge\`)."
-            fi
-            # No matches is the normal case, so the greps below must not be
-            # allowed to fail the step: `grep` exits 1 on no match, which a
-            # pipefail shell would surface through the assignment.
-            PRUNED=$(grep -o 'Dropping stale exclude entry "[^"]*"' /tmp/normalize.log 2>/dev/null | sed -E 's/Dropping stale exclude entry "(.*)"/\1/' | sort -u || true)
-            if [ -n "$PRUNED" ]; then
-              echo ""
-              echo "Removed \`minimumReleaseAgeExclude\` entries that are no longer needed (the pinned version is now old enough on its own):"
-              while IFS= read -r p; do
-                [ -z "$p" ] && continue
-                echo "- \`$p\`"
-              done <<< "$PRUNED"
-            fi
-            ORPHANED=$(grep -o 'Dropping orphaned override entry "[^"]*"' /tmp/normalize.log 2>/dev/null | sed -E 's/Dropping orphaned override entry "(.*)"/\1/' | sort -u || true)
-            if [ -n "$ORPHANED" ]; then
-              echo ""
-              echo "Removed \`overrides\` entries whose package is no longer in the dependency tree (the pin protects nothing, and Renovate keeps filing no-op bump PRs against it):"
-              while IFS= read -r p; do
-                [ -z "$p" ] && continue
-                echo "- \`$p\`"
-              done <<< "$ORPHANED"
-            fi
-            echo "BODY_EOF"
-          } >> "$GITHUB_OUTPUT"
+      - name: Audit and fix lockfile
+        id: audit_fix
+        uses: tailor-platform/actions/lockfile-audit-fix@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
 
       - name: Add changeset
-        if: steps.diff.outputs.changed == 'true' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        if: steps.audit_fix.outputs.changed == 'true' && steps.audit_fix.outputs.runtime-deps-changed == 'true'
         id: add_changeset
         run: |
           cat > .changeset/lockfile-audit-fix.md <<'EOF'
@@ -178,14 +67,14 @@ jobs:
           EOF
 
       - name: Determine repository name
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.audit_fix.outputs.changed == 'true'
         id: repo
         env:
           REPOSITORY: ${{ github.repository }}
         run: echo "name=${REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
 
       - name: Get GitHub App token
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.audit_fix.outputs.changed == 'true'
         id: get_access_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -196,19 +85,18 @@ jobs:
           permission-pull-requests: write
 
       - name: Create or update pull request
-        if: steps.diff.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        if: steps.audit_fix.outputs.changed == 'true'
+        uses: tailor-platform/actions/create-signed-pr@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
         with:
           token: ${{ steps.get_access_token.outputs.token }}
-          sign-commits: true
-          commit-message: "fix(deps): automated lockfile security fix"
           branch: chore/lockfile-audit-fix
-          delete-branch: true
+          commit-message: "fix(deps): automated lockfile security fix"
           title: "fix(deps): automated lockfile security fix"
-          body: ${{ steps.summary.outputs.body }}
-          add-paths: |
+          body: ${{ steps.audit_fix.outputs.summary }}
+          paths: |
             pnpm-lock.yaml
             pnpm-workspace.yaml
+            package.json
             ${{ steps.add_changeset.outcome == 'success' && '.changeset/lockfile-audit-fix.md' || '' }}
           labels: |
             security
