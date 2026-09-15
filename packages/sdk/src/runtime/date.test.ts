@@ -299,8 +299,12 @@ describe("Temporal.PlainDate representation", () => {
         Temporal.PlainDate.from("0099-01-02"),
         Temporal.PlainDate.from("0000-02-29"),
         Temporal.PlainDate.from("9999-12-31"),
+        // Temporal.PlainDate always stores an ISO year/month/day internally;
+        // a non-ISO calendar only changes what the `year`/`month`/`day`
+        // getters report, not the digits `toString()` serializes.
+        Temporal.PlainDate.from("2026-09-07").withCalendar("hebrew"),
       ]),
-    ).toEqual(["2026-09-07", "0099-01-02", "0000-02-29", "9999-12-31"]);
+    ).toEqual(["2026-09-07", "0099-01-02", "0000-02-29", "9999-12-31", "2026-09-07"]);
   });
 
   test.each([
