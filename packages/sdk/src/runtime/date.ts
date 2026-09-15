@@ -16,6 +16,21 @@ export function formatDate(date: Date): string {
   return `${String(year).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
+/**
+ * Format a Temporal.PlainDate as a YYYY-MM-DD string, ignoring its calendar.
+ * @param date - Temporal.PlainDate to format
+ * @returns Date string in YYYY-MM-DD format
+ */
+function formatTemporalPlainDate(date: Temporal.PlainDate): string {
+  const iso = date.toString({ calendarName: "never" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    throw new RangeError(
+      `Expected a Temporal.PlainDate with a 4-digit year (0000-9999), but received ${iso}`,
+    );
+  }
+  return iso;
+}
+
 type DateField = {
   readonly type: TailorFieldType;
   readonly metadata: FieldMetadata;
@@ -69,6 +84,21 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
     }
     try {
       return formatDate(value);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new RangeError(`Invalid date at ${describePathTarget(path)}: ${reason}`, {
+        cause: error,
+      });
+    }
+  }
+  if (field.type === "date" && field.metadata.as === "temporal") {
+    if (!(value instanceof Temporal.PlainDate)) {
+      throw new TypeError(
+        `Expected a Temporal.PlainDate instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+      );
+    }
+    try {
+      return formatTemporalPlainDate(value);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       throw new RangeError(`Invalid date at ${describePathTarget(path)}: ${reason}`, {

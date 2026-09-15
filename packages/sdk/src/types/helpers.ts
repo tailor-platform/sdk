@@ -19,14 +19,14 @@ export type IsUnion<T, U extends T = T> = T extends unknown
   : never;
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export type DeepWritable<T> = T extends Date | RegExp | Function
+export type DeepWritable<T> = T extends Date | Temporal.PlainDate | RegExp | Function
   ? T
   : T extends object
     ? { -readonly [P in keyof T]: DeepWritable<T[P]> } & {}
     : T;
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export type DeepReadonly<T> = T extends Date | RegExp | Function
+export type DeepReadonly<T> = T extends Date | Temporal.PlainDate | RegExp | Function
   ? T
   : T extends readonly (infer E)[]
     ? readonly DeepReadonly<E>[]
@@ -37,13 +37,14 @@ export type DeepReadonly<T> = T extends Date | RegExp | Function
 export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never;
 
 /**
- * Replace `Date` with `string` throughout a type.
+ * Replace `Date` and `Temporal.PlainDate` with `string` throughout a type.
  *
  * Values that reach user code as a parsed JSON payload cannot carry a `Date`
- * instance, so a type describing such a payload must report the serialized
- * form even when the type it derives from uses `Date`.
+ * or `Temporal.PlainDate` instance, so a type describing such a payload must
+ * report the serialized form even when the type it derives from uses one of
+ * those representations.
  */
-export type SerializeDates<T> = T extends Date
+export type SerializeDates<T> = T extends Date | Temporal.PlainDate
   ? string
   : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     T extends RegExp | Function

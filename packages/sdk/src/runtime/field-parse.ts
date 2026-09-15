@@ -305,6 +305,17 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
       }
       return date;
     }
+    if (field.type === "date" && field._metadata.as === "temporal") {
+      try {
+        return Temporal.PlainDate.from(`${item}`);
+      } catch {
+        issues.push({
+          message: `Expected a valid calendar date: received ${item}`,
+          path: itemPath.length > 0 ? itemPath : undefined,
+        });
+        return item;
+      }
+    }
     if (field.type !== "nested") return item;
     const record = item as Record<string, unknown>;
     let result = record;

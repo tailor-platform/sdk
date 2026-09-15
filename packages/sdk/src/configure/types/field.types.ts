@@ -37,7 +37,7 @@ export type TailorToTs = {
 } & Record<TailorFieldType, unknown>;
 
 export interface FieldMetadata {
-  as?: "string" | "date";
+  as?: "string" | "date" | "temporal";
   description?: string;
   required?: boolean;
 
@@ -64,11 +64,18 @@ export type FieldOptions = {
 
 /** Options for a date field. */
 export type DateFieldOptions = FieldOptions & {
-  /** Use a Date at midnight UTC instead of a YYYY-MM-DD string. Defaults to string. */
-  as?: "string" | "date";
+  /**
+   * Use a Date at midnight UTC, or a Temporal.PlainDate, instead of a
+   * YYYY-MM-DD string. Defaults to string.
+   */
+  as?: "string" | "date" | "temporal";
 };
 
-export type DateFieldValue<As> = As extends "date" ? Date : string;
+export type DateFieldValue<As> = As extends "date"
+  ? Date
+  : As extends "temporal"
+    ? Temporal.PlainDate
+    : string;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;
