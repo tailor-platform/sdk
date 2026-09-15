@@ -2,6 +2,22 @@ import { describe, expect, test } from "vitest";
 import { findUndefinedReferences } from "./free-variables";
 
 describe("findUndefinedReferences", () => {
+  test("includes guarded free references when requested", () => {
+    expect(
+      findUndefinedReferences('typeof _data !== "undefined" && _data[typeof key]', {
+        includeGuardedReferences: true,
+      }),
+    ).toEqual(new Set(["_data", "key"]));
+  });
+
+  test("keeps locally bound names excluded when including guarded references", () => {
+    expect(
+      findUndefinedReferences('(_data) => typeof _data !== "undefined" && _data.name', {
+        includeGuardedReferences: true,
+      }),
+    ).toEqual(new Set());
+  });
+
   test.each<[name: string, code: string, expected: string[]]>([
     ["returns empty set for self-contained function", "({ value }) => value.length > 5", []],
     ["detects a single free variable", "({ value }) => value.length < MAX_LENGTH", ["MAX_LENGTH"]],
