@@ -242,7 +242,7 @@
     "tsdown": "0.23.0",
     "typescript": "6.0.3",
     "vitest": "5.0.0",
-    "zinfer": "0.4.5"
+    "zinfer": "0.4.6"
   },
   "peerDependencies": {
     "@electric-sql/pglite": ">=0.2.0",
