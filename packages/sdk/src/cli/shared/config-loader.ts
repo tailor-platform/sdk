@@ -6,6 +6,7 @@ import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { pickPluginArrays } from "#/plugin/guards";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
+import { withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
@@ -64,7 +65,10 @@ export async function loadConfig(
     !("default" in configModule) ||
     !configModule.default
   ) {
-    throw new Error("Invalid Tailor config module: default export not found");
+    throw atConfigFile(
+      new Error("Invalid Tailor config module: default export not found"),
+      resolvedPath,
+    );
   }
 
   const validated = AppConfigSchema.safeParse(configModule.default);
@@ -72,11 +76,18 @@ export async function loadConfig(
     const issues = validated.error.issues
       .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("\n");
-    throw new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`);
+    throw atConfigFile(
+      new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`),
+      resolvedPath,
+    );
   }
 
   const appConfig = configModule.default as AppConfig;
-  await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
+  try {
+    await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
+  } catch (error) {
+    throw error instanceof Error ? atConfigFile(error, resolvedPath) : error;
+  }
   const env = appConfig.env
     ? Object.fromEntries(
         Object.entries(appConfig.env).map(([key, entry]) => [key, resolveEnvValue(entry)]),
@@ -101,4 +112,14 @@ export async function loadConfig(
     } as LoadedConfig,
     plugins: allPlugins,
   };
+}
+
+/**
+ * Point a config rejection at the file it came from.
+ * @param error - Failure raised while loading the config
+ * @param resolvedPath - Absolute path to the config file
+ * @returns The same error, carrying the config file as its source location
+ */
+function atConfigFile<T extends Error>(error: T, resolvedPath: string): T {
+  return withErrorDiagnostics(error, { location: { file: resolvedPath } });
 }

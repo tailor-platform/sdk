@@ -1,11 +1,20 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { Jsonifiable } from "type-fest";
 
+/** Where a failure originated, for tooling that links to source. */
+export interface ErrorSourceLocation {
+  /** Absolute path to the file the failure points at. */
+  file: string;
+  /** 1-based line within `file`. */
+  line?: number;
+}
+
 interface ErrorDiagnostics {
   code?: string;
   suggestion?: string;
   context?: Readonly<Record<string, Jsonifiable | undefined>>;
   causes?: Readonly<Record<string, unknown>>;
+  location?: ErrorSourceLocation;
 }
 
 const diagnostics = new WeakMap<Error, ErrorDiagnostics>();
@@ -17,7 +26,7 @@ const diagnostics = new WeakMap<Error, ErrorDiagnostics>();
  * @returns Original error
  */
 export function withErrorDiagnostics<T extends Error>(error: T, details: ErrorDiagnostics): T {
-  diagnostics.set(error, details);
+  diagnostics.set(error, { ...diagnostics.get(error), ...details });
   return error;
 }
 
