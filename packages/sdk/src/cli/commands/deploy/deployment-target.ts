@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
 import { loadApplication, type Application } from "#/cli/services/application";
+import { type OperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadConfigPath } from "#/cli/shared/context";
 import { CLIError, internalError } from "#/cli/shared/errors";
@@ -39,6 +40,12 @@ type BuildDeploymentTargetParams = {
   noCache: boolean;
   packageVersion: string;
   cacheDir: string;
+  /** Operator client used to resolve `env` static website placeholders while bundling. Omitted in `--build-only`. */
+  client?: OperatorClient;
+  /** Workspace ID paired with `client`. */
+  workspaceId?: string;
+  /** Static website names planned by any config in the same deploy run. */
+  expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
 };
 
 export type BuiltDeploymentTarget = {
@@ -81,7 +88,18 @@ export function parseDeployConfigPaths(configPath?: string): Array<string | unde
 async function buildDeploymentTarget(
   params: BuildDeploymentTargetParams,
 ): Promise<BuiltDeploymentTarget> {
-  const { configPath, loadedConfig, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
+  const {
+    configPath,
+    loadedConfig,
+    dryRun,
+    buildOnly,
+    noCache,
+    packageVersion,
+    cacheDir,
+    client,
+    workspaceId,
+    expectedLocalStaticWebsiteNames,
+  } = params;
   const { config, plugins } =
     loadedConfig ??
     assertDefined(
@@ -121,6 +139,9 @@ async function buildDeploymentTarget(
         config,
         pluginManager,
         bundleCache: cacheManager.bundleCache,
+        client,
+        workspaceId,
+        expectedLocalStaticWebsiteNames,
       }),
     );
     application = result.application;

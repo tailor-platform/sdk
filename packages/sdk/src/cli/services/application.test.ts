@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { defineConfig } from "#/configure/config/index";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
@@ -9,6 +10,7 @@ import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
 import { defineApplication, loadApplication } from "./application";
+import type { OperatorClient } from "#/cli/shared/client";
 
 describe("defineAuth parse wiring", () => {
   test("preserves an explicit userProfile.namespace through AuthConfigSchema.parse", async () => {
@@ -190,5 +192,119 @@ export default createExecutor({
     await expect(loadApplication({ config })).rejects.toThrow(
       /Invalid wait point key "needsReview"/,
     );
+  });
+});
+
+describe("loadApplication static website env resolution", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  function makeClient(url: string): OperatorClient {
+    return {
+      getStaticWebsite: vi.fn().mockResolvedValue({ staticwebsite: { url } }),
+    } as unknown as OperatorClient;
+  }
+
+  test("resolves a name:url placeholder before bundling a workflow job", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const workflowFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      workflowFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: (_input: undefined, { env }) => ({ siteUrl: env.siteUrl }),
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+
+    const website = defineStaticWebSite("my-site", { description: "my website" });
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        staticWebsites: [website],
+        workflow: { files: [workflowFile] },
+        env: { siteUrl: website.url },
+      }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+
+    const { application, workflowBuildResult } = await loadApplication({
+      config,
+      client: makeClient("https://site.example.com"),
+      workspaceId: "ws-1",
+    });
+
+    expect(application.env.siteUrl).toBe("https://site.example.com");
+    const bundledCode = [...(workflowBuildResult?.bundledCode.values() ?? [])].join("\n");
+    expect(bundledCode).toContain("https://site.example.com");
+    expect(bundledCode).not.toContain("my-site:url");
+  });
+
+  test("keeps env unresolved without a client, e.g. --build-only", async () => {
+    const website = defineStaticWebSite("my-site", { description: "my website" });
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        staticWebsites: [website],
+        env: { siteUrl: website.url },
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const { application } = await loadApplication({ config });
+
+    expect(application.env.siteUrl).toBe("my-site:url");
+  });
+
+  test("keeps the placeholder without warning when the site is created later in the same deploy run", async () => {
+    const getStaticWebsite = vi
+      .fn()
+      .mockRejectedValue(new ConnectError("not found", Code.NotFound));
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        env: { siteUrl: "sibling-site:url" },
+      }),
+      path: "tailor.config.ts",
+    };
+
+    const { application } = await loadApplication({
+      config,
+      client,
+      workspaceId: "ws-1",
+      expectedLocalStaticWebsiteNames: new Set(["sibling-site"]),
+    });
+
+    expect(application.env.siteUrl).toBe("sibling-site:url");
+  });
+
+  test("fails instead of shipping an unresolved placeholder when the lookup fails unexpectedly", async () => {
+    const error = new ConnectError("service unavailable", Code.Unavailable);
+    const client = {
+      getStaticWebsite: vi.fn().mockRejectedValue(error),
+    } as unknown as OperatorClient;
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        env: { siteUrl: "my-site:url" },
+      }),
+      path: "tailor.config.ts",
+    };
+
+    await expect(loadApplication({ config, client, workspaceId: "ws-1" })).rejects.toThrow(error);
   });
 });

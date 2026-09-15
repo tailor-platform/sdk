@@ -17,7 +17,7 @@ import {
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { type ApplicationEnv, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import {
   assertNoPublishEventsConflict,
   publishEventsConflict,
@@ -335,7 +335,7 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
-  env: Record<string, string | number | boolean>,
+  env: ApplicationEnv,
   authNamespace: string | undefined,
   forceApplyAll = false,
   records: ResolverRecordInputs = {},
@@ -527,7 +527,7 @@ function processResolver(
   namespace: string,
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
-  env: Record<string, string | number | boolean>,
+  env: ApplicationEnv,
   authNamespace: string | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [

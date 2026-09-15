@@ -579,6 +579,31 @@ describe("planExecutor", () => {
     });
   });
 
+  describe("application env passthrough", () => {
+    function variablesExprOf(create: { request: { executor?: unknown } }): string {
+      return (
+        (create.request.executor as { targetConfig?: { config?: unknown } }).targetConfig
+          ?.config as {
+          case: "function";
+          value: { variables: { expr: string } };
+        }
+      ).value.variables.expr;
+    }
+
+    test("embeds application.env into the args expression verbatim", async () => {
+      const application: Application = {
+        ...createMockApplication([createMockExecutor("executor-a")]),
+        env: { SITE_URL: "my-site:url", RETRIES: 3 },
+      };
+
+      const result = await planExecutor(buildPlanContext(application));
+
+      const variablesExpr = variablesExprOf(result.changeSet.creates[0]!);
+      expect(variablesExpr).toContain('"SITE_URL":"my-site:url"');
+      expect(variablesExpr).toContain('"RETRIES":3');
+    });
+  });
+
   describe("resolverExecutedTrigger success field", () => {
     test("includes success field in trigger condition expression", async () => {
       const application = createMockApplication(

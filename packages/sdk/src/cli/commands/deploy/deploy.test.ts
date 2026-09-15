@@ -9,6 +9,7 @@ import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
   confirmDeploymentPlans,
+  collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
   planDeploymentTargets,
   shouldForceApplyAll,
@@ -1028,6 +1029,30 @@ function fakeTarget(
 }
 
 describe("multi-config deployment orchestration", () => {
+  test("forwards client, workspaceId, and expectedLocalStaticWebsiteNames to every config build", async () => {
+    const client = {} as never;
+    const expectedLocalStaticWebsiteNames = new Set(["buyer-site"]);
+    const received: unknown[] = [];
+
+    await buildDeploymentTargets({
+      configPaths: ["buyer/tailor.config.ts"],
+      dryRun: false,
+      buildOnly: false,
+      noCache: false,
+      packageVersion: "test",
+      cacheDir: "cache",
+      client,
+      workspaceId: "workspace-id",
+      expectedLocalStaticWebsiteNames,
+      buildTarget: async (params) => {
+        received.push(params.client, params.workspaceId, params.expectedLocalStaticWebsiteNames);
+        return fakeTarget({ appName: params.configPath });
+      },
+    });
+
+    expect(received).toEqual([client, "workspace-id", expectedLocalStaticWebsiteNames]);
+  });
+
   test("starts every config build before awaiting a build result", async () => {
     const started: Array<string | undefined> = [];
     const releases: Array<() => void> = [];
@@ -1437,5 +1462,26 @@ describe("collectExternalAuthIdpConfigNames", () => {
         fakeAuthTarget("shared-auth", "my-idp"),
       ]),
     ).not.toThrow();
+  });
+});
+
+describe("collectExpectedLocalStaticWebsiteNamesFromConfigs", () => {
+  function loadedConfig(staticWebsites: ReadonlyArray<{ name: string }>) {
+    return { config: { staticWebsites } } as never;
+  }
+
+  test("collects static website names across every config", () => {
+    const result = collectExpectedLocalStaticWebsiteNamesFromConfigs([
+      loadedConfig([{ name: "buyer-site" }]),
+      loadedConfig([{ name: "supplier-site" }]),
+    ]);
+
+    expect(result).toEqual(new Set(["buyer-site", "supplier-site"]));
+  });
+
+  test("returns an empty set when no config declares a static website", () => {
+    const result = collectExpectedLocalStaticWebsiteNamesFromConfigs([loadedConfig([])]);
+
+    expect(result).toEqual(new Set());
   });
 });

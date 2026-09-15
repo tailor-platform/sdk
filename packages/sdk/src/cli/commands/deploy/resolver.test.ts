@@ -307,6 +307,36 @@ describe("planPipeline (resolver service level)", () => {
     });
   });
 
+  describe("application env passthrough", () => {
+    function createPipelineWithResolver(): ResolverService {
+      return {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: {
+          "test-resolver": {
+            name: "test-resolver",
+            operation: "query",
+            output: { type: "string", metadata: {} },
+          },
+        },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+    }
+
+    test("embeds application.env into the operationHook expression verbatim", async () => {
+      const application = createMockApplication([createPipelineWithResolver()], {
+        env: { SITE_URL: "my-site:url" },
+      });
+
+      const result = await planPipeline(buildCtx({ application }));
+
+      const hookExpr =
+        result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
+          ?.operationHook?.expr;
+      expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
+    });
+  });
+
   describe("delete scenarios (service level)", () => {
     test("service is deleted when removed from config", async () => {
       const client = createMockClient([

@@ -113,6 +113,23 @@ const auth = defineAuth("my-auth", {
 });
 ```
 
+### Application Environment Variables
+
+```typescript
+const website = defineStaticWebSite("my-frontend", {
+  description: "Frontend application",
+});
+
+export default defineConfig({
+  env: {
+    siteUrl: website.url, // https://my-frontend.example.com
+  },
+  staticWebsites: [website],
+});
+```
+
+Resolver, executor, workflow job, and auth before-login hook code, and TailorDB migration scripts, that read [`env`](../configuration.md#environment-variables) receive the deployed URL. On the first deploy, where the website does not exist yet, the unresolved reference is delivered instead and the CLI warns about it; deploy again to inject the URL. `function run` does not resolve this reference; it passes the value exactly as declared.
+
 ## Complete Example
 
 ```typescript

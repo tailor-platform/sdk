@@ -17,7 +17,7 @@ import {
   getApplicationAuthNamespace,
   requireApplicationAuthNamespace,
 } from "#/cli/shared/auth-namespace";
-import { type OperatorClient } from "#/cli/shared/client";
+import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
@@ -131,7 +131,7 @@ export async function planExecutor(context: PlanContext) {
       appName: application.name,
       appId: application.id,
     });
-    const desiredExecutor = protoExecutor(context, executor);
+    const desiredExecutor = protoExecutor(context, executor, application.env);
     if (existing) {
       const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,
@@ -501,10 +501,10 @@ function resolveIdpNamespace(
 function protoExecutor(
   context: PlanContext,
   executor: Executor,
+  env: ApplicationEnv,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const { application } = context;
   const appName = application.name;
-  const env = application.env;
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;

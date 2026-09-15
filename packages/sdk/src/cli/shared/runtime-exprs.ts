@@ -14,6 +14,7 @@
  * sync.
  */
 import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
+import type { ApplicationEnv } from "#/cli/shared/client";
 import type { Trigger } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
 
@@ -75,10 +76,7 @@ const ACTOR_TRANSFORM_EXPR = `actor: ${makePrincipalExpr({
  * @param env - Application env record to embed in the expression
  * @returns A JavaScript expression string, e.g. `({ ...args, ... })`
  */
-export function buildExecutorArgsExpr(
-  triggerKind: Trigger["kind"],
-  env: Record<string, string | number | boolean>,
-): string {
+export function buildExecutorArgsExpr(triggerKind: Trigger["kind"], env: ApplicationEnv): string {
   const envExpr = `env: ${JSON.stringify(env)}`;
 
   switch (triggerKind) {
@@ -119,9 +117,7 @@ export function buildExecutorArgsExpr(
  * @param env - Application env record to embed in the expression
  * @returns A JavaScript expression string for the operationHook
  */
-export function buildResolverOperationHookExpr(
-  env: Record<string, string | number | boolean>,
-): string {
+export function buildResolverOperationHookExpr(env: ApplicationEnv): string {
   return `({ ...context.pipeline, input: context.args, caller: ${tailorPrincipalMap}, env: ${JSON.stringify(env)} });`;
 }
 
