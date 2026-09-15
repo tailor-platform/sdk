@@ -5,7 +5,7 @@ import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
-import { logger } from "./logger";
+import { logger, outputEnvIsJson } from "./logger";
 
 type ArgsShape = Record<string, z.ZodType>;
 export type MachineUserInputSource = "option" | "env";
@@ -185,28 +185,9 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 // Argument Definitions
 // ============================================================================
 
-/**
- * Environment variable selecting the default output format for every command.
- *
- * Set `TAILOR_OUTPUT=json` in agent and automation contexts so the CLI emits
- * JSON without passing `--json` on every call. An explicit `--json` always
- * wins, so `TAILOR_OUTPUT=table` restores table output only where no flag is
- * present. Because JSON mode also suppresses interactive prompts, prefer
- * setting this per invocation over exporting it from a shell profile.
- */
-const OUTPUT_ENV_VAR = "TAILOR_OUTPUT";
-
 /** Name and short alias of the `--json` flag, shared by its definition and the argv scan. */
 const JSON_ARG_NAME = "json";
 const JSON_ARG_ALIAS = "j";
-
-/**
- * Whether `TAILOR_OUTPUT` selects JSON output.
- * @returns `true` when the variable is set to `json` (case-insensitive)
- */
-function outputEnvIsJson(): boolean {
-  return process.env[OUTPUT_ENV_VAR]?.trim().toLowerCase() === "json";
-}
 
 /**
  * Whether `--json` was passed explicitly, which the parsed value cannot answer
