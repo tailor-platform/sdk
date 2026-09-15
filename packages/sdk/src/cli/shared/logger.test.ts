@@ -1,12 +1,24 @@
 import { stripVTControlCharacters } from "node:util";
-import { describe, test, expect, vi } from "vitest";
-import { CIPromptError, formatLogLine, logger } from "./logger";
+import { afterEach, describe, test, expect, vi } from "vitest";
+import { CIPromptError, formatLogLine, logger, redactSecrets, resetSecretRegistry } from "./logger";
 
 function captureStdout(fn: () => void): string {
   using stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
   fn();
   return stdoutSpy.mock.calls.map((call) => String(call[0])).join("");
 }
+
+function captureStderr(fn: () => void): string {
+  using stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  fn();
+  return stripVTControlCharacters(stderrSpy.mock.calls.map((call) => String(call[0])).join(""));
+}
+
+// This file runs in the shared, non-isolated "unit-core" Vitest project, so registered
+// secrets would otherwise leak into unrelated test files run in the same worker.
+afterEach(() => {
+  resetSecretRegistry();
+});
 
 describe("logger", () => {
   describe("CIPromptError", () => {
@@ -183,6 +195,173 @@ describe("logger", () => {
       expect(output).toContain("id");
       expect(output).not.toContain("secret");
       expect(output).not.toContain("hidden");
+    });
+
+    test("does not redact registered secrets", () => {
+      logger.registerSecret("out-should-not-redact-this-token");
+      const output = captureStdout(() => logger.out("out-should-not-redact-this-token"));
+      expect(output).toBe("out-should-not-redact-this-token\n");
+    });
+  });
+
+  describe("registerSecret", () => {
+    test("redacts a registered secret from info/success/warn/error/log/debug output", () => {
+      logger.registerSecret("sk-live-abcdef123456");
+      logger.verbose = true;
+
+      for (const output of [
+        captureStderr(() => logger.info("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.success("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.warn("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.error("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.log("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.debug("token: sk-live-abcdef123456")),
+      ]) {
+        expect(output).toContain("<redacted>");
+        expect(output).not.toContain("sk-live-abcdef123456");
+      }
+
+      logger.verbose = false;
+      for (const output of [
+        captureStderr(() => logger.info("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.success("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.warn("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.error("token: sk-live-abcdef123456")),
+        captureStderr(() => logger.log("token: sk-live-abcdef123456")),
+      ]) {
+        expect(output).not.toContain("sk-live-abcdef123456");
+      }
+    });
+
+    test("ignores a non-string value instead of throwing (e.g. an unvalidated undefined field)", () => {
+      expect(() => logger.registerSecret(undefined as unknown as string)).not.toThrow();
+      expect(() => logger.registerSecret(null as unknown as string)).not.toThrow();
+    });
+
+    test("ignores empty strings and values shorter than 4 characters", () => {
+      logger.registerSecret("");
+      logger.registerSecret("abc");
+      const output = captureStderr(() => logger.info("prefix abc suffix and more text"));
+      expect(output).toContain("abc");
+      expect(output).not.toContain("<redacted>");
+    });
+
+    test("counts Unicode code points, not UTF-16 code units, against the minimum length", () => {
+      // Two emoji: 2 code points, but 4 UTF-16 code units. Must still be treated as length 2
+      // (below the minimum) rather than length 4.
+      logger.registerSecret("😀😀");
+      const output = captureStderr(() => logger.info("prefix 😀😀 suffix"));
+      expect(output).toContain("😀😀");
+      expect(output).not.toContain("<redacted>");
+    });
+
+    test("redacts the longer of two overlapping registered secrets without leaving a fragment", () => {
+      logger.registerSecret("credential-outer-9f2c8b1a");
+      logger.registerSecret("outer-9f2c8b1a");
+      const output = captureStderr(() => logger.info("value=credential-outer-9f2c8b1a"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("redacts a registered secret even after JSON.stringify escapes it", () => {
+      const secret = 'a"secret-with-quotes\\and-backslashes';
+      logger.registerSecret(secret);
+      const serialized = JSON.stringify({ token: secret });
+      const output = captureStderr(() => logger.log(serialized));
+      expect(output).not.toContain(secret);
+      expect(output).not.toContain("secret-with-quotes");
+      expect(output).toContain("<redacted>");
+    });
+
+    test("redacts a registered secret's form-urlencoded form (e.g. a decoded OAuth code echoed back in a still-encoded callback URL)", () => {
+      const decodedCode = "abc+def/ghi";
+      const encodedCode = "abc%2Bdef%2Fghi";
+      logger.registerSecret(decodedCode);
+      const output = captureStderr(() =>
+        logger.error(`token exchange failed for callback ?code=${encodedCode}&state=xyz`),
+      );
+      expect(output).not.toContain(encodedCode);
+      expect(output).toContain("<redacted>");
+    });
+
+    test("redacts a space in a registered secret's form-urlencoded form as '+', not '%20' (matching what a URL query string actually contains)", () => {
+      const decodedValue = "a secret value";
+      logger.registerSecret(decodedValue);
+      const output = captureStderr(() =>
+        logger.error("callback failed for ?code=a+secret+value&state=xyz"),
+      );
+      expect(output).not.toContain("a+secret+value");
+      expect(output).toContain("<redacted>");
+    });
+
+    test("does not throw when registering a value containing a lone UTF-16 surrogate", () => {
+      // encodeURIComponent would throw URIError here; URLSearchParams substitutes U+FFFD
+      // instead, so registration (and every later log call) must keep working.
+      expect(() => logger.registerSecret("lone-surrogate-\uD800-value")).not.toThrow();
+      const output = captureStderr(() => logger.error("value: lone-surrogate-\uD800-value"));
+      expect(output).toContain("<redacted>");
+    });
+
+    test("does not reprocess the placeholder when a later secret matches text inside it", () => {
+      logger.registerSecret("foo-reprocess-guard-redacted");
+      logger.registerSecret("reprocess-guard-redacted");
+      const output = captureStderr(() => logger.info("value=foo-reprocess-guard-redacted"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("is idempotent: a later-registered secret matching text inside an existing placeholder is left alone", () => {
+      // Simulates passing an already-redacted string (e.g. a --json error envelope built by
+      // serializeError) through a diagnostic log call, which redacts a second time.
+      logger.registerSecret("first-pass-secret-value");
+      const oncePassed = redactSecrets("value=first-pass-secret-value");
+      expect(oncePassed).toBe("value=<redacted>");
+
+      logger.registerSecret("redact");
+      expect(redactSecrets(oncePassed)).toBe("value=<redacted>");
+    });
+
+    test("still redacts a secret that merely overlaps a placeholder rather than sitting wholly inside it", () => {
+      // The idempotency guard above must only discard matches wholly inside a placeholder.
+      // A secret like "leak<redacted>" extends outside one and must still be caught.
+      logger.registerSecret("leak<redacted>");
+      expect(redactSecrets("value=leak<redacted>")).toBe("value=<redacted>");
+    });
+
+    test("merges two secrets that cross (neither contains the other) without leaking a fragment of either", () => {
+      logger.registerSecret("crossoverleftpart");
+      logger.registerSecret("leftpartcrossoverright");
+      // "leftpartcrossoverright" starts in the middle of "crossoverleftpart".
+      const output = captureStderr(() => logger.info("value=crossoverleftpartcrossoverright"));
+      expect(output).toBe("ℹ value=<redacted>\n");
+    });
+
+    test("does not leak internal redaction machinery when a registered secret happens to contain 'redact'", () => {
+      logger.registerSecret("first-registered-secret-value");
+      logger.registerSecret("redact");
+      const output = captureStderr(() =>
+        logger.info("value=<redacted> first-registered-secret-value"),
+      );
+      expect(output).toBe("ℹ value=<redacted> <redacted>\n");
+    });
+
+    test("finds a newly registered secret even though the earlier one already triggered a redaction", () => {
+      // The multi-pattern matcher is cached and only rebuilt when a genuinely new secret is
+      // registered (see registerSecret's automaton invalidation) — this exercises both the
+      // "before invalidation" and "after invalidation" paths against the same matcher.
+      logger.registerSecret("cache-invalidation-first-secret");
+      expect(captureStderr(() => logger.info("cache-invalidation-first-secret"))).toContain(
+        "<redacted>",
+      );
+
+      logger.registerSecret("cache-invalidation-second-secret");
+      const output = captureStderr(() => logger.info("cache-invalidation-second-secret"));
+      expect(output).toContain("<redacted>");
+      expect(output).not.toContain("cache-invalidation-second-secret");
+
+      // Re-registering the first secret (no-op on the underlying Set) must not stop the
+      // second secret from still being found by the cached matcher.
+      logger.registerSecret("cache-invalidation-first-secret");
+      const stillWorks = captureStderr(() => logger.info("cache-invalidation-second-secret"));
+      expect(stillWorks).not.toContain("cache-invalidation-second-secret");
     });
   });
 });

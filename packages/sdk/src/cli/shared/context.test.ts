@@ -1307,6 +1307,7 @@ describe("saveUserTokens", () => {
 
   test("stores tokens in the OS keyring by default when available", async () => {
     const config = createEmptyConfig();
+    using registerSecretSpy = vi.spyOn(logger, "registerSecret").mockImplementation(() => {});
 
     await saveUserTokens(
       config,
@@ -1324,6 +1325,8 @@ describe("saveUserTokens", () => {
     expect(keyringPasswords.get("tailor-platform-cli:platform-user-sub")).toBe(
       JSON.stringify({ accessToken: "access-token", refreshToken: "refresh-token" }),
     );
+    expect(registerSecretSpy).toHaveBeenCalledWith("access-token");
+    expect(registerSecretSpy).toHaveBeenCalledWith("refresh-token");
   });
 
   test("uses existing keyring credentials when keyring writes are denied", async () => {
