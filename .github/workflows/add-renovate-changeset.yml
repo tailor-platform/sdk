@@ -75,10 +75,23 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           NAMES: ${{ steps.changeset_check.outputs.changed-names }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -eo pipefail
           FILENAME=".changeset/renovate-${PR_NUMBER}.md"
-          SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node .github/scripts/neutralize-mentions.mjs)
+
+          # This job checks out the Renovate branch's own head sha (not
+          # merged with the base), so a branch opened before this script
+          # existed won't have it on disk. Fall back to the copy already
+          # fetched from the base branch (by the "Snapshot base lockfile"
+          # step above) for those older, still-open Renovate PRs.
+          if [ -f .github/scripts/neutralize-mentions.mjs ]; then
+            SANITIZER=.github/scripts/neutralize-mentions.mjs
+          else
+            SANITIZER=$(mktemp --suffix=.mjs)
+            git show "origin/${BASE_REF}:.github/scripts/neutralize-mentions.mjs" > "$SANITIZER"
+          fi
+          SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node "$SANITIZER")
 
           {
             echo "---"
