@@ -3,7 +3,7 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type { TemporalPlainDate } from "#/types/helpers";
+import type { TemporalPlainDate, TypeLevelError } from "#/types/helpers";
 
 export interface EnumValue {
   value: string;
@@ -76,7 +76,9 @@ export type DateFieldOptions = FieldOptions & {
 export type DateFieldValue<As> = As extends "date"
   ? Date
   : As extends "temporal"
-    ? TemporalPlainDate
+    ? [TemporalPlainDate] extends [never]
+      ? TypeLevelError<'t.date({ as: "temporal" }) requires "ESNext.Temporal" in compilerOptions.lib (TypeScript 6.0+)'>
+      : TemporalPlainDate
     : string;
 
 // Return Output type based on FieldOptions.
