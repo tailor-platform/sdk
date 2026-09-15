@@ -159,7 +159,7 @@ createResolver({
 
 `Temporal` is a JavaScript engine global, not something this package exports. Two things depend on your own project, not on the SDK:
 
-- **Types**: TypeScript only knows the `Temporal` namespace when `compilerOptions.lib` includes `"ESNext"` (or `"ESNext.Temporal"` specifically). Without it, `t.date({ as: "temporal" })` fails to type-check with "Cannot find namespace 'Temporal'". With `compilerOptions.skipLibCheck: false` (TypeScript's own default), this `lib` requirement applies to your whole project even if you never use `as: "temporal"`, because the SDK's own type declarations mention `Temporal`; projects scaffolded by `create-sdk` set `skipLibCheck: true` and are unaffected.
+- **Types**: TypeScript only knows the `Temporal` namespace when `compilerOptions.lib` includes `"ESNext"` (or `"ESNext.Temporal"` specifically), which requires TypeScript 6.0 or later — earlier versions don't ship that `lib` entry at all. Without it, `t.date({ as: "temporal" })` fails to type-check with "Cannot find namespace 'Temporal'". With `compilerOptions.skipLibCheck: false` (TypeScript's own default), this `lib` requirement applies to your whole project even if you never use `as: "temporal"`, because the SDK's own type declarations mention `Temporal`; projects scaffolded by `create-sdk` set `skipLibCheck: true` and are unaffected.
 - **Runtime**: deployed resolvers and `tailor function run` execute on the Tailor Platform, which provides `Temporal`. If you call `Temporal` from your own code running elsewhere (for example a local Node.js script or a unit test for your resolver's `body`), check that your JavaScript runtime supports it — some versions require an experimental flag.
 
 ### Custom Type Name (`typeName`)
