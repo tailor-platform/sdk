@@ -1022,6 +1022,14 @@ export type ResolveStaticWebsiteUrlsOptions = {
    * change the shape of what user code receives.
    */
   keepUnresolved?: boolean;
+  /**
+   * When true, a lookup failure other than `NotFound` (a permission error, a
+   * transient RPC failure, ...) is re-thrown instead of being downgraded to a
+   * warning. Callers where the fallback value ends up embedded in deployed
+   * code use this, since shipping it silently is worse than failing the
+   * deploy. A `NotFound` for a name in `expectedLocalNames` is unaffected.
+   */
+  failOnUnexpectedError?: boolean;
 };
 
 /** `name:url[/path]` static website placeholder, anchored at the end. */
@@ -1057,7 +1065,7 @@ export async function resolveStaticWebsiteUrls(
     return [];
   }
 
-  const { expectedLocalNames, keepUnresolved = false } = options;
+  const { expectedLocalNames, keepUnresolved = false, failOnUnexpectedError = false } = options;
   const unresolved = (url: string) => (keepUnresolved ? [url] : []);
   const fallbackNote = keepUnresolved
     ? `Leaving the ${context} value unresolved.`
@@ -1083,8 +1091,12 @@ export async function resolveStaticWebsiteUrls(
           logger.warn(`Static website "${siteName}" has no URL assigned yet. ${fallbackNote}`);
           return unresolved(url);
         } catch (error) {
-          if (isNotFoundError(error) && expectedLocalNames?.has(siteName)) {
-            return [url];
+          if (isNotFoundError(error)) {
+            if (expectedLocalNames?.has(siteName)) {
+              return [url];
+            }
+          } else if (failOnUnexpectedError) {
+            throw error;
           }
           logger.warn(
             `Static website "${siteName}" not found for ${context} configuration. ${fallbackNote}`,
@@ -1109,8 +1121,10 @@ export type ApplicationEnv = Readonly<Record<string, string | number | boolean>>
  * resolver operationHook expressions -- so an unresolved placeholder is
  * delivered as the literal string `"my-site:url"`. Each placeholder value goes
  * through `resolveStaticWebsiteUrls`, which keeps the same first-deployment
- * semantics as `cors` and OAuth2 redirect URIs: a website that this deploy run
- * is about to create is left as-is, without a lookup warning.
+ * semantics as `cors` and OAuth2 redirect URIs for a website this deploy run
+ * is about to create (left as-is, no warning), but -- unlike `cors` -- fails
+ * the deploy on any other lookup failure instead of shipping the unresolved
+ * placeholder into deployed code.
  *
  * Values that are not placeholders -- and the record itself when it holds no
  * placeholder at all -- are returned untouched, so the common case costs no
@@ -1125,7 +1139,7 @@ export async function resolveStaticWebsiteUrlsInEnv(
   client: OperatorClient,
   workspaceId: string,
   env: ApplicationEnv | undefined,
-  options: Omit<ResolveStaticWebsiteUrlsOptions, "keepUnresolved"> = {},
+  options: Omit<ResolveStaticWebsiteUrlsOptions, "keepUnresolved" | "failOnUnexpectedError"> = {},
 ): Promise<ApplicationEnv> {
   if (!env || !Object.values(env).some(hasStaticWebsiteUrlPlaceholder)) {
     return env ?? {};
@@ -1141,7 +1155,7 @@ export async function resolveStaticWebsiteUrlsInEnv(
         workspaceId,
         [value],
         `env "${key}"`,
-        { ...options, keepUnresolved: true },
+        { ...options, keepUnresolved: true, failOnUnexpectedError: true },
       );
       return [key, resolved ?? value] as const;
     }),

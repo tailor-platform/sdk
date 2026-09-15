@@ -1454,6 +1454,34 @@ describe("resolveStaticWebsiteUrls", () => {
       'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
     );
   });
+
+  test("re-throws a non-NotFound error instead of falling back when failOnUnexpectedError is set", async () => {
+    const error = new ConnectError("service unavailable", Code.Unavailable);
+    const client = makeClient(async () => {
+      throw error;
+    });
+
+    await expect(
+      resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+        failOnUnexpectedError: true,
+      }),
+    ).rejects.toThrow(error);
+  });
+
+  test("still keeps a NotFound entry unresolved when failOnUnexpectedError is set", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["unknown:url"], "CORS", {
+      failOnUnexpectedError: true,
+      keepUnresolved: true,
+    });
+
+    expect(resolved).toEqual(["unknown:url"]);
+    expect(warnSpy).toHaveBeenCalledOnce();
+  });
 });
 
 describe("resolveStaticWebsiteUrlsInEnv", () => {
@@ -1546,6 +1574,17 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'Static website "my-site" has no URL assigned yet. Leaving the env "SITE_URL" value unresolved.',
     );
+  });
+
+  test("fails instead of shipping the placeholder when the lookup fails with an unexpected error", async () => {
+    const error = new ConnectError("service unavailable", Code.Unavailable);
+    const client = makeClient(async () => {
+      throw error;
+    });
+
+    await expect(
+      resolveStaticWebsiteUrlsInEnv(client, "ws-1", { SITE_URL: "my-site:url" }),
+    ).rejects.toThrow(error);
   });
 });
 

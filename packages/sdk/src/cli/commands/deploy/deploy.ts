@@ -136,7 +136,7 @@ function collectExpectedLocalStaticWebsiteNames(
 
 // Same set as collectExpectedLocalStaticWebsiteNames, read from the loaded
 // configs so it is available before any of them is bundled.
-function collectExpectedLocalStaticWebsiteNamesFromConfigs(
+export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
   configs: ReadonlyArray<{ config: { staticWebsites?: ReadonlyArray<{ name: string }> } }>,
 ): ReadonlySet<string> {
   const websiteNames = new Set<string>();

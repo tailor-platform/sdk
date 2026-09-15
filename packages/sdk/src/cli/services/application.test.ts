@@ -290,4 +290,21 @@ export default createWorkflow({ name: "main-workflow", mainJob });
 
     expect(application.env.siteUrl).toBe("sibling-site:url");
   });
+
+  test("fails instead of shipping an unresolved placeholder when the lookup fails unexpectedly", async () => {
+    const error = new ConnectError("service unavailable", Code.Unavailable);
+    const client = {
+      getStaticWebsite: vi.fn().mockRejectedValue(error),
+    } as unknown as OperatorClient;
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        env: { siteUrl: "my-site:url" },
+      }),
+      path: "tailor.config.ts",
+    };
+
+    await expect(loadApplication({ config, client, workspaceId: "ws-1" })).rejects.toThrow(error);
+  });
 });
