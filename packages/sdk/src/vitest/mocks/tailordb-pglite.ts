@@ -74,10 +74,11 @@ function toQueryObjectResult(result: PGliteQueryResult) {
  * PGlite instances are borrowed, never closed — close them yourself (e.g. in
  * `afterAll`).
  *
- * Create the tables a test needs up front with `CREATE TABLE` statements
- * matching the generated Kysely types. PGlite runs full PostgreSQL while
- * TailorDB supports a subset of it, so a statement passing here can still be
- * rejected by the platform.
+ * Create the tables a test needs up front: run the script `kyselyTypePlugin`
+ * writes when `pgliteSchemaPath` is set, or your own `CREATE TABLE`
+ * statements matching the generated Kysely types. PGlite runs full PostgreSQL
+ * while TailorDB supports a subset of it, so a statement passing here can
+ * still be rejected by the platform.
  *
  * Transactions on a shared instance are serialized: while one is open,
  * queries from other `getDB` instances on the same PGlite instance wait for

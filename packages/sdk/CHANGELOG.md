@@ -1,5 +1,75 @@
 # @tailor-platform/sdk
 
+## 2.16.0
+
+### Minor Changes
+
+- [#2345](https://github.com/tailor-platform/sdk/pull/2345) [`ceca2f4`](https://github.com/tailor-platform/sdk/commit/ceca2f44d1b9924bead28bd09289b02a99e3a463) Thanks [@dqn](https://github.com/dqn)! - Surface command failures as GitHub Actions annotations. When `GITHUB_ACTIONS=true`, a failing `tailor` command writes one `::error::` workflow command carrying the error code, details, suggestion, and next action, so the failure shows on the run instead of only in the scrolled log. Set `TAILOR_GITHUB_ACTIONS_ANNOTATIONS=false` to turn it off; `--json` suppresses it.
+
+- [#2334](https://github.com/tailor-platform/sdk/pull/2334) [`94b4286`](https://github.com/tailor-platform/sdk/commit/94b42863d21ba39ee34f87d678a1c56edff0f862) Thanks [@dqn](https://github.com/dqn)! - Convert a single-value field into an array with `tailordb migration generate --expand-contract`. When only the array-ness changes, the generated migration pair stores each existing value as a one-element array and needs no edits; array-to-single-value changes remain manual.
+
+- [#2261](https://github.com/tailor-platform/sdk/pull/2261) [`a340cbf`](https://github.com/tailor-platform/sdk/commit/a340cbf51d6dcd8e38067e155f75e2f570480988) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Add `tailor seed dump`, which writes the rows currently in TailorDB out as JSONL seed data. The output is the format `tailor seed apply` reads, so a dump taken before a change is what restores the tables after it: `tailor seed apply --truncate` puts the dumped rows back. Dump every table, one namespace with `--namespace`, or the tables you name; `--out` writes the files somewhere other than the seed data directory, and existing files are only overwritten with `--force`. IdP `_User` records are not dumped.
+
+- [#2327](https://github.com/tailor-platform/sdk/pull/2327) [`964c86e`](https://github.com/tailor-platform/sdk/commit/964c86e013b39d4dbfd97a7ad6e7956b0972acae) Thanks [@dqn](https://github.com/dqn)! - Make `tailor seed validate` reject a seed row that carries a field the table does not declare, at the top level or inside a nested object, instead of passing it through to fail later as a database error in `tailor seed apply`. The issue names the field and how to fix the row.
+  
+  Fields a plugin adds to a table are validated like the table's own. The seed schema generated for a table with plugins attached loads the table through the new `getExtendedTable()` helper from `@tailor-platform/sdk/plugin`, which returns the table with every plugin-added field applied, as `tailor generate` sees it. Run `tailor generate` after upgrading so the seed schema files are regenerated.
+
+- [#2284](https://github.com/tailor-platform/sdk/pull/2284) [`347b5a1`](https://github.com/tailor-platform/sdk/commit/347b5a1f50d1ed597d64f4907b6bab0330a1c9ba) Thanks [@dqn](https://github.com/dqn)! - Add `tailor workspace prune` to delete stale temporary workspaces, such as the ones left behind by CI runs, preview deployments, or interrupted local e2e runs.
+  
+  In name-and-age mode, a workspace is deleted only when its whole name matches a `--name` regular expression and it was created at least `--older-than` ago. Use `--organization-root <id>` for workspaces directly under an organization, `--folder-id <id>` for workspaces in a folder, or `--personal` for workspaces belonging to no organization and no folder. Organization roots and folders can be repeated, and all locations combine as a union. Locations are read only from the command line; without a location, this mode considers every visible workspace.
+  
+  Use `--exclude` to keep named workspaces. Delete-protected workspaces are always kept, the command aborts without deleting anything when more workspaces match than `--limit` allows or when a location option resolves to an empty value, and `--dry-run` lists the candidates first. `--older-than 0s` requires an explicit location.
+  
+  ```bash
+  tailor workspace prune --name 'e2e-ws-.*' --older-than 24h --dry-run
+  tailor workspace prune --name 'e2e-ws-.*' --older-than 24h --yes
+  ```
+
+- [#2306](https://github.com/tailor-platform/sdk/pull/2306) [`503f88c`](https://github.com/tailor-platform/sdk/commit/503f88cb4bb7da9fb5a954aa2181991daa23e71e) Thanks [@dqn](https://github.com/dqn)! - Let a workspace carry its own expiry, so pruning it needs no name or age filter.
+  
+  `tailor workspace create --ttl 24h` records on the workspace when it becomes prunable, and `tailor workspace prune --expired --folder-id <id>` deletes the workspaces in that location whose recorded expiry has passed. A workspace that records no expiry is never deleted this way, and neither is one whose recorded expiry cannot be read.
+  
+  `tailor workspace ttl set` and `tailor workspace ttl clear` change that expiry afterwards, and `workspace get` / `workspace list` report it. `create --ttl` exits non-zero when it cannot confirm the expiry was recorded, naming the `ttl set` command that finishes the job — the workspace itself is still created and reported.
+  
+  Because the expiry is recorded on the workspace rather than derived from its name, anything able to write the workspace's metadata can bring its deletion forward — and on the Platform, writing a workspace's metadata is a lesser permission than deleting it. `--expired` therefore requires at least one location, and `--name` still applies on top.
+  
+  `workspace prune` now names locations instead of filtering by organization: `--organization-root <id>` selects the workspaces directly under an organization and none inside its folders, `--folder-id <id>` selects the workspaces in one folder, and `--personal` selects the workspaces belonging to no organization and no folder. Each can be repeated and they combine as a union. `--organization-id` is gone, and the location options no longer read `TAILOR_PLATFORM_ORGANIZATION_ID` or `TAILOR_PLATFORM_FOLDER_ID`, so a `--name` / `--older-than` sweep that names no location now considers every visible workspace instead of being narrowed by those variables.
+  
+  Restoring a workspace does not clear its recorded expiry, so restore it and then run `workspace ttl set` or `workspace ttl clear` before the next `--expired` run — or keep it out of that run with `--exclude`.
+  
+  ```bash
+  tailor workspace create --name e2e-ws-1 --region us-west --folder-id <id> --ttl 24h
+  tailor workspace ttl set --workspace-id <id> --ttl 7d
+  tailor workspace prune --expired --folder-id <id> --dry-run
+  tailor workspace prune --expired --folder-id <id> --personal --yes
+  ```
+
+### Patch Changes
+
+- [#2326](https://github.com/tailor-platform/sdk/pull/2326) [`a9e8b8b`](https://github.com/tailor-platform/sdk/commit/a9e8b8b01a9d4b363b4f84c5b0089179647f70eb) Thanks [@dqn](https://github.com/dqn)! - Preserve actionable authentication, permission, and connection diagnostics, including both causes when deployment and metadata recovery fail.
+
+- [#2340](https://github.com/tailor-platform/sdk/pull/2340) [`2003497`](https://github.com/tailor-platform/sdk/commit/20034971cc0754407e2b7f387fcfe2e12529a5e2) Thanks [@dqn](https://github.com/dqn)! - Report a stable `error.code` with recovery guidance for user-actionable CLI command failures (invalid options, missing resources, invalid configuration, unmet preconditions): `--json` output no longer falls back to `UNEXPECTED_ERROR` for them, and human-readable output prints the code with its suggestion and next command.
+
+- [#2327](https://github.com/tailor-platform/sdk/pull/2327) [`2beebd0`](https://github.com/tailor-platform/sdk/commit/2beebd0273f37e839127a0f2c53361e44a8202de) Thanks [@dqn](https://github.com/dqn)! - Keep a table's `hooks()` and `validate()` when a plugin adds fields to it. The extended table lost both, so they were missing from the deployed table.
+
+- [#2315](https://github.com/tailor-platform/sdk/pull/2315) [`f5f82f8`](https://github.com/tailor-platform/sdk/commit/f5f82f8351b3aaf278262b3827c369d89b20f810) Thanks [@toiroakr](https://github.com/toiroakr)! - Allow the CLI to use readable keyring credentials without requiring a test write. Explain that credentials may be inaccessible in a sandbox and provide recovery instructions when keyring credentials cannot be found or read.
+
+- [#2347](https://github.com/tailor-platform/sdk/pull/2347) [`ddcecce`](https://github.com/tailor-platform/sdk/commit/ddceccebe40751f074dd9f5c3a0d875c91e9f1fe) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix GitHub Actions annotation titles to fall back to `CLI_ERROR` when a `CLIError`'s `code` is an empty string, not only when it is missing entirely.
+
+- [#2344](https://github.com/tailor-platform/sdk/pull/2344) [`e010f8b`](https://github.com/tailor-platform/sdk/commit/e010f8bcdccc3cbecf12ef8062a51d5a95c41026) Thanks [@dqn](https://github.com/dqn)! - Propagate failures from the default subcommand a parent CLI command runs, so shortcuts like `tailor workspace`, `tailor workflow`, `tailor secret vault`, and `tailor executor webhook` exit non-zero and print the same error as their explicit `list` form instead of exiting 0 with no output. Scripts and CI steps that relied on the exit code of a parent shortcut now see authentication and other failures.
+
+- [#2325](https://github.com/tailor-platform/sdk/pull/2325) [`882ff68`](https://github.com/tailor-platform/sdk/commit/882ff68a1c8df95f76c23bd053dbf168a957119a) Thanks [@dqn](https://github.com/dqn)! - Move individual file loading and generation logs to verbose output while keeping progress and failures visible. Preserve failing plugin IDs, generation hooks, and causes in human-readable and JSON errors.
+
+- [#2336](https://github.com/tailor-platform/sdk/pull/2336) [`8c4e4a2`](https://github.com/tailor-platform/sdk/commit/8c4e4a27dc928f784eae82353eb8c7811e86d635) Thanks [@dqn](https://github.com/dqn)! - Keep the run's `--profile` and `--workspace-id` on the follow-up commands the CLI suggests, so copying a suggested command after `tailor workspace create --profile dev --ttl 24h`, `tailor auth status --profile dev`, `tailor authconnection authorize --profile dev`, `tailor executor list --profile dev`, or `tailor executor webhook list --profile dev` targets the same Platform and workspace as the run that printed it. `auth status` now reports a missing login as a `NOT_AUTHENTICATED` error whose suggested next command is `tailor login` with the same profile.
+
+- [#2323](https://github.com/tailor-platform/sdk/pull/2323) [`61fb8f9`](https://github.com/tailor-platform/sdk/commit/61fb8f9713c2118a896e6952b9fdeb63cce96a87) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @connectrpc to v2.2.0
+
+- [#2329](https://github.com/tailor-platform/sdk/pull/2329) [`cadee3a`](https://github.com/tailor-platform/sdk/commit/cadee3ab7955f741fc89208ff8a64f281e9539d2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.12.7
+
+- [#2072](https://github.com/tailor-platform/sdk/pull/2072) [`fd3595f`](https://github.com/tailor-platform/sdk/commit/fd3595f07ccb31ec280c948be481f19849a98a7f) Thanks [@toiroakr](https://github.com/toiroakr)! - Narrow the parsed TailorDB field type to the eleven field types the schema actually accepts (`uuid`, `string`, `boolean`, `integer`, `float`, `decimal`, `enum`, `date`, `datetime`, `time`, `nested`) instead of a bare string. Behavior is unchanged; the internal types now match what validation already enforced.
+
+- [#2322](https://github.com/tailor-platform/sdk/pull/2322) [`71f6134`](https://github.com/tailor-platform/sdk/commit/71f6134a34082c442f0d3bb202d9134441da0ccd) Thanks [@dqn](https://github.com/dqn)! - Enable verbose CLI diagnostics when GitHub Actions sets `RUNNER_DEBUG=1`, and include error stack traces consistently when `DEBUG=true` is set.
+
 ## 2.15.0
 
 ### Minor Changes
