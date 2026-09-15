@@ -27,6 +27,13 @@ human-readable text or empty stdout.
 Commands that only perform side effects and do not define a structured result may leave stdout empty
 even when `--json` is passed.
 
+Set `TAILOR_OUTPUT=json` to default every command to JSON without passing `--json` each time. This
+is intended for agents, scripts, and CI steps that parse CLI output. An explicit flag always wins,
+so `--json=false` forces table output and `TAILOR_OUTPUT=table` restores it where no flag is
+present; any other value (including unset) leaves the default unchanged. JSON mode also disables
+interactive prompts, so set the variable per invocation or per job rather than exporting it from a
+shell profile; a command that needed a prompt names the variable when it refuses.
+
 Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
 a command failure under `--json` emits a JSON error envelope to stderr. Failures you can act on — an
 invalid or missing option, a resource that does not exist, an invalid configuration, or an unmet
@@ -205,7 +212,8 @@ Resolution rules:
   globally installed one.
 - **Place global flags after the plugin command.** Only the arguments following the plugin name are
   forwarded; a global flag placed before it (e.g. `tailor --json tailordb erd export`) is consumed by
-  the host CLI and does not reach the plugin. Write `tailor tailordb erd export --json` instead.
+  the host CLI and does not reach the plugin. Write `tailor tailordb erd export --json` instead, or
+  set `TAILOR_OUTPUT=json`, which plugins inherit from the environment.
 
 Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
 `node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is

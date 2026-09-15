@@ -26,7 +26,9 @@ Use these files as the single source of truth:
 1. Prefer SDK docs above assumptions. If behavior is unclear, cite the exact doc path used.
 2. Keep examples compatible with Node.js 22+.
 3. For CLI questions, verify command and option names from `docs/cli-reference.md` and `docs/cli/*.md`.
-4. For configuration questions, validate examples against `docs/configuration.md` and related service docs.
+4. When running CLI commands, set `TAILOR_OUTPUT=json` (or pass `--json`) and parse the JSON instead
+   of the table output, which is formatted for humans and may change.
+5. For configuration questions, validate examples against `docs/configuration.md` and related service docs.
 
 ## Quick Navigation
 

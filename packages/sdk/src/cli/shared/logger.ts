@@ -5,13 +5,45 @@ import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
 
 /**
- * Error thrown when a prompt is attempted in a non-interactive environment
+ * Environment variable selecting the default output format for every command.
+ *
+ * Set `TAILOR_OUTPUT=json` in agent and automation contexts so the CLI emits
+ * JSON without passing `--json` on every call. An explicit `--json` always
+ * wins, so `TAILOR_OUTPUT=table` restores table output only where no flag is
+ * present. Because JSON mode also suppresses interactive prompts, prefer
+ * setting this per invocation over exporting it from a shell profile.
+ */
+const OUTPUT_ENV_VAR = "TAILOR_OUTPUT";
+
+/** What selected JSON output: an explicit `--json`, or `TAILOR_OUTPUT`. */
+export type JsonModeSource = "flag" | "env";
+
+/**
+ * Whether `TAILOR_OUTPUT` selects JSON output.
+ * @returns `true` when the variable is set to `json` (case-insensitive)
+ */
+export function outputEnvIsJson(): boolean {
+  return process.env[OUTPUT_ENV_VAR]?.trim().toLowerCase() === "json";
+}
+
+/**
+ * Error thrown when a prompt is attempted in a non-interactive environment.
+ *
+ * JSON mode suppresses prompts, so name whatever selected it: an explicit
+ * `--json` stays enabled however the environment is set, while `TAILOR_OUTPUT`
+ * leaves nothing in the command line to explain the refusal.
  */
 export class CIPromptError extends Error {
   constructor(message?: string) {
+    const remedy =
+      _jsonModeSource === "flag"
+        ? " JSON output is enabled by --json; drop it to restore prompts."
+        : ` JSON output is enabled by ${OUTPUT_ENV_VAR}=json; unset it to restore prompts.`;
+    const reason = _jsonMode && _jsonModeSource !== undefined ? remedy : "";
     super(
-      message ??
-        "Interactive prompts are not available in this environment. Provide the required options explicitly.",
+      (message ??
+        "Interactive prompts are not available in this environment. Provide the required options explicitly.") +
+        reason,
     );
     this.name = "CIPromptError";
   }
@@ -94,6 +126,7 @@ export interface OutOptions {
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
 let _jsonMode = false;
+let _jsonModeSource: JsonModeSource | undefined;
 let _verbose = false;
 
 // Values registered via `logger.registerSecret()`, redacted from diagnostic log output
@@ -358,6 +391,18 @@ export const logger = {
   },
   set jsonMode(value: boolean) {
     _jsonMode = value;
+    if (!value) _jsonModeSource = undefined;
+  },
+
+  /**
+   * Enable or disable JSON mode, recording what selected it so a suppressed
+   * prompt can name the right remedy.
+   * @param value - Whether JSON output is on
+   * @param source - What turned it on; omit when turning it off
+   */
+  setJsonMode(value: boolean, source?: JsonModeSource): void {
+    _jsonMode = value;
+    _jsonModeSource = value ? source : undefined;
   },
 
   get verbose(): boolean {
