@@ -65,9 +65,14 @@ jobs:
       - name: Get changed files
         id: changes
         run: |
-          # Include both modified and untracked files
-          files=$(git status --porcelain | awk '{print $2}' | tr '\n' ' ')
-          echo "files=${files}" >> "$GITHUB_OUTPUT"
+          # Include both modified and untracked files.
+          # commit-action expects one path per line: a space-joined list is
+          # passed to git ls-files as a single pathspec and matches nothing.
+          {
+            echo "files<<EOF"
+            git status --porcelain | cut -c4-
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Commit changes
         if: steps.changes.outputs.files != ''
