@@ -253,8 +253,10 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
       description: "Output as JSON",
       effect: (value, { args }) => {
         // An explicit flag always wins; TAILOR_OUTPUT only supplies the default.
-        const json = value || (!isJsonExplicit(args) && outputEnvIsJson());
-        logger.jsonMode = json;
+        const explicit = isJsonExplicit(args);
+        const fromEnv = !explicit && outputEnvIsJson();
+        const json = value || fromEnv;
+        logger.setJsonMode(json, fromEnv ? "env" : "flag");
         // Commands branch on the parsed value, so keep both views in step.
         (args as { json?: boolean }).json = json;
       },
