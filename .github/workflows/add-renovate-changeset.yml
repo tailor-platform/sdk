@@ -75,10 +75,18 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           NAMES: ${{ steps.changeset_check.outputs.changed-names }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eo pipefail
           FILENAME=".changeset/renovate-${PR_NUMBER}.md"
-          SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node .github/scripts/neutralize-mentions.mjs)
+
+          # Fetch the mention-neutralizing script from the default branch
+          # instead of running this PR's own (possibly tampered) checkout of
+          # it, since this step's token has pull-requests:write.
+          SANITIZER=$(mktemp --suffix=.mjs)
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/scripts/neutralize-mentions.mjs?ref=${{ github.event.repository.default_branch }}" \
+            -H "Accept: application/vnd.github.raw" > "$SANITIZER"
+          SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node "$SANITIZER")
 
           {
             echo "---"

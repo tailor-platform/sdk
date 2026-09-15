@@ -443,10 +443,15 @@ jobs:
             exit 0
           fi
 
-          # Neutralizes @mentions so unrelated contributors quoted from
-          # release notes are never notified. Node is guaranteed present
-          # (the Claude action runs on it).
-          node .github/scripts/neutralize-mentions.mjs "$REVIEW_BODY_FILE"
+          # Fetch the mention-neutralizing script from the default branch
+          # instead of running this PR's own (possibly tampered) checkout of
+          # it, since this step's token has pull-requests:write. Neutralizes
+          # @mentions so unrelated contributors quoted from release notes are
+          # never notified.
+          SANITIZER=$(mktemp --suffix=.mjs)
+          gh api "repos/$REPO/contents/.github/scripts/neutralize-mentions.mjs?ref=${{ github.event.repository.default_branch }}" \
+            -H "Accept: application/vnd.github.raw" > "$SANITIZER"
+          node "$SANITIZER" "$REVIEW_BODY_FILE"
 
           # Guarantee the upsert marker is present even if the model omitted it.
           if ! grep -qF "$MARKER" "$REVIEW_BODY_FILE"; then
