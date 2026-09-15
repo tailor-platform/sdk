@@ -41,7 +41,8 @@ tailor setup check
 | `setup check`         | Audit generated workflows for drift against the current config/repo (read-only).                     |
 | `setup delete`        | Delete managed workflow/action file(s) and their `.github/tailor.lock` entries.                      |
 
-Run `tailor setup <command> --help` for the full option reference.
+Run `tailor setup ci <command> --help` for CI generator options, or
+`tailor setup <command> --help` for `deps`, `check`, and `delete` options.
 
 ## Further reading
 
