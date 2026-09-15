@@ -64,7 +64,7 @@ runs:
         # Example: pnpm --filter <package-name> run build:static
         # Note: this run: command is user-editable. Custom build commands are preserved across
         # reruns and are not treated as drift by setup check. Other edits to this file are flagged
-        # as drift and will be overwritten if you re-run setup action with --force.
+        # as drift and will be overwritten if you re-run setup ci action with --force.
         true
     # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply
