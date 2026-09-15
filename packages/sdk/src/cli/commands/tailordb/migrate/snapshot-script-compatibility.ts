@@ -13,7 +13,10 @@ function usesLegacyData(expr: string): boolean {
   );
 }
 
-function normalizeValidations(validations: SnapshotValidation[]): SnapshotValidation[] {
+function normalizeValidations(
+  validations: SnapshotValidation[],
+  dataAccess: string,
+): SnapshotValidation[] {
   const normalized: SnapshotValidation[] = [];
   let firstLegacy: SnapshotValidation | undefined;
   let checks: string[] = [];
@@ -25,7 +28,7 @@ function normalizeValidations(validations: SnapshotValidation[]): SnapshotValida
       script: {
         ...firstLegacy.script,
         expr: assertParsableExpression(
-          `((_data) => { ${checks.join("\n")} })(_newRecord)`,
+          `((_data) => { ${checks.join("\n")} })(${dataAccess})`,
           "legacy migration validator",
         ),
       },
@@ -54,17 +57,21 @@ function normalizeField(
   field: SnapshotFieldConfig,
   inputAccess: string,
   updateAccess: string,
+  validateAccess: string,
   fieldName: string,
 ): SnapshotFieldConfig {
   const normalized = { ...field };
   if (field.fields) {
-    // The script compiler binds __el while evaluating hooks in array elements.
+    // The script compiler binds __el while evaluating hooks and validators in array elements.
     const nestedInput = field.array ? "__el" : `${inputAccess}?.[${JSON.stringify(fieldName)}]`;
     const nestedUpdate = field.array ? "__el" : `${updateAccess}?.[${JSON.stringify(fieldName)}]`;
+    const nestedValidate = field.array
+      ? "__el"
+      : `${validateAccess}?.[${JSON.stringify(fieldName)}]`;
     normalized.fields = Object.fromEntries(
       Object.entries(field.fields).map(([name, nested]) => [
         name,
-        normalizeField(nested, nestedInput, nestedUpdate, name),
+        normalizeField(nested, nestedInput, nestedUpdate, nestedValidate, name),
       ]),
     );
   }
@@ -85,7 +92,7 @@ function normalizeField(
     }
   }
   if (field.validate) {
-    normalized.validate = normalizeValidations(field.validate);
+    normalized.validate = normalizeValidations(field.validate, validateAccess);
   }
   return normalized;
 }
@@ -103,7 +110,13 @@ export function normalizeTableScriptCompatibility(
     fields: Object.fromEntries(
       Object.entries(table.fields).map(([name, field]) => [
         name,
-        normalizeField(field, "_input", "Object.assign({}, _oldRecord, _input)", name),
+        normalizeField(
+          field,
+          "_input",
+          "Object.assign({}, _oldRecord, _input)",
+          "_newRecord",
+          name,
+        ),
       ]),
     ),
   };

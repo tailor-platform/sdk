@@ -391,6 +391,52 @@ describe("migration file compatibility", () => {
     });
   });
 
+  test("scopes a legacy validator's sibling-field access to its own nested container", () => {
+    const raw = readHistoricalSnapshot();
+    const siblingValidator = (fieldName: string): TailorDBSnapshotType["fields"][string] => ({
+      type: "int",
+      required: false,
+      validate: [
+        {
+          script: {
+            expr: `(({value,data})=>value==null||data.${fieldName}==null?true:value>data.${fieldName})({ value: _value, data: _data })`,
+          },
+          errorMessage: `max must be greater than ${fieldName}`,
+        },
+      ],
+    });
+    raw.tables.Customer!.fields = {
+      profile: {
+        type: "nested",
+        required: false,
+        fields: { min: { type: "int", required: false }, max: siblingValidator("min") },
+      },
+      entries: {
+        type: "nested",
+        required: false,
+        array: true,
+        fields: { min: { type: "int", required: false }, max: siblingValidator("min") },
+      },
+    };
+    const snapshot = loadSnapshot(writeSchemaToDir(testDir, 0, raw));
+
+    expect(
+      validate(snapshot.tables.Customer!, {
+        profile: { min: 1, max: 5 },
+        entries: [{ min: 1, max: 5 }],
+      }),
+    ).toEqual({});
+    expect(
+      validate(snapshot.tables.Customer!, {
+        profile: { min: 5, max: 1 },
+        entries: [{ min: 5, max: 1 }],
+      }),
+    ).toEqual({
+      "profile.max": "max must be greater than min",
+      "entries[0].max": "max must be greater than min",
+    });
+  });
+
   test.each([
     ['typeof _data !== "undefined" && _data.name', "Alice"],
     ["typeof _data", "object"],
