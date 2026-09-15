@@ -49,3 +49,11 @@ test("Web Standard / ECMAScript globals remain available after whitelist cleanup
   expect(typeof setTimeout).toBe("function");
   expect(typeof Promise).toBe("function");
 });
+
+test("Temporal survives whitelist cleanup when the Node process provides it", () => {
+  // This suite's vitest.config.ts passes --harmony-temporal so this assertion
+  // is meaningful; without it, `Temporal` would be undefined regardless of
+  // the environment's whitelist.
+  expect(typeof Temporal).toBe("object");
+  expect(Temporal.PlainDate.from("2026-09-15").toString()).toBe("2026-09-15");
+});

@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: { alias: { "@": sdkSrc } },
   test: {
     watch: false,
+    execArgv: ["--harmony-temporal"],
     environment: resolve(here, "../environment.ts"),
     setupFiles: [resolve(here, "../setup.ts")],
     include: ["./**/*.test.ts"],

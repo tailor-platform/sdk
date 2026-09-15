@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "ESNext.Temporal"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "ScriptHost", "ESNext.Temporal"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
