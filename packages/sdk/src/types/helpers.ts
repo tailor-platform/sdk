@@ -18,19 +18,29 @@ export type IsUnion<T, U extends T = T> = T extends unknown
     : true
   : never;
 
-// Reading the bare name `Temporal.PlainDate` here would force every
-// consumer's tsc to resolve the ambient `Temporal` global to type-check this
-// module's declarations (even under `skipLibCheck: false`, and even for
-// consumers who never touch a `temporal` date field), because it's a
-// generic type alias whose full definition ships in the public `.d.ts`.
-// Reaching it structurally through `globalThis` instead means a `lib`
-// without `Temporal` makes this resolve to `never` — a silent no-op in the
-// unions below — rather than a compile error.
-export type TemporalPlainDate = typeof globalThis extends { Temporal: infer T }
-  ? T extends { PlainDate: new (...args: never[]) => infer Instance }
-    ? Instance
+// Naming an ambient global class directly (e.g. `Temporal.PlainDate`) would
+// force every consumer's tsc to resolve it to type-check a module that
+// mentions the name — even under `skipLibCheck: false`, and even for
+// consumers whose code never touches that global — because a public generic
+// type alias ships its full definition in the `.d.ts`. Reaching the global
+// structurally through `globalThis` instead means a `lib` that doesn't
+// declare it makes this resolve to `never` (a silent no-op wherever it's
+// unioned in) rather than a compile error, so a type can opt into an
+// experimental or optional ambient global without that requirement leaking
+// to consumers who never use it.
+type OptionalGlobalInstance<
+  Namespace extends PropertyKey,
+  Member extends PropertyKey,
+> = typeof globalThis extends { [N in Namespace]: infer T }
+  ? Member extends keyof T
+    ? T[Member] extends new (...args: never[]) => infer Instance
+      ? Instance
+      : never
     : never
   : never;
+
+// The calendar-date representation `t.date({ as: "temporal" })` uses.
+export type TemporalPlainDate = OptionalGlobalInstance<"Temporal", "PlainDate">;
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export type DeepWritable<T> = T extends Date | TemporalPlainDate | RegExp | Function
