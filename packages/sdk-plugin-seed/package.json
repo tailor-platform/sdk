@@ -37,7 +37,7 @@
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/shared": "workspace:^",
-    "@types/node": "24.13.3",
+    "@types/node": "24.13.4",
     "eslint-plugin-zod": "4.12.1",
     "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
