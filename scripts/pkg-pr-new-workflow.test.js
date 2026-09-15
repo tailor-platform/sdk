@@ -26,4 +26,9 @@ describe("pkg.pr.new workflow", () => {
     expect(workflow).toContain("EXPECTED_SEED_PLUGIN_URL");
     expect(workflow).toContain('.devDependencies["@tailor-platform/sdk-plugin-seed"]');
   });
+
+  test("scopes the pnpm smoke-test install to the SDK's own postinstall", () => {
+    expect(workflow).toContain("pnpm install --ignore-scripts");
+    expect(workflow).toContain("node node_modules/@tailor-platform/sdk/postinstall.mjs");
+  });
 });

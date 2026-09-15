@@ -106,7 +106,7 @@ async function ensureWorkspacePackage(worktreePath: string): Promise<void> {
   const packageJson = await readJsonObject(packageJsonPath);
   packageJson.private ??= true;
   packageJson.type ??= "module";
-  packageJson.packageManager ??= "pnpm@11.1.2";
+  packageJson.packageManager ??= "pnpm@12.4.1";
   const scripts = isObject(packageJson.scripts) ? packageJson.scripts : {};
   packageJson.scripts = {
     ...scripts,
