@@ -26,6 +26,13 @@ test("stdin/stdout mode leaves text without '@' unchanged", () => {
   assert.equal(result.stdout, input);
 });
 
+test("an option-injection-looking title is treated as inert stdin data, not a Node flag", () => {
+  const input = "--eval=process.stdout.write('pwned')";
+  const result = spawnSync(process.execPath, [script], { input, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, input);
+});
+
 test("file mode rewrites the file in place, preserving UTF-8 content", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "neutralize-mentions-"));
   t.after(() => rmSync(dir, { recursive: true }));
