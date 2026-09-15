@@ -162,11 +162,6 @@ describe("plugin dispatch argument forwarding", () => {
       expected: ["--json", "export", "--verbose"],
     },
     {
-      name: "a profile typed before the plugin name",
-      argv: ["--profile", "alpha", "erd", "export"],
-      expected: ["--profile", "alpha", "export"],
-    },
-    {
       name: "a preceding flag kept ahead of a trailing double dash",
       argv: ["--json", "erd", "export", "--", "--json"],
       expected: ["--json", "export", "--", "--json"],
