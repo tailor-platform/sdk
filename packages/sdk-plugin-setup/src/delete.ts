@@ -62,7 +62,7 @@ function warnCoordinatorReferences(
       logger.warn(
         `Coordinator "${coordinator.workspaceName}" still references this action's directory ` +
           `(${match.target.inputs.dir}). Remove \`${match.target.workspaceName}\` from the ` +
-          `relevant \`--action\` value and re-run \`tailor setup coordinate\` to update it.`,
+          `relevant \`--action\` value and re-run \`tailor setup ci coordinate\` to update it.`,
       );
     }
   }
@@ -83,7 +83,7 @@ export async function setupDelete(options: DeleteOptions): Promise<void> {
   if (!lock || lock.targets.length === 0) {
     throw new Error(
       "No managed workflows found (.github/tailor.lock is missing or empty). " +
-        "Run `tailor setup branch` (or another setup subcommand) first.",
+        "Run `tailor setup ci branch` (or another setup subcommand) first.",
     );
   }
 

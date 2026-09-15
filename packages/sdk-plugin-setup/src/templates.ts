@@ -9,7 +9,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 11;
+export const TEMPLATE_VERSION = 12;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -663,7 +663,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
 /**
  * Render the content of the user-owned .github/actions/tailor-setup/action.yml local action.
  *
- * This file is generated once by `setup coordinate` and never overwritten.
+ * This file is generated once by `setup ci coordinate` and never overwritten.
  * It wraps the setup and install actions with the package manager baked in.
  * @param params - Package manager configuration
  * @returns File content string
@@ -671,7 +671,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
 export function renderTailorSetupAction(params: { packageManager: PackageManager }): string {
   const { packageManager } = params;
   return [
-    `# This file is user-owned. Generated once by \`tailor setup coordinate\` and never overwritten.`,
+    `# This file is user-owned. Generated once by \`tailor setup ci coordinate\` and never overwritten.`,
     `# Customize freely: add pre/post steps, change install flags, etc.`,
     `name: Tailor Setup`,
     `description: Install dependencies and run tailor setup for composite action callers.`,
