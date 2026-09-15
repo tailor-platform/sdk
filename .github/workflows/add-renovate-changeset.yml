@@ -78,16 +78,7 @@ jobs:
         run: |
           set -eo pipefail
           FILENAME=".changeset/renovate-${PR_NUMBER}.md"
-
-          # --- Static mention guard (deterministic, not AI-dependent) -----------
-          # Insert a zero-width space (U+200B) right after EVERY '@' so the text
-          # renders identically but GitHub never parses it as a mention. We do
-          # not try to match only "real" handles: ZWSP is invisible, so
-          # over-inserting is harmless, while missing one would notify someone.
-          # Node is guaranteed present (bundled on the ubuntu-latest runner image).
-          SAFE_TITLE=$(node -e '
-            process.stdout.write(process.argv[1].replace(/@/g, "@\u200b"));
-          ' "${PR_TITLE}")
+          SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node .github/scripts/neutralize-mentions.mjs)
 
           {
             echo "---"

@@ -6,4 +6,4 @@
 "@tailor-platform/sdk-plugin-tailordb-erd": patch
 ---
 
-chore(deps): update dependency @types/node to v24.13.4
+chore(deps): update dependency @​types/node to v24.13.4
