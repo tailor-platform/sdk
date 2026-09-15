@@ -181,6 +181,14 @@ export default defineConfig({
       },
     ],
     environment: "node",
+    // Node's V8 gated the TC39 Temporal API behind this flag until it shipped
+    // by default (already the case on Node 26); the Platform function runtime
+    // enables it unconditionally. `t.date({ as: "temporal" })` needs a real
+    // `Temporal` global under test. Only pass the flag when it's still
+    // needed: V8 eventually drops flags once the feature they gate has
+    // shipped, and passing a dropped flag unconditionally would fail workers
+    // with "bad option".
+    execArgv: typeof Temporal === "undefined" ? ["--harmony-temporal"] : [],
     globals: true,
     watch: false,
     // The dedicated tsconfig narrows tsc to the type-test files and their

@@ -363,11 +363,12 @@ function decimal<const Opt extends FieldOptions>(options?: Opt) {
  * @returns A date field
  * @example t.date()
  * @example t.date({ as: "date" })
+ * @example t.date({ as: "temporal" })
  */
 function date<const Opt extends DateFieldOptions = FieldOptions>(options?: Opt) {
   const field = createTailorField<"date", Opt, DateFieldValue<Opt["as"]>>("date", options);
-  if (options?.as === "date") {
-    field._metadata.as = "date";
+  if (options?.as === "date" || options?.as === "temporal") {
+    field._metadata.as = options.as;
   }
   return field;
 }

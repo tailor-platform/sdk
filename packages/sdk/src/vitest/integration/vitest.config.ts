@@ -12,6 +12,11 @@ export default defineConfig({
   resolve: { alias: { "@": sdkSrc } },
   test: {
     watch: false,
+    // See packages/sdk/vitest.config.ts for why this is gated: V8 eventually
+    // drops a flag once the feature it gates has shipped, and an
+    // unconditional flag would then fail this project's workers with "bad
+    // option".
+    execArgv: typeof Temporal === "undefined" ? ["--harmony-temporal"] : [],
     environment: resolve(here, "../environment.ts"),
     setupFiles: [resolve(here, "../setup.ts")],
     include: ["./**/*.test.ts"],

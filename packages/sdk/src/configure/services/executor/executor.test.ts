@@ -606,6 +606,9 @@ describe("resolverExecutedTrigger", () => {
         rows: [{ day: new Date("2026-09-07") }],
         plain: "2026-09-07",
         at: new Date("2026-09-07T12:00:00Z"),
+        temporalDay: Temporal.PlainDate.from("2026-09-07"),
+        temporalDays: [Temporal.PlainDate.from("2026-09-07")],
+        temporalRows: [{ day: Temporal.PlainDate.from("2026-09-07") }],
       }),
       output: t.object({
         day: t.date({ as: "date" }),
@@ -614,6 +617,9 @@ describe("resolverExecutedTrigger", () => {
         rows: t.object({ day: t.date({ as: "date" }) }, { array: true }),
         plain: t.date(),
         at: t.datetime(),
+        temporalDay: t.date({ as: "temporal" }),
+        temporalDays: t.date({ as: "temporal", array: true }),
+        temporalRows: t.object({ day: t.date({ as: "temporal" }) }, { array: true }),
       }),
     });
 
@@ -632,6 +638,9 @@ describe("resolverExecutedTrigger", () => {
           expectTypeOf(args.result.rows).toEqualTypeOf<{ day: string }[]>();
           expectTypeOf(args.result.plain).toEqualTypeOf<string>();
           expectTypeOf(args.result.at).toEqualTypeOf<string>();
+          expectTypeOf(args.result.temporalDay).toEqualTypeOf<string>();
+          expectTypeOf(args.result.temporalDays).toEqualTypeOf<string[]>();
+          expectTypeOf(args.result.temporalRows).toEqualTypeOf<{ day: string }[]>();
         },
       },
     });

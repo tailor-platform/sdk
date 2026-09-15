@@ -114,4 +114,94 @@ describe("resolver Date representation bundles", () => {
       "Invalid date at rows[0].day: Expected a Date with a 4-digit year (0000-9999), but received an invalid Date",
     );
   });
+
+  test.each(["production", "function run"] as const)(
+    "converts Temporal.PlainDate through %s",
+    async (mode) => {
+      using tmp = tempCwd("sdk-date-representation-temporal-");
+      const scopeDir = path.join(tmp.dir, "node_modules/@tailor-platform");
+      fs.mkdirSync(scopeDir, { recursive: true });
+      fs.symlinkSync(path.resolve(__dirname, "../../../.."), path.join(scopeDir, "sdk"), "dir");
+      const sourceFile = path.join(tmp.dir, "resolver.mjs");
+      fs.writeFileSync(
+        sourceFile,
+        `
+      import { createResolver, t } from "@tailor-platform/sdk";
+      const fields = {
+        rows: t.object({
+          day: t.date({ as: "temporal" }),
+          dates: t.date({ as: "temporal", array: true }),
+          absent: t.date({ as: "temporal", optional: true }),
+        }, { array: true }),
+      };
+      export default createResolver({
+        name: "temporalDateRoundTrip",
+        operation: "query",
+        input: { ...fields, invalidOutput: t.bool({ optional: true }) },
+        body: async ({ input }) => {
+          const row = input.rows[0];
+          if (!(row.day instanceof Temporal.PlainDate) ||
+              !row.dates.every((day) => day instanceof Temporal.PlainDate)) {
+            throw new Error("Expected Temporal.PlainDate input in body");
+          }
+          if (input.invalidOutput) row.day = "not-a-plain-date";
+          else row.day = row.day.add({ days: 1 });
+          return { rows: input.rows };
+        },
+        output: fields,
+      });
+    `,
+      );
+      const detected = await detectFunctionType({ filePath: sourceFile });
+      expect(detected.type).toBe("resolver");
+      const input = {
+        rows: [
+          {
+            day: "2024-02-29",
+            dates: ["0000-02-29", "0099-12-31"],
+            absent: null,
+          },
+        ],
+      };
+      expect(
+        detected.inputSchema?.parse({ value: input, data: input, invoker: null }).issues,
+      ).toBeUndefined();
+
+      const code =
+        mode === "production"
+          ? (
+              await bundleResolvers({
+                namespace: "date",
+                config: { files: ["./resolver.mjs"] },
+                baseDir: tmp.dir,
+                inlineSourcemap: true,
+              })
+            ).get("temporalDateRoundTrip")!
+          : (
+              await bundleForRun({
+                detected,
+                sourceFile,
+                baseDir: tmp.dir,
+                machineUser: { name: "test", id: "test", attributes: null, attributeList: [] },
+                workspaceId: "test",
+              })
+            ).bundledCode;
+      const bundlePath = path.join(tmp.dir, "bundle.mjs");
+      fs.writeFileSync(bundlePath, code);
+      const { main } = await import(pathToFileURL(bundlePath).href);
+      const run = (value: unknown) =>
+        main(mode === "production" ? { input: value, caller: null, env: {} } : value);
+
+      await expect(run(input)).resolves.toEqual({
+        rows: [{ ...input.rows[0], day: "2024-03-01" }],
+      });
+      expect(input.rows[0]?.day).toBe("2024-02-29");
+      await expect(run({ rows: [{ ...input.rows[0], day: "2023-02-29" }] })).rejects.toThrow(
+        "valid calendar date",
+      );
+      await expect(run({ ...input, invalidOutput: true })).rejects.toThrow(
+        "Expected a Temporal.PlainDate instance at rows[0].day",
+      );
+    },
+  );
 });

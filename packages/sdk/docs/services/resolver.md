@@ -143,6 +143,25 @@ This option also works in nested objects and with `array: true` or `optional: tr
 
 An executor subscribing to the resolver with `resolverExecutedTrigger` receives the event as JSON, so `result` holds the `YYYY-MM-DD` string rather than a `Date`.
 
+Use `t.date({ as: "temporal" })` to work with the [`Temporal.PlainDate`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/PlainDate) global instead:
+
+```typescript
+createResolver({
+  name: "nextDay",
+  operation: "query",
+  input: { day: t.date({ as: "temporal" }) },
+  body: ({ input }) => input.day.add({ days: 1 }),
+  output: t.date({ as: "temporal" }),
+});
+```
+
+`Temporal.PlainDate` has no time zone, so date arithmetic is unambiguous. It works the same as `as: "date"` otherwise: `array`/`optional`/nested objects are supported, input must be a valid calendar date, output must have a 4-digit year (0000-9999), and an executor receiving the event through `resolverExecutedTrigger` sees the `YYYY-MM-DD` string.
+
+`Temporal` is a JavaScript engine global, not something this package exports. Two things depend on your own project, not on the SDK:
+
+- **Types**: TypeScript only knows the `Temporal` namespace when `compilerOptions.lib` includes `"ESNext"` (or `"ESNext.Temporal"` specifically), which requires TypeScript 6.0 or later — earlier versions don't ship that `lib` entry at all. Without it, `t.date({ as: "temporal" })`'s value type reports a descriptive error naming this requirement, and code that tries to use it (for example calling `.add()` on the field) fails to type-check. You'll only see a raw "Cannot find namespace 'Temporal'" error if your own code names `Temporal` directly. This requirement only applies where you actually use `as: "temporal"`; other fields and projects that don't use this option type-check normally regardless of `lib` or TypeScript version.
+- **Runtime**: deployed resolvers and `tailor function run` execute on the Tailor Platform, which provides `Temporal`. If you call `Temporal` from your own code running elsewhere (for example a local Node.js script or a unit test for your resolver's `body`), check that your JavaScript runtime supports it — some versions require an experimental flag.
+
 ### Custom Type Name (`typeName`)
 
 Enum and nested object fields in input/output schemas generate protobuf type names automatically (e.g., `{ResolverName}{FieldName}`). Use `typeName()` to set a custom name:

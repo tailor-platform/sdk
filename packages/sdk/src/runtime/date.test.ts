@@ -17,15 +17,20 @@ describe("Date representation", () => {
     const date = t.date({ as: "date" });
     const optional = t.date({ as: "date", optional: true });
     const array = t.date({ as: "date", array: true, optional: true });
+    const temporal = t.date({ as: "temporal" });
     expectTypeOf<output<typeof plain>>().toEqualTypeOf<string>();
     expectTypeOf<output<typeof explicit>>().toEqualTypeOf<string>();
     expectTypeOf<output<typeof date>>().toEqualTypeOf<Date>();
     expectTypeOf<output<typeof optional>>().toEqualTypeOf<Date | null>();
     expectTypeOf<output<typeof array>>().toEqualTypeOf<Date[] | null>();
+    expectTypeOf<output<typeof temporal>>().toEqualTypeOf<Temporal.PlainDate>();
     const dynamic = (options: DateFieldOptions) => t.date(options);
-    expectTypeOf<output<ReturnType<typeof dynamic>>>().toEqualTypeOf<string | Date>();
+    expectTypeOf<output<ReturnType<typeof dynamic>>>().toEqualTypeOf<
+      string | Date | Temporal.PlainDate
+    >();
     expect(plain.metadata).not.toHaveProperty("as");
     expect(date.metadata.as).toBe("date");
+    expect(temporal.metadata.as).toBe("temporal");
   });
 
   test("converts nested input before field and parent validation without mutating it", () => {
@@ -194,5 +199,161 @@ describe("Date representation", () => {
     });
     expect(ResolverSchema.parse(resolver).input?.date?.metadata.as).toBe("date");
     expect(ResolverSchema.parse(resolver).output.fields.date?.metadata.as).toBe("date");
+  });
+});
+
+describe("Temporal.PlainDate representation", () => {
+  test("converts nested input before field and parent validation without mutating it", () => {
+    const validateDate = vi.fn(({ value }: { value: Temporal.PlainDate }) => {
+      expect(value).toBeInstanceOf(Temporal.PlainDate);
+    });
+    const date = t.date({ as: "temporal" }).description("Day").validate(validateDate);
+    const schema = t
+      .object({
+        rows: t
+          .object(
+            {
+              date,
+              dates: t.date({ as: "temporal", array: true }),
+              absent: t.date({ as: "temporal", optional: true }),
+              plain: t.date(),
+            },
+            { array: true },
+          )
+          .validate(({ value }) => {
+            expectTypeOf(value[0]!.date).toEqualTypeOf<Temporal.PlainDate>();
+            expect(value[0]?.date).toBeInstanceOf(Temporal.PlainDate);
+          }),
+      })
+      .description("Rows");
+    const input = {
+      rows: [
+        {
+          date: "2024-02-29",
+          dates: ["0000-01-01", "0099-12-31"],
+          absent: null,
+          plain: "2026-09-07",
+        },
+      ],
+    };
+    const expected = {
+      rows: [
+        {
+          date: Temporal.PlainDate.from("2024-02-29"),
+          dates: [Temporal.PlainDate.from("0000-01-01"), Temporal.PlainDate.from("0099-12-31")],
+          absent: null,
+          plain: "2026-09-07",
+        },
+      ],
+    };
+    expect(parse(schema, input)).toEqual({ value: expected });
+    expect(
+      parseInputFields({ fields: schema.fields, value: input, data: input, invoker: null }),
+    ).toEqual({ value: expected });
+    expect(validateDate).toHaveBeenCalledWith({ value: Temporal.PlainDate.from("2024-02-29") });
+    expect(input.rows[0]?.date).toBe("2024-02-29");
+    expect(serializeDateFields(schema, expected)).toEqual(input);
+    expect(expected.rows[0]?.date).toBeInstanceOf(Temporal.PlainDate);
+  });
+
+  test.each([
+    "2023-02-29",
+    "2026-02-30",
+    "2026-13-01",
+    "2026-00-01",
+    "2026-01-00",
+    "2026-04-31",
+    "invalid",
+    "2026-09-07T00:00:00Z",
+    // Temporal.PlainDate.from accepts these ISO 8601 forms, but they aren't
+    // the canonical YYYY-MM-DD wire format: an extended year would parse
+    // successfully here and only fail later, when serializing an unchanged
+    // value back out; a calendar annotation would silently normalize away.
+    "+010000-01-01",
+    "-000001-01-01",
+    "2026-09-07[u-ca=hebrew]",
+  ])("rejects invalid date input %s with a nested path", (value) => {
+    const schema = t.object({
+      rows: t.object({ date: t.date({ as: "temporal" }) }, { array: true }),
+    });
+    expect(parse(schema, { rows: [{ date: value }] })).toMatchObject({
+      issues: [{ path: ["rows", "[0]", "date"] }],
+    });
+  });
+
+  test("collects invalid calendar dates before running custom validators", () => {
+    const validate = vi.fn();
+    const schema = t
+      .object({ dates: t.date({ as: "temporal", array: true }).validate(validate) })
+      .validate(validate);
+    expect(parse(schema, { dates: ["2023-02-29", "2026-04-31"] })).toMatchObject({
+      issues: [{ path: ["dates", "[0]"] }, { path: ["dates", "[1]"] }],
+    });
+    expect(validate).not.toHaveBeenCalled();
+  });
+
+  test("surfaces a missing Temporal global instead of reporting an invalid date", () => {
+    const originalTemporal = Temporal;
+    // @ts-expect-error simulating a runtime that never defines Temporal
+    delete globalThis.Temporal;
+    try {
+      const schema = t.object({ date: t.date({ as: "temporal" }) });
+      expect(() => parse(schema, { date: "2026-09-07" })).toThrow(ReferenceError);
+    } finally {
+      globalThis.Temporal = originalTemporal;
+    }
+  });
+
+  test.each([null, undefined])("preserves optional input and output %s", (value) => {
+    const field = t.date({ as: "temporal", optional: true });
+    expect(field.parse({ value, data: {}, invoker: null })).toEqual({ value: null });
+    expect(serializeDateFields(field, value)).toBe(value);
+  });
+
+  test("formats using the ISO 8601 calendar, ignoring any other calendar attached", () => {
+    const field = t.date({ as: "temporal", array: true });
+    expect(
+      serializeDateFields(field, [
+        Temporal.PlainDate.from("2026-09-07"),
+        Temporal.PlainDate.from("0099-01-02"),
+        Temporal.PlainDate.from("0000-02-29"),
+        Temporal.PlainDate.from("9999-12-31"),
+        // Temporal.PlainDate always stores an ISO year/month/day internally;
+        // a non-ISO calendar only changes what the `year`/`month`/`day`
+        // getters report, not the digits `toString()` serializes.
+        Temporal.PlainDate.from("2026-09-07").withCalendar("hebrew"),
+      ]),
+    ).toEqual(["2026-09-07", "0099-01-02", "0000-02-29", "9999-12-31", "2026-09-07"]);
+  });
+
+  test.each([
+    ["+010000-01-01", "+010000-01-01"],
+    ["-000001-01-01", "-000001-01-01"],
+  ])("rejects unrepresentable Temporal.PlainDate output %s", (iso, received) => {
+    const schema = t.object({ dates: t.date({ as: "temporal", array: true }) });
+    expect(() => serializeDateFields(schema, { dates: [Temporal.PlainDate.from(iso)] })).toThrow(
+      `Invalid date at dates[0]: Expected a Temporal.PlainDate with a 4-digit year (0000-9999), but received ${received}`,
+    );
+  });
+
+  test("rejects strings returned for a Temporal.PlainDate representation", () => {
+    expect(() => serializeDateFields(t.date({ as: "temporal" }), "2026-09-07")).toThrow(
+      'Expected a Temporal.PlainDate instance at the top-level value, but received a string ("2026-09-07")',
+    );
+  });
+
+  test("keeps resolver body types and parsed metadata aligned", () => {
+    const resolver = createResolver({
+      name: "temporalExample",
+      operation: "query",
+      input: { date: t.date({ as: "temporal" }) },
+      body: ({ input }) => {
+        expectTypeOf(input.date).toEqualTypeOf<Temporal.PlainDate>();
+        return { date: input.date };
+      },
+      output: { date: t.date({ as: "temporal" }) },
+    });
+    expect(ResolverSchema.parse(resolver).input?.date?.metadata.as).toBe("temporal");
+    expect(ResolverSchema.parse(resolver).output.fields.date?.metadata.as).toBe("temporal");
   });
 });

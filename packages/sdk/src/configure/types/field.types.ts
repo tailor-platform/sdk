@@ -3,6 +3,11 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
+import type { OptionalGlobalInstance, TypeLevelError } from "#/types/helpers";
+
+// The calendar-date representation `t.date({ as: "temporal" })` uses.
+type TemporalPlainDate = OptionalGlobalInstance<"Temporal", "PlainDate">;
+
 export interface EnumValue {
   value: string;
   description?: string;
@@ -37,7 +42,7 @@ export type TailorToTs = {
 } & Record<TailorFieldType, unknown>;
 
 export interface FieldMetadata {
-  as?: "string" | "date";
+  as?: "string" | "date" | "temporal";
   description?: string;
   required?: boolean;
 
@@ -64,11 +69,20 @@ export type FieldOptions = {
 
 /** Options for a date field. */
 export type DateFieldOptions = FieldOptions & {
-  /** Use a Date at midnight UTC instead of a YYYY-MM-DD string. Defaults to string. */
-  as?: "string" | "date";
+  /**
+   * Use a Date at midnight UTC, or a Temporal.PlainDate, instead of a
+   * YYYY-MM-DD string. Defaults to string.
+   */
+  as?: "string" | "date" | "temporal";
 };
 
-export type DateFieldValue<As> = As extends "date" ? Date : string;
+export type DateFieldValue<As> = As extends "date"
+  ? Date
+  : As extends "temporal"
+    ? [TemporalPlainDate] extends [never]
+      ? TypeLevelError<'t.date({ as: "temporal" }) requires "ESNext.Temporal" in compilerOptions.lib (TypeScript 6.0+)'>
+      : TemporalPlainDate
+    : string;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;
