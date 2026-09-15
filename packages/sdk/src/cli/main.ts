@@ -34,7 +34,7 @@ import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
-import { commonArgs } from "./shared/args";
+import { commonArgs, workspaceArgs } from "./shared/args";
 import { runDefaultSubCommand } from "./shared/command";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
@@ -136,16 +136,20 @@ export const mainCommand = withCompletionCommand({
 
 void runMain(mainCommand, {
   version: packageJson.version,
+  // `profile` is global so a dispatched plugin still receives it when typed
+  // before the plugin name; a command declaring its own wins on merge.
   // strip unknown keys
-  globalArgs: z.object(commonArgs),
+  globalArgs: z.object({ ...commonArgs, profile: workspaceArgs.profile }),
   displayErrors: false,
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
-  onUnknownSubcommand: ({ commandPath, name, args }) =>
+  onUnknownSubcommand: ({ commandPath, name, args, precedingArgs }) =>
     dispatchPluginWithInstallHint({
       commandPath,
       name,
-      args,
+      // Prepend, so a repeated flag stays last-wins and a preceding one is not
+      // pushed past a trailing `--` into positional territory.
+      args: [...precedingArgs, ...args],
       cliName,
       profile: process.env.TAILOR_PLATFORM_PROFILE,
     }),

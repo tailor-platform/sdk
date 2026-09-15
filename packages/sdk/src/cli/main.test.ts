@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
@@ -128,5 +129,78 @@ describe("parent command shortcuts on success", () => {
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Manage when a workspace becomes prunable.");
+  }, 20_000);
+});
+
+describe("plugin dispatch argument forwarding", () => {
+  /**
+   * Writes a `tailor-<name>` probe onto PATH that records the argv it receives.
+   * @param dir - Directory to place the probe in (prepended to PATH by the caller)
+   * @param name - Plugin subcommand name, so the binary is `tailor-<name>`
+   * @returns Path of the JSON file the probe writes its argv to
+   */
+  function writeProbePlugin(dir: string, name: string): string {
+    const capture = path.join(dir, "argv.json");
+    const probe = path.join(dir, `tailor-${name}`);
+    fs.writeFileSync(
+      probe,
+      `#!/usr/bin/env node\n` +
+        `require("node:fs").writeFileSync(${JSON.stringify(capture)}, JSON.stringify(process.argv.slice(2)));\n`,
+    );
+    fs.chmodSync(probe, 0o755);
+    return capture;
+  }
+
+  test.each([
+    {
+      name: "a global flag typed before the plugin name",
+      argv: ["--json", "erd", "export"],
+      expected: ["--json", "export"],
+    },
+    {
+      name: "flags on both sides of the plugin name",
+      argv: ["--json", "erd", "export", "--verbose"],
+      expected: ["--json", "export", "--verbose"],
+    },
+    {
+      name: "a profile typed before the plugin name",
+      argv: ["--profile", "alpha", "erd", "export"],
+      expected: ["--profile", "alpha", "export"],
+    },
+    {
+      name: "a preceding flag kept ahead of a trailing double dash",
+      argv: ["--json", "erd", "export", "--", "--json"],
+      expected: ["--json", "export", "--", "--json"],
+    },
+  ])(
+    "forwards $name",
+    ({ argv, expected }) => {
+      expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(
+        true,
+      );
+      using tmp = tempCwd("cli-plugin-forward-");
+      const capture = writeProbePlugin(tmp.dir, "erd");
+
+      const result = runCli(argv, tmp.dir, { PATH: `${tmp.dir}:${process.env.PATH ?? ""}` });
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(JSON.parse(fs.readFileSync(capture, "utf8"))).toEqual(expected);
+    },
+    20_000,
+  );
+
+  test("answers --help itself instead of dispatching a plugin", () => {
+    expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
+    using tmp = tempCwd("cli-plugin-help-");
+    const capture = writeProbePlugin(tmp.dir, "erd");
+
+    const result = runCli(["--help", "erd", "export"], tmp.dir, {
+      PATH: `${tmp.dir}:${process.env.PATH ?? ""}`,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(existsSync(capture)).toBe(false);
   }, 20_000);
 });

@@ -210,9 +210,10 @@ Resolution rules:
 - **Lookup order:** the project's `node_modules/.bin` (nearest first, walking up from the current
   directory), then your `PATH`. So a plugin installed as a project dev-dependency takes precedence over a
   globally installed one.
-- **Place global flags after the plugin command.** Only the arguments following the plugin name are
-  forwarded; a global flag placed before it (e.g. `tailor --json tailordb erd export`) is consumed by
-  the host CLI and does not reach the plugin. Write `tailor tailordb erd export --json` instead.
+- **Global flags reach the plugin from either side.** `tailor --json tailordb erd export` and
+  `tailor tailordb erd export --json` both forward `--json`. A flag typed before the plugin name is
+  consumed by the host CLI first and then forwarded, so when the same flag appears on both sides the
+  later one wins. `--help` and `--version` are answered by the host CLI and never dispatch a plugin.
 
 Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
 `node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is
