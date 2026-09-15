@@ -1,7 +1,8 @@
 import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
-import { symbols } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -576,6 +577,87 @@ describe("planExecutor", () => {
 
       // All existing executors with matching label should be deleted
       expect(result.changeSet.deletes).toHaveLength(2);
+    });
+  });
+
+  describe("application env static website placeholders", () => {
+    function buildApplicationWithEnv(
+      executors: Executor[],
+      env: Record<string, string | number | boolean>,
+    ): Application {
+      return {
+        ...createMockApplication(executors),
+        env,
+        staticWebsiteServices: [{ name: "my-site" }],
+      };
+    }
+
+    function variablesExprOf(create: { request: { executor?: unknown } }): string {
+      return (
+        (create.request.executor as { targetConfig?: { config?: unknown } }).targetConfig
+          ?.config as {
+          case: "function";
+          value: { variables: { expr: string } };
+        }
+      ).value.variables.expr;
+    }
+
+    test("resolves name:url env values into the args expression once per application", async () => {
+      const getStaticWebsite = vi
+        .fn()
+        .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
+      const client = { ...createMockClient([]), getStaticWebsite } as OperatorClient;
+      const application = buildApplicationWithEnv(
+        [createMockExecutor("executor-a"), createMockExecutor("executor-b")],
+        { SITE_URL: "my-site:url", CALLBACK_URL: "my-site:url/callback", RETRIES: 3 },
+      );
+
+      const result = await planExecutor(buildPlanContext(application, { client }));
+
+      expect(result.changeSet.creates).toHaveLength(2);
+      for (const create of result.changeSet.creates) {
+        const variablesExpr = variablesExprOf(create);
+        expect(variablesExpr).toContain('"SITE_URL":"https://site.example.com"');
+        expect(variablesExpr).toContain('"CALLBACK_URL":"https://site.example.com/callback"');
+        expect(variablesExpr).toContain('"RETRIES":3');
+        expect(variablesExpr).not.toContain("my-site:url");
+      }
+      // One lookup per placeholder value, not per executor: both executors
+      // embed the same env, so it is resolved once for the application.
+      expect(getStaticWebsite).toHaveBeenCalledTimes(2);
+    });
+
+    test("keeps the placeholder when the static website is created later in the same run", async () => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const getStaticWebsite = vi.fn().mockRejectedValue(new ConnectError("gone", Code.NotFound));
+      const client = { ...createMockClient([]), getStaticWebsite } as OperatorClient;
+      const application = buildApplicationWithEnv([createMockExecutor("executor-a")], {
+        SITE_URL: "my-site:url",
+      });
+
+      const result = await planExecutor(
+        buildPlanContext(application, {
+          client,
+          expectedLocalStaticWebsiteNames: new Set(["my-site"]),
+        }),
+      );
+
+      expect(variablesExprOf(result.changeSet.creates[0]!)).toContain('"SITE_URL":"my-site:url"');
+      expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining("is created later in this deploy"),
+      );
+    });
+
+    test("does not look up static websites when env holds no placeholder", async () => {
+      const getStaticWebsite = vi.fn();
+      const client = { ...createMockClient([]), getStaticWebsite } as OperatorClient;
+      const application = buildApplicationWithEnv([createMockExecutor("executor-a")], {
+        API_URL: "https://literal.example.com",
+      });
+
+      await planExecutor(buildPlanContext(application, { client }));
+
+      expect(getStaticWebsite).not.toHaveBeenCalled();
     });
   });
 

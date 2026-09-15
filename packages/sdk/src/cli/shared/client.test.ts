@@ -27,6 +27,7 @@ import {
   POOLED_UPLOAD_METHODS,
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
+  resolveStaticWebsiteUrlsInEnv,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
   type OperatorClient,
@@ -1451,6 +1452,99 @@ describe("resolveStaticWebsiteUrls", () => {
     expect(resolved).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
       'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
+    );
+  });
+});
+
+describe("resolveStaticWebsiteUrlsInEnv", () => {
+  function makeClient(
+    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+  ): OperatorClient {
+    return {
+      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
+    } as unknown as OperatorClient;
+  }
+
+  test("resolves :url values and leaves every other value untouched", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "https://site.example.com" } }));
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
+      SITE_URL: "my-site:url",
+      CALLBACK_URL: "my-site:url/callback",
+      API_URL: "https://literal.example.com",
+      RETRIES: 3,
+      DEBUG: false,
+    });
+
+    expect(resolved).toEqual({
+      SITE_URL: "https://site.example.com",
+      CALLBACK_URL: "https://site.example.com/callback",
+      API_URL: "https://literal.example.com",
+      RETRIES: 3,
+      DEBUG: false,
+    });
+  });
+
+  test("returns the record as-is without a lookup when no value is a placeholder", async () => {
+    const getStaticWebsite = vi.fn();
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const env = { API_URL: "https://literal.example.com", RETRIES: 3 };
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", env);
+
+    expect(resolved).toBe(env);
+    expect(getStaticWebsite).not.toHaveBeenCalled();
+  });
+
+  test("keeps the placeholder instead of dropping the key when the site is missing", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
+      SITE_URL: "unknown:url",
+    });
+
+    expect(resolved).toEqual({ SITE_URL: "unknown:url" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "unknown" not found for env "SITE_URL" configuration. Leaving the env "SITE_URL" value unresolved.',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'env "SITE_URL" keeps the unresolved value "unknown:url". The literal pattern is passed to your code at runtime.',
+    );
+  });
+
+  test("keeps the placeholder and points at the next deploy when the site is created later in this run", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(
+      client,
+      "ws-1",
+      { SITE_URL: "my-site:url" },
+      { expectedLocalNames: new Set(["my-site"]) },
+    );
+
+    expect(resolved).toEqual({ SITE_URL: "my-site:url" });
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+      'env "SITE_URL" keeps the unresolved value "my-site:url" because static website "my-site" is created later in this deploy. Deploy again once it exists to inject its URL.',
+    );
+  });
+
+  test("keeps the placeholder when the site exists but has no URL yet", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
+      SITE_URL: "my-site:url",
+    });
+
+    expect(resolved).toEqual({ SITE_URL: "my-site:url" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" has no URL assigned yet. Leaving the env "SITE_URL" value unresolved.',
     );
   });
 });

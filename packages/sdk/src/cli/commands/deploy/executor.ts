@@ -17,7 +17,7 @@ import {
   getApplicationAuthNamespace,
   requireApplicationAuthNamespace,
 } from "#/cli/shared/auth-namespace";
-import { type OperatorClient } from "#/cli/shared/client";
+import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
@@ -43,6 +43,7 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import { resolveApplicationEnv } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
@@ -124,6 +125,9 @@ export async function planExecutor(context: PlanContext) {
   });
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
+  // Resolved once per application: every executor embeds the same `env`.
+  const env =
+    Object.keys(executors).length > 0 ? await resolveApplicationEnv(context) : application.env;
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest({
@@ -131,7 +135,7 @@ export async function planExecutor(context: PlanContext) {
       appName: application.name,
       appId: application.id,
     });
-    const desiredExecutor = protoExecutor(context, executor);
+    const desiredExecutor = protoExecutor(context, executor, env);
     if (existing) {
       const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,
@@ -501,10 +505,10 @@ function resolveIdpNamespace(
 function protoExecutor(
   context: PlanContext,
   executor: Executor,
+  env: ApplicationEnv,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const { application } = context;
   const appName = application.name;
-  const env = application.env;
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;

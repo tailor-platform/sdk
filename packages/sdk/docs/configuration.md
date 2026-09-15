@@ -245,6 +245,23 @@ export default defineConfig({
 });
 ```
 
+A value can reference a [static website](./services/staticwebsite.md#type-safe-url-references) through its `url` property, the same reference `cors` and OAuth2 redirect URIs accept. Resolver and executor code then reads the deployed website URL:
+
+```typescript
+const website = defineStaticWebSite("my-frontend", { description: "Frontend" });
+
+export default defineConfig({
+  name: "my-app",
+  env: {
+    siteUrl: website.url, // https://my-frontend.example.com
+    callbackUrl: `${website.url}/callback`, // https://my-frontend.example.com/callback
+  },
+  staticWebsites: [website],
+});
+```
+
+On the first deploy the website does not exist yet, so the value is delivered as the unresolved reference and the CLI warns about it; deploy again once the website exists to inject its URL.
+
 `tailor.config.ts` runs locally when an SDK command loads the config. If values come from your shell or an env file, SDK commands can load them before config evaluation with the global [`--env-file`](./cli-reference.md#environment-file-loading) and `--env-file-if-exists` options:
 
 ```typescript

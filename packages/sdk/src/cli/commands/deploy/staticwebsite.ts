@@ -6,7 +6,13 @@ import {
   type RemoveCustomDomainRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-platform/tailor-proto/staticwebsite_pb";
-import { getOrNull, type OperatorClient } from "#/cli/shared/client";
+import {
+  type ApplicationEnv,
+  getOrNull,
+  hasStaticWebsiteUrlPlaceholder,
+  type OperatorClient,
+  resolveStaticWebsiteUrlsInEnv,
+} from "#/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
@@ -146,6 +152,35 @@ export function expectedLocalStaticWebsiteNames(context: PlanContext): ReadonlyS
     context.expectedLocalStaticWebsiteNames ??
     new Set(context.application.staticWebsiteServices.map((website) => website.name))
   );
+}
+
+/** Per-plan memo keeping `resolveApplicationEnv` to a single lookup per application. */
+const applicationEnvCache = new WeakMap<PlanContext, Promise<ApplicationEnv>>();
+
+/**
+ * Application `env` with `name:url` static website placeholders resolved.
+ *
+ * `env` is embedded verbatim into the expressions that hand arguments to user
+ * code, so it goes through the same resolution as `cors` and OAuth2 redirect
+ * URIs instead of shipping the raw pattern. Resolved once per plan context and
+ * shared by every planner that embeds `env`.
+ * @param context - Planning context
+ * @returns The application's env with resolvable placeholders replaced by URLs
+ */
+export function resolveApplicationEnv(context: PlanContext): Promise<ApplicationEnv> {
+  const cached = applicationEnvCache.get(context);
+  if (cached) return cached;
+
+  const { client, workspaceId, application } = context;
+  // `expectedLocalStaticWebsiteNames` walks the application's services, so it
+  // is only computed when there is actually a placeholder to resolve.
+  const resolved = Object.values(application.env).some(hasStaticWebsiteUrlPlaceholder)
+    ? resolveStaticWebsiteUrlsInEnv(client, workspaceId, application.env, {
+        expectedLocalNames: expectedLocalStaticWebsiteNames(context),
+      })
+    : Promise.resolve(application.env);
+  applicationEnvCache.set(context, resolved);
+  return resolved;
 }
 
 /**

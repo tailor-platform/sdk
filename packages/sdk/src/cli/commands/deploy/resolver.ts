@@ -17,7 +17,7 @@ import {
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { type ApplicationEnv, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import {
   assertNoPublishEventsConflict,
   publishEventsConflict,
@@ -51,6 +51,7 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import { resolveApplicationEnv } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
@@ -153,6 +154,8 @@ export async function planPipeline(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, application.id, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
+  // Resolved once per application: every resolver embeds the same `env`.
+  const env = pipelines.length > 0 ? await resolveApplicationEnv(context) : application.env;
   const { changeSet: resolverChangeSet } = await planResolvers(
     client,
     workspaceId,
@@ -160,7 +163,7 @@ export async function planPipeline(context: PlanContext) {
     executors,
     context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
-    application.env,
+    env,
     getApplicationAuthNamespace(application),
     forceApplyAll,
     {
@@ -335,7 +338,7 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
-  env: Record<string, string | number | boolean>,
+  env: ApplicationEnv,
   authNamespace: string | undefined,
   forceApplyAll = false,
   records: ResolverRecordInputs = {},
@@ -527,7 +530,7 @@ function processResolver(
   namespace: string,
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
-  env: Record<string, string | number | boolean>,
+  env: ApplicationEnv,
   authNamespace: string | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [

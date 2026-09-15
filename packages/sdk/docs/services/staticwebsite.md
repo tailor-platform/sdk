@@ -113,6 +113,23 @@ const auth = defineAuth("my-auth", {
 });
 ```
 
+### Application Environment Variables
+
+```typescript
+const website = defineStaticWebSite("my-frontend", {
+  description: "Frontend application",
+});
+
+export default defineConfig({
+  env: {
+    siteUrl: website.url, // https://my-frontend.example.com
+  },
+  staticWebsites: [website],
+});
+```
+
+Resolver and executor code that reads [`env`](../configuration.md#environment-variables) receives the deployed URL. On the first deploy, where the website does not exist yet, the unresolved reference is delivered instead and the CLI warns about it; deploy again to inject the URL.
+
 ## Complete Example
 
 ```typescript
