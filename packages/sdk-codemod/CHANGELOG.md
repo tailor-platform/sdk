@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.10
+
+### Patch Changes
+
+- [#2328](https://github.com/tailor-platform/sdk/pull/2328) [`bbb817b`](https://github.com/tailor-platform/sdk/commit/bbb817b87b66963bf5840430665712db15cc4495) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#2331](https://github.com/tailor-platform/sdk/pull/2331) [`73cb3fa`](https://github.com/tailor-platform/sdk/commit/73cb3fab10ee9f24d5ade55b1b497d610d8b99e6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.3
+
+- [#2350](https://github.com/tailor-platform/sdk/pull/2350) [`4537014`](https://github.com/tailor-platform/sdk/commit/4537014882c2ff0115e09753158dc7eda0bcc767) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @types/node to v24.13.4
+
 ## 0.8.9
 
 ### Patch Changes
