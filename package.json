@@ -52,7 +52,7 @@
     "@changesets/changelog-github": "1.0.1",
     "@changesets/cli": "3.0.2",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.13.3",
+    "@types/node": "24.13.4",
     "eslint-plugin-zod": "4.12.1",
     "knip": "6.34.0",
     "lefthook": "2.1.12",
