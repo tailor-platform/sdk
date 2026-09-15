@@ -68,22 +68,15 @@ jobs:
       - name: Update generator expected fixtures
         run: pnpm --filter example run test:generator:update-expects
 
-      - name: Get changed files
-        id: changes
-        run: |
-          # Include untracked files too, so newly generated fixtures (e.g. a
-          # schema for a new type) are committed and not silently dropped.
-          files=$( { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u | tr '\n' ' ')
-          echo "files=${files}" >> "$GITHUB_OUTPUT"
-
+      # Omitting `files` lets commit-action list the files itself with
+      # `git ls-files --modified --others --exclude-standard`, which also
+      # covers untracked output. It no-ops when nothing changed.
       - name: Commit changes
-        if: steps.changes.outputs.files != ''
         uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
           app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
           commit_message: "chore: run generate"
-          files: ${{ steps.changes.outputs.files }}
 
   generate-cross-platform:
     needs: changes
