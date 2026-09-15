@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
 import { loadConfig } from "./config-loader";
+import { getErrorDiagnostics } from "./error-diagnostics";
 
 // Assembled at runtime: spelled out in full, this fixture is indistinguishable
 // from a live credential to the repository's own push protection.
@@ -16,6 +17,15 @@ function writeConfig(source: string): string {
   const configPath = path.join(dir, "tailor.config.ts");
   fs.writeFileSync(configPath, source);
   return configPath;
+}
+
+async function rejectionOf(promise: Promise<unknown>): Promise<Error> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error("expected the config to be rejected");
 }
 
 afterEach(() => {
@@ -43,12 +53,13 @@ describe("loadConfig", () => {
     ]);
   });
 
-  test("rejects a module without a default export", async () => {
+  test("rejects a module without a default export, pointing at the config file", async () => {
     const configPath = writeConfig(`export const name = "test-app";`);
 
-    await expect(loadConfig(configPath)).rejects.toThrow(
-      "Invalid Tailor config module: default export not found",
-    );
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error.message).toContain("Invalid Tailor config module: default export not found");
+    expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
   test("rejects a credential in env, naming the config it came from", async () => {
@@ -56,10 +67,11 @@ describe("loadConfig", () => {
       `export default { name: "test-app", env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } };`,
     );
 
-    await expect(loadConfig(configPath)).rejects.toThrow(
-      /env\.SLACK_BOT_TOKEN \(matched slack: SLACK_TOKEN\)/,
-    );
-    await expect(loadConfig(configPath)).rejects.toThrow(configPath);
+    const error = await rejectionOf(loadConfig(configPath));
+
+    expect(error.message).toMatch(/env\.SLACK_BOT_TOKEN \(matched slack: SLACK_TOKEN\)/);
+    expect(error.message).toContain(configPath);
+    expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
   test("resolves an allowed entry to its value, so the reason never travels with it", async () => {
