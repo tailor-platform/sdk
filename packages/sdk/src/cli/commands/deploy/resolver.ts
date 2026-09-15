@@ -51,7 +51,6 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
-import { resolveApplicationEnv } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
@@ -154,8 +153,6 @@ export async function planPipeline(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, application.id, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  // Resolved once per application: every resolver embeds the same `env`.
-  const env = pipelines.length > 0 ? await resolveApplicationEnv(context) : application.env;
   const { changeSet: resolverChangeSet } = await planResolvers(
     client,
     workspaceId,
@@ -163,7 +160,7 @@ export async function planPipeline(context: PlanContext) {
     executors,
     context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
-    env,
+    application.env,
     getApplicationAuthNamespace(application),
     forceApplyAll,
     {

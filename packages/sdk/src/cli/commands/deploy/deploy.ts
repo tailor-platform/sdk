@@ -134,6 +134,20 @@ function collectExpectedLocalStaticWebsiteNames(
   return websiteNames;
 }
 
+// Same set as collectExpectedLocalStaticWebsiteNames, read from the loaded
+// configs so it is available before any of them is bundled.
+function collectExpectedLocalStaticWebsiteNamesFromConfigs(
+  configs: ReadonlyArray<{ config: { staticWebsites?: ReadonlyArray<{ name: string }> } }>,
+): ReadonlySet<string> {
+  const websiteNames = new Set<string>();
+  for (const { config } of configs) {
+    for (const website of config.staticWebsites ?? []) {
+      websiteNames.add(website.name);
+    }
+  }
+  return websiteNames;
+}
+
 /**
  * Detect whether any resource owned by this application was last applied by a
  * different SDK version, in which case every resource is re-applied.
@@ -665,6 +679,8 @@ async function deployInternal(
           workspaceCommandArgs: workspaceRecoveryArgs(options, cliContext),
           workspaceCommandJson: cliContext?.json || logger.jsonMode,
         });
+    const expectedLocalStaticWebsiteNames =
+      collectExpectedLocalStaticWebsiteNamesFromConfigs(preflightConfigs);
     const targets = await withSpan("build", async () => {
       const noCache = options?.noCache ?? false;
       const packageJson = await readPackageJson();
@@ -682,6 +698,9 @@ async function deployInternal(
         noCache,
         packageVersion: packageJson.version ?? "unknown",
         cacheDir,
+        client: workspace?.client,
+        workspaceId: workspace?.workspaceId,
+        expectedLocalStaticWebsiteNames,
       });
 
       return targets;

@@ -307,7 +307,7 @@ describe("planPipeline (resolver service level)", () => {
     });
   });
 
-  describe("application env static website placeholders", () => {
+  describe("application env passthrough", () => {
     function createPipelineWithResolver(): ResolverService {
       return {
         namespace: "my-resolver",
@@ -323,36 +323,17 @@ describe("planPipeline (resolver service level)", () => {
       } as unknown as ResolverService;
     }
 
-    test("resolves name:url env values into the operationHook expression", async () => {
-      const getStaticWebsite = vi
-        .fn()
-        .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
-      const client = { ...createMockClient([]), getStaticWebsite } as OperatorClient;
+    test("embeds application.env into the operationHook expression verbatim", async () => {
       const application = createMockApplication([createPipelineWithResolver()], {
         env: { SITE_URL: "my-site:url" },
-        staticWebsiteServices: [{ name: "my-site" }],
       });
 
-      const result = await planPipeline(buildCtx({ client, application }));
+      const result = await planPipeline(buildCtx({ application }));
 
       const hookExpr =
         result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
           ?.operationHook?.expr;
-      expect(hookExpr).toContain('"SITE_URL":"https://site.example.com"');
-      expect(hookExpr).not.toContain("my-site:url");
-    });
-
-    test("does not look up static websites when env holds no placeholder", async () => {
-      const getStaticWebsite = vi.fn();
-      const client = { ...createMockClient([]), getStaticWebsite } as OperatorClient;
-      const application = createMockApplication([createPipelineWithResolver()], {
-        env: { API_URL: "https://literal.example.com" },
-        staticWebsiteServices: [],
-      });
-
-      await planPipeline(buildCtx({ client, application }));
-
-      expect(getStaticWebsite).not.toHaveBeenCalled();
+      expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
     });
   });
 

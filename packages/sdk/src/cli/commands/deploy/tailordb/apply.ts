@@ -134,7 +134,7 @@ function buildMigrationContextForScripts(
       ? Object.keys(authService.config.machineUsers)
       : undefined,
     dbConfig: dbConfigMap,
-    env: migrationContext.config.env ?? {},
+    env: migrationContext.application.env,
     configDir: path.dirname(migrationContext.config.path),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,

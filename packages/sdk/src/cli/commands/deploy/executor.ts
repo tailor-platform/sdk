@@ -43,7 +43,6 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
-import { resolveApplicationEnv } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
@@ -125,9 +124,6 @@ export async function planExecutor(context: PlanContext) {
   });
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
-  // Resolved once per application: every executor embeds the same `env`.
-  const env =
-    Object.keys(executors).length > 0 ? await resolveApplicationEnv(context) : application.env;
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest({
@@ -135,7 +131,7 @@ export async function planExecutor(context: PlanContext) {
       appName: application.name,
       appId: application.id,
     });
-    const desiredExecutor = protoExecutor(context, executor, env);
+    const desiredExecutor = protoExecutor(context, executor, application.env);
     if (existing) {
       const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,

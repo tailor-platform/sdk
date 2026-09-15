@@ -128,7 +128,7 @@ export default defineConfig({
 });
 ```
 
-Resolver and executor code that reads [`env`](../configuration.md#environment-variables) receives the deployed URL. On the first deploy, where the website does not exist yet, the unresolved reference is delivered instead and the CLI warns about it; deploy again to inject the URL.
+Resolver, executor, workflow job, and auth before-login hook code, and TailorDB migration scripts, that read [`env`](../configuration.md#environment-variables) receive the deployed URL. On the first deploy, where the website does not exist yet, the unresolved reference is delivered instead and the CLI warns about it; deploy again to inject the URL. `function run` does not resolve this reference; it passes the value exactly as declared.
 
 ## Complete Example
 

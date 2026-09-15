@@ -21,6 +21,7 @@ import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/service
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
+import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
@@ -442,6 +443,27 @@ export interface DefineApplicationParams {
 }
 
 /**
+ * Parameters for loading and bundling an application
+ */
+export interface LoadApplicationParams extends DefineApplicationParams {
+  /**
+   * Operator client used to resolve `name:url` static website placeholders in
+   * `env` before it is bundled into resolver, executor, workflow, and auth
+   * hook code. Omit to skip resolution (e.g. `--build-only`, which never
+   * reaches the platform); `env` then keeps any unresolved placeholder.
+   */
+  client?: OperatorClient;
+  /** Workspace ID paired with `client`. */
+  workspaceId?: string;
+  /**
+   * Static website names planned by any config in the same deploy run. An
+   * unresolved placeholder naming one of these is kept without a warning,
+   * since the website exists only once this run finishes.
+   */
+  expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
+}
+
+/**
  * Define a Tailor application from the given configuration.
  * This is a lightweight, synchronous function that creates the application
  * structure without loading tables or bundling files.
@@ -518,9 +540,16 @@ function assertWaitPointKeys(): void {
  * @returns Fully initialized application with workflow results
  */
 export async function loadApplication(
-  params: DefineApplicationParams,
+  params: LoadApplicationParams,
 ): Promise<LoadApplicationResult> {
-  const { config, pluginManager, bundleCache } = params;
+  const {
+    config,
+    pluginManager,
+    bundleCache,
+    client,
+    workspaceId,
+    expectedLocalStaticWebsiteNames,
+  } = params;
   const baseDir = path.dirname(config.path);
 
   // 1. Define services (synchronous)
@@ -535,7 +564,20 @@ export async function loadApplication(
     ignoreNullishValues,
   } = defineServices(config, baseDir, pluginManager);
 
-  // 2. Load TailorDB tables and process namespace plugins
+  // 2. Resolve `name:url` static website placeholders in `env` once, before any
+  // bundling or expression generation embeds it into resolver, executor,
+  // workflow, or auth hook code. Skipped without a client (e.g. `--build-only`,
+  // which never reaches the platform), leaving `env` as declared.
+  const env =
+    client && workspaceId
+      ? await resolveStaticWebsiteUrlsInEnv(client, workspaceId, config.env ?? {}, {
+          expectedLocalNames:
+            expectedLocalStaticWebsiteNames ??
+            new Set(staticWebsiteServices.map((website) => website.name)),
+        })
+      : (config.env ?? {});
+
+  // 3. Load TailorDB tables and process namespace plugins
   for (const tailordb of tailordbResult.tailorDBServices) {
     await tailordb.loadTypes();
     await tailordb.processNamespacePlugins();
@@ -544,36 +586,36 @@ export async function loadApplication(
     tailorDBServices: tailordbResult.tailorDBServices,
   });
 
-  // 3. Generate plugin files and determine executor file paths
+  // 4. Generate plugin files and determine executor file paths
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
     pluginManager,
     tailordbResult.tailorDBServices,
     config.path,
   );
 
-  // 4. Determine final executorService (const, no reassignment)
+  // 5. Determine final executorService (const, no reassignment)
   const executorService = defineExecutor(config.executor, baseDir, pluginExecutorFiles.length > 0);
 
-  // 5. Load and collect workflows
+  // 6. Load and collect workflows
   const workflowService = defineWorkflow(config.workflow, baseDir);
   if (workflowService) {
     await workflowService.loadWorkflows();
   }
 
-  // 6. Load and collect HTTP adapters
+  // 7. Load and collect HTTP adapters
   const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);
   if (httpAdapterService) {
     await httpAdapterService.loadAdapters();
   }
 
-  // 7. Build start context for workflow/job start transformation
+  // 8. Build start context for workflow/job start transformation
   const startContext = await buildStartContext(
     config.workflow,
     getApplicationAuthNamespace({ authService: authResult.authService, config }),
     baseDir,
   );
 
-  // 8. Resolve bundle settings
+  // 9. Resolve bundle settings
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(config.logLevel);
   // Shared across every bundle below so a project with many resolvers/executors/etc.
@@ -588,7 +630,7 @@ export async function loadApplication(
     authHooks: new Map(),
   };
 
-  // 9. Bundle resolvers
+  // 10. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
     const resolverBundles = await bundleResolvers({
       namespace: pipeline.namespace,
@@ -606,7 +648,7 @@ export async function loadApplication(
     }
   }
 
-  // 10. Bundle executors
+  // 11. Bundle executors
   if (executorService) {
     bundledScripts.executors = await bundleExecutors({
       config: executorService.config,
@@ -620,14 +662,14 @@ export async function loadApplication(
     });
   }
 
-  // 11. Bundle workflows
+  // 12. Bundle workflows
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
   if (workflowService && workflowService.jobs.length > 0) {
     const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
     workflowBuildResult = await bundleWorkflowJobs(
       workflowService.jobs,
       mainJobNames,
-      config.env ?? {},
+      env,
       startContext,
       baseDir,
       bundleCache,
@@ -638,7 +680,7 @@ export async function loadApplication(
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
-  // 12. Bundle HTTP adapters
+  // 13. Bundle HTTP adapters
   let httpAdapterBuildResult: HttpAdapterBundleResult | undefined;
   if (httpAdapterService && httpAdapterService.adapters.length > 0) {
     httpAdapterBuildResult = await bundleHttpAdapters(
@@ -655,14 +697,14 @@ export async function loadApplication(
     );
   }
 
-  // 13. Bundle auth hooks
+  // 14. Bundle auth hooks
   if (authResult.authService?.config.hooks?.beforeLogin) {
     const authName = authResult.authService.config.name;
     bundledScripts.authHooks = await bundleAuthHooks({
       configPath: config.path,
       authName,
       handlerAccessPath: `auth.hooks.beforeLogin.handler`,
-      env: config.env ?? {},
+      env,
       startContext,
       cache: bundleCache,
       inlineSourcemap,
@@ -672,7 +714,7 @@ export async function loadApplication(
     });
   }
 
-  // 14. Load resolver and executor definitions (for validation/logging)
+  // 15. Load resolver and executor definitions (for validation/logging)
   for (const pipeline of resolverResult.resolverServices) {
     await pipeline.loadResolvers();
   }
@@ -682,7 +724,7 @@ export async function loadApplication(
       await executorService.loadPluginExecutorFiles([...pluginExecutorFiles]);
     }
   }
-  // 15. Check the wait point keys every loaded module declared
+  // 16. Check the wait point keys every loaded module declared
   assertWaitPointKeys();
 
   if (workflowService) {
@@ -693,7 +735,7 @@ export async function loadApplication(
   }
   logger.newline();
 
-  // 16. Build immutable Application
+  // 17. Build immutable Application
   const application = buildApplication({
     config,
     tailordbResult,
@@ -707,7 +749,7 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-    env: config.env ?? {},
+    env,
   });
 
   return { application, workflowBuildResult, httpAdapterBuildResult, bundledScripts };
