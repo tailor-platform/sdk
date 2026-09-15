@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 2.17.0
+
+### Patch Changes
+
+- [#2364](https://github.com/tailor-platform/sdk/pull/2364) [`fa5b087`](https://github.com/tailor-platform/sdk/commit/fa5b0872e637d1b4c5d1fb9c7f8f38074dffd545) Thanks [@dqn](https://github.com/dqn)! - Remove the unused empty `.prettierrc` from the `generators` template, completing the same cleanup already applied to the other templates. The template formats with `oxfmt`, and `.oxfmtrc.json` keeps the generated `src/generated/` and `src/seed/` output out of formatting.
+
 ## 2.16.0
 
 ### Minor Changes

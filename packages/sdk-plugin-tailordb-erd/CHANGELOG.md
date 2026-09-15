@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.2.1
+
+### Patch Changes
+
+- [#2328](https://github.com/tailor-platform/sdk/pull/2328) [`bbb817b`](https://github.com/tailor-platform/sdk/commit/bbb817b87b66963bf5840430665712db15cc4495) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#2331](https://github.com/tailor-platform/sdk/pull/2331) [`73cb3fa`](https://github.com/tailor-platform/sdk/commit/73cb3fab10ee9f24d5ade55b1b497d610d8b99e6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.3
+
+- [#2350](https://github.com/tailor-platform/sdk/pull/2350) [`4537014`](https://github.com/tailor-platform/sdk/commit/4537014882c2ff0115e09753158dc7eda0bcc767) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @types/node to v24.13.4
+- Updated dependencies [[`18ac373`](https://github.com/tailor-platform/sdk/commit/18ac373d1d5eb863c9dabfc0f1a8c19c5a3a9422), [`3e8dc24`](https://github.com/tailor-platform/sdk/commit/3e8dc24bf2a5b55c811e28570dffb763baf9030e), [`f3289dd`](https://github.com/tailor-platform/sdk/commit/f3289dd9e373e479de8a1e0a9da8b026422d6fca), [`39f32f6`](https://github.com/tailor-platform/sdk/commit/39f32f64f3292e57691d6469fd81cecda5f45ee7), [`4a03de8`](https://github.com/tailor-platform/sdk/commit/4a03de85d81f29fed5023b6ae6dab206521d0e90), [`bbb817b`](https://github.com/tailor-platform/sdk/commit/bbb817b87b66963bf5840430665712db15cc4495), [`73cb3fa`](https://github.com/tailor-platform/sdk/commit/73cb3fab10ee9f24d5ade55b1b497d610d8b99e6), [`98a9615`](https://github.com/tailor-platform/sdk/commit/98a96153bda73cbbb72f8b6090c948eef6ed0c13), [`4537014`](https://github.com/tailor-platform/sdk/commit/4537014882c2ff0115e09753158dc7eda0bcc767), [`54eafd9`](https://github.com/tailor-platform/sdk/commit/54eafd96ff0d860ca39674acc36e26839e338850)]:
+  - @tailor-platform/sdk@2.17.0
+
 ## 0.2.0
 
 ### Minor Changes
