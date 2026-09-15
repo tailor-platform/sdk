@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import * as fs from "node:fs";
-import { existsSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
@@ -134,20 +133,20 @@ describe("parent command shortcuts on success", () => {
 
 describe("plugin dispatch argument forwarding", () => {
   /**
-   * Writes a `tailor-<name>` probe onto PATH that records the argv it receives.
-   * @param dir - Directory to place the probe in (prepended to PATH by the caller)
-   * @param name - Plugin subcommand name, so the binary is `tailor-<name>`
+   * Writes a `tailor-erd` probe into `dir` that records the argv it receives.
+   * The caller prepends `dir` to PATH so plugin resolution finds it.
+   * @param dir - Directory to place the probe in
    * @returns Path of the JSON file the probe writes its argv to
    */
-  function writeProbePlugin(dir: string, name: string): string {
+  function writeProbePlugin(dir: string): string {
     const capture = path.join(dir, "argv.json");
-    const probe = path.join(dir, `tailor-${name}`);
-    fs.writeFileSync(
+    const probe = path.join(dir, "tailor-erd");
+    writeFileSync(
       probe,
       `#!/usr/bin/env node\n` +
         `require("node:fs").writeFileSync(${JSON.stringify(capture)}, JSON.stringify(process.argv.slice(2)));\n`,
     );
-    fs.chmodSync(probe, 0o755);
+    chmodSync(probe, 0o755);
     return capture;
   }
 
@@ -179,13 +178,13 @@ describe("plugin dispatch argument forwarding", () => {
         true,
       );
       using tmp = tempCwd("cli-plugin-forward-");
-      const capture = writeProbePlugin(tmp.dir, "erd");
+      const capture = writeProbePlugin(tmp.dir);
 
       const result = runCli(argv, tmp.dir, { PATH: `${tmp.dir}:${process.env.PATH ?? ""}` });
 
       expect(result.error).toBeUndefined();
       expect(result.status).toBe(0);
-      expect(JSON.parse(fs.readFileSync(capture, "utf8"))).toEqual(expected);
+      expect(JSON.parse(readFileSync(capture, "utf8"))).toEqual(expected);
     },
     20_000,
   );
@@ -193,7 +192,7 @@ describe("plugin dispatch argument forwarding", () => {
   test("answers --help itself instead of dispatching a plugin", () => {
     expect(existsSync(builtEntry), "Build the SDK before running CLI subprocess tests").toBe(true);
     using tmp = tempCwd("cli-plugin-help-");
-    const capture = writeProbePlugin(tmp.dir, "erd");
+    const capture = writeProbePlugin(tmp.dir);
 
     const result = runCli(["--help", "erd", "export"], tmp.dir, {
       PATH: `${tmp.dir}:${process.env.PATH ?? ""}`,
