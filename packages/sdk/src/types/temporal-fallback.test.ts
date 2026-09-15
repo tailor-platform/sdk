@@ -14,6 +14,10 @@ afterAll(() => {
   }
 });
 
+// `skipLibCheck: false` and unfiltered diagnostics are deliberate: this test
+// pins the SDK's own advertised opt-in fallback, so it must also fail if a
+// direct `Temporal.PlainDate` reference is reintroduced into `helpers.ts` or
+// `field.types.ts` themselves, not just into files that merely import them.
 function diagnosticsFor(source: string, lib: string[]): string[] {
   const dir = mkdtempSync(join(tmpdir(), "tailor-temporal-fallback-"));
   tempDirs.push(dir);
@@ -24,7 +28,7 @@ function diagnosticsFor(source: string, lib: string[]): string[] {
     rootNames: [fileName],
     options: {
       strict: true,
-      skipLibCheck: true,
+      skipLibCheck: false,
       noEmit: true,
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.ESNext,
@@ -35,8 +39,10 @@ function diagnosticsFor(source: string, lib: string[]): string[] {
 
   return ts
     .getPreEmitDiagnostics(program)
-    .filter((diagnostic) => diagnostic.file?.fileName === fileName)
-    .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "));
+    .map(
+      (diagnostic) =>
+        `${diagnostic.file?.fileName ?? "<unknown>"}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`,
+    );
 }
 
 const NO_TEMPORAL_LIB = ["lib.es2022.d.ts"];

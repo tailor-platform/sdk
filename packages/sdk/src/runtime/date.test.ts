@@ -265,6 +265,13 @@ describe("Temporal.PlainDate representation", () => {
     "2026-04-31",
     "invalid",
     "2026-09-07T00:00:00Z",
+    // Temporal.PlainDate.from accepts these ISO 8601 forms, but they aren't
+    // the canonical YYYY-MM-DD wire format: an extended year would parse
+    // successfully here and only fail later, when serializing an unchanged
+    // value back out; a calendar annotation would silently normalize away.
+    "+010000-01-01",
+    "-000001-01-01",
+    "2026-09-07[u-ca=hebrew]",
   ])("rejects invalid date input %s with a nested path", (value) => {
     const schema = t.object({
       rows: t.object({ date: t.date({ as: "temporal" }) }, { array: true }),

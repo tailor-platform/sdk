@@ -28,7 +28,7 @@ export type IsUnion<T, U extends T = T> = T extends unknown
 // unioned in) rather than a compile error, so a type can opt into an
 // experimental or optional ambient global without that requirement leaking
 // to consumers who never use it.
-type OptionalGlobalInstance<
+export type OptionalGlobalInstance<
   Namespace extends PropertyKey,
   Member extends PropertyKey,
 > = typeof globalThis extends { [N in Namespace]: infer T }
@@ -39,18 +39,23 @@ type OptionalGlobalInstance<
     : never
   : never;
 
-// The calendar-date representation `t.date({ as: "temporal" })` uses.
-export type TemporalPlainDate = OptionalGlobalInstance<"Temporal", "PlainDate">;
-
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export type DeepWritable<T> = T extends Date | TemporalPlainDate | RegExp | Function
+export type DeepWritable<T> = T extends
+  | Date
+  | OptionalGlobalInstance<"Temporal", "PlainDate">
+  | RegExp
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  | Function
   ? T
   : T extends object
     ? { -readonly [P in keyof T]: DeepWritable<T[P]> } & {}
     : T;
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export type DeepReadonly<T> = T extends Date | TemporalPlainDate | RegExp | Function
+export type DeepReadonly<T> = T extends
+  | Date
+  | OptionalGlobalInstance<"Temporal", "PlainDate">
+  | RegExp
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  | Function
   ? T
   : T extends readonly (infer E)[]
     ? readonly DeepReadonly<E>[]
@@ -68,7 +73,7 @@ export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never
  * report the serialized form even when the type it derives from uses one of
  * those representations.
  */
-export type SerializeDates<T> = T extends Date | TemporalPlainDate
+export type SerializeDates<T> = T extends Date | OptionalGlobalInstance<"Temporal", "PlainDate">
   ? string
   : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     T extends RegExp | Function

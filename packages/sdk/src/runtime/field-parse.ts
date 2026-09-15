@@ -307,6 +307,9 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
     }
     if (field.type === "date" && field._metadata.as === "temporal") {
       try {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(`${item}`)) {
+          throw new RangeError(`Expected a canonical YYYY-MM-DD calendar date, received: ${item}`);
+        }
         return Temporal.PlainDate.from(`${item}`);
       } catch (error) {
         if (!(error instanceof RangeError)) throw error;

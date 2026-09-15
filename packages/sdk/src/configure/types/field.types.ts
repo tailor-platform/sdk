@@ -3,7 +3,10 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type { TemporalPlainDate, TypeLevelError } from "#/types/helpers";
+import type { OptionalGlobalInstance, TypeLevelError } from "#/types/helpers";
+
+// The calendar-date representation `t.date({ as: "temporal" })` uses.
+type TemporalPlainDate = OptionalGlobalInstance<"Temporal", "PlainDate">;
 
 export interface EnumValue {
   value: string;
