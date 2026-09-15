@@ -15,7 +15,7 @@ import {
   toPageDirection,
 } from "./args";
 import { defineAppCommand } from "./command";
-import { logger } from "./logger";
+import { CIPromptError, logger } from "./logger";
 import { tempCwd } from "./test-helpers/temp-cwd";
 
 describe("loadEnvFiles", () => {
@@ -401,6 +401,33 @@ describe("createCommonArgs effects", () => {
       }
     },
   );
+
+  test.each([
+    { argv: ["--json"], want: "--json", unwanted: "TAILOR_OUTPUT" },
+    { argv: [] as string[], want: "TAILOR_OUTPUT", unwanted: "--json" },
+  ])("a suppressed prompt names what selected JSON for $argv", async ({ argv, want, unwanted }) => {
+    const previousJsonMode = logger.jsonMode;
+    const previousArgv = process.argv;
+    vi.stubEnv("TAILOR_OUTPUT", "json");
+    try {
+      logger.jsonMode = false;
+      process.argv = [previousArgv[0] as string, "tailor", ...argv];
+      const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+      const result = await runCommand(command, argv, {
+        // Strip unknown keys the same way the CLI entrypoint parses global args.
+        globalArgs: z.object(createCommonArgs()),
+      });
+      expect(result.exitCode).toBe(0);
+      expect(logger.jsonMode).toBe(true);
+      const { message } = new CIPromptError();
+      expect(message).toContain(want);
+      expect(message).not.toContain(unwanted);
+    } finally {
+      process.argv = previousArgv;
+      vi.unstubAllEnvs();
+      logger.jsonMode = previousJsonMode;
+    }
+  });
 
   test.each([
     {
