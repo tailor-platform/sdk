@@ -18,15 +18,29 @@ export type IsUnion<T, U extends T = T> = T extends unknown
     : true
   : never;
 
+// Reading the bare name `Temporal.PlainDate` here would force every
+// consumer's tsc to resolve the ambient `Temporal` global to type-check this
+// module's declarations (even under `skipLibCheck: false`, and even for
+// consumers who never touch a `temporal` date field), because it's a
+// generic type alias whose full definition ships in the public `.d.ts`.
+// Reaching it structurally through `globalThis` instead means a `lib`
+// without `Temporal` makes this resolve to `never` — a silent no-op in the
+// unions below — rather than a compile error.
+export type TemporalPlainDate = typeof globalThis extends { Temporal: infer T }
+  ? T extends { PlainDate: new (...args: never[]) => infer Instance }
+    ? Instance
+    : never
+  : never;
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export type DeepWritable<T> = T extends Date | Temporal.PlainDate | RegExp | Function
+export type DeepWritable<T> = T extends Date | TemporalPlainDate | RegExp | Function
   ? T
   : T extends object
     ? { -readonly [P in keyof T]: DeepWritable<T[P]> } & {}
     : T;
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export type DeepReadonly<T> = T extends Date | Temporal.PlainDate | RegExp | Function
+export type DeepReadonly<T> = T extends Date | TemporalPlainDate | RegExp | Function
   ? T
   : T extends readonly (infer E)[]
     ? readonly DeepReadonly<E>[]
@@ -44,7 +58,7 @@ export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never
  * report the serialized form even when the type it derives from uses one of
  * those representations.
  */
-export type SerializeDates<T> = T extends Date | Temporal.PlainDate
+export type SerializeDates<T> = T extends Date | TemporalPlainDate
   ? string
   : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     T extends RegExp | Function

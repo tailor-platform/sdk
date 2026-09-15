@@ -3,6 +3,8 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
+import type { TemporalPlainDate } from "#/types/helpers";
+
 export interface EnumValue {
   value: string;
   description?: string;
@@ -74,7 +76,7 @@ export type DateFieldOptions = FieldOptions & {
 export type DateFieldValue<As> = As extends "date"
   ? Date
   : As extends "temporal"
-    ? Temporal.PlainDate
+    ? TemporalPlainDate
     : string;
 
 // Return Output type based on FieldOptions.
