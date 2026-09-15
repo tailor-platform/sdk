@@ -6,4 +6,4 @@
 "@tailor-platform/sdk-plugin-tailordb-erd": patch
 ---
 
-fix(deps): update @inquirer
+fix(deps): update @​inquirer

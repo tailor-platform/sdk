@@ -443,21 +443,10 @@ jobs:
             exit 0
           fi
 
-          # --- Static mention guard (deterministic, not AI-dependent) ----------
-          # Insert a zero-width space (U+200B) right after EVERY '@'. The text
-          # renders identically, but GitHub no longer parses it as a mention, so
-          # unrelated contributors quoted from release notes are never notified.
-          # We deliberately do not try to match only "real" handles: ZWSP is
-          # invisible, so over-inserting is harmless, while missing one would
-          # notify someone. Node is guaranteed present (the Claude action runs
-          # on it).
-          node -e '
-            const fs = require("fs");
-            const file = process.argv[1];
-            let text = fs.readFileSync(file, "utf8");
-            text = text.replace(/@/g, "@\u200b");
-            fs.writeFileSync(file, text);
-          ' "$REVIEW_BODY_FILE"
+          # Neutralizes @mentions so unrelated contributors quoted from
+          # release notes are never notified. Node is guaranteed present
+          # (the Claude action runs on it).
+          node .github/scripts/neutralize-mentions.mjs "$REVIEW_BODY_FILE"
 
           # Guarantee the upsert marker is present even if the model omitted it.
           if ! grep -qF "$MARKER" "$REVIEW_BODY_FILE"; then
