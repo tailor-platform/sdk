@@ -467,9 +467,9 @@ the job. Execution and configuration errors fail regardless of this variable.
 Running `check` on your own machine also verifies that
 `TAILOR_PLATFORM_WORKSPACE_ID` is set locally for any branch, tag, or
 coordinate target, since those workflows read it directly. `check` detects on
-its own when it is running inside GitHub Actions (no flag needed) and skips
-that local-only verification there, since the deploy job resolves the
-Environment variable itself at runtime.
+its own when it is running in CI (no flag needed) and skips that local-only
+verification there, since the deploy job resolves the Environment variable
+itself at runtime.
 
 ## Updating the generated workflow
 
