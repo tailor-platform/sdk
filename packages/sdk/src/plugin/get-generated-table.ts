@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { pickPluginArrays } from "./guards";
 import { PluginManager } from "./manager";
 import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 import type { Plugin, PluginOutput, TablePluginOutput } from "#/plugin/types";
@@ -25,9 +24,36 @@ interface ConfigCache {
 /** Cache: resolved config path -> loaded config data */
 const configCacheMap = new Map<string, ConfigCache>();
 
+const OPTIONAL_HOOK_KEYS = [
+  "onTableLoaded",
+  "onNamespaceLoaded",
+  "onTailorDBReady",
+  "onResolverReady",
+  "onExecutorReady",
+] as const;
+
+/**
+ * Check if a value is a Plugin instance. Mirrors PluginConfigSchema's shape without
+ * depending on zod, since this module must stay usable from a bundled executor.
+ * @param value - Value to check
+ * @returns True if value has the shape of Plugin
+ */
+function isPlugin(value: unknown): value is Plugin {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== "string" || typeof candidate.description !== "string") return false;
+  if (candidate.importPath !== undefined && typeof candidate.importPath !== "string") return false;
+  for (const key of OPTIONAL_HOOK_KEYS) {
+    if (candidate[key] !== undefined && typeof candidate[key] !== "function") return false;
+  }
+  const hasDefinitionTimeHooks = candidate.onTableLoaded || candidate.onNamespaceLoaded;
+  if (hasDefinitionTimeHooks && typeof candidate.importPath !== "string") return false;
+  return true;
+}
+
 /**
  * Load and cache config module from the given path.
- * Extracts plugins from all array exports using definePlugins() format.
+ * Reads plugins from the config module's `plugins` export (definePlugins() format).
  * Returns null if the config file does not exist (e.g., in bundled executor on platform server).
  * @param configPath - Absolute or relative path to tailor.config.ts
  * @returns Cached config data with plugins map, or null if config file is not available
@@ -52,10 +78,26 @@ async function loadAndCacheConfig(configPath: string): Promise<ConfigCache | nul
   const configDir = path.dirname(resolvedPath);
   const plugins = new Map<string, PluginEntry>();
 
-  for (const items of pickPluginArrays(configModule)) {
-    for (const item of items) {
-      const plugin = item as Plugin;
-      plugins.set(plugin.id, { plugin, pluginConfig: plugin.pluginConfig });
+  // The only export read for plugins is `plugins`, the result of definePlugins().
+  if (Object.hasOwn(configModule, "plugins")) {
+    const pluginsExport: unknown = configModule.plugins;
+    if (!Array.isArray(pluginsExport)) {
+      throw new Error(
+        `Invalid \`plugins\` export in "${resolvedPath}": expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
+      );
+    }
+    for (const item of pluginsExport) {
+      if (!isPlugin(item)) {
+        throw new Error(
+          `Invalid \`plugins\` export in "${resolvedPath}": every item must be a plugin created by definePlugins()`,
+        );
+      }
+      if (plugins.has(item.id)) {
+        throw new Error(
+          `Duplicate plugin ID "${item.id}" detected in "${resolvedPath}". Each plugin must have a unique ID.`,
+        );
+      }
+      plugins.set(item.id, { plugin: item, pluginConfig: item.pluginConfig });
     }
   }
 

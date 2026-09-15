@@ -3,7 +3,6 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
-import { pickPluginArrays } from "#/plugin/guards";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { installCliTailordbStub } from "./mock";
@@ -83,13 +82,31 @@ export async function loadConfig(
       )
     : undefined;
 
-  // Collect all plugin exports (plugins, plugins2, etc.); an array with an
-  // item the schema rejects is left out as a whole.
+  // The only export read for plugins is `plugins`, the result of definePlugins().
   const allPlugins: Plugin[] = [];
-  for (const items of pickPluginArrays(configModule)) {
-    const parsed = items.map((item) => PluginConfigSchema.safeParse(item));
-    if (parsed.every((result) => result.success)) {
-      allPlugins.push(...parsed.map((result) => result.data));
+  if (Object.hasOwn(configModule, "plugins")) {
+    const pluginsExport = (configModule as Record<string, unknown>).plugins;
+    if (!Array.isArray(pluginsExport)) {
+      throw new Error(
+        `Invalid \`plugins\` export in ${resolvedPath}: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
+      );
+    }
+    const seenIds = new Set<string>();
+    for (const item of pluginsExport) {
+      const result = PluginConfigSchema.safeParse(item);
+      if (!result.success) {
+        const issues = result.error.issues
+          .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+          .join("\n");
+        throw new Error(`Invalid \`plugins\` export in ${resolvedPath}:\n${issues}`);
+      }
+      if (seenIds.has(result.data.id)) {
+        throw new Error(
+          `Duplicate plugin ID "${result.data.id}" detected. Each plugin must have a unique ID.`,
+        );
+      }
+      seenIds.add(result.data.id);
+      allPlugins.push(result.data);
     }
   }
 
