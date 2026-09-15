@@ -33,6 +33,14 @@ describe("setup ci subcommand nesting", () => {
     );
   });
 
+  test("ci branch rejects the removed --branch alias", async () => {
+    const result = await runCommand(setupCommand, ["ci", "branch", "--branch", "release"]);
+
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain("Unknown flags: branch");
+    expect(setupTarget).not.toHaveBeenCalled();
+  });
+
   test("ci tag dispatches to setupTarget with kind tag", async () => {
     const result = await runCommand(setupCommand, ["ci", "tag", "--branch", "main"]);
 
