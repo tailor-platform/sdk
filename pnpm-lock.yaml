@@ -226,14 +226,14 @@ importers:
         version: 4.4.0
     devDependencies:
       '@bufbuild/protobuf':
-        specifier: 2.14.1
-        version: 2.14.1
+        specifier: 2.15.0
+        version: 2.15.0
       '@connectrpc/connect':
         specifier: 2.2.0
-        version: 2.2.0(@bufbuild/protobuf@2.14.1)
+        version: 2.2.0(@bufbuild/protobuf@2.15.0)
       '@connectrpc/connect-node':
         specifier: 2.2.0
-        version: 2.2.0(@bufbuild/protobuf@2.14.1)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.14.1))
+        version: 2.2.0(@bufbuild/protobuf@2.15.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.15.0))
       '@electric-sql/pglite':
         specifier: 0.5.8
         version: 0.5.8
@@ -624,17 +624,17 @@ importers:
         specifier: 3.3.1
         version: 3.3.1
       '@bufbuild/protobuf':
-        specifier: 2.14.1
-        version: 2.14.1
+        specifier: 2.15.0
+        version: 2.15.0
       '@bufbuild/protovalidate':
         specifier: 1.2.0
-        version: 1.2.0(@bufbuild/protobuf@2.14.1)
+        version: 1.2.0(@bufbuild/protobuf@2.15.0)
       '@connectrpc/connect':
         specifier: 2.2.0
-        version: 2.2.0(@bufbuild/protobuf@2.14.1)
+        version: 2.2.0(@bufbuild/protobuf@2.15.0)
       '@connectrpc/connect-node':
         specifier: 2.2.0
-        version: 2.2.0(@bufbuild/protobuf@2.14.1)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.14.1))
+        version: 2.2.0(@bufbuild/protobuf@2.15.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.15.0))
       '@inquirer/core':
         specifier: 12.0.3
         version: 12.0.3(@types/node@24.13.4)
@@ -1043,11 +1043,11 @@ importers:
   packages/tailor-proto:
     dependencies:
       '@bufbuild/protobuf':
-        specifier: 2.14.1
-        version: 2.14.1
+        specifier: 2.15.0
+        version: 2.15.0
       '@connectrpc/connect':
         specifier: 2.2.0
-        version: 2.2.0(@bufbuild/protobuf@2.14.1)
+        version: 2.2.0(@bufbuild/protobuf@2.15.0)
 
 packages:
 
@@ -1156,8 +1156,8 @@ packages:
     peerDependencies:
       '@bufbuild/protobuf': ^2.6.2
 
-  '@bufbuild/protobuf@2.14.1':
-    resolution: {integrity: sha512-agRJn3+EJDUe8AvxTx/LnHA/GErvLE62pSaSk7+MwFOtOv8eWBu/qCq2qoZjBjVZ3C2aiFJCveuSs17KMkYGOw==}
+  '@bufbuild/protobuf@2.15.0':
+    resolution: {integrity: sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA==}
 
   '@bufbuild/protovalidate@1.2.0':
     resolution: {integrity: sha512-tD08DwGrHIV88khLz1Kdz9DYUwEo1TsoepaIg7/B/zd//AymaTx67kvCS1jlkcG/+vgQaSOl6f0HCE3sL8vI7w==}
@@ -4571,21 +4571,21 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@bufbuild/cel-spec@0.4.0(@bufbuild/protobuf@2.14.1)':
+  '@bufbuild/cel-spec@0.4.0(@bufbuild/protobuf@2.15.0)':
     dependencies:
-      '@bufbuild/protobuf': 2.14.1
+      '@bufbuild/protobuf': 2.15.0
 
-  '@bufbuild/cel@0.4.0(@bufbuild/protobuf@2.14.1)':
+  '@bufbuild/cel@0.4.0(@bufbuild/protobuf@2.15.0)':
     dependencies:
-      '@bufbuild/cel-spec': 0.4.0(@bufbuild/protobuf@2.14.1)
-      '@bufbuild/protobuf': 2.14.1
+      '@bufbuild/cel-spec': 0.4.0(@bufbuild/protobuf@2.15.0)
+      '@bufbuild/protobuf': 2.15.0
 
-  '@bufbuild/protobuf@2.14.1': {}
+  '@bufbuild/protobuf@2.15.0': {}
 
-  '@bufbuild/protovalidate@1.2.0(@bufbuild/protobuf@2.14.1)':
+  '@bufbuild/protovalidate@1.2.0(@bufbuild/protobuf@2.15.0)':
     dependencies:
-      '@bufbuild/cel': 0.4.0(@bufbuild/protobuf@2.14.1)
-      '@bufbuild/protobuf': 2.14.1
+      '@bufbuild/cel': 0.4.0(@bufbuild/protobuf@2.15.0)
+      '@bufbuild/protobuf': 2.15.0
 
   '@cacheable/memory@2.2.0':
     dependencies:
@@ -4724,14 +4724,14 @@ snapshots:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@connectrpc/connect-node@2.2.0(@bufbuild/protobuf@2.14.1)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.14.1))':
+  '@connectrpc/connect-node@2.2.0(@bufbuild/protobuf@2.15.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.15.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.14.1
-      '@connectrpc/connect': 2.2.0(@bufbuild/protobuf@2.14.1)
+      '@bufbuild/protobuf': 2.15.0
+      '@connectrpc/connect': 2.2.0(@bufbuild/protobuf@2.15.0)
 
-  '@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.14.1)':
+  '@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.15.0)':
     dependencies:
-      '@bufbuild/protobuf': 2.14.1
+      '@bufbuild/protobuf': 2.15.0
 
   '@croct/json5-parser@0.2.2':
     dependencies:
