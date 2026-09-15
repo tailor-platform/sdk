@@ -32,7 +32,7 @@ is intended for agents, scripts, and CI steps that parse CLI output. An explicit
 so `--json=false` forces table output and `TAILOR_OUTPUT=table` restores it where no flag is
 present; any other value (including unset) leaves the default unchanged. JSON mode also disables
 interactive prompts, so set the variable per invocation or per job rather than exporting it from a
-shell profile.
+shell profile; a command that needed a prompt names the variable when it refuses.
 
 Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
 a command failure under `--json` emits a JSON error envelope to stderr. CLI errors include a stable

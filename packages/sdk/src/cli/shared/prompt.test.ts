@@ -53,6 +53,33 @@ describe("prompt", () => {
       }
     });
 
+    test.each([
+      { label: "names TAILOR_OUTPUT when the environment selected JSON", output: "json" },
+      { label: "stays silent about the environment when a flag selected JSON", output: undefined },
+    ])("$label", async ({ output }) => {
+      const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+      const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+      Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+      Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
+      vi.stubEnv("TAILOR_OUTPUT", output);
+
+      try {
+        const [{ prompt }, { logger }] = await Promise.all([
+          import("./prompt"),
+          import("./logger"),
+        ]);
+        logger.jsonMode = true;
+        const error = await prompt.confirm({ message: "proceed?" }).catch((e: unknown) => e);
+        logger.jsonMode = false;
+        const message = error instanceof Error ? error.message : String(error);
+        expect(message.includes("TAILOR_OUTPUT")).toBe(output !== undefined);
+      } finally {
+        vi.unstubAllEnvs();
+        if (stdinDescriptor) Object.defineProperty(process.stdin, "isTTY", stdinDescriptor);
+        if (stdoutDescriptor) Object.defineProperty(process.stdout, "isTTY", stdoutDescriptor);
+      }
+    });
+
     test("disables prompts for JSON output", async () => {
       const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
       const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");

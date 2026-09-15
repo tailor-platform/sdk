@@ -5,13 +5,41 @@ import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
 
 /**
- * Error thrown when a prompt is attempted in a non-interactive environment
+ * Environment variable selecting the default output format for every command.
+ *
+ * Set `TAILOR_OUTPUT=json` in agent and automation contexts so the CLI emits
+ * JSON without passing `--json` on every call. An explicit `--json` always
+ * wins, so `TAILOR_OUTPUT=table` restores table output only where no flag is
+ * present. Because JSON mode also suppresses interactive prompts, prefer
+ * setting this per invocation over exporting it from a shell profile.
+ */
+const OUTPUT_ENV_VAR = "TAILOR_OUTPUT";
+
+/**
+ * Whether `TAILOR_OUTPUT` selects JSON output.
+ * @returns `true` when the variable is set to `json` (case-insensitive)
+ */
+export function outputEnvIsJson(): boolean {
+  return process.env[OUTPUT_ENV_VAR]?.trim().toLowerCase() === "json";
+}
+
+/**
+ * Error thrown when a prompt is attempted in a non-interactive environment.
+ *
+ * JSON mode suppresses prompts, and `TAILOR_OUTPUT` can enable it from the
+ * environment, where nothing in the command line explains the refusal — so
+ * name the variable when it is what turned prompts off.
  */
 export class CIPromptError extends Error {
   constructor(message?: string) {
+    const reason =
+      _jsonMode && outputEnvIsJson()
+        ? ` JSON output is enabled by ${OUTPUT_ENV_VAR}=json; unset it to restore prompts.`
+        : "";
     super(
-      message ??
-        "Interactive prompts are not available in this environment. Provide the required options explicitly.",
+      (message ??
+        "Interactive prompts are not available in this environment. Provide the required options explicitly.") +
+        reason,
     );
     this.name = "CIPromptError";
   }
