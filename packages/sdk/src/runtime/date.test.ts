@@ -285,6 +285,18 @@ describe("Temporal.PlainDate representation", () => {
     expect(validate).not.toHaveBeenCalled();
   });
 
+  test("surfaces a missing Temporal global instead of reporting an invalid date", () => {
+    const originalTemporal = Temporal;
+    // @ts-expect-error simulating a runtime that never defines Temporal
+    delete globalThis.Temporal;
+    try {
+      const schema = t.object({ date: t.date({ as: "temporal" }) });
+      expect(() => parse(schema, { date: "2026-09-07" })).toThrow(ReferenceError);
+    } finally {
+      globalThis.Temporal = originalTemporal;
+    }
+  });
+
   test.each([null, undefined])("preserves optional input and output %s", (value) => {
     const field = t.date({ as: "temporal", optional: true });
     expect(field.parse({ value, data: {}, invoker: null })).toEqual({ value: null });

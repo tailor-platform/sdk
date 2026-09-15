@@ -308,7 +308,8 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
     if (field.type === "date" && field._metadata.as === "temporal") {
       try {
         return Temporal.PlainDate.from(`${item}`);
-      } catch {
+      } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
         issues.push({
           message: `Expected a valid calendar date: received ${item}`,
           path: itemPath.length > 0 ? itemPath : undefined,
