@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { deployCommand } from "./deploy";
 import { domainCommand } from "./domain";
 import { getCommand } from "./get";
@@ -14,7 +13,5 @@ export const staticwebsiteCommand = defineCommand({
     list: listCommand,
     get: getCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listCommand);
-  },
+  defaultSubCommand: "list",
 });
