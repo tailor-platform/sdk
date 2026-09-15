@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { folderCommand } from "./folder";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
@@ -16,7 +15,5 @@ export const organizationCommand = defineCommand({
     tree: treeCommand,
     update: updateCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listCommand);
-  },
+  defaultSubCommand: "list",
 });
