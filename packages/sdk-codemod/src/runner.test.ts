@@ -146,6 +146,9 @@ describe("runCodemods", () => {
   });
 
   test.each([
+    'import { defineAuth } from "@tailor-platform/sdk"; export const auth = defineAuth("auth", {});',
+    'import { defineAuth as makeAuth } from "@tailor-platform/sdk"; export const auth = makeAuth("auth", {});',
+    'import * as sdk from "@tailor-platform/sdk"; export const auth = sdk.defineAuth("auth", {});',
     "export const plugins = definePlugins();",
     "const generators = definePlugins(); export { generators as plugins };",
     "export const generators = definePlugins(); export { generators as plugins };",

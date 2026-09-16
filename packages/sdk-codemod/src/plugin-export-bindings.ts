@@ -15,6 +15,10 @@ export function hasTypeScriptName(root: SgNode, name: string): boolean {
         { kind: "import_alias" },
         { kind: "import_require_clause" },
         { kind: "namespace_export" },
+        { kind: "function_expression" },
+        { kind: "generator_function" },
+        { kind: "generator_function_declaration" },
+        { kind: "class" },
       ],
     },
   })) {
