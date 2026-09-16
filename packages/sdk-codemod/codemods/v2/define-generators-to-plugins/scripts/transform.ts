@@ -378,6 +378,18 @@ export default function transform(source: string, filePath?: string): string | n
       ),
   );
 
+  // Calls through aliases are not covered by the tuple conversion above. Keep the
+  // entire file intact so the legacy-pattern warning directs users to migrate it.
+  if (
+    sdkImportStatements.some((stmt) =>
+      stmt
+        .findAll({ rule: { kind: "import_specifier" } })
+        .some((spec) => spec.field("name")?.text() === "defineGenerators" && spec.field("alias")),
+    )
+  ) {
+    return null;
+  }
+
   for (const importStmt of sdkImportStatements) {
     const specifiers = importStmt.findAll({
       rule: { kind: "import_specifier" },

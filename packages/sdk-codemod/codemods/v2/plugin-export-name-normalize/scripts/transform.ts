@@ -36,9 +36,9 @@ function isTopLevelExportedDeclarator(decl: SgNode): boolean {
 }
 
 /**
- * Check for a local or non-SDK binding that makes the factory name untrustworthy.
+ * Check whether the factory lacks an unambiguous direct SDK import.
  * @param root - Parsed config module
- * @returns Whether definePlugins is bound to an unrelated value
+ * @returns Whether definePlugins cannot be verified as the SDK factory
  */
 function hasUnrelatedFactoryBinding(root: SgNode): boolean {
   let sdkBindingStart = -1;
@@ -52,7 +52,7 @@ function hasUnrelatedFactoryBinding(root: SgNode): boolean {
       }
     }
   }
-  return hasOtherBindingNamed(root, "definePlugins", sdkBindingStart);
+  return sdkBindingStart === -1 || hasOtherBindingNamed(root, "definePlugins", sdkBindingStart);
 }
 
 /**
