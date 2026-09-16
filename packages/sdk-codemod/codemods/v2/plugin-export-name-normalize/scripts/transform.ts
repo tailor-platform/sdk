@@ -293,12 +293,14 @@ function hasOtherBindingNamed(root: SgNode, name: string, excludeStart: number):
  * @param declNode - The declaration/specifier name node to rename
  * @param oldName - The binding's current name
  * @param edits - Edit list to append to
+ * @param preserveExportNames - Keep public names in modules other than Tailor configs
  */
 function renameBindingAndUsages(
   root: SgNode,
   declNode: SgNode,
   oldName: string,
   edits: Edit[],
+  preserveExportNames: boolean,
 ): void {
   edits.push(declNode.replace("plugins"));
   const declStart = declNode.range().start.index;
@@ -310,6 +312,10 @@ function renameBindingAndUsages(
     if (exportSpec?.kind() === "export_specifier") {
       if (exportSpec.parent()?.parent()?.field("source")) continue;
       if (exportSpec.field("alias")?.range().start.index === idNode.range().start.index) continue;
+      if (preserveExportNames && !exportSpec.field("alias")) {
+        edits.push(idNode.replace(`plugins as ${oldName}`));
+        continue;
+      }
     }
     edits.push(idNode.replace("plugins"));
   }
@@ -506,7 +512,7 @@ export default function transform(source: string, filePath?: string): string | n
   if (localRenames.length > 1) return null;
   const edits: Edit[] = remoteRenames.map((node) => node.replace("plugins"));
   for (const { node, oldName } of localRenames) {
-    renameBindingAndUsages(tree, node, oldName, edits);
+    renameBindingAndUsages(tree, node, oldName, edits, !!filePath && !isTailorConfigPath(filePath));
   }
 
   if (edits.length === 0) return null;

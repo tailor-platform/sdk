@@ -69,6 +69,25 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test.each([
+    ["consumer.ts", "plugins as generator"],
+    ["tailor.config.mts", "plugins"],
+  ])("preserves the appropriate public export in %s", (fileName, exportSpecifier) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-local-reexport-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source = 'import { generator } from "./tailor.config.ts"; export { generator };';
+      expect(normalizePluginExport(source, path.join(dir, fileName))).toBe(
+        `import { plugins } from "./tailor.config.ts"; export { ${exportSpecifier} };`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("adds the canonical plugin import beside an existing aliased import", () => {
     const source = `import { defineGenerators } from "@tailor-platform/sdk";
 import { kyselyTypePlugin as makeKyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
