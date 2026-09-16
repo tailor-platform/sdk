@@ -681,107 +681,130 @@ async function deployInternal(
         });
     const expectedLocalStaticWebsiteNames =
       collectExpectedLocalStaticWebsiteNamesFromConfigs(preflightConfigs);
-    const targets = await withSpan("build", async () => {
-      const noCache = options?.noCache ?? false;
-      const packageJson = await readPackageJson();
-      const cacheDir = path.resolve(getDistDir(), "cache");
-      if (options?.cleanCache) {
-        fs.rmSync(cacheDir, { recursive: true, force: true });
-        logger.info("Bundle cache cleaned");
+
+    // A config can reference a static website (via `env`, `cors`, an OAuth2
+    // redirect URI, or an IdP return origin) that this same deploy is about to
+    // create. That reference resolves to the placeholder pattern for this
+    // apply, because the site does not exist yet at plan time. Once the apply
+    // below actually creates it, a second build/plan/apply pass sees the real
+    // platform state and resolves it for real, so the user never has to run
+    // `deploy` again by hand to pick up a site their own deploy just created.
+    const maxPasses = dryRun || buildOnly ? 1 : 2;
+    let planSummary: ReturnType<typeof printDeploymentPlans> | undefined;
+
+    for (let pass = 1; pass <= maxPasses; pass++) {
+      const targets = await withSpan("build", async () => {
+        const noCache = options?.noCache ?? false;
+        const packageJson = await readPackageJson();
+        const cacheDir = path.resolve(getDistDir(), "cache");
+        if (options?.cleanCache) {
+          fs.rmSync(cacheDir, { recursive: true, force: true });
+          logger.info("Bundle cache cleaned");
+        }
+
+        return buildDeploymentTargets({
+          configPaths,
+          loadedConfigs: buildOnly ? undefined : preflightConfigs,
+          dryRun,
+          buildOnly,
+          noCache,
+          packageVersion: packageJson.version ?? "unknown",
+          cacheDir,
+          client: workspace?.client,
+          workspaceId: workspace?.workspaceId,
+          expectedLocalStaticWebsiteNames,
+        });
+      });
+      if (buildOnly) {
+        return { bundledScripts: mergeBundledScripts(targets) };
       }
 
-      const targets = await buildDeploymentTargets({
-        configPaths,
-        loadedConfigs: buildOnly ? undefined : preflightConfigs,
-        dryRun,
-        buildOnly,
-        noCache,
-        packageVersion: packageJson.version ?? "unknown",
-        cacheDir,
-        client: workspace?.client,
-        workspaceId: workspace?.workspaceId,
-        expectedLocalStaticWebsiteNames,
+      assertUniqueGlobalResourceNames(targets);
+
+      // Note: the normal apply path intentionally skips writing bundle files to
+      // .tailor/. Bundles are kept in memory and uploaded directly to the
+      // function registry. To test a function locally, use `function run`
+      // with a .ts source file instead of a pre-bundled .js file.
+
+      if (!workspace) throw internalError("Workspace was not resolved");
+      const { client, workspaceId } = workspace;
+
+      rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
+      rootSpan.setAttribute("workspace.id", workspaceId);
+
+      const planTargets = targets.map((target) => ({
+        ...target,
+        application: adjustApplicationForMigrationTest(target.application, internalContext),
+      }));
+      const metadataClient = await withSpan("plan.metadataLookup", () =>
+        createMetadataLookupClient({
+          client,
+          workspaceId,
+          applications: planTargets.map(({ application }) => application),
+        }),
+      );
+      const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
+      const deployments = await planDeploymentTargets({
+        targets: planTargets,
+        runInputs,
+        client: metadataClient,
+        workspaceId,
+        noSchemaCheck: options?.noSchemaCheck,
+        migrationTestBaselines: internalContext?.migrationTestBaselines,
+        migrationTestSnapshots: internalContext?.migrationTestSnapshots,
       });
 
-      return targets;
-    });
-    if (buildOnly) {
-      return { bundledScripts: mergeBundledScripts(targets) };
+      dropCrossDeploymentManagedDeletes(deployments);
+
+      // The second, automatic pass only completes a deploy the user already
+      // approved on the first pass, so it asks for no new confirmation.
+      const yes = pass > 1 ? true : (options?.yes ?? false);
+
+      // Phase 1b: Confirm
+      const missingDependentApps = (
+        await Promise.all(
+          planTargets.map((target) =>
+            fetchMissingDependentApps({
+              client: metadataClient,
+              workspaceId,
+              application: target.application,
+              runAppIds: runInputs.runAppIds ?? new Set<string>(),
+              subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
+              jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
+            }),
+          ),
+        )
+      ).flat();
+
+      await withSpan("confirm", async () => {
+        await confirmDeploymentPlans({ deployments, yes, dryRun, missingDependentApps });
+      });
+
+      planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
+
+      if (options?.noValidate) {
+        logger.warn("Client-side validation skipped (--no-validate).");
+      } else {
+        await validateDeploymentPlans(deployments);
+      }
+
+      if (dryRun) {
+        logger.info("Dry run enabled. No changes applied.");
+        return undefined;
+      }
+
+      await applyDeploymentPlans(client, workspaceId, deployments);
+
+      const createdStaticWebsite = deployments.some(
+        (deployment) => deployment.staticWebsite.changeSet.creates.length > 0,
+      );
+      if (pass === maxPasses || !createdStaticWebsite) {
+        break;
+      }
+      logger.info(
+        "A static website was just created; redeploying once more so any env/cors/OAuth2/IdP reference to it resolves to its real URL.",
+      );
     }
-
-    assertUniqueGlobalResourceNames(targets);
-
-    // Note: the normal apply path intentionally skips writing bundle files to
-    // .tailor/. Bundles are kept in memory and uploaded directly to the
-    // function registry. To test a function locally, use `function run`
-    // with a .ts source file instead of a pre-bundled .js file.
-
-    if (!workspace) throw internalError("Workspace was not resolved");
-    const { client, workspaceId } = workspace;
-
-    rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
-    rootSpan.setAttribute("workspace.id", workspaceId);
-
-    const planTargets = targets.map((target) => ({
-      ...target,
-      application: adjustApplicationForMigrationTest(target.application, internalContext),
-    }));
-    const metadataClient = await withSpan("plan.metadataLookup", () =>
-      createMetadataLookupClient({
-        client,
-        workspaceId,
-        applications: planTargets.map(({ application }) => application),
-      }),
-    );
-    const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
-    const deployments = await planDeploymentTargets({
-      targets: planTargets,
-      runInputs,
-      client: metadataClient,
-      workspaceId,
-      noSchemaCheck: options?.noSchemaCheck,
-      migrationTestBaselines: internalContext?.migrationTestBaselines,
-      migrationTestSnapshots: internalContext?.migrationTestSnapshots,
-    });
-
-    const yes = options?.yes ?? false;
-
-    dropCrossDeploymentManagedDeletes(deployments);
-
-    // Phase 1b: Confirm
-    const missingDependentApps = (
-      await Promise.all(
-        planTargets.map((target) =>
-          fetchMissingDependentApps({
-            client: metadataClient,
-            workspaceId,
-            application: target.application,
-            runAppIds: runInputs.runAppIds ?? new Set<string>(),
-            subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
-            jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
-          }),
-        ),
-      )
-    ).flat();
-
-    await withSpan("confirm", async () => {
-      await confirmDeploymentPlans({ deployments, yes, dryRun, missingDependentApps });
-    });
-
-    const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
-
-    if (options?.noValidate) {
-      logger.warn("Client-side validation skipped (--no-validate).");
-    } else {
-      await validateDeploymentPlans(deployments);
-    }
-
-    if (dryRun) {
-      logger.info("Dry run enabled. No changes applied.");
-      return undefined;
-    }
-
-    await applyDeploymentPlans(client, workspaceId, deployments);
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {
