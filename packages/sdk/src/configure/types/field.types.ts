@@ -5,8 +5,11 @@
 
 import type { OptionalGlobalInstance, TypeLevelError } from "#/types/helpers";
 
-// The calendar-date representation `t.date({ as: "temporal" })` uses.
-type TemporalPlainDate = OptionalGlobalInstance<"Temporal", "PlainDate">;
+type TemporalFieldValue<Field extends string, Member extends string> = [
+  OptionalGlobalInstance<"Temporal", Member>,
+] extends [never]
+  ? TypeLevelError<`t.${Field}({ as: "temporal" }) requires "ESNext.Temporal" in compilerOptions.lib (TypeScript 6.0+)`>
+  : OptionalGlobalInstance<"Temporal", Member>;
 
 export interface EnumValue {
   value: string;
@@ -79,9 +82,37 @@ export type DateFieldOptions = FieldOptions & {
 export type DateFieldValue<As> = As extends "date"
   ? Date
   : As extends "temporal"
-    ? [TemporalPlainDate] extends [never]
-      ? TypeLevelError<'t.date({ as: "temporal" }) requires "ESNext.Temporal" in compilerOptions.lib (TypeScript 6.0+)'>
-      : TemporalPlainDate
+    ? TemporalFieldValue<"date", "PlainDate">
+    : string;
+
+/** Options for a datetime field. */
+export type DateTimeFieldOptions = FieldOptions & {
+  /** Choose string, Date, or Temporal.Instant values. Defaults to string input and string | Date output. */
+  as?: "string" | "date" | "temporal";
+};
+
+export type DateTimeFieldValue<As> = As extends "date"
+  ? Date
+  : As extends "temporal"
+    ? TemporalFieldValue<"datetime", "Instant">
+    : As extends "string"
+      ? string
+      : string | Date;
+
+/** Options for a time field. */
+export type TimeFieldOptions = FieldOptions & {
+  /**
+   * Choose HH:mm strings, Date values on 1970-01-01 UTC, or Temporal.PlainTime values.
+   * Defaults to string. Date output uses UTC hours/minutes and ignores the date.
+   * Seconds and fractional seconds are truncated in both representations.
+   */
+  as?: "string" | "date" | "temporal";
+};
+
+export type TimeFieldValue<As> = As extends "date"
+  ? Date
+  : As extends "temporal"
+    ? TemporalFieldValue<"time", "PlainTime">
     : string;
 
 // Return Output type based on FieldOptions.

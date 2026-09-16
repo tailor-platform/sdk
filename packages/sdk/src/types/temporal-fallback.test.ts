@@ -53,9 +53,9 @@ describe("Temporal type opt-in fallback", () => {
     const messages = diagnosticsFor(
       `
       import type { DeepWritable, SerializeDates } from "${join(SDK_ROOT, "src", "types", "helpers")}";
-      import type { DateFieldValue } from "${join(SDK_ROOT, "src", "configure", "types", "field.types")}";
+      import type { DateFieldValue, DateTimeFieldValue, TimeFieldValue } from "${join(SDK_ROOT, "src", "configure", "types", "field.types")}";
 
-      type Row = { day: DateFieldValue<"date">; label: DateFieldValue<undefined> };
+      type Row = { day: DateFieldValue<"date">; label: DateFieldValue<undefined>; at: DateTimeFieldValue<"date">; legacyAt: DateTimeFieldValue<undefined>; time: TimeFieldValue<"date">; legacyTime: TimeFieldValue<undefined> };
       type _Writable = DeepWritable<Row>;
       type _Serialized = SerializeDates<Row>;
       `,
@@ -67,13 +67,21 @@ describe("Temporal type opt-in fallback", () => {
   test("DateFieldValue's temporal branch names the missing lib requirement without ESNext.Temporal", () => {
     const messages = diagnosticsFor(
       `
-      import type { DateFieldValue } from "${join(SDK_ROOT, "src", "configure", "types", "field.types")}";
+      import type { DateFieldValue, DateTimeFieldValue, TimeFieldValue } from "${join(SDK_ROOT, "src", "configure", "types", "field.types")}";
 
       declare const value: DateFieldValue<"temporal">;
       value.add({ days: 1 });
+      declare const at: DateTimeFieldValue<"temporal">;
+      at.add({ hours: 1 });
+      declare const time: TimeFieldValue<"temporal">;
+      time.add({ minutes: 1 });
       `,
       NO_TEMPORAL_LIB,
     );
+    expect(messages).toHaveLength(3);
+    for (const field of ["date", "datetime", "time"]) {
+      expect(messages.join("\n")).toContain(`t.${field}(`);
+    }
     expect(messages.join("\n")).toContain(
       'requires \\"ESNext.Temporal\\" in compilerOptions.lib (TypeScript 6.0+)',
     );
@@ -82,11 +90,17 @@ describe("Temporal type opt-in fallback", () => {
   test("DateFieldValue's temporal branch resolves to the real Temporal.PlainDate when the lib provides it", () => {
     const messages = diagnosticsFor(
       `
-      import type { DateFieldValue } from "${join(SDK_ROOT, "src", "configure", "types", "field.types")}";
+      import type { DateFieldValue, DateTimeFieldValue, TimeFieldValue } from "${join(SDK_ROOT, "src", "configure", "types", "field.types")}";
 
       declare const value: DateFieldValue<"temporal">;
       const next: Temporal.PlainDate = value.add({ days: 1 });
       const roundTrip: DateFieldValue<"temporal"> = Temporal.PlainDate.from("2026-09-15");
+      declare const at: DateTimeFieldValue<"temporal">;
+      const nextAt: Temporal.Instant = at.add({ hours: 1 });
+      const instant: DateTimeFieldValue<"temporal"> = Temporal.Instant.from("2026-09-15T00:00:00Z");
+      declare const time: TimeFieldValue<"temporal">;
+      const nextTime: Temporal.PlainTime = time.add({ minutes: 1 });
+      const plainTime: TimeFieldValue<"temporal"> = Temporal.PlainTime.from("12:30");
       `,
       WITH_TEMPORAL_LIB,
     );

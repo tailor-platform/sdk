@@ -43,6 +43,10 @@ describe("resolver Date representation bundles", () => {
           day: date,
           dates: t.date({ as: "date", array: true }),
           absent: t.date({ as: "date", optional: true }),
+          at: t.datetime({ as: "date" }),
+          times: t.time({ as: "date", array: true }),
+          absentAt: t.datetime({ as: "date", optional: true }),
+          absentTime: t.time({ as: "date", optional: true }),
           plain: t.date(),
         }, { array: true }),
       };
@@ -53,11 +57,14 @@ describe("resolver Date representation bundles", () => {
         body: async ({ input }) => {
           const row = input.rows[0];
           if (!(row.day instanceof Date) || row.day.getUTCHours() !== 0 ||
-              !row.dates.every((day) => day instanceof Date)) {
+              !row.dates.every((day) => day instanceof Date) ||
+              !(row.at instanceof Date) || !row.times.every((time) => time instanceof Date)) {
             throw new Error("Expected UTC Date input in body");
           }
           if (input.invalidOutput) row.day = new Date(NaN);
           else row.day.setUTCDate(row.day.getUTCDate() + 1);
+          row.at.setUTCHours(row.at.getUTCHours() + 1);
+          row.times.forEach((time) => time.setUTCMinutes(time.getUTCMinutes() + 1, 59, 999));
           return { rows: input.rows };
         },
         output: fields,
@@ -72,6 +79,10 @@ describe("resolver Date representation bundles", () => {
           day: "2024-02-29",
           dates: ["0000-02-29", "0099-12-31"],
           absent: null,
+          at: "2024-02-29T23:45:12.123+09:00",
+          times: ["00:00", "23:59"],
+          absentAt: null,
+          absentTime: null,
           plain: "2026-09-07",
         },
       ],
@@ -105,7 +116,16 @@ describe("resolver Date representation bundles", () => {
     const run = (value: unknown) =>
       main(mode === "production" ? { input: value, caller: null, env: {} } : value);
 
-    await expect(run(input)).resolves.toEqual({ rows: [{ ...input.rows[0], day: "2024-03-01" }] });
+    await expect(run(input)).resolves.toEqual({
+      rows: [
+        {
+          ...input.rows[0],
+          day: "2024-03-01",
+          at: "2024-02-29T15:45:12.123Z",
+          times: ["00:01", "00:00"],
+        },
+      ],
+    });
     expect(input.rows[0]?.day).toBe("2024-02-29");
     await expect(run({ rows: [{ ...input.rows[0], day: "2023-02-29" }] })).rejects.toThrow(
       "valid calendar date",
@@ -132,6 +152,10 @@ describe("resolver Date representation bundles", () => {
           day: t.date({ as: "temporal" }),
           dates: t.date({ as: "temporal", array: true }),
           absent: t.date({ as: "temporal", optional: true }),
+          at: t.datetime({ as: "temporal" }),
+          times: t.time({ as: "temporal", array: true }),
+          absentAt: t.datetime({ as: "temporal", optional: true }),
+          absentTime: t.time({ as: "temporal", optional: true }),
         }, { array: true }),
       };
       export default createResolver({
@@ -141,11 +165,14 @@ describe("resolver Date representation bundles", () => {
         body: async ({ input }) => {
           const row = input.rows[0];
           if (!(row.day instanceof Temporal.PlainDate) ||
-              !row.dates.every((day) => day instanceof Temporal.PlainDate)) {
+              !row.dates.every((day) => day instanceof Temporal.PlainDate) ||
+              !(row.at instanceof Temporal.Instant) || !row.times.every((time) => time instanceof Temporal.PlainTime)) {
             throw new Error("Expected Temporal.PlainDate input in body");
           }
           if (input.invalidOutput) row.day = "not-a-plain-date";
           else row.day = row.day.add({ days: 1 });
+          row.at = row.at.add({ hours: 1 });
+          row.times = row.times.map((time) => time.add({ minutes: 1, seconds: 59, nanoseconds: 999999999 }));
           return { rows: input.rows };
         },
         output: fields,
@@ -160,6 +187,10 @@ describe("resolver Date representation bundles", () => {
             day: "2024-02-29",
             dates: ["0000-02-29", "0099-12-31"],
             absent: null,
+            at: "2024-02-29T23:45:12.123+09:00",
+            times: ["00:00", "23:59"],
+            absentAt: null,
+            absentTime: null,
           },
         ],
       };
@@ -193,7 +224,14 @@ describe("resolver Date representation bundles", () => {
         main(mode === "production" ? { input: value, caller: null, env: {} } : value);
 
       await expect(run(input)).resolves.toEqual({
-        rows: [{ ...input.rows[0], day: "2024-03-01" }],
+        rows: [
+          {
+            ...input.rows[0],
+            day: "2024-03-01",
+            at: "2024-02-29T15:45:12.123Z",
+            times: ["00:01", "00:00"],
+          },
+        ],
       });
       expect(input.rows[0]?.day).toBe("2024-02-29");
       await expect(run({ rows: [{ ...input.rows[0], day: "2023-02-29" }] })).rejects.toThrow(

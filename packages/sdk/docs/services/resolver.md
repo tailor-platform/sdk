@@ -120,7 +120,7 @@ createResolver({
 });
 ```
 
-### Date Values
+### Date and Time Values
 
 `t.date()` uses `YYYY-MM-DD` strings by default. Use `t.date({ as: "date" })` to work with JavaScript `Date` values in the resolver body and input validators:
 
@@ -157,9 +157,35 @@ createResolver({
 
 `Temporal.PlainDate` has no time zone, so date arithmetic is unambiguous. It works the same as `as: "date"` otherwise: `array`/`optional`/nested objects are supported, input must be a valid calendar date, output must have a 4-digit year (0000-9999), and an executor receiving the event through `resolverExecutedTrigger` sees the `YYYY-MM-DD` string.
 
+`t.datetime` and `t.time` also support both representations:
+
+```typescript
+createResolver({
+  name: "reschedule",
+  operation: "query",
+  input: {
+    at: t.datetime({ as: "temporal" }),
+    time: t.time({ as: "temporal" }),
+  },
+  body: ({ input }) => ({
+    at: input.at.add({ hours: 1 }),
+    time: input.time.add({ minutes: 30 }),
+  }),
+  output: {
+    at: t.datetime({ as: "temporal" }),
+    time: t.time({ as: "temporal" }),
+  },
+});
+```
+
+- **Datetime**: `t.datetime({ as: "temporal" })` uses `Temporal.Instant`; `t.datetime({ as: "date" })` uses `Date`. Input must be a valid ISO datetime with seconds and a UTC offset or `Z`; leap seconds are rejected. Output uses UTC (`Z`) and must have a 4-digit UTC year (0000-9999). `Temporal.Instant` preserves nanoseconds during SDK conversion, but the Platform truncates datetimes to milliseconds. `Date` itself has only millisecond precision. Without `as`, the existing behavior is unchanged: input is a string, and output accepts `string | Date`. Explicit `as: "string"` types the value as `string`.
+- **Time**: `t.time({ as: "temporal" })` uses `Temporal.PlainTime`; `t.time({ as: "date" })` uses a `Date` on `1970-01-01` in UTC. Input and output use `HH:mm` in the range `00:00`–`23:59`. For `Date` output, only the UTC hours and minutes are used; the date portion is ignored. Both representations truncate seconds and fractional seconds without rounding up: `12:30:59.999` becomes `12:30`. Use UTC getters/setters when changing a `Date` time. Without `as`, or with `as: "string"`, time values remain strings.
+
+All three field types support `array`, `optional`, nested objects, and input validators with the selected representation. Both deployed resolvers and `tailor function run` convert input and output. Executors using `resolverExecutedTrigger` receive date, datetime, and time results as strings.
+
 `Temporal` is a JavaScript engine global, not something this package exports. Two things depend on your own project, not on the SDK:
 
-- **Types**: TypeScript only knows the `Temporal` namespace when `compilerOptions.lib` includes `"ESNext"` (or `"ESNext.Temporal"` specifically), which requires TypeScript 6.0 or later — earlier versions don't ship that `lib` entry at all. Without it, `t.date({ as: "temporal" })`'s value type reports a descriptive error naming this requirement, and code that tries to use it (for example calling `.add()` on the field) fails to type-check. You'll only see a raw "Cannot find namespace 'Temporal'" error if your own code names `Temporal` directly. This requirement only applies where you actually use `as: "temporal"`; other fields and projects that don't use this option type-check normally regardless of `lib` or TypeScript version.
+- **Types**: TypeScript only knows the `Temporal` namespace when `compilerOptions.lib` includes `"ESNext"` (or `"ESNext.Temporal"` specifically), which requires TypeScript 6.0 or later — earlier versions don't ship that `lib` entry at all. Without it, a field using `as: "temporal"` reports a descriptive error naming this requirement, and code that tries to use it (for example calling `.add()` on the field) fails to type-check. You'll only see a raw "Cannot find namespace 'Temporal'" error if your own code names `Temporal` directly. This requirement only applies where you actually use `as: "temporal"`; other fields and projects that don't use this option type-check normally regardless of `lib` or TypeScript version.
 - **Runtime**: deployed resolvers and `tailor function run` execute on the Tailor Platform, which provides `Temporal`. If you call `Temporal` from your own code running elsewhere (for example a local Node.js script or a unit test for your resolver's `body`), check that your JavaScript runtime supports it — some versions require an experimental flag.
 
 ### Custom Type Name (`typeName`)

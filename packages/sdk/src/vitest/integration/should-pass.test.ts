@@ -58,4 +58,8 @@ test("Temporal survives whitelist cleanup when the Node process provides it", ()
   // whitelist.
   expect(typeof Temporal).toBe("object");
   expect(Temporal.PlainDate.from("2026-09-15").toString()).toBe("2026-09-15");
+  expect(Temporal.Instant.from("2026-09-15T00:00:00+09:00").toString()).toBe(
+    "2026-09-14T15:00:00Z",
+  );
+  expect(Temporal.PlainTime.from("12:30").toString({ smallestUnit: "minute" })).toBe("12:30");
 });

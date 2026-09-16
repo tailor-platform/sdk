@@ -295,26 +295,40 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
   const { field, value, issues, pathArray } = args;
   if (value === null || value === undefined) return value;
   const convert = (item: unknown, itemPath: string[]): unknown => {
-    if (field.type === "date" && field._metadata.as === "date") {
-      const date = new Date(`${item}T00:00:00.000Z`);
-      if (!Number.isFinite(date.getTime()) || formatDate(date) !== item) {
-        issues.push({
-          message: `Expected a valid calendar date: received ${item}`,
-          path: itemPath.length > 0 ? itemPath : undefined,
-        });
-      }
-      return date;
-    }
-    if (field.type === "date" && field._metadata.as === "temporal") {
+    const { type, _metadata: metadata } = field;
+    if (
+      (type === "date" || type === "datetime" || type === "time") &&
+      (metadata.as === "date" || metadata.as === "temporal")
+    ) {
       try {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(`${item}`)) {
-          throw new RangeError(`Expected a canonical YYYY-MM-DD calendar date, received: ${item}`);
+        const text = String(item);
+        if (type === "datetime" && text.slice(17, 19) === "60") {
+          throw new RangeError("Leap seconds are not supported");
         }
-        return Temporal.PlainDate.from(`${item}`);
+        if (metadata.as === "temporal") {
+          if (type === "date") return Temporal.PlainDate.from(text);
+          if (type === "datetime") return Temporal.Instant.from(text);
+          return Temporal.PlainTime.from(text);
+        }
+        const date = new Date(
+          type === "date"
+            ? `${text}T00:00:00.000Z`
+            : type === "time"
+              ? `1970-01-01T${text}:00.000Z`
+              : text,
+        );
+        if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid Date");
+        if (type !== "time") {
+          const calendarDate = text.slice(0, 10);
+          if (formatDate(new Date(`${calendarDate}T00:00:00.000Z`)) !== calendarDate) {
+            throw new RangeError("Invalid calendar date");
+          }
+        }
+        return date;
       } catch (error) {
         if (!(error instanceof RangeError)) throw error;
         issues.push({
-          message: `Expected a valid calendar date: received ${item}`,
+          message: `Expected a valid ${type === "date" ? "calendar date" : type}: received ${item}`,
           path: itemPath.length > 0 ? itemPath : undefined,
         });
         return item;

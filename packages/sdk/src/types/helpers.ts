@@ -41,7 +41,7 @@ export type OptionalGlobalInstance<
 
 export type DeepWritable<T> = T extends
   | Date
-  | OptionalGlobalInstance<"Temporal", "PlainDate">
+  | OptionalGlobalInstance<"Temporal", "PlainDate" | "Instant" | "PlainTime">
   | RegExp
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   | Function
@@ -52,7 +52,7 @@ export type DeepWritable<T> = T extends
 
 export type DeepReadonly<T> = T extends
   | Date
-  | OptionalGlobalInstance<"Temporal", "PlainDate">
+  | OptionalGlobalInstance<"Temporal", "PlainDate" | "Instant" | "PlainTime">
   | RegExp
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   | Function
@@ -66,14 +66,16 @@ export type DeepReadonly<T> = T extends
 export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never;
 
 /**
- * Replace `Date` and `Temporal.PlainDate` with `string` throughout a type.
+ * Replace `Date` and supported Temporal values with `string` throughout a type.
  *
  * Values that reach user code as a parsed JSON payload cannot carry a `Date`
- * or `Temporal.PlainDate` instance, so a type describing such a payload must
+ * or Temporal instance, so a type describing such a payload must
  * report the serialized form even when the type it derives from uses one of
  * those representations.
  */
-export type SerializeDates<T> = T extends Date | OptionalGlobalInstance<"Temporal", "PlainDate">
+export type SerializeDates<T> = T extends
+  | Date
+  | OptionalGlobalInstance<"Temporal", "PlainDate" | "Instant" | "PlainTime">
   ? string
   : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     T extends RegExp | Function

@@ -606,6 +606,10 @@ describe("resolverExecutedTrigger", () => {
         rows: [{ day: new Date("2026-09-07") }],
         plain: "2026-09-07",
         at: new Date("2026-09-07T12:00:00Z"),
+        dateAt: new Date("2026-09-07T12:30:00Z"),
+        dateTime: new Date("1970-01-01T12:30:00Z"),
+        instant: Temporal.Instant.from("2026-09-07T12:30:00Z"),
+        times: [Temporal.PlainTime.from("12:30")],
         temporalDay: Temporal.PlainDate.from("2026-09-07"),
         temporalDays: [Temporal.PlainDate.from("2026-09-07")],
         temporalRows: [{ day: Temporal.PlainDate.from("2026-09-07") }],
@@ -617,6 +621,10 @@ describe("resolverExecutedTrigger", () => {
         rows: t.object({ day: t.date({ as: "date" }) }, { array: true }),
         plain: t.date(),
         at: t.datetime(),
+        dateAt: t.datetime({ as: "date" }),
+        dateTime: t.time({ as: "date" }),
+        instant: t.datetime({ as: "temporal" }),
+        times: t.time({ as: "temporal", array: true }),
         temporalDay: t.date({ as: "temporal" }),
         temporalDays: t.date({ as: "temporal", array: true }),
         temporalRows: t.object({ day: t.date({ as: "temporal" }) }, { array: true }),
@@ -638,6 +646,10 @@ describe("resolverExecutedTrigger", () => {
           expectTypeOf(args.result.rows).toEqualTypeOf<{ day: string }[]>();
           expectTypeOf(args.result.plain).toEqualTypeOf<string>();
           expectTypeOf(args.result.at).toEqualTypeOf<string>();
+          expectTypeOf(args.result.dateAt).toEqualTypeOf<string>();
+          expectTypeOf(args.result.dateTime).toEqualTypeOf<string>();
+          expectTypeOf(args.result.instant).toEqualTypeOf<string>();
+          expectTypeOf(args.result.times).toEqualTypeOf<string[]>();
           expectTypeOf(args.result.temporalDay).toEqualTypeOf<string>();
           expectTypeOf(args.result.temporalDays).toEqualTypeOf<string[]>();
           expectTypeOf(args.result.temporalRows).toEqualTypeOf<{ day: string }[]>();

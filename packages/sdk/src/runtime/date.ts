@@ -31,6 +31,36 @@ function formatTemporalPlainDate(date: Temporal.PlainDate): string {
   return iso;
 }
 
+function formatDateTime(date: Date): string {
+  formatDate(date);
+  return date.toISOString();
+}
+
+function formatHoursMinutes(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function formatTime(date: Date): string {
+  if (!Number.isFinite(date.getTime())) {
+    throw new RangeError("Expected a valid Date, but received an invalid Date");
+  }
+  return formatHoursMinutes(date.getUTCHours(), date.getUTCMinutes());
+}
+
+function formatTemporal(value: Temporal.PlainDate | Temporal.Instant | Temporal.PlainTime): string {
+  if (value instanceof Temporal.PlainDate) return formatTemporalPlainDate(value);
+  if (value instanceof Temporal.Instant) {
+    const iso = value.toString();
+    if (!/^\d{4}-/.test(iso)) {
+      throw new RangeError(
+        `Expected a Temporal.Instant with a 4-digit UTC year (0000-9999), but received ${iso}`,
+      );
+    }
+    return iso;
+  }
+  return formatHoursMinutes(value.hour, value.minute);
+}
+
 type DateField = {
   readonly type: TailorFieldType;
   readonly metadata: FieldMetadata;
@@ -76,13 +106,17 @@ function describeReceivedValue(value: unknown): string {
 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
   if (value === null || value === undefined) return value;
-  if (field.type === "date" && field.metadata.as === "date") {
+  const isDateTimeField =
+    field.type === "date" || field.type === "datetime" || field.type === "time";
+  if (isDateTimeField && field.metadata.as === "date") {
     if (!(value instanceof Date)) {
       throw new TypeError(
         `Expected a Date instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
       );
     }
     try {
+      if (field.type === "datetime") return formatDateTime(value);
+      if (field.type === "time") return formatTime(value);
       return formatDate(value);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -91,14 +125,20 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
       });
     }
   }
-  if (field.type === "date" && field.metadata.as === "temporal") {
-    if (!(value instanceof Temporal.PlainDate)) {
+  if (isDateTimeField && field.metadata.as === "temporal") {
+    const expected =
+      field.type === "date"
+        ? Temporal.PlainDate
+        : field.type === "datetime"
+          ? Temporal.Instant
+          : Temporal.PlainTime;
+    if (!(value instanceof expected)) {
       throw new TypeError(
-        `Expected a Temporal.PlainDate instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+        `Expected a Temporal.${expected.name} instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
       );
     }
     try {
-      return formatTemporalPlainDate(value);
+      return formatTemporal(value);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       throw new RangeError(`Invalid date at ${describePathTarget(path)}: ${reason}`, {
@@ -125,10 +165,10 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
 }
 
 /**
- * Convert fields using the Date representation to YYYY-MM-DD strings in UTC.
- * @param field - Date or object field defining the value's shape
+ * Convert fields using Date or Temporal representations to date, datetime, or time strings.
+ * @param field - Field defining the value's shape
  * @param value - Value to serialize
- * @returns Value with Date fields converted to strings
+ * @returns Value with Date and Temporal fields converted to strings
  * @internal
  */
 export function serializeDateFields(field: DateField, value: unknown): unknown {
