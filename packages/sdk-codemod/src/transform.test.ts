@@ -62,6 +62,29 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  describe.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("%s TypeScript binding safety", (_name, transform, factory) => {
+    test.each([
+      'export * as plugins from "./other";',
+      "enum plugins { A }",
+      "namespace plugins {}",
+      'import plugins = require("./other");',
+      "import plugins = Other.member;",
+    ])("preserves a conflicting declaration: %s", (declaration) => {
+      const source = `import { ${factory} } from "@tailor-platform/sdk"; ${declaration} export const generators = ${factory}();`;
+      expect(transform(source)).toBeNull();
+    });
+
+    test("preserves a shadowing enum binding", () => {
+      const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); function f() { enum generators { A } return generators.A; }`;
+      const output = transform(source) ?? source;
+      expect(output).not.toContain("export const plugins");
+      expect(output).toContain("enum generators");
+    });
+  });
+
   test("preserves an unrelated exported alias when renaming a local import", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-exported-alias-"));
     try {

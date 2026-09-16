@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { parse, Lang } from "@ast-grep/napi";
 import * as path from "pathe";
+import { hasTypeScriptName } from "../../../../src/plugin-export-bindings";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const OLD_NAMES = ["generator", "generators"] as const;
@@ -149,6 +150,7 @@ function isBoundByDefaultOrNamespaceImport(root: SgNode, name: string): boolean 
  * @returns True if a `plugins` binding already exists
  */
 function fileAlreadyBindsPlugins(root: SgNode): boolean {
+  if (hasTypeScriptName(root, "plugins")) return true;
   for (const spec of root.findAll({ rule: { kind: "export_specifier" } })) {
     if ((spec.field("alias") ?? spec.field("name"))?.text() === "plugins") return true;
   }
@@ -225,6 +227,7 @@ function isBoundAsParameterAnywhere(root: SgNode, name: string): boolean {
  * @returns True when another binding for `name` exists
  */
 function hasOtherBindingNamed(root: SgNode, name: string, excludeStart: number): boolean {
+  if (hasTypeScriptName(root, name)) return true;
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const nameNode = decl.field("name");
     if (!nameNode) continue;

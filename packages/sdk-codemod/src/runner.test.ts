@@ -82,6 +82,10 @@ describe("runCodemods", () => {
   });
 
   test.each([
+    [
+      "define-generators-to-plugins",
+      'import { defineGenerators } from "@tailor-platform/sdk"; export const plugins = defineGenerators(["custom-plugin", {}]);',
+    ],
     ["plugin-export-name-normalize", 'export { generator } from "./tailor.config";'],
     ["plugin-export-name-normalize", 'export { generators as legacy } from "./tailor.config.mts";'],
     ["plugin-export-name-normalize", "export const generators = [myPlugin()] as const;"],
