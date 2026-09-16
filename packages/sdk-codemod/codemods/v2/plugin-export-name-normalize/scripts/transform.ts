@@ -36,12 +36,33 @@ function isTopLevelExportedDeclarator(decl: SgNode): boolean {
 }
 
 /**
+ * Check for a local or non-SDK binding that makes the factory name untrustworthy.
+ * @param root - Parsed config module
+ * @returns Whether definePlugins is bound to an unrelated value
+ */
+function hasUnrelatedFactoryBinding(root: SgNode): boolean {
+  let sdkBindingStart = -1;
+  for (const stmt of root.children().filter((node) => node.kind() === "import_statement")) {
+    if (stmt.field("source")?.text().slice(1, -1) !== "@tailor-platform/sdk") continue;
+    for (const spec of stmt.findAll({ rule: { kind: "import_specifier" } })) {
+      const imported = spec.field("name");
+      const local = spec.field("alias") ?? imported;
+      if (imported?.text() === "definePlugins" && local?.text() === "definePlugins") {
+        sdkBindingStart = local.range().start.index;
+      }
+    }
+  }
+  return hasOtherBindingNamed(root, "definePlugins", sdkBindingStart);
+}
+
+/**
  * Find `generator`/`generators` variable declarators whose value is a `definePlugins()` call
  * and which are themselves a top-level module export.
  * @param root - File root node
  * @returns Matching declarators, in source order
  */
 function findRenamableDeclarators(root: SgNode): SgNode[] {
+  if (hasUnrelatedFactoryBinding(root)) return [];
   const result: SgNode[] = [];
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const nameNode = decl.field("name");
@@ -348,6 +369,7 @@ function stillExportsOwnName(configTree: SgNode, oldName: string): boolean {
  * @returns True when a `plugins` export of the right shape exists
  */
 function hasSettledPluginsExport(configTree: SgNode): boolean {
+  if (hasUnrelatedFactoryBinding(configTree)) return false;
   return configTree.findAll({ rule: { kind: "variable_declarator" } }).some((decl) => {
     const nameNode = decl.field("name");
     return (

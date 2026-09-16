@@ -70,6 +70,14 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 
 describe("codemod transforms", () => {
   test.each([
+    "function definePlugins() { return []; }",
+    'import { definePlugins } from "./other";',
+  ])("preserves an unrelated definePlugins binding: %s", (binding) => {
+    const source = `${binding} export const generators = definePlugins();`;
+    expect(normalizePluginExport(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test.each([
     ["normalize", normalizePluginExport, "definePlugins"],
     ["legacy", migrateGenerators, "defineGenerators"],
   ] as const)("preserves helper exports during %s", (_name, transform, factory) => {

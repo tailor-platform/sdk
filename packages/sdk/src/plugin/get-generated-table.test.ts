@@ -338,6 +338,16 @@ export default { db: { main: { files: [] } } };
       );
     });
 
+    test("rejects arrays decorated with plugin properties", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [Object.assign([], { id: "array", description: "test" })]; export default { db: {} };`,
+      );
+      await expect(getGeneratedTable(configPath, "array", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
     test("rejects a `plugins` export containing an invalid item", async () => {
       fs.writeFileSync(
         configPath,
