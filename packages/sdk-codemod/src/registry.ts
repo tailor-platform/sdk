@@ -208,6 +208,8 @@ export const allCodemods: CodemodPackage[] = [
       "assign the result to `export const plugins`.",
       "Merge any remaining exported plugin arrays into `plugins`, including bindings",
       "exported separately with `export { ... }`, and update their importing files.",
+      "Only tailor.config module exports are renamed automatically; preserve helper-module",
+      "exports and expose their plugins under the canonical config export manually.",
     ].join("\n"),
   },
   {
@@ -248,6 +250,8 @@ export const allCodemods: CodemodPackage[] = [
       "same-named binding in that file — rename those by hand to `plugins`.",
       "Multiple arrays or bindings exported separately with `export { ... }` need manual",
       "consolidation into the `plugins` export; update their importing files as well.",
+      "Only tailor.config module exports are renamed automatically. Review aliased SDK",
+      "factory calls and helper-module re-exports manually, preserving the helper API.",
     ].join("\n"),
   },
   {

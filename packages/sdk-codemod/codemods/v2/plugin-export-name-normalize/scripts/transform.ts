@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { parse, Lang } from "@ast-grep/napi";
 import * as path from "pathe";
-import { hasTypeScriptName } from "../../../../src/plugin-export-bindings";
+import { hasTypeScriptName, isTailorConfigPath } from "../../../../src/plugin-export-bindings";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const OLD_NAMES = ["generator", "generators"] as const;
@@ -427,7 +427,8 @@ export default function transform(source: string, filePath?: string): string | n
 
   const tree = parse(Lang.TypeScript, source).root();
 
-  const declarators = findRenamableDeclarators(tree);
+  const declarators =
+    !filePath || isTailorConfigPath(filePath) ? findRenamableDeclarators(tree) : [];
   const importSpecifiers = findTailorConfigGeneratorSpecifiers(tree);
   if (declarators.length === 0 && importSpecifiers.length === 0) return null;
 

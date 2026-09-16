@@ -24,3 +24,12 @@ export function hasTypeScriptName(root: SgNode, name: string): boolean {
   }
   return false;
 }
+
+/**
+ * Identify a conventional Tailor config module for config-only export migration.
+ * @param filePath - Source path supplied by the codemod runner
+ * @returns Whether the file is a Tailor config module
+ */
+export function isTailorConfigPath(filePath: string): boolean {
+  return /(?:^|[/\\])tailor\.config\.[cm]?[jt]sx?$/.test(filePath);
+}

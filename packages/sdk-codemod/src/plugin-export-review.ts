@@ -1,4 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { isTailorConfigPath } from "./plugin-export-bindings";
 import type { LlmReviewFinding } from "./types";
 import type { SgNode } from "@ast-grep/napi";
 
@@ -16,6 +17,26 @@ export function reviewFindings(
 ): LlmReviewFinding[] {
   const root = parse(filePath.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript, source).root();
   const findings: LlmReviewFinding[] = [];
+  const isConfigFile = isTailorConfigPath(filePath);
+  const factories = new Set(["definePlugins", "defineGenerators"]);
+  for (const stmt of root.children().filter((node) => node.kind() === "import_statement")) {
+    if (stmt.field("source")?.text().slice(1, -1) !== "@tailor-platform/sdk") continue;
+    for (const spec of stmt.findAll({ rule: { kind: "import_specifier" } })) {
+      if (["definePlugins", "defineGenerators"].includes(spec.field("name")?.text() ?? "")) {
+        factories.add((spec.field("alias") ?? spec.field("name"))!.text());
+      }
+    }
+    for (const spec of stmt.findAll({ rule: { kind: "namespace_import" } })) {
+      const local = spec
+        .children()
+        .find((child) => child.kind() === "identifier")
+        ?.text();
+      if (local) {
+        factories.add(`${local}.definePlugins`);
+        factories.add(`${local}.defineGenerators`);
+      }
+    }
+  }
   const report = (node: SgNode, message: string): void => {
     findings.push({
       file: relativePath,
@@ -25,7 +46,7 @@ export function reviewFindings(
     });
   };
   const exports = root.children().filter((stmt) => stmt.kind() === "export_statement");
-  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+  for (const decl of isConfigFile ? root.findAll({ rule: { kind: "variable_declarator" } }) : []) {
     const name = decl.field("name");
     let value = decl.field("value");
     while (
@@ -44,10 +65,8 @@ export function reviewFindings(
     }
     if (name?.kind() !== "identifier" || !value) continue;
     const isPluginCall =
-      value.kind() === "call_expression" &&
-      ["definePlugins", "defineGenerators"].includes(value.field("function")?.text() ?? "");
-    const isConfigArray =
-      /(?:^|[/\\])tailor\.config\.[cm]?[jt]sx?$/.test(filePath) && value.kind() === "array";
+      value.kind() === "call_expression" && factories.has(value.field("function")?.text() ?? "");
+    const isConfigArray = value.kind() === "array";
     if (!isPluginCall && !isConfigArray) continue;
     const owner = decl.parent()?.parent();
     const names: string[] = [];
@@ -77,6 +96,17 @@ export function reviewFindings(
     .children()
     .filter((node) => node.kind() === "import_statement" || node.kind() === "export_statement")) {
     const modulePath = stmt.field("source")?.text().slice(1, -1);
+    if (isConfigFile && modulePath && stmt.kind() === "export_statement") {
+      for (const spec of stmt.findAll({ rule: { kind: "export_specifier" } })) {
+        const exportedName = (spec.field("alias") ?? spec.field("name"))?.text();
+        if (exportedName !== "plugins" && exportedName !== "default") {
+          report(
+            spec,
+            "Review this config re-export for plugins and expose plugin definitions as plugins.",
+          );
+        }
+      }
+    }
     if (
       !modulePath ||
       !/(^|\/)tailor\.config(?:\.(?:ts|tsx|mts|cts|js|mjs|cjs))?$/.test(modulePath)
