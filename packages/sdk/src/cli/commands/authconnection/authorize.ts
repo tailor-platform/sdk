@@ -162,6 +162,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
               message: "No authorization code received.",
             });
           }
+          logger.registerSecret(code);
 
           // Send authorization code to the platform for server-side token exchange
           await client.exchangeAuthConnectionAuthorizationCode({

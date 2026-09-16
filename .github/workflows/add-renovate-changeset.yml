@@ -75,9 +75,24 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           NAMES: ${{ steps.changeset_check.outputs.changed-names }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -eo pipefail
           FILENAME=".changeset/renovate-${PR_NUMBER}.md"
+
+          # This job checks out the Renovate branch's own head sha (not
+          # merged with the base), so a branch opened before this script
+          # existed won't have it on disk. Fall back to the copy already
+          # fetched from the base branch (by the "Snapshot base lockfile"
+          # step above) for those older, still-open Renovate PRs.
+          if [ -f .github/scripts/neutralize-mentions.mjs ]; then
+            SANITIZER=.github/scripts/neutralize-mentions.mjs
+          else
+            SANITIZER=$(mktemp --suffix=.mjs)
+            git show "origin/${BASE_REF}:.github/scripts/neutralize-mentions.mjs" > "$SANITIZER"
+          fi
+          SAFE_TITLE=$(printf '%s' "${PR_TITLE}" | node "$SANITIZER")
+
           {
             echo "---"
             while IFS= read -r name; do
@@ -86,12 +101,12 @@ jobs:
             done <<< "$NAMES"
             echo "---"
             echo ""
-            printf '%s\n' "${PR_TITLE}"
+            printf '%s\n' "${SAFE_TITLE}"
           } > "$FILENAME"
 
       - name: Commit changeset
         if: steps.existing.outputs.found == 'false' && steps.create_changeset.outcome == 'success'
-        uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
+        uses: suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7 # v1.1.0
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
           app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
