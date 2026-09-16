@@ -226,6 +226,51 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
+  test("skips tailorDB, secretManager, staticWebsite, aiGateway, and workflowExecutionPolicy steps when passed in `skip`", async () => {
+    mocks.calls.length = 0;
+
+    await applyDeploymentPlans(
+      {} as never,
+      "workspace-id",
+      [deployment("supplier")],
+      new Set([
+        "tailorDB",
+        "secretManager",
+        "staticWebsite",
+        "aiGateway",
+        "workflowExecutionPolicy",
+      ]),
+    );
+
+    expect(mocks.preflightTailorDB).not.toHaveBeenCalled();
+    expect(mocks.applyTailorDB).not.toHaveBeenCalled();
+    expect(mocks.applySecretManager).not.toHaveBeenCalled();
+    expect(mocks.applyStaticWebsite).not.toHaveBeenCalled();
+    expect(mocks.applyAIGateway).not.toHaveBeenCalled();
+    expect(mocks.applyWorkflowJobFunctionExecutionPolicy).not.toHaveBeenCalled();
+
+    expect(mocks.calls).toEqual([
+      "function:supplier-function:create-update",
+      "idp:supplier-idp:create-update",
+      "auth:supplier-auth:create-update-prerequisites",
+      "auth:supplier-auth:create-update-dependents",
+      "pipeline:supplier-pipeline:create-update",
+      "pipeline:supplier-pipeline:delete-resources",
+      "auth:supplier-auth:delete-resources",
+      "idp:supplier-idp:delete-resources",
+      "application:supplier-application:create-update",
+      "executor:supplier-executor:create-update",
+      "workflow:supplier-workflow:create-update",
+      "workflow:supplier-workflow:delete",
+      "executor:supplier-executor:delete",
+      "application:supplier-application:delete",
+      "pipeline:supplier-pipeline:delete-services",
+      "auth:supplier-auth:delete-services",
+      "idp:supplier-idp:delete-services",
+      "function:supplier-function:delete",
+    ]);
+  });
+
   test("fails migration preflight before applying any resource", async () => {
     mocks.calls.length = 0;
     mocks.applySecretManager.mockClear();

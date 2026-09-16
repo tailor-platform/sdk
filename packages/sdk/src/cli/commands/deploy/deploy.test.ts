@@ -1106,6 +1106,37 @@ describe("multi-config deployment orchestration", () => {
 
     await expect(planPromise).resolves.toHaveLength(2);
   });
+
+  test("forwards skip and matches previous deployments by application name", async () => {
+    const targets = [fakeTarget({ appName: "buyer" }), fakeTarget({ appName: "supplier" })];
+    const skip = new Set(["staticWebsite"] as const);
+    const previousBuyer = plannedDeployment("buyer", emptyResults());
+    const previousSupplier = plannedDeployment("supplier", emptyResults());
+    const received: Array<{ appName: string; skip: unknown; previous: unknown }> = [];
+
+    await planDeploymentTargets({
+      targets,
+      runInputs: {} as never,
+      client: {} as never,
+      workspaceId: "workspace-id",
+      noSchemaCheck: false,
+      skip,
+      previousDeployments: [previousSupplier, previousBuyer],
+      planTarget: async (params) => {
+        received.push({
+          appName: params.target.application.name,
+          skip: params.skip,
+          previous: params.previous,
+        });
+        return plannedDeployment(params.target.application.name, emptyResults());
+      },
+    });
+
+    expect(received).toEqual([
+      { appName: "buyer", skip, previous: previousBuyer },
+      { appName: "supplier", skip, previous: previousSupplier },
+    ]);
+  });
 });
 
 describe("adjustApplicationForMigrationTest", () => {

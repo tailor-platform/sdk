@@ -18,6 +18,7 @@ import {
   applyDeploymentPlans,
   deploymentPlanResults,
   type PlannedDeployment,
+  type RepeatableResourceKind,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { mergeBundledScripts } from "./bundled-scripts";
@@ -121,6 +122,17 @@ interface DeployInternalContext {
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   suppressResultOutput?: boolean;
 }
+
+// None of these resource kinds can carry a static website URL reference, so the
+// automatic second pass (see `deployInternal`'s pass loop) leaves them exactly
+// as pass 1 applied them instead of re-planning and re-applying them.
+const REPEATABLE_RESOURCE_KINDS: ReadonlySet<RepeatableResourceKind> = new Set([
+  "tailorDB",
+  "secretManager",
+  "aiGateway",
+  "staticWebsite",
+  "workflowExecutionPolicy",
+]);
 
 function collectExpectedLocalStaticWebsiteNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
@@ -248,6 +260,10 @@ type PlanDeploymentTargetParams = {
   noSchemaCheck: boolean | undefined;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  /** Resource kinds to reuse from `previous` instead of re-planning. */
+  skip?: ReadonlySet<RepeatableResourceKind>;
+  /** This target's own plan result from the prior pass, source for `skip` reuse. */
+  previous?: PlannedDeployment;
 };
 
 type ConfirmDeploymentPlansParams = {
@@ -267,6 +283,10 @@ type PlanDeploymentTargetsParams = {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
+  /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
+  skip?: ReadonlySet<RepeatableResourceKind>;
+  /** Prior pass's plan results, matched to targets by application name. */
+  previousDeployments?: ReadonlyArray<PlannedDeployment>;
 };
 
 function recoveryEnvironmentArgs(
@@ -387,6 +407,8 @@ async function planDeploymentTarget(
     noSchemaCheck,
     migrationTestBaselines,
     migrationTestSnapshots,
+    skip,
+    previous,
   } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
@@ -461,9 +483,15 @@ async function planDeploymentTarget(
       workflowExecutionPolicy,
       secretManager,
     ] = await Promise.all([
-      withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-      withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-      withSpan("plan.aiGateway", () => planAIGateway(ctx)),
+      skip?.has("tailorDB") && previous
+        ? previous.tailorDB
+        : withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+      skip?.has("staticWebsite") && previous
+        ? previous.staticWebsite
+        : withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+      skip?.has("aiGateway") && previous
+        ? previous.aiGateway
+        : withSpan("plan.aiGateway", () => planAIGateway(ctx)),
       withSpan("plan.idp", () => planIdP(ctx)),
       withSpan("plan.auth", () => planAuth(ctx)),
       withSpan("plan.pipeline", () => planPipeline(ctx)),
@@ -486,16 +514,20 @@ async function planDeploymentTarget(
           },
         ),
       ),
-      withSpan("plan.workflowExecutionPolicy", () =>
-        planWorkflowJobFunctionExecutionPolicy(
-          client,
-          workspaceId,
-          application.name,
-          application.id,
-          config.workflow?.executionPolicies ?? {},
-        ),
-      ),
-      withSpan("plan.secretManager", () => planSecretManager(ctx)),
+      skip?.has("workflowExecutionPolicy") && previous
+        ? previous.workflowExecutionPolicy
+        : withSpan("plan.workflowExecutionPolicy", () =>
+            planWorkflowJobFunctionExecutionPolicy(
+              client,
+              workspaceId,
+              application.name,
+              application.id,
+              config.workflow?.executionPolicies ?? {},
+            ),
+          ),
+      skip?.has("secretManager") && previous
+        ? previous.secretManager
+        : withSpan("plan.secretManager", () => planSecretManager(ctx)),
     ]);
 
     return {
@@ -519,13 +551,17 @@ async function planDeploymentTarget(
 export async function planDeploymentTargets(
   params: PlanDeploymentTargetsParams,
 ): Promise<PlannedDeployment[]> {
-  const { targets, planTarget = planDeploymentTarget, ...planParams } = params;
+  const { targets, planTarget = planDeploymentTarget, previousDeployments, ...planParams } = params;
+  const previousByAppName = new Map(
+    previousDeployments?.map((deployment) => [deployment.application.name, deployment]),
+  );
   return Promise.all(
     targets.map((target) =>
       planTarget({
         ...planParams,
         target,
         targets,
+        previous: previousByAppName.get(target.application.name),
       }),
     ),
   );
@@ -691,8 +727,13 @@ async function deployInternal(
     // `deploy` again by hand to pick up a site their own deploy just created.
     const maxPasses = dryRun || buildOnly ? 1 : 2;
     let planSummary: ReturnType<typeof printDeploymentPlans> | undefined;
+    let previousDeployments: PlannedDeployment[] | undefined;
 
     for (let pass = 1; pass <= maxPasses; pass++) {
+      // Only the second, automatic pass reuses anything: none of these kinds
+      // can carry a static website URL, so redoing them would just repeat
+      // pass 1's work without changing the outcome.
+      const skip = pass > 1 ? REPEATABLE_RESOURCE_KINDS : undefined;
       const targets = await withSpan("build", async () => {
         const noCache = options?.noCache ?? false;
         const packageJson = await readPackageJson();
@@ -752,6 +793,8 @@ async function deployInternal(
         noSchemaCheck: options?.noSchemaCheck,
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
+        skip,
+        previousDeployments,
       });
 
       dropCrossDeploymentManagedDeletes(deployments);
@@ -793,7 +836,7 @@ async function deployInternal(
         return undefined;
       }
 
-      await applyDeploymentPlans(client, workspaceId, deployments);
+      await applyDeploymentPlans(client, workspaceId, deployments, skip);
 
       const createdStaticWebsite = deployments.some(
         (deployment) => deployment.staticWebsite.changeSet.creates.length > 0,
@@ -801,6 +844,7 @@ async function deployInternal(
       if (pass === maxPasses || !createdStaticWebsite) {
         break;
       }
+      previousDeployments = deployments;
       logger.info(
         "A static website was just created; redeploying once more so any env/cors/OAuth2/IdP reference to it resolves to its real URL.",
       );

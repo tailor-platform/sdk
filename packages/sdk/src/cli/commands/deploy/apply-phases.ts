@@ -44,15 +44,30 @@ export function deploymentPlanResults(deployment: PlannedDeployment): PlanResult
 }
 
 /**
+ * Resource kinds whose plan and apply can be skipped on a deploy's automatic
+ * repeat pass (see `deployInternal`'s static-website retry loop): none of
+ * them can embed a static website's URL, and whatever they needed from this
+ * run's config already went through on the first pass.
+ */
+export type RepeatableResourceKind =
+  | "tailorDB"
+  | "secretManager"
+  | "aiGateway"
+  | "staticWebsite"
+  | "workflowExecutionPolicy";
+
+/**
  * Apply planned deploy changes for one or more applications.
  * @param client - Operator client instance
  * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
+ * @param skip - Resource kinds to leave untouched (already applied on an earlier pass)
  */
 export async function applyDeploymentPlans(
   client: OperatorClient,
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
+  skip: ReadonlySet<RepeatableResourceKind> = new Set(),
 ): Promise<void> {
   const forEachDeployment = async (
     apply: (deployment: PlannedDeployment) => Promise<unknown>,
@@ -68,30 +83,39 @@ export async function applyDeploymentPlans(
   ): Promise<void> => withSpan(name, () => forEachDeployment(apply));
 
   await withSpan("apply.preflight", async () => {
+    if (skip.has("tailorDB")) return;
     await forEachDeployment((d) => preflightTailorDB(client, d.tailorDB));
   });
 
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
-      await step("apply.secretManager.createUpdate", (d) =>
-        applySecretManager(applyClient, d.secretManager, "create-update", d.application),
-      );
+      if (!skip.has("secretManager")) {
+        await step("apply.secretManager.createUpdate", (d) =>
+          applySecretManager(applyClient, d.secretManager, "create-update", d.application),
+        );
+      }
       await step("apply.functionRegistry.createUpdate", (d) =>
         applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
       );
-      await step("apply.staticWebsite.createUpdate", (d) =>
-        applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
-      );
-      await step("apply.aiGateway.createUpdate", (d) =>
-        applyAIGateway(applyClient, d.aiGateway, "create-update"),
-      );
+      if (!skip.has("staticWebsite")) {
+        await step("apply.staticWebsite.createUpdate", (d) =>
+          applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
+        );
+      }
+      if (!skip.has("aiGateway")) {
+        await step("apply.aiGateway.createUpdate", (d) =>
+          applyAIGateway(applyClient, d.aiGateway, "create-update"),
+        );
+      }
       await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
       await step("apply.auth.createUpdatePrerequisites", (d) =>
         applyAuth(applyClient, d.auth, "create-update-prerequisites"),
       );
-      await step("apply.tailorDB.createUpdate", (d) =>
-        applyTailorDB(applyClient, d.tailorDB, "create-update"),
-      );
+      if (!skip.has("tailorDB")) {
+        await step("apply.tailorDB.createUpdate", (d) =>
+          applyTailorDB(applyClient, d.tailorDB, "create-update"),
+        );
+      }
       await step("apply.auth.createUpdateDependents", (d) =>
         applyAuth(applyClient, d.auth, "create-update-dependents"),
       );
@@ -116,13 +140,15 @@ export async function applyDeploymentPlans(
       );
       // Execution policies must exist before workflow job functions that reference
       // them by key, otherwise the runtime rejects the dispatch as an unknown key.
-      await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
-        applyWorkflowJobFunctionExecutionPolicy(
-          applyClient,
-          d.workflowExecutionPolicy,
-          "create-update",
-        ),
-      );
+      if (!skip.has("workflowExecutionPolicy")) {
+        await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
+          applyWorkflowJobFunctionExecutionPolicy(
+            applyClient,
+            d.workflowExecutionPolicy,
+            "create-update",
+          ),
+        );
+      }
       await step("apply.workflow.createUpdate", (d) =>
         applyWorkflow(applyClient, d.workflow, "create-update"),
       );
@@ -131,15 +157,23 @@ export async function applyDeploymentPlans(
 
   await withSpan("apply.deleteDependentServices", async () => {
     await forEachDeployment((d) => applyWorkflow(client, d.workflow, "delete"));
-    await forEachDeployment((d) =>
-      applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "delete"),
-    );
+    if (!skip.has("workflowExecutionPolicy")) {
+      await forEachDeployment((d) =>
+        applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "delete"),
+      );
+    }
     await forEachDeployment((d) => applyExecutor(client, d.executor, "delete"));
-    await forEachDeployment((d) => applyStaticWebsite(client, d.staticWebsite, "delete"));
-    await forEachDeployment((d) => applyAIGateway(client, d.aiGateway, "delete"));
-    await forEachDeployment((d) =>
-      applySecretManager(client, d.secretManager, "delete", d.application),
-    );
+    if (!skip.has("staticWebsite")) {
+      await forEachDeployment((d) => applyStaticWebsite(client, d.staticWebsite, "delete"));
+    }
+    if (!skip.has("aiGateway")) {
+      await forEachDeployment((d) => applyAIGateway(client, d.aiGateway, "delete"));
+    }
+    if (!skip.has("secretManager")) {
+      await forEachDeployment((d) =>
+        applySecretManager(client, d.secretManager, "delete", d.application),
+      );
+    }
   });
 
   await withSpan("apply.deleteApplication", async () => {
@@ -150,7 +184,9 @@ export async function applyDeploymentPlans(
     await forEachDeployment((d) => applyPipeline(client, d.pipeline, "delete-services"));
     await forEachDeployment((d) => applyAuth(client, d.auth, "delete-services"));
     await forEachDeployment((d) => applyIdP(client, d.idp, "delete-services"));
-    await forEachDeployment((d) => applyTailorDB(client, d.tailorDB, "delete-services"));
+    if (!skip.has("tailorDB")) {
+      await forEachDeployment((d) => applyTailorDB(client, d.tailorDB, "delete-services"));
+    }
   });
 
   await withSpan("apply.cleanup", async () => {
