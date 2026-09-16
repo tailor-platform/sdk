@@ -69,6 +69,12 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test("leaves aliased legacy factories intact for manual migration", () => {
+    const source = `import { defineGenerators as makeGenerators } from "@tailor-platform/sdk";
+export const generators = makeGenerators(["@tailor-platform/kysely-type", {}]);`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
   test("renames references inside JSX without rewriting expression syntax", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-tsx-consumer-"));
     try {
@@ -97,6 +103,7 @@ describe("codemod transforms", () => {
   });
 
   test.each([
+    "",
     "function definePlugins() { return []; }",
     'import { definePlugins } from "./other";',
   ])("preserves an unrelated definePlugins binding: %s", (binding) => {
@@ -150,7 +157,7 @@ describe("codemod transforms", () => {
     try {
       fs.writeFileSync(
         path.join(dir, "tailor.config.ts"),
-        "export const generator = definePlugins();",
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
       );
       const source =
         'import { generator } from "./tailor.config"; const other = 1; export { other as generator }; console.log(generator);';
@@ -174,18 +181,18 @@ describe("codemod transforms", () => {
 
   test.each([
     'import { generators } from "./other/tailor.config";',
-    "export const generators = definePlugins();",
+    'import { definePlugins } from "@tailor-platform/sdk"; export const generators = definePlugins();',
   ])("skips competing new local bindings: %s", (otherBinding) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-target-collision-"));
     try {
       fs.mkdirSync(path.join(dir, "other"));
       fs.writeFileSync(
         path.join(dir, "tailor.config.ts"),
-        "export const generator = definePlugins();",
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
       );
       fs.writeFileSync(
         path.join(dir, "other/tailor.config.ts"),
-        "export const generators = definePlugins();",
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generators = definePlugins();',
       );
       const source = `import { generator } from "../tailor.config";\n${otherBinding.replace("./other/", "../other/")}`;
       expect(normalizePluginExport(source, path.join(dir, "combined/tailor.config.ts"))).toBeNull();
@@ -199,7 +206,7 @@ describe("codemod transforms", () => {
     try {
       fs.writeFileSync(
         path.join(dir, "tailor.config.ts"),
-        "export const plugins = definePlugins();",
+        'import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins();',
       );
       fs.writeFileSync(
         path.join(dir, "tailor.config.mts"),
@@ -217,7 +224,7 @@ describe("codemod transforms", () => {
     try {
       fs.writeFileSync(
         path.join(dir, "tailor.config.ts"),
-        "export const generator = definePlugins();",
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
       );
       const source =
         'import { generator as plugins } from "./tailor.config"; console.log(plugins);';
@@ -230,7 +237,8 @@ describe("codemod transforms", () => {
   });
 
   test("preserves a plugin export already available through an exported alias", () => {
-    const source = "export const generators = definePlugins(); export { generators as plugins };";
+    const source =
+      'import { definePlugins } from "@tailor-platform/sdk"; export const generators = definePlugins(); export { generators as plugins };';
     expect(normalizePluginExport(source)).toBeNull();
   });
 
@@ -245,7 +253,7 @@ describe("codemod transforms", () => {
     try {
       fs.writeFileSync(
         path.join(dir, `tailor.config.${extension}`),
-        "export const generator = definePlugins();\n",
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();\n',
       );
       const source = `import { generator } from "./tailor.config.${extension}";\nconsole.log(generator);\n`;
       expect(normalizePluginExport(source, path.join(dir, `consumer.${extension}`))).toBe(
@@ -266,7 +274,7 @@ describe("codemod transforms", () => {
     try {
       fs.writeFileSync(
         path.join(dir, "tailor.config.ts"),
-        `export const plugins = definePlugins();\n${unrelatedExport}\n`,
+        `import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins();\n${unrelatedExport}\n`,
       );
       const source = 'import { generator } from "./tailor.config";\nconsole.log(generator);\n';
       expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
