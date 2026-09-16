@@ -9,12 +9,7 @@ import {
 import { isCLIError } from "./errors";
 import { parseBoolean } from "./parse-boolean";
 
-/**
- * Properties attached to a GitHub Actions annotation.
- *
- * `file`/`line` are accepted but not yet populated by any CLI error; they are
- * part of the command format so producers can add source locations later.
- */
+/** Properties attached to a GitHub Actions annotation. */
 export interface AnnotationProperties {
   /** Short heading shown above the annotation body. */
   title?: string;
