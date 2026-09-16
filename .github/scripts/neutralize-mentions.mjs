@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-const neutralize = (text) => text.replace(/@/g, "@​");
+const neutralize = (text) => text.replace(/@/g, "@\u200b");
 
 const [file] = process.argv.slice(2);
 

@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const script = fileURLToPath(new URL("./neutralize-mentions.mjs", import.meta.url));
-const ZWSP = "​";
+const ZWSP = "\u200b";
 
 test("stdin/stdout mode inserts a ZWSP after every '@', including UTF-8 text", () => {
   const input = "fix(deps): update @inquirer for 日本語 @ユーザー and @types/node";
