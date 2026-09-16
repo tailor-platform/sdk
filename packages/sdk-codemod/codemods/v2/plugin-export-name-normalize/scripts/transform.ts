@@ -1,7 +1,11 @@
 import * as fs from "node:fs";
 import { parse, Lang } from "@ast-grep/napi";
 import * as path from "pathe";
-import { hasTypeScriptName, isTailorConfigPath } from "../../../../src/plugin-export-bindings";
+import {
+  hasTypeScriptName,
+  isTailorConfigPath,
+  isIntrinsicJsxName,
+} from "../../../../src/plugin-export-bindings";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const OLD_NAMES = ["generator", "generators"] as const;
@@ -299,6 +303,7 @@ function renameBindingAndUsages(
   edits.push(declNode.replace("plugins"));
   const declStart = declNode.range().start.index;
   for (const idNode of root.findAll({ rule: { kind: "identifier", regex: `^${oldName}$` } })) {
+    if (isIntrinsicJsxName(idNode)) continue;
     if (idNode.range().start.index === declStart) continue;
     if (idNode.parent()?.kind() === "import_specifier") continue;
     const exportSpec = idNode.parent();

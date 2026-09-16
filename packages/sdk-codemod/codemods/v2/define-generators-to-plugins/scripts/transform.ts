@@ -1,5 +1,9 @@
 import { parse, Lang } from "@ast-grep/napi";
-import { hasTypeScriptName, isTailorConfigPath } from "../../../../src/plugin-export-bindings";
+import {
+  hasTypeScriptName,
+  isTailorConfigPath,
+  isIntrinsicJsxName,
+} from "../../../../src/plugin-export-bindings";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 /**
@@ -245,6 +249,7 @@ function renameBindingAndUsages(
   edits.push(declNode.replace("plugins"));
   const declStart = declNode.range().start.index;
   for (const idNode of root.findAll({ rule: { kind: "identifier", regex: `^${oldName}$` } })) {
+    if (isIntrinsicJsxName(idNode)) continue;
     if (idNode.range().start.index === declStart) continue;
     if (idNode.parent()?.kind() === "import_specifier") continue;
     const exportSpec = idNode.parent();
@@ -370,13 +375,44 @@ export default function transform(source: string, filePath?: string): string | n
 
   // Check across ALL SDK import statements whether definePlugins is already
   // imported (may be in a different statement than defineGenerators).
-  const hasDefinePlugins = sdkImportStatements.some((stmt) =>
-    stmt
-      .findAll({ rule: { kind: "import_specifier" } })
-      .some((s) =>
-        s.children().some((c: SgNode) => c.kind() === "identifier" && c.text() === "definePlugins"),
-      ),
+  const sdkSpecifiers = sdkImportStatements.flatMap((stmt) =>
+    stmt.findAll({ rule: { kind: "import_specifier" } }),
   );
+  const legacyFactory = sdkSpecifiers
+    .find((spec) => spec.field("name")?.text() === "defineGenerators" && !spec.field("alias"))
+    ?.field("name");
+  const pluginFactory = sdkSpecifiers.find(
+    (spec) =>
+      spec.field("name")?.text() === "definePlugins" &&
+      (spec.field("alias") ?? spec.field("name"))?.text() === "definePlugins",
+  );
+  const pluginBinding = pluginFactory?.field("alias") ?? pluginFactory?.field("name");
+  const hasDefinePlugins = pluginBinding !== undefined && pluginBinding !== null;
+  if (
+    !legacyFactory ||
+    hasOtherBindingNamed(tree, "defineGenerators", legacyFactory.range().start.index) ||
+    hasOtherBindingNamed(tree, "definePlugins", pluginBinding?.range().start.index ?? -1)
+  ) {
+    return null;
+  }
+  // Renaming the import is safe only when every factory reference is a direct
+  // call covered by tuple conversion. Indirect references require manual review.
+  for (const reference of tree.findAll({
+    rule: {
+      any: [{ kind: "identifier" }, { kind: "shorthand_property_identifier" }],
+      regex: "^defineGenerators$",
+    },
+  })) {
+    if (reference.parent()?.kind() === "import_specifier" || isIntrinsicJsxName(reference))
+      continue;
+    const parent = reference.parent();
+    if (
+      parent?.kind() !== "call_expression" ||
+      parent.field("function")?.range().start.index !== reference.range().start.index
+    ) {
+      return null;
+    }
+  }
 
   // Calls through aliases are not covered by the tuple conversion above. Keep the
   // entire file intact so the legacy-pattern warning directs users to migrate it.

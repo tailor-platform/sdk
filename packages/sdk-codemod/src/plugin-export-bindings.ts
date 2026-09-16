@@ -1,6 +1,21 @@
 import type { SgNode } from "@ast-grep/napi";
 
 /**
+ * Distinguish intrinsic JSX tag names from references to JavaScript bindings.
+ * @param node - Identifier considered for renaming
+ * @returns Whether this identifier names a lowercase JSX element
+ */
+export function isIntrinsicJsxName(node: SgNode): boolean {
+  const parentKind = node.parent()?.kind();
+  return (
+    /^[a-z]/.test(node.text()) &&
+    (parentKind === "jsx_opening_element" ||
+      parentKind === "jsx_closing_element" ||
+      parentKind === "jsx_self_closing_element")
+  );
+}
+
+/**
  * Detect TypeScript value declarations and namespace exports that make a rename ambiguous.
  * @param root - Parsed source file
  * @param name - Name that must remain unambiguous

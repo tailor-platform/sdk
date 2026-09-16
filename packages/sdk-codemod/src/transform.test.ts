@@ -69,6 +69,46 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test("keeps a direct plugin factory binding beside an aliased plugin import", () => {
+    const source = `import { defineGenerators, definePlugins as makePlugins } from "@tailor-platform/sdk";
+export const generators = defineGenerators();`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBe(
+      `import { definePlugins, definePlugins as makePlugins } from "@tailor-platform/sdk";
+export const plugins = definePlugins();`,
+    );
+  });
+
+  test("preserves a shadowed legacy factory", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+export const generators = defineGenerators();
+function read(defineGenerators) { return defineGenerators(); }`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test("preserves a conflicting plugin factory binding", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+const definePlugins = () => [];
+export const generators = defineGenerators();`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test("preserves legacy factories referenced indirectly", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+const makeGenerators = defineGenerators;
+export const generators = makeGenerators();`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves intrinsic JSX tag names during %s", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); export const view = <generators><generators />{generators}</generators>;`;
+    expect(transform(source, "/project/tailor.config.tsx")).toBe(
+      'import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins(); export const view = <generators><generators />{plugins}</generators>;',
+    );
+  });
+
   test("leaves aliased legacy factories intact for manual migration", () => {
     const source = `import { defineGenerators as makeGenerators } from "@tailor-platform/sdk";
 export const generators = makeGenerators(["@tailor-platform/kysely-type", {}]);`;
