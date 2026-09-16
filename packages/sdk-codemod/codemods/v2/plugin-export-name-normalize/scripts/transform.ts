@@ -406,7 +406,10 @@ function sourceConfigRenameIsSafe(filePath: string, modulePath: string, oldName:
     return false;
   }
 
-  const configTree = parse(Lang.TypeScript, configSource).root();
+  const configTree = parse(
+    resolved.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript,
+    configSource,
+  ).root();
 
   if (!stillExportsOwnName(configTree, oldName)) {
     // Already migrated (or never existed under this name at all): safe only if `plugins`
@@ -447,7 +450,7 @@ function sourceConfigRenameIsSafe(filePath: string, modulePath: string, oldName:
 export default function transform(source: string, filePath?: string): string | null {
   if (!source.includes("generator")) return null;
 
-  const tree = parse(Lang.TypeScript, source).root();
+  const tree = parse(filePath?.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript, source).root();
 
   const declarators =
     !filePath || isTailorConfigPath(filePath) ? findRenamableDeclarators(tree) : [];
