@@ -219,6 +219,43 @@ export const generators = makeGenerators(["@tailor-platform/kysely-type", {}]);`
     }
   });
 
+  test.each(["mts", "cts", "mjs", "cjs"])(
+    "does not substitute a .ts config for a missing explicit .%s module",
+    (extension) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-missing-config-"));
+      try {
+        fs.writeFileSync(
+          path.join(dir, "tailor.config.ts"),
+          'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+        );
+        const source = `import { generator } from "./tailor.config.${extension}";`;
+        expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each([
+    ["mjs", "mts"],
+    ["cjs", "cts"],
+  ])("resolves .%s imports to .%s sources", (emittedExtension, sourceExtension) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-emitted-config-"));
+    try {
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), "export const generator = 1;");
+      fs.writeFileSync(
+        path.join(dir, `tailor.config.${sourceExtension}`),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source = `import { generator } from "./tailor.config.${emittedExtension}";`;
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBe(
+        `import { plugins } from "./tailor.config.${emittedExtension}";`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("preserves an existing plugins import alias while renaming its remote name", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-import-alias-"));
     try {
