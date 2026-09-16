@@ -69,6 +69,33 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test("renames references inside JSX without rewriting expression syntax", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-tsx-consumer-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source =
+        'import { generator } from "./tailor.config"; export const view = <div>{generator}</div>;';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.tsx"))).toBe(
+        'import { plugins } from "./tailor.config"; export const view = <div>{plugins}</div>;',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves JSX expression syntax in %s configs", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); export const view = <div>{generators}</div>;`;
+    expect(transform(source, "/project/tailor.config.tsx")).toBe(
+      'import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins(); export const view = <div>{plugins}</div>;',
+    );
+  });
+
   test.each([
     "function definePlugins() { return []; }",
     'import { definePlugins } from "./other";',

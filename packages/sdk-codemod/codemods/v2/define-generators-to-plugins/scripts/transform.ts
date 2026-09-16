@@ -277,7 +277,7 @@ function renameBindingAndUsages(
  * @returns Transformed source or null if no changes needed
  */
 export default function transform(source: string, filePath?: string): string | null {
-  const tree = parse(Lang.TypeScript, source).root();
+  const tree = parse(filePath?.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript, source).root();
 
   // Only process files that import defineGenerators from the SDK.
   // This prevents modifying unrelated files that happen to contain the identifier.
