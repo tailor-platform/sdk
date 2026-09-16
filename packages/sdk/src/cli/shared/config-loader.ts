@@ -106,7 +106,8 @@ export async function loadConfig(
         );
       }
       seenIds.add(result.data.id);
-      allPlugins.push(result.data);
+      // Validation must not replace class instances or the state their hooks use.
+      allPlugins.push(item as Plugin);
     }
   }
 

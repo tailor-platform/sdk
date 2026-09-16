@@ -330,8 +330,18 @@ function resolveRelativeModule(filePath: string, rawSpecifier: string): string |
   const baseDir = path.dirname(filePath);
   const asIs = path.resolve(baseDir, rawSpecifier);
   if (fs.existsSync(asIs)) return asIs;
+  // Only emitted JavaScript extensions can substitute TypeScript source files.
+  const sourceExtensions: Record<string, string[]> = {
+    ".js": [".ts", ".tsx"],
+    ".mjs": [".mts"],
+    ".cjs": [".cts"],
+  };
+  const extension = path.extname(rawSpecifier);
+  // The final `.config` is part of an extensionless tailor.config module name.
+  const extensions =
+    extension === ".config" ? CONFIG_EXTENSIONS : (sourceExtensions[extension] ?? []);
   const withoutExt = rawSpecifier.replace(/\.(ts|tsx|js|mjs|cjs|mts|cts)$/, "");
-  for (const ext of CONFIG_EXTENSIONS) {
+  for (const ext of extensions) {
     const candidate = path.resolve(baseDir, withoutExt + ext);
     if (fs.existsSync(candidate)) return candidate;
   }
