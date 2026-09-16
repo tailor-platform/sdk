@@ -32,7 +32,7 @@
     "@politty/zod": "0.2.1",
     "pathe": "2.0.3",
     "pkg-types": "2.3.3",
-    "zod": "4.5.4"
+    "zod": "4.6.4"
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
