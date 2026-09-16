@@ -5,15 +5,21 @@ import { describe, expect, test } from "vitest";
 import { NEXT_RELEASE, V2_NEXT_PENDING, allCodemods, getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
-  test("offers plugin export normalization to existing v2 users at the v3 boundary", () => {
-    expect(getApplicableCodemods("2.15.0", "3.0.0").map((codemod) => codemod.id)).toContain(
-      "v3/plugin-export-name-normalize",
+  test("offers beta plugin export normalization when crossing the minor release boundary", () => {
+    expect(getApplicableCodemods("2.17.0", "2.18.0").map((codemod) => codemod.id)).toContain(
+      "v2/plugin-export-name-normalize",
     );
-    expect(getApplicableCodemods("1.67.1", "3.0.0").map((codemod) => codemod.id)).toContain(
-      "v3/plugin-export-name-normalize",
+    expect(getApplicableCodemods("2.15.0", "2.18.0").map((codemod) => codemod.id)).toContain(
+      "v2/plugin-export-name-normalize",
     );
-    expect(getApplicableCodemods("2.15.0", "2.16.0").map((codemod) => codemod.id)).not.toContain(
-      "v3/plugin-export-name-normalize",
+    expect(getApplicableCodemods("1.67.1", "2.18.0").map((codemod) => codemod.id)).toContain(
+      "v2/plugin-export-name-normalize",
+    );
+    expect(getApplicableCodemods("2.15.0", "2.17.0").map((codemod) => codemod.id)).not.toContain(
+      "v2/plugin-export-name-normalize",
+    );
+    expect(getApplicableCodemods("2.18.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
+      "v2/plugin-export-name-normalize",
     );
   });
 
