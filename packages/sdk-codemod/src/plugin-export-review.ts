@@ -3,6 +3,8 @@ import { isTailorConfigPath } from "./plugin-export-bindings";
 import type { LlmReviewFinding } from "./types";
 import type { SgNode } from "@ast-grep/napi";
 
+const CONFIG_MODULE_SOURCE = /(^|\/)tailor\.config(?:\.(?:ts|tsx|mts|cts|js|mjs|cjs))?$/;
+
 /**
  * Report plugin exports and imports that still need manual migration.
  * @param source - Source after the current transform
@@ -67,7 +69,19 @@ export function reviewFindings(
     const isPluginCall =
       value.kind() === "call_expression" && factories.has(value.field("function")?.text() ?? "");
     const isConfigArray = value.kind() === "array";
-    if (!isPluginCall && !isConfigArray) continue;
+    // An indirect value can also be a plugin array; do not silently assume otherwise.
+    const isUnclassifiedValue = ![
+      "string",
+      "number",
+      "true",
+      "false",
+      "null",
+      "object",
+      "arrow_function",
+      "function_expression",
+      "class",
+    ].some((kind) => kind === value?.kind());
+    if (!isPluginCall && !isConfigArray && !isUnclassifiedValue) continue;
     const owner = decl.parent()?.parent();
     const names: string[] = [];
     if (owner?.kind() === "export_statement" && owner.parent()?.kind() === "program") {
@@ -88,7 +102,7 @@ export function reviewFindings(
         decl,
         isPluginCall
           ? "Merge plugin definitions into export const plugins = definePlugins(...)."
-          : "Review this exported array for plugin definitions and merge any plugins into the plugins export.",
+          : "Review this noncanonical config export for plugin definitions and expose any plugins as plugins.",
       );
     }
   }
@@ -97,6 +111,12 @@ export function reviewFindings(
     .filter((node) => node.kind() === "import_statement" || node.kind() === "export_statement")) {
     const modulePath = stmt.field("source")?.text().slice(1, -1);
     if (isConfigFile && modulePath && stmt.kind() === "export_statement") {
+      if (stmt.children().some((child) => child.kind() === "*")) {
+        report(
+          stmt,
+          "Review this wildcard config re-export and expose any plugin arrays as plugins.",
+        );
+      }
       for (const spec of stmt.findAll({ rule: { kind: "export_specifier" } })) {
         const exportedName = (spec.field("alias") ?? spec.field("name"))?.text();
         if (exportedName !== "plugins" && exportedName !== "default") {
@@ -107,17 +127,34 @@ export function reviewFindings(
         }
       }
     }
-    if (
-      !modulePath ||
-      !/(^|\/)tailor\.config(?:\.(?:ts|tsx|mts|cts|js|mjs|cjs))?$/.test(modulePath)
-    )
-      continue;
+    if (!modulePath || !CONFIG_MODULE_SOURCE.test(modulePath)) continue;
+    for (const namespace of stmt.findAll({ rule: { kind: "namespace_import" } })) {
+      report(
+        namespace,
+        "Review this config namespace import and replace legacy plugin member references with plugins.",
+      );
+    }
     for (const spec of stmt.findAll({
       rule: { any: [{ kind: "import_specifier" }, { kind: "export_specifier" }] },
     })) {
       if (["generator", "generators"].includes(spec.field("name")?.text() ?? "")) {
         report(spec, "Review this legacy plugin reference together with its tailor.config export.");
       }
+    }
+  }
+  for (const call of root.findAll({ rule: { kind: "call_expression" } })) {
+    if (call.field("function")?.text() !== "import") continue;
+    const modulePath = call
+      .field("arguments")
+      ?.children()
+      .find((child) => child.kind() === "string")
+      ?.text()
+      .slice(1, -1);
+    if (modulePath && CONFIG_MODULE_SOURCE.test(modulePath)) {
+      report(
+        call,
+        "Review this dynamic config import and replace legacy plugin member references with plugins.",
+      );
     }
   }
   return findings;
