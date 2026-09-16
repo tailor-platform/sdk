@@ -1,5 +1,5 @@
 import { formatDate } from "./date";
-import { Temporal } from "./temporal";
+import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -307,6 +307,7 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
           throw new RangeError("Leap seconds are not supported");
         }
         if (metadata.as === "temporal") {
+          const Temporal = getTemporal();
           if (type === "date") return Temporal.PlainDate.from(text);
           if (type === "datetime") return Temporal.Instant.from(text);
           return Temporal.PlainTime.from(text);

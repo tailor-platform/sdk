@@ -1,6 +1,11 @@
 import type { Temporal as TemporalTypes } from "temporal-spec";
 
-function getTemporal(): typeof TemporalTypes {
+/**
+ * Get the host Temporal implementation when a value is needed.
+ * @returns Host Temporal implementation
+ * @internal
+ */
+export function getTemporal(): typeof TemporalTypes {
   const temporal = (globalThis as unknown as { Temporal?: typeof TemporalTypes }).Temporal;
   if (!temporal) {
     throw new ReferenceError(
