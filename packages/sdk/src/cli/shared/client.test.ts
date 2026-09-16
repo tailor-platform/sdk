@@ -1558,7 +1558,7 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
 
     expect(resolved).toEqual({ SITE_URL: "my-site:url" });
     expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
-      'env "SITE_URL" keeps the unresolved value "my-site:url" because static website "my-site" is created later in this deploy. Deploy again once it exists to inject its URL.',
+      'env "SITE_URL" keeps the unresolved value "my-site:url" for now because static website "my-site" is created later in this deploy; this deploy rebuilds automatically once it exists to inject the real URL.',
     );
   });
 

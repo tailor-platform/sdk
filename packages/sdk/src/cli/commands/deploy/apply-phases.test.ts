@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { applyDeploymentPlans, type PlannedDeployment } from "./apply-phases";
+import {
+  applyDeploymentPlans,
+  applyPrerequisiteResources,
+  applyRemainingResources,
+  type PlannedDeployment,
+} from "./apply-phases";
 import { writeMetadataLabels } from "./label";
 
 const mocks = vi.hoisted(() => {
@@ -123,6 +128,7 @@ describe("applyDeploymentPlans", () => {
           "apply.cleanup",
           "apply.createUpdateApplication",
           "apply.createUpdateDependentServices",
+          "apply.createUpdatePrerequisiteServices",
           "apply.createUpdateServices",
           "apply.deleteApplication",
           "apply.deleteDependentServices",
@@ -142,6 +148,11 @@ describe("applyDeploymentPlans", () => {
           "apply.workflow.createUpdate",
           "apply.workflowExecutionPolicy.createUpdate",
         ].toSorted(),
+      );
+
+      // Prerequisite services (no possible env/URL reference) get their own phase span.
+      expect(byName.get("apply.secretManager.createUpdate")).toBe(
+        idOf("apply.createUpdatePrerequisiteServices"),
       );
 
       // Per-service spans hang off their phase, so a slow service is attributable.
@@ -165,12 +176,8 @@ describe("applyDeploymentPlans", () => {
     ]);
 
     expect(mocks.calls).toEqual([
-      "tailordb-preflight:supplier-tailordb",
-      "tailordb-preflight:buyer-tailordb",
       "secret:supplier-secret:create-update",
       "secret:buyer-secret:create-update",
-      "function:supplier-function:create-update",
-      "function:buyer-function:create-update",
       "staticwebsite:supplier-staticwebsite:create-update",
       "staticwebsite:buyer-staticwebsite:create-update",
       "aigateway:supplier-aigateway:create-update",
@@ -179,6 +186,10 @@ describe("applyDeploymentPlans", () => {
       "idp:buyer-idp:create-update",
       "auth:supplier-auth:create-update-prerequisites",
       "auth:buyer-auth:create-update-prerequisites",
+      "tailordb-preflight:supplier-tailordb",
+      "tailordb-preflight:buyer-tailordb",
+      "function:supplier-function:create-update",
+      "function:buyer-function:create-update",
       "tailordb:supplier-tailordb:create-update",
       "tailordb:buyer-tailordb:create-update",
       "auth:supplier-auth:create-update-dependents",
@@ -226,33 +237,63 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
-  test("skips tailorDB, secretManager, staticWebsite, aiGateway, and workflowExecutionPolicy steps when passed in `skip`", async () => {
+  test("applyPrerequisiteResources applies only secretManager, staticWebsite, aiGateway, idp, and auth prerequisites", async () => {
     mocks.calls.length = 0;
 
-    await applyDeploymentPlans(
-      {} as never,
-      "workspace-id",
-      [deployment("supplier")],
-      new Set([
-        "tailorDB",
-        "secretManager",
-        "staticWebsite",
-        "aiGateway",
-        "workflowExecutionPolicy",
-      ]),
-    );
+    await applyPrerequisiteResources({} as never, [deployment("supplier")]);
 
     expect(mocks.preflightTailorDB).not.toHaveBeenCalled();
     expect(mocks.applyTailorDB).not.toHaveBeenCalled();
-    expect(mocks.applySecretManager).not.toHaveBeenCalled();
-    expect(mocks.applyStaticWebsite).not.toHaveBeenCalled();
-    expect(mocks.applyAIGateway).not.toHaveBeenCalled();
+    expect(mocks.applyFunctionRegistry).not.toHaveBeenCalled();
+    expect(mocks.applyPipeline).not.toHaveBeenCalled();
+    expect(mocks.applyApplication).not.toHaveBeenCalled();
+    expect(mocks.applyExecutor).not.toHaveBeenCalled();
+    expect(mocks.applyWorkflow).not.toHaveBeenCalled();
     expect(mocks.applyWorkflowJobFunctionExecutionPolicy).not.toHaveBeenCalled();
 
     expect(mocks.calls).toEqual([
-      "function:supplier-function:create-update",
+      "secret:supplier-secret:create-update",
+      "staticwebsite:supplier-staticwebsite:create-update",
+      "aigateway:supplier-aigateway:create-update",
       "idp:supplier-idp:create-update",
       "auth:supplier-auth:create-update-prerequisites",
+    ]);
+  });
+
+  test("applyRemainingResources applies every kind except secretManager, staticWebsite, aiGateway, idp create-update, and auth prerequisites", async () => {
+    mocks.calls.length = 0;
+
+    await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
+
+    expect(mocks.applySecretManager).toHaveBeenCalledTimes(1);
+    expect(mocks.applySecretManager).toHaveBeenCalledWith(
+      {},
+      { marker: "supplier-secret" },
+      "delete",
+      { name: "supplier" },
+    );
+    expect(mocks.applyStaticWebsite).toHaveBeenCalledTimes(1);
+    expect(mocks.applyStaticWebsite).toHaveBeenCalledWith(
+      {},
+      { marker: "supplier-staticwebsite" },
+      "delete",
+    );
+    expect(mocks.applyAIGateway).toHaveBeenCalledTimes(1);
+    expect(mocks.applyAIGateway).toHaveBeenCalledWith(
+      {},
+      { marker: "supplier-aigateway" },
+      "delete",
+    );
+    expect(mocks.applyAuth).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "create-update-prerequisites",
+    );
+
+    expect(mocks.calls).toEqual([
+      "tailordb-preflight:supplier-tailordb",
+      "function:supplier-function:create-update",
+      "tailordb:supplier-tailordb:create-update",
       "auth:supplier-auth:create-update-dependents",
       "pipeline:supplier-pipeline:create-update",
       "pipeline:supplier-pipeline:delete-resources",
@@ -260,28 +301,42 @@ describe("applyDeploymentPlans", () => {
       "idp:supplier-idp:delete-resources",
       "application:supplier-application:create-update",
       "executor:supplier-executor:create-update",
+      "workflowExecutionPolicy:supplier-workflowExecutionPolicy:create-update",
       "workflow:supplier-workflow:create-update",
       "workflow:supplier-workflow:delete",
+      "workflowExecutionPolicy:supplier-workflowExecutionPolicy:delete",
       "executor:supplier-executor:delete",
+      "staticwebsite:supplier-staticwebsite:delete",
+      "aigateway:supplier-aigateway:delete",
+      "secret:supplier-secret:delete",
       "application:supplier-application:delete",
       "pipeline:supplier-pipeline:delete-services",
       "auth:supplier-auth:delete-services",
       "idp:supplier-idp:delete-services",
+      "tailordb:supplier-tailordb:delete-services",
       "function:supplier-function:delete",
     ]);
   });
 
-  test("fails migration preflight before applying any resource", async () => {
+  test("fails migration preflight before applying functionRegistry or anything after it", async () => {
     mocks.calls.length = 0;
-    mocks.applySecretManager.mockClear();
     mocks.preflightTailorDB.mockRejectedValueOnce(new Error("migration state changed"));
 
     await expect(
       applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")]),
     ).rejects.toThrow("migration state changed");
 
-    expect(mocks.calls).toEqual([]);
-    expect(mocks.applySecretManager).not.toHaveBeenCalled();
+    // The prerequisite phase (no possible env/URL reference) already completed by
+    // the time preflight runs.
+    expect(mocks.calls).toEqual([
+      "secret:supplier-secret:create-update",
+      "staticwebsite:supplier-staticwebsite:create-update",
+      "aigateway:supplier-aigateway:create-update",
+      "idp:supplier-idp:create-update",
+      "auth:supplier-auth:create-update-prerequisites",
+    ]);
+    expect(mocks.applyFunctionRegistry).not.toHaveBeenCalled();
+    expect(mocks.applyTailorDB).not.toHaveBeenCalled();
   });
 
   test("flushes resource metadata once before dependent delete phases", async () => {

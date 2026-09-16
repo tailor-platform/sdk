@@ -720,12 +720,14 @@ export default defineConfig({
     expect(
       warnMessages.some((message) => message.includes("is created later in this deploy")),
     ).toBe(true);
-    // The single deploy() call announces and runs the automatic second pass,
-    // so the placeholder does not need a second, human-triggered `deploy`.
-    expect(infoMessages.some((message) => message.includes("redeploying once more"))).toBe(true);
-    // Exactly one occurrence: left unresolved on the first pass, resolved for
-    // real on the second. A regression that keeps failing to resolve would
-    // log this warning again on the second pass.
+    // The single deploy() call announces and runs the automatic rebuild, so
+    // the placeholder does not need a second, human-triggered `deploy`.
+    expect(infoMessages.some((message) => message.includes("rebuilding so env resolves"))).toBe(
+      true,
+    );
+    // Exactly one occurrence: left unresolved on the first build, resolved for
+    // real on the rebuild. A regression that keeps failing to resolve would
+    // log this warning again on the rebuild.
     expect(
       warnMessages.filter((message) => message.includes("keeps the unresolved value")),
     ).toHaveLength(1);

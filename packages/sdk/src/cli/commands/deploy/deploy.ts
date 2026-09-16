@@ -3,7 +3,11 @@ import * as path from "pathe";
 import { type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
 import { recoveryContextArgs } from "#/cli/shared/args";
-import { getOrNull, type OperatorClient } from "#/cli/shared/client";
+import {
+  getOrNull,
+  hasStaticWebsiteUrlPlaceholder,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -15,10 +19,10 @@ import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
 import { planApplication } from "./application";
 import {
-  applyDeploymentPlans,
+  applyPrerequisiteResources,
+  applyRemainingResources,
   deploymentPlanResults,
   type PlannedDeployment,
-  type RepeatableResourceKind,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { mergeBundledScripts } from "./bundled-scripts";
@@ -122,17 +126,6 @@ interface DeployInternalContext {
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   suppressResultOutput?: boolean;
 }
-
-// None of these resource kinds can carry a static website URL reference, so the
-// automatic second pass (see `deployInternal`'s pass loop) leaves them exactly
-// as pass 1 applied them instead of re-planning and re-applying them.
-const REPEATABLE_RESOURCE_KINDS: ReadonlySet<RepeatableResourceKind> = new Set([
-  "tailorDB",
-  "secretManager",
-  "aiGateway",
-  "staticWebsite",
-  "workflowExecutionPolicy",
-]);
 
 function collectExpectedLocalStaticWebsiteNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
@@ -260,10 +253,6 @@ type PlanDeploymentTargetParams = {
   noSchemaCheck: boolean | undefined;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
-  /** Resource kinds to reuse from `previous` instead of re-planning. */
-  skip?: ReadonlySet<RepeatableResourceKind>;
-  /** This target's own plan result from the prior pass, source for `skip` reuse. */
-  previous?: PlannedDeployment;
 };
 
 type ConfirmDeploymentPlansParams = {
@@ -283,10 +272,6 @@ type PlanDeploymentTargetsParams = {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
-  /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
-  skip?: ReadonlySet<RepeatableResourceKind>;
-  /** Prior pass's plan results, matched to targets by application name. */
-  previousDeployments?: ReadonlyArray<PlannedDeployment>;
 };
 
 function recoveryEnvironmentArgs(
@@ -407,8 +392,6 @@ async function planDeploymentTarget(
     noSchemaCheck,
     migrationTestBaselines,
     migrationTestSnapshots,
-    skip,
-    previous,
   } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
@@ -483,15 +466,9 @@ async function planDeploymentTarget(
       workflowExecutionPolicy,
       secretManager,
     ] = await Promise.all([
-      skip?.has("tailorDB") && previous
-        ? previous.tailorDB
-        : withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-      skip?.has("staticWebsite") && previous
-        ? previous.staticWebsite
-        : withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-      skip?.has("aiGateway") && previous
-        ? previous.aiGateway
-        : withSpan("plan.aiGateway", () => planAIGateway(ctx)),
+      withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+      withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+      withSpan("plan.aiGateway", () => planAIGateway(ctx)),
       withSpan("plan.idp", () => planIdP(ctx)),
       withSpan("plan.auth", () => planAuth(ctx)),
       withSpan("plan.pipeline", () => planPipeline(ctx)),
@@ -514,20 +491,16 @@ async function planDeploymentTarget(
           },
         ),
       ),
-      skip?.has("workflowExecutionPolicy") && previous
-        ? previous.workflowExecutionPolicy
-        : withSpan("plan.workflowExecutionPolicy", () =>
-            planWorkflowJobFunctionExecutionPolicy(
-              client,
-              workspaceId,
-              application.name,
-              application.id,
-              config.workflow?.executionPolicies ?? {},
-            ),
-          ),
-      skip?.has("secretManager") && previous
-        ? previous.secretManager
-        : withSpan("plan.secretManager", () => planSecretManager(ctx)),
+      withSpan("plan.workflowExecutionPolicy", () =>
+        planWorkflowJobFunctionExecutionPolicy(
+          client,
+          workspaceId,
+          application.name,
+          application.id,
+          config.workflow?.executionPolicies ?? {},
+        ),
+      ),
+      withSpan("plan.secretManager", () => planSecretManager(ctx)),
     ]);
 
     return {
@@ -551,17 +524,13 @@ async function planDeploymentTarget(
 export async function planDeploymentTargets(
   params: PlanDeploymentTargetsParams,
 ): Promise<PlannedDeployment[]> {
-  const { targets, planTarget = planDeploymentTarget, previousDeployments, ...planParams } = params;
-  const previousByAppName = new Map(
-    previousDeployments?.map((deployment) => [deployment.application.name, deployment]),
-  );
+  const { targets, planTarget = planDeploymentTarget, ...planParams } = params;
   return Promise.all(
     targets.map((target) =>
       planTarget({
         ...planParams,
         target,
         targets,
-        previous: previousByAppName.get(target.application.name),
       }),
     ),
   );
@@ -718,23 +687,8 @@ async function deployInternal(
     const expectedLocalStaticWebsiteNames =
       collectExpectedLocalStaticWebsiteNamesFromConfigs(preflightConfigs);
 
-    // A config can reference a static website (via `env`, `cors`, an OAuth2
-    // redirect URI, or an IdP return origin) that this same deploy is about to
-    // create. That reference resolves to the placeholder pattern for this
-    // apply, because the site does not exist yet at plan time. Once the apply
-    // below actually creates it, a second build/plan/apply pass sees the real
-    // platform state and resolves it for real, so the user never has to run
-    // `deploy` again by hand to pick up a site their own deploy just created.
-    const maxPasses = dryRun || buildOnly ? 1 : 2;
-    let planSummary: ReturnType<typeof printDeploymentPlans> | undefined;
-    let previousDeployments: PlannedDeployment[] | undefined;
-
-    for (let pass = 1; pass <= maxPasses; pass++) {
-      // Only the second, automatic pass reuses anything: none of these kinds
-      // can carry a static website URL, so redoing them would just repeat
-      // pass 1's work without changing the outcome.
-      const skip = pass > 1 ? REPEATABLE_RESOURCE_KINDS : undefined;
-      const targets = await withSpan("build", async () => {
+    const build = () =>
+      withSpan("build", async () => {
         const noCache = options?.noCache ?? false;
         const packageJson = await readPackageJson();
         const cacheDir = path.resolve(getDistDir(), "cache");
@@ -756,23 +710,26 @@ async function deployInternal(
           expectedLocalStaticWebsiteNames,
         });
       });
-      if (buildOnly) {
-        return { bundledScripts: mergeBundledScripts(targets) };
-      }
 
-      assertUniqueGlobalResourceNames(targets);
+    const targets = await build();
+    if (buildOnly) {
+      return { bundledScripts: mergeBundledScripts(targets) };
+    }
 
-      // Note: the normal apply path intentionally skips writing bundle files to
-      // .tailor/. Bundles are kept in memory and uploaded directly to the
-      // function registry. To test a function locally, use `function run`
-      // with a .ts source file instead of a pre-bundled .js file.
+    assertUniqueGlobalResourceNames(targets);
 
-      if (!workspace) throw internalError("Workspace was not resolved");
-      const { client, workspaceId } = workspace;
+    // Note: the normal apply path intentionally skips writing bundle files to
+    // .tailor/. Bundles are kept in memory and uploaded directly to the
+    // function registry. To test a function locally, use `function run`
+    // with a .ts source file instead of a pre-bundled .js file.
 
-      rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
-      rootSpan.setAttribute("workspace.id", workspaceId);
+    if (!workspace) throw internalError("Workspace was not resolved");
+    const { client, workspaceId } = workspace;
 
+    rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
+    rootSpan.setAttribute("workspace.id", workspaceId);
+
+    const plan = async (targets: ReadonlyArray<BuiltDeploymentTarget>) => {
       const planTargets = targets.map((target) => ({
         ...target,
         application: adjustApplicationForMigrationTest(target.application, internalContext),
@@ -793,61 +750,80 @@ async function deployInternal(
         noSchemaCheck: options?.noSchemaCheck,
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
-        skip,
-        previousDeployments,
       });
-
       dropCrossDeploymentManagedDeletes(deployments);
+      return { planTargets, metadataClient, runInputs, deployments };
+    };
 
-      // The second, automatic pass only completes a deploy the user already
-      // approved on the first pass, so it asks for no new confirmation.
-      const yes = pass > 1 ? true : (options?.yes ?? false);
+    const { planTargets, metadataClient, runInputs, deployments } = await plan(targets);
 
-      // Phase 1b: Confirm
-      const missingDependentApps = (
-        await Promise.all(
-          planTargets.map((target) =>
-            fetchMissingDependentApps({
-              client: metadataClient,
-              workspaceId,
-              application: target.application,
-              runAppIds: runInputs.runAppIds ?? new Set<string>(),
-              subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
-              jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
-            }),
-          ),
-        )
-      ).flat();
+    // Phase 1b: Confirm
+    const missingDependentApps = (
+      await Promise.all(
+        planTargets.map((target) =>
+          fetchMissingDependentApps({
+            client: metadataClient,
+            workspaceId,
+            application: target.application,
+            runAppIds: runInputs.runAppIds ?? new Set<string>(),
+            subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
+            jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
+          }),
+        ),
+      )
+    ).flat();
 
-      await withSpan("confirm", async () => {
-        await confirmDeploymentPlans({ deployments, yes, dryRun, missingDependentApps });
+    await withSpan("confirm", async () => {
+      await confirmDeploymentPlans({
+        deployments,
+        yes: options?.yes ?? false,
+        dryRun,
+        missingDependentApps,
       });
+    });
 
-      planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
+    let planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
 
-      if (options?.noValidate) {
-        logger.warn("Client-side validation skipped (--no-validate).");
-      } else {
-        await validateDeploymentPlans(deployments);
-      }
+    const validate = (deployments: ReadonlyArray<PlannedDeployment>) =>
+      options?.noValidate
+        ? logger.warn("Client-side validation skipped (--no-validate).")
+        : validateDeploymentPlans(deployments);
+    await validate(deployments);
 
-      if (dryRun) {
-        logger.info("Dry run enabled. No changes applied.");
-        return undefined;
-      }
+    if (dryRun) {
+      logger.info("Dry run enabled. No changes applied.");
+      return undefined;
+    }
 
-      await applyDeploymentPlans(client, workspaceId, deployments, skip);
+    // secretManager/staticWebsite/aiGateway/idp/auth's prerequisite resources
+    // can never reference a static website's URL, so applying them first is
+    // safe -- and it means a site this same deploy creates already exists by
+    // the time env is read again below.
+    await applyPrerequisiteResources(client, deployments);
 
-      const createdStaticWebsite = deployments.some(
-        (deployment) => deployment.staticWebsite.changeSet.creates.length > 0,
-      );
-      if (pass === maxPasses || !createdStaticWebsite) {
-        break;
-      }
-      previousDeployments = deployments;
+    // `env` is baked into resolver/executor/workflow job/auth hook code and
+    // TailorDB migration scripts once, at build time, before this deploy has
+    // applied anything. When it references a site the prerequisite apply
+    // above just created, the placeholder above is still literally present in
+    // `application.env` -- rebuilding now (and re-planning only the resource
+    // kinds whose apply payload embeds `env` directly) picks up the real URL,
+    // without redoing anything the prerequisite apply already finished.
+    const needsUrlResolution = deployments.some((deployment) =>
+      Object.values(deployment.application.env).some(hasStaticWebsiteUrlPlaceholder),
+    );
+
+    if (needsUrlResolution) {
       logger.info(
-        "A static website was just created; redeploying once more so any env/cors/OAuth2/IdP reference to it resolves to its real URL.",
+        "A static website was just created; rebuilding so env resolves to its real URL before the rest of this deploy applies.",
       );
+      const rebuiltTargets = await build();
+      assertUniqueGlobalResourceNames(rebuiltTargets);
+      const rebuilt = await plan(rebuiltTargets);
+      await validate(rebuilt.deployments);
+      planSummary = printDeploymentPlans(rebuilt.deployments, { dryRun: options?.dryRun });
+      await applyRemainingResources(client, workspaceId, rebuilt.deployments);
+    } else {
+      await applyRemainingResources(client, workspaceId, deployments);
     }
 
     if (!internalContext?.suppressResultOutput) {

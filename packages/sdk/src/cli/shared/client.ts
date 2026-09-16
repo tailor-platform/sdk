@@ -1182,8 +1182,8 @@ function warnUnresolvedEnvPlaceholders(
     const siteName = value.slice(0, value.search(STATIC_WEBSITE_URL_PATTERN));
     if (expectedLocalNames?.has(siteName)) {
       logger.warn(
-        `env "${key}" keeps the unresolved value "${value}" because static website "${siteName}" ` +
-          `is created later in this deploy. Deploy again once it exists to inject its URL.`,
+        `env "${key}" keeps the unresolved value "${value}" for now because static website "${siteName}" ` +
+          `is created later in this deploy; this deploy rebuilds automatically once it exists to inject the real URL.`,
       );
       continue;
     }
