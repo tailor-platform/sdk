@@ -1029,6 +1029,70 @@ describe("loadAccessToken", () => {
       expect(config.users["platform-user-sub"]?.email).toBe("new@example.com");
     });
 
+    test("preserves the previous refresh token when the refresh response omits rotation", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: null,
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "platform-user-sub": {
+            access_token: "expired-access-token",
+            refresh_token: "original-refresh-token",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+
+      const config = await readPlatformConfig();
+      await fetchLatestToken(config, "platform-user-sub");
+
+      expect(keyringPasswords.get("tailor-platform-cli:platform-user-sub")).toBe(
+        JSON.stringify({
+          accessToken: "new-access-token",
+          refreshToken: "original-refresh-token",
+        }),
+      );
+    });
+
+    test("preserves the previous refresh token on the config-file storage path too", async () => {
+      clientMocks.refreshToken.mockResolvedValue({
+        accessToken: "new-access-token",
+        refreshToken: null,
+        expiresAt: Date.now() + 3600 * 1000,
+      });
+      keyringSetPasswordFailure.error = new Error("keyring denied");
+      writePlatformConfig({
+        version: 3,
+        min_sdk_version: "2.0.0",
+        users: {
+          "platform-user-sub": {
+            access_token: "expired-access-token",
+            refresh_token: "original-refresh-token",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {},
+        current_user: "platform-user-sub",
+      });
+
+      const config = await readPlatformConfig();
+      await fetchLatestToken(config, "platform-user-sub");
+
+      expect(config.users["platform-user-sub"]).toMatchObject({
+        storage: "file",
+        access_token: "new-access-token",
+        refresh_token: "original-refresh-token",
+      });
+    });
+
     test("keeps the legacy email key when subject resolution fails on refresh", async () => {
       clientMocks.refreshToken.mockResolvedValue({
         accessToken: "new-access-token",
