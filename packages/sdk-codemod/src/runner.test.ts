@@ -82,6 +82,12 @@ describe("runCodemods", () => {
   });
 
   test.each([
+    ["plugin-export-name-normalize", 'export { generator } from "./tailor.config";'],
+    ["plugin-export-name-normalize", 'export { generators as legacy } from "./tailor.config.mts";'],
+    ["plugin-export-name-normalize", "export const generators = [myPlugin()] as const;"],
+    ["plugin-export-name-normalize", "export const generators = [myPlugin()] satisfies Plugin[];"],
+    ["plugin-export-name-normalize", "export const generators = (definePlugins());"],
+    ["plugin-export-name-normalize", "export const generators = <Plugin[]>[myPlugin()];"],
     ["plugin-export-name-normalize", "export const generators = [myPlugin()];"],
     ["plugin-export-name-normalize", "export const plugins2 = [myPlugin()];"],
     [
@@ -127,6 +133,30 @@ describe("runCodemods", () => {
     expect(result.warnings).toEqual([]);
     expect(result.llmReviews).toEqual([]);
   });
+
+  test.each([true, false])(
+    "reports imports needing manual migration after chained conversion (dryRun: %s)",
+    async (dryRun) => {
+      using _stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+      const { tmpDir: dir } = await createTestProject(
+        "tailor.config.ts",
+        'import { defineGenerators } from "@tailor-platform/sdk"; export const generator = defineGenerators();',
+      );
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "a-consumer.ts"),
+        'import { generator } from "./tailor.config";',
+      );
+      const codemods = ["define-generators-to-plugins", "plugin-export-name-normalize"].map(
+        (name) => ({
+          codemod: allCodemods.find((entry) => entry.id === `v2/${name}`)!,
+          scriptPath: path.resolve(__dirname, `../codemods/v2/${name}/scripts/transform.ts`),
+        }),
+      );
+      const result = await runCodemods(codemods, dir, dryRun);
+      expect(result.llmReviews.some((review) => review.files.includes("a-consumer.ts"))).toBe(true);
+    },
+  );
 
   describe("chained transforms in dry-run", () => {
     // Transform A: renames "oldFunc" → "midFunc"

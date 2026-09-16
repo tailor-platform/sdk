@@ -244,6 +244,10 @@ function renameBindingAndUsages(
   for (const idNode of root.findAll({ rule: { kind: "identifier", regex: `^${oldName}$` } })) {
     if (idNode.range().start.index === declStart) continue;
     if (idNode.parent()?.kind() === "import_specifier") continue;
+    const exportSpec = idNode.parent();
+    if (exportSpec?.kind() === "export_specifier") {
+      if (exportSpec.parent()?.parent()?.field("source")) continue;
+    }
     edits.push(idNode.replace("plugins"));
   }
   // A shorthand `{ oldName }` is both the object key and the value reference; replacing the
