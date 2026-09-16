@@ -317,6 +317,47 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
   });
 
+  // `main.ts` hands the host-consumed tokens to `dispatchPlugin` already
+  // concatenated ahead of the post-name args, so the flags reaching the three
+  // consumers here are whatever position the user typed them in. The end-to-end
+  // concatenation is pinned in `main.test.ts`, which does not run on Windows.
+  test("honors a leading env-file flag that was typed before the plugin name", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    fs.writeFileSync(path.join(project, ".env.staging"), "");
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["--env-file", ".env.staging", "deploy"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    const { env, argv } = readCapture();
+    expect(argv).toEqual(["--env-file", ".env.staging", "deploy"]);
+    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
+  });
+
+  test("resolves the last profile when one was typed before the plugin name and one after", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["--profile", "first", "deploy", "--profile", "second"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    expect(contextMocks.loadAccessToken).toHaveBeenCalledWith({ profile: "second" });
+    expect(contextMocks.loadWorkspaceId).toHaveBeenCalledWith({ profile: "second" });
+  });
+
   test("skips platform context even when the --env-file-if-exists file is missing", async () => {
     const project = path.join(tempDir, "project");
     writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);

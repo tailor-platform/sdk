@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-setup",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Tailor CLI plugin providing the `tailor setup` commands (repository automation setup)",
   "license": "MIT",
   "repository": {
@@ -34,14 +34,14 @@
     "json5": "2.2.3",
     "pathe": "2.0.3",
     "pkg-types": "2.3.3",
-    "zod": "4.5.4"
+    "zod": "4.6.4"
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.4",
     "confbox": "0.3.1",
     "eslint-plugin-zod": "4.12.1",
-    "oxlint": "1.81.0",
+    "oxlint": "1.82.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.23.0",
     "typescript": "6.0.3",

@@ -365,13 +365,16 @@ function mapToTsType(
   type: string;
   usedTimestamp: boolean;
 } {
+  if (fieldType === "nested") {
+    return { type: "Record<string, unknown>", usedTimestamp: false };
+  }
   if (fieldType === "enum" && allowedValues && allowedValues.length > 0) {
     return {
       type: `(${formatEnumUnion(allowedValues.map((v) => v.value))})`,
       usedTimestamp: false,
     };
   }
-  if (fieldType === "enum" || fieldType === "nested") {
+  if (fieldType === "enum") {
     return { type: "string", usedTimestamp: false };
   }
   const type = mapFieldTypeToColumnType(fieldType);

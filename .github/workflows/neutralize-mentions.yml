@@ -1,0 +1,40 @@
+name: Neutralize Mentions
+
+# Tests neutralize-mentions.mjs, which renovate-auto-review.yml,
+# docs-consistency-check.yml, and add-renovate-changeset.yml use to strip
+# live @mentions before posting PR content. The script has no dependencies
+# of its own, so this only needs a checkout.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/scripts/neutralize-mentions.mjs
+      - .github/scripts/neutralize-mentions.test.mjs
+      - .github/workflows/neutralize-mentions.yml
+  pull_request:
+    paths:
+      - .github/scripts/neutralize-mentions.mjs
+      - .github/scripts/neutralize-mentions.test.mjs
+      - .github/workflows/neutralize-mentions.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  test:
+    name: Test neutralize-mentions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run tests
+        run: node --test .github/scripts/neutralize-mentions.test.mjs

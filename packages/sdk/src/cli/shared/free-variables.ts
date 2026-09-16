@@ -162,13 +162,22 @@ function walkGuardedChain(
   return false;
 }
 
+interface FindUndefinedReferencesOptions {
+  /** Include references protected by typeof checks, even though they cannot throw. */
+  includeGuardedReferences?: boolean;
+}
+
 /**
  * Parse a code string with oxc-parser and return identifiers that are referenced
  * but never bound anywhere in the snippet (free variables), excluding ES builtins.
  * @param code - Valid JavaScript code to analyze.
+ * @param options - Whether guarded references should also be returned.
  * @returns Set of undefined variable names.
  */
-export function findUndefinedReferences(code: string): Set<string> {
+export function findUndefinedReferences(
+  code: string,
+  options?: FindUndefinedReferencesOptions,
+): Set<string> {
   const { program, errors } = parseSync("_.js", code);
   if (errors.length > 0) {
     const details = errors.map((error) => `  - ${error.message}`).join("\n");
@@ -252,7 +261,11 @@ export function findUndefinedReferences(code: string): Set<string> {
         return;
 
       case "UnaryExpression":
-        if (node.operator === "typeof" && node.argument.type === "Identifier") {
+        if (
+          !options?.includeGuardedReferences &&
+          node.operator === "typeof" &&
+          node.argument.type === "Identifier"
+        ) {
           return;
         }
         walk(node.argument);
@@ -261,7 +274,11 @@ export function findUndefinedReferences(code: string): Set<string> {
       case "LogicalExpression": {
         const guardedName = node.operator === "&&" ? typeofGuardTarget(node.left) : undefined;
         walk(node.left);
-        if (guardedName && walkGuardedChain(node.right, guardedName, walk)) {
+        if (
+          !options?.includeGuardedReferences &&
+          guardedName &&
+          walkGuardedChain(node.right, guardedName, walk)
+        ) {
           return;
         }
         walk(node.right);

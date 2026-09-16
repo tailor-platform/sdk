@@ -125,16 +125,22 @@ describe("buildTypeScripts", () => {
     };
 
     const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
-    expect(createExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
-    expect(createExpr).toContain(
-      '"displayName": ((_value) => (_value.trim()))((_input["profile"] || {})["displayName"])',
-    );
-    expect(createExpr).toContain(
-      '"contact": Object.assign({}, (_input["profile"] || {})["contact"], {',
-    );
-    expect(createExpr).toContain(
-      '"email": ((_value) => (_value.toLowerCase()))(((_input["profile"] || {})["contact"] || {})["email"])',
-    );
+    const run = new Function("_input", `return ${createExpr}\n`);
+    expect(
+      run({
+        profile: {
+          displayName: " Alice ",
+          locale: "ja",
+          contact: { email: "A@EXAMPLE.COM", phone: "123" },
+        },
+      }),
+    ).toEqual({
+      profile: {
+        displayName: "Alice",
+        locale: "ja",
+        contact: { email: "a@example.com", phone: "123" },
+      },
+    });
   });
 
   test("applies default as ?? fallback after hook on create only", () => {
@@ -268,7 +274,9 @@ describe("buildTypeScripts", () => {
     const expr = buildTypeScripts(fields).typeValidate?.create?.expr ?? "";
     expect(expr).toContain('(_newRecord["items"] || []).forEach((__el, __idx) => {');
     expect(expr).toContain('const _value = __el["name"]');
-    expect(expr).toContain('"items[" + __idx + "].name"');
+    expect(new Function("_newRecord", `return ${expr}`)({ items: [{ name: "" }] })).toEqual({
+      "items[0].name": "required",
+    });
   });
 
   test("nested array forEach terminates with semicolon to prevent ASI with table-level validate", () => {
@@ -461,6 +469,32 @@ describe("buildTypeScripts", () => {
 
     const updateExpr = buildTypeScripts(fields).typeHook?.update?.expr ?? "";
     expect(updateExpr).not.toContain("__oldEl");
+  });
+
+  test("passes omitted array values as old values to child update hooks", () => {
+    const qty = { type: "integer", hooks: { update: { expr: "_value ?? (_oldValue + 1)" } } };
+    const fields: Record<string, ScriptFieldConfig> = {
+      items: {
+        type: "nested",
+        array: true,
+        fields: {
+          qty,
+          extras: { type: "nested", array: true, fields: { qty } },
+        },
+      },
+    };
+    const expr = buildTypeScripts(fields).typeHook!.update!.expr;
+    const update = new Function("_input", "_oldRecord", `return ${expr}\n`);
+    const oldRecord = Object.freeze({
+      items: Object.freeze([
+        Object.freeze({ qty: 3, extras: Object.freeze([Object.freeze({ qty: 10 })]) }),
+      ]),
+    });
+
+    expect(update({}, oldRecord)).toEqual({ items: [{ qty: 4, extras: [{ qty: 11 }] }] });
+    expect(update({ items: [{ qty: 8, extras: [{ qty: 9 }] }] }, oldRecord)).toEqual({
+      items: [{ qty: 8, extras: [{ qty: 9 }] }],
+    });
   });
 });
 
