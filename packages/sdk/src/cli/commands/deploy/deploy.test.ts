@@ -8,6 +8,7 @@ import { mergeBundledScripts } from "./bundled-scripts";
 import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
+  carryConfirmedAppDeletes,
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
@@ -1105,6 +1106,91 @@ describe("multi-config deployment orchestration", () => {
     releases.forEach((release) => release());
 
     await expect(planPromise).resolves.toHaveLength(2);
+  });
+
+  test("forwards skip and matches previous deployments by application name", async () => {
+    const targets = [fakeTarget({ appName: "buyer" }), fakeTarget({ appName: "supplier" })];
+    const skip = new Set(["staticWebsite"] as const);
+    const previousBuyer = plannedDeployment("buyer", emptyResults());
+    const previousSupplier = plannedDeployment("supplier", emptyResults());
+    const received: Array<{ appName: string; skip: unknown; previous: unknown }> = [];
+
+    await planDeploymentTargets({
+      targets,
+      runInputs: {} as never,
+      client: {} as never,
+      workspaceId: "workspace-id",
+      noSchemaCheck: false,
+      skip,
+      previousDeployments: [previousSupplier, previousBuyer],
+      planTarget: async (params) => {
+        received.push({
+          appName: params.target.application.name,
+          skip: params.skip,
+          previous: params.previous,
+        });
+        return plannedDeployment(params.target.application.name, emptyResults());
+      },
+    });
+
+    expect(received).toEqual([
+      { appName: "buyer", skip, previous: previousBuyer },
+      { appName: "supplier", skip, previous: previousSupplier },
+    ]);
+  });
+});
+
+describe("carryConfirmedAppDeletes", () => {
+  function appDelete(name: string): PlannedDeployment["app"]["deletes"][number] {
+    return { name, request: { workspaceId: "ws", applicationName: name } };
+  }
+
+  function withAppDeletes(
+    name: string,
+    deletes: ReadonlyArray<PlannedDeployment["app"]["deletes"][number]>,
+  ): PlannedDeployment {
+    const deployment = plannedDeployment(name, emptyResults());
+    deployment.app.deletes.push(...deletes);
+    return deployment;
+  }
+
+  test("carries a confirm-added delete over onto the matching rebuilt deployment", () => {
+    const original = [
+      withAppDeletes("buyer", [appDelete("renamed-buyer")]),
+      withAppDeletes("supplier", []),
+    ];
+    const preConfirmAppDeleteCounts = new Map([
+      ["buyer", 0],
+      ["supplier", 0],
+    ]);
+    const rebuilt = [withAppDeletes("buyer", []), withAppDeletes("supplier", [])];
+
+    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
+
+    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
+    expect(rebuilt[1]!.app.deletes).toEqual([]);
+  });
+
+  test("leaves a fresh delete already present in the rebuild untouched", () => {
+    const original = [
+      withAppDeletes("buyer", [appDelete("own-delete"), appDelete("renamed-buyer")]),
+    ];
+    const preConfirmAppDeleteCounts = new Map([["buyer", 1]]);
+    const rebuilt = [withAppDeletes("buyer", [appDelete("own-delete")])];
+
+    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
+
+    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("own-delete"), appDelete("renamed-buyer")]);
+  });
+
+  test("does not duplicate a delete the rebuild already carries under the same name", () => {
+    const original = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
+    const preConfirmAppDeleteCounts = new Map([["buyer", 0]]);
+    const rebuilt = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
+
+    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
+
+    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
   });
 });
 

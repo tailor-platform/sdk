@@ -23,6 +23,7 @@ import {
   applyRemainingResources,
   deploymentPlanResults,
   type PlannedDeployment,
+  type ReusablePlanKind,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { mergeBundledScripts } from "./bundled-scripts";
@@ -126,6 +127,19 @@ interface DeployInternalContext {
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   suppressResultOutput?: boolean;
 }
+
+// None of these resource kinds can embed `env` or this run's rebuilt bundle
+// content, so the conditional rebuild in `deployInternal` reuses each one's
+// plan result from before the rebuild instead of re-planning it.
+const REUSABLE_ON_REBUILD_KINDS: ReadonlySet<ReusablePlanKind> = new Set([
+  "tailorDB",
+  "secretManager",
+  "aiGateway",
+  "staticWebsite",
+  "workflowExecutionPolicy",
+  "idp",
+  "auth",
+]);
 
 function collectExpectedLocalStaticWebsiteNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
@@ -253,6 +267,10 @@ type PlanDeploymentTargetParams = {
   noSchemaCheck: boolean | undefined;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  /** Resource kinds to reuse from `previous` instead of re-planning. */
+  skip?: ReadonlySet<ReusablePlanKind>;
+  /** This target's own plan result from before the rebuild, source for `skip` reuse. */
+  previous?: PlannedDeployment;
 };
 
 type ConfirmDeploymentPlansParams = {
@@ -272,6 +290,10 @@ type PlanDeploymentTargetsParams = {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
+  /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
+  skip?: ReadonlySet<ReusablePlanKind>;
+  /** Prior plan results, matched to targets by application name, source for `skip` reuse. */
+  previousDeployments?: ReadonlyArray<PlannedDeployment>;
 };
 
 function recoveryEnvironmentArgs(
@@ -392,6 +414,8 @@ async function planDeploymentTarget(
     noSchemaCheck,
     migrationTestBaselines,
     migrationTestSnapshots,
+    skip,
+    previous,
   } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
@@ -401,15 +425,17 @@ async function planDeploymentTarget(
     const snapshot = migrationTestSnapshots?.get(service.namespace);
     return snapshot ? { ...service, types: snapshot.tables, typeSourceInfo: {} } : service;
   });
-  await withSpan("plan.validateTailorDBTypeNames", () =>
-    assertUniqueTailorDBTypeNamesWithExternal({
-      client,
-      workspaceId,
-      tailorDBServices: migrationTestServices,
-      externalTailorDBNamespaces: application.externalTailorDBNamespaces,
-      plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
-    }),
-  );
+  if (!(skip?.has("tailorDB") && previous)) {
+    await withSpan("plan.validateTailorDBTypeNames", () =>
+      assertUniqueTailorDBTypeNamesWithExternal({
+        client,
+        workspaceId,
+        tailorDBServices: migrationTestServices,
+        externalTailorDBNamespaces: application.externalTailorDBNamespaces,
+        plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
+      }),
+    );
+  }
 
   const workflowService = application.workflowService;
   const bundledWorkflowJobs = filterBundledWorkflowJobs(
@@ -466,11 +492,17 @@ async function planDeploymentTarget(
       workflowExecutionPolicy,
       secretManager,
     ] = await Promise.all([
-      withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-      withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-      withSpan("plan.aiGateway", () => planAIGateway(ctx)),
-      withSpan("plan.idp", () => planIdP(ctx)),
-      withSpan("plan.auth", () => planAuth(ctx)),
+      skip?.has("tailorDB") && previous
+        ? previous.tailorDB
+        : withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+      skip?.has("staticWebsite") && previous
+        ? previous.staticWebsite
+        : withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+      skip?.has("aiGateway") && previous
+        ? previous.aiGateway
+        : withSpan("plan.aiGateway", () => planAIGateway(ctx)),
+      skip?.has("idp") && previous ? previous.idp : withSpan("plan.idp", () => planIdP(ctx)),
+      skip?.has("auth") && previous ? previous.auth : withSpan("plan.auth", () => planAuth(ctx)),
       withSpan("plan.pipeline", () => planPipeline(ctx)),
       withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
       withSpan("plan.executor", () => planExecutor(ctx)),
@@ -491,16 +523,20 @@ async function planDeploymentTarget(
           },
         ),
       ),
-      withSpan("plan.workflowExecutionPolicy", () =>
-        planWorkflowJobFunctionExecutionPolicy(
-          client,
-          workspaceId,
-          application.name,
-          application.id,
-          config.workflow?.executionPolicies ?? {},
-        ),
-      ),
-      withSpan("plan.secretManager", () => planSecretManager(ctx)),
+      skip?.has("workflowExecutionPolicy") && previous
+        ? previous.workflowExecutionPolicy
+        : withSpan("plan.workflowExecutionPolicy", () =>
+            planWorkflowJobFunctionExecutionPolicy(
+              client,
+              workspaceId,
+              application.name,
+              application.id,
+              config.workflow?.executionPolicies ?? {},
+            ),
+          ),
+      skip?.has("secretManager") && previous
+        ? previous.secretManager
+        : withSpan("plan.secretManager", () => planSecretManager(ctx)),
     ]);
 
     return {
@@ -524,13 +560,17 @@ async function planDeploymentTarget(
 export async function planDeploymentTargets(
   params: PlanDeploymentTargetsParams,
 ): Promise<PlannedDeployment[]> {
-  const { targets, planTarget = planDeploymentTarget, ...planParams } = params;
+  const { targets, planTarget = planDeploymentTarget, previousDeployments, ...planParams } = params;
+  const previousByAppName = new Map(
+    previousDeployments?.map((deployment) => [deployment.application.name, deployment]),
+  );
   return Promise.all(
     targets.map((target) =>
       planTarget({
         ...planParams,
         target,
         targets,
+        previous: previousByAppName.get(target.application.name),
       }),
     ),
   );
@@ -593,6 +633,38 @@ async function validateDeploymentPlans(
 ): Promise<void> {
   for (const deployment of deployments) {
     await validatePlan(deploymentPlanResults(deployment));
+  }
+}
+
+/**
+ * Carry the renamed-app cleanup deletes `confirmDeploymentPlans` appended
+ * onto `original`'s `app.deletes` over onto the matching `rebuilt` entry.
+ * `app` is always re-planned on a rebuild (its HTTP adapter bundles can
+ * embed `env`), so a fresh `planApplication` result never carries them.
+ * @param original - Deployments as confirmed, before the rebuild
+ * @param rebuilt - Freshly planned deployments the rebuild will apply instead
+ * @param preConfirmAppDeleteCounts - Each application's `app.deletes.length` before confirm ran
+ */
+export function carryConfirmedAppDeletes(
+  original: ReadonlyArray<PlannedDeployment>,
+  rebuilt: ReadonlyArray<PlannedDeployment>,
+  preConfirmAppDeleteCounts: ReadonlyMap<string, number>,
+): void {
+  const originalByAppName = new Map(
+    original.map((deployment) => [deployment.application.name, deployment]),
+  );
+  for (const deployment of rebuilt) {
+    const originalDeployment = originalByAppName.get(deployment.application.name);
+    const startIndex = preConfirmAppDeleteCounts.get(deployment.application.name);
+    if (!originalDeployment || startIndex === undefined) {
+      continue;
+    }
+    const confirmedDeletes = originalDeployment.app.deletes.slice(startIndex);
+    for (const confirmedDelete of confirmedDeletes) {
+      if (!deployment.app.deletes.some((del) => del.name === confirmedDelete.name)) {
+        deployment.app.deletes.push(confirmedDelete);
+      }
+    }
   }
 }
 
@@ -729,7 +801,13 @@ async function deployInternal(
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    const plan = async (targets: ReadonlyArray<BuiltDeploymentTarget>) => {
+    const plan = async (
+      targets: ReadonlyArray<BuiltDeploymentTarget>,
+      reuse?: {
+        skip: ReadonlySet<ReusablePlanKind>;
+        previousDeployments: ReadonlyArray<PlannedDeployment>;
+      },
+    ) => {
       const planTargets = targets.map((target) => ({
         ...target,
         application: adjustApplicationForMigrationTest(target.application, internalContext),
@@ -750,6 +828,8 @@ async function deployInternal(
         noSchemaCheck: options?.noSchemaCheck,
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
+        skip: reuse?.skip,
+        previousDeployments: reuse?.previousDeployments,
       });
       dropCrossDeploymentManagedDeletes(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
@@ -772,6 +852,15 @@ async function deployInternal(
         ),
       )
     ).flat();
+
+    // `confirmDeploymentPlans` appends renamed-app cleanup deletes onto each
+    // deployment's `app.deletes` in place. Recorded here so a later rebuild
+    // (which replaces `deployments` with a freshly planned `app` for every
+    // application) can carry those additions over instead of losing them --
+    // confirm itself never runs a second time, so nothing else re-adds them.
+    const preConfirmAppDeleteCounts = new Map(
+      deployments.map((deployment) => [deployment.application.name, deployment.app.deletes.length]),
+    );
 
     await withSpan("confirm", async () => {
       await confirmDeploymentPlans({
@@ -801,13 +890,12 @@ async function deployInternal(
     // the time env is read again below.
     await applyPrerequisiteResources(client, deployments);
 
-    // `env` is baked into resolver/executor/workflow job/auth hook code and
-    // TailorDB migration scripts once, at build time, before this deploy has
-    // applied anything. When it references a site the prerequisite apply
-    // above just created, the placeholder above is still literally present in
-    // `application.env` -- rebuilding now (and re-planning only the resource
-    // kinds whose apply payload embeds `env` directly) picks up the real URL,
-    // without redoing anything the prerequisite apply already finished.
+    // `env` is baked into resolver/executor/workflow job/auth hook code once,
+    // at build time, before this deploy has applied anything. When it
+    // references a site the prerequisite apply above just created, the
+    // placeholder is still literally present in `application.env` --
+    // rebuilding now picks up the real URL. TailorDB migration scripts don't
+    // need this: they re-resolve `env` themselves right before executing.
     const needsUrlResolution = deployments.some((deployment) =>
       Object.values(deployment.application.env).some(hasStaticWebsiteUrlPlaceholder),
     );
@@ -818,7 +906,15 @@ async function deployInternal(
       );
       const rebuiltTargets = await build();
       assertUniqueGlobalResourceNames(rebuiltTargets);
-      const rebuilt = await plan(rebuiltTargets);
+      // None of REUSABLE_ON_REBUILD_KINDS's plans can change from this
+      // rebuild (see its definition), and each was already confirmed once
+      // above -- reuse them instead of re-querying the platform and
+      // re-diffing them for a second time in the same deploy.
+      const rebuilt = await plan(rebuiltTargets, {
+        skip: REUSABLE_ON_REBUILD_KINDS,
+        previousDeployments: deployments,
+      });
+      carryConfirmedAppDeletes(deployments, rebuilt.deployments, preConfirmAppDeleteCounts);
       await validate(rebuilt.deployments);
       planSummary = printDeploymentPlans(rebuilt.deployments, { dryRun: options?.dryRun });
       await applyRemainingResources(client, workspaceId, rebuilt.deployments);

@@ -38,6 +38,22 @@ export type PlannedDeployment = {
 
 export type PlanResults = Omit<PlannedDeployment, "application">;
 
+/**
+ * Resource kinds whose plan cannot change between a deploy's first plan and
+ * the conditional rebuild `deployInternal` runs when `env` still holds an
+ * unresolved static website URL: none of them embed `env` or this run's
+ * rebuilt bundle content, so the rebuild reuses each one's already-confirmed
+ * plan result instead of re-querying the platform and re-diffing it.
+ */
+export type ReusablePlanKind =
+  | "tailorDB"
+  | "secretManager"
+  | "aiGateway"
+  | "staticWebsite"
+  | "workflowExecutionPolicy"
+  | "idp"
+  | "auth";
+
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
   const { application: _application, ...results } = deployment;
   return results;
