@@ -15,6 +15,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
+import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
@@ -40,7 +41,6 @@ import {
   type ValidateAndDetectResult,
 } from "./migration-validation";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { ApplyPhase } from "../types";
 import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
@@ -104,11 +104,11 @@ async function reconcileMigrationLabels(
  * @param migrationsRequiringScripts - Migrations that require scripts
  * @returns Migration context for script execution
  */
-function buildMigrationContextForScripts(
+async function buildMigrationContextForScripts(
   client: OperatorClient,
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
   migrationsRequiringScripts: PendingMigration[],
-): MigrationContext {
+): Promise<MigrationContext> {
   const authService = migrationContext.application.authService;
   if (!authService) {
     throw CLIError({
@@ -126,6 +126,15 @@ function buildMigrationContextForScripts(
     }
   }
 
+  // TailorDB apply always runs after staticWebsite apply in the same pass, so a
+  // site this deploy just created already exists here even though `env` was
+  // resolved earlier, at build time, before that site existed.
+  const env = await resolveStaticWebsiteUrlsInEnv(
+    client,
+    migrationContext.workspaceId,
+    migrationContext.application.env,
+  );
+
   return {
     client,
     workspaceId: migrationContext.workspaceId,
@@ -134,7 +143,7 @@ function buildMigrationContextForScripts(
       ? Object.keys(authService.config.machineUsers)
       : undefined,
     dbConfig: dbConfigMap,
-    env: migrationContext.application.env,
+    env,
     configDir: path.dirname(migrationContext.config.path),
     appName: migrationContext.application.name,
     appId: migrationContext.application.id,
@@ -415,7 +424,11 @@ export async function applyTailorDB(
       // Step 2: Build migration context for script execution (if any migrations require scripts)
       const migrationCtx =
         migrationsRequiringScripts.length > 0
-          ? buildMigrationContextForScripts(client, migrationContext, migrationsRequiringScripts)
+          ? await buildMigrationContextForScripts(
+              client,
+              migrationContext,
+              migrationsRequiringScripts,
+            )
           : undefined;
 
       // Step 3: Execute each migration sequentially: pre -> script -> post
