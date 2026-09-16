@@ -149,6 +149,9 @@ function isBoundByDefaultOrNamespaceImport(root: SgNode, name: string): boolean 
  * @returns True if a `plugins` binding already exists
  */
 function fileAlreadyBindsPlugins(root: SgNode): boolean {
+  for (const spec of root.findAll({ rule: { kind: "export_specifier" } })) {
+    if ((spec.field("alias") ?? spec.field("name"))?.text() === "plugins") return true;
+  }
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const nameNode = decl.field("name");
     if (nameNode && patternBindsName(nameNode, "plugins")) return true;
@@ -296,13 +299,14 @@ function renameBindingAndUsages(
 function resolveRelativeModule(filePath: string, rawSpecifier: string): string | null {
   if (!rawSpecifier.startsWith(".")) return null;
   const baseDir = path.dirname(filePath);
+  const asIs = path.resolve(baseDir, rawSpecifier);
+  if (fs.existsSync(asIs)) return asIs;
   const withoutExt = rawSpecifier.replace(/\.(ts|tsx|js|mjs|cjs|mts|cts)$/, "");
   for (const ext of CONFIG_EXTENSIONS) {
     const candidate = path.resolve(baseDir, withoutExt + ext);
     if (fs.existsSync(candidate)) return candidate;
   }
-  const asIs = path.resolve(baseDir, rawSpecifier);
-  return fs.existsSync(asIs) ? asIs : null;
+  return null;
 }
 
 /**
@@ -419,17 +423,17 @@ export default function transform(source: string, filePath?: string): string | n
   const importSpecifiers = findTailorConfigGeneratorSpecifiers(tree);
   if (declarators.length === 0 && importSpecifiers.length === 0) return null;
 
-  if (fileAlreadyBindsPlugins(tree)) return null;
+  const hasPluginsCollision = fileAlreadyBindsPlugins(tree);
+  const localRenames: Array<{ node: SgNode; oldName: string }> = [];
+  const remoteRenames: SgNode[] = [];
 
-  const edits: Edit[] = [];
-
-  // Two competing legacy exports (e.g. both `generator` and `generators` in one file) can't
-  // both become `plugins` without colliding; leave both for a manual merge.
-  if (declarators.length === 1) {
+  // Collect the edits before applying any: individually safe renames can collide with
+  // each other when two different local bindings would both become `plugins`.
+  if (!hasPluginsCollision && declarators.length === 1) {
     const nameNode = declarators[0]!.field("name")!;
     const oldName = nameNode.text();
     if (!hasOtherBindingNamed(tree, oldName, nameNode.range().start.index)) {
-      renameBindingAndUsages(tree, nameNode, oldName, edits);
+      localRenames.push({ node: nameNode, oldName });
     }
   }
 
@@ -437,18 +441,23 @@ export default function transform(source: string, filePath?: string): string | n
     const importedNode = spec.field("name");
     if (!importedNode) continue;
     const oldName = importedNode.text();
-
     if (!filePath || !sourceConfigRenameIsSafe(filePath, modulePath, oldName)) continue;
 
-    const aliasNode = spec.field("alias");
-    if (aliasNode) {
-      // Only the remote name changes; the local binding (the alias) is untouched.
-      edits.push(importedNode.replace("plugins"));
-      continue;
+    if (spec.field("alias")) {
+      // An alias only needs its remote name updated, even when its local name is `plugins`.
+      remoteRenames.push(importedNode);
+    } else if (
+      !hasPluginsCollision &&
+      !hasOtherBindingNamed(tree, oldName, importedNode.range().start.index)
+    ) {
+      localRenames.push({ node: importedNode, oldName });
     }
+  }
 
-    if (hasOtherBindingNamed(tree, oldName, importedNode.range().start.index)) continue;
-    renameBindingAndUsages(tree, importedNode, oldName, edits);
+  if (localRenames.length > 1) return null;
+  const edits: Edit[] = remoteRenames.map((node) => node.replace("plugins"));
+  for (const { node, oldName } of localRenames) {
+    renameBindingAndUsages(tree, node, oldName, edits);
   }
 
   if (edits.length === 0) return null;

@@ -216,10 +216,6 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.18.0",
     scriptPath: "v2/plugin-export-name-normalize/scripts/transform.js",
-    legacyPatterns: [
-      /export\s+(?:const|let|var)\s+generators?\s*=\s*definePlugins\b/,
-      /import\s*\{[^}]*\b(generator|generators)\b[^}]*\}\s*from\s*["'][^"']*tailor\.config(\.(ts|tsx|mts|cts|js|mjs|cjs))?["']/,
-    ],
     examples: [
       {
         before: [

@@ -28,14 +28,19 @@ export function reviewFindings(
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const name = decl.field("name");
     const value = decl.field("value");
-    if (name?.kind() !== "identifier" || value?.kind() !== "call_expression") continue;
-    if (!["definePlugins", "defineGenerators"].includes(value.field("function")?.text() ?? ""))
-      continue;
+    if (name?.kind() !== "identifier" || !value) continue;
+    const isPluginCall =
+      value.kind() === "call_expression" &&
+      ["definePlugins", "defineGenerators"].includes(value.field("function")?.text() ?? "");
+    const isConfigArray =
+      /(?:^|[/\\])tailor\.config\.[cm]?[jt]sx?$/.test(filePath) && value.kind() === "array";
+    if (!isPluginCall && !isConfigArray) continue;
     const owner = decl.parent()?.parent();
     const names: string[] = [];
     if (owner?.kind() === "export_statement" && owner.parent()?.kind() === "program") {
       names.push(name.text());
-    } else if (owner?.kind() === "program") {
+    }
+    if (owner?.kind() === "program" || owner?.parent()?.kind() === "program") {
       for (const stmt of exports) {
         if (stmt.field("source")) continue;
         for (const spec of stmt.findAll({ rule: { kind: "export_specifier" } })) {
@@ -46,7 +51,12 @@ export function reviewFindings(
       }
     }
     if (names.length > 0 && !names.includes("plugins")) {
-      report(decl, "Merge plugin definitions into export const plugins = definePlugins(...).");
+      report(
+        decl,
+        isPluginCall
+          ? "Merge plugin definitions into export const plugins = definePlugins(...)."
+          : "Review this exported array for plugin definitions and merge any plugins into the plugins export.",
+      );
     }
   }
   for (const stmt of root.children().filter((node) => node.kind() === "import_statement")) {

@@ -155,6 +155,9 @@ function isBoundByDefaultOrNamespaceImport(root: SgNode, name: string): boolean 
  * @returns True if a `plugins` binding already exists
  */
 function fileAlreadyBindsPlugins(root: SgNode): boolean {
+  for (const spec of root.findAll({ rule: { kind: "export_specifier" } })) {
+    if ((spec.field("alias") ?? spec.field("name"))?.text() === "plugins") return true;
+  }
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const nameNode = decl.field("name");
     if (nameNode && patternBindsName(nameNode, "plugins")) return true;

@@ -62,6 +62,74 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test.each([
+    'import { generators } from "./other/tailor.config";',
+    "export const generators = definePlugins();",
+  ])("skips competing new local bindings: %s", (otherBinding) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-target-collision-"));
+    try {
+      fs.mkdirSync(path.join(dir, "other"));
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        "export const generator = definePlugins();",
+      );
+      fs.writeFileSync(
+        path.join(dir, "other/tailor.config.ts"),
+        "export const generators = definePlugins();",
+      );
+      const source = `import { generator } from "./tailor.config";\n${otherBinding}`;
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves an explicitly named config before other extensions", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-explicit-config-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        "export const plugins = definePlugins();",
+      );
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.mts"),
+        "export const generator = makeGenerator();",
+      );
+      const source = 'import { generator } from "./tailor.config.mts";';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves an existing plugins import alias while renaming its remote name", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-import-alias-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        "export const generator = definePlugins();",
+      );
+      const source =
+        'import { generator as plugins } from "./tailor.config"; console.log(plugins);';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBe(
+        'import { plugins as plugins } from "./tailor.config"; console.log(plugins);',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves a plugin export already available through an exported alias", () => {
+    const source = "export const generators = definePlugins(); export { generators as plugins };";
+    expect(normalizePluginExport(source)).toBeNull();
+  });
+
+  test("preserves an exported plugins alias when converting legacy generators", () => {
+    const source =
+      'import { defineGenerators } from "@tailor-platform/sdk"; export const generators = defineGenerators(); export { generators as plugins };';
+    expect(migrateGenerators(source)).toBeNull();
+  });
+
   test.each(["mts", "cts"])("renames imports from tailor.config.%s", (extension) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-extension-"));
     try {
