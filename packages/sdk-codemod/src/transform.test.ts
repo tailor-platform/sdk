@@ -62,6 +62,33 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test("preserves an unrelated exported alias when renaming a local import", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-exported-alias-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        "export const generator = definePlugins();",
+      );
+      const source =
+        'import { generator } from "./tailor.config"; const other = 1; export { other as generator }; console.log(generator);';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBe(
+        'import { plugins } from "./tailor.config"; const other = 1; export { other as generator }; console.log(plugins);',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves unrelated source re-exports during %s", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); export { generators as legacy } from "./other";`;
+    const result = transform(source);
+    expect(result).toContain("export const plugins = definePlugins()");
+    expect(result).toContain('export { generators as legacy } from "./other"');
+  });
+
   test.each([
     'import { generators } from "./other/tailor.config";',
     "export const generators = definePlugins();",

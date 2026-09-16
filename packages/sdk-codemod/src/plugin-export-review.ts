@@ -27,7 +27,21 @@ export function reviewFindings(
   const exports = root.children().filter((stmt) => stmt.kind() === "export_statement");
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const name = decl.field("name");
-    const value = decl.field("value");
+    let value = decl.field("value");
+    while (
+      value &&
+      [
+        "as_expression",
+        "satisfies_expression",
+        "parenthesized_expression",
+        "type_assertion",
+        "non_null_expression",
+      ].some((kind) => kind === value?.kind())
+    ) {
+      value =
+        value.children().find((child) => child.isNamed() && child.kind() !== "type_arguments") ??
+        null;
+    }
     if (name?.kind() !== "identifier" || !value) continue;
     const isPluginCall =
       value.kind() === "call_expression" &&
@@ -59,16 +73,20 @@ export function reviewFindings(
       );
     }
   }
-  for (const stmt of root.children().filter((node) => node.kind() === "import_statement")) {
+  for (const stmt of root
+    .children()
+    .filter((node) => node.kind() === "import_statement" || node.kind() === "export_statement")) {
     const modulePath = stmt.field("source")?.text().slice(1, -1);
     if (
       !modulePath ||
       !/(^|\/)tailor\.config(?:\.(?:ts|tsx|mts|cts|js|mjs|cjs))?$/.test(modulePath)
     )
       continue;
-    for (const spec of stmt.findAll({ rule: { kind: "import_specifier" } })) {
+    for (const spec of stmt.findAll({
+      rule: { any: [{ kind: "import_specifier" }, { kind: "export_specifier" }] },
+    })) {
       if (["generator", "generators"].includes(spec.field("name")?.text() ?? "")) {
-        report(spec, "Review this legacy plugin import together with its tailor.config export.");
+        report(spec, "Review this legacy plugin reference together with its tailor.config export.");
       }
     }
   }
