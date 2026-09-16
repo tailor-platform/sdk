@@ -39,7 +39,7 @@ const OPTIONAL_HOOK_KEYS = [
  * @returns True if value has the shape of Plugin
  */
 function isPlugin(value: unknown): value is Plugin {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.id !== "string" || typeof candidate.description !== "string") return false;
   if (candidate.importPath !== undefined && typeof candidate.importPath !== "string") return false;

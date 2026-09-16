@@ -31,7 +31,7 @@ export function reviewFindings(
   const root = parse(filePath.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript, source).root();
   const findings: LlmReviewFinding[] = [];
   const isConfigFile = isTailorConfigPath(filePath);
-  const factories = new Set(["definePlugins", "defineGenerators"]);
+  const factories = new Set<string>();
   const configFactories = new Set<string>();
   for (const stmt of root.children().filter((node) => node.kind() === "import_statement")) {
     if (stmt.field("source")?.text().slice(1, -1) !== "@tailor-platform/sdk") continue;
@@ -124,37 +124,41 @@ export function reviewFindings(
       );
     }
   }
-  for (const stmt of root
-    .children()
-    .filter((node) => node.kind() === "import_statement" || node.kind() === "export_statement")) {
+  for (const stmt of root.children()) {
+    const isExport = stmt.kind() === "export_statement";
+    if (!isExport && stmt.kind() !== "import_statement") continue;
     const modulePath = stmt.field("source")?.text().slice(1, -1);
-    if (isConfigFile && modulePath && stmt.kind() === "export_statement") {
-      if (stmt.children().some((child) => child.kind() === "*")) {
+    const isConfigSource = modulePath !== undefined && CONFIG_MODULE_SOURCE.test(modulePath);
+    if (isExport && (isConfigFile || isConfigSource)) {
+      if (
+        stmt.children().some((child) => child.kind() === "*" || child.kind() === "namespace_export")
+      ) {
         report(
           stmt,
-          "Review this wildcard config re-export and expose any plugin arrays as plugins.",
+          "Review this indirect re-export and expose any config plugin arrays as plugins.",
         );
       }
       for (const spec of stmt.findAll({ rule: { kind: "export_specifier" } })) {
         const exportedName = (spec.field("alias") ?? spec.field("name"))?.text();
-        if (exportedName !== "plugins" && exportedName !== "default") {
+        if (
+          (isConfigFile && exportedName !== "plugins" && exportedName !== "default") ||
+          (isConfigSource && ["generator", "generators"].includes(spec.field("name")?.text() ?? ""))
+        ) {
           report(
             spec,
-            "Review this config re-export for plugins and expose plugin definitions as plugins.",
+            "Review this re-export for plugin definitions and expose config plugins as plugins.",
           );
         }
       }
     }
-    if (!modulePath || !CONFIG_MODULE_SOURCE.test(modulePath)) continue;
+    if (!isConfigSource || isExport) continue;
     for (const namespace of stmt.findAll({ rule: { kind: "namespace_import" } })) {
       report(
         namespace,
         "Review this config namespace import and replace legacy plugin member references with plugins.",
       );
     }
-    for (const spec of stmt.findAll({
-      rule: { any: [{ kind: "import_specifier" }, { kind: "export_specifier" }] },
-    })) {
+    for (const spec of stmt.findAll({ rule: { kind: "import_specifier" } })) {
       if (["generator", "generators"].includes(spec.field("name")?.text() ?? "")) {
         report(spec, "Review this legacy plugin reference together with its tailor.config export.");
       }

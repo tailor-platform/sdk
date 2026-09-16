@@ -84,6 +84,10 @@ describe("runCodemods", () => {
   test.each([
     [
       "plugin-export-name-normalize",
+      'import { generators } from "./plugin-helper"; export { generators };',
+    ],
+    [
+      "plugin-export-name-normalize",
       'import * as config from "./tailor.config"; console.log(config.generator);',
     ],
     [
@@ -188,6 +192,21 @@ describe("runCodemods", () => {
       );
       const result = await runCodemods(codemods, dir, dryRun);
       expect(result.llmReviews.some((review) => review.files.includes("a-consumer.ts"))).toBe(true);
+    },
+  );
+
+  test.each(['export * from "./tailor.config";', 'export * as config from "./tailor.config";'])(
+    "reports indirect consumer re-exports: %s",
+    async (source) => {
+      const { tmpDir: dir } = await createTestProject("consumer.ts", source);
+      tmpDir = dir;
+      const codemod = allCodemods.find((entry) => entry.id === "v2/plugin-export-name-normalize")!;
+      const scriptPath = path.resolve(
+        __dirname,
+        "../codemods/v2/plugin-export-name-normalize/scripts/transform.ts",
+      );
+      const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+      expect(result.llmReviews.some((review) => review.files.includes("consumer.ts"))).toBe(true);
     },
   );
 
