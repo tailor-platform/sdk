@@ -9,7 +9,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 11;
+export const TEMPLATE_VERSION = 12;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -426,8 +426,8 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   return { content: out, generatedIds };
 }
 
-export const ACTIONS_SHA = "0208711e73101483eedfc77fd190d236e2e95c74";
-export const ACTIONS_VERSION = "v2.3.3";
+export const ACTIONS_SHA = "aa06a6c4926268e1013eaca4aa292ff390883e44";
+export const ACTIONS_VERSION = "v2.3.4";
 
 /**
  * Render the coordinator workflow that orchestrates per-app composite actions.
