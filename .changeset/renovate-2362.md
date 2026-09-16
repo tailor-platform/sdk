@@ -6,4 +6,4 @@
 "@tailor-platform/sdk-plugin-tailordb-erd": patch
 ---
 
-fix(deps): update dependency pkg-types to v2.3.3
+fix(deps): update dependency zod to v4.6.4

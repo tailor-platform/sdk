@@ -50,9 +50,12 @@ jobs:
         run: ghalint run-action
 
       - name: Run zizmor
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: zizmor --no-progress .github/workflows/ .github/actions/
+        uses: tailor-platform/actions/lint-github-actions@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
+        with:
+          paths: |
+            .github/workflows/
+            .github/actions/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   lint-generated-workflows:
     name: Lint generated workflows

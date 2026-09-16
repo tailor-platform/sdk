@@ -54,11 +54,11 @@
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.4",
     "eslint-plugin-zod": "4.12.1",
-    "knip": "6.34.0",
+    "knip": "6.35.1",
     "lefthook": "2.1.12",
     "madge": "8.0.0",
-    "oxfmt": "0.66.0",
-    "oxlint": "1.81.0",
+    "oxfmt": "0.67.0",
+    "oxlint": "1.82.0",
     "pkg-pr-new": "0.0.88",
     "publint": "0.3.24",
     "tsx": "4.23.13",
@@ -67,5 +67,5 @@
   "engines": {
     "node": ">= 22.18.0"
   },
-  "packageManager": "pnpm@11.25.0"
+  "packageManager": "pnpm@12.4.1"
 }

@@ -44,8 +44,8 @@ export interface Database {
   };
   NestedProfile: {
     id: Generated<string>;
-    userInfo: string;
-    metadata: string;
+    userInfo: Record<string, unknown>;
+    metadata: Record<string, unknown>;
     archived: boolean | null;
     createdAt: Timestamp;
     updatedAt: ColumnType<Date | null, Date | string, Date | string>;
@@ -56,7 +56,7 @@ export interface Database {
     totalPrice: number;
     discount: number | null;
     status: string;
-    attachedFiles: string[];
+    attachedFiles: Record<string, unknown>[];
     createdAt: Timestamp;
     updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };

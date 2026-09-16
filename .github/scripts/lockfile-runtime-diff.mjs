@@ -21,7 +21,8 @@ function parseArgs(argv) {
 
 function parseImporters(text) {
   const lines = text.split("\n");
-  const importersIdx = lines.findIndex((l) => /^importers:\s*$/.test(l));
+  // pnpm 12 lockfiles are two YAML documents; the real `dependencies` live in the last one.
+  const importersIdx = lines.findLastIndex((l) => /^importers:\s*$/.test(l));
   if (importersIdx === -1) return {};
 
   const importers = {};

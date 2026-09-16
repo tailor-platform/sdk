@@ -28,6 +28,7 @@ import {
   type OperatorClient,
 } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -131,12 +132,20 @@ export async function applyAuth(
 
   const applyMachineUsers = async () => {
     await Promise.all([
-      ...changeSet.machineUser.creates.map((create) =>
-        client.createAuthMachineUser(create.request),
-      ),
-      ...changeSet.machineUser.updates.map((update) =>
-        client.updateAuthMachineUser(update.request),
-      ),
+      ...changeSet.machineUser.creates.map(async (create) => {
+        const created = await client.createAuthMachineUser(create.request);
+        if (created.machineUser?.clientSecret) {
+          logger.registerSecret(created.machineUser.clientSecret);
+        }
+        return created;
+      }),
+      ...changeSet.machineUser.updates.map(async (update) => {
+        const updated = await client.updateAuthMachineUser(update.request);
+        if (updated.machineUser?.clientSecret) {
+          logger.registerSecret(updated.machineUser.clientSecret);
+        }
+        return updated;
+      }),
     ]);
   };
 
@@ -212,7 +221,11 @@ export async function applyAuth(
           oauth2Client.redirectUris,
           "OAuth2 redirect URIs",
         );
-        return client.createAuthOAuth2Client(create.request);
+        const created = await client.createAuthOAuth2Client(create.request);
+        if (created.oauth2Client?.clientSecret) {
+          logger.registerSecret(created.oauth2Client.clientSecret);
+        }
+        return created;
       }),
       ...changeSet.oauth2Client.updates.map(async (update) => {
         const oauth2Client = assertDefined(
@@ -225,7 +238,11 @@ export async function applyAuth(
           oauth2Client.redirectUris,
           "OAuth2 redirect URIs",
         );
-        return client.updateAuthOAuth2Client(update.request);
+        const updated = await client.updateAuthOAuth2Client(update.request);
+        if (updated.oauth2Client?.clientSecret) {
+          logger.registerSecret(updated.oauth2Client.clientSecret);
+        }
+        return updated;
       }),
     ]);
 
@@ -241,7 +258,10 @@ export async function applyAuth(
         replaceOauth2Client.redirectUris,
         "OAuth2 redirect URIs",
       );
-      await client.createAuthOAuth2Client(replace.createRequest);
+      const replaced = await client.createAuthOAuth2Client(replace.createRequest);
+      if (replaced.oauth2Client?.clientSecret) {
+        logger.registerSecret(replaced.oauth2Client.clientSecret);
+      }
     }
 
     await Promise.all([
@@ -1078,6 +1098,7 @@ async function planMachineUsers(
     const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
       existingMap.set(machineUser.name, machineUser);
+      logger.registerSecret(machineUser.clientSecret);
     });
     for (const machineUsername of Object.keys(config.machineUsers ?? {})) {
       const machineUser = config.machineUsers?.[machineUsername];
@@ -1135,6 +1156,7 @@ async function planMachineUsers(
   for (const namespaceName of deletedServices) {
     const existingMachineUsers = await fetchMachineUsers(namespaceName);
     existingMachineUsers.forEach((machineUser) => {
+      logger.registerSecret(machineUser.clientSecret);
       changeSet.deletes.push({
         name: machineUser.name,
         request: {
@@ -1366,6 +1388,7 @@ async function planOAuth2Clients(
     const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
       existingClientsMap.set(oauth2Client.name, oauth2Client);
+      logger.registerSecret(oauth2Client.clientSecret);
     });
     for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
       const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
@@ -1457,6 +1480,7 @@ async function planOAuth2Clients(
   for (const namespaceName of deletedServices) {
     const existingOAuth2Clients = await fetchOAuth2Clients(namespaceName);
     existingOAuth2Clients.forEach((oauth2Client) => {
+      logger.registerSecret(oauth2Client.clientSecret);
       changeSet.deletes.push({
         name: oauth2Client.name,
         request: {

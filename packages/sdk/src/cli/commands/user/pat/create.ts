@@ -3,6 +3,7 @@ import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { internalError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 import { createPatOperatorClient } from "./user";
@@ -34,6 +35,7 @@ export const createCommand = defineAppCommand({
     if (!result.accessToken) {
       throw internalError("Failed to create personal access token");
     }
+    logger.registerSecret(result.accessToken);
 
     printCreatedToken(args.name, result.accessToken, args.write, "created");
   },
