@@ -282,6 +282,22 @@ export default {
   });
 
   describe("plugin export selection", () => {
+    test.each([
+      'tableConfigRequired: "yes"',
+      "tableConfigRequired: null",
+      'onTableLoaded() {}, importPath: ""',
+    ])("rejects invalid plugin options: %s", async (options) => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{ id: "invalid", description: "test", ${options} }];
+export default { db: { main: { files: [] } } };
+`,
+      );
+      await expect(getGeneratedTable(configPath, "invalid", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
     test("ignores array exports under any name other than `plugins`", async () => {
       fs.writeFileSync(
         configPath,

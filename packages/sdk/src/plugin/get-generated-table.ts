@@ -43,11 +43,17 @@ function isPlugin(value: unknown): value is Plugin {
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.id !== "string" || typeof candidate.description !== "string") return false;
   if (candidate.importPath !== undefined && typeof candidate.importPath !== "string") return false;
+  if (
+    candidate.tableConfigRequired !== undefined &&
+    typeof candidate.tableConfigRequired !== "boolean" &&
+    typeof candidate.tableConfigRequired !== "function"
+  )
+    return false;
   for (const key of OPTIONAL_HOOK_KEYS) {
     if (candidate[key] !== undefined && typeof candidate[key] !== "function") return false;
   }
   const hasDefinitionTimeHooks = candidate.onTableLoaded || candidate.onNamespaceLoaded;
-  if (hasDefinitionTimeHooks && typeof candidate.importPath !== "string") return false;
+  if (hasDefinitionTimeHooks && !candidate.importPath) return false;
   return true;
 }
 

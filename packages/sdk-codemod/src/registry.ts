@@ -206,6 +206,8 @@ export const allCodemods: CodemodPackage[] = [
       "know, or a non-tuple/spread form — convert it to definePlugins(pluginFn(config)),",
       "importing the matching plugin from its @tailor-platform/sdk/plugin/<name> subpath, and",
       "assign the result to `export const plugins`.",
+      "Merge any remaining exported plugin arrays into `plugins`, including bindings",
+      "exported separately with `export { ... }`, and update their importing files.",
     ].join("\n"),
   },
   {
@@ -217,8 +219,8 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.18.0",
     scriptPath: "v2/plugin-export-name-normalize/scripts/transform.js",
     legacyPatterns: [
-      /export const generators? = definePlugins/,
-      /import\s*\{[^}]*\b(generator|generators)\b[^}]*\}\s*from\s*["'][^"']*tailor\.config(\.(ts|tsx|js|mjs|cjs))?["']/,
+      /export\s+(?:const|let|var)\s+generators?\s*=\s*definePlugins\b/,
+      /import\s*\{[^}]*\b(generator|generators)\b[^}]*\}\s*from\s*["'][^"']*tailor\.config(\.(ts|tsx|mts|cts|js|mjs|cjs))?["']/,
     ],
     examples: [
       {
@@ -248,6 +250,8 @@ export const allCodemods: CodemodPackage[] = [
       "leaves a file untouched when it already binds `plugins` to something else, or when a",
       "bare (unaliased) import's local usages cannot be safely told apart from an unrelated",
       "same-named binding in that file — rename those by hand to `plugins`.",
+      "Multiple arrays or bindings exported separately with `export { ... }` need manual",
+      "consolidation into the `plugins` export; update their importing files as well.",
     ].join("\n"),
   },
   {

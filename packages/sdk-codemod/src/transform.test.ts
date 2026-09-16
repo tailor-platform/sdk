@@ -62,6 +62,41 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test.each(["mts", "cts"])("renames imports from tailor.config.%s", (extension) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-extension-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, `tailor.config.${extension}`),
+        "export const generator = definePlugins();\n",
+      );
+      const source = `import { generator } from "./tailor.config.${extension}";\nconsole.log(generator);\n`;
+      expect(normalizePluginExport(source, path.join(dir, `consumer.${extension}`))).toBe(
+        `import { plugins } from "./tailor.config.${extension}";\nconsole.log(plugins);\n`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    "export const generator = makeGenerator();",
+    "export function generator() {}",
+    "const unrelated = makeGenerator(); export { unrelated as generator };",
+    'export { generator } from "./other";',
+  ])("preserves unrelated config exports: %s", (unrelatedExport) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-unrelated-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        `export const plugins = definePlugins();\n${unrelatedExport}\n`,
+      );
+      const source = 'import { generator } from "./tailor.config";\nconsole.log(generator);\n';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("preserves imports when multiple legacy exports prevent config normalization", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-normalize-"));
     try {

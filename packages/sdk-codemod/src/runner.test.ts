@@ -81,6 +81,49 @@ describe("runCodemods", () => {
     ]);
   });
 
+  test.each([
+    [
+      "plugin-export-name-normalize",
+      "const plugins = []; export let generators\n = definePlugins();",
+    ],
+    ["plugin-export-name-normalize", "const generators = definePlugins(); export { generators };"],
+    ["plugin-export-name-normalize", 'import { generator } from "./tailor.config.mts";'],
+    ["plugin-export-name-normalize", 'import { generators } from "./tailor.config.cts";'],
+    [
+      "define-generators-to-plugins",
+      'import { defineGenerators } from "@tailor-platform/sdk"; export const dbGenerators = defineGenerators(); export const enumGenerators = defineGenerators();',
+    ],
+    [
+      "define-generators-to-plugins",
+      'import { defineGenerators } from "@tailor-platform/sdk"; const generators = defineGenerators(); export { generators };',
+    ],
+  ])("reports manual migration for %s: %s", async (name, source) => {
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const codemod = allCodemods.find((entry) => entry.id === `v2/${name}`)!;
+    const { tmpDir: dir } = await createTestProject("tailor.config.ts", source);
+    tmpDir = dir;
+    const scriptPath = path.resolve(__dirname, `../codemods/v2/${name}/scripts/transform.ts`);
+    const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+    expect(result.warnings.length + result.llmReviews.length).toBeGreaterThan(0);
+  });
+
+  test.each([
+    "export const plugins = definePlugins();",
+    "const generators = definePlugins(); export { generators as plugins };",
+    "function local() { const generators = definePlugins(); return generators; }",
+  ])("does not report canonical or unexported plugin bindings: %s", async (source) => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/plugin-export-name-normalize")!;
+    const { tmpDir: dir } = await createTestProject("tailor.config.ts", source);
+    tmpDir = dir;
+    const scriptPath = path.resolve(
+      __dirname,
+      "../codemods/v2/plugin-export-name-normalize/scripts/transform.ts",
+    );
+    const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+    expect(result.warnings).toEqual([]);
+    expect(result.llmReviews).toEqual([]);
+  });
+
   describe("chained transforms in dry-run", () => {
     // Transform A: renames "oldFunc" → "midFunc"
     const transformAPath = path.join(os.tmpdir(), "transform-a.ts");
