@@ -1,5 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
-import { hasTypeScriptName } from "../../../../src/plugin-export-bindings";
+import { hasTypeScriptName, isTailorConfigPath } from "../../../../src/plugin-export-bindings";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 /**
@@ -273,9 +273,10 @@ function renameBindingAndUsages(
  * 4. Rename the export variable to `plugins`, the official plugin config export name
  *    (skipping the whole file when `plugins` is already bound to something else)
  * @param source - Source code to transform
+ * @param filePath - Source path, used to restrict export renames to config modules
  * @returns Transformed source or null if no changes needed
  */
-export default function transform(source: string): string | null {
+export default function transform(source: string, filePath?: string): string | null {
   const tree = parse(Lang.TypeScript, source).root();
 
   // Only process files that import defineGenerators from the SDK.
@@ -434,7 +435,7 @@ export default function transform(source: string): string | null {
 
   // Two (or more) defineGenerators()/definePlugins() outputs in one file can't all become
   // `plugins` without colliding; leave them all for a manual merge.
-  if (declaratorsToRename.length === 1) {
+  if (declaratorsToRename.length === 1 && (!filePath || isTailorConfigPath(filePath))) {
     if (fileAlreadyBindsPlugins(tree)) {
       return null;
     }

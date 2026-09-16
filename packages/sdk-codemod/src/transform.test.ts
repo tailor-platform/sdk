@@ -53,7 +53,14 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
   for (const c of cases) {
     const inputPath = path.join(c.caseDir, c.inputFile);
     const input = await fs.promises.readFile(inputPath, "utf-8");
-    const result = await transform(input, inputPath);
+    // These fixtures model config modules, even though their source is stored as input.ts.
+    const transformPath = [
+      "v2/define-generators-to-plugins",
+      "v2/plugin-export-name-normalize",
+    ].includes(codemodPath)
+      ? path.join(c.caseDir, "tailor.config.ts")
+      : inputPath;
+    const result = await transform(input, transformPath);
     const expected = c.expectedFile
       ? await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8")
       : null;
@@ -62,6 +69,15 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves helper exports during %s", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}();`;
+    const result = transform(source, "/project/helpers.ts") ?? source;
+    expect(result).toContain("export const generators = definePlugins()");
+  });
+
   describe.each([
     ["normalize", normalizePluginExport, "definePlugins"],
     ["legacy", migrateGenerators, "defineGenerators"],
@@ -127,8 +143,8 @@ describe("codemod transforms", () => {
         path.join(dir, "other/tailor.config.ts"),
         "export const generators = definePlugins();",
       );
-      const source = `import { generator } from "./tailor.config";\n${otherBinding}`;
-      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+      const source = `import { generator } from "../tailor.config";\n${otherBinding.replace("./other/", "../other/")}`;
+      expect(normalizePluginExport(source, path.join(dir, "combined/tailor.config.ts"))).toBeNull();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
