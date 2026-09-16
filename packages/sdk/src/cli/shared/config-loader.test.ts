@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { loadConfig } from "./config-loader";
-import { getErrorDiagnostics } from "./error-diagnostics";
+import { atConfigSource, loadConfig } from "./config-loader";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 
 // Assembled at runtime: spelled out in full, this fixture is indistinguishable
 // from a live credential to the repository's own push protection.
@@ -121,5 +121,76 @@ describe("loadConfig", () => {
 
     expect(config.env).toBeUndefined();
     expect(config.name).toBe("test-app");
+  });
+});
+
+// The CLI strips types with amaro, which reports source it cannot parse as a
+// plain object rather than an Error. Vitest transforms these files with Vite
+// instead, so the diagnostic is reproduced from its observed shape.
+const syntaxDiagnostic = {
+  code: "InvalidSyntax",
+  message: "Unexpected token `=`. Expected an identifier",
+  snippet: "const broken: = ;",
+  filename: "/repo/tailordb/User.ts",
+  startLine: 4,
+  startColumn: 14,
+  endLine: 4,
+  endColumn: 15,
+};
+
+describe("atConfigSource", () => {
+  test("renders unparsable source as an Error pointing at the line it failed on", () => {
+    const result = atConfigSource(syntaxDiagnostic, "/repo/tailor.config.ts");
+
+    expect(result).toBeInstanceOf(SyntaxError);
+    expect((result as Error).message).toBe(syntaxDiagnostic.message);
+    expect((result as Error).cause).toBe(syntaxDiagnostic);
+    expect(getErrorDiagnostics(result as Error).location).toEqual({
+      file: "/repo/tailordb/User.ts",
+      line: 4,
+    });
+  });
+
+  test("names the file unparsable source was found in, not the config importing it", () => {
+    const result = atConfigSource(syntaxDiagnostic, "/repo/tailor.config.ts");
+
+    expect(getErrorDiagnostics(result as Error).location?.file).toBe("/repo/tailordb/User.ts");
+  });
+
+  test("attributes a failure that names no source to the config file", () => {
+    const result = atConfigSource(new Error("boom"), "/repo/tailor.config.ts");
+
+    expect(getErrorDiagnostics(result as Error).location).toEqual({
+      file: "/repo/tailor.config.ts",
+    });
+  });
+
+  test("keeps a location the failure already carries", () => {
+    const located = withErrorDiagnostics(new Error("boom"), {
+      location: { file: "/repo/resolvers/order.ts", line: 9 },
+    });
+
+    const result = atConfigSource(located, "/repo/tailor.config.ts");
+
+    expect(getErrorDiagnostics(result as Error).location).toEqual({
+      file: "/repo/resolvers/order.ts",
+      line: 9,
+    });
+  });
+
+  test("leaves a thrown value that is not an Error alone", () => {
+    const thrown = { unrecognized: true };
+
+    expect(atConfigSource(thrown, "/repo/tailor.config.ts")).toBe(thrown);
+  });
+
+  test("omits the line when the diagnostic carries none", () => {
+    const { startLine: _startLine, ...withoutLine } = syntaxDiagnostic;
+
+    const result = atConfigSource(withoutLine, "/repo/tailor.config.ts");
+
+    expect(getErrorDiagnostics(result as Error).location).toEqual({
+      file: "/repo/tailordb/User.ts",
+    });
   });
 });

@@ -6,7 +6,7 @@ import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { pickPluginArrays } from "#/plugin/guards";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
-import { withErrorDiagnostics } from "./error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { installCliTailordbStub } from "./mock";
 import { currentImportNonce, IMPORT_NONCE_PARAM } from "./user-modules";
 import type { AppConfig, EnvValue } from "#/configure/config/types";
@@ -58,7 +58,12 @@ export async function loadConfig(
   if (importNonce) {
     configUrl.searchParams.set(IMPORT_NONCE_PARAM, importNonce);
   }
-  const configModule: unknown = await import(configUrl.href);
+  let configModule: unknown;
+  try {
+    configModule = await import(configUrl.href);
+  } catch (error) {
+    throw atConfigSource(error, resolvedPath);
+  }
   if (
     typeof configModule !== "object" ||
     configModule === null ||
@@ -122,4 +127,52 @@ export async function loadConfig(
  */
 function atConfigFile<T extends Error>(error: T, resolvedPath: string): T {
   return withErrorDiagnostics(error, { location: { file: resolvedPath } });
+}
+
+/**
+ * Diagnostic the TypeScript transform throws for source it cannot parse.
+ *
+ * It arrives as a plain object rather than an Error, so a failure to parse the
+ * config would otherwise reach the caller as `[object Object]`.
+ */
+interface SyntaxDiagnostic {
+  code: "InvalidSyntax";
+  message: string;
+  filename: string;
+  startLine?: number;
+}
+
+function isSyntaxDiagnostic(value: unknown): value is SyntaxDiagnostic {
+  if (typeof value !== "object" || value === null || value instanceof Error) return false;
+  const { code, message, filename, startLine } = value as Record<string, unknown>;
+  return (
+    code === "InvalidSyntax" &&
+    typeof message === "string" &&
+    typeof filename === "string" &&
+    (startLine === undefined || typeof startLine === "number")
+  );
+}
+
+/**
+ * Point a failure raised while importing the config at the source it came from.
+ *
+ * Unparsable source names the file it was found in, which is the imported
+ * module rather than the config when the config imports it. Anything else is
+ * attributed to the config file, the one location loading it establishes, and
+ * a failure that already names its own source keeps it.
+ * @param error - Value thrown while importing the config
+ * @param resolvedPath - Absolute path to the config file
+ * @returns An Error carrying the source location the failure points at
+ */
+export function atConfigSource(error: unknown, resolvedPath: string): unknown {
+  if (isSyntaxDiagnostic(error)) {
+    return withErrorDiagnostics(new SyntaxError(error.message, { cause: error }), {
+      location: {
+        file: error.filename,
+        ...(error.startLine === undefined ? {} : { line: error.startLine }),
+      },
+    });
+  }
+  if (!(error instanceof Error)) return error;
+  return getErrorDiagnostics(error).location ? error : atConfigFile(error, resolvedPath);
 }
