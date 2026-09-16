@@ -82,6 +82,8 @@ describe("runCodemods", () => {
   });
 
   test.each([
+    ["plugin-export-name-normalize", "export const generators = [myPlugin()];"],
+    ["plugin-export-name-normalize", "export const plugins2 = [myPlugin()];"],
     [
       "plugin-export-name-normalize",
       "const plugins = []; export let generators\n = definePlugins();",
@@ -110,6 +112,8 @@ describe("runCodemods", () => {
   test.each([
     "export const plugins = definePlugins();",
     "const generators = definePlugins(); export { generators as plugins };",
+    "export const generators = definePlugins(); export { generators as plugins };",
+    "export const plugins = [myPlugin()];",
     "function local() { const generators = definePlugins(); return generators; }",
   ])("does not report canonical or unexported plugin bindings: %s", async (source) => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/plugin-export-name-normalize")!;

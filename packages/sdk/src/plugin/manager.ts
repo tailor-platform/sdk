@@ -139,9 +139,8 @@ export interface PluginExecutorInfo {
 
 /**
  * Manages plugin registration and processing.
- * Callers must ensure `plugins` carries no duplicate IDs; `loadConfig()` already
- * guarantees this for its own `plugins` output, which is where every plugin
- * array passed here comes from.
+ * Callers must ensure `plugins` carries no duplicate IDs. CLI and runtime config
+ * loaders validate this before constructing the manager.
  */
 export class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
