@@ -88,9 +88,18 @@ describe("codemod transforms", () => {
       "namespace plugins {}",
       'import plugins = require("./other");',
       "import plugins = Other.member;",
+      "const f = function plugins() { return generators; };",
+      "const c = class plugins {};",
+      "function* plugins() {}",
+      "const f = function* plugins() {};",
     ])("preserves a conflicting declaration: %s", (declaration) => {
       const source = `import { ${factory} } from "@tailor-platform/sdk"; ${declaration} export const generators = ${factory}();`;
       expect(transform(source)).toBeNull();
+    });
+
+    test.each(["generators", "plugins"])("preserves rest-parameter bindings: %s", (name) => {
+      const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); function read(...${name}) { return generators; }`;
+      expect(transform(source) ?? source).not.toContain("export const plugins");
     });
 
     test("preserves a shadowing enum binding", () => {

@@ -5,6 +5,17 @@ import type { SgNode } from "@ast-grep/napi";
 
 const CONFIG_MODULE_SOURCE = /(^|\/)tailor\.config(?:\.(?:ts|tsx|mts|cts|js|mjs|cjs))?$/;
 
+const CONFIG_FACTORIES = new Set([
+  "defineConfig",
+  "defineAuth",
+  "defineIdp",
+  "defineStaticWebSite",
+  "defineAIGateway",
+  "defineSecretManager",
+  "defineWorkflowExecutionPolicy",
+  "defineWorkflowExecutionPolicies",
+]);
+
 /**
  * Report plugin exports and imports that still need manual migration.
  * @param source - Source after the current transform
@@ -21,9 +32,13 @@ export function reviewFindings(
   const findings: LlmReviewFinding[] = [];
   const isConfigFile = isTailorConfigPath(filePath);
   const factories = new Set(["definePlugins", "defineGenerators"]);
+  const configFactories = new Set<string>();
   for (const stmt of root.children().filter((node) => node.kind() === "import_statement")) {
     if (stmt.field("source")?.text().slice(1, -1) !== "@tailor-platform/sdk") continue;
     for (const spec of stmt.findAll({ rule: { kind: "import_specifier" } })) {
+      if (CONFIG_FACTORIES.has(spec.field("name")?.text() ?? "")) {
+        configFactories.add((spec.field("alias") ?? spec.field("name"))!.text());
+      }
       if (["definePlugins", "defineGenerators"].includes(spec.field("name")?.text() ?? "")) {
         factories.add((spec.field("alias") ?? spec.field("name"))!.text());
       }
@@ -36,6 +51,7 @@ export function reviewFindings(
       if (local) {
         factories.add(`${local}.definePlugins`);
         factories.add(`${local}.defineGenerators`);
+        for (const factory of CONFIG_FACTORIES) configFactories.add(`${local}.${factory}`);
       }
     }
   }
@@ -66,8 +82,10 @@ export function reviewFindings(
         null;
     }
     if (name?.kind() !== "identifier" || !value) continue;
-    const isPluginCall =
-      value.kind() === "call_expression" && factories.has(value.field("function")?.text() ?? "");
+    const calledFactory =
+      value.kind() === "call_expression" ? value.field("function")?.text() : undefined;
+    if (calledFactory && configFactories.has(calledFactory)) continue;
+    const isPluginCall = calledFactory !== undefined && factories.has(calledFactory);
     const isConfigArray = value.kind() === "array";
     // An indirect value can also be a plugin array; do not silently assume otherwise.
     const isUnclassifiedValue = ![
