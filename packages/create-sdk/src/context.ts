@@ -97,8 +97,8 @@ export const collectContext = async (opts: Opts): Promise<Context> => {
   if (!name) {
     name = unwrapPromptResult(
       await text({
-      message: "📝 What's your project name?",
-      validate: validateName,
+        message: "📝 What's your project name?",
+        validate: validateName,
       }),
     );
   } else {
