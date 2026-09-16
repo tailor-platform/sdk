@@ -250,6 +250,8 @@ export const allCodemods: CodemodPackage[] = [
       "consolidation into the `plugins` export; update their importing files as well.",
       "Only tailor.config module exports are renamed automatically. Review aliased SDK",
       "factory calls and helper-module re-exports manually, preserving the helper API.",
+      "Indirect config exports, namespace/dynamic imports, and wildcard re-exports are",
+      "conservatively reported for review; keep unrelated values and canonical references unchanged.",
     ].join("\n"),
   },
   {

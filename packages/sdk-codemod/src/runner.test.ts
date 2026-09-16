@@ -84,6 +84,23 @@ describe("runCodemods", () => {
   test.each([
     [
       "plugin-export-name-normalize",
+      'import * as config from "./tailor.config"; console.log(config.generator);',
+    ],
+    [
+      "plugin-export-name-normalize",
+      'const config = await import("./tailor.config"); console.log(config.generators);',
+    ],
+    [
+      "plugin-export-name-normalize",
+      "const makePlugins = definePlugins; export const generators = makePlugins();",
+    ],
+    [
+      "plugin-export-name-normalize",
+      "const registered = definePlugins(); export const generators = registered;",
+    ],
+    ["plugin-export-name-normalize", 'export * from "./helpers";'],
+    [
+      "plugin-export-name-normalize",
       'import { definePlugins as makePlugins } from "@tailor-platform/sdk"; export const generators = makePlugins();',
     ],
     [
