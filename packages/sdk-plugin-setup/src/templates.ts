@@ -9,7 +9,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 12;
+export const TEMPLATE_VERSION = 11;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
