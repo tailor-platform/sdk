@@ -508,14 +508,22 @@ export default function transform(source: string, filePath?: string): string | n
     const importLines: string[] = [];
     for (const [importPath, functionName] of importsToAdd) {
       const line = `import { ${functionName} } from "${importPath}";`;
-      // Skip if this function is already imported (mixed config scenario).
-      // Use a targeted regex to match import statements containing the function
-      // name, rather than checking the import path which could match unrelated
-      // imports from the same module (e.g. importing a different symbol).
-      const importExists = new RegExp(`import\\s*\\{[^}]*\\b${functionName}\\b[^}]*\\}`, "m").test(
-        result,
-      );
-      if (importExists) continue;
+      // Reuse only the canonical module's matching local binding. An alias does
+      // not provide that name, and an unrelated binding must not be overwritten.
+      const existing = tree
+        .findAll({ rule: { kind: "import_statement" } })
+        .filter((stmt) => stmt.field("source")?.text().slice(1, -1) === importPath)
+        .flatMap((stmt) => stmt.findAll({ rule: { kind: "import_specifier" } }))
+        .find(
+          (spec) =>
+            spec.field("name")?.text() === functionName &&
+            (spec.field("alias") ?? spec.field("name"))?.text() === functionName,
+        );
+      const binding = existing?.field("alias") ?? existing?.field("name");
+      if (hasOtherBindingNamed(tree, functionName, binding?.range().start.index ?? -1)) {
+        return null;
+      }
+      if (binding) continue;
       importLines.push(line);
     }
     // Sort for deterministic output and skip if all imports already present

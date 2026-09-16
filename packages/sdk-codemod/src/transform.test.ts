@@ -69,6 +69,29 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test("adds the canonical plugin import beside an existing aliased import", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+import { kyselyTypePlugin as makeKyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+export const generators = defineGenerators(["@tailor-platform/kysely-type", {}]);`;
+    const result = migrateGenerators(source, "/project/tailor.config.ts");
+    expect(result).toContain(
+      'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+    );
+    expect(result).toContain("import { kyselyTypePlugin as makeKyselyTypePlugin }");
+    expect(result).toContain("export const plugins = definePlugins(kyselyTypePlugin({}));");
+  });
+
+  test.each([
+    'import { kyselyTypePlugin } from "./helper";',
+    "const kyselyTypePlugin = () => [];",
+    "function helper(kyselyTypePlugin) { return kyselyTypePlugin(); }",
+  ])("preserves conflicting generated plugin bindings: %s", (binding) => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+${binding}
+export const generators = defineGenerators(["@tailor-platform/kysely-type", {}]);`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
   test("keeps a direct plugin factory binding beside an aliased plugin import", () => {
     const source = `import { defineGenerators, definePlugins as makePlugins } from "@tailor-platform/sdk";
 export const generators = defineGenerators();`;
