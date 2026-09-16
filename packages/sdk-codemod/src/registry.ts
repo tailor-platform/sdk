@@ -209,13 +209,13 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
-    id: "v3/plugin-export-name-normalize",
+    id: "v2/plugin-export-name-normalize",
     name: "generator/generators → plugins export rename",
     description:
       "Rename the plugin config export (and its imports) from generator/generators to plugins",
     since: "1.0.0",
-    until: "3.0.0",
-    scriptPath: "v3/plugin-export-name-normalize/scripts/transform.js",
+    until: "2.18.0",
+    scriptPath: "v2/plugin-export-name-normalize/scripts/transform.js",
     legacyPatterns: [
       /export const generators? = definePlugins/,
       /import\s*\{[^}]*\b(generator|generators)\b[^}]*\}\s*from\s*["'][^"']*tailor\.config(\.(ts|tsx|js|mjs|cjs))?["']/,

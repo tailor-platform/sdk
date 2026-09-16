@@ -4,4 +4,4 @@ description: "Normalize the plugin config export name (generator/generators) to 
 engine: jssg
 language: typescript
 since: "1.0.0"
-until: "3.0.0"
+until: "2.18.0"

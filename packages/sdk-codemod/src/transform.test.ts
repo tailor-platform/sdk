@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import migrateGenerators from "../codemods/v2/define-generators-to-plugins/scripts/transform";
-import normalizePluginExport from "../codemods/v3/plugin-export-name-normalize/scripts/transform";
+import normalizePluginExport from "../codemods/v2/plugin-export-name-normalize/scripts/transform";
 import type { TransformFn } from "./runner";
 
 const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
@@ -134,8 +134,8 @@ export function read(plugins: unknown) { return generators; }
     await expect(runFixtureCases("v2/define-generators-to-plugins")).resolves.toBeUndefined();
   });
 
-  test("v3/plugin-export-name-normalize transforms correctly", async () => {
-    await expect(runFixtureCases("v3/plugin-export-name-normalize")).resolves.toBeUndefined();
+  test("v2/plugin-export-name-normalize transforms correctly", async () => {
+    await expect(runFixtureCases("v2/plugin-export-name-normalize")).resolves.toBeUndefined();
   });
 
   test("v2/plugin-cli-import transforms correctly", async () => {
