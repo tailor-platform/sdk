@@ -4,6 +4,7 @@ import { t } from "#/configure/types/type";
 import { ResolverSchema } from "#/parser/service/resolver/schema";
 import { serializeDateFields } from "./date";
 import { parseInputFields } from "./field-parse";
+import { Temporal } from "./temporal";
 import type { DateFieldOptions } from "#/configure/types/field.types";
 import type { output } from "#/types/helpers";
 
@@ -293,14 +294,12 @@ describe("Temporal.PlainDate representation", () => {
   });
 
   test("surfaces a missing Temporal global instead of reporting an invalid date", () => {
-    const originalTemporal = Temporal;
-    // @ts-expect-error simulating a runtime that never defines Temporal
-    delete globalThis.Temporal;
+    vi.stubGlobal("Temporal", undefined);
     try {
       const schema = t.object({ date: t.date({ as: "temporal" }) });
       expect(() => parse(schema, { date: "2026-09-07" })).toThrow(ReferenceError);
     } finally {
-      globalThis.Temporal = originalTemporal;
+      vi.unstubAllGlobals();
     }
   });
 

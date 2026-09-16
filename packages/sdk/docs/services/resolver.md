@@ -143,7 +143,7 @@ This option also works in nested objects and with `array: true` or `optional: tr
 
 An executor subscribing to the resolver with `resolverExecutedTrigger` receives the event as JSON, so `result` holds the `YYYY-MM-DD` string rather than a `Date`.
 
-Use `t.date({ as: "temporal" })` to work with the [`Temporal.PlainDate`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/PlainDate) global instead:
+Use `t.date({ as: "temporal" })` to work with the [`Temporal.PlainDate`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/PlainDate) value instead:
 
 ```typescript
 createResolver({
@@ -183,10 +183,17 @@ createResolver({
 
 All three field types support `array`, `optional`, nested objects, and input validators with the selected representation. Both deployed resolvers and `tailor function run` convert input and output. Executors using `resolverExecutedTrigger` receive date, datetime, and time results as strings.
 
-`Temporal` is a JavaScript engine global, not something this package exports. Two things depend on your own project, not on the SDK:
+The SDK supplies Temporal types, so existing projects can use `as: "temporal"` without changing `compilerOptions.lib`. To construct values or name their types, import `Temporal` from the SDK:
 
-- **Types**: TypeScript only knows the `Temporal` namespace when `compilerOptions.lib` includes `"ESNext"` (or `"ESNext.Temporal"` specifically), which requires TypeScript 6.0 or later — earlier versions don't ship that `lib` entry at all. Without it, a field using `as: "temporal"` reports a descriptive error naming this requirement, and code that tries to use it (for example calling `.add()` on the field) fails to type-check. You'll only see a raw "Cannot find namespace 'Temporal'" error if your own code names `Temporal` directly. This requirement only applies where you actually use `as: "temporal"`; other fields and projects that don't use this option type-check normally regardless of `lib` or TypeScript version.
-- **Runtime**: deployed resolvers and `tailor function run` execute on the Tailor Platform, which provides `Temporal`. If you call `Temporal` from your own code running elsewhere (for example a local Node.js script or a unit test for your resolver's `body`), check that your JavaScript runtime supports it — some versions require an experimental flag.
+```typescript
+import { Temporal } from "@tailor-platform/sdk/runtime";
+
+const day: Temporal.PlainDate = Temporal.PlainDate.from("2026-09-07");
+const at: Temporal.Instant = Temporal.Instant.from("2026-09-07T12:30:00Z");
+const time: Temporal.PlainTime = Temporal.PlainTime.from("12:30:59.999");
+```
+
+This import uses the runtime's Temporal implementation. Deployed resolvers and `tailor function run` use the Tailor Platform's native Temporal. The SDK's [`tailor-runtime` Vitest environment](../testing.md) installs a polyfill when Node.js does not provide Temporal; no Node.js flags or separate polyfill setup are needed. Other local runtimes must provide Temporal to construct or parse Temporal values. Importing the SDK and defining fields does not require it, so CLI configuration loading works on Node.js without Temporal. The SDK does not add ambient global Temporal types or include the polyfill in deployed functions.
 
 ### Custom Type Name (`typeName`)
 

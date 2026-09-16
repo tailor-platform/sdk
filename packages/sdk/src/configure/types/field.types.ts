@@ -3,13 +3,7 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type { OptionalGlobalInstance, TypeLevelError } from "#/types/helpers";
-
-type TemporalFieldValue<Field extends string, Member extends string> = [
-  OptionalGlobalInstance<"Temporal", Member>,
-] extends [never]
-  ? TypeLevelError<`t.${Field}({ as: "temporal" }) requires "ESNext.Temporal" in compilerOptions.lib (TypeScript 6.0+)`>
-  : OptionalGlobalInstance<"Temporal", Member>;
+import type { Temporal } from "temporal-spec";
 
 export interface EnumValue {
   value: string;
@@ -82,7 +76,7 @@ export type DateFieldOptions = FieldOptions & {
 export type DateFieldValue<As> = As extends "date"
   ? Date
   : As extends "temporal"
-    ? TemporalFieldValue<"date", "PlainDate">
+    ? Temporal.PlainDate
     : string;
 
 /** Options for a datetime field. */
@@ -94,7 +88,7 @@ export type DateTimeFieldOptions = FieldOptions & {
 export type DateTimeFieldValue<As> = As extends "date"
   ? Date
   : As extends "temporal"
-    ? TemporalFieldValue<"datetime", "Instant">
+    ? Temporal.Instant
     : As extends "string"
       ? string
       : string | Date;
@@ -112,7 +106,7 @@ export type TimeFieldOptions = FieldOptions & {
 export type TimeFieldValue<As> = As extends "date"
   ? Date
   : As extends "temporal"
-    ? TemporalFieldValue<"time", "PlainTime">
+    ? Temporal.PlainTime
     : string;
 
 // Return Output type based on FieldOptions.

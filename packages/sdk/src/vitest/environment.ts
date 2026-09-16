@@ -36,6 +36,12 @@ export default {
   async setup(global: typeof globalThis) {
     const g = global as Record<string, unknown>;
 
+    const temporalDescriptor = Object.getOwnPropertyDescriptor(g, "Temporal");
+    const needsTemporal = g.Temporal === undefined;
+    const temporal = needsTemporal
+      ? (await import("temporal-polyfill/full/implementation")).Temporal
+      : undefined;
+
     // Save and remove all non-whitelisted globals
     const saved: Record<string, PropertyDescriptor> = {};
     for (const key of Object.getOwnPropertyNames(g)) {
@@ -51,10 +57,25 @@ export default {
     // Install the base platform surface after whitelist cleanup. Per-namespace
     // mocks (workflow, tailordb, …) are installed on demand by `using xMock()`.
     installPlatformGlobals(global);
+    if (needsTemporal) {
+      Object.defineProperty(g, "Temporal", {
+        value: temporal,
+        writable: true,
+        configurable: true,
+      });
+    }
 
     return {
       teardown(global: typeof globalThis) {
         cleanupPlatformGlobals(global);
+
+        if (needsTemporal) {
+          if (temporalDescriptor) {
+            Object.defineProperty(global, "Temporal", temporalDescriptor);
+          } else {
+            Reflect.deleteProperty(global, "Temporal");
+          }
+        }
 
         // Restore removed globals
         const g = global as Record<string, unknown>;

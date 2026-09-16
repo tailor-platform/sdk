@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { expect, test } from "vitest";
+import { t } from "../../configure/types/type";
+import { serializeDateFields } from "../../runtime/date";
+import { Temporal } from "../../runtime/temporal";
 import { mockTailordb, mockWorkflow } from "../mock";
 import { generateId } from "./fixtures/uses-web-crypto";
 
@@ -50,16 +53,33 @@ test("Web Standard / ECMAScript globals remain available after whitelist cleanup
   expect(typeof Promise).toBe("function");
 });
 
-test("Temporal survives whitelist cleanup when the Node process provides it", () => {
-  // This suite's vitest.config.ts conditionally passes --harmony-temporal
-  // (only when the running Node doesn't already provide `Temporal`) so this
-  // assertion is meaningful either way; without the flag on a Node that
-  // needs it, `Temporal` would be undefined regardless of the environment's
-  // whitelist.
+test("Temporal is available in the platform environment without Node flags", () => {
   expect(typeof Temporal).toBe("object");
   expect(Temporal.PlainDate.from("2026-09-15").toString()).toBe("2026-09-15");
   expect(Temporal.Instant.from("2026-09-15T00:00:00+09:00").toString()).toBe(
     "2026-09-14T15:00:00Z",
   );
   expect(Temporal.PlainTime.from("12:30").toString({ smallestUnit: "minute" })).toBe("12:30");
+});
+
+test("Temporal fields parse and serialize through the environment implementation", () => {
+  const fields = t.object({
+    day: t.date({ as: "temporal" }),
+    at: t.datetime({ as: "temporal" }),
+    time: t.time({ as: "temporal" }),
+  });
+  const input = { day: "2026-09-16", at: "2026-09-16T00:00:00Z", time: "23:59" };
+  const result = fields.parse({ value: input, data: input, invoker: null });
+  if (result.issues) throw new Error(JSON.stringify(result.issues));
+  expect(result.value.day).toBeInstanceOf(Temporal.PlainDate);
+  expect(result.value.at).toBeInstanceOf(Temporal.Instant);
+  expect(result.value.time).toBeInstanceOf(Temporal.PlainTime);
+  result.value.time = result.value.time.with({ second: 59, millisecond: 999 });
+  expect(serializeDateFields(fields, result.value)).toEqual(input);
+  expect(
+    t.date({ as: "temporal" }).parse({ value: "2026-02-30", data: {}, invoker: null }),
+  ).toHaveProperty("issues");
+  expect(() =>
+    serializeDateFields(t.date({ as: "temporal" }), Temporal.PlainDate.from("+010000-01-01")),
+  ).toThrow("4-digit year");
 });

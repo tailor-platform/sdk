@@ -4,6 +4,7 @@ import { t } from "#/configure/types/type";
 import { ResolverSchema } from "#/parser/service/resolver/schema";
 import { serializeDateFields } from "./date";
 import { parseInputFields } from "./field-parse";
+import { Temporal } from "./temporal";
 import type { DateTimeFieldOptions, TimeFieldOptions } from "#/configure/types/field.types";
 import type { DeepReadonly, output, SerializeDates } from "#/types/helpers";
 
@@ -274,10 +275,10 @@ describe("Datetime and time representations", () => {
       });
       expect(() =>
         t.datetime({ as: "temporal" }).parse({ value: input.at, data: {}, invoker: null }),
-      ).toThrow(TypeError);
+      ).toThrow(ReferenceError);
       expect(() =>
         t.time({ as: "temporal" }).parse({ value: input.time, data: {}, invoker: null }),
-      ).toThrow(TypeError);
+      ).toThrow(ReferenceError);
     } finally {
       vi.unstubAllGlobals();
     }

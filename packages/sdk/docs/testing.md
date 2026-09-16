@@ -475,10 +475,26 @@ export default defineConfig({
 
 Inline projects inherit the root-level `tailorRuntime()` plugin by default on Vitest 5. On Vitest 4, add `extends: true` to each project; without it, `node:*` import blocking silently does not run.
 
+### Temporal
+
+The `tailor-runtime` environment supplies `Temporal` when Node.js does not provide it, including non-ISO calendars. An existing native implementation is preserved. No `test.execArgv` flags or separate polyfill setup are needed, and the environment restores the original global on teardown.
+
+Use the SDK import for both values and types without changing your TypeScript `lib` settings:
+
+```typescript
+import { Temporal } from "@tailor-platform/sdk/runtime";
+
+test("adds one day", () => {
+  const day: Temporal.PlainDate = Temporal.PlainDate.from("2026-09-07");
+  expect(day.add({ days: 1 }).toString()).toBe("2026-09-08");
+});
+```
+
+The polyfill is loaded by the test environment only. Deployed functions use the Platform's native Temporal.
+
 ### Known Limitations
 
 - **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
-- **`Temporal`** (used by `t.date`, `t.datetime`, and `t.time` with `as: "temporal"`) is not polyfilled. If your Node.js version doesn't provide it, add the flag it requires (for example `--harmony-temporal` on Node.js versions where it's still experimental) to your `vitest.config.ts`'s `test.execArgv`, gated on `Temporal` not already being defined so the flag doesn't linger once your Node.js version drops it: `execArgv: typeof Temporal === "undefined" ? ["--harmony-temporal"] : []`.
 
 ## Unit Tests
 

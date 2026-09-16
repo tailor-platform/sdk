@@ -1,3 +1,5 @@
+import type { Temporal } from "temporal-spec";
+
 export type Prettify<T> = {
   [K in keyof T as string extends K ? never : K]: T[K];
 } & {};
@@ -18,30 +20,11 @@ export type IsUnion<T, U extends T = T> = T extends unknown
     : true
   : never;
 
-// Naming an ambient global class directly (e.g. `Temporal.PlainDate`) would
-// force every consumer's tsc to resolve it to type-check a module that
-// mentions the name — even under `skipLibCheck: false`, and even for
-// consumers whose code never touches that global — because a public generic
-// type alias ships its full definition in the `.d.ts`. Reaching the global
-// structurally through `globalThis` instead means a `lib` that doesn't
-// declare it makes this resolve to `never` (a silent no-op wherever it's
-// unioned in) rather than a compile error, so a type can opt into an
-// experimental or optional ambient global without that requirement leaking
-// to consumers who never use it.
-export type OptionalGlobalInstance<
-  Namespace extends PropertyKey,
-  Member extends PropertyKey,
-> = typeof globalThis extends { [N in Namespace]: infer T }
-  ? Member extends keyof T
-    ? T[Member] extends new (...args: never[]) => infer Instance
-      ? Instance
-      : never
-    : never
-  : never;
-
 export type DeepWritable<T> = T extends
   | Date
-  | OptionalGlobalInstance<"Temporal", "PlainDate" | "Instant" | "PlainTime">
+  | Temporal.PlainDate
+  | Temporal.Instant
+  | Temporal.PlainTime
   | RegExp
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   | Function
@@ -52,7 +35,9 @@ export type DeepWritable<T> = T extends
 
 export type DeepReadonly<T> = T extends
   | Date
-  | OptionalGlobalInstance<"Temporal", "PlainDate" | "Instant" | "PlainTime">
+  | Temporal.PlainDate
+  | Temporal.Instant
+  | Temporal.PlainTime
   | RegExp
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   | Function
@@ -75,7 +60,9 @@ export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never
  */
 export type SerializeDates<T> = T extends
   | Date
-  | OptionalGlobalInstance<"Temporal", "PlainDate" | "Instant" | "PlainTime">
+  | Temporal.PlainDate
+  | Temporal.Instant
+  | Temporal.PlainTime
   ? string
   : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     T extends RegExp | Function

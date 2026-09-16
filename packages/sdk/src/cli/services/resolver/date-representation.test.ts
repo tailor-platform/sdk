@@ -35,6 +35,7 @@ describe("resolver Date representation bundles", () => {
       sourceFile,
       `
       import { createResolver, t } from "@tailor-platform/sdk";
+      import { Temporal } from "@tailor-platform/sdk/runtime";
       const date = t.date({ as: "date" }).validate(({ value }) =>
         value instanceof Date ? undefined : "Expected Date in validator"
       );
@@ -147,6 +148,7 @@ describe("resolver Date representation bundles", () => {
         sourceFile,
         `
       import { createResolver, t } from "@tailor-platform/sdk";
+      import { Temporal } from "@tailor-platform/sdk/runtime";
       const fields = {
         rows: t.object({
           day: t.date({ as: "temporal" }),
