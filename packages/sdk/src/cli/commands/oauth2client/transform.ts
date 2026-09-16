@@ -3,6 +3,7 @@ import {
   type AuthOAuth2Client,
   AuthOAuth2Client_GrantType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { logger } from "#/cli/shared/logger";
 
 const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string => {
   switch (grantType) {
@@ -56,6 +57,7 @@ export function toOAuth2ClientInfo(client: AuthOAuth2Client): OAuth2ClientInfo {
  * @returns OAuth2 client credentials
  */
 export function toOAuth2ClientCredentials(client: AuthOAuth2Client): OAuth2ClientCredentials {
+  logger.registerSecret(client.clientSecret);
   return {
     name: client.name,
     description: client.description,

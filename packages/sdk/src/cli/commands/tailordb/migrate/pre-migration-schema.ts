@@ -45,11 +45,17 @@ import {
 import type {
   DiffChange,
   FieldDiffChange,
+  FieldModifiedChange,
   IndexDiffChange,
+  MigrationDiff,
   NestedMemberRename,
   TableScriptsModifiedChange,
 } from "./diff-calculator";
-import type { SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
+import type {
+  SnapshotFieldConfig,
+  SnapshotIndexConfig,
+  TailorDBSnapshotType,
+} from "./snapshot-types";
 import type { PendingMigration } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -150,9 +156,20 @@ export function createPreMigrationSnapshotType(
 export function buildPreMigrationChangesMap(
   pendingMigrations: PendingMigration[],
 ): PreMigrationChangesMap {
+  return buildPreMigrationChangesMapFromDiffs(pendingMigrations.map((m) => m.diff));
+}
+
+/**
+ * {@link buildPreMigrationChangesMap} over the diffs themselves.
+ * @param diffs - Migration diffs to scan
+ * @returns Map of changes keyed by tableName/fieldName
+ */
+export function buildPreMigrationChangesMapFromDiffs(
+  diffs: readonly MigrationDiff[],
+): PreMigrationChangesMap {
   const map: PreMigrationChangesMap = new Map();
-  for (const migration of pendingMigrations) {
-    for (const change of migration.diff.changes) {
+  for (const diff of diffs) {
+    for (const change of diff.changes) {
       if (!isPreMigrationFieldChange(change)) continue;
       if (!change.fieldName) continue;
       const perType = map.get(change.tableName) ?? new Map<string, FieldDiffChange>();
@@ -182,9 +199,54 @@ export function applyPreMigrationFieldAdjustments(
   fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
   typeChanges: Map<string, FieldDiffChange>,
 ): void {
+  relaxFieldsForPreMigration(fields, typeChanges, {
+    toField: convertFieldConfigToProto,
+    adjustNestedMembers: (field, change) => {
+      restoreRemovedNestedMembers(field, change.before, change.after);
+      relaxRenamedNestedMembers(field, change.memberRenames ?? []);
+    },
+  });
+}
+
+/**
+ * {@link applyPreMigrationFieldAdjustments} on snapshot-shaped fields, for
+ * describing the Pre-phase schema outside a deploy. Nested members are left
+ * as the target declares them: the snapshot consumers read a nested field as
+ * one value.
+ * @param fields - Snapshot field map to adjust (mutated in place)
+ * @param typeChanges - Changes for this table, keyed by fieldName
+ */
+export function applyPreMigrationFieldAdjustmentsToSnapshot(
+  fields: Record<string, SnapshotFieldConfig>,
+  typeChanges: Map<string, FieldDiffChange>,
+): void {
+  relaxFieldsForPreMigration(fields, typeChanges, {
+    toField: (config) => structuredClone(config),
+  });
+}
+
+/** The properties the Pre-phase relaxes, shared by the proto and snapshot field shapes. */
+interface PreMigrationField {
+  required?: boolean;
+  unique?: boolean;
+  allowedValues?: { value?: string; description?: string }[];
+}
+
+interface PreMigrationFieldStrategy<F extends PreMigrationField> {
+  /** Build the field to re-insert from its snapshot config. */
+  toField: (config: SnapshotFieldConfig) => F;
+  /** Apply nested-member relaxations to a modified field. */
+  adjustNestedMembers?: (field: F, change: FieldModifiedChange) => void;
+}
+
+function relaxFieldsForPreMigration<F extends PreMigrationField>(
+  fields: Record<string, F>,
+  typeChanges: Map<string, FieldDiffChange>,
+  strategy: PreMigrationFieldStrategy<F>,
+): void {
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
-      defineRecordEntry(fields, fieldName, convertFieldConfigToProto(change.before));
+      defineRecordEntry(fields, fieldName, strategy.toField(change.before));
       continue;
     }
 
@@ -195,8 +257,8 @@ export function applyPreMigrationFieldAdjustments(
       // constraints. Unique is always deferred because stored values of a
       // previously removed field with the new name may still contain
       // duplicates until the copy overwrites them.
-      defineRecordEntry(fields, change.previousFieldName, convertFieldConfigToProto(change.before));
-      const newField = fields[fieldName];
+      defineRecordEntry(fields, change.previousFieldName, strategy.toField(change.before));
+      const newField: PreMigrationField | undefined = fields[fieldName];
       if (newField) {
         if (change.after.required) newField.required = false;
         if (change.after.unique ?? false) newField.unique = false;
@@ -207,29 +269,30 @@ export function applyPreMigrationFieldAdjustments(
     const field = fields[fieldName];
     if (!field) continue;
 
+    const relaxed: PreMigrationField = field;
+
     if (change.kind === "field_added") {
       if (change.after.required) {
-        field.required = false;
+        relaxed.required = false;
       }
       continue;
     }
 
     if (change.kind === "field_type_modified") {
-      defineRecordEntry(fields, fieldName, convertFieldConfigToProto(change.before));
+      defineRecordEntry(fields, fieldName, strategy.toField(change.before));
       continue;
     }
 
     const { before, after } = change;
 
-    restoreRemovedNestedMembers(field, before, after);
-    relaxRenamedNestedMembers(field, change.memberRenames ?? []);
+    strategy.adjustNestedMembers?.(field, change);
 
     if (!before.required && after.required) {
-      field.required = false;
+      relaxed.required = false;
     }
 
     if (!(before.unique ?? false) && (after.unique ?? false)) {
-      field.unique = false;
+      relaxed.unique = false;
     }
 
     // Snapshots omit allowedValues when an enum has no values left.
@@ -247,7 +310,7 @@ export function applyPreMigrationFieldAdjustments(
           valueMap.set(v.value, v.description ?? "");
         }
       }
-      field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
+      relaxed.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
         value,
         description,
       }));
@@ -336,9 +399,20 @@ export type PreMigrationIndexChangesMap = Map<string, Map<string, IndexDiffChang
 export function buildPreMigrationIndexChangesMap(
   pendingMigrations: PendingMigration[],
 ): PreMigrationIndexChangesMap {
+  return buildPreMigrationIndexChangesMapFromDiffs(pendingMigrations.map((m) => m.diff));
+}
+
+/**
+ * {@link buildPreMigrationIndexChangesMap} over the diffs themselves.
+ * @param diffs - Migration diffs to scan
+ * @returns Map of changes keyed by tableName/indexName
+ */
+export function buildPreMigrationIndexChangesMapFromDiffs(
+  diffs: readonly MigrationDiff[],
+): PreMigrationIndexChangesMap {
   const map: PreMigrationIndexChangesMap = new Map();
-  for (const migration of pendingMigrations) {
-    for (const change of migration.diff.changes) {
+  for (const diff of diffs) {
+    for (const change of diff.changes) {
       if (change.kind !== "index_added" && change.kind !== "index_modified") continue;
       const before = change.kind === "index_modified" ? change.before : undefined;
       if (!isBreakingIndexChange(change.tableName, change.indexName, before, change.after)) {
@@ -368,13 +442,33 @@ export function applyPreMigrationIndexAdjustments(
   indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>>,
   typeIndexChanges: Map<string, IndexDiffChange>,
 ): void {
+  relaxIndexesForPreMigration(indexes, typeIndexChanges, convertIndexToProto);
+}
+
+/**
+ * {@link applyPreMigrationIndexAdjustments} on snapshot-shaped indexes.
+ * @param indexes - Snapshot index map to adjust (mutated in place)
+ * @param typeIndexChanges - Changes for this table, keyed by indexName
+ */
+export function applyPreMigrationIndexAdjustmentsToSnapshot(
+  indexes: Record<string, SnapshotIndexConfig>,
+  typeIndexChanges: Map<string, IndexDiffChange>,
+): void {
+  relaxIndexesForPreMigration(indexes, typeIndexChanges, (index) => structuredClone(index));
+}
+
+function relaxIndexesForPreMigration<I>(
+  indexes: Record<string, I>,
+  typeIndexChanges: Map<string, IndexDiffChange>,
+  toIndex: (config: SnapshotIndexConfig) => I,
+): void {
   for (const [indexName, change] of typeIndexChanges) {
     if (change.kind === "index_added") {
       delete indexes[indexName];
       continue;
     }
     if (change.kind === "index_modified") {
-      defineRecordEntry(indexes, indexName, convertIndexToProto(change.before));
+      defineRecordEntry(indexes, indexName, toIndex(change.before));
     }
   }
 }

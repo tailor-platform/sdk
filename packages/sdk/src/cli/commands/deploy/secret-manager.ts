@@ -1,4 +1,5 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, writeMetadataLabels } from "./label";
@@ -214,6 +215,7 @@ export async function planSecretManager(context: PlanContext) {
           skippedSecrets.push(`${vaultName}/${secret.name}`);
           continue;
         }
+        logger.registerSecret(secret.value);
 
         if (existingSet.has(secret.name)) {
           const stored = state.vaults[vaultName]?.[secret.name];
