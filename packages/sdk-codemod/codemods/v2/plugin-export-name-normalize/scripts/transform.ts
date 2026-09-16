@@ -60,7 +60,7 @@ function findRenamableDeclarators(root: SgNode): SgNode[] {
  */
 function isTailorConfigImportSource(sourceText: string): boolean {
   const raw = sourceText.replace(/^["']|["']$/g, "");
-  const withoutExt = raw.replace(/\.(ts|tsx|js|mjs|cjs)$/, "");
+  const withoutExt = raw.replace(/\.(ts|tsx|js|mjs|cjs|mts|cts)$/, "");
   return /(^|\/)tailor\.config$/.test(withoutExt);
 }
 
@@ -306,16 +306,28 @@ function resolveRelativeModule(filePath: string, rawSpecifier: string): string |
 }
 
 /**
- * Whether the config module still exports `oldName` under its own name as a top-level
- * `definePlugins()` binding (renamed or not doesn't matter here — only presence does).
+ * Whether the config module still exports `oldName`, including unrelated exports.
  * @param configTree - Parsed root of the config module
  * @param oldName - Binding name to look for
  * @returns True when `oldName` is still its own top-level export
  */
 function stillExportsOwnName(configTree: SgNode, oldName: string): boolean {
-  return findRenamableDeclarators(configTree).some(
-    (decl) => decl.field("name")?.text() === oldName,
-  );
+  return configTree.children().some((stmt) => {
+    if (stmt.kind() !== "export_statement") return false;
+    if (stmt.children().some((child) => child.kind() === "*")) return true;
+    const declaration = stmt.field("declaration");
+    if (declaration?.field("name")?.text() === oldName) return true;
+    if (
+      declaration?.children().some((child) => {
+        const name = child.kind() === "variable_declarator" ? child.field("name") : null;
+        return name ? patternBindsName(name, oldName) : false;
+      })
+    )
+      return true;
+    return stmt
+      .findAll({ rule: { kind: "export_specifier" } })
+      .some((spec) => (spec.field("alias") ?? spec.field("name"))?.text() === oldName);
+  });
 }
 
 /**
@@ -372,7 +384,7 @@ function sourceConfigRenameIsSafe(filePath: string, modulePath: string, oldName:
   // itself collide (including with an unrelated existing `plugins`).
   if (fileAlreadyBindsPlugins(configTree)) return false;
   const matching = findRenamableDeclarators(configTree);
-  if (matching.length !== 1) return false;
+  if (matching.length !== 1 || matching[0]!.field("name")?.text() !== oldName) return false;
   const nameNode = matching[0]!.field("name")!;
   return !hasOtherBindingNamed(configTree, oldName, nameNode.range().start.index);
 }
@@ -443,3 +455,5 @@ export default function transform(source: string, filePath?: string): string | n
 
   return tree.commitEdits(edits);
 }
+
+export { reviewFindings } from "../../../../src/plugin-export-review";

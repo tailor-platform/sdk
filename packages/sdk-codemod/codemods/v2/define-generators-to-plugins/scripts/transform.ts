@@ -480,3 +480,5 @@ export default function transform(source: string): string | null {
 
   return result;
 }
+
+export { reviewFindings } from "../../../../src/plugin-export-review";
