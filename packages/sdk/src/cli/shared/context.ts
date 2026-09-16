@@ -1119,7 +1119,7 @@ export async function fetchLatestToken(
     resolvedUser,
     {
       accessToken: resp.accessToken,
-      refreshToken: resp.refreshToken ?? undefined,
+      refreshToken: resp.refreshToken ?? tokens.refreshToken,
     },
     newExpiresAt,
     { platformConfig, email },
