@@ -571,9 +571,6 @@ describe("Tailor Platform action pins", () => {
     const templatesSource = fs.readFileSync(path.join(import.meta.dirname, "templates.ts"), "utf8");
     const match = new RegExp(manager!.matchStrings[0]).exec(templatesSource);
 
-    // A silent regex/source mismatch here means Renovate stops bumping
-    // ACTIONS_SHA/ACTIONS_VERSION without failing anything until the
-    // stale pin trips the assertion above on the next release.
     expect(match?.groups).toEqual({
       currentDigest: ACTIONS_SHA,
       currentValue: ACTIONS_VERSION,
