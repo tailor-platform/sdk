@@ -1035,6 +1035,13 @@ export type ResolveStaticWebsiteUrlsOptions = {
    * deploy. A `NotFound` for a name in `expectedLocalNames` is unaffected.
    */
   failOnUnexpectedError?: boolean;
+  /**
+   * Shared `getStaticWebsite` lookups, keyed by site name. Pass the same map
+   * across multiple calls that may reference the same site (for example, one
+   * call per `env` key) so only the first caller for a given name issues the
+   * platform lookup; the rest reuse its result.
+   */
+  siteLookupCache?: Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>;
 };
 
 /** `name:url[/path]` static website placeholder, anchored at the end. */
@@ -1085,6 +1092,16 @@ export async function resolveStaticWebsiteUrls(
   const fallbackNote = keepUnresolved
     ? `Leaving the ${context} value unresolved.`
     : `Excluding from ${context}.`;
+  const siteLookupCache: NonNullable<ResolveStaticWebsiteUrlsOptions["siteLookupCache"]> =
+    options.siteLookupCache ?? new Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>();
+  const lookupSite = (siteName: string) => {
+    let lookup = siteLookupCache.get(siteName);
+    if (!lookup) {
+      lookup = client.getStaticWebsite({ workspaceId, name: siteName });
+      siteLookupCache.set(siteName, lookup);
+    }
+    return lookup;
+  };
 
   const results = await Promise.all(
     urls.map(async (url) => {
@@ -1095,10 +1112,7 @@ export async function resolveStaticWebsiteUrls(
         const pathSuffix = match[1] || "";
 
         try {
-          const response = await client.getStaticWebsite({
-            workspaceId,
-            name: siteName,
-          });
+          const response = await lookupSite(siteName);
 
           if (response.staticwebsite?.url) {
             return [response.staticwebsite.url + pathSuffix];
@@ -1172,6 +1186,12 @@ export async function resolveStaticWebsiteUrlsInEnv(
     return env ?? {};
   }
 
+  // Shared across every key below, so two keys referencing the same site
+  // (e.g. `siteUrl` and `callbackUrl`) issue one getStaticWebsite call, not
+  // one per key.
+  const siteLookupCache: NonNullable<ResolveStaticWebsiteUrlsOptions["siteLookupCache"]> =
+    new Map();
+
   const entries = await Promise.all(
     Object.entries(env).map(async ([key, value]) => {
       if (!hasStaticWebsiteUrlPlaceholder(value)) {
@@ -1182,7 +1202,7 @@ export async function resolveStaticWebsiteUrlsInEnv(
         workspaceId,
         [value],
         `env "${key}"`,
-        { ...options, keepUnresolved: true, failOnUnexpectedError: true },
+        { ...options, keepUnresolved: true, failOnUnexpectedError: true, siteLookupCache },
       );
       return [key, resolved ?? value] as const;
     }),
@@ -1210,7 +1230,7 @@ function warnUnresolvedEnvPlaceholders(
     if (expectedLocalNames?.has(siteName)) {
       logger.warn(
         `env "${key}" keeps the unresolved value "${value}" for now because static website "${siteName}" ` +
-          `is created later in this deploy; this deploy rebuilds automatically once it exists to inject the real URL.`,
+          `isn't available yet; this deploy rebuilds automatically once it is, to inject the real URL.`,
       );
       continue;
     }

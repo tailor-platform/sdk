@@ -475,8 +475,9 @@ export interface LoadApplicationParams extends DefineApplicationParams {
   workspaceId?: string;
   /**
    * Static website names planned by any config in the same deploy run. An
-   * unresolved placeholder naming one of these is kept without a warning,
-   * since the website exists only once this run finishes.
+   * unresolved placeholder naming one of these is kept (with a warning
+   * explaining that this run's rebuild will resolve it once the website
+   * exists), instead of the warning used for a name outside this set.
    */
   expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
   /**

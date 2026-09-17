@@ -1524,6 +1524,47 @@ describe("resolveStaticWebsiteUrls", () => {
       'Static website "my-site" has no URL assigned yet. Leaving the CORS value unresolved.',
     );
   });
+
+  test("looks up a site once even when multiple values reference it", async () => {
+    const getStaticWebsite = vi
+      .fn()
+      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url", "my-site:url/callback"],
+      "CORS",
+    );
+
+    expect(resolved).toEqual(["https://site.example.com", "https://site.example.com/callback"]);
+    expect(getStaticWebsite).toHaveBeenCalledOnce();
+  });
+
+  test("reuses a lookup from a shared siteLookupCache instead of calling getStaticWebsite again", async () => {
+    const getStaticWebsite = vi
+      .fn()
+      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const siteLookupCache: NonNullable<
+      Parameters<typeof resolveStaticWebsiteUrls>[4]
+    >["siteLookupCache"] = new Map();
+
+    await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", { siteLookupCache });
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url/callback"],
+      "OAuth2 redirect URIs",
+      {
+        siteLookupCache,
+      },
+    );
+
+    expect(resolved).toEqual(["https://site.example.com/callback"]);
+    expect(getStaticWebsite).toHaveBeenCalledOnce();
+  });
 });
 
 describe("resolveStaticWebsiteUrlsInEnv", () => {
@@ -1600,7 +1641,7 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
 
     expect(resolved).toEqual({ SITE_URL: "my-site:url" });
     expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
-      'env "SITE_URL" keeps the unresolved value "my-site:url" for now because static website "my-site" is created later in this deploy; this deploy rebuilds automatically once it exists to inject the real URL.',
+      'env "SITE_URL" keeps the unresolved value "my-site:url" for now because static website "my-site" isn\'t available yet; this deploy rebuilds automatically once it is, to inject the real URL.',
     );
   });
 
@@ -1638,6 +1679,24 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
     await expect(
       resolveStaticWebsiteUrlsInEnv(client, "ws-1", { SITE_URL: "my-site:url" }),
     ).rejects.toThrow(error);
+  });
+
+  test("looks up a site once even when multiple env keys reference it", async () => {
+    const getStaticWebsite = vi
+      .fn()
+      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
+      SITE_URL: "my-site:url",
+      CALLBACK_URL: "my-site:url/callback",
+    });
+
+    expect(resolved).toEqual({
+      SITE_URL: "https://site.example.com",
+      CALLBACK_URL: "https://site.example.com/callback",
+    });
+    expect(getStaticWebsite).toHaveBeenCalledOnce();
   });
 });
 
