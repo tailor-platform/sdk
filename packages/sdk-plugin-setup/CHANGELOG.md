@@ -1,5 +1,23 @@
 # @tailor-platform/sdk-plugin-setup
 
+## 0.5.0
+
+### Minor Changes
+
+- [#2365](https://github.com/tailor-platform/sdk/pull/2365) [`094bf55`](https://github.com/tailor-platform/sdk/commit/094bf55be5fb771ec5116a4317537799d987fe83) Thanks [@toiroakr](https://github.com/toiroakr)! - Move the `branch`, `tag`, `preview`, `action`, and `coordinate` generators under a new `ci` subcommand group: `tailor setup branch` is now `tailor setup ci branch` (likewise for `tag`, `preview`, `action`, and `coordinate`). `setup deps`, `setup check`, and `setup delete` are unchanged.
+  
+  The `--branch` alias of `setup branch`'s `--target` option is removed instead of being kept until v3 as previously announced; use `--target`. `setup` remains a beta command, so this and the regrouping above ship as an immediate breaking change rather than going through a deprecation cycle.
+  
+  `setup check` no longer takes a `--ci` flag: it now detects automatically whether it is running inside CI (the same way the rest of the CLI does) and adjusts its checks accordingly. Drop `--ci` from any script that passes it.
+
+### Patch Changes
+
+- [#2332](https://github.com/tailor-platform/sdk/pull/2332) [`766a3f9`](https://github.com/tailor-platform/sdk/commit/766a3f91acaf7fa9cd643f7c2bf9fe6055d578c5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.8.0
+
+- [#2378](https://github.com/tailor-platform/sdk/pull/2378) [`867d586`](https://github.com/tailor-platform/sdk/commit/867d586a8b08a27f0b1a26dec2f18efa7963e375) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.6.5
+- Updated dependencies [[`f5a3ad8`](https://github.com/tailor-platform/sdk/commit/f5a3ad8212dc5eec1ce54265d7a841aea96c7944), [`766a3f9`](https://github.com/tailor-platform/sdk/commit/766a3f91acaf7fa9cd643f7c2bf9fe6055d578c5), [`867d586`](https://github.com/tailor-platform/sdk/commit/867d586a8b08a27f0b1a26dec2f18efa7963e375), [`8d65e44`](https://github.com/tailor-platform/sdk/commit/8d65e44c5f4462637a9f3b60a2c0241b8edbb098)]:
+  - @tailor-platform/sdk@2.19.0
+
 ## 0.4.2
 
 ### Patch Changes
