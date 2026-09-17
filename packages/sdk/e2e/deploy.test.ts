@@ -697,6 +697,7 @@ import { defineConfig, defineStaticWebSite } from "@tailor-platform/sdk";
 const website = defineStaticWebSite("${siteName}", { description: "auto-redeploy e2e" });
 
 export default defineConfig({
+  id: "${crypto.randomUUID()}",
   name: "${appName}",
   staticWebsites: [website],
   env: { siteUrl: website.url },

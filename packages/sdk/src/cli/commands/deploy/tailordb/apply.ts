@@ -300,6 +300,20 @@ export async function applyTailorDB(
         migratingNamespaces,
       );
 
+      // Resolved before any mutation below (Step 1 onward), so a lookup
+      // failure other than "the site doesn't exist yet" (a permission error,
+      // a transient platform error, ...) aborts before schema/service changes
+      // run instead of after.
+      const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
+      const migrationCtx =
+        migrationsRequiringScripts.length > 0
+          ? await buildMigrationContextForScripts(
+              client,
+              migrationContext,
+              migrationsRequiringScripts,
+            )
+          : undefined;
+
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
@@ -418,18 +432,6 @@ export async function applyTailorDB(
           .filter((update) => isOutsideMigrations(update.request.namespaceName))
           .map((update) => client.updateTailorDBGQLPermission(update.request)),
       ]);
-
-      const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
-
-      // Step 2: Build migration context for script execution (if any migrations require scripts)
-      const migrationCtx =
-        migrationsRequiringScripts.length > 0
-          ? await buildMigrationContextForScripts(
-              client,
-              migrationContext,
-              migrationsRequiringScripts,
-            )
-          : undefined;
 
       // Step 3: Execute each migration sequentially: pre -> script -> post
       if (migrationsRequiringScripts.length > 0) {

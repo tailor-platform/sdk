@@ -543,6 +543,14 @@ async function planResolvers(
         },
       });
     });
+    // No detail is ever fetched for a deleted namespace's resolvers, so carry
+    // over whatever a prior call already cached instead of leaving this
+    // namespace out of the returned cache entirely.
+    existingResolversByNamespace.set(namespaceName, {
+      existingResolvers,
+      existingResolverDetails:
+        previousExisting?.get(namespaceName)?.existingResolverDetails ?? new Map(),
+    });
   }
   return { changeSet, existingResolversByNamespace };
 }

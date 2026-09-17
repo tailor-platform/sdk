@@ -608,6 +608,31 @@ describe("planPipeline (resolver service level)", () => {
       expect(second.changeSet.resolver.unchanged).toHaveLength(1);
       expect(second.changeSet.resolver.unchanged[0]!.name).toBe("test-resolver");
     });
+
+    test("skips re-listing resolvers for a deleted service's namespace when a prior fetch is provided", async () => {
+      const application = createMockApplication([createMockResolverService("new-resolver")]);
+      const client = createMockClient([{ name: "old-resolver", label: appName }], {
+        "old-resolver": [{ name: "stale-resolver", operation: "query" }],
+      });
+
+      const first = await planPipeline(buildCtx({ client, application }));
+      // Once for the locally declared "new-resolver" namespace, once for the
+      // remote-only "old-resolver" namespace being deleted.
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(2);
+      expect(first.changeSet.resolver.deletes).toHaveLength(1);
+      expect(first.changeSet.resolver.deletes[0]!.name).toBe("stale-resolver");
+
+      const second = await planPipeline(buildCtx({ client, application }), {
+        existingServices: first.existingServices,
+        existingResolvers: first.existingResolvers,
+      });
+
+      // Neither namespace's resolver list was re-fetched, including the
+      // deleted one: both came from the cache.
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(2);
+      expect(second.changeSet.resolver.deletes).toHaveLength(1);
+      expect(second.changeSet.resolver.deletes[0]!.name).toBe("stale-resolver");
+    });
   });
 });
 
