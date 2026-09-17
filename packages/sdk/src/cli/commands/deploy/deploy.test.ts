@@ -12,6 +12,7 @@ import {
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
+  needsEnvRebuild,
   planDeploymentTargets,
   shouldForceApplyAll,
 } from "./deploy";
@@ -1191,6 +1192,39 @@ describe("carryConfirmedAppDeletes", () => {
     carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
 
     expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
+  });
+});
+
+describe("needsEnvRebuild", () => {
+  function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
+    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+  }
+
+  test("is true when env references a site this deploy declares", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "my-site:url" })];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(true);
+  });
+
+  test("is false when env has no placeholder at all", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "https://already-resolved.example.com" })];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(false);
+  });
+
+  test("is false when the placeholder names a site this deploy does not declare", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "typo-site:url" })];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(false);
+  });
+
+  test("is true when only one of several deployments has a matching placeholder", () => {
+    const deployments = [
+      deploymentWithEnv({ siteUrl: "https://already-resolved.example.com" }),
+      deploymentWithEnv({ otherUrl: "my-site:url/callback" }),
+    ];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(true);
   });
 });
 

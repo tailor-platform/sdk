@@ -30,6 +30,7 @@ import {
   resolveStaticWebsiteUrlsInEnv,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
+  staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "./client";
 import { errorToJson } from "./error-json";
@@ -1364,6 +1365,20 @@ describe("errorHandlingInterceptor", () => {
     const error = await promise.catch((e: unknown) => e as ConnectError);
     expect(error.message).toContain("trn: trn:v1:workspace/staffing:tailordb/shared-db");
     expect(error.message).not.toContain("arbitrary-remote-value");
+  });
+});
+
+describe("staticWebsiteNameFromPlaceholder", () => {
+  test("extracts the name from a bare :url placeholder", () => {
+    expect(staticWebsiteNameFromPlaceholder("my-site:url")).toBe("my-site");
+  });
+
+  test("extracts the name from a :url placeholder with a path suffix", () => {
+    expect(staticWebsiteNameFromPlaceholder("my-site:url/callback")).toBe("my-site");
+  });
+
+  test("returns the value unchanged when it is not actually a placeholder", () => {
+    expect(staticWebsiteNameFromPlaceholder("https://example.com")).toBe("https://example.com");
   });
 });
 

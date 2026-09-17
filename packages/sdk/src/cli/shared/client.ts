@@ -1045,6 +1045,16 @@ export function hasStaticWebsiteUrlPlaceholder(value: unknown): value is string 
 }
 
 /**
+ * Extract the static website name from a `name:url[/path]` placeholder.
+ * @param value - A value already confirmed via {@link hasStaticWebsiteUrlPlaceholder}
+ * @returns The site name, or the whole value if it does not actually match (defensive fallback)
+ */
+export function staticWebsiteNameFromPlaceholder(value: string): string {
+  const match = value.match(STATIC_WEBSITE_URL_PATTERN);
+  return match?.index !== undefined ? value.substring(0, match.index) : value;
+}
+
+/**
  * Resolve "name:url" patterns to actual Static Website URLs.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID

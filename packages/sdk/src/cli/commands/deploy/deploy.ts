@@ -6,6 +6,7 @@ import { recoveryContextArgs } from "#/cli/shared/args";
 import {
   getOrNull,
   hasStaticWebsiteUrlPlaceholder,
+  staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "#/cli/shared/client";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -669,6 +670,32 @@ export function carryConfirmedAppDeletes(
 }
 
 /**
+ * Check whether `env` still holds a static website URL placeholder this same
+ * deploy is expected to resolve, once the site it names exists.
+ *
+ * A placeholder naming a site outside `expectedLocalStaticWebsiteNames` (a
+ * typo, or a site no config in this run declares) can never resolve here --
+ * rebuilding for it would just repeat the same lookup failure and warning a
+ * second time, so only a placeholder this deploy's own static websites can
+ * satisfy triggers the rebuild.
+ * @param deployments - Planned deployments to inspect
+ * @param expectedLocalStaticWebsiteNames - Static website names declared by any config in this deploy run
+ * @returns True when rebuilding now would actually resolve something
+ */
+export function needsEnvRebuild(
+  deployments: ReadonlyArray<PlannedDeployment>,
+  expectedLocalStaticWebsiteNames: ReadonlySet<string>,
+): boolean {
+  return deployments.some((deployment) =>
+    Object.values(deployment.application.env).some(
+      (value) =>
+        hasStaticWebsiteUrlPlaceholder(value) &&
+        expectedLocalStaticWebsiteNames.has(staticWebsiteNameFromPlaceholder(value)),
+    ),
+  );
+}
+
+/**
  * Strip the services a migration test deploy must not manage, so plan modules
  * see an application that already reflects the deploy's scope. Baseline deploys
  * omit executors and Auth user profiles (data loading must not trigger current
@@ -906,9 +933,7 @@ async function deployInternal(
     // don't need rebundling; see `loadApplication`'s `previous` handling).
     // TailorDB migration scripts don't need this either: they re-resolve
     // `env` themselves right before executing.
-    const needsUrlResolution = deployments.some((deployment) =>
-      Object.values(deployment.application.env).some(hasStaticWebsiteUrlPlaceholder),
-    );
+    const needsUrlResolution = needsEnvRebuild(deployments, expectedLocalStaticWebsiteNames);
 
     if (needsUrlResolution) {
       logger.info(
