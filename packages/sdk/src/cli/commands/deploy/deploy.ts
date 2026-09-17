@@ -16,6 +16,7 @@ import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { withSpan } from "#/cli/telemetry/index";
+import { assertDefined } from "#/utils/assert";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
 import { planApplication } from "./application";
@@ -29,6 +30,7 @@ import {
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { mergeBundledScripts } from "./bundled-scripts";
+import { type PlanSummary } from "./change-set";
 import {
   confirmImportantResourceDeletion,
   confirmMigrationCheckpointRepairs,
@@ -973,13 +975,32 @@ async function deployInternal(
       });
     });
 
-    let planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
-
     const validate = (deployments: ReadonlyArray<PlannedDeployment>) =>
       options?.noValidate
         ? logger.warn("Client-side validation skipped (--no-validate).")
         : validateDeploymentPlans(deployments);
     await validate(deployments);
+
+    // `env`'s static website placeholders are resolved once, at build time,
+    // before this deploy has applied anything. When one references a site the
+    // prerequisite apply below just creates, the placeholder is still
+    // literally present in `application.env` -- rebuilding now re-resolves it
+    // and rebundles only workflow jobs and auth hooks, the two kinds that
+    // embed `env` directly (resolver/executor read it through a separate,
+    // always-freshly-generated expression, not their function bundle, so they
+    // don't need rebundling; see `loadApplication`'s `previous` handling).
+    // TailorDB migration scripts don't need this either: they re-resolve
+    // `env` themselves right before executing.
+    const needsUrlResolution = needsEnvRebuild(deployments, expectedLocalStaticWebsiteNames);
+
+    // On the rebuild path below, the plan actually applied is the rebuilt
+    // one, so printing this first-pass plan would only show output that's
+    // about to be superseded. Dry run never rebuilds (it returns right
+    // below), so it always shows this first pass instead.
+    let planSummary: PlanSummary | undefined =
+      dryRun || !needsUrlResolution
+        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun })
+        : undefined;
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");
@@ -997,18 +1018,6 @@ async function deployInternal(
     // safe -- and it means a site this same deploy creates already exists by
     // the time env is read again below.
     await applyPrerequisiteResources(client, deployments);
-
-    // `env`'s static website placeholders are resolved once, at build time,
-    // before this deploy has applied anything. When one references a site the
-    // prerequisite apply above just created, the placeholder is still
-    // literally present in `application.env` -- rebuilding now re-resolves it
-    // and rebundles only workflow jobs and auth hooks, the two kinds that
-    // embed `env` directly (resolver/executor read it through a separate,
-    // always-freshly-generated expression, not their function bundle, so they
-    // don't need rebundling; see `loadApplication`'s `previous` handling).
-    // TailorDB migration scripts don't need this either: they re-resolve
-    // `env` themselves right before executing.
-    const needsUrlResolution = needsEnvRebuild(deployments, expectedLocalStaticWebsiteNames);
 
     if (needsUrlResolution) {
       logger.info(
@@ -1038,7 +1047,10 @@ async function deployInternal(
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {
-        logger.out({ summary: planSummary, status: "applied" });
+        logger.out({
+          summary: assertDefined(planSummary, "planSummary was never printed before this point"),
+          status: "applied",
+        });
       } else {
         logger.success("Successfully applied changes.");
       }
