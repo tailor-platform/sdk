@@ -1010,8 +1010,9 @@ export type ResolveStaticWebsiteUrlsOptions = {
    * Use this from plan-phase callers to avoid noisy warnings on the first
    * deployment, where the static website will be created later in the same
    * apply run. Other failure modes ("URL not yet assigned", transient RPC
-   * errors, permission errors) are intentionally not suppressed so that
-   * real platform problems still surface during planning.
+   * errors, permission errors) are unaffected by this option: they still log
+   * a warning, and separately, `failOnUnexpectedError` decides whether they
+   * abort instead.
    */
   expectedLocalNames?: ReadonlySet<string>;
   /**

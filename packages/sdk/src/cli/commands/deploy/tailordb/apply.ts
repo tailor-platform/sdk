@@ -271,6 +271,21 @@ export async function applyTailorDB(
     const { pendingMigrations, checkpointRepairs, namespacesWithMigrations, migrationHistoryIds } =
       await validateTailorDBMigrationState(client, result);
 
+    // Resolved before any mutation below -- including the checkpoint-repair
+    // labels right after this -- so a lookup failure other than "the site
+    // doesn't exist yet" (a permission error, a transient platform error,
+    // ...) aborts before any TailorDB migration state changes instead of
+    // after.
+    const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
+    const migrationCtx =
+      migrationsRequiringScripts.length > 0
+        ? await buildMigrationContextForScripts(
+            client,
+            migrationContext,
+            migrationsRequiringScripts,
+          )
+        : undefined;
+
     for (const repair of checkpointRepairs) {
       await updateMigrationLabel(
         client,
@@ -299,20 +314,6 @@ export async function applyTailorDB(
         migrationContext.workspaceId,
         migratingNamespaces,
       );
-
-      // Resolved before any mutation below (Step 1 onward), so a lookup
-      // failure other than "the site doesn't exist yet" (a permission error,
-      // a transient platform error, ...) aborts before schema/service changes
-      // run instead of after.
-      const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
-      const migrationCtx =
-        migrationsRequiringScripts.length > 0
-          ? await buildMigrationContextForScripts(
-              client,
-              migrationContext,
-              migrationsRequiringScripts,
-            )
-          : undefined;
 
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
