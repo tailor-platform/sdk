@@ -664,6 +664,43 @@ describe("planApplication", () => {
       );
     });
   });
+
+  describe("previous reuse", () => {
+    test("skips re-listing applications/labels when a prior fetch is provided, still re-resolving cors", async () => {
+      const client = createMockClient([
+        {
+          name: appName,
+          authNamespace: "auth-a",
+          authIdpConfigName: "idp-a",
+          cors: ["https://a.example.com", "https://b.example.com"],
+          allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+          disableIntrospection: true,
+          disabled: false,
+          subgraphs: matchingSubgraphs,
+        },
+      ]);
+      const application = createMockApplication({
+        cors: ["https://a.example.com", "https://b.example.com"],
+      });
+
+      const first = await planApplication(createContext(client, application));
+      expect(client.listApplications).toHaveBeenCalledTimes(1);
+      expect(client.getMetadata).toHaveBeenCalledTimes(1);
+      expect(first.unchanged).toHaveLength(1);
+
+      const second = await planApplication(createContext(client, application), undefined, {
+        existingApplications: first.existingApplications,
+        existingLabels: first.existingLabels,
+      });
+
+      // The application list/labels aren't re-fetched, but cors is re-resolved
+      // regardless (getStaticWebsite is mocked as always-NotFound here, which
+      // is why cors isn't itself asserted -- the point is the calls below).
+      expect(client.listApplications).toHaveBeenCalledTimes(1);
+      expect(client.getMetadata).toHaveBeenCalledTimes(1);
+      expect(second.unchanged).toHaveLength(1);
+    });
+  });
 });
 
 describe("diffHttpAdapterDisplay", () => {

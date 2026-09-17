@@ -37,6 +37,7 @@ function emptyInput(): ValidatePlanInput {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set(),
+      existingMap: {},
     },
     tailorDB: {
       changeSet: {
@@ -111,6 +112,8 @@ function emptyInput(): ValidatePlanInput {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set(),
+      existingServices: {},
+      existingResolvers: new Map(),
     },
     app: Object.assign(createChangeSet("Applications"), {
       conflicts: [],
@@ -122,6 +125,7 @@ function emptyInput(): ValidatePlanInput {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set(),
+      existingExecutors: {},
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),
@@ -133,6 +137,8 @@ function emptyInput(): ValidatePlanInput {
       resourceOwners: new Set(),
       appName: "my-app",
       appId: undefined,
+      existingJobFunctions: new Map(),
+      existingWorkflows: {},
     },
     workflowExecutionPolicy: {
       changeSet: createChangeSet("Workflow execution policies"),

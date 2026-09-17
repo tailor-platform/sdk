@@ -44,6 +44,7 @@ import {
   type MetadataLabelWrite,
   resolverTrn,
   resourceTrn,
+  type WithLabel,
   writeMetadataLabels,
 } from "./label";
 import {
@@ -56,6 +57,23 @@ import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
 import type { Resolver } from "#/types/resolver.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+
+type ExistingPipelineServices = WithLabel<
+  Awaited<ReturnType<OperatorClient["listPipelineServices"]>>["pipelineServices"][number]
+>;
+type ExistingPipelineResolverSummary = Awaited<
+  ReturnType<OperatorClient["listPipelineResolvers"]>
+>["pipelineResolvers"][number];
+type ExistingPipelineResolverDetail = Awaited<
+  ReturnType<OperatorClient["getPipelineResolver"]>
+>["pipelineResolver"];
+/** Per-namespace fetch results a replan reuses instead of re-querying the platform. */
+interface PreviousPipelineNamespaceResolvers {
+  existingResolvers: ReadonlyArray<ExistingPipelineResolverSummary>;
+  /** Full detail per resolver name, populated only for resolvers matched during the original diff. */
+  existingResolverDetails: ReadonlyMap<string, ExistingPipelineResolverDetail>;
+}
+type PreviousPipelineResolvers = ReadonlyMap<string, PreviousPipelineNamespaceResolvers>;
 
 // Scalar type mapping for field type conversion
 const SCALAR_TYPE_MAP = {
@@ -129,11 +147,23 @@ export async function applyPipeline(
 }
 
 /**
- * Plan resolver pipeline changes based on current and desired state.
+ * Plan pipeline (service and resolver) changes based on current and desired state.
  * @param context - Planning context
+ * @param previous - A prior call's fetched existing services/resolvers, reused instead of
+ *   re-querying the platform (the remote pipeline state cannot have changed between a
+ *   deploy's first plan and its conditional rebuild's replan; only `env` does, and it only
+ *   affects each resolver's desired `operationHook`, not what's fetched here)
+ * @param previous.existingServices - The prior call's fetched pipeline services
+ * @param previous.existingResolvers - The prior call's fetched resolvers, keyed by namespace
  * @returns Planned changes
  */
-export async function planPipeline(context: PlanContext) {
+export async function planPipeline(
+  context: PlanContext,
+  previous?: {
+    existingServices?: ExistingPipelineServices;
+    existingResolvers?: PreviousPipelineResolvers;
+  },
+) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const pipelines: Readonly<ResolverService>[] = [];
   if (!forRemoval) {
@@ -151,9 +181,17 @@ export async function planPipeline(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, application.id, pipelines);
+    existingServices,
+  } = await planServices(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    pipelines,
+    previous?.existingServices,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const { changeSet: resolverChangeSet } = await planResolvers(
+  const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
     client,
     workspaceId,
     pipelines,
@@ -169,6 +207,7 @@ export async function planPipeline(context: PlanContext) {
       dependentApps: context.dependentApps,
       runAppIds: context.runAppIds,
     },
+    previous?.existingResolvers,
   );
 
   return {
@@ -179,6 +218,8 @@ export async function planPipeline(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
+    existingServices,
+    existingResolvers: existingResolversByNamespace,
   };
 }
 
@@ -205,6 +246,7 @@ async function planServices(
   appName: string,
   appId: string | undefined,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
+  previousExisting?: ExistingPipelineServices,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "Pipeline services",
@@ -213,19 +255,24 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const existingServices = await fetchExistingResourcesWithLabels({
-    client,
-    fetchPage: async (pageToken, maxPageSize) => {
-      const { pipelineServices, nextPageToken } = await client.listPipelineServices({
-        workspaceId,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [pipelineServices, nextPageToken];
-    },
-    getName: (resource) => resource.namespace?.name,
-    getTrn: (name) => resourceTrn(workspaceId, "pipeline", name),
-  });
+  const fetchedServices =
+    previousExisting ??
+    (await fetchExistingResourcesWithLabels({
+      client,
+      fetchPage: async (pageToken, maxPageSize) => {
+        const { pipelineServices, nextPageToken } = await client.listPipelineServices({
+          workspaceId,
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [pipelineServices, nextPageToken];
+      },
+      getName: (resource) => resource.namespace?.name,
+      getTrn: (name) => resourceTrn(workspaceId, "pipeline", name),
+    }));
+  // Diffing below deletes matched entries to find what's left to remove, so
+  // work on a copy and keep `fetchedServices` itself pristine for reuse.
+  const existingServices = { ...fetchedServices };
 
   for (const pipeline of pipelines) {
     const existing = existingServices[pipeline.namespace];
@@ -291,7 +338,7 @@ async function planServices(
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners, existingServices: fetchedServices };
 }
 
 type CreateResolver = {
@@ -339,6 +386,7 @@ async function planResolvers(
   authNamespace: string | undefined,
   forceApplyAll = false,
   records: ResolverRecordInputs = {},
+  previousExisting?: PreviousPipelineResolvers,
 ) {
   const changeSet = createChangeSet<
     CreateResolver,
@@ -370,6 +418,10 @@ async function planResolvers(
   };
 
   const fetchResolvers = (namespaceName: string) => {
+    const cached = previousExisting?.get(namespaceName);
+    if (cached) {
+      return Promise.resolve(cached.existingResolvers);
+    }
     return fetchAllTolerant(async (pageToken, maxPageSize) => {
       const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
         workspaceId,
@@ -380,6 +432,10 @@ async function planResolvers(
       return [pipelineResolvers, nextPageToken];
     });
   };
+
+  // Reused when a namespace's fetch is served from `previousExisting`, so this
+  // replan's own return value can seed a further reuse the same way.
+  const existingResolversByNamespace = new Map<string, PreviousPipelineNamespaceResolvers>();
 
   const executorUsedResolvers = new Set(initialExecutorUsedResolvers);
   for (const executor of executors) {
@@ -405,6 +461,8 @@ async function planResolvers(
     const existingResolversMap = new Map(
       existingResolvers.map((resolver) => [resolver.name, resolver]),
     );
+    const cachedDetails = previousExisting?.get(pipeline.namespace)?.existingResolverDetails;
+    const existingResolverDetails = new Map<string, ExistingPipelineResolverDetail>();
     for (const resolver of Object.values(pipeline.resolvers)) {
       const desiredResolver = processResolver(
         pipeline.namespace,
@@ -416,11 +474,16 @@ async function planResolvers(
       const existingResolver = existingResolversMap.get(resolver.name);
       const metaRequest = await resolverMetaRequest(pipeline.namespace, resolver);
       if (existingResolver) {
-        const { pipelineResolver: existingResolverDetail } = await client.getPipelineResolver({
-          workspaceId,
-          namespaceName: pipeline.namespace,
-          resolverName: resolver.name,
-        });
+        const existingResolverDetail = cachedDetails?.has(resolver.name)
+          ? cachedDetails.get(resolver.name)
+          : (
+              await client.getPipelineResolver({
+                workspaceId,
+                namespaceName: pipeline.namespace,
+                resolverName: resolver.name,
+              })
+            ).pipelineResolver;
+        existingResolverDetails.set(resolver.name, existingResolverDetail);
         if (
           !forceApplyAll &&
           existingResolverDetail &&
@@ -452,6 +515,10 @@ async function planResolvers(
         });
       }
     }
+    existingResolversByNamespace.set(pipeline.namespace, {
+      existingResolvers,
+      existingResolverDetails,
+    });
     existingResolversMap.forEach((_resolver, name) => {
       changeSet.deletes.push({
         name,
@@ -477,7 +544,7 @@ async function planResolvers(
       });
     });
   }
-  return { changeSet };
+  return { changeSet, existingResolversByNamespace };
 }
 
 type ResolverDisplayEntry = GroupedDisplayEntry;

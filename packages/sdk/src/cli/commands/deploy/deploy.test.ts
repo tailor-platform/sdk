@@ -50,6 +50,7 @@ function emptyResults(): PlanResults {
       executorFunctionChanges: emptyFunctionChanges(),
       authHookFunctionChanges: emptyFunctionChanges(),
       ...emptyOwnership(),
+      existingMap: {},
     },
     tailorDB: {
       changeSet: {
@@ -112,6 +113,8 @@ function emptyResults(): PlanResults {
         resolver: createChangeSet("Pipeline resolvers"),
       },
       ...emptyOwnership(),
+      existingServices: {},
+      existingResolvers: new Map(),
     },
     app: Object.assign(
       createChangeSet("Applications"),
@@ -120,6 +123,7 @@ function emptyResults(): PlanResults {
     executor: {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),
+      existingExecutors: {},
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),
@@ -129,6 +133,8 @@ function emptyResults(): PlanResults {
       ...emptyOwnership(),
       appName: "my-app",
       appId: undefined,
+      existingJobFunctions: new Map(),
+      existingWorkflows: {},
     },
     workflowExecutionPolicy: {
       changeSet: createChangeSet("Workflow execution policies"),

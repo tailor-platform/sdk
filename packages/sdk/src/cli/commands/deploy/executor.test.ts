@@ -1423,6 +1423,35 @@ describe("planExecutor", () => {
       await expect(planExecutor(buildPlanContext(application))).rejects.toThrow(errorPattern);
     });
   });
+
+  describe("previousExisting reuse", () => {
+    test("skips re-listing executors when a prior fetch is provided", async () => {
+      const listExecutorExecutors = vi.fn().mockResolvedValue({
+        executors: [{ name: "existing-executor" }],
+        nextPageToken: "",
+      });
+      const client = {
+        listExecutorExecutors,
+        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      } as unknown as OperatorClient;
+
+      const application = createMockApplication([createMockExecutor("existing-executor")]);
+      const first = await planExecutor(buildPlanContext(application, { client }));
+      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(first.changeSet.creates).toHaveLength(0);
+      expect(first.changeSet.updates).toHaveLength(1);
+
+      const second = await planExecutor(
+        buildPlanContext(application, { client }),
+        first.existingExecutors,
+      );
+
+      // Not called a second time: the platform list is reused as-is.
+      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(second.changeSet.creates).toHaveLength(0);
+      expect(second.changeSet.updates).toHaveLength(1);
+    });
+  });
 });
 
 describe("formatExecutorChangeEntries", () => {

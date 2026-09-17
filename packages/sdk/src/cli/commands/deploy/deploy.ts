@@ -473,7 +473,14 @@ async function planDeploymentTarget(
       idpNames,
     };
     const functionRegistry = await withSpan("plan.functionRegistry", () =>
-      planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),
+      planFunctionRegistry(
+        client,
+        workspaceId,
+        application.name,
+        application.id,
+        functionEntries,
+        previous?.functionRegistry.existingMap,
+      ),
     );
     const unchangedWorkflowJobs = new Set(
       functionRegistry.changeSet.unchanged
@@ -504,9 +511,26 @@ async function planDeploymentTarget(
         : withSpan("plan.aiGateway", () => planAIGateway(ctx)),
       skip?.has("idp") && previous ? previous.idp : withSpan("plan.idp", () => planIdP(ctx)),
       skip?.has("auth") && previous ? previous.auth : withSpan("plan.auth", () => planAuth(ctx)),
-      withSpan("plan.pipeline", () => planPipeline(ctx)),
-      withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
-      withSpan("plan.executor", () => planExecutor(ctx)),
+      withSpan("plan.pipeline", () =>
+        planPipeline(
+          ctx,
+          previous && {
+            existingServices: previous.pipeline.existingServices,
+            existingResolvers: previous.pipeline.existingResolvers,
+          },
+        ),
+      ),
+      withSpan("plan.application", () =>
+        planApplication(
+          ctx,
+          httpAdapterBuildResult,
+          previous && {
+            existingApplications: previous.app.existingApplications,
+            existingLabels: previous.app.existingLabels,
+          },
+        ),
+      ),
+      withSpan("plan.executor", () => planExecutor(ctx, previous?.executor.existingExecutors)),
       withSpan("plan.workflow", () =>
         planWorkflow(
           client,
@@ -521,6 +545,10 @@ async function planDeploymentTarget(
             jobPublishEvents: collectWorkflowJobPublishEvents(target),
             dependentApps: ctx.dependentApps,
             runAppIds: ctx.runAppIds,
+          },
+          previous && {
+            existingJobFunctions: previous.workflow.existingJobFunctions,
+            existingWorkflows: previous.workflow.existingWorkflows,
           },
         ),
       ),

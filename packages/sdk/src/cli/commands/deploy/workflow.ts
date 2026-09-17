@@ -22,6 +22,7 @@ import {
   type MetadataLabelWrite,
   resourceTrn,
   sdkNameLabelKey,
+  type WithLabel,
   writeMetadataLabels,
 } from "./label";
 import {
@@ -501,6 +502,17 @@ function collectStaleJobFunctionNames(
  * @param eventPublishing - Executor subscriptions and explicit job flags driving execution event publishing
  * @returns Planned workflow changes
  */
+/**
+ * Previous fetch results a replan reuses instead of re-querying the platform for
+ * the workflow/job-function state that cannot have changed since the first plan.
+ */
+export interface PreviousWorkflowExisting {
+  existingJobFunctions: ReadonlyMap<string, ExistingJobFunction>;
+  existingWorkflows: WithLabel<
+    Awaited<ReturnType<OperatorClient["listWorkflows"]>>["workflows"][number]
+  >;
+}
+
 export async function planWorkflow(
   client: OperatorClient,
   workspaceId: string,
@@ -510,6 +522,7 @@ export async function planWorkflow(
   mainJobDeps: Record<string, string[]>,
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
   eventPublishing: WorkflowEventPublishing = {},
+  previousExisting?: PreviousWorkflowExisting,
 ) {
   const changeSet = createChangeSet<
     CreateWorkflow,
@@ -535,7 +548,9 @@ export async function planWorkflow(
     const explicit = eventPublishing.jobPublishEvents ?? new Map<string, boolean>();
     return jobNames.length > 0 && jobNames.every((jobName) => explicit.has(jobName));
   };
-  const existingJobFunctions = await fetchExistingJobFunctions(client, workspaceId);
+  const existingJobFunctions =
+    previousExisting?.existingJobFunctions ??
+    (await fetchExistingJobFunctions(client, workspaceId));
   const jobFunctionPublishEvents = resolveJobPublishEvents({
     workflows,
     mainJobDeps,
@@ -547,19 +562,24 @@ export async function planWorkflow(
     jobFunctionPublishEvents,
   );
 
-  const existingWorkflows = await fetchExistingResourcesWithLabels({
-    client,
-    fetchPage: async (pageToken, pageSize) => {
-      const response = await client.listWorkflows({
-        workspaceId,
-        pageToken,
-        pageSize,
-      });
-      return [response.workflows, response.nextPageToken];
-    },
-    getName: (resource) => resource.name,
-    getTrn: (name) => resourceTrn(workspaceId, "workflow", name),
-  });
+  const fetchedWorkflows =
+    previousExisting?.existingWorkflows ??
+    (await fetchExistingResourcesWithLabels({
+      client,
+      fetchPage: async (pageToken, pageSize) => {
+        const response = await client.listWorkflows({
+          workspaceId,
+          pageToken,
+          pageSize,
+        });
+        return [response.workflows, response.nextPageToken];
+      },
+      getName: (resource) => resource.name,
+      getTrn: (name) => resourceTrn(workspaceId, "workflow", name),
+    }));
+  // Diffing below deletes matched entries to find what's left to remove, so
+  // work on a copy and keep `fetchedWorkflows` itself pristine for reuse.
+  const existingWorkflows = { ...fetchedWorkflows };
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
@@ -712,6 +732,8 @@ export async function planWorkflow(
     unchangedWorkflowJobNames,
     jobFunctionDeletes,
     jobFunctionPublishEvents,
+    existingJobFunctions,
+    existingWorkflows: fetchedWorkflows,
   };
 }
 

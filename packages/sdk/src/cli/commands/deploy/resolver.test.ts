@@ -558,6 +558,57 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
     });
   });
+
+  describe("previousExisting reuse", () => {
+    function createPipeline(resolver: {
+      name: string;
+      operation: Resolver["operation"];
+      [key: string]: unknown;
+    }): ResolverService {
+      return {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+    }
+
+    test("skips re-listing services/resolvers and re-fetching resolver detail when a prior fetch is provided", async () => {
+      const pipeline = createPipeline({
+        name: "test-resolver",
+        operation: "query",
+        output: { type: "string", metadata: {} },
+      });
+      const application = createMockApplication([pipeline]);
+
+      // Plan once against an empty workspace to learn the desired shape, then
+      // plan again as if that shape were already deployed (so it comes back unchanged).
+      const emptyClient = createMockClient([]);
+      const createResult = await planPipeline(buildCtx({ client: emptyClient, application }));
+      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [desiredResolver as Record<string, unknown>],
+      });
+      const first = await planPipeline(buildCtx({ client, application }));
+      expect(client.listPipelineServices).toHaveBeenCalledTimes(1);
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(1);
+      expect(client.getPipelineResolver).toHaveBeenCalledTimes(1);
+      expect(first.changeSet.resolver.unchanged).toHaveLength(1);
+
+      const second = await planPipeline(buildCtx({ client, application }), {
+        existingServices: first.existingServices,
+        existingResolvers: first.existingResolvers,
+      });
+
+      // None of the fetches ran a second time: the platform state is reused as-is.
+      expect(client.listPipelineServices).toHaveBeenCalledTimes(1);
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(1);
+      expect(client.getPipelineResolver).toHaveBeenCalledTimes(1);
+      expect(second.changeSet.resolver.unchanged).toHaveLength(1);
+      expect(second.changeSet.resolver.unchanged[0]!.name).toBe("test-resolver");
+    });
+  });
 });
 
 describe("processResolver invoker mapping", () => {

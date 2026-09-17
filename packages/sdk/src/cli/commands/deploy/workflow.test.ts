@@ -1147,6 +1147,73 @@ describe("planWorkflow", () => {
       expect(jobs?.pinned).toBe(true);
     });
   });
+
+  describe("previousExisting reuse", () => {
+    test("skips re-listing workflows/job functions when a prior fetch is provided", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "sample-workflow",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "sample-workflow",
+            mainJobFunctionName: "validate-order",
+            jobFunctions: {
+              "check-inventory": "5",
+              "process-payment": "5",
+              "validate-order": "5",
+            },
+          },
+        },
+      ]);
+      const workflows = {
+        "sample-workflow": createMockWorkflow("sample-workflow", "validate-order"),
+      };
+      const mainJobDeps = {
+        "validate-order": ["validate-order", "check-inventory", "process-payment"],
+      };
+      const unchangedJobFunctions = new Set([
+        "validate-order",
+        "check-inventory",
+        "process-payment",
+      ]);
+
+      const first = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        workflows,
+        mainJobDeps,
+        unchangedJobFunctions,
+      );
+      expect(client.listWorkflows).toHaveBeenCalledTimes(1);
+      expect(client.listWorkflowJobFunctions).toHaveBeenCalledTimes(1);
+      expect(first.changeSet.unchanged).toHaveLength(1);
+
+      const second = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        workflows,
+        mainJobDeps,
+        unchangedJobFunctions,
+        {},
+        {
+          existingJobFunctions: first.existingJobFunctions,
+          existingWorkflows: first.existingWorkflows,
+        },
+      );
+
+      // Neither list call ran a second time: the platform state is reused as-is.
+      expect(client.listWorkflows).toHaveBeenCalledTimes(1);
+      expect(client.listWorkflowJobFunctions).toHaveBeenCalledTimes(1);
+      expect(second.changeSet.unchanged).toHaveLength(1);
+      expect(second.changeSet.unchanged[0]!.name).toBe("sample-workflow");
+    });
+  });
 });
 
 describe("formatWorkflowChangeEntries", () => {
