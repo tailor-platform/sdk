@@ -674,8 +674,10 @@ async function validateDeploymentPlans(
 /**
  * Carry the renamed-app cleanup deletes `confirmDeploymentPlans` appended
  * onto `original`'s `app.deletes` over onto the matching `rebuilt` entry.
- * `app` is always re-planned on a rebuild (its HTTP adapter bundles can
- * embed `env`), so a fresh `planApplication` result never carries them.
+ * `app` is always re-planned on a rebuild (its `cors` is resolved live at
+ * plan time, since the site it references may have just been created --
+ * HTTP adapter bundles themselves are reused as-is and don't embed `env`),
+ * so a fresh `planApplication` result never carries them.
  * @param original - Deployments as confirmed, before the rebuild
  * @param rebuilt - Freshly planned deployments the rebuild will apply instead
  * @param preConfirmAppDeleteCounts - Each application's `app.deletes.length` before confirm ran

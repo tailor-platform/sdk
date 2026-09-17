@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 import { userAgent } from "./user-agent";
@@ -1026,7 +1027,10 @@ export type ResolveStaticWebsiteUrlsOptions = {
   /**
    * When true, a lookup failure other than `NotFound` (a permission error, a
    * transient RPC failure, ...) is re-thrown instead of being downgraded to a
-   * warning. Callers where the fallback value ends up embedded in deployed
+   * warning. A site that exists but has no URL assigned yet is treated the
+   * same way, unless its name is in `expectedLocalNames` -- there, a rebuild
+   * is expected to resolve it, so it is kept unresolved with a warning
+   * instead. Callers where the fallback value ends up embedded in deployed
    * code use this, since shipping it silently is worse than failing the
    * deploy. A `NotFound` for a name in `expectedLocalNames` is unaffected.
    */
@@ -1098,6 +1102,17 @@ export async function resolveStaticWebsiteUrls(
 
           if (response.staticwebsite?.url) {
             return [response.staticwebsite.url + pathSuffix];
+          }
+          // A site outside `expectedLocalNames` has no pending rebuild that
+          // will ever re-check it, so this deploy is the only chance to catch
+          // a missing URL -- keeping it unresolved here would ship the
+          // literal placeholder with nothing left to fail on.
+          if (!expectedLocalNames?.has(siteName) && failOnUnexpectedError) {
+            throw CLIError({
+              code: "STATIC_WEBSITE_URL_NOT_ASSIGNED",
+              message: `Static website "${siteName}" exists but has no URL assigned yet.`,
+              suggestion: "Re-run the deploy once the static website's URL is available.",
+            });
           }
           logger.warn(`Static website "${siteName}" has no URL assigned yet. ${fallbackNote}`);
           return unresolved(url);

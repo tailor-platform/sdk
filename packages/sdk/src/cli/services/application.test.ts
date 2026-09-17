@@ -267,7 +267,7 @@ export default createWorkflow({ name: "main-workflow", mainJob });
     expect(application.env.siteUrl).toBe("my-site:url");
   });
 
-  test("keeps the placeholder without warning when the site is created later in the same deploy run", async () => {
+  test("keeps the placeholder with a warning when the site is created later in the same deploy run", async () => {
     const getStaticWebsite = vi
       .fn()
       .mockRejectedValue(new ConnectError("not found", Code.NotFound));

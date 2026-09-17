@@ -1497,6 +1497,33 @@ describe("resolveStaticWebsiteUrls", () => {
     expect(resolved).toEqual(["unknown:url"]);
     expect(warnSpy).toHaveBeenCalledOnce();
   });
+
+  test("fails instead of keeping an unresolved entry when a site has no URL yet, isn't expected locally, and failOnUnexpectedError is set", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    await expect(
+      resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+        failOnUnexpectedError: true,
+        keepUnresolved: true,
+      }),
+    ).rejects.toThrow('Static website "my-site" exists but has no URL assigned yet.');
+  });
+
+  test("still keeps an unassigned-URL entry unresolved when the site is expected locally, even with failOnUnexpectedError", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+      failOnUnexpectedError: true,
+      keepUnresolved: true,
+      expectedLocalNames: new Set(["my-site"]),
+    });
+
+    expect(resolved).toEqual(["my-site:url"]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" has no URL assigned yet. Leaving the CORS value unresolved.',
+    );
+  });
 });
 
 describe("resolveStaticWebsiteUrlsInEnv", () => {
@@ -1577,18 +1604,29 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
     );
   });
 
-  test("keeps the placeholder when the site exists but has no URL yet", async () => {
+  test("keeps the placeholder when the site exists but has no URL yet, for a name in expectedLocalNames", async () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
 
-    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
-      SITE_URL: "my-site:url",
-    });
+    const resolved = await resolveStaticWebsiteUrlsInEnv(
+      client,
+      "ws-1",
+      { SITE_URL: "my-site:url" },
+      { expectedLocalNames: new Set(["my-site"]) },
+    );
 
     expect(resolved).toEqual({ SITE_URL: "my-site:url" });
     expect(warnSpy).toHaveBeenCalledWith(
       'Static website "my-site" has no URL assigned yet. Leaving the env "SITE_URL" value unresolved.',
     );
+  });
+
+  test("fails instead of shipping the placeholder when the site has no URL yet and isn't in expectedLocalNames", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    await expect(
+      resolveStaticWebsiteUrlsInEnv(client, "ws-1", { SITE_URL: "my-site:url" }),
+    ).rejects.toThrow('Static website "my-site" exists but has no URL assigned yet.');
   });
 
   test("fails instead of shipping the placeholder when the lookup fails with an unexpected error", async () => {
