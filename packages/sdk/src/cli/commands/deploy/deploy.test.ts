@@ -1246,11 +1246,11 @@ describe("assertEnvResolvedAfterRebuild", () => {
     expect(() => assertEnvResolvedAfterRebuild(deployments, new Set(["my-site"]))).not.toThrow();
   });
 
-  test("throws when env still holds an unresolved placeholder for a site this deploy just created", () => {
+  test("throws when env still holds an unresolved placeholder after the rebuild", () => {
     const deployments = [deploymentWithEnv({ siteUrl: "my-site:url" })];
 
     expect(() => assertEnvResolvedAfterRebuild(deployments, new Set(["my-site"]))).toThrow(
-      "could not be resolved after rebuilding",
+      "still has no URL after rebuilding",
     );
   });
 });

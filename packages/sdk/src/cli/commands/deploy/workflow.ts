@@ -491,18 +491,6 @@ function collectStaleJobFunctionNames(
 }
 
 /**
- * Plan workflow changes and job functions based on current and desired state.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param appName - Application name
- * @param appId - Application ID used for workflow metadata when available
- * @param workflows - Parsed workflows
- * @param mainJobDeps - Main job dependencies by workflow
- * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
- * @param eventPublishing - Executor subscriptions and explicit job flags driving execution event publishing
- * @returns Planned workflow changes
- */
-/**
  * Previous fetch results a replan reuses instead of re-querying the platform for
  * the workflow/job-function state that cannot have changed since the first plan.
  */
@@ -513,6 +501,20 @@ export interface PreviousWorkflowExisting {
   >;
 }
 
+/**
+ * Plan workflow changes and job functions based on current and desired state.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param appName - Application name
+ * @param appId - Application ID used for workflow metadata when available
+ * @param workflows - Parsed workflows
+ * @param mainJobDeps - Main job dependencies by workflow
+ * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
+ * @param eventPublishing - Executor subscriptions and explicit job flags driving execution event publishing
+ * @param previousExisting - A prior call's fetched existing job functions/workflows, reused instead of
+ *   re-querying the platform
+ * @returns Planned workflow changes
+ */
 export async function planWorkflow(
   client: OperatorClient,
   workspaceId: string,

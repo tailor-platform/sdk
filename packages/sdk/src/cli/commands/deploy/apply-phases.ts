@@ -20,6 +20,16 @@ import type { OperatorClient } from "#/cli/shared/client";
 
 export type PlannedDeployment = {
   readonly application: Readonly<Application>;
+  /**
+   * Whether every resource is force-reapplied because an owned resource's
+   * `sdk-version` label mismatches the running SDK. Computed once per deploy
+   * and reused as-is on a conditional rebuild's replan (see
+   * {@link ReusablePlanKind}'s doc comment): recomputing it there could flip
+   * it to `false` if the prerequisite-resource apply already refreshed the
+   * one stale label that made it `true`, silently dropping a force-reapply
+   * the user already confirmed.
+   */
+  readonly forceApplyAll: boolean;
   readonly functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   readonly tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   readonly staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
@@ -36,7 +46,7 @@ export type PlannedDeployment = {
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export type PlanResults = Omit<PlannedDeployment, "application">;
+export type PlanResults = Omit<PlannedDeployment, "application" | "forceApplyAll">;
 
 /**
  * Resource kinds whose plan cannot change between a deploy's first plan and
@@ -55,7 +65,7 @@ export type ReusablePlanKind =
   | "auth";
 
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
-  const { application: _application, ...results } = deployment;
+  const { application: _application, forceApplyAll: _forceApplyAll, ...results } = deployment;
   return results;
 }
 

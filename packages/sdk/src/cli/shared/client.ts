@@ -1132,9 +1132,10 @@ export type ApplicationEnv = Readonly<Record<string, string | number | boolean>>
  * delivered as the literal string `"my-site:url"`. Each placeholder value goes
  * through `resolveStaticWebsiteUrls`, which keeps the same first-deployment
  * semantics as `cors` and OAuth2 redirect URIs for a website this deploy run
- * is about to create (left as-is, no warning), but -- unlike `cors` -- fails
- * the deploy on any other lookup failure instead of shipping the unresolved
- * placeholder into deployed code.
+ * is about to create (left as-is, with a warning naming the site and noting
+ * this deploy will rebuild to inject the real URL once it exists), but --
+ * unlike `cors` -- fails the deploy on any other lookup failure instead of
+ * shipping the unresolved placeholder into deployed code.
  *
  * Values that are not placeholders -- and the record itself when it holds no
  * placeholder at all -- are returned untouched, so the common case costs no

@@ -700,6 +700,40 @@ describe("planApplication", () => {
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
       expect(second.unchanged).toHaveLength(1);
     });
+
+    test("treats a legitimately-undefined previous.existingLabels as already fetched, not a cache miss", async () => {
+      const client = createMockClient([
+        {
+          name: appName,
+          authNamespace: "auth-a",
+          authIdpConfigName: "idp-a",
+          cors: ["https://a.example.com", "https://b.example.com"],
+          allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+          disableIntrospection: true,
+          disabled: false,
+          subgraphs: matchingSubgraphs,
+        },
+      ]);
+      // No metadata found for this app's own trn, e.g. a brand new resource.
+      client.getMetadata = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+      const application = createMockApplication({
+        cors: ["https://a.example.com", "https://b.example.com"],
+      });
+
+      const first = await planApplication(createContext(client, application));
+      expect(client.getMetadata).toHaveBeenCalledTimes(1);
+      expect(first.existingLabels).toBeUndefined();
+
+      const second = await planApplication(createContext(client, application), undefined, {
+        existingApplications: first.existingApplications,
+        existingLabels: first.existingLabels,
+      });
+
+      // `previous` was given, so the cached `undefined` is honored as-is
+      // instead of being treated as "no previous fetch happened".
+      expect(client.getMetadata).toHaveBeenCalledTimes(1);
+      expect(second.existingLabels).toBeUndefined();
+    });
   });
 });
 

@@ -377,8 +377,12 @@ export async function planApplication(
     appId: application.id,
     metadata: application.config.metadata,
   });
-  const existingLabels =
-    previous?.existingLabels ?? (await fetchAppLabels(client, workspaceId, application.name));
+  // `previous.existingLabels` can legitimately be `undefined` (no metadata
+  // found on the first fetch), so branch on `previous` itself -- `??` would
+  // treat that cached `undefined` as a cache miss and re-fetch needlessly.
+  const existingLabels = previous
+    ? previous.existingLabels
+    : await fetchAppLabels(client, workspaceId, application.name);
   assertLabelBudget(application.name, existingLabels, metaRequest);
   const metadataDetails = diffMetadataDisplay(existingLabels, application.config.metadata);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);

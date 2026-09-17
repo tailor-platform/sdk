@@ -260,7 +260,7 @@ export default defineConfig({
 });
 ```
 
-This resolves even when the same deploy both creates the website and reads its URL — one `deploy` call is enough, with no second, manually-triggered `deploy` needed. If the referenced website does not exist at all, the CLI warns and leaves the unresolved reference in place. If the website was just created but its URL still isn't ready by the time this same deploy checks again, the deploy fails instead of shipping the unresolved reference. `function run` does not resolve this reference; it passes the value exactly as declared.
+This resolves even when the same deploy both creates the website and reads its URL — one `deploy` call is enough, with no second, manually-triggered `deploy` needed. If the referenced website does not exist at all, the CLI warns and leaves the unresolved reference in place. If the reference still can't be resolved after this deploy's rebuild, the deploy fails instead of shipping the unresolved reference. `function run` does not resolve this reference; it passes the value exactly as declared.
 
 `tailor.config.ts` runs locally when an SDK command loads the config. If values come from your shell or an env file, SDK commands can load them before config evaluation with the global [`--env-file`](./cli-reference.md#environment-file-loading) and `--env-file-if-exists` options:
 

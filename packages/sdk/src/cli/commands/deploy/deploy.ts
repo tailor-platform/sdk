@@ -445,9 +445,13 @@ async function planDeploymentTarget(
     workflowBuildResult?.usedJobNames ?? [],
   );
   const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs, bundledScripts);
-  const forceApplyAll = await withSpan("plan.detectSdkVersionChange", () =>
-    shouldForceApplyAll(client, workspaceId, application, functionEntries),
-  );
+  // Reused as-is on a rebuild's replan -- see `PlannedDeployment.forceApplyAll`'s
+  // doc comment for why recomputing it there is unsafe.
+  const forceApplyAll = previous
+    ? previous.forceApplyAll
+    : await withSpan("plan.detectSdkVersionChange", () =>
+        shouldForceApplyAll(client, workspaceId, application, functionEntries),
+      );
 
   return withSpan("plan", async () => {
     const applications = targets.map((target) => target.application);
@@ -571,6 +575,7 @@ async function planDeploymentTarget(
 
     return {
       application,
+      forceApplyAll,
       functionRegistry,
       tailorDB,
       staticWebsite,
@@ -740,8 +745,8 @@ export function assertEnvResolvedAfterRebuild(
   throw CLIError({
     code: "STATIC_WEBSITE_URL_NOT_RESOLVED",
     message:
-      "A static website referenced by env was created in this deploy, but its URL could " +
-      "not be resolved after rebuilding.",
+      "A static website referenced by env still has no URL after rebuilding to pick up " +
+      "this deploy's own config changes.",
     suggestion: "Re-run the deploy; the static website's URL may not be assigned yet.",
   });
 }
@@ -885,6 +890,13 @@ async function deployInternal(
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
+    // Reused on a rebuild's replan (see below) instead of re-scanning
+    // metadata: applyPrerequisiteResources only touches
+    // secretManager/staticWebsite/aiGateway/idp/auth labels, and none of the
+    // 5 resource kinds a rebuild actually re-diffs (functionRegistry,
+    // pipeline, application, executor, workflow) read metadata for those
+    // kinds, so the first pass's batch cannot be stale for them.
+    let firstMetadataClient: OperatorClient | undefined;
     const plan = async (
       targets: ReadonlyArray<BuiltDeploymentTarget>,
       reuse?: {
@@ -896,13 +908,17 @@ async function deployInternal(
         ...target,
         application: adjustApplicationForMigrationTest(target.application, internalContext),
       }));
-      const metadataClient = await withSpan("plan.metadataLookup", () =>
-        createMetadataLookupClient({
-          client,
-          workspaceId,
-          applications: planTargets.map(({ application }) => application),
-        }),
-      );
+      const metadataClient =
+        reuse && firstMetadataClient
+          ? firstMetadataClient
+          : await withSpan("plan.metadataLookup", () =>
+              createMetadataLookupClient({
+                client,
+                workspaceId,
+                applications: planTargets.map(({ application }) => application),
+              }),
+            );
+      firstMetadataClient = metadataClient;
       const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
       const deployments = await planDeploymentTargets({
         targets: planTargets,
