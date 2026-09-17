@@ -8,6 +8,7 @@ import { mergeBundledScripts } from "./bundled-scripts";
 import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
+  assertEnvResolvedAfterRebuild,
   carryConfirmedAppDeletes,
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
@@ -1231,6 +1232,26 @@ describe("needsEnvRebuild", () => {
     ];
 
     expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(true);
+  });
+});
+
+describe("assertEnvResolvedAfterRebuild", () => {
+  function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
+    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+  }
+
+  test("does not throw when env holds no placeholder for a locally declared site", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "https://my-site.example.com" })];
+
+    expect(() => assertEnvResolvedAfterRebuild(deployments, new Set(["my-site"]))).not.toThrow();
+  });
+
+  test("throws when env still holds an unresolved placeholder for a site this deploy just created", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "my-site:url" })];
+
+    expect(() => assertEnvResolvedAfterRebuild(deployments, new Set(["my-site"]))).toThrow(
+      "could not be resolved after rebuilding",
+    );
   });
 });
 

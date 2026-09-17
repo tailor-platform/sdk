@@ -128,7 +128,7 @@ export default defineConfig({
 });
 ```
 
-Resolver, executor, workflow job, and auth before-login hook code, and TailorDB migration scripts, that read [`env`](../configuration.md#environment-variables) receive the deployed URL, even when the same deploy both creates the website and reads its URL — one `deploy` call resolves it, with no second, manually-triggered `deploy` needed. If the referenced website does not exist at all, the CLI warns and leaves the unresolved reference in place. `function run` does not resolve this reference; it passes the value exactly as declared.
+Resolver, executor, workflow job, and auth before-login hook code, and TailorDB migration scripts, that read [`env`](../configuration.md#environment-variables) receive the deployed URL, even when the same deploy both creates the website and reads its URL — one `deploy` call resolves it, with no second, manually-triggered `deploy` needed. If the referenced website does not exist at all, the CLI warns and leaves the unresolved reference in place. If the website was just created but its URL still isn't ready by the time this same deploy checks again, the deploy fails instead of shipping the unresolved reference. `function run` does not resolve this reference; it passes the value exactly as declared.
 
 ## Complete Example
 

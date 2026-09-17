@@ -78,6 +78,24 @@ function makeStep(deployments: ReadonlyArray<PlannedDeployment>) {
 }
 
 /**
+ * Validate every deployment's TailorDB migration state before anything else
+ * is applied, so a stale migration checkpoint or schema fails the deploy with
+ * nothing yet mutated -- instead of after prerequisite resources (secret
+ * manager, static website, AI gateway, IdP, auth) are already created or
+ * updated.
+ * @param client - Operator client instance
+ * @param deployments - Planned deployments to preflight
+ */
+export async function preflightAllTailorDB(
+  client: OperatorClient,
+  deployments: ReadonlyArray<PlannedDeployment>,
+): Promise<void> {
+  await withSpan("apply.preflight", async () => {
+    await forEachDeployment(deployments, (d) => preflightTailorDB(client, d.tailorDB));
+  });
+}
+
+/**
  * Apply the resource kinds that a static website's URL can never reference
  * (secretManager, staticWebsite, aiGateway, idp, and auth's prerequisite
  * resources): creating them first means staticWebsite's URL already exists
@@ -122,10 +140,6 @@ export async function applyRemainingResources(
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
   const step = makeStep(deployments);
-
-  await withSpan("apply.preflight", async () => {
-    await forEachDeployment(deployments, (d) => preflightTailorDB(client, d.tailorDB));
-  });
 
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
@@ -217,9 +231,10 @@ export async function applyRemainingResources(
 
 /**
  * Apply planned deploy changes for one or more applications in one shot:
- * {@link applyPrerequisiteResources} followed by {@link applyRemainingResources}.
- * `deployInternal` calls the two halves separately instead, so it can rebuild
- * between them when a static website was just created.
+ * {@link preflightAllTailorDB}, {@link applyPrerequisiteResources}, then
+ * {@link applyRemainingResources}. `deployInternal` calls the three parts
+ * separately instead, so it can rebuild between the last two when a static
+ * website was just created.
  * @param client - Operator client instance
  * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
@@ -229,6 +244,7 @@ export async function applyDeploymentPlans(
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
+  await preflightAllTailorDB(client, deployments);
   await applyPrerequisiteResources(client, deployments);
   await applyRemainingResources(client, workspaceId, deployments);
 }

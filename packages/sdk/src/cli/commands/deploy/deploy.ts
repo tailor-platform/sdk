@@ -23,6 +23,7 @@ import {
   applyPrerequisiteResources,
   applyRemainingResources,
   deploymentPlanResults,
+  preflightAllTailorDB,
   type PlannedDeployment,
   type ReusablePlanKind,
 } from "./apply-phases";
@@ -724,6 +725,28 @@ export function needsEnvRebuild(
 }
 
 /**
+ * Fail the deploy if `env` still holds an unresolved static website
+ * placeholder after the rebuild meant to resolve it (e.g. the platform
+ * hasn't assigned the site's URL yet) -- shipping the placeholder into
+ * deployed code would silently defeat the whole point of rebuilding.
+ * @param rebuiltDeployments - The rebuild's planned deployments
+ * @param expectedLocalStaticWebsiteNames - Static website names declared by any config in this deploy run
+ */
+export function assertEnvResolvedAfterRebuild(
+  rebuiltDeployments: ReadonlyArray<PlannedDeployment>,
+  expectedLocalStaticWebsiteNames: ReadonlySet<string>,
+): void {
+  if (!needsEnvRebuild(rebuiltDeployments, expectedLocalStaticWebsiteNames)) return;
+  throw CLIError({
+    code: "STATIC_WEBSITE_URL_NOT_RESOLVED",
+    message:
+      "A static website referenced by env was created in this deploy, but its URL could " +
+      "not be resolved after rebuilding.",
+    suggestion: "Re-run the deploy; the static website's URL may not be assigned yet.",
+  });
+}
+
+/**
  * Strip the services a migration test deploy must not manage, so plan modules
  * see an application that already reflects the deploy's scope. Baseline deploys
  * omit executors and Auth user profiles (data loading must not trigger current
@@ -945,6 +968,12 @@ async function deployInternal(
       return undefined;
     }
 
+    // Validate TailorDB's migration state before anything is applied, so a
+    // stale migration checkpoint or schema fails the deploy with nothing yet
+    // mutated -- not after the prerequisite resources below are already
+    // created or updated.
+    await preflightAllTailorDB(client, deployments);
+
     // secretManager/staticWebsite/aiGateway/idp/auth's prerequisite resources
     // can never reference a static website's URL, so applying them first is
     // safe -- and it means a site this same deploy creates already exists by
@@ -980,6 +1009,7 @@ async function deployInternal(
         skip: REUSABLE_ON_REBUILD_KINDS,
         previousDeployments: deployments,
       });
+      assertEnvResolvedAfterRebuild(rebuilt.deployments, expectedLocalStaticWebsiteNames);
       carryConfirmedAppDeletes(deployments, rebuilt.deployments, preConfirmAppDeleteCounts);
       await validate(rebuilt.deployments);
       planSummary = printDeploymentPlans(rebuilt.deployments, { dryRun: options?.dryRun });

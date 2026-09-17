@@ -63,13 +63,13 @@ deploy
 │   ├── plan.workflowExecutionPolicy
 │   └── plan.secretManager
 ├── confirm
+├── apply.preflight
 ├── apply.createUpdatePrerequisiteServices
 │   ├── apply.secretManager.createUpdate
 │   ├── apply.staticWebsite.createUpdate
 │   ├── apply.aiGateway.createUpdate
 │   ├── apply.idp.createUpdate
 │   └── apply.auth.createUpdatePrerequisites
-├── apply.preflight
 ├── apply.createUpdateServices
 │   ├── apply.functionRegistry.createUpdate
 │   ├── apply.tailorDB.createUpdate
@@ -93,11 +93,14 @@ deploy
 With `--build-only`, `config.preflight` is omitted and the config preparation
 and loading spans run under `build` instead.
 
-`apply.createUpdatePrerequisiteServices` covers the resource kinds that can
-never hold a reference to a static website's URL. Applying them first means a
-site this same deploy creates already exists by the time the rest of the
-deploy needs it. If nothing in `env` referenced such a site, the conditional
-rebuild/replan step is skipped entirely and `apply.preflight` follows
+`apply.preflight` validates every deployment's TailorDB migration state before
+anything is applied, so a stale migration checkpoint or schema fails the
+deploy with nothing yet mutated. `apply.createUpdatePrerequisiteServices`
+covers the resource kinds that can never hold a reference to a static
+website's URL. Applying them first means a site this same deploy creates
+already exists by the time the rest of the deploy needs it. If nothing in
+`env` referenced such a site, the conditional rebuild/replan step is skipped
+entirely and `apply.createUpdateServices` follows
 `apply.createUpdatePrerequisiteServices` directly. When the rebuild does run,
 its replan only emits `plan.functionRegistry`, `plan.pipeline`,
 `plan.application`, `plan.executor`, and `plan.workflow` — the other `plan.*`

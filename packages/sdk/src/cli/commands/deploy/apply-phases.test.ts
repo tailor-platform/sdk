@@ -3,6 +3,7 @@ import {
   applyDeploymentPlans,
   applyPrerequisiteResources,
   applyRemainingResources,
+  preflightAllTailorDB,
   type PlannedDeployment,
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
@@ -176,6 +177,8 @@ describe("applyDeploymentPlans", () => {
     ]);
 
     expect(mocks.calls).toEqual([
+      "tailordb-preflight:supplier-tailordb",
+      "tailordb-preflight:buyer-tailordb",
       "secret:supplier-secret:create-update",
       "secret:buyer-secret:create-update",
       "staticwebsite:supplier-staticwebsite:create-update",
@@ -186,8 +189,6 @@ describe("applyDeploymentPlans", () => {
       "idp:buyer-idp:create-update",
       "auth:supplier-auth:create-update-prerequisites",
       "auth:buyer-auth:create-update-prerequisites",
-      "tailordb-preflight:supplier-tailordb",
-      "tailordb-preflight:buyer-tailordb",
       "function:supplier-function:create-update",
       "function:buyer-function:create-update",
       "tailordb:supplier-tailordb:create-update",
@@ -265,6 +266,7 @@ describe("applyDeploymentPlans", () => {
 
     await applyRemainingResources({} as never, "workspace-id", [deployment("supplier")]);
 
+    expect(mocks.preflightTailorDB).not.toHaveBeenCalled();
     expect(mocks.applySecretManager).toHaveBeenCalledTimes(1);
     expect(mocks.applySecretManager).toHaveBeenCalledWith(
       {},
@@ -291,7 +293,6 @@ describe("applyDeploymentPlans", () => {
     );
 
     expect(mocks.calls).toEqual([
-      "tailordb-preflight:supplier-tailordb",
       "function:supplier-function:create-update",
       "tailordb:supplier-tailordb:create-update",
       "auth:supplier-auth:create-update-dependents",
@@ -318,7 +319,18 @@ describe("applyDeploymentPlans", () => {
     ]);
   });
 
-  test("fails migration preflight before applying functionRegistry or anything after it", async () => {
+  test("preflightAllTailorDB runs before any resource is applied", async () => {
+    mocks.calls.length = 0;
+
+    await preflightAllTailorDB({} as never, [deployment("supplier"), deployment("buyer")]);
+
+    expect(mocks.calls).toEqual([
+      "tailordb-preflight:supplier-tailordb",
+      "tailordb-preflight:buyer-tailordb",
+    ]);
+  });
+
+  test("fails migration preflight before applying anything", async () => {
     mocks.calls.length = 0;
     mocks.preflightTailorDB.mockRejectedValueOnce(new Error("migration state changed"));
 
@@ -326,15 +338,12 @@ describe("applyDeploymentPlans", () => {
       applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")]),
     ).rejects.toThrow("migration state changed");
 
-    // The prerequisite phase (no possible env/URL reference) already completed by
-    // the time preflight runs.
-    expect(mocks.calls).toEqual([
-      "secret:supplier-secret:create-update",
-      "staticwebsite:supplier-staticwebsite:create-update",
-      "aigateway:supplier-aigateway:create-update",
-      "idp:supplier-idp:create-update",
-      "auth:supplier-auth:create-update-prerequisites",
-    ]);
+    // Preflight runs before anything else, so a failure leaves nothing applied --
+    // not even the prerequisite resources (secretManager, staticWebsite, aiGateway,
+    // idp, auth) that have no possible env/URL reference.
+    expect(mocks.calls).toEqual([]);
+    expect(mocks.applySecretManager).not.toHaveBeenCalled();
+    expect(mocks.applyStaticWebsite).not.toHaveBeenCalled();
     expect(mocks.applyFunctionRegistry).not.toHaveBeenCalled();
     expect(mocks.applyTailorDB).not.toHaveBeenCalled();
   });
