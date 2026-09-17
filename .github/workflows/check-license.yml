@@ -34,7 +34,7 @@ jobs:
         uses: $/.github/actions/install-deps
 
       - name: Check licenses
-        uses: tailor-platform/actions/check-licenses@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
+        uses: tailor-platform/actions/check-licenses@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
         with:
           license-groups: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSE_GROUPS }}
           additional-licenses: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSES }}

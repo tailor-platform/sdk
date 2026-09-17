@@ -69,7 +69,7 @@ runs:
     # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply
       if: inputs.deploy == 'true'
-      uses: tailor-platform/actions/deploy@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
+      uses: tailor-platform/actions/deploy@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
       env:
         TAILOR_PLATFORM_SDK_CONFIG_PATH: ${{ inputs.config }}
       with:
@@ -80,7 +80,7 @@ runs:
         platform-client-secret: ${{ inputs.platform-client-secret }}
     - id: tailor-notify
       if: failure() && inputs.slack-token != '' && inputs.slack-channel-id != ''
-      uses: tailor-platform/actions/notify@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
+      uses: tailor-platform/actions/notify@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
       with:
         provider: slack
         status: failure

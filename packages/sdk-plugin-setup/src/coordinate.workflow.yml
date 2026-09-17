@@ -38,7 +38,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: tailor-tag-guard
-        uses: tailor-platform/actions/tag-guard@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
+        uses: tailor-platform/actions/tag-guard@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
         with:
           target-branch: __BRANCH__
   # __TAG_GUARD_JOB_END__
