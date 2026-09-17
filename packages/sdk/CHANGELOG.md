@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 2.19.0
+
+### Minor Changes
+
+- [#2369](https://github.com/tailor-platform/sdk/pull/2369) [`f5a3ad8`](https://github.com/tailor-platform/sdk/commit/f5a3ad8212dc5eec1ce54265d7a841aea96c7944) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `as: "temporal"` to `t.date`, `t.datetime`, and `t.time`, using `Temporal.PlainDate`, `Temporal.Instant`, and `Temporal.PlainTime` respectively. Extend `as: "date"` to datetime and time fields, converting datetime input to a `Date` and time input to a `Date` on 1970-01-01 UTC. Time output uses hours/minutes (UTC for Date) and truncates seconds and fractions without rounding. Existing defaults remain unchanged. Import `Temporal` from `@tailor-platform/sdk/runtime` for constructors and types without changing TypeScript `lib` settings. The `tailor-runtime` Vitest environment installs a Temporal polyfill only when the runtime lacks it; deployed functions use native Temporal.
+
+### Patch Changes
+
+- [#2332](https://github.com/tailor-platform/sdk/pull/2332) [`766a3f9`](https://github.com/tailor-platform/sdk/commit/766a3f91acaf7fa9cd643f7c2bf9fe6055d578c5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.8.0
+
+- [#2378](https://github.com/tailor-platform/sdk/pull/2378) [`867d586`](https://github.com/tailor-platform/sdk/commit/867d586a8b08a27f0b1a26dec2f18efa7963e375) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.6.5
+
+- [#2383](https://github.com/tailor-platform/sdk/pull/2383) [`8d65e44`](https://github.com/tailor-platform/sdk/commit/8d65e44c5f4462637a9f3b60a2c0241b8edbb098) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​napi-rs/keyring to v2.1.0
+
 ## 2.18.0
 
 ### Minor Changes
