@@ -75,6 +75,63 @@ export const mainJob = createWorkflowJob({
     }
   });
 
+  test("reuses a prior call's usedJobNames/mainJobDeps instead of re-detecting reachability", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "reuse-used-jobs-test-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => ({}),
+});
+
+export const unusedJob = createWorkflowJob({
+  name: "unused-job",
+  body: async () => ({}),
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+
+    try {
+      const allJobs = [
+        { name: "main-job", exportName: "mainJob", sourceFile },
+        { name: "unused-job", exportName: "unusedJob", sourceFile },
+      ];
+      const startContext = { modules: new Map() };
+
+      const fresh = await bundleWorkflowJobs(allJobs, ["main-job"], {}, startContext, tmpDir);
+      // Without a hint, reachability detection correctly drops the unused job.
+      expect(fresh.usedJobNames).toEqual(["main-job"]);
+      expect(fresh.bundledCode.has("unused-job")).toBe(false);
+
+      const reused = await bundleWorkflowJobs(
+        allJobs,
+        ["main-job"],
+        {},
+        startContext,
+        tmpDir,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { usedJobNames: ["main-job", "unused-job"], mainJobDeps: fresh.mainJobDeps },
+      );
+
+      // A caller-supplied usedJobNames set is trusted as-is, not re-detected:
+      // "unused-job" is bundled here only because it was passed in, proving
+      // filterUsedJobs did not run again.
+      expect(reused.usedJobNames).toEqual(["main-job", "unused-job"]);
+      expect(reused.bundledCode.has("unused-job")).toBe(true);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   test("rejects a job that references process.env", async () => {
     const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-forbidden-global-")));
     const sourceFile = path.join(tmpDir, "workflow.ts");

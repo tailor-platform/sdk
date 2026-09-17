@@ -856,6 +856,7 @@ async function reloadEnvDependentBundles(params: {
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
+      previous.workflowBuildResult,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }

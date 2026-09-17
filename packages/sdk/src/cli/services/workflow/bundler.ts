@@ -283,6 +283,9 @@ export interface BundleWorkflowJobsResult {
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
  * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
+ * @param previousUsedJobs - A prior call's `usedJobNames`/`mainJobDeps` over the same
+ *   `allJobs`/`mainJobNames`/`startContext`, reused instead of re-parsing every workflow
+ *   source file to redetect reachability (which cannot change unless the sources do)
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -295,14 +298,25 @@ export async function bundleWorkflowJobs(
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  previousUsedJobs?: Pick<BundleWorkflowJobsResult, "usedJobNames" | "mainJobDeps">,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
     return { mainJobDeps: {}, usedJobNames: [], bundledCode: new Map() };
   }
 
-  // Filter to only used jobs and get per-mainJob dependencies
-  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, startContext);
+  // Reachability (which jobs a mainJob's .start() calls reach) depends only on
+  // the jobs' own source, never on `env`, so a caller that already computed it
+  // over these same jobs can skip re-parsing every workflow source file.
+  let usedJobs: JobInfo[];
+  let mainJobDeps: Record<string, string[]>;
+  if (previousUsedJobs) {
+    const usedJobNames = new Set(previousUsedJobs.usedJobNames);
+    usedJobs = allJobs.filter((job) => usedJobNames.has(job.name));
+    mainJobDeps = previousUsedJobs.mainJobDeps;
+  } else {
+    ({ usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, startContext));
+  }
 
   logger.newline();
   logger.log(
