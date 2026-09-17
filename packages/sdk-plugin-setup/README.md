@@ -19,10 +19,10 @@ The Tailor CLI discovers the plugin automatically from `node_modules/.bin` (or y
 
 ```bash
 # Branch target: deploy to stg on every push to main
-tailor setup branch --name my-app-stg
+tailor setup ci branch --name my-app-stg
 
 # Tag target: deploy to production when a tag is pushed, with an approval gate
-tailor setup tag --name my-app-prod --branch main --environment production
+tailor setup ci tag --name my-app-prod --branch main --environment production
 
 # Audit generated workflows for drift
 tailor setup check
@@ -30,18 +30,19 @@ tailor setup check
 
 ## Commands
 
-| Command            | Description                                                                                        |
-| ------------------ | -------------------------------------------------------------------------------------------------- |
-| `setup branch`     | Generate a branch-target deploy workflow (push to branch triggers deploy).                         |
-| `setup tag`        | Generate a tag-target deploy workflow (tag push triggers deploy).                                  |
-| `setup preview`    | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                  |
-| `setup action`     | Generate a per-app composite action for use with `setup coordinate` (monorepo multi-app deploys).  |
-| `setup coordinate` | Generate a coordinator workflow that orchestrates multiple `--action`-generated composite actions. |
-| `setup deps`       | Generate a dependency update config for Tailor dependency and workflow updates.                    |
-| `setup check`      | Audit generated workflows for drift against the current config/repo (read-only).                   |
-| `setup delete`     | Delete managed workflow/action file(s) and their `.github/tailor.lock` entries.                    |
+| Command               | Description                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `setup ci branch`     | Generate a branch-target deploy workflow (push to branch triggers deploy).                           |
+| `setup ci tag`        | Generate a tag-target deploy workflow (tag push triggers deploy).                                    |
+| `setup ci preview`    | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                    |
+| `setup ci action`     | Generate a per-app composite action for use with `setup ci coordinate` (monorepo multi-app deploys). |
+| `setup ci coordinate` | Generate a coordinator workflow that orchestrates multiple `--action`-generated composite actions.   |
+| `setup deps`          | Generate a dependency update config for Tailor dependency and workflow updates.                      |
+| `setup check`         | Audit generated workflows for drift against the current config/repo (read-only).                     |
+| `setup delete`        | Delete managed workflow/action file(s) and their `.github/tailor.lock` entries.                      |
 
-Run `tailor setup <command> --help` for the full option reference.
+Run `tailor setup ci <command> --help` for CI generator options, or
+`tailor setup <command> --help` for `deps`, `check`, and `delete` options.
 
 ## Further reading
 

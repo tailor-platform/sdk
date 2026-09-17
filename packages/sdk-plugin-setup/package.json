@@ -34,6 +34,7 @@
     "json5": "2.2.3",
     "pathe": "2.0.3",
     "pkg-types": "2.3.3",
+    "std-env": "4.2.0",
     "zod": "4.6.4"
   },
   "devDependencies": {

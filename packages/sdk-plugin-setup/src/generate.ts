@@ -745,7 +745,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     logger.newline();
     logger.log(`The composite action has been generated at ${styles.path(resolved.file)}.`);
     logger.log(
-      "Use `tailor setup coordinate` to generate a coordinator workflow that orchestrates this action.",
+      "Use `tailor setup ci coordinate` to generate a coordinator workflow that orchestrates this action.",
     );
     logger.log(`Commit ${TAILOR_LOCK_FILENAME} alongside it: it records this app's id.`);
     if (configEdited) {
@@ -761,7 +761,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
  *
  * Unlike `setupTarget`, this function does not read a Tailor config. The coordinator
  * name is required via `--name`. App working directories are resolved from
- * the lock file entries created by `setup action`.
+ * the lock file entries created by `setup ci action`.
  * @param options - Coordinate setup options
  */
 export async function setupCoordinate(options: CoordinateSetupOptions): Promise<void> {
@@ -773,7 +773,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   if (actions.length === 0) {
     throw new Error(
       "At least one --action is required. " +
-        "Run `tailor setup action --dir <app-dir>` for each app first.",
+        "Run `tailor setup ci action --dir <app-dir>` for each app first.",
     );
   }
 
@@ -802,7 +802,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   if (!lock) {
     throw new Error(
       ".github/tailor.lock not found. " +
-        "Run `tailor setup action --name <name>` for each app before running setup coordinate.",
+        "Run `tailor setup ci action --name <name>` for each app before running setup ci coordinate.",
     );
   }
 
@@ -826,13 +826,13 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       if (!entry) {
         throw new Error(
           `Action target "${name}" not found in .github/tailor.lock. ` +
-            `Run \`tailor setup action --name ${name}\` first.`,
+            `Run \`tailor setup ci action --name ${name}\` first.`,
         );
       }
       if (names.length > 1 && entry.templateVersion < TEMPLATE_VERSION) {
         throw new Error(
           `Action target "${name}" was generated with an older setup template. ` +
-            `Run \`tailor setup action --name ${name} --force\` before grouping it in setup coordinate.`,
+            `Run \`tailor setup ci action --name ${name} --force\` before grouping it in setup ci coordinate.`,
         );
       }
       validateDir(entry.inputs.dir);
