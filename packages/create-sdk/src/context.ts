@@ -61,12 +61,12 @@ const validateTemplate = async (template: string) => {
   return undefined;
 };
 
-const unwrapPromptResult = <T>(value: T | symbol) => {
+const unwrapPromptResult = <T>(value: T): Exclude<T, symbol> => {
   if (typeof value === "symbol") {
     cancel("Operation cancelled");
     process.exit(0);
   }
-  return value;
+  return value as Exclude<T, symbol>;
 };
 
 const requireValue = (value: string | undefined, message: string) => {
