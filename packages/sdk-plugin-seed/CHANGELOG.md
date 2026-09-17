@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.3.2
+
+### Patch Changes
+
+- [#2363](https://github.com/tailor-platform/sdk/pull/2363) [`9917232`](https://github.com/tailor-platform/sdk/commit/9917232ce05ca1dc79c7c7a3cd6bfa00ecd1d040) Thanks [@dqn](https://github.com/dqn)! - Point GitHub Actions annotations at the file that failed. `tailor seed validate` reports the offending JSONL file and line, and a rejected config reports its file, so the annotation links straight to the source. Source the CLI cannot parse now reports the file it was found in and the line it failed on, which is the imported module rather than the config when the config imports it; such a failure previously surfaced as `Unknown error: [object Object]`, and under `--json` its `code` is now `UNEXPECTED_ERROR` rather than `UNKNOWN_ERROR`. The annotation's line counts blank lines; the line printed in the report text still skips them, so the two differ on a file that contains one.
+
+- [#2362](https://github.com/tailor-platform/sdk/pull/2362) [`08ff50b`](https://github.com/tailor-platform/sdk/commit/08ff50b50a31c6a27ccb8f6ca409365032d13e0d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.6.4
+- Updated dependencies [[`9917232`](https://github.com/tailor-platform/sdk/commit/9917232ce05ca1dc79c7c7a3cd6bfa00ecd1d040), [`e54b854`](https://github.com/tailor-platform/sdk/commit/e54b85445c64ba30cb19731d1122488d6826e1b5), [`b8f397a`](https://github.com/tailor-platform/sdk/commit/b8f397a08941f78bf670cb806287b20427fe1f10), [`4096ad5`](https://github.com/tailor-platform/sdk/commit/4096ad5aad03a2dd9aef6fd334334bfcb60aaff4), [`aa99ee5`](https://github.com/tailor-platform/sdk/commit/aa99ee5af9c94fe7bfaa8c8c13c42f67db517763), [`7361bbf`](https://github.com/tailor-platform/sdk/commit/7361bbf1aa0dd608548d637213a9bcf7286aeb94), [`08ff50b`](https://github.com/tailor-platform/sdk/commit/08ff50b50a31c6a27ccb8f6ca409365032d13e0d), [`a7b581f`](https://github.com/tailor-platform/sdk/commit/a7b581f1909d85eb61e06b783a6a2abd8658b0a2)]:
+  - @tailor-platform/sdk@2.18.0
+
 ## 0.3.1
 
 ### Patch Changes
