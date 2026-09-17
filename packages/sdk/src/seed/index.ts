@@ -12,6 +12,7 @@ import { LinesDB, ErrorFormatter, findSchemaFile } from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join } from "pathe";
+import { firstErrorLocation } from "./record-lines";
 import type { JsonObject, ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
@@ -34,7 +35,13 @@ type ValidateSeedDataOptions = {
 
 type ValidateSeedResult =
   | { valid: true; output: string }
-  | { valid: false; output: string; error: string };
+  | {
+      valid: false;
+      output: string;
+      error: string;
+      /** Where the first reported error sits, for tooling that links to source. */
+      location?: { file: string; line?: number };
+    };
 
 /**
  * A JSONL seed file that received values.
@@ -167,6 +174,7 @@ export async function validateSeedData(
     valid: false,
     output: outputLines.join("\n"),
     error: formatValidationErrors(result.errors, verbose),
+    location: await firstErrorLocation(result.errors),
   };
 }
 

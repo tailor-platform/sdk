@@ -54,7 +54,8 @@ export function errorToJson(
 ): { error: Readonly<Record<string, Jsonifiable | undefined>> } {
   const envelope = baseErrorToJson(error, options);
   if (!(error instanceof Error)) return envelope;
-  const { causes, context, ...diagnostics } = getErrorDiagnostics(error);
+  // `location` drives source annotations for tooling, not the error envelope.
+  const { causes, context, location: _location, ...diagnostics } = getErrorDiagnostics(error);
   return {
     error: {
       ...envelope.error,

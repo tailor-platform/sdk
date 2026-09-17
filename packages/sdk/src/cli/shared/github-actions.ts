@@ -1,14 +1,15 @@
+import { realpathSync } from "node:fs";
 import { stripVTControlCharacters } from "node:util";
-import { getErrorDiagnostics } from "./error-diagnostics";
+import { isAbsolute, relative, resolve, sep } from "pathe";
+import {
+  getErrorDiagnostics,
+  withErrorDiagnostics,
+  type ErrorSourceLocation,
+} from "./error-diagnostics";
 import { isCLIError } from "./errors";
 import { parseBoolean } from "./parse-boolean";
 
-/**
- * Properties attached to a GitHub Actions annotation.
- *
- * `file`/`line` are accepted but not yet populated by any CLI error; they are
- * part of the command format so producers can add source locations later.
- */
+/** Properties attached to a GitHub Actions annotation. */
 export interface AnnotationProperties {
   /** Short heading shown above the annotation body. */
   title?: string;
@@ -80,6 +81,46 @@ export function annotationsEnabled(jsonMode: boolean): boolean {
 }
 
 /**
+ * Resolve a path through any symlinks on the way to it.
+ *
+ * A runner can export `GITHUB_WORKSPACE` through a symlink while paths arrive
+ * already resolved, which leaves two spellings of one location. A path that
+ * does not exist keeps its lexical form.
+ * @param value - Path to resolve
+ * @returns Real path, or the resolved lexical path when it cannot be read
+ */
+function realPath(value: string): string {
+  try {
+    return realpathSync(resolve(value));
+  } catch {
+    return resolve(value);
+  }
+}
+
+/**
+ * Render a path the way GitHub Actions resolves annotation locations.
+ *
+ * Steps run with `working-directory` set, so a cwd-relative path points at the
+ * wrong file; the runner resolves annotation paths against the workspace root.
+ * Containment is decided by the relative path rather than a prefix match, so a
+ * sibling such as `/repo-other` is not read as living inside `/repo`, and both
+ * sides are resolved through symlinks so one location has one spelling.
+ * @param file - Absolute path to the file the failure points at
+ * @returns Workspace-relative path, or undefined when it lies outside
+ */
+export function workspaceRelativePath(file: string): string | undefined {
+  const workspace = process.env.GITHUB_WORKSPACE;
+  if (!workspace || !isAbsolute(file)) return undefined;
+  const rel = relative(realPath(workspace), realPath(file));
+  if (rel === "" || isAbsolute(rel)) return undefined;
+  const segments = rel.split(sep);
+  // A leading ".." segment means the file escapes the workspace; a directory
+  // merely named "..data" does not.
+  if (segments[0] === "..") return undefined;
+  return segments.join("/");
+}
+
+/**
  * Render a GitHub Actions annotation command line.
  *
  * Colors are stripped unconditionally: the runner renders the annotation as
@@ -147,6 +188,19 @@ export function describeTerminalError(
 }
 
 /**
+ * Attach the source location a failure points at.
+ *
+ * Consumed when the command's failure is annotated; the error is otherwise
+ * unchanged, so its message and formatting stay the caller's own.
+ * @param error - Failure to annotate
+ * @param location - Absolute file, and the 1-based line when known
+ * @returns The same error
+ */
+export function withSourceLocation<T extends Error>(error: T, location: ErrorSourceLocation): T {
+  return withErrorDiagnostics(error, { location });
+}
+
+/**
  * Annotate the failure that ended the command, when running in GitHub Actions.
  * @param error - Failure that ended the command
  * @param options - JSON mode state and the suggestion shown for a plain error
@@ -159,5 +213,22 @@ export function annotateTerminalError(
 ): void {
   if (!annotationsEnabled(options.jsonMode)) return;
   const { message, title } = describeTerminalError(error, options.suggestion);
-  process.stderr.write(formatAnnotation("error", message, { title }));
+  process.stderr.write(formatAnnotation("error", message, { title, ...sourceLocation(error) }));
+}
+
+/**
+ * Read an error's source location as annotation properties.
+ *
+ * A location outside the workspace is dropped rather than guessed at, so the
+ * annotation still reports the failure without pointing at the wrong file.
+ * @param error - Failure that ended the command
+ * @returns `file`/`line` properties, or an empty object when unavailable
+ */
+function sourceLocation(error: unknown): { file?: string; line?: number } {
+  if (!(error instanceof Error)) return {};
+  const location = getErrorDiagnostics(error).location;
+  if (!location) return {};
+  const file = workspaceRelativePath(location.file);
+  if (file === undefined) return {};
+  return location.line === undefined ? { file } : { file, line: location.line };
 }

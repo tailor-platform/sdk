@@ -1,12 +1,15 @@
-import {
-  loadSeedContext,
-  configArg,
-  defineAppCommand,
-  logger,
-  arg,
-} from "@tailor-platform/sdk/cli";
+import * as sdkCli from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
+
+const { loadSeedContext, configArg, defineAppCommand, logger, arg } = sdkCli;
+
+// `withSourceLocation` reached the CLI surface in a release this plugin's peer
+// range still opens below, so an older SDK resolves without it.
+function attachSourceLocation(error: Error, location: sdkCli.ErrorSourceLocation): Error {
+  const { withSourceLocation } = sdkCli as Partial<typeof sdkCli>;
+  return typeof withSourceLocation === "function" ? withSourceLocation(error, location) : error;
+}
 
 export const seedValidateCommand = defineAppCommand({
   name: "validate",
@@ -43,7 +46,7 @@ export const seedValidateCommand = defineAppCommand({
       // the CLI from printing an error marker in front of them.
       const error = new Error(result.error) as Error & { format: () => string };
       error.format = () => result.error;
-      throw error;
+      throw result.location ? attachSourceLocation(error, result.location) : error;
     }
   },
 });

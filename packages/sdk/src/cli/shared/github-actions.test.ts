@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { color } from "@tailor-platform/shared/color";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { withErrorDiagnostics } from "./error-diagnostics";
@@ -7,6 +10,7 @@ import {
   annotationsEnabled,
   describeTerminalError,
   formatAnnotation,
+  workspaceRelativePath,
 } from "./github-actions";
 
 function captureStderr(fn: () => void): string {
@@ -249,11 +253,105 @@ describe("github-actions", () => {
       expect(output).toBe("");
     });
 
+    test("carries a workspace-relative file and line from the error's location", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      process.env.GITHUB_WORKSPACE = "/repo";
+      const error = withErrorDiagnostics(new Error("bad row"), {
+        code: "SEED_INVALID",
+        location: { file: "/repo/seed/data/User.jsonl", line: 4 },
+      });
+      const output = captureStderr(() => annotateTerminalError(error, { jsonMode: false }));
+      expect(output).toContain("file=seed/data/User.jsonl");
+      expect(output).toContain("line=4");
+      expect(output).toContain("title=SEED_INVALID");
+    });
+
+    test("omits line when the location carries only a file", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      process.env.GITHUB_WORKSPACE = "/repo";
+      const error = withErrorDiagnostics(new Error("bad config"), {
+        location: { file: "/repo/tailor.config.ts" },
+      });
+      const output = captureStderr(() => annotateTerminalError(error, { jsonMode: false }));
+      expect(output).toContain("file=tailor.config.ts");
+      expect(output).not.toContain("line=");
+    });
+
+    test("still annotates, without a location, when the file is outside the workspace", () => {
+      process.env.GITHUB_ACTIONS = "true";
+      process.env.GITHUB_WORKSPACE = "/repo";
+      const error = withErrorDiagnostics(new Error("bad row"), {
+        location: { file: "/elsewhere/User.jsonl", line: 2 },
+      });
+      const output = captureStderr(() => annotateTerminalError(error, { jsonMode: false }));
+      expect(output).toContain("bad row");
+      expect(output).not.toContain("file=");
+      expect(output).not.toContain("line=");
+    });
+
     test("writes nothing outside GitHub Actions", () => {
       const output = captureStderr(() =>
         annotateTerminalError(new Error("boom"), { jsonMode: false }),
       );
       expect(output).toBe("");
+    });
+  });
+
+  describe("workspaceRelativePath", () => {
+    test("returns undefined when GITHUB_WORKSPACE is unset", () => {
+      expect(workspaceRelativePath("/repo/src/a.ts")).toBeUndefined();
+    });
+
+    test("relativizes a path inside the workspace", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/repo/src/a.ts")).toBe("src/a.ts");
+    });
+
+    test("returns undefined for a path outside the workspace", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/elsewhere/a.ts")).toBeUndefined();
+    });
+
+    test("does not treat a sibling with a shared prefix as inside", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/repo-other/a.ts")).toBeUndefined();
+    });
+
+    test("returns undefined for the workspace directory itself", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/repo")).toBeUndefined();
+    });
+
+    test("emits forward slashes regardless of input separators", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/repo/src/nested/a.ts")).toBe("src/nested/a.ts");
+    });
+
+    test("resolves a workspace reached through a symlink", () => {
+      const base = mkdtempSync(join(tmpdir(), "ga-ws-"));
+      try {
+        const real = join(base, "ws");
+        mkdirSync(join(real, "data"), { recursive: true });
+        const link = join(base, "wslink");
+        symlinkSync(real, link);
+        const file = join(real, "data", "User.jsonl");
+        writeFileSync(file, "{}\n");
+        process.env.GITHUB_WORKSPACE = link;
+        expect(workspaceRelativePath(file)).toBe("data/User.jsonl");
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    });
+
+    test("keeps a directory whose name merely starts with dots", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/repo/..data/a.ts")).toBe("..data/a.ts");
+    });
+
+    test("resolves dot segments before deciding containment", () => {
+      process.env.GITHUB_WORKSPACE = "/repo";
+      expect(workspaceRelativePath("/repo/src/../src/a.ts")).toBe("src/a.ts");
+      expect(workspaceRelativePath("/repo/../secret.ts")).toBeUndefined();
     });
   });
 });
