@@ -104,6 +104,12 @@ its replan only emits `plan.functionRegistry`, `plan.pipeline`,
 spans under `plan` (including `plan.validateTailorDBTypeNames`) reuse their
 result from the first plan instead of running again.
 
+The rebuild itself is similarly scoped: it re-resolves `env` and rebundles
+only workflow jobs and auth hooks, the two kinds of bundled code that embed
+`env` directly. `build.generateUserTypes` is skipped entirely (nothing it
+generates depends on `env`), and resolver, executor, and HTTP adapter bundles
+are reused from the first `build.loadApplication` rather than rebundled.
+
 The pre/post migration spans repeat once per pending migration; the script span
 appears only for migrations that carry a `migrate.ts`.
 

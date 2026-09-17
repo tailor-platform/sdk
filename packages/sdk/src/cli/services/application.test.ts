@@ -308,3 +308,95 @@ export default createWorkflow({ name: "main-workflow", mainJob });
     await expect(loadApplication({ config, client, workspaceId: "ws-1" })).rejects.toThrow(error);
   });
 });
+
+describe("loadApplication previous reuse", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  test("rebundles only the workflow job that embeds env, reusing everything else", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const workflowFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      workflowFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: (_input: undefined, { env }) => ({ siteUrl: env.siteUrl }),
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => {} },
+});
+`,
+    );
+
+    const website = defineStaticWebSite("my-site", { description: "my website" });
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        staticWebsites: [website],
+        workflow: { files: [workflowFile] },
+        executor: { files: [executorFile] },
+        env: { siteUrl: website.url },
+      }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+
+    const notFoundClient = {
+      getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+    } as unknown as OperatorClient;
+
+    const first = await loadApplication({
+      config,
+      client: notFoundClient,
+      workspaceId: "ws-1",
+      expectedLocalStaticWebsiteNames: new Set(["my-site"]),
+    });
+    expect(first.application.env.siteUrl).toBe("my-site:url");
+
+    const resolvedClient = {
+      getStaticWebsite: vi
+        .fn()
+        .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } }),
+    } as unknown as OperatorClient;
+
+    const second = await loadApplication({
+      config,
+      client: resolvedClient,
+      workspaceId: "ws-1",
+      previous: first,
+    });
+
+    // env re-resolved, and the workflow job that embeds it rebuilt with the real URL.
+    expect(second.application.env.siteUrl).toBe("https://site.example.com");
+    const bundledCode = [...(second.workflowBuildResult?.bundledCode.values() ?? [])].join("\n");
+    expect(bundledCode).toContain("https://site.example.com");
+    expect(bundledCode).not.toContain("my-site:url");
+
+    // Executor bundling never depends on env, so it's reused, not rebundled.
+    expect(second.bundledScripts.executors).toBe(first.bundledScripts.executors);
+    // Config parsing, TailorDB loading, and service definitions are reused too.
+    expect(second.application.executorService).toBe(first.application.executorService);
+    expect(second.application.tailorDBServices).toBe(first.application.tailorDBServices);
+    expect(second.reusableBuildState).toBe(first.reusableBuildState);
+  });
+});

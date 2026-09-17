@@ -759,15 +759,20 @@ async function deployInternal(
     const expectedLocalStaticWebsiteNames =
       collectExpectedLocalStaticWebsiteNamesFromConfigs(preflightConfigs);
 
-    const build = () =>
+    // Cleaned once, before the first build, so a later conditional rebuild
+    // (see the `needsUrlResolution` branch below) finds the cache the first
+    // build just populated instead of wiping it and re-bundling everything
+    // from scratch a second time.
+    const noCache = options?.noCache ?? false;
+    const cacheDir = path.resolve(getDistDir(), "cache");
+    if (options?.cleanCache) {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+      logger.info("Bundle cache cleaned");
+    }
+
+    const build = (previousTargets?: ReadonlyArray<BuiltDeploymentTarget>) =>
       withSpan("build", async () => {
-        const noCache = options?.noCache ?? false;
         const packageJson = await readPackageJson();
-        const cacheDir = path.resolve(getDistDir(), "cache");
-        if (options?.cleanCache) {
-          fs.rmSync(cacheDir, { recursive: true, force: true });
-          logger.info("Bundle cache cleaned");
-        }
 
         return buildDeploymentTargets({
           configPaths,
@@ -780,6 +785,7 @@ async function deployInternal(
           client: workspace?.client,
           workspaceId: workspace?.workspaceId,
           expectedLocalStaticWebsiteNames,
+          previousTargets,
         });
       });
 
@@ -890,12 +896,16 @@ async function deployInternal(
     // the time env is read again below.
     await applyPrerequisiteResources(client, deployments);
 
-    // `env` is baked into resolver/executor/workflow job/auth hook code once,
-    // at build time, before this deploy has applied anything. When it
-    // references a site the prerequisite apply above just created, the
-    // placeholder is still literally present in `application.env` --
-    // rebuilding now picks up the real URL. TailorDB migration scripts don't
-    // need this: they re-resolve `env` themselves right before executing.
+    // `env`'s static website placeholders are resolved once, at build time,
+    // before this deploy has applied anything. When one references a site the
+    // prerequisite apply above just created, the placeholder is still
+    // literally present in `application.env` -- rebuilding now re-resolves it
+    // and rebundles only workflow jobs and auth hooks, the two kinds that
+    // embed `env` directly (resolver/executor read it through a separate,
+    // always-freshly-generated expression, not their function bundle, so they
+    // don't need rebundling; see `loadApplication`'s `previous` handling).
+    // TailorDB migration scripts don't need this either: they re-resolve
+    // `env` themselves right before executing.
     const needsUrlResolution = deployments.some((deployment) =>
       Object.values(deployment.application.env).some(hasStaticWebsiteUrlPlaceholder),
     );
@@ -904,7 +914,10 @@ async function deployInternal(
       logger.info(
         "A static website was just created; rebuilding so env resolves to its real URL before the rest of this deploy applies.",
       );
-      const rebuiltTargets = await build();
+      // Reuses everything from the first build except `env` resolution and
+      // the workflow-job/auth-hook bundles it feeds -- see `loadApplication`'s
+      // `previous` handling for what that skips.
+      const rebuiltTargets = await build(targets);
       assertUniqueGlobalResourceNames(rebuiltTargets);
       // None of REUSABLE_ON_REBUILD_KINDS's plans can change from this
       // rebuild (see its definition), and each was already confirmed once

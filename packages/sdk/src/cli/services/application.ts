@@ -27,12 +27,16 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
-import { buildStartContext } from "#/cli/shared/start-context";
-import { createTsconfigLookupCache } from "#/cli/shared/tsconfig-paths-plugin";
+import { buildStartContext, type StartContext } from "#/cli/shared/start-context";
+import {
+  createTsconfigLookupCache,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import {
   type AppConfig,
   type ExecutorServiceInput,
   type HttpAdapterServiceInput,
+  type LogLevel,
   type ResolverServiceInput,
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
@@ -81,6 +85,18 @@ export type Application = {
 };
 
 /**
+ * Intermediate state from a `loadApplication` call that carries no `env`
+ * dependency, kept so a later call passing `previous` can rebundle only
+ * workflow jobs and auth hooks without redoing this work.
+ */
+interface ReusableBuildState {
+  readonly startContext: StartContext;
+  readonly tsconfigCache: TsconfigLookupCache;
+  readonly inlineSourcemap: boolean;
+  readonly bundleLogLevel: LogLevel;
+}
+
+/**
  * Result of loading the application
  */
 export interface LoadApplicationResult {
@@ -92,6 +108,8 @@ export interface LoadApplicationResult {
   httpAdapterBuildResult?: HttpAdapterBundleResult;
   /** In-memory bundled scripts organized by kind */
   bundledScripts: BundledScripts;
+  /** State a later `previous`-driven reload reuses instead of recomputing. */
+  reusableBuildState: ReusableBuildState;
 }
 
 type DefineTailorDBResult = {
@@ -461,6 +479,16 @@ export interface LoadApplicationParams extends DefineApplicationParams {
    * since the website exists only once this run finishes.
    */
   expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
+  /**
+   * A prior `loadApplication` result for this same config. When present,
+   * everything independent of `env` (config parsing, TailorDB loading,
+   * plugin execution, and the resolver/executor/HTTP-adapter bundles) is
+   * reused as-is, and only `env` resolution plus the workflow-job and
+   * auth-hook bundles that embed it are redone -- the two kinds of bundled
+   * code that actually change when `env` newly resolves to a static
+   * website's URL.
+   */
+  previous?: LoadApplicationResult;
 }
 
 /**
@@ -549,8 +577,21 @@ export async function loadApplication(
     client,
     workspaceId,
     expectedLocalStaticWebsiteNames,
+    previous,
   } = params;
   const baseDir = path.dirname(config.path);
+
+  if (previous) {
+    return reloadEnvDependentBundles({
+      config,
+      baseDir,
+      client,
+      workspaceId,
+      expectedLocalStaticWebsiteNames,
+      bundleCache,
+      previous,
+    });
+  }
 
   // 1. Define services (synchronous)
   const {
@@ -752,5 +793,102 @@ export async function loadApplication(
     env,
   });
 
-  return { application, workflowBuildResult, httpAdapterBuildResult, bundledScripts };
+  return {
+    application,
+    workflowBuildResult,
+    httpAdapterBuildResult,
+    bundledScripts,
+    reusableBuildState: { startContext, tsconfigCache, inlineSourcemap, bundleLogLevel },
+  };
+}
+
+/**
+ * Re-resolve `env`'s static website placeholders and rebundle only the
+ * workflow-job and auth-hook code that embeds it, reusing everything else
+ * from `previous` -- config parsing, TailorDB loading, plugin execution, and
+ * the resolver/executor/HTTP-adapter bundles, none of which depend on `env`.
+ * @param params - Config, client, and the prior `loadApplication` result to reuse
+ * @returns A `LoadApplicationResult` with `env` and its two dependent bundle kinds refreshed
+ */
+async function reloadEnvDependentBundles(params: {
+  config: LoadedConfig;
+  baseDir: string;
+  client: OperatorClient | undefined;
+  workspaceId: string | undefined;
+  expectedLocalStaticWebsiteNames: ReadonlySet<string> | undefined;
+  bundleCache: BundleCache | undefined;
+  previous: LoadApplicationResult;
+}): Promise<LoadApplicationResult> {
+  const {
+    config,
+    baseDir,
+    client,
+    workspaceId,
+    expectedLocalStaticWebsiteNames,
+    bundleCache,
+    previous,
+  } = params;
+  const { application: previousApplication, reusableBuildState } = previous;
+  const { startContext, tsconfigCache, inlineSourcemap, bundleLogLevel } = reusableBuildState;
+
+  const env =
+    client && workspaceId
+      ? await resolveStaticWebsiteUrlsInEnv(client, workspaceId, config.env ?? {}, {
+          expectedLocalNames:
+            expectedLocalStaticWebsiteNames ??
+            new Set(previousApplication.staticWebsiteServices.map((website) => website.name)),
+        })
+      : (config.env ?? {});
+
+  const bundledScripts: BundledScripts = { ...previous.bundledScripts };
+
+  const workflowService = previousApplication.workflowService;
+  let workflowBuildResult = previous.workflowBuildResult;
+  if (workflowService && workflowService.jobs.length > 0) {
+    const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
+    workflowBuildResult = await bundleWorkflowJobs(
+      workflowService.jobs,
+      mainJobNames,
+      env,
+      startContext,
+      baseDir,
+      bundleCache,
+      inlineSourcemap,
+      bundleLogLevel,
+      tsconfigCache,
+    );
+    bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
+  }
+
+  if (previousApplication.authService?.config.hooks?.beforeLogin) {
+    const authName = previousApplication.authService.config.name;
+    bundledScripts.authHooks = await bundleAuthHooks({
+      configPath: config.path,
+      authName,
+      handlerAccessPath: `auth.hooks.beforeLogin.handler`,
+      env,
+      startContext,
+      cache: bundleCache,
+      inlineSourcemap,
+      bundleLogLevel,
+      baseDir,
+      tsconfigCache,
+    });
+  }
+
+  const application: Application = {
+    ...previousApplication,
+    env,
+    get applications() {
+      return [application];
+    },
+  };
+
+  return {
+    application,
+    workflowBuildResult,
+    httpAdapterBuildResult: previous.httpAdapterBuildResult,
+    bundledScripts,
+    reusableBuildState,
+  };
 }

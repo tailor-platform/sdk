@@ -46,6 +46,13 @@ type BuildDeploymentTargetParams = {
   workspaceId?: string;
   /** Static website names planned by any config in the same deploy run. */
   expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
+  /**
+   * This same config's own prior build. When present, only `env` resolution
+   * and the workflow-job/auth-hook bundles it feeds are redone; everything
+   * else (config parsing, TailorDB loading, plugin execution, and the
+   * resolver/executor/HTTP-adapter bundles) is reused as-is.
+   */
+  previous?: BuiltDeploymentTarget;
 };
 
 export type BuiltDeploymentTarget = {
@@ -54,15 +61,18 @@ export type BuiltDeploymentTarget = {
   workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
   httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
   bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+  reusableBuildState: Awaited<ReturnType<typeof loadApplication>>["reusableBuildState"];
 };
 
 type BuildDeploymentTargetsParams = Omit<
   BuildDeploymentTargetParams,
-  "configPath" | "loadedConfig"
+  "configPath" | "loadedConfig" | "previous"
 > & {
   configPaths: ReadonlyArray<string | undefined>;
   loadedConfigs?: ReadonlyArray<LoadedDeployConfig>;
   buildTarget?: (params: BuildDeploymentTargetParams) => Promise<BuiltDeploymentTarget>;
+  /** Prior builds, matched to `configPaths` by index (same array, same order). */
+  previousTargets?: ReadonlyArray<BuiltDeploymentTarget>;
 };
 /**
  * Parse the deploy config option into one or more config paths.
@@ -99,6 +109,7 @@ async function buildDeploymentTarget(
     client,
     workspaceId,
     expectedLocalStaticWebsiteNames,
+    previous,
   } = params;
   const { config, plugins } =
     loadedConfig ??
@@ -125,14 +136,19 @@ async function buildDeploymentTarget(
     pluginManager = new PluginManager(plugins);
   }
 
-  await withSpan("build.generateUserTypes", () =>
-    generateUserTypes({ config, configPath: config.path }),
-  );
+  // Generated types are derived from config/TailorDB shape, not `env`, so a
+  // reload reusing `previous` would regenerate identical output.
+  if (!previous) {
+    await withSpan("build.generateUserTypes", () =>
+      generateUserTypes({ config, configPath: config.path }),
+    );
+  }
 
   let application: Application;
   let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
   let httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
   let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+  let reusableBuildState: Awaited<ReturnType<typeof loadApplication>>["reusableBuildState"];
   try {
     const result = await withSpan("build.loadApplication", () =>
       loadApplication({
@@ -142,12 +158,14 @@ async function buildDeploymentTarget(
         client,
         workspaceId,
         expectedLocalStaticWebsiteNames,
+        previous,
       }),
     );
     application = result.application;
     workflowBuildResult = result.workflowBuildResult;
     httpAdapterBuildResult = result.httpAdapterBuildResult;
     bundledScripts = result.bundledScripts;
+    reusableBuildState = result.reusableBuildState;
   } finally {
     cacheManager.finalize();
   }
@@ -158,6 +176,7 @@ async function buildDeploymentTarget(
     workflowBuildResult,
     httpAdapterBuildResult,
     bundledScripts,
+    reusableBuildState,
   };
 }
 
@@ -259,6 +278,7 @@ export async function buildDeploymentTargets(
     configPaths,
     loadedConfigs: providedLoadedConfigs,
     buildTarget,
+    previousTargets,
     ...targetParams
   } = params;
   if (
@@ -284,6 +304,7 @@ export async function buildDeploymentTargets(
         ...targetParams,
         configPath,
         loadedConfig: loadedConfigs?.[index],
+        previous: previousTargets?.[index],
       }),
     ),
   );
