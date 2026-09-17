@@ -557,6 +557,25 @@ describe("Tailor Platform action pins", () => {
       }
     }
   });
+
+  test("Renovate's custom manager regex actually matches this file's ACTIONS_SHA/ACTIONS_VERSION declarations", () => {
+    const renovateConfig = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
+    ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
+
+    const manager = renovateConfig.customManagers.find((m) =>
+      m.managerFilePatterns.some((p) => p.includes("templates")),
+    );
+    expect(manager).toBeDefined();
+
+    const templatesSource = fs.readFileSync(path.join(import.meta.dirname, "templates.ts"), "utf8");
+    const match = new RegExp(manager!.matchStrings[0]).exec(templatesSource);
+
+    expect(match?.groups).toEqual({
+      currentDigest: ACTIONS_SHA,
+      currentValue: ACTIONS_VERSION,
+    });
+  });
 });
 
 describe("drift check failure policy", () => {
