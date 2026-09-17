@@ -718,9 +718,7 @@ export default defineConfig({
 
     // Left unresolved during the first pass, because the site does not exist
     // yet at that pass's plan time -- expected, not a failure.
-    expect(
-      warnMessages.some((message) => message.includes("is created later in this deploy")),
-    ).toBe(true);
+    expect(warnMessages.some((message) => message.includes("isn't available yet"))).toBe(true);
     // The single deploy() call announces and runs the automatic rebuild, so
     // the placeholder does not need a second, human-triggered `deploy`.
     expect(infoMessages.some((message) => message.includes("rebuilding so env resolves"))).toBe(
