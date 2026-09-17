@@ -7,9 +7,6 @@ import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
 // Bump on material template-structure changes (managed step ids, placeholders)
-// so old/new generations stay distinguishable in the lock. A tailor-platform/actions
-// pin bump alone is not a structure change: downstream repos keep their pin current
-// through their own Renovate config, not through this counter.
 /** Template schema version, tracked per target in the lock file. */
 export const TEMPLATE_VERSION = 11;
 
