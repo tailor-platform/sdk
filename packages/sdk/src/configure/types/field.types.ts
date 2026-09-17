@@ -3,6 +3,8 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
+import type { Temporal } from "temporal-spec";
+
 export interface EnumValue {
   value: string;
   description?: string;
@@ -37,7 +39,7 @@ export type TailorToTs = {
 } & Record<TailorFieldType, unknown>;
 
 export interface FieldMetadata {
-  as?: "string" | "date";
+  as?: "string" | "date" | "temporal";
   description?: string;
   required?: boolean;
 
@@ -64,11 +66,48 @@ export type FieldOptions = {
 
 /** Options for a date field. */
 export type DateFieldOptions = FieldOptions & {
-  /** Use a Date at midnight UTC instead of a YYYY-MM-DD string. Defaults to string. */
-  as?: "string" | "date";
+  /**
+   * Use a Date at midnight UTC, or a Temporal.PlainDate, instead of a
+   * YYYY-MM-DD string. Defaults to string.
+   */
+  as?: "string" | "date" | "temporal";
 };
 
-export type DateFieldValue<As> = As extends "date" ? Date : string;
+export type DateFieldValue<As> = As extends "date"
+  ? Date
+  : As extends "temporal"
+    ? Temporal.PlainDate
+    : string;
+
+/** Options for a datetime field. */
+export type DateTimeFieldOptions = FieldOptions & {
+  /** Choose string, Date, or Temporal.Instant values. Defaults to string input and string | Date output. */
+  as?: "string" | "date" | "temporal";
+};
+
+export type DateTimeFieldValue<As> = As extends "date"
+  ? Date
+  : As extends "temporal"
+    ? Temporal.Instant
+    : As extends "string"
+      ? string
+      : string | Date;
+
+/** Options for a time field. */
+export type TimeFieldOptions = FieldOptions & {
+  /**
+   * Choose HH:mm strings, Date values on 1970-01-01 UTC, or Temporal.PlainTime values.
+   * Defaults to string. Date output uses UTC hours/minutes and ignores the date.
+   * Seconds and fractional seconds are truncated in both representations.
+   */
+  as?: "string" | "date" | "temporal";
+};
+
+export type TimeFieldValue<As> = As extends "date"
+  ? Date
+  : As extends "temporal"
+    ? Temporal.PlainTime
+    : string;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;
