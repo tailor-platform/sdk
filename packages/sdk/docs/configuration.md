@@ -260,7 +260,7 @@ export default defineConfig({
 });
 ```
 
-This resolves even when the same deploy both creates the website and reads its URL — one `deploy` call is enough, with no second, manually-triggered `deploy` needed. If the referenced website does not exist at all, the CLI warns and leaves the unresolved reference in place. If the reference still can't be resolved after this deploy's rebuild, the deploy fails instead of shipping the unresolved reference. `function run` does not resolve this reference; it passes the value exactly as declared.
+This resolves even when the same deploy both creates the website and reads its URL — one `deploy` call is enough, with no second, manually-triggered `deploy` needed. If the referenced website does not exist at all, the CLI warns and leaves the unresolved reference in place. If the reference still can't be resolved after this deploy's rebuild, the deploy fails instead of shipping the unresolved reference. This platform lookup only happens during `deploy`; `function run` passes the literal `<name>:url` string unchanged, since it never talks to the platform to resolve it.
 
 `tailor.config.ts` runs locally when an SDK command loads the config. If values come from your shell or an env file, SDK commands can load them before config evaluation with the global [`--env-file`](./cli-reference.md#environment-file-loading) and `--env-file-if-exists` options:
 
@@ -277,7 +277,7 @@ export default defineConfig({
 
 If the same config defines an auth before-login hook, make sure the config module can be evaluated without Node-only globals in the platform runtime. Avoid arbitrary `process.env` reads in that module; pass literal values, or values generated into a config module before deployment, and read them from the hook's `env` argument.
 
-When the SDK deploys application code or runs detected service code with `function run`, it passes the resolved values as the `env` argument. Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
+When the SDK deploys application code or runs detected service code with `function run`, it passes the values `tailor.config.ts` evaluated to as the `env` argument -- except a static website `<name>:url` reference, which only `deploy` resolves (see above). Do not read `process.env` from deployed resolvers, executors, workflow jobs, auth hooks, or migration scripts; Node-side environment variables are not available there. Put sensitive values in [Secret Manager](./services/secret.md) instead of `env`.
 
 | Code location             | Runtime access                                                                                                                            |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
