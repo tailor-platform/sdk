@@ -27,7 +27,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@clack/prompts": "1.7.0",
+    "@clack/prompts": "1.8.0",
     "@politty/zod": "0.2.1",
     "execa": "10.0.1",
     "picocolors": "1.1.1",
