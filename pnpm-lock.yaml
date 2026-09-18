@@ -5563,10 +5563,10 @@ snapshots:
       '@clack/prompts': 1.8.0
       '@inquirer/prompts': 8.7.2(@types/node@24.13.4)
 
-  '@politty/zod@0.2.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.4))(zod@4.6.4)':
+  '@politty/zod@0.2.1(@clack/prompts@1.8.1)(@inquirer/prompts@8.7.2(@types/node@24.13.4))(zod@4.6.5)':
     dependencies:
       yaml: 2.9.1
-      zod: 4.6.4
+      zod: 4.6.5
     optionalDependencies:
       '@clack/prompts': 1.8.1
       '@inquirer/prompts': 8.7.2(@types/node@24.13.4)
