@@ -1,4 +1,6 @@
+import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
+import type { Temporal } from "temporal-spec";
 
 /**
  * Format a Date using its UTC calendar date.
@@ -6,6 +8,10 @@ import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.typ
  * @returns Date string in YYYY-MM-DD format
  */
 export function formatDate(date: Date): string {
+  return formatDateTime(date).slice(0, 10);
+}
+
+function formatDateTime(date: Date): string {
   const year = date.getUTCFullYear();
   if (!Number.isFinite(year) || year < 0 || year > 9999) {
     const received = Number.isNaN(date.getTime()) ? "an invalid Date" : `year ${year}`;
@@ -13,7 +19,31 @@ export function formatDate(date: Date): string {
       `Expected a Date with a 4-digit year (0000-9999), but received ${received}`,
     );
   }
-  return `${String(year).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  return date.toISOString();
+}
+
+function formatHoursMinutes(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function formatTime(date: Date): string {
+  if (!Number.isFinite(date.getTime())) {
+    throw new RangeError("Expected a valid Date, but received an invalid Date");
+  }
+  return formatHoursMinutes(date.getUTCHours(), date.getUTCMinutes());
+}
+
+function formatTemporal(value: Temporal.PlainDate | Temporal.Instant | Temporal.PlainTime): string {
+  const Temporal = getTemporal();
+  if (value instanceof Temporal.PlainTime) return formatHoursMinutes(value.hour, value.minute);
+  const iso = value.toString({ calendarName: "never" });
+  if (!/^\d{4}-/.test(iso)) {
+    const isInstant = value instanceof Temporal.Instant;
+    throw new RangeError(
+      `Expected a Temporal.${isInstant ? "Instant" : "PlainDate"} with a 4-digit ${isInstant ? "UTC " : ""}year (0000-9999), but received ${iso}`,
+    );
+  }
+  return iso;
 }
 
 type DateField = {
@@ -23,7 +53,6 @@ type DateField = {
 };
 
 function serialize(field: DateField, value: unknown, path: string): unknown {
-  if (value === null || value === undefined) return value;
   if (field.metadata.array) {
     if (!Array.isArray(value)) return value;
     const converted = value.map((item, index) => serializeValue(field, item, `${path}[${index}]`));
@@ -61,14 +90,31 @@ function describeReceivedValue(value: unknown): string {
 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
   if (value === null || value === undefined) return value;
-  if (field.type === "date" && field.metadata.as === "date") {
-    if (!(value instanceof Date)) {
+  const { type } = field;
+  const isDateTimeField = type === "date" || type === "datetime" || type === "time";
+  const as = field.metadata.as;
+  if (isDateTimeField && (as === "date" || as === "temporal")) {
+    const expected =
+      as === "date"
+        ? Date
+        : type === "date"
+          ? getTemporal().PlainDate
+          : type === "datetime"
+            ? getTemporal().Instant
+            : getTemporal().PlainTime;
+    if (!(value instanceof expected)) {
+      const name = as === "date" ? "Date" : `Temporal.${expected.name}`;
       throw new TypeError(
-        `Expected a Date instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+        `Expected a ${name} instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
       );
     }
     try {
-      return formatDate(value);
+      if (value instanceof Date) {
+        if (type === "datetime") return formatDateTime(value);
+        if (type === "time") return formatTime(value);
+        return formatDate(value);
+      }
+      return formatTemporal(value);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       throw new RangeError(`Invalid date at ${describePathTarget(path)}: ${reason}`, {
@@ -76,7 +122,7 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
       });
     }
   }
-  if (field.type !== "nested" || typeof value !== "object" || Array.isArray(value)) return value;
+  if (type !== "nested" || typeof value !== "object" || Array.isArray(value)) return value;
   const record = value as Record<string, unknown>;
   let result = record;
   for (const [key, child] of Object.entries(field.fields)) {
@@ -95,10 +141,10 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
 }
 
 /**
- * Convert fields using the Date representation to YYYY-MM-DD strings in UTC.
- * @param field - Date or object field defining the value's shape
+ * Convert fields using Date or Temporal representations to date, datetime, or time strings.
+ * @param field - Field defining the value's shape
  * @param value - Value to serialize
- * @returns Value with Date fields converted to strings
+ * @returns Value with Date and Temporal fields converted to strings
  * @internal
  */
 export function serializeDateFields(field: DateField, value: unknown): unknown {

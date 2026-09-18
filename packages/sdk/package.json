@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "2.18.0",
+  "version": "2.19.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -182,7 +182,7 @@
     "@inquirer/core": "12.0.3",
     "@inquirer/prompts": "8.7.2",
     "@jridgewell/trace-mapping": "0.3.31",
-    "@napi-rs/keyring": "2.0.0",
+    "@napi-rs/keyring": "2.1.0",
     "@opentelemetry/api": "1.9.1",
     "@opentelemetry/exporter-trace-otlp-proto": "0.222.0",
     "@opentelemetry/resources": "2.11.0",
@@ -219,10 +219,12 @@
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
     "std-env": "4.2.0",
+    "temporal-polyfill": "1.0.5",
+    "temporal-spec": "1.0.1",
     "ts-cron-validator": "1.1.5",
     "type-fest": "5.9.0",
     "xdg-basedir": "5.1.0",
-    "zod": "4.6.4"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",

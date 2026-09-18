@@ -1,4 +1,5 @@
 import { formatDate } from "./date";
+import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -295,15 +296,45 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
   const { field, value, issues, pathArray } = args;
   if (value === null || value === undefined) return value;
   const convert = (item: unknown, itemPath: string[]): unknown => {
-    if (field.type === "date" && field._metadata.as === "date") {
-      const date = new Date(`${item}T00:00:00.000Z`);
-      if (!Number.isFinite(date.getTime()) || formatDate(date) !== item) {
+    const { type, _metadata: metadata } = field;
+    if (
+      (type === "date" || type === "datetime" || type === "time") &&
+      (metadata.as === "date" || metadata.as === "temporal")
+    ) {
+      try {
+        const text = String(item);
+        if (type === "datetime" && text.slice(17, 19) === "60") {
+          throw new RangeError("Leap seconds are not supported");
+        }
+        if (metadata.as === "temporal") {
+          const Temporal = getTemporal();
+          if (type === "date") return Temporal.PlainDate.from(text);
+          if (type === "datetime") return Temporal.Instant.from(text);
+          return Temporal.PlainTime.from(text);
+        }
+        const date = new Date(
+          type === "date"
+            ? `${text}T00:00:00.000Z`
+            : type === "time"
+              ? `1970-01-01T${text}:00.000Z`
+              : text,
+        );
+        if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid Date");
+        if (type !== "time") {
+          const calendarDate = text.slice(0, 10);
+          if (formatDate(new Date(`${calendarDate}T00:00:00.000Z`)) !== calendarDate) {
+            throw new RangeError("Invalid calendar date");
+          }
+        }
+        return date;
+      } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
         issues.push({
-          message: `Expected a valid calendar date: received ${item}`,
+          message: `Expected a valid ${type === "date" ? "calendar date" : type}: received ${item}`,
           path: itemPath.length > 0 ? itemPath : undefined,
         });
+        return item;
       }
-      return date;
     }
     if (field.type !== "nested") return item;
     const record = item as Record<string, unknown>;

@@ -7,6 +7,7 @@ import {
   getNamespacesWithMigrations,
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
+import { isCI } from "std-env";
 import { normalizeActionContent } from "./generate";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import { hashContent, type LockTarget, readLock } from "./lock";
@@ -230,11 +231,6 @@ function readHash(absFile: string, normalize?: (content: string) => string): str
 export type CheckGitHubOptions = {
   /** Repository root where `.github` lives. */
   outputDir: string;
-  /**
-   * When true, run in CI mode: skip checks that are handled at runtime by
-   * the deployed GitHub Actions (e.g. TAILOR_PLATFORM_WORKSPACE_ID presence).
-   */
-  ci?: boolean;
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
   /** Injectable config-existence probe, for testing. */
@@ -286,7 +282,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   if (!lock || lock.targets.length === 0) {
     throw new Error(
       "No managed workflows found (.github/tailor.lock is missing or empty). " +
-        "Run `tailor setup branch` (or another setup subcommand) first.",
+        "Run `tailor setup ci branch` (or another setup subcommand) first.",
     );
   }
 
@@ -297,7 +293,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   // never read vars.* themselves. Preview targets create per-PR workspaces and
   // don't reference TAILOR_PLATFORM_WORKSPACE_ID either.
   // In CI the plan/deploy actions handle this at runtime.
-  if (!options.ci) {
+  if (!isCI) {
     const needsWorkspaceId = lock.targets.some(
       (t) => t.kind === "branch" || t.kind === "tag" || t.kind === "coordinate",
     );
@@ -391,7 +387,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   for (const finding of findings) {
     logger.warn(`[${finding.target}] ${finding.message} (ignore key: ${finding.rule})`);
   }
-  if (options.ci) {
+  if (isCI) {
     logger.log(`${DRIFT_COUNT_MARKER}=${String(findings.length)}`);
   }
   throw new Error(

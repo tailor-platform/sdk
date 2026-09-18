@@ -1,4 +1,4 @@
-import { arg, confirmationArgs, defineAppCommand, logger } from "@tailor-platform/sdk/cli";
+import { arg, confirmationArgs, defineAppCommand, defineCommand } from "@tailor-platform/sdk/cli";
 import { z } from "zod";
 import { checkGitHub } from "./check";
 import { setupDelete } from "./delete";
@@ -8,15 +8,9 @@ import { setupRenovate } from "./renovate";
 const checkCommand = defineAppCommand({
   name: "check",
   description: "Audit generated workflows for drift against the current config/repo (read-only).",
-  args: z.strictObject({
-    ci: arg(z.boolean().default(false), {
-      description:
-        "Run in CI mode: skip checks that are handled by the runtime " +
-        "(e.g. TAILOR_PLATFORM_WORKSPACE_ID).",
-    }),
-  }),
-  run: async (args) => {
-    await checkGitHub({ outputDir: process.cwd(), ci: args.ci });
+  args: z.strictObject({}),
+  run: async () => {
+    await checkGitHub({ outputDir: process.cwd() });
   },
 });
 
@@ -63,7 +57,7 @@ const coordinateCommand = defineAppCommand({
 const actionCommand = defineAppCommand({
   name: "action",
   description:
-    "Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).",
+    "Generate a per-app composite action for use with setup ci coordinate (monorepo multi-app deploys).",
   args: z.strictObject({
     name: arg(z.string().min(1).optional(), {
       alias: "n",
@@ -101,7 +95,6 @@ const branchCommand = defineAppCommand({
       description: "Name (defaults to the config 'name')",
     }),
     target: arg(z.string().min(1).optional(), {
-      hiddenAlias: "branch",
       description: "Deploy trigger branch (defaults to the detected default branch)",
     }),
     environment: arg(z.string().min(1).optional(), {
@@ -118,13 +111,7 @@ const branchCommand = defineAppCommand({
       description: "Discard hand edits / take over unmanaged files and regenerate",
     }),
   }),
-  notes: "`--branch` is a deprecated alias of `--target` and will be removed in v3.",
   run: async (args) => {
-    if (usedDeprecatedBranchFlag(process.argv)) {
-      logger.warn(
-        "`tailor setup branch --branch` is deprecated and will be removed in v3. Use `--target` instead.",
-      );
-    }
     await setupTarget({
       kind: "branch",
       workspaceName: args.name,
@@ -258,24 +245,22 @@ const deleteCommand = defineAppCommand({
   },
 });
 
-/**
- * Detect whether the deprecated `--branch` spelling of `--target` was
- * used. politty resolves hidden aliases before dispatch, so the spelling is
- * only observable from the raw argv.
- * @param argv - Process argv tokens
- * @returns true when a `--branch` token is present
- */
-function usedDeprecatedBranchFlag(argv: readonly string[]): boolean {
-  return argv.some((token) => token === "--branch" || token.startsWith("--branch="));
-}
+const ciCommand = defineCommand({
+  name: "ci",
+  description:
+    "Generate a GitHub Actions deploy workflow or composite action, tracked in .github/tailor.lock and drift-checked by `setup check`.",
+  subCommands: {
+    branch: branchCommand,
+    tag: tagCommand,
+    preview: previewCommand,
+    action: actionCommand,
+    coordinate: coordinateCommand,
+  },
+});
 
 export const setupSubCommands = {
-  // TargetKind generators: tracked in .github/tailor.lock and drift-checked by `setup check`.
-  branch: branchCommand,
-  tag: tagCommand,
-  preview: previewCommand,
-  action: actionCommand,
-  coordinate: coordinateCommand,
+  // GitHub Actions generators: tracked in .github/tailor.lock and drift-checked by `setup check`.
+  ci: ciCommand,
   // Standalone generator: writes a user-owned file, not tracked in the lock.
   deps: depsCommand,
   // Cross-cutting operations over lock-tracked files.
