@@ -12,6 +12,10 @@ import type {
   FieldOptions,
   DateFieldOptions,
   DateFieldValue,
+  DateTimeFieldOptions,
+  DateTimeFieldValue,
+  TimeFieldOptions,
+  TimeFieldValue,
   FieldOutput,
   TailorField as TailorFieldBase,
   FieldValidateInput,
@@ -363,11 +367,12 @@ function decimal<const Opt extends FieldOptions>(options?: Opt) {
  * @returns A date field
  * @example t.date()
  * @example t.date({ as: "date" })
+ * @example t.date({ as: "temporal" })
  */
 function date<const Opt extends DateFieldOptions = FieldOptions>(options?: Opt) {
   const field = createTailorField<"date", Opt, DateFieldValue<Opt["as"]>>("date", options);
-  if (options?.as === "date") {
-    field._metadata.as = "date";
+  if (options?.as === "date" || options?.as === "temporal") {
+    field._metadata.as = options.as;
   }
   return field;
 }
@@ -377,9 +382,18 @@ function date<const Opt extends DateFieldOptions = FieldOptions>(options?: Opt) 
  * @param options - Field configuration options
  * @returns A datetime field
  * @example t.datetime()
+ * @example t.datetime({ as: "date" })
+ * @example t.datetime({ as: "temporal" })
  */
-function datetime<const Opt extends FieldOptions>(options?: Opt) {
-  return createTailorField("datetime", options);
+function datetime<const Opt extends DateTimeFieldOptions = FieldOptions>(options?: Opt) {
+  const field = createTailorField<"datetime", Opt, DateTimeFieldValue<Opt["as"]>>(
+    "datetime",
+    options,
+  );
+  if (options?.as === "date" || options?.as === "temporal") {
+    field._metadata.as = options.as;
+  }
+  return field;
 }
 
 /**
@@ -387,9 +401,15 @@ function datetime<const Opt extends FieldOptions>(options?: Opt) {
  * @param options - Field configuration options
  * @returns A time field
  * @example t.time()
+ * @example t.time({ as: "date" })
+ * @example t.time({ as: "temporal" })
  */
-function time<const Opt extends FieldOptions>(options?: Opt) {
-  return createTailorField("time", options);
+function time<const Opt extends TimeFieldOptions = FieldOptions>(options?: Opt) {
+  const field = createTailorField<"time", Opt, TimeFieldValue<Opt["as"]>>("time", options);
+  if (options?.as === "date" || options?.as === "temporal") {
+    field._metadata.as = options.as;
+  }
+  return field;
 }
 
 /**

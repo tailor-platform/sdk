@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.12
+
+### Patch Changes
+
+- [#2365](https://github.com/tailor-platform/sdk/pull/2365) [`094bf55`](https://github.com/tailor-platform/sdk/commit/094bf55be5fb771ec5116a4317537799d987fe83) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the `v3/setup-branch-flag-rename` codemod. It rewrote `tailor setup branch --branch` to `--target`, but `@tailor-platform/sdk-plugin-setup` now removes the `--branch` alias outright instead of deprecating it until v3, so the rewrite no longer applies.
+
+- [#2332](https://github.com/tailor-platform/sdk/pull/2332) [`766a3f9`](https://github.com/tailor-platform/sdk/commit/766a3f91acaf7fa9cd643f7c2bf9fe6055d578c5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.8.0
+
+- [#2378](https://github.com/tailor-platform/sdk/pull/2378) [`867d586`](https://github.com/tailor-platform/sdk/commit/867d586a8b08a27f0b1a26dec2f18efa7963e375) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.6.5
+
 ## 0.8.11
 
 ### Patch Changes

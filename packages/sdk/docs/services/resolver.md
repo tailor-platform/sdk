@@ -120,7 +120,7 @@ createResolver({
 });
 ```
 
-### Date Values
+### Date and Time Values
 
 `t.date()` uses `YYYY-MM-DD` strings by default. Use `t.date({ as: "date" })` to work with JavaScript `Date` values in the resolver body and input validators:
 
@@ -142,6 +142,58 @@ GraphQL still accepts and returns `YYYY-MM-DD` strings. The SDK converts input t
 This option also works in nested objects and with `array: true` or `optional: true`. Input must be a valid calendar date, and output must be a valid `Date` with a 4-digit UTC year (0000-9999). Both deployed resolvers and `tailor function run` perform these conversions.
 
 An executor subscribing to the resolver with `resolverExecutedTrigger` receives the event as JSON, so `result` holds the `YYYY-MM-DD` string rather than a `Date`.
+
+Use `t.date({ as: "temporal" })` to work with the [`Temporal.PlainDate`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/PlainDate) value instead:
+
+```typescript
+createResolver({
+  name: "nextDay",
+  operation: "query",
+  input: { day: t.date({ as: "temporal" }) },
+  body: ({ input }) => input.day.add({ days: 1 }),
+  output: t.date({ as: "temporal" }),
+});
+```
+
+`Temporal.PlainDate` has no time zone, so date arithmetic is unambiguous. It works the same as `as: "date"` otherwise: `array`/`optional`/nested objects are supported, input must be a valid calendar date, output must have a 4-digit year (0000-9999), and an executor receiving the event through `resolverExecutedTrigger` sees the `YYYY-MM-DD` string.
+
+`t.datetime` and `t.time` also support both representations:
+
+```typescript
+createResolver({
+  name: "reschedule",
+  operation: "query",
+  input: {
+    at: t.datetime({ as: "temporal" }),
+    time: t.time({ as: "temporal" }),
+  },
+  body: ({ input }) => ({
+    at: input.at.add({ hours: 1 }),
+    time: input.time.add({ minutes: 30 }),
+  }),
+  output: {
+    at: t.datetime({ as: "temporal" }),
+    time: t.time({ as: "temporal" }),
+  },
+});
+```
+
+- **Datetime**: `t.datetime({ as: "temporal" })` uses `Temporal.Instant`; `t.datetime({ as: "date" })` uses `Date`. Input must be a valid ISO datetime with seconds and a UTC offset or `Z`; leap seconds are rejected. Output uses UTC (`Z`) and must have a 4-digit UTC year (0000-9999). `Temporal.Instant` preserves nanoseconds during SDK conversion, but the Platform truncates datetimes to milliseconds. `Date` itself has only millisecond precision. Without `as`, the existing behavior is unchanged: input is a string, and output accepts `string | Date`. Explicit `as: "string"` types the value as `string`.
+- **Time**: `t.time({ as: "temporal" })` uses `Temporal.PlainTime`; `t.time({ as: "date" })` uses a `Date` on `1970-01-01` in UTC. Input and output use `HH:mm` in the range `00:00`–`23:59`. For `Date` output, only the UTC hours and minutes are used; the date portion is ignored. Both representations truncate seconds and fractional seconds without rounding up: `12:30:59.999` becomes `12:30`. Use UTC getters/setters when changing a `Date` time. Without `as`, or with `as: "string"`, time values remain strings.
+
+All three field types support `array`, `optional`, nested objects, and input validators with the selected representation. Both deployed resolvers and `tailor function run` convert input and output. Executors using `resolverExecutedTrigger` receive date, datetime, and time results as strings.
+
+The SDK supplies Temporal types, so existing projects can use `as: "temporal"` without changing `compilerOptions.lib`. To construct values or name their types, import `Temporal` from the SDK:
+
+```typescript
+import { Temporal } from "@tailor-platform/sdk/runtime";
+
+const day: Temporal.PlainDate = Temporal.PlainDate.from("2026-09-07");
+const at: Temporal.Instant = Temporal.Instant.from("2026-09-07T12:30:00Z");
+const time: Temporal.PlainTime = Temporal.PlainTime.from("12:30:59.999");
+```
+
+This import uses the runtime's Temporal implementation. Deployed resolvers and `tailor function run` use the Tailor Platform's native Temporal. The SDK's [`tailor-runtime` Vitest environment](../testing.md) installs a polyfill when Node.js does not provide Temporal; no Node.js flags or separate polyfill setup are needed. Other local runtimes must provide Temporal to construct or parse Temporal values. Importing the SDK and defining fields does not require it, so CLI configuration loading works on Node.js without Temporal. The SDK does not add ambient global Temporal types or include the polyfill in deployed functions.
 
 ### Custom Type Name (`typeName`)
 

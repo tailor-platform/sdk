@@ -46,4 +46,4 @@ jobs:
           install: false
 
       - name: Audit lockfile for newly introduced vulnerabilities
-        uses: tailor-platform/actions/lockfile-audit@0208711e73101483eedfc77fd190d236e2e95c74 # v2.3.3
+        uses: tailor-platform/actions/lockfile-audit@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
