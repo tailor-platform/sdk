@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { cancel, log, select, text } from "@clack/prompts";
+import { cancel, isCancel, log, select, text } from "@clack/prompts";
 
 interface Opts {
   name?: string;
@@ -61,21 +61,6 @@ const validateTemplate = async (template: string) => {
   return undefined;
 };
 
-const unwrapPromptResult = <T>(value: T | symbol) => {
-  if (typeof value === "symbol") {
-    cancel("Operation cancelled");
-    process.exit(0);
-  }
-  return value;
-};
-
-const requireValue = (value: string | undefined, message: string) => {
-  if (!value) {
-    throw new Error(message);
-  }
-  return value;
-};
-
 export const collectContext = async (opts: Opts): Promise<Context> => {
   let { name, template } = opts;
   if (name) {
@@ -95,12 +80,15 @@ export const collectContext = async (opts: Opts): Promise<Context> => {
   }
 
   if (!name) {
-    name = unwrapPromptResult(
-      await text({
-        message: "📝 What's your project name?",
-        validate: validateName,
-      }),
-    );
+    const ret = await text({
+      message: "📝 What's your project name?",
+      validate: validateName,
+    });
+    if (isCancel(ret)) {
+      cancel("Operation cancelled");
+      process.exit(0);
+    }
+    name = ret;
   } else {
     log.info(`📦 Project: ${name}`);
   }
@@ -110,23 +98,23 @@ export const collectContext = async (opts: Opts): Promise<Context> => {
       value,
       hint: templateHints[value],
     }));
-    template = unwrapPromptResult(
-      await select({
-        message: "🎨 Choose your template",
-        options,
-      }),
-    );
+    const ret = await select({
+      message: "🎨 Choose your template",
+      options,
+    });
+    if (isCancel(ret)) {
+      cancel("Operation cancelled");
+      process.exit(0);
+    }
+    template = ret;
   } else {
     log.info(`🎯 Template: ${template}`);
   }
 
-  const projectName = requireValue(name, "Project name is required.");
-  const templateName = requireValue(template, "Template is required.");
-
   return {
-    projectName,
-    projectDir: resolve(projectName),
-    templateName,
-    templateDir: resolve(templatesDir(), templateName),
+    projectName: name,
+    projectDir: resolve(name),
+    templateName: template,
+    templateDir: resolve(templatesDir(), template),
   };
 };
