@@ -307,6 +307,36 @@ describe("planPipeline (resolver service level)", () => {
     });
   });
 
+  describe("application env passthrough", () => {
+    function createPipelineWithResolver(): ResolverService {
+      return {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: {
+          "test-resolver": {
+            name: "test-resolver",
+            operation: "query",
+            output: { type: "string", metadata: {} },
+          },
+        },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+    }
+
+    test("embeds application.env into the operationHook expression verbatim", async () => {
+      const application = createMockApplication([createPipelineWithResolver()], {
+        env: { SITE_URL: "my-site:url" },
+      });
+
+      const result = await planPipeline(buildCtx({ application }));
+
+      const hookExpr =
+        result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
+          ?.operationHook?.expr;
+      expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
+    });
+  });
+
   describe("delete scenarios (service level)", () => {
     test("service is deleted when removed from config", async () => {
       const client = createMockClient([
@@ -526,6 +556,82 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.resolver.updates).toHaveLength(1);
       expect(result.changeSet.resolver.updates[0]!.name).toBe("test-resolver");
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
+    });
+  });
+
+  describe("previousExisting reuse", () => {
+    function createPipeline(resolver: {
+      name: string;
+      operation: Resolver["operation"];
+      [key: string]: unknown;
+    }): ResolverService {
+      return {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+    }
+
+    test("skips re-listing services/resolvers and re-fetching resolver detail when a prior fetch is provided", async () => {
+      const pipeline = createPipeline({
+        name: "test-resolver",
+        operation: "query",
+        output: { type: "string", metadata: {} },
+      });
+      const application = createMockApplication([pipeline]);
+
+      // Plan once against an empty workspace to learn the desired shape, then
+      // plan again as if that shape were already deployed (so it comes back unchanged).
+      const emptyClient = createMockClient([]);
+      const createResult = await planPipeline(buildCtx({ client: emptyClient, application }));
+      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [desiredResolver as Record<string, unknown>],
+      });
+      const first = await planPipeline(buildCtx({ client, application }));
+      expect(client.listPipelineServices).toHaveBeenCalledTimes(1);
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(1);
+      expect(client.getPipelineResolver).toHaveBeenCalledTimes(1);
+      expect(first.changeSet.resolver.unchanged).toHaveLength(1);
+
+      const second = await planPipeline(buildCtx({ client, application }), {
+        existingServices: first.existingServices,
+        existingResolvers: first.existingResolvers,
+      });
+
+      // None of the fetches ran a second time: the platform state is reused as-is.
+      expect(client.listPipelineServices).toHaveBeenCalledTimes(1);
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(1);
+      expect(client.getPipelineResolver).toHaveBeenCalledTimes(1);
+      expect(second.changeSet.resolver.unchanged).toHaveLength(1);
+      expect(second.changeSet.resolver.unchanged[0]!.name).toBe("test-resolver");
+    });
+
+    test("skips re-listing resolvers for a deleted service's namespace when a prior fetch is provided", async () => {
+      const application = createMockApplication([createMockResolverService("new-resolver")]);
+      const client = createMockClient([{ name: "old-resolver", label: appName }], {
+        "old-resolver": [{ name: "stale-resolver", operation: "query" }],
+      });
+
+      const first = await planPipeline(buildCtx({ client, application }));
+      // Once for the locally declared "new-resolver" namespace, once for the
+      // remote-only "old-resolver" namespace being deleted.
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(2);
+      expect(first.changeSet.resolver.deletes).toHaveLength(1);
+      expect(first.changeSet.resolver.deletes[0]!.name).toBe("stale-resolver");
+
+      const second = await planPipeline(buildCtx({ client, application }), {
+        existingServices: first.existingServices,
+        existingResolvers: first.existingResolvers,
+      });
+
+      // Neither namespace's resolver list was re-fetched, including the
+      // deleted one: both came from the cache.
+      expect(client.listPipelineResolvers).toHaveBeenCalledTimes(2);
+      expect(second.changeSet.resolver.deletes).toHaveLength(1);
+      expect(second.changeSet.resolver.deletes[0]!.name).toBe("stale-resolver");
     });
   });
 });

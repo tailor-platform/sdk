@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 import { userAgent } from "./user-agent";
@@ -1010,11 +1011,60 @@ export type ResolveStaticWebsiteUrlsOptions = {
    * Use this from plan-phase callers to avoid noisy warnings on the first
    * deployment, where the static website will be created later in the same
    * apply run. Other failure modes ("URL not yet assigned", transient RPC
-   * errors, permission errors) are intentionally not suppressed so that
-   * real platform problems still surface during planning.
+   * errors, permission errors) are unaffected by this option: they still log
+   * a warning, and separately, `failOnUnexpectedError` decides whether they
+   * abort instead.
    */
   expectedLocalNames?: ReadonlySet<string>;
+  /**
+   * When true, an entry that cannot be resolved keeps its original
+   * `name:url[/path]` pattern instead of being dropped, and the warning says
+   * so. Callers whose target is a fixed-shape value (an env var, for example)
+   * rather than a list use this, because silently dropping the value would
+   * change the shape of what user code receives.
+   */
+  keepUnresolved?: boolean;
+  /**
+   * When true, a lookup failure other than `NotFound` (a permission error, a
+   * transient RPC failure, ...) is re-thrown instead of being downgraded to a
+   * warning. A site that exists but has no URL assigned yet is treated the
+   * same way, unless its name is in `expectedLocalNames` -- there, a rebuild
+   * is expected to resolve it, so it is kept unresolved with a warning
+   * instead. Callers where the fallback value ends up embedded in deployed
+   * code use this, since shipping it silently is worse than failing the
+   * deploy. A `NotFound` for a name in `expectedLocalNames` is unaffected.
+   */
+  failOnUnexpectedError?: boolean;
+  /**
+   * Shared `getStaticWebsite` lookups, keyed by site name. Pass the same map
+   * across multiple calls that may reference the same site (for example, one
+   * call per `env` key) so only the first caller for a given name issues the
+   * platform lookup; the rest reuse its result.
+   */
+  siteLookupCache?: Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>;
 };
+
+/** `name:url[/path]` static website placeholder, anchored at the end. */
+const STATIC_WEBSITE_URL_PATTERN = /:url(\/.*)?$/;
+
+/**
+ * Check whether a value is a `name:url[/path]` static website placeholder.
+ * @param value - Value to test; non-strings are never placeholders
+ * @returns True when the value still needs static website resolution
+ */
+export function hasStaticWebsiteUrlPlaceholder(value: unknown): value is string {
+  return typeof value === "string" && STATIC_WEBSITE_URL_PATTERN.test(value);
+}
+
+/**
+ * Extract the static website name from a `name:url[/path]` placeholder.
+ * @param value - A value already confirmed via {@link hasStaticWebsiteUrlPlaceholder}
+ * @returns The site name, or the whole value if it does not actually match (defensive fallback)
+ */
+export function staticWebsiteNameFromPlaceholder(value: string): string {
+  const match = value.match(STATIC_WEBSITE_URL_PATTERN);
+  return match?.index !== undefined ? value.substring(0, match.index) : value;
+}
 
 /**
  * Resolve "name:url" patterns to actual Static Website URLs.
@@ -1037,38 +1087,61 @@ export async function resolveStaticWebsiteUrls(
     return [];
   }
 
-  const { expectedLocalNames } = options;
+  const { expectedLocalNames, keepUnresolved = false, failOnUnexpectedError = false } = options;
+  const unresolved = (url: string) => (keepUnresolved ? [url] : []);
+  const fallbackNote = keepUnresolved
+    ? `Leaving the ${context} value unresolved.`
+    : `Excluding from ${context}.`;
+  const siteLookupCache: NonNullable<ResolveStaticWebsiteUrlsOptions["siteLookupCache"]> =
+    options.siteLookupCache ?? new Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>();
+  const lookupSite = (siteName: string) => {
+    let lookup = siteLookupCache.get(siteName);
+    if (!lookup) {
+      lookup = client.getStaticWebsite({ workspaceId, name: siteName });
+      siteLookupCache.set(siteName, lookup);
+    }
+    return lookup;
+  };
 
   const results = await Promise.all(
     urls.map(async (url) => {
-      const urlPattern = /:url(\/.*)?$/;
-      const match = url.match(urlPattern);
+      const match = url.match(STATIC_WEBSITE_URL_PATTERN);
 
       if (match && match.index !== undefined) {
         const siteName = url.substring(0, match.index);
         const pathSuffix = match[1] || "";
 
         try {
-          const response = await client.getStaticWebsite({
-            workspaceId,
-            name: siteName,
-          });
+          const response = await lookupSite(siteName);
 
           if (response.staticwebsite?.url) {
             return [response.staticwebsite.url + pathSuffix];
           }
-          logger.warn(
-            `Static website "${siteName}" has no URL assigned yet. Excluding from ${context}.`,
-          );
-          return [];
+          // A site outside `expectedLocalNames` has no pending rebuild that
+          // will ever re-check it, so this deploy is the only chance to catch
+          // a missing URL -- keeping it unresolved here would ship the
+          // literal placeholder with nothing left to fail on.
+          if (!expectedLocalNames?.has(siteName) && failOnUnexpectedError) {
+            throw CLIError({
+              code: "STATIC_WEBSITE_URL_NOT_ASSIGNED",
+              message: `Static website "${siteName}" exists but has no URL assigned yet.`,
+              suggestion: "Re-run the deploy once the static website's URL is available.",
+            });
+          }
+          logger.warn(`Static website "${siteName}" has no URL assigned yet. ${fallbackNote}`);
+          return unresolved(url);
         } catch (error) {
-          if (isNotFoundError(error) && expectedLocalNames?.has(siteName)) {
-            return [url];
+          if (isNotFoundError(error)) {
+            if (expectedLocalNames?.has(siteName)) {
+              return [url];
+            }
+          } else if (failOnUnexpectedError) {
+            throw error;
           }
           logger.warn(
-            `Static website "${siteName}" not found for ${context} configuration. Excluding from ${context}.`,
+            `Static website "${siteName}" not found for ${context} configuration. ${fallbackNote}`,
           );
-          return [];
+          return unresolved(url);
         }
       }
       return [url];
@@ -1076,6 +1149,96 @@ export async function resolveStaticWebsiteUrls(
   );
 
   return results.flat();
+}
+
+/** Application `env` as declared by `defineConfig({ env })`. */
+export type ApplicationEnv = Readonly<Record<string, string | number | boolean>>;
+
+/**
+ * Resolve `name:url` patterns held by an application's `env` values.
+ *
+ * `env` reaches user code verbatim -- it is embedded in the executor args and
+ * resolver operationHook expressions -- so an unresolved placeholder is
+ * delivered as the literal string `"my-site:url"`. Each placeholder value goes
+ * through `resolveStaticWebsiteUrls`, which keeps the same first-deployment
+ * semantics as `cors` and OAuth2 redirect URIs for a website this deploy run
+ * is about to create (left as-is, with a warning naming the site and noting
+ * this deploy will rebuild to inject the real URL once it exists), but --
+ * unlike `cors` -- fails the deploy on any other lookup failure instead of
+ * shipping the unresolved placeholder into deployed code.
+ *
+ * Values that are not placeholders -- and the record itself when it holds no
+ * placeholder at all -- are returned untouched, so the common case costs no
+ * platform round trip.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param env - Application env record
+ * @param options - Optional behavior overrides
+ * @returns An env record with resolvable placeholders replaced by URLs
+ */
+export async function resolveStaticWebsiteUrlsInEnv(
+  client: OperatorClient,
+  workspaceId: string,
+  env: ApplicationEnv | undefined,
+  options: Omit<ResolveStaticWebsiteUrlsOptions, "keepUnresolved" | "failOnUnexpectedError"> = {},
+): Promise<ApplicationEnv> {
+  if (!env || !Object.values(env).some(hasStaticWebsiteUrlPlaceholder)) {
+    return env ?? {};
+  }
+
+  // Shared across every key below, so two keys referencing the same site
+  // (e.g. `siteUrl` and `callbackUrl`) issue one getStaticWebsite call, not
+  // one per key.
+  const siteLookupCache: NonNullable<ResolveStaticWebsiteUrlsOptions["siteLookupCache"]> =
+    new Map();
+
+  const entries = await Promise.all(
+    Object.entries(env).map(async ([key, value]) => {
+      if (!hasStaticWebsiteUrlPlaceholder(value)) {
+        return [key, value] as const;
+      }
+      const [resolved] = await resolveStaticWebsiteUrls(
+        client,
+        workspaceId,
+        [value],
+        `env "${key}"`,
+        { ...options, keepUnresolved: true, failOnUnexpectedError: true, siteLookupCache },
+      );
+      return [key, resolved ?? value] as const;
+    }),
+  );
+
+  const resolved: ApplicationEnv = Object.fromEntries<string | number | boolean>(entries);
+  warnUnresolvedEnvPlaceholders(resolved, options.expectedLocalNames);
+  return resolved;
+}
+
+/**
+ * Warn about env values that are still `name:url` placeholders after
+ * resolution, so a gap surfaces at deploy time instead of as a malformed URL
+ * inside a running function.
+ * @param env - Env record after resolution
+ * @param expectedLocalNames - Static websites this deploy run creates later
+ */
+function warnUnresolvedEnvPlaceholders(
+  env: ApplicationEnv,
+  expectedLocalNames: ReadonlySet<string> | undefined,
+): void {
+  for (const [key, value] of Object.entries(env)) {
+    if (!hasStaticWebsiteUrlPlaceholder(value)) continue;
+    const siteName = value.slice(0, value.search(STATIC_WEBSITE_URL_PATTERN));
+    if (expectedLocalNames?.has(siteName)) {
+      logger.warn(
+        `env "${key}" keeps the unresolved value "${value}" for now because static website "${siteName}" ` +
+          `isn't available yet; this deploy rebuilds automatically once it is, to inject the real URL.`,
+      );
+      continue;
+    }
+    logger.warn(
+      `env "${key}" keeps the unresolved value "${value}". ` +
+        `The literal pattern is passed to your code at runtime.`,
+    );
+  }
 }
 
 /**

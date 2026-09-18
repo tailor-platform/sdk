@@ -27,8 +27,10 @@ import {
   POOLED_UPLOAD_METHODS,
   rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
+  resolveStaticWebsiteUrlsInEnv,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
+  staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "./client";
 import { errorToJson } from "./error-json";
@@ -1366,6 +1368,20 @@ describe("errorHandlingInterceptor", () => {
   });
 });
 
+describe("staticWebsiteNameFromPlaceholder", () => {
+  test("extracts the name from a bare :url placeholder", () => {
+    expect(staticWebsiteNameFromPlaceholder("my-site:url")).toBe("my-site");
+  });
+
+  test("extracts the name from a :url placeholder with a path suffix", () => {
+    expect(staticWebsiteNameFromPlaceholder("my-site:url/callback")).toBe("my-site");
+  });
+
+  test("returns the value unchanged when it is not actually a placeholder", () => {
+    expect(staticWebsiteNameFromPlaceholder("https://example.com")).toBe("https://example.com");
+  });
+});
+
 describe("resolveStaticWebsiteUrls", () => {
   function makeClient(
     impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
@@ -1452,6 +1468,235 @@ describe("resolveStaticWebsiteUrls", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
     );
+  });
+
+  test("re-throws a non-NotFound error instead of falling back when failOnUnexpectedError is set", async () => {
+    const error = new ConnectError("service unavailable", Code.Unavailable);
+    const client = makeClient(async () => {
+      throw error;
+    });
+
+    await expect(
+      resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+        failOnUnexpectedError: true,
+      }),
+    ).rejects.toThrow(error);
+  });
+
+  test("still keeps a NotFound entry unresolved when failOnUnexpectedError is set", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["unknown:url"], "CORS", {
+      failOnUnexpectedError: true,
+      keepUnresolved: true,
+    });
+
+    expect(resolved).toEqual(["unknown:url"]);
+    expect(warnSpy).toHaveBeenCalledOnce();
+  });
+
+  test("fails instead of keeping an unresolved entry when a site has no URL yet, isn't expected locally, and failOnUnexpectedError is set", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    await expect(
+      resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+        failOnUnexpectedError: true,
+        keepUnresolved: true,
+      }),
+    ).rejects.toThrow('Static website "my-site" exists but has no URL assigned yet.');
+  });
+
+  test("still keeps an unassigned-URL entry unresolved when the site is expected locally, even with failOnUnexpectedError", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+      failOnUnexpectedError: true,
+      keepUnresolved: true,
+      expectedLocalNames: new Set(["my-site"]),
+    });
+
+    expect(resolved).toEqual(["my-site:url"]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" has no URL assigned yet. Leaving the CORS value unresolved.',
+    );
+  });
+
+  test("looks up a site once even when multiple values reference it", async () => {
+    const getStaticWebsite = vi
+      .fn()
+      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url", "my-site:url/callback"],
+      "CORS",
+    );
+
+    expect(resolved).toEqual(["https://site.example.com", "https://site.example.com/callback"]);
+    expect(getStaticWebsite).toHaveBeenCalledOnce();
+  });
+
+  test("reuses a lookup from a shared siteLookupCache instead of calling getStaticWebsite again", async () => {
+    const getStaticWebsite = vi
+      .fn()
+      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const siteLookupCache: NonNullable<
+      Parameters<typeof resolveStaticWebsiteUrls>[4]
+    >["siteLookupCache"] = new Map();
+
+    await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", { siteLookupCache });
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url/callback"],
+      "OAuth2 redirect URIs",
+      {
+        siteLookupCache,
+      },
+    );
+
+    expect(resolved).toEqual(["https://site.example.com/callback"]);
+    expect(getStaticWebsite).toHaveBeenCalledOnce();
+  });
+});
+
+describe("resolveStaticWebsiteUrlsInEnv", () => {
+  function makeClient(
+    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+  ): OperatorClient {
+    return {
+      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
+    } as unknown as OperatorClient;
+  }
+
+  test("resolves :url values and leaves every other value untouched", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "https://site.example.com" } }));
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
+      SITE_URL: "my-site:url",
+      CALLBACK_URL: "my-site:url/callback",
+      API_URL: "https://literal.example.com",
+      RETRIES: 3,
+      DEBUG: false,
+    });
+
+    expect(resolved).toEqual({
+      SITE_URL: "https://site.example.com",
+      CALLBACK_URL: "https://site.example.com/callback",
+      API_URL: "https://literal.example.com",
+      RETRIES: 3,
+      DEBUG: false,
+    });
+  });
+
+  test("returns the record as-is without a lookup when no value is a placeholder", async () => {
+    const getStaticWebsite = vi.fn();
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const env = { API_URL: "https://literal.example.com", RETRIES: 3 };
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", env);
+
+    expect(resolved).toBe(env);
+    expect(getStaticWebsite).not.toHaveBeenCalled();
+  });
+
+  test("keeps the placeholder instead of dropping the key when the site is missing", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
+      SITE_URL: "unknown:url",
+    });
+
+    expect(resolved).toEqual({ SITE_URL: "unknown:url" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "unknown" not found for env "SITE_URL" configuration. Leaving the env "SITE_URL" value unresolved.',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'env "SITE_URL" keeps the unresolved value "unknown:url". The literal pattern is passed to your code at runtime.',
+    );
+  });
+
+  test("keeps the placeholder and points at the next deploy when the site is created later in this run", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(
+      client,
+      "ws-1",
+      { SITE_URL: "my-site:url" },
+      { expectedLocalNames: new Set(["my-site"]) },
+    );
+
+    expect(resolved).toEqual({ SITE_URL: "my-site:url" });
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
+      'env "SITE_URL" keeps the unresolved value "my-site:url" for now because static website "my-site" isn\'t available yet; this deploy rebuilds automatically once it is, to inject the real URL.',
+    );
+  });
+
+  test("keeps the placeholder when the site exists but has no URL yet, for a name in expectedLocalNames", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(
+      client,
+      "ws-1",
+      { SITE_URL: "my-site:url" },
+      { expectedLocalNames: new Set(["my-site"]) },
+    );
+
+    expect(resolved).toEqual({ SITE_URL: "my-site:url" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" has no URL assigned yet. Leaving the env "SITE_URL" value unresolved.',
+    );
+  });
+
+  test("fails instead of shipping the placeholder when the site has no URL yet and isn't in expectedLocalNames", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    await expect(
+      resolveStaticWebsiteUrlsInEnv(client, "ws-1", { SITE_URL: "my-site:url" }),
+    ).rejects.toThrow('Static website "my-site" exists but has no URL assigned yet.');
+  });
+
+  test("fails instead of shipping the placeholder when the lookup fails with an unexpected error", async () => {
+    const error = new ConnectError("service unavailable", Code.Unavailable);
+    const client = makeClient(async () => {
+      throw error;
+    });
+
+    await expect(
+      resolveStaticWebsiteUrlsInEnv(client, "ws-1", { SITE_URL: "my-site:url" }),
+    ).rejects.toThrow(error);
+  });
+
+  test("looks up a site once even when multiple env keys reference it", async () => {
+    const getStaticWebsite = vi
+      .fn()
+      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
+    const client = { getStaticWebsite } as unknown as OperatorClient;
+
+    const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
+      SITE_URL: "my-site:url",
+      CALLBACK_URL: "my-site:url/callback",
+    });
+
+    expect(resolved).toEqual({
+      SITE_URL: "https://site.example.com",
+      CALLBACK_URL: "https://site.example.com/callback",
+    });
+    expect(getStaticWebsite).toHaveBeenCalledOnce();
   });
 });
 

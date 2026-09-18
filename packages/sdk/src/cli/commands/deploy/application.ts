@@ -246,11 +246,20 @@ function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApp
  * Plan application changes based on current and desired state.
  * @param context - Planning context
  * @param httpAdapterBuildResult - Bundled HTTP adapter scripts to embed on the Application
+ * @param previous - A prior call's fetched existing applications/labels, reused instead of
+ *   re-querying the platform (the application resource itself isn't touched between a deploy's
+ *   first plan and its conditional rebuild's replan)
+ * @param previous.existingApplications - The prior call's fetched application list
+ * @param previous.existingLabels - The prior call's fetched labels for this application
  * @returns Planned changes
  */
 export async function planApplication(
   context: PlanContext,
   httpAdapterBuildResult?: HttpAdapterBundleResult,
+  previous?: {
+    existingApplications: ReadonlyArray<ProtoApplication>;
+    existingLabels: Record<string, string> | undefined;
+  },
 ) {
   const { client, workspaceId, application, forRemoval } = context;
   const conflicts: OwnerConflict[] = [];
@@ -264,14 +273,21 @@ export async function planApplication(
     UpdateApplication
   >("Applications");
 
-  const existingApplications = await fetchAllTolerant(async (pageToken, maxPageSize) => {
-    const { applications, nextPageToken } = await client.listApplications({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [applications, nextPageToken];
-  });
+  // The application resource itself isn't touched between a deploy's first
+  // plan and its conditional rebuild's replan (only the prerequisite resource
+  // kinds are applied in between), so its own list/label fetches are reused
+  // when available. `cors` is the exception: it's re-resolved live, right
+  // below, since the site it may reference could have just been created.
+  const existingApplications =
+    previous?.existingApplications ??
+    (await fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { applications, nextPageToken } = await client.listApplications({
+        workspaceId,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [applications, nextPageToken];
+    }));
 
   if (forRemoval) {
     // A same-named app in a shared workspace may belong to another user, so
@@ -305,13 +321,19 @@ export async function planApplication(
         });
       }
     }
-    return withOwnership(changeSet, conflicts, unmanaged, resourceOwners);
+    return Object.assign(withOwnership(changeSet, conflicts, unmanaged, resourceOwners), {
+      existingApplications,
+      existingLabels: undefined,
+    });
   }
 
   // Skip application create/update when there are no subgraphs
   // (e.g. deploying only static web hosting)
   if (application.subgraphs.length === 0) {
-    return withOwnership(changeSet, conflicts, unmanaged, resourceOwners);
+    return Object.assign(withOwnership(changeSet, conflicts, unmanaged, resourceOwners), {
+      existingApplications,
+      existingLabels: undefined,
+    });
   }
 
   let authNamespace: string | undefined;
@@ -355,7 +377,12 @@ export async function planApplication(
     appId: application.id,
     metadata: application.config.metadata,
   });
-  const existingLabels = await fetchAppLabels(client, workspaceId, application.name);
+  // `previous.existingLabels` can legitimately be `undefined` (no metadata
+  // found on the first fetch), so branch on `previous` itself -- `??` would
+  // treat that cached `undefined` as a cache miss and re-fetch needlessly.
+  const existingLabels = previous
+    ? previous.existingLabels
+    : await fetchAppLabels(client, workspaceId, application.name);
   assertLabelBudget(application.name, existingLabels, metaRequest);
   const metadataDetails = diffMetadataDisplay(existingLabels, application.config.metadata);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
@@ -454,7 +481,10 @@ export async function planApplication(
     });
   }
 
-  return withOwnership(changeSet, conflicts, unmanaged, resourceOwners);
+  return Object.assign(withOwnership(changeSet, conflicts, unmanaged, resourceOwners), {
+    existingApplications,
+    existingLabels,
+  });
 }
 
 /**

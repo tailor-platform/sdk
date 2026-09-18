@@ -3,7 +3,12 @@ import * as path from "pathe";
 import { type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
 import { recoveryContextArgs } from "#/cli/shared/args";
-import { getOrNull, type OperatorClient } from "#/cli/shared/client";
+import {
+  getOrNull,
+  hasStaticWebsiteUrlPlaceholder,
+  staticWebsiteNameFromPlaceholder,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -11,16 +16,21 @@ import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { withSpan } from "#/cli/telemetry/index";
+import { assertDefined } from "#/utils/assert";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
 import { planApplication } from "./application";
 import {
-  applyDeploymentPlans,
+  applyPrerequisiteResources,
+  applyRemainingResources,
   deploymentPlanResults,
+  preflightAllTailorDB,
   type PlannedDeployment,
+  type ReusablePlanKind,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { mergeBundledScripts } from "./bundled-scripts";
+import { type PlanSummary } from "./change-set";
 import {
   confirmImportantResourceDeletion,
   confirmMigrationCheckpointRepairs,
@@ -122,12 +132,39 @@ interface DeployInternalContext {
   suppressResultOutput?: boolean;
 }
 
+// None of these resource kinds can embed `env` or this run's rebuilt bundle
+// content, so the conditional rebuild in `deployInternal` reuses each one's
+// plan result from before the rebuild instead of re-planning it.
+const REUSABLE_ON_REBUILD_KINDS: ReadonlySet<ReusablePlanKind> = new Set([
+  "tailorDB",
+  "secretManager",
+  "aiGateway",
+  "staticWebsite",
+  "workflowExecutionPolicy",
+  "idp",
+  "auth",
+]);
+
 function collectExpectedLocalStaticWebsiteNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlySet<string> {
   const websiteNames = new Set<string>();
   for (const target of targets) {
     for (const website of target.application.staticWebsiteServices) {
+      websiteNames.add(website.name);
+    }
+  }
+  return websiteNames;
+}
+
+// Same set as collectExpectedLocalStaticWebsiteNames, read from the loaded
+// configs so it is available before any of them is bundled.
+export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
+  configs: ReadonlyArray<{ config: { staticWebsites?: ReadonlyArray<{ name: string }> } }>,
+): ReadonlySet<string> {
+  const websiteNames = new Set<string>();
+  for (const { config } of configs) {
+    for (const website of config.staticWebsites ?? []) {
       websiteNames.add(website.name);
     }
   }
@@ -234,6 +271,10 @@ type PlanDeploymentTargetParams = {
   noSchemaCheck: boolean | undefined;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  /** Resource kinds to reuse from `previous` instead of re-planning. */
+  skip?: ReadonlySet<ReusablePlanKind>;
+  /** This target's own plan result from before the rebuild, source for `skip` reuse. */
+  previous?: PlannedDeployment;
 };
 
 type ConfirmDeploymentPlansParams = {
@@ -253,6 +294,10 @@ type PlanDeploymentTargetsParams = {
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
+  /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
+  skip?: ReadonlySet<ReusablePlanKind>;
+  /** Prior plan results, matched to targets by application name, source for `skip` reuse. */
+  previousDeployments?: ReadonlyArray<PlannedDeployment>;
 };
 
 function recoveryEnvironmentArgs(
@@ -373,6 +418,8 @@ async function planDeploymentTarget(
     noSchemaCheck,
     migrationTestBaselines,
     migrationTestSnapshots,
+    skip,
+    previous,
   } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
@@ -382,15 +429,17 @@ async function planDeploymentTarget(
     const snapshot = migrationTestSnapshots?.get(service.namespace);
     return snapshot ? { ...service, types: snapshot.tables, typeSourceInfo: {} } : service;
   });
-  await withSpan("plan.validateTailorDBTypeNames", () =>
-    assertUniqueTailorDBTypeNamesWithExternal({
-      client,
-      workspaceId,
-      tailorDBServices: migrationTestServices,
-      externalTailorDBNamespaces: application.externalTailorDBNamespaces,
-      plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
-    }),
-  );
+  if (!(skip?.has("tailorDB") && previous)) {
+    await withSpan("plan.validateTailorDBTypeNames", () =>
+      assertUniqueTailorDBTypeNamesWithExternal({
+        client,
+        workspaceId,
+        tailorDBServices: migrationTestServices,
+        externalTailorDBNamespaces: application.externalTailorDBNamespaces,
+        plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
+      }),
+    );
+  }
 
   const workflowService = application.workflowService;
   const bundledWorkflowJobs = filterBundledWorkflowJobs(
@@ -398,9 +447,13 @@ async function planDeploymentTarget(
     workflowBuildResult?.usedJobNames ?? [],
   );
   const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs, bundledScripts);
-  const forceApplyAll = await withSpan("plan.detectSdkVersionChange", () =>
-    shouldForceApplyAll(client, workspaceId, application, functionEntries),
-  );
+  // Reused as-is on a rebuild's replan -- see `PlannedDeployment.forceApplyAll`'s
+  // doc comment for why recomputing it there is unsafe.
+  const forceApplyAll = previous
+    ? previous.forceApplyAll
+    : await withSpan("plan.detectSdkVersionChange", () =>
+        shouldForceApplyAll(client, workspaceId, application, functionEntries),
+      );
 
   return withSpan("plan", async () => {
     const applications = targets.map((target) => target.application);
@@ -427,7 +480,14 @@ async function planDeploymentTarget(
       idpNames,
     };
     const functionRegistry = await withSpan("plan.functionRegistry", () =>
-      planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),
+      planFunctionRegistry(
+        client,
+        workspaceId,
+        application.name,
+        application.id,
+        functionEntries,
+        previous?.functionRegistry.existingMap,
+      ),
     );
     const unchangedWorkflowJobs = new Set(
       functionRegistry.changeSet.unchanged
@@ -447,14 +507,37 @@ async function planDeploymentTarget(
       workflowExecutionPolicy,
       secretManager,
     ] = await Promise.all([
-      withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-      withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-      withSpan("plan.aiGateway", () => planAIGateway(ctx)),
-      withSpan("plan.idp", () => planIdP(ctx)),
-      withSpan("plan.auth", () => planAuth(ctx)),
-      withSpan("plan.pipeline", () => planPipeline(ctx)),
-      withSpan("plan.application", () => planApplication(ctx, httpAdapterBuildResult)),
-      withSpan("plan.executor", () => planExecutor(ctx)),
+      skip?.has("tailorDB") && previous
+        ? previous.tailorDB
+        : withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+      skip?.has("staticWebsite") && previous
+        ? previous.staticWebsite
+        : withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+      skip?.has("aiGateway") && previous
+        ? previous.aiGateway
+        : withSpan("plan.aiGateway", () => planAIGateway(ctx)),
+      skip?.has("idp") && previous ? previous.idp : withSpan("plan.idp", () => planIdP(ctx)),
+      skip?.has("auth") && previous ? previous.auth : withSpan("plan.auth", () => planAuth(ctx)),
+      withSpan("plan.pipeline", () =>
+        planPipeline(
+          ctx,
+          previous && {
+            existingServices: previous.pipeline.existingServices,
+            existingResolvers: previous.pipeline.existingResolvers,
+          },
+        ),
+      ),
+      withSpan("plan.application", () =>
+        planApplication(
+          ctx,
+          httpAdapterBuildResult,
+          previous && {
+            existingApplications: previous.app.existingApplications,
+            existingLabels: previous.app.existingLabels,
+          },
+        ),
+      ),
+      withSpan("plan.executor", () => planExecutor(ctx, previous?.executor.existingExecutors)),
       withSpan("plan.workflow", () =>
         planWorkflow(
           client,
@@ -470,22 +553,31 @@ async function planDeploymentTarget(
             dependentApps: ctx.dependentApps,
             runAppIds: ctx.runAppIds,
           },
+          previous && {
+            existingJobFunctions: previous.workflow.existingJobFunctions,
+            existingWorkflows: previous.workflow.existingWorkflows,
+          },
         ),
       ),
-      withSpan("plan.workflowExecutionPolicy", () =>
-        planWorkflowJobFunctionExecutionPolicy(
-          client,
-          workspaceId,
-          application.name,
-          application.id,
-          config.workflow?.executionPolicies ?? {},
-        ),
-      ),
-      withSpan("plan.secretManager", () => planSecretManager(ctx)),
+      skip?.has("workflowExecutionPolicy") && previous
+        ? previous.workflowExecutionPolicy
+        : withSpan("plan.workflowExecutionPolicy", () =>
+            planWorkflowJobFunctionExecutionPolicy(
+              client,
+              workspaceId,
+              application.name,
+              application.id,
+              config.workflow?.executionPolicies ?? {},
+            ),
+          ),
+      skip?.has("secretManager") && previous
+        ? previous.secretManager
+        : withSpan("plan.secretManager", () => planSecretManager(ctx)),
     ]);
 
     return {
       application,
+      forceApplyAll,
       functionRegistry,
       tailorDB,
       staticWebsite,
@@ -505,13 +597,17 @@ async function planDeploymentTarget(
 export async function planDeploymentTargets(
   params: PlanDeploymentTargetsParams,
 ): Promise<PlannedDeployment[]> {
-  const { targets, planTarget = planDeploymentTarget, ...planParams } = params;
+  const { targets, planTarget = planDeploymentTarget, previousDeployments, ...planParams } = params;
+  const previousByAppName = new Map(
+    previousDeployments?.map((deployment) => [deployment.application.name, deployment]),
+  );
   return Promise.all(
     targets.map((target) =>
       planTarget({
         ...planParams,
         target,
         targets,
+        previous: previousByAppName.get(target.application.name),
       }),
     ),
   );
@@ -575,6 +671,88 @@ async function validateDeploymentPlans(
   for (const deployment of deployments) {
     await validatePlan(deploymentPlanResults(deployment));
   }
+}
+
+/**
+ * Carry the renamed-app cleanup deletes `confirmDeploymentPlans` appended
+ * onto `original`'s `app.deletes` over onto the matching `rebuilt` entry.
+ * `app` is always re-planned on a rebuild (its `cors` is resolved live at
+ * plan time, since the site it references may have just been created --
+ * HTTP adapter bundles themselves are reused as-is and don't embed `env`),
+ * so a fresh `planApplication` result never carries them.
+ * @param original - Deployments as confirmed, before the rebuild
+ * @param rebuilt - Freshly planned deployments the rebuild will apply instead
+ * @param preConfirmAppDeleteCounts - Each application's `app.deletes.length` before confirm ran
+ */
+export function carryConfirmedAppDeletes(
+  original: ReadonlyArray<PlannedDeployment>,
+  rebuilt: ReadonlyArray<PlannedDeployment>,
+  preConfirmAppDeleteCounts: ReadonlyMap<string, number>,
+): void {
+  const originalByAppName = new Map(
+    original.map((deployment) => [deployment.application.name, deployment]),
+  );
+  for (const deployment of rebuilt) {
+    const originalDeployment = originalByAppName.get(deployment.application.name);
+    const startIndex = preConfirmAppDeleteCounts.get(deployment.application.name);
+    if (!originalDeployment || startIndex === undefined) {
+      continue;
+    }
+    const confirmedDeletes = originalDeployment.app.deletes.slice(startIndex);
+    for (const confirmedDelete of confirmedDeletes) {
+      if (!deployment.app.deletes.some((del) => del.name === confirmedDelete.name)) {
+        deployment.app.deletes.push(confirmedDelete);
+      }
+    }
+  }
+}
+
+/**
+ * Check whether `env` still holds a static website URL placeholder this same
+ * deploy is expected to resolve, once the site it names exists.
+ *
+ * A placeholder naming a site outside `expectedLocalStaticWebsiteNames` (a
+ * typo, or a site no config in this run declares) can never resolve here --
+ * rebuilding for it would just repeat the same lookup failure and warning a
+ * second time, so only a placeholder this deploy's own static websites can
+ * satisfy triggers the rebuild.
+ * @param deployments - Planned deployments to inspect
+ * @param expectedLocalStaticWebsiteNames - Static website names declared by any config in this deploy run
+ * @returns True when rebuilding now would actually resolve something
+ */
+export function needsEnvRebuild(
+  deployments: ReadonlyArray<PlannedDeployment>,
+  expectedLocalStaticWebsiteNames: ReadonlySet<string>,
+): boolean {
+  return deployments.some((deployment) =>
+    Object.values(deployment.application.env).some(
+      (value) =>
+        hasStaticWebsiteUrlPlaceholder(value) &&
+        expectedLocalStaticWebsiteNames.has(staticWebsiteNameFromPlaceholder(value)),
+    ),
+  );
+}
+
+/**
+ * Fail the deploy if `env` still holds an unresolved static website
+ * placeholder after the rebuild meant to resolve it (e.g. the platform
+ * hasn't assigned the site's URL yet) -- shipping the placeholder into
+ * deployed code would silently defeat the whole point of rebuilding.
+ * @param rebuiltDeployments - The rebuild's planned deployments
+ * @param expectedLocalStaticWebsiteNames - Static website names declared by any config in this deploy run
+ */
+export function assertEnvResolvedAfterRebuild(
+  rebuiltDeployments: ReadonlyArray<PlannedDeployment>,
+  expectedLocalStaticWebsiteNames: ReadonlySet<string>,
+): void {
+  if (!needsEnvRebuild(rebuiltDeployments, expectedLocalStaticWebsiteNames)) return;
+  throw CLIError({
+    code: "STATIC_WEBSITE_URL_NOT_RESOLVED",
+    message:
+      "A static website referenced by env still has no URL after rebuilding to pick up " +
+      "this deploy's own config changes.",
+    suggestion: "Re-run the deploy; the static website's URL may not be assigned yet.",
+  });
 }
 
 /**
@@ -665,27 +843,40 @@ async function deployInternal(
           workspaceCommandArgs: workspaceRecoveryArgs(options, cliContext),
           workspaceCommandJson: cliContext?.json || logger.jsonMode,
         });
-    const targets = await withSpan("build", async () => {
-      const noCache = options?.noCache ?? false;
-      const packageJson = await readPackageJson();
-      const cacheDir = path.resolve(getDistDir(), "cache");
-      if (options?.cleanCache) {
-        fs.rmSync(cacheDir, { recursive: true, force: true });
-        logger.info("Bundle cache cleaned");
-      }
+    const expectedLocalStaticWebsiteNames =
+      collectExpectedLocalStaticWebsiteNamesFromConfigs(preflightConfigs);
 
-      const targets = await buildDeploymentTargets({
-        configPaths,
-        loadedConfigs: buildOnly ? undefined : preflightConfigs,
-        dryRun,
-        buildOnly,
-        noCache,
-        packageVersion: packageJson.version ?? "unknown",
-        cacheDir,
+    // Cleaned once, before the first build, so a later conditional rebuild
+    // (see the `needsUrlResolution` branch below) finds the cache the first
+    // build just populated instead of wiping it and re-bundling everything
+    // from scratch a second time.
+    const noCache = options?.noCache ?? false;
+    const cacheDir = path.resolve(getDistDir(), "cache");
+    if (options?.cleanCache) {
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+      logger.info("Bundle cache cleaned");
+    }
+
+    const build = (previousTargets?: ReadonlyArray<BuiltDeploymentTarget>) =>
+      withSpan("build", async () => {
+        const packageJson = await readPackageJson();
+
+        return buildDeploymentTargets({
+          configPaths,
+          loadedConfigs: buildOnly ? undefined : preflightConfigs,
+          dryRun,
+          buildOnly,
+          noCache,
+          packageVersion: packageJson.version ?? "unknown",
+          cacheDir,
+          client: workspace?.client,
+          workspaceId: workspace?.workspaceId,
+          expectedLocalStaticWebsiteNames,
+          previousTargets,
+        });
       });
 
-      return targets;
-    });
+    const targets = await build();
     if (buildOnly) {
       return { bundledScripts: mergeBundledScripts(targets) };
     }
@@ -703,31 +894,52 @@ async function deployInternal(
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    const planTargets = targets.map((target) => ({
-      ...target,
-      application: adjustApplicationForMigrationTest(target.application, internalContext),
-    }));
-    const metadataClient = await withSpan("plan.metadataLookup", () =>
-      createMetadataLookupClient({
-        client,
+    // Reused on a rebuild's replan (see below) instead of re-scanning
+    // metadata: applyPrerequisiteResources only touches
+    // secretManager/staticWebsite/aiGateway/idp/auth labels, and none of the
+    // 5 resource kinds a rebuild actually re-diffs (functionRegistry,
+    // pipeline, application, executor, workflow) read metadata for those
+    // kinds, so the first pass's batch cannot be stale for them.
+    let firstMetadataClient: OperatorClient | undefined;
+    const plan = async (
+      targets: ReadonlyArray<BuiltDeploymentTarget>,
+      reuse?: {
+        skip: ReadonlySet<ReusablePlanKind>;
+        previousDeployments: ReadonlyArray<PlannedDeployment>;
+      },
+    ) => {
+      const planTargets = targets.map((target) => ({
+        ...target,
+        application: adjustApplicationForMigrationTest(target.application, internalContext),
+      }));
+      const metadataClient =
+        reuse && firstMetadataClient
+          ? firstMetadataClient
+          : await withSpan("plan.metadataLookup", () =>
+              createMetadataLookupClient({
+                client,
+                workspaceId,
+                applications: planTargets.map(({ application }) => application),
+              }),
+            );
+      firstMetadataClient = metadataClient;
+      const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
+      const deployments = await planDeploymentTargets({
+        targets: planTargets,
+        runInputs,
+        client: metadataClient,
         workspaceId,
-        applications: planTargets.map(({ application }) => application),
-      }),
-    );
-    const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
-    const deployments = await planDeploymentTargets({
-      targets: planTargets,
-      runInputs,
-      client: metadataClient,
-      workspaceId,
-      noSchemaCheck: options?.noSchemaCheck,
-      migrationTestBaselines: internalContext?.migrationTestBaselines,
-      migrationTestSnapshots: internalContext?.migrationTestSnapshots,
-    });
+        noSchemaCheck: options?.noSchemaCheck,
+        migrationTestBaselines: internalContext?.migrationTestBaselines,
+        migrationTestSnapshots: internalContext?.migrationTestSnapshots,
+        skip: reuse?.skip,
+        previousDeployments: reuse?.previousDeployments,
+      });
+      dropCrossDeploymentManagedDeletes(deployments);
+      return { planTargets, metadataClient, runInputs, deployments };
+    };
 
-    const yes = options?.yes ?? false;
-
-    dropCrossDeploymentManagedDeletes(deployments);
+    const { planTargets, metadataClient, runInputs, deployments } = await plan(targets);
 
     // Phase 1b: Confirm
     const missingDependentApps = (
@@ -745,28 +957,100 @@ async function deployInternal(
       )
     ).flat();
 
+    // `confirmDeploymentPlans` appends renamed-app cleanup deletes onto each
+    // deployment's `app.deletes` in place. Recorded here so a later rebuild
+    // (which replaces `deployments` with a freshly planned `app` for every
+    // application) can carry those additions over instead of losing them --
+    // confirm itself never runs a second time, so nothing else re-adds them.
+    const preConfirmAppDeleteCounts = new Map(
+      deployments.map((deployment) => [deployment.application.name, deployment.app.deletes.length]),
+    );
+
     await withSpan("confirm", async () => {
-      await confirmDeploymentPlans({ deployments, yes, dryRun, missingDependentApps });
+      await confirmDeploymentPlans({
+        deployments,
+        yes: options?.yes ?? false,
+        dryRun,
+        missingDependentApps,
+      });
     });
 
-    const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });
+    const validate = (deployments: ReadonlyArray<PlannedDeployment>) =>
+      options?.noValidate
+        ? logger.warn("Client-side validation skipped (--no-validate).")
+        : validateDeploymentPlans(deployments);
+    await validate(deployments);
 
-    if (options?.noValidate) {
-      logger.warn("Client-side validation skipped (--no-validate).");
-    } else {
-      await validateDeploymentPlans(deployments);
-    }
+    // `env`'s static website placeholders are resolved once, at build time,
+    // before this deploy has applied anything. When one references a site the
+    // prerequisite apply below just creates, the placeholder is still
+    // literally present in `application.env` -- rebuilding now re-resolves it
+    // and rebundles only workflow jobs and auth hooks, the two kinds that
+    // embed `env` directly (resolver/executor read it through a separate,
+    // always-freshly-generated expression, not their function bundle, so they
+    // don't need rebundling; see `loadApplication`'s `previous` handling).
+    // TailorDB migration scripts don't need this either: they re-resolve
+    // `env` themselves right before executing.
+    const needsUrlResolution = needsEnvRebuild(deployments, expectedLocalStaticWebsiteNames);
+
+    // On the rebuild path below, the plan actually applied is the rebuilt
+    // one, so printing this first-pass plan would only show output that's
+    // about to be superseded. Dry run never rebuilds (it returns right
+    // below), so it always shows this first pass instead.
+    let planSummary: PlanSummary | undefined =
+      dryRun || !needsUrlResolution
+        ? printDeploymentPlans(deployments, { dryRun: options?.dryRun })
+        : undefined;
 
     if (dryRun) {
       logger.info("Dry run enabled. No changes applied.");
       return undefined;
     }
 
-    await applyDeploymentPlans(client, workspaceId, deployments);
+    // Validate TailorDB's migration state before anything is applied, so a
+    // stale migration checkpoint or schema fails the deploy with nothing yet
+    // mutated -- not after the prerequisite resources below are already
+    // created or updated.
+    await preflightAllTailorDB(client, deployments);
+
+    // secretManager/staticWebsite/aiGateway/idp/auth's prerequisite resources
+    // can never reference a static website's URL, so applying them first is
+    // safe -- and it means a site this same deploy creates already exists by
+    // the time env is read again below.
+    await applyPrerequisiteResources(client, deployments);
+
+    if (needsUrlResolution) {
+      logger.info(
+        "A static website was just created; rebuilding so env resolves to its real URL before the rest of this deploy applies.",
+      );
+      // Reuses everything from the first build except `env` resolution and
+      // the workflow-job/auth-hook bundles it feeds -- see `loadApplication`'s
+      // `previous` handling for what that skips.
+      const rebuiltTargets = await build(targets);
+      assertUniqueGlobalResourceNames(rebuiltTargets);
+      // None of REUSABLE_ON_REBUILD_KINDS's plans can change from this
+      // rebuild (see its definition), and each was already confirmed once
+      // above -- reuse them instead of re-querying the platform and
+      // re-diffing them for a second time in the same deploy.
+      const rebuilt = await plan(rebuiltTargets, {
+        skip: REUSABLE_ON_REBUILD_KINDS,
+        previousDeployments: deployments,
+      });
+      assertEnvResolvedAfterRebuild(rebuilt.deployments, expectedLocalStaticWebsiteNames);
+      carryConfirmedAppDeletes(deployments, rebuilt.deployments, preConfirmAppDeleteCounts);
+      await validate(rebuilt.deployments);
+      planSummary = printDeploymentPlans(rebuilt.deployments, { dryRun: options?.dryRun });
+      await applyRemainingResources(client, workspaceId, rebuilt.deployments);
+    } else {
+      await applyRemainingResources(client, workspaceId, deployments);
+    }
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {
-        logger.out({ summary: planSummary, status: "applied" });
+        logger.out({
+          summary: assertDefined(planSummary, "planSummary was never printed before this point"),
+          status: "applied",
+        });
       } else {
         logger.success("Successfully applied changes.");
       }

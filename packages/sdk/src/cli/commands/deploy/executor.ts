@@ -17,7 +17,7 @@ import {
   getApplicationAuthNamespace,
   requireApplicationAuthNamespace,
 } from "#/cli/shared/auth-namespace";
-import { type OperatorClient } from "#/cli/shared/client";
+import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
@@ -36,6 +36,7 @@ import {
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
+  type WithLabel,
   writeMetadataLabels,
 } from "./label";
 import {
@@ -47,6 +48,10 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
+
+type ExistingExecutors = WithLabel<
+  Awaited<ReturnType<OperatorClient["listExecutorExecutors"]>>["executors"][number]
+>;
 
 /**
  * Apply executor-related changes for the given phase.
@@ -100,28 +105,36 @@ type DeleteExecutor = {
 /**
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
+ * @param previousExisting - A prior call's fetched existing executors, reused instead of
+ *   re-listing them from the platform (the remote executor list cannot have changed between
+ *   a deploy's first plan and its conditional rebuild's replan)
  * @returns Planned changes
  */
-export async function planExecutor(context: PlanContext) {
+export async function planExecutor(context: PlanContext, previousExisting?: ExistingExecutors) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const existingExecutors = await fetchExistingResourcesWithLabels({
-    client,
-    fetchPage: async (pageToken, pageSize) => {
-      const { executors, nextPageToken } = await client.listExecutorExecutors({
-        workspaceId,
-        pageToken,
-        pageSize,
-      });
-      return [executors, nextPageToken];
-    },
-    getName: (resource) => resource.name,
-    getTrn: (name) => resourceTrn(workspaceId, "executor", name),
-  });
+  const fetchedExecutors =
+    previousExisting ??
+    (await fetchExistingResourcesWithLabels({
+      client,
+      fetchPage: async (pageToken, pageSize) => {
+        const { executors, nextPageToken } = await client.listExecutorExecutors({
+          workspaceId,
+          pageToken,
+          pageSize,
+        });
+        return [executors, nextPageToken];
+      },
+      getName: (resource) => resource.name,
+      getTrn: (name) => resourceTrn(workspaceId, "executor", name),
+    }));
+  // Diffing below deletes matched entries to find what's left to remove, so
+  // work on a copy and keep `fetchedExecutors` itself pristine for reuse.
+  const existingExecutors = { ...fetchedExecutors };
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
@@ -131,7 +144,7 @@ export async function planExecutor(context: PlanContext) {
       appName: application.name,
       appId: application.id,
     });
-    const desiredExecutor = protoExecutor(context, executor);
+    const desiredExecutor = protoExecutor(context, executor, application.env);
     if (existing) {
       const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,
@@ -193,7 +206,7 @@ export async function planExecutor(context: PlanContext) {
     }
   });
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners, existingExecutors: fetchedExecutors };
 }
 
 type ExecutorDisplayEntry = GroupedDisplayEntry;
@@ -501,10 +514,10 @@ function resolveIdpNamespace(
 function protoExecutor(
   context: PlanContext,
   executor: Executor,
+  env: ApplicationEnv,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const { application } = context;
   const appName = application.name;
-  const env = application.env;
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;

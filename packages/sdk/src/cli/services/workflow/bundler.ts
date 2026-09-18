@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
@@ -263,6 +264,8 @@ export interface BundleWorkflowJobsResult {
   usedJobNames: string[];
   /** Maps job name to bundled code string */
   bundledCode: Map<string, string>;
+  /** Digest of every source file that determines job reachability, as of this call */
+  sourceFileState: string;
 }
 
 /**
@@ -283,6 +286,11 @@ export interface BundleWorkflowJobsResult {
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
  * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
+ * @param previousUsedJobs - A prior call's `usedJobNames`/`mainJobDeps`/`sourceFileState` over
+ *   the same `allJobs`/`mainJobNames`/`startContext`, reused instead of re-parsing every
+ *   workflow source file to redetect reachability, as long as `sourceFileState` still matches
+ *   (reachability cannot change unless the sources do, but the sources can change between calls,
+ *   e.g. during an interactive confirmation pause before a rebuild)
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -295,14 +303,36 @@ export async function bundleWorkflowJobs(
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
   tsconfigCache?: TsconfigLookupCache,
+  previousUsedJobs?: Pick<
+    BundleWorkflowJobsResult,
+    "usedJobNames" | "mainJobDeps" | "sourceFileState"
+  >,
 ): Promise<BundleWorkflowJobsResult> {
+  const jobSourceFiles = allJobs.map((job) => job.sourceFile);
+  const sourceFileState = hashReachabilitySourceFiles([
+    ...jobSourceFiles,
+    ...collectExtraStartCallFiles(jobSourceFiles, startContext),
+  ]);
+
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
-    return { mainJobDeps: {}, usedJobNames: [], bundledCode: new Map() };
+    return { mainJobDeps: {}, usedJobNames: [], bundledCode: new Map(), sourceFileState };
   }
 
-  // Filter to only used jobs and get per-mainJob dependencies
-  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, startContext);
+  // Reachability (which jobs a mainJob's .start() calls reach) depends only on
+  // the jobs' own source, never on `env`, so a caller that already computed it
+  // over these same jobs can skip re-parsing every workflow source file --
+  // unless those source files changed since that computation (e.g. during an
+  // interactive confirmation pause before a rebuild).
+  let usedJobs: JobInfo[];
+  let mainJobDeps: Record<string, string[]>;
+  if (previousUsedJobs && previousUsedJobs.sourceFileState === sourceFileState) {
+    const usedJobNames = new Set(previousUsedJobs.usedJobNames);
+    usedJobs = allJobs.filter((job) => usedJobNames.has(job.name));
+    mainJobDeps = previousUsedJobs.mainJobDeps;
+  } else {
+    ({ usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, startContext));
+  }
 
   logger.newline();
   logger.log(
@@ -349,12 +379,58 @@ export async function bundleWorkflowJobs(
     mainJobDeps,
     usedJobNames: usedJobs.map((job) => job.name),
     bundledCode,
+    sourceFileState,
   };
 }
 
 interface FilterUsedJobsResult {
   usedJobs: JobInfo[];
   mainJobDeps: Record<string, string[]>;
+}
+
+/**
+ * Source files beyond each job's own that still need scanning for `.start()`
+ * calls: a shared helper module that factors out a call without defining a
+ * job itself. Without this, a call factored into such a file is never
+ * checked for reachability at all.
+ * @param jobSourceFiles - Source files each job's own definition already covers
+ * @param startContext - Module binding metadata for resolving start targets
+ * @returns Additional file paths to scan
+ */
+function collectExtraStartCallFiles(
+  jobSourceFiles: Iterable<string>,
+  startContext: StartContext,
+): string[] {
+  const knownRealpaths = new Set([...jobSourceFiles].map(safeRealpath));
+  const extra: string[] = [];
+  for (const binding of startContext.modules.values()) {
+    if (!knownRealpaths.has(safeRealpath(binding.sourceFile))) {
+      extra.push(binding.sourceFile);
+    }
+  }
+  return extra;
+}
+
+/**
+ * Hash the content of every file that determines workflow job reachability,
+ * so a caller can detect whether any of them changed since a previous
+ * bundling pass instead of assuming reachability is still valid.
+ * @param filePaths - Files to hash
+ * @returns SHA-256 digest of the sorted file set's paths and contents
+ */
+function hashReachabilitySourceFiles(filePaths: Iterable<string>): string {
+  const hash = createHash("sha256");
+  for (const filePath of [...new Set(filePaths)].toSorted()) {
+    hash.update(filePath);
+    hash.update("\0");
+    try {
+      hash.update(fs.readFileSync(filePath));
+    } catch {
+      hash.update("<missing>");
+    }
+    hash.update("\0");
+  }
+  return hash.digest("hex");
 }
 
 /**
@@ -386,15 +462,9 @@ async function filterUsedJobs(
     jobsBySourceFile.set(job.sourceFile, existing);
   }
 
-  // Files with no job of their own (e.g. a shared helper module factoring out
-  // .start() calls) still need scanning for stray start calls below; otherwise
-  // a call factored into such a file is never checked at all.
   const filesToScan = new Map(jobsBySourceFile);
-  const knownRealpaths = new Set([...jobsBySourceFile.keys()].map(safeRealpath));
-  for (const binding of startContext.modules.values()) {
-    if (!knownRealpaths.has(safeRealpath(binding.sourceFile))) {
-      filesToScan.set(binding.sourceFile, []);
-    }
+  for (const extraFile of collectExtraStartCallFiles(jobsBySourceFile.keys(), startContext)) {
+    filesToScan.set(extraFile, []);
   }
 
   // Detect start calls and build dependency graph

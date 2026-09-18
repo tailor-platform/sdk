@@ -30,7 +30,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import ml from "#/utils/multiline";
-import type { PlannedDeployment } from "#/cli/commands/deploy/apply-phases";
+import type { PlanResults } from "#/cli/commands/deploy/apply-phases";
 import type { PlanContext } from "#/cli/commands/deploy/types";
 
 export interface RemoveOptions {
@@ -113,7 +113,7 @@ async function execRemove(
       [],
     ),
     secretManager: await planSecretManager(ctx),
-  } satisfies Omit<PlannedDeployment, "application">;
+  } satisfies PlanResults;
 
   // Resources carrying this application's sdk-name whose sdk-app-id the config
   // does not match, because it holds a different id or none. They are skipped,

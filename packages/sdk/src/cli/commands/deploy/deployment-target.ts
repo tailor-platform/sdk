@@ -4,6 +4,7 @@ import * as path from "pathe";
 import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
 import { loadApplication, type Application } from "#/cli/services/application";
+import { type OperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadConfigPath } from "#/cli/shared/context";
 import { CLIError, internalError } from "#/cli/shared/errors";
@@ -39,6 +40,19 @@ type BuildDeploymentTargetParams = {
   noCache: boolean;
   packageVersion: string;
   cacheDir: string;
+  /** Operator client used to resolve `env` static website placeholders while bundling. Omitted in `--build-only`. */
+  client?: OperatorClient;
+  /** Workspace ID paired with `client`. */
+  workspaceId?: string;
+  /** Static website names planned by any config in the same deploy run. */
+  expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
+  /**
+   * This same config's own prior build. When present, only `env` resolution
+   * and the workflow-job/auth-hook bundles it feeds are redone; everything
+   * else (config parsing, TailorDB loading, plugin execution, and the
+   * resolver/executor/HTTP-adapter bundles) is reused as-is.
+   */
+  previous?: BuiltDeploymentTarget;
 };
 
 export type BuiltDeploymentTarget = {
@@ -47,15 +61,18 @@ export type BuiltDeploymentTarget = {
   workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
   httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
   bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+  reusableBuildState: Awaited<ReturnType<typeof loadApplication>>["reusableBuildState"];
 };
 
 type BuildDeploymentTargetsParams = Omit<
   BuildDeploymentTargetParams,
-  "configPath" | "loadedConfig"
+  "configPath" | "loadedConfig" | "previous"
 > & {
   configPaths: ReadonlyArray<string | undefined>;
   loadedConfigs?: ReadonlyArray<LoadedDeployConfig>;
   buildTarget?: (params: BuildDeploymentTargetParams) => Promise<BuiltDeploymentTarget>;
+  /** Prior builds, matched to `configPaths` by index (same array, same order). */
+  previousTargets?: ReadonlyArray<BuiltDeploymentTarget>;
 };
 /**
  * Parse the deploy config option into one or more config paths.
@@ -81,7 +98,19 @@ export function parseDeployConfigPaths(configPath?: string): Array<string | unde
 async function buildDeploymentTarget(
   params: BuildDeploymentTargetParams,
 ): Promise<BuiltDeploymentTarget> {
-  const { configPath, loadedConfig, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
+  const {
+    configPath,
+    loadedConfig,
+    dryRun,
+    buildOnly,
+    noCache,
+    packageVersion,
+    cacheDir,
+    client,
+    workspaceId,
+    expectedLocalStaticWebsiteNames,
+    previous,
+  } = params;
   const { config, plugins } =
     loadedConfig ??
     assertDefined(
@@ -107,26 +136,36 @@ async function buildDeploymentTarget(
     pluginManager = new PluginManager(plugins);
   }
 
-  await withSpan("build.generateUserTypes", () =>
-    generateUserTypes({ config, configPath: config.path }),
-  );
+  // Generated types are derived from config/TailorDB shape, not `env`, so a
+  // reload reusing `previous` would regenerate identical output.
+  if (!previous) {
+    await withSpan("build.generateUserTypes", () =>
+      generateUserTypes({ config, configPath: config.path }),
+    );
+  }
 
   let application: Application;
   let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
   let httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
   let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
+  let reusableBuildState: Awaited<ReturnType<typeof loadApplication>>["reusableBuildState"];
   try {
     const result = await withSpan("build.loadApplication", () =>
       loadApplication({
         config,
         pluginManager,
         bundleCache: cacheManager.bundleCache,
+        client,
+        workspaceId,
+        expectedLocalStaticWebsiteNames,
+        previous,
       }),
     );
     application = result.application;
     workflowBuildResult = result.workflowBuildResult;
     httpAdapterBuildResult = result.httpAdapterBuildResult;
     bundledScripts = result.bundledScripts;
+    reusableBuildState = result.reusableBuildState;
   } finally {
     cacheManager.finalize();
   }
@@ -137,6 +176,7 @@ async function buildDeploymentTarget(
     workflowBuildResult,
     httpAdapterBuildResult,
     bundledScripts,
+    reusableBuildState,
   };
 }
 
@@ -238,6 +278,7 @@ export async function buildDeploymentTargets(
     configPaths,
     loadedConfigs: providedLoadedConfigs,
     buildTarget,
+    previousTargets,
     ...targetParams
   } = params;
   if (
@@ -263,6 +304,7 @@ export async function buildDeploymentTargets(
         ...targetParams,
         configPath,
         loadedConfig: loadedConfigs?.[index],
+        previous: previousTargets?.[index],
       }),
     ),
   );

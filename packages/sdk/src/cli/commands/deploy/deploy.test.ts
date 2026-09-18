@@ -8,8 +8,12 @@ import { mergeBundledScripts } from "./bundled-scripts";
 import { createChangeSet } from "./change-set";
 import {
   adjustApplicationForMigrationTest,
+  assertEnvResolvedAfterRebuild,
+  carryConfirmedAppDeletes,
   confirmDeploymentPlans,
+  collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
+  needsEnvRebuild,
   planDeploymentTargets,
   shouldForceApplyAll,
 } from "./deploy";
@@ -47,6 +51,7 @@ function emptyResults(): PlanResults {
       executorFunctionChanges: emptyFunctionChanges(),
       authHookFunctionChanges: emptyFunctionChanges(),
       ...emptyOwnership(),
+      existingMap: {},
     },
     tailorDB: {
       changeSet: {
@@ -109,6 +114,8 @@ function emptyResults(): PlanResults {
         resolver: createChangeSet("Pipeline resolvers"),
       },
       ...emptyOwnership(),
+      existingServices: {},
+      existingResolvers: new Map(),
     },
     app: Object.assign(
       createChangeSet("Applications"),
@@ -117,6 +124,7 @@ function emptyResults(): PlanResults {
     executor: {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),
+      existingExecutors: {},
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),
@@ -126,6 +134,8 @@ function emptyResults(): PlanResults {
       ...emptyOwnership(),
       appName: "my-app",
       appId: undefined,
+      existingJobFunctions: new Map(),
+      existingWorkflows: {},
     },
     workflowExecutionPolicy: {
       changeSet: createChangeSet("Workflow execution policies"),
@@ -1028,6 +1038,30 @@ function fakeTarget(
 }
 
 describe("multi-config deployment orchestration", () => {
+  test("forwards client, workspaceId, and expectedLocalStaticWebsiteNames to every config build", async () => {
+    const client = {} as never;
+    const expectedLocalStaticWebsiteNames = new Set(["buyer-site"]);
+    const received: unknown[] = [];
+
+    await buildDeploymentTargets({
+      configPaths: ["buyer/tailor.config.ts"],
+      dryRun: false,
+      buildOnly: false,
+      noCache: false,
+      packageVersion: "test",
+      cacheDir: "cache",
+      client,
+      workspaceId: "workspace-id",
+      expectedLocalStaticWebsiteNames,
+      buildTarget: async (params) => {
+        received.push(params.client, params.workspaceId, params.expectedLocalStaticWebsiteNames);
+        return fakeTarget({ appName: params.configPath });
+      },
+    });
+
+    expect(received).toEqual([client, "workspace-id", expectedLocalStaticWebsiteNames]);
+  });
+
   test("starts every config build before awaiting a build result", async () => {
     const started: Array<string | undefined> = [];
     const releases: Array<() => void> = [];
@@ -1080,6 +1114,144 @@ describe("multi-config deployment orchestration", () => {
     releases.forEach((release) => release());
 
     await expect(planPromise).resolves.toHaveLength(2);
+  });
+
+  test("forwards skip and matches previous deployments by application name", async () => {
+    const targets = [fakeTarget({ appName: "buyer" }), fakeTarget({ appName: "supplier" })];
+    const skip = new Set(["staticWebsite"] as const);
+    const previousBuyer = plannedDeployment("buyer", emptyResults());
+    const previousSupplier = plannedDeployment("supplier", emptyResults());
+    const received: Array<{ appName: string; skip: unknown; previous: unknown }> = [];
+
+    await planDeploymentTargets({
+      targets,
+      runInputs: {} as never,
+      client: {} as never,
+      workspaceId: "workspace-id",
+      noSchemaCheck: false,
+      skip,
+      previousDeployments: [previousSupplier, previousBuyer],
+      planTarget: async (params) => {
+        received.push({
+          appName: params.target.application.name,
+          skip: params.skip,
+          previous: params.previous,
+        });
+        return plannedDeployment(params.target.application.name, emptyResults());
+      },
+    });
+
+    expect(received).toEqual([
+      { appName: "buyer", skip, previous: previousBuyer },
+      { appName: "supplier", skip, previous: previousSupplier },
+    ]);
+  });
+});
+
+describe("carryConfirmedAppDeletes", () => {
+  function appDelete(name: string): PlannedDeployment["app"]["deletes"][number] {
+    return { name, request: { workspaceId: "ws", applicationName: name } };
+  }
+
+  function withAppDeletes(
+    name: string,
+    deletes: ReadonlyArray<PlannedDeployment["app"]["deletes"][number]>,
+  ): PlannedDeployment {
+    const deployment = plannedDeployment(name, emptyResults());
+    deployment.app.deletes.push(...deletes);
+    return deployment;
+  }
+
+  test("carries a confirm-added delete over onto the matching rebuilt deployment", () => {
+    const original = [
+      withAppDeletes("buyer", [appDelete("renamed-buyer")]),
+      withAppDeletes("supplier", []),
+    ];
+    const preConfirmAppDeleteCounts = new Map([
+      ["buyer", 0],
+      ["supplier", 0],
+    ]);
+    const rebuilt = [withAppDeletes("buyer", []), withAppDeletes("supplier", [])];
+
+    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
+
+    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
+    expect(rebuilt[1]!.app.deletes).toEqual([]);
+  });
+
+  test("leaves a fresh delete already present in the rebuild untouched", () => {
+    const original = [
+      withAppDeletes("buyer", [appDelete("own-delete"), appDelete("renamed-buyer")]),
+    ];
+    const preConfirmAppDeleteCounts = new Map([["buyer", 1]]);
+    const rebuilt = [withAppDeletes("buyer", [appDelete("own-delete")])];
+
+    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
+
+    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("own-delete"), appDelete("renamed-buyer")]);
+  });
+
+  test("does not duplicate a delete the rebuild already carries under the same name", () => {
+    const original = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
+    const preConfirmAppDeleteCounts = new Map([["buyer", 0]]);
+    const rebuilt = [withAppDeletes("buyer", [appDelete("renamed-buyer")])];
+
+    carryConfirmedAppDeletes(original, rebuilt, preConfirmAppDeleteCounts);
+
+    expect(rebuilt[0]!.app.deletes).toEqual([appDelete("renamed-buyer")]);
+  });
+});
+
+describe("needsEnvRebuild", () => {
+  function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
+    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+  }
+
+  test("is true when env references a site this deploy declares", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "my-site:url" })];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(true);
+  });
+
+  test("is false when env has no placeholder at all", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "https://already-resolved.example.com" })];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(false);
+  });
+
+  test("is false when the placeholder names a site this deploy does not declare", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "typo-site:url" })];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(false);
+  });
+
+  test("is true when only one of several deployments has a matching placeholder", () => {
+    const deployments = [
+      deploymentWithEnv({ siteUrl: "https://already-resolved.example.com" }),
+      deploymentWithEnv({ otherUrl: "my-site:url/callback" }),
+    ];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(true);
+  });
+});
+
+describe("assertEnvResolvedAfterRebuild", () => {
+  function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
+    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+  }
+
+  test("does not throw when env holds no placeholder for a locally declared site", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "https://my-site.example.com" })];
+
+    expect(() => assertEnvResolvedAfterRebuild(deployments, new Set(["my-site"]))).not.toThrow();
+  });
+
+  test("throws when env still holds an unresolved placeholder after the rebuild", () => {
+    const deployments = [deploymentWithEnv({ siteUrl: "my-site:url" })];
+
+    expect(() => assertEnvResolvedAfterRebuild(deployments, new Set(["my-site"]))).toThrow(
+      "still has no URL after rebuilding",
+    );
   });
 });
 
@@ -1437,5 +1609,26 @@ describe("collectExternalAuthIdpConfigNames", () => {
         fakeAuthTarget("shared-auth", "my-idp"),
       ]),
     ).not.toThrow();
+  });
+});
+
+describe("collectExpectedLocalStaticWebsiteNamesFromConfigs", () => {
+  function loadedConfig(staticWebsites: ReadonlyArray<{ name: string }>) {
+    return { config: { staticWebsites } } as never;
+  }
+
+  test("collects static website names across every config", () => {
+    const result = collectExpectedLocalStaticWebsiteNamesFromConfigs([
+      loadedConfig([{ name: "buyer-site" }]),
+      loadedConfig([{ name: "supplier-site" }]),
+    ]);
+
+    expect(result).toEqual(new Set(["buyer-site", "supplier-site"]));
+  });
+
+  test("returns an empty set when no config declares a static website", () => {
+    const result = collectExpectedLocalStaticWebsiteNamesFromConfigs([loadedConfig([])]);
+
+    expect(result).toEqual(new Set());
   });
 });

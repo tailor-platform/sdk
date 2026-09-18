@@ -20,6 +20,16 @@ import type { OperatorClient } from "#/cli/shared/client";
 
 export type PlannedDeployment = {
   readonly application: Readonly<Application>;
+  /**
+   * Whether every resource is force-reapplied because an owned resource's
+   * `sdk-version` label mismatches the running SDK. Computed once per deploy
+   * and reused as-is on a conditional rebuild's replan (see
+   * {@link ReusablePlanKind}'s doc comment): recomputing it there could flip
+   * it to `false` if the prerequisite-resource apply already refreshed the
+   * one stale label that made it `true`, silently dropping a force-reapply
+   * the user already confirmed.
+   */
+  readonly forceApplyAll: boolean;
   readonly functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   readonly tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   readonly staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
@@ -36,48 +46,83 @@ export type PlannedDeployment = {
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export type PlanResults = Omit<PlannedDeployment, "application">;
+export type PlanResults = Omit<PlannedDeployment, "application" | "forceApplyAll">;
+
+/**
+ * Resource kinds whose plan cannot change between a deploy's first plan and
+ * the conditional rebuild `deployInternal` runs when `env` still holds an
+ * unresolved static website URL: none of them embed `env` or this run's
+ * rebuilt bundle content, so the rebuild reuses each one's already-confirmed
+ * plan result instead of re-querying the platform and re-diffing it.
+ */
+export type ReusablePlanKind =
+  | "tailorDB"
+  | "secretManager"
+  | "aiGateway"
+  | "staticWebsite"
+  | "workflowExecutionPolicy"
+  | "idp"
+  | "auth";
 
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
-  const { application: _application, ...results } = deployment;
+  const { application: _application, forceApplyAll: _forceApplyAll, ...results } = deployment;
   return results;
 }
 
-/**
- * Apply planned deploy changes for one or more applications.
- * @param client - Operator client instance
- * @param workspaceId - Target workspace ID
- * @param deployments - Planned deployments to apply
- */
-export async function applyDeploymentPlans(
-  client: OperatorClient,
-  workspaceId: string,
+function forEachDeployment(
   deployments: ReadonlyArray<PlannedDeployment>,
+  apply: (deployment: PlannedDeployment) => Promise<unknown>,
 ): Promise<void> {
-  const forEachDeployment = async (
-    apply: (deployment: PlannedDeployment) => Promise<unknown>,
-  ): Promise<void> => {
+  return (async () => {
     for (const deployment of deployments) {
       await apply(deployment);
     }
-  };
+  })();
+}
 
-  const step = (
+function makeStep(deployments: ReadonlyArray<PlannedDeployment>) {
+  return (
     name: string,
     apply: (deployment: PlannedDeployment) => Promise<unknown>,
-  ): Promise<void> => withSpan(name, () => forEachDeployment(apply));
+  ): Promise<void> => withSpan(name, () => forEachDeployment(deployments, apply));
+}
 
+/**
+ * Validate every deployment's TailorDB migration state before anything else
+ * is applied, so a stale migration checkpoint or schema fails the deploy with
+ * nothing yet mutated -- instead of after prerequisite resources (secret
+ * manager, static website, AI gateway, IdP, auth) are already created or
+ * updated.
+ * @param client - Operator client instance
+ * @param deployments - Planned deployments to preflight
+ */
+export async function preflightAllTailorDB(
+  client: OperatorClient,
+  deployments: ReadonlyArray<PlannedDeployment>,
+): Promise<void> {
   await withSpan("apply.preflight", async () => {
-    await forEachDeployment((d) => preflightTailorDB(client, d.tailorDB));
+    await forEachDeployment(deployments, (d) => preflightTailorDB(client, d.tailorDB));
   });
+}
 
+/**
+ * Apply the resource kinds that a static website's URL can never reference
+ * (secretManager, staticWebsite, aiGateway, idp, and auth's prerequisite
+ * resources): creating them first means staticWebsite's URL already exists
+ * by the time the rest of the deploy -- including a rebuild triggered by
+ * `deployInternal` when `env` still holds an unresolved placeholder -- runs.
+ * @param client - Operator client instance
+ * @param deployments - Planned deployments to apply
+ */
+export async function applyPrerequisiteResources(
+  client: OperatorClient,
+  deployments: ReadonlyArray<PlannedDeployment>,
+): Promise<void> {
+  const step = makeStep(deployments);
   await withMetadataWriteBatch(client, async (applyClient) => {
-    await withSpan("apply.createUpdateServices", async () => {
+    await withSpan("apply.createUpdatePrerequisiteServices", async () => {
       await step("apply.secretManager.createUpdate", (d) =>
         applySecretManager(applyClient, d.secretManager, "create-update", d.application),
-      );
-      await step("apply.functionRegistry.createUpdate", (d) =>
-        applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
       );
       await step("apply.staticWebsite.createUpdate", (d) =>
         applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
@@ -88,6 +133,28 @@ export async function applyDeploymentPlans(
       await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
       await step("apply.auth.createUpdatePrerequisites", (d) =>
         applyAuth(applyClient, d.auth, "create-update-prerequisites"),
+      );
+    });
+  });
+}
+
+/**
+ * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
+ * @param client - Operator client instance
+ * @param workspaceId - Target workspace ID
+ * @param deployments - Planned deployments to apply
+ */
+export async function applyRemainingResources(
+  client: OperatorClient,
+  workspaceId: string,
+  deployments: ReadonlyArray<PlannedDeployment>,
+): Promise<void> {
+  const step = makeStep(deployments);
+
+  await withMetadataWriteBatch(client, async (applyClient) => {
+    await withSpan("apply.createUpdateServices", async () => {
+      await step("apply.functionRegistry.createUpdate", (d) =>
+        applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
       );
       await step("apply.tailorDB.createUpdate", (d) =>
         applyTailorDB(applyClient, d.tailorDB, "create-update"),
@@ -101,13 +168,19 @@ export async function applyDeploymentPlans(
     });
 
     await withSpan("apply.deleteSubgraphResources", async () => {
-      await forEachDeployment((d) => applyPipeline(applyClient, d.pipeline, "delete-resources"));
-      await forEachDeployment((d) => applyAuth(applyClient, d.auth, "delete-resources"));
-      await forEachDeployment((d) => applyIdP(applyClient, d.idp, "delete-resources"));
+      await forEachDeployment(deployments, (d) =>
+        applyPipeline(applyClient, d.pipeline, "delete-resources"),
+      );
+      await forEachDeployment(deployments, (d) =>
+        applyAuth(applyClient, d.auth, "delete-resources"),
+      );
+      await forEachDeployment(deployments, (d) => applyIdP(applyClient, d.idp, "delete-resources"));
     });
 
     await withSpan("apply.createUpdateApplication", async () => {
-      await forEachDeployment((d) => applyApplication(applyClient, d.app, "create-update"));
+      await forEachDeployment(deployments, (d) =>
+        applyApplication(applyClient, d.app, "create-update"),
+      );
     });
 
     await withSpan("apply.createUpdateDependentServices", async () => {
@@ -130,32 +203,58 @@ export async function applyDeploymentPlans(
   });
 
   await withSpan("apply.deleteDependentServices", async () => {
-    await forEachDeployment((d) => applyWorkflow(client, d.workflow, "delete"));
-    await forEachDeployment((d) =>
+    await forEachDeployment(deployments, (d) => applyWorkflow(client, d.workflow, "delete"));
+    await forEachDeployment(deployments, (d) =>
       applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "delete"),
     );
-    await forEachDeployment((d) => applyExecutor(client, d.executor, "delete"));
-    await forEachDeployment((d) => applyStaticWebsite(client, d.staticWebsite, "delete"));
-    await forEachDeployment((d) => applyAIGateway(client, d.aiGateway, "delete"));
-    await forEachDeployment((d) =>
+    await forEachDeployment(deployments, (d) => applyExecutor(client, d.executor, "delete"));
+    await forEachDeployment(deployments, (d) =>
+      applyStaticWebsite(client, d.staticWebsite, "delete"),
+    );
+    await forEachDeployment(deployments, (d) => applyAIGateway(client, d.aiGateway, "delete"));
+    await forEachDeployment(deployments, (d) =>
       applySecretManager(client, d.secretManager, "delete", d.application),
     );
   });
 
   await withSpan("apply.deleteApplication", async () => {
-    await forEachDeployment((d) => applyApplication(client, d.app, "delete"));
+    await forEachDeployment(deployments, (d) => applyApplication(client, d.app, "delete"));
   });
 
   await withSpan("apply.deleteSubgraphServices", async () => {
-    await forEachDeployment((d) => applyPipeline(client, d.pipeline, "delete-services"));
-    await forEachDeployment((d) => applyAuth(client, d.auth, "delete-services"));
-    await forEachDeployment((d) => applyIdP(client, d.idp, "delete-services"));
-    await forEachDeployment((d) => applyTailorDB(client, d.tailorDB, "delete-services"));
+    await forEachDeployment(deployments, (d) =>
+      applyPipeline(client, d.pipeline, "delete-services"),
+    );
+    await forEachDeployment(deployments, (d) => applyAuth(client, d.auth, "delete-services"));
+    await forEachDeployment(deployments, (d) => applyIdP(client, d.idp, "delete-services"));
+    await forEachDeployment(deployments, (d) =>
+      applyTailorDB(client, d.tailorDB, "delete-services"),
+    );
   });
 
   await withSpan("apply.cleanup", async () => {
-    await forEachDeployment((d) =>
+    await forEachDeployment(deployments, (d) =>
       applyFunctionRegistry(client, workspaceId, d.functionRegistry, "delete"),
     );
   });
+}
+
+/**
+ * Apply planned deploy changes for one or more applications in one shot:
+ * {@link preflightAllTailorDB}, {@link applyPrerequisiteResources}, then
+ * {@link applyRemainingResources}. `deployInternal` calls the three parts
+ * separately instead, so it can rebuild between the last two when a static
+ * website was just created.
+ * @param client - Operator client instance
+ * @param workspaceId - Target workspace ID
+ * @param deployments - Planned deployments to apply
+ */
+export async function applyDeploymentPlans(
+  client: OperatorClient,
+  workspaceId: string,
+  deployments: ReadonlyArray<PlannedDeployment>,
+): Promise<void> {
+  await preflightAllTailorDB(client, deployments);
+  await applyPrerequisiteResources(client, deployments);
+  await applyRemainingResources(client, workspaceId, deployments);
 }

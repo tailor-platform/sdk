@@ -18,6 +18,7 @@ describe("bundleWorkflowJobs", () => {
       mainJobDeps: {},
       usedJobNames: [],
       bundledCode: new Map(),
+      sourceFileState: expect.any(String),
     });
   });
 
@@ -71,6 +72,129 @@ export const mainJob = createWorkflowJob({
       });
     } finally {
       vi.unstubAllGlobals();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("reuses a prior call's usedJobNames/mainJobDeps instead of re-detecting reachability", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "reuse-used-jobs-test-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => ({}),
+});
+
+export const unusedJob = createWorkflowJob({
+  name: "unused-job",
+  body: async () => ({}),
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+
+    try {
+      const allJobs = [
+        { name: "main-job", exportName: "mainJob", sourceFile },
+        { name: "unused-job", exportName: "unusedJob", sourceFile },
+      ];
+      const startContext = { modules: new Map() };
+
+      const fresh = await bundleWorkflowJobs(allJobs, ["main-job"], {}, startContext, tmpDir);
+      // Without a hint, reachability detection correctly drops the unused job.
+      expect(fresh.usedJobNames).toEqual(["main-job"]);
+      expect(fresh.bundledCode.has("unused-job")).toBe(false);
+
+      const reused = await bundleWorkflowJobs(
+        allJobs,
+        ["main-job"],
+        {},
+        startContext,
+        tmpDir,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          usedJobNames: ["main-job", "unused-job"],
+          mainJobDeps: fresh.mainJobDeps,
+          sourceFileState: fresh.sourceFileState,
+        },
+      );
+
+      // A caller-supplied usedJobNames set is trusted as-is, not re-detected:
+      // "unused-job" is bundled here only because it was passed in, proving
+      // filterUsedJobs did not run again.
+      expect(reused.usedJobNames).toEqual(["main-job", "unused-job"]);
+      expect(reused.bundledCode.has("unused-job")).toBe(true);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("falls back to full reachability detection when a source file changed since the prior call", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "stale-used-jobs-test-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => ({}),
+});
+
+export const unusedJob = createWorkflowJob({
+  name: "unused-job",
+  body: async () => ({}),
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+
+    try {
+      const allJobs = [
+        { name: "main-job", exportName: "mainJob", sourceFile },
+        { name: "unused-job", exportName: "unusedJob", sourceFile },
+      ];
+      const startContext = { modules: new Map() };
+
+      const fresh = await bundleWorkflowJobs(allJobs, ["main-job"], {}, startContext, tmpDir);
+
+      // Touch the source file so its content-hash changes, simulating an edit
+      // made between the first build and a later rebuild.
+      fs.appendFileSync(sourceFile, "\n// touched\n");
+
+      const rebuilt = await bundleWorkflowJobs(
+        allJobs,
+        ["main-job"],
+        {},
+        startContext,
+        tmpDir,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          usedJobNames: ["main-job", "unused-job"],
+          mainJobDeps: fresh.mainJobDeps,
+          sourceFileState: fresh.sourceFileState,
+        },
+      );
+
+      // The stale hint is discarded because the source changed, so reachability
+      // is redetected from scratch and "unused-job" is correctly dropped again.
+      expect(rebuilt.usedJobNames).toEqual(["main-job"]);
+      expect(rebuilt.bundledCode.has("unused-job")).toBe(false);
+      expect(rebuilt.sourceFileState).not.toEqual(fresh.sourceFileState);
+    } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });

@@ -313,6 +313,36 @@ describe("planFunctionRegistry", () => {
       expect(result.conflicts[0]!.currentOwner).toBe("other-app");
     });
   });
+
+  describe("previousExisting reuse", () => {
+    test("skips re-listing the registry when a prior fetch is provided, still diffing the new content", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
+      ]);
+      const first = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+      expect(client.listFunctionRegistries).toHaveBeenCalledTimes(1);
+      expect(first.changeSet.unchanged).toHaveLength(1);
+      expect(first.changeSet.updates).toHaveLength(0);
+
+      // A rebuild changed the bundle content, so the entry's hash now differs
+      // from what's deployed -- but the platform-side listing is unchanged.
+      const rebuiltEntry = { ...entry, contentHash: "new-hash" };
+      const second = await planFunctionRegistry(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        [rebuiltEntry],
+        first.existingMap,
+      );
+
+      // Not called a second time: the platform list is reused as-is.
+      expect(client.listFunctionRegistries).toHaveBeenCalledTimes(1);
+      expect(second.changeSet.updates).toHaveLength(1);
+      expect(second.changeSet.updates[0]!.entry.contentHash).toBe("new-hash");
+    });
+  });
 });
 
 describe("splitFunctionRegistryChanges", () => {

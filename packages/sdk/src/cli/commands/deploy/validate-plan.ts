@@ -73,10 +73,10 @@ import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
 import { toPlatformExecutionPolicyKey } from "./workflow-execution-policy";
-import type { PlannedDeployment } from "./apply-phases";
+import type { PlanResults } from "./apply-phases";
 
 /** Plan results passed to validatePlan. */
-export type ValidatePlanInput = Omit<PlannedDeployment, "application">;
+export type ValidatePlanInput = PlanResults;
 
 type ViolationEntry = {
   kind: string;

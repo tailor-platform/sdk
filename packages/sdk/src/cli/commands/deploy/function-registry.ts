@@ -8,6 +8,7 @@ import {
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
+  type WithLabel,
   writeMetadataLabels,
 } from "./label";
 import {
@@ -284,6 +285,9 @@ type ExistingFunction = {
  * @param appName - Application name
  * @param appId - Stable application id (when managed by SDK)
  * @param entries - Desired function entries
+ * @param previousExisting - A prior call's fetched existing registry entries, reused instead of
+ *   re-listing them from the platform (the remote function registry cannot have changed between
+ *   a deploy's first plan and its conditional rebuild's replan; only `entries`, the desired side, does)
  * @returns Planned changes
  */
 export async function planFunctionRegistry(
@@ -292,6 +296,7 @@ export async function planFunctionRegistry(
   appName: string,
   appId: string | undefined,
   entries: FunctionEntry[],
+  previousExisting?: WithLabel<ExistingFunction>,
 ) {
   const changeSet: FunctionRegistryChangeSet = createChangeSet<
     CreateFunction,
@@ -302,25 +307,30 @@ export async function planFunctionRegistry(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const existingMap = await fetchExistingResourcesWithLabels({
-    client,
-    fetchPage: async (pageToken, maxPageSize) => {
-      const response = await client.listFunctionRegistries({
-        workspaceId,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [
-        response.functions.map((f): ExistingFunction => ({
-          name: f.name,
-          contentHash: f.contentHash,
-        })),
-        response.nextPageToken,
-      ];
-    },
-    getName: (func) => func.name,
-    getTrn: (name) => resourceTrn(workspaceId, "function_registry", name),
-  });
+  const fetchedMap =
+    previousExisting ??
+    (await fetchExistingResourcesWithLabels({
+      client,
+      fetchPage: async (pageToken, maxPageSize) => {
+        const response = await client.listFunctionRegistries({
+          workspaceId,
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [
+          response.functions.map((f): ExistingFunction => ({
+            name: f.name,
+            contentHash: f.contentHash,
+          })),
+          response.nextPageToken,
+        ];
+      },
+      getName: (func) => func.name,
+      getTrn: (name) => resourceTrn(workspaceId, "function_registry", name),
+    }));
+  // Diffing below deletes matched entries to find what's left to remove, so
+  // work on a copy and keep `fetchedMap` itself pristine for reuse.
+  const existingMap = { ...fetchedMap };
 
   // Process desired entries
   for (const entry of entries) {
@@ -401,6 +411,7 @@ export async function planFunctionRegistry(
     conflicts,
     unmanaged,
     resourceOwners,
+    existingMap: fetchedMap,
   };
 }
 

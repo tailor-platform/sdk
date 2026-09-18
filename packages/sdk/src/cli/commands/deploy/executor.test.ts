@@ -579,6 +579,31 @@ describe("planExecutor", () => {
     });
   });
 
+  describe("application env passthrough", () => {
+    function variablesExprOf(create: { request: { executor?: unknown } }): string {
+      return (
+        (create.request.executor as { targetConfig?: { config?: unknown } }).targetConfig
+          ?.config as {
+          case: "function";
+          value: { variables: { expr: string } };
+        }
+      ).value.variables.expr;
+    }
+
+    test("embeds application.env into the args expression verbatim", async () => {
+      const application: Application = {
+        ...createMockApplication([createMockExecutor("executor-a")]),
+        env: { SITE_URL: "my-site:url", RETRIES: 3 },
+      };
+
+      const result = await planExecutor(buildPlanContext(application));
+
+      const variablesExpr = variablesExprOf(result.changeSet.creates[0]!);
+      expect(variablesExpr).toContain('"SITE_URL":"my-site:url"');
+      expect(variablesExpr).toContain('"RETRIES":3');
+    });
+  });
+
   describe("resolverExecutedTrigger success field", () => {
     test("includes success field in trigger condition expression", async () => {
       const application = createMockApplication(
@@ -1396,6 +1421,35 @@ describe("planExecutor", () => {
       const application = createMockApplication([executor], appOptions);
 
       await expect(planExecutor(buildPlanContext(application))).rejects.toThrow(errorPattern);
+    });
+  });
+
+  describe("previousExisting reuse", () => {
+    test("skips re-listing executors when a prior fetch is provided", async () => {
+      const listExecutorExecutors = vi.fn().mockResolvedValue({
+        executors: [{ name: "existing-executor" }],
+        nextPageToken: "",
+      });
+      const client = {
+        listExecutorExecutors,
+        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      } as unknown as OperatorClient;
+
+      const application = createMockApplication([createMockExecutor("existing-executor")]);
+      const first = await planExecutor(buildPlanContext(application, { client }));
+      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(first.changeSet.creates).toHaveLength(0);
+      expect(first.changeSet.updates).toHaveLength(1);
+
+      const second = await planExecutor(
+        buildPlanContext(application, { client }),
+        first.existingExecutors,
+      );
+
+      // Not called a second time: the platform list is reused as-is.
+      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(second.changeSet.creates).toHaveLength(0);
+      expect(second.changeSet.updates).toHaveLength(1);
     });
   });
 });

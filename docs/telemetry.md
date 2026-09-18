@@ -64,13 +64,14 @@ deploy
 │   └── plan.secretManager
 ├── confirm
 ├── apply.preflight
-├── apply.createUpdateServices
+├── apply.createUpdatePrerequisiteServices
 │   ├── apply.secretManager.createUpdate
-│   ├── apply.functionRegistry.createUpdate
 │   ├── apply.staticWebsite.createUpdate
 │   ├── apply.aiGateway.createUpdate
 │   ├── apply.idp.createUpdate
-│   ├── apply.auth.createUpdatePrerequisites
+│   └── apply.auth.createUpdatePrerequisites
+├── apply.createUpdateServices
+│   ├── apply.functionRegistry.createUpdate
 │   ├── apply.tailorDB.createUpdate
 │   │   ├── apply.tailorDB.migration.prePhase
 │   │   ├── apply.tailorDB.migration.script
@@ -91,6 +92,26 @@ deploy
 
 With `--build-only`, `config.preflight` is omitted and the config preparation
 and loading spans run under `build` instead.
+
+`apply.preflight` validates every deployment's TailorDB migration state before
+anything is applied, so a stale migration checkpoint or schema fails the
+deploy with nothing yet mutated. `apply.createUpdatePrerequisiteServices`
+covers the resource kinds that can never hold a reference to a static
+website's URL. Applying them first means a site this same deploy creates
+already exists by the time the rest of the deploy needs it. If nothing in
+`env` referenced such a site, the conditional rebuild/replan step is skipped
+entirely and `apply.createUpdateServices` follows
+`apply.createUpdatePrerequisiteServices` directly. When the rebuild does run,
+its replan only emits `plan.functionRegistry`, `plan.pipeline`,
+`plan.application`, `plan.executor`, and `plan.workflow` — the other `plan.*`
+spans under `plan` (including `plan.validateTailorDBTypeNames`) reuse their
+result from the first plan instead of running again.
+
+The rebuild itself is similarly scoped: it re-resolves `env` and rebundles
+only workflow jobs and auth hooks, the two kinds of bundled code that embed
+`env` directly. `build.generateUserTypes` is skipped entirely (nothing it
+generates depends on `env`), and resolver, executor, and HTTP adapter bundles
+are reused from the first `build.loadApplication` rather than rebundled.
 
 The pre/post migration spans repeat once per pending migration; the script span
 appears only for migrations that carry a `migrate.ts`.

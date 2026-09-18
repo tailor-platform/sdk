@@ -16,10 +16,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, aroundAll } from "vitest";
+import { describe, test, expect, aroundAll, vi } from "vitest";
 import { deploy } from "../src/cli/commands/deploy/deploy";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+import { logger } from "../src/cli/shared/logger";
 import {
   resolveE2ERunId,
   resolveE2EWorkspaceRegion,
@@ -651,4 +652,86 @@ export default defineConfig({
       }),
     ).resolves.toBeUndefined();
   }, 120000);
+});
+
+describe("E2E: static website env reference created in the same deploy", () => {
+  let workspaceId: string;
+  let client: OperatorClient;
+  let tempDir: string;
+
+  aroundAll(async (runSuite) => {
+    const accessToken = await loadAccessToken();
+    client = await initOperatorClient(accessToken);
+    const region = await resolveE2EWorkspaceRegion(client);
+
+    const workspaceName = `e2e-ws-${ciRunId ? `${ciRunId}-` : ""}${testRunId}-static-env`;
+    const createResp = await client.createWorkspace({
+      workspaceName,
+      workspaceRegion: region,
+      deleteProtection: false,
+      organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
+      folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+    });
+    workspaceId = createResp.workspace!.id!;
+    trackWorkspace(workspaceId);
+
+    const sdkRoot = path.resolve(__dirname, "..");
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-static-env-"));
+    trackTempDir(tempDir);
+    const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
+    fs.mkdirSync(nodeModulesDir, { recursive: true });
+    fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
+
+    await runSuite();
+  }, 120000);
+
+  test("resolves a static website `env` reference created by the same deploy, in one deploy() call", async () => {
+    const siteName = `e2e-site-${testRunId}`;
+    const appName = `e2e-static-env-${testRunId}`;
+    const configPath = path.join(tempDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configPath,
+      `
+import { defineConfig, defineStaticWebSite } from "@tailor-platform/sdk";
+
+const website = defineStaticWebSite("${siteName}", { description: "auto-redeploy e2e" });
+
+export default defineConfig({
+  id: "${crypto.randomUUID()}",
+  name: "${appName}",
+  staticWebsites: [website],
+  env: { siteUrl: website.url },
+});
+`,
+    );
+
+    const warnMessages: string[] = [];
+    const infoMessages: string[] = [];
+    using _warnSpy = vi
+      .spyOn(logger, "warn")
+      .mockImplementation((message: string) => void warnMessages.push(message));
+    using _infoSpy = vi
+      .spyOn(logger, "info")
+      .mockImplementation((message: string) => void infoMessages.push(message));
+
+    await expect(deploy({ workspaceId, configPath, yes: true })).resolves.toBeUndefined();
+
+    // Left unresolved during the first pass, because the site does not exist
+    // yet at that pass's plan time -- expected, not a failure.
+    expect(warnMessages.some((message) => message.includes("isn't available yet"))).toBe(true);
+    // The single deploy() call announces and runs the automatic rebuild, so
+    // the placeholder does not need a second, human-triggered `deploy`.
+    expect(infoMessages.some((message) => message.includes("rebuilding so env resolves"))).toBe(
+      true,
+    );
+    // Exactly one occurrence: left unresolved on the first build, resolved for
+    // real on the rebuild. A regression that keeps failing to resolve would
+    // log this warning again on the rebuild.
+    expect(
+      warnMessages.filter((message) => message.includes("keeps the unresolved value")),
+    ).toHaveLength(1);
+
+    const site = await client.getStaticWebsite({ workspaceId, name: siteName });
+    expect(site.staticwebsite?.url).toBeTruthy();
+  }, 180000);
 });
