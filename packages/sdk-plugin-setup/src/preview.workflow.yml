@@ -29,25 +29,25 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/generate-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/drift-check@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
           fail-on-drift: ${{ vars.TAILOR_PLATFORM_FAIL_ON_DRIFT == 'true' }}
       - id: tailor-preview-deploy
-        uses: tailor-platform/actions/preview-deploy@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/preview-deploy@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           region: "__REGION__"
@@ -60,7 +60,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - id: tailor-preview-comment
         if: always()
-        uses: tailor-platform/actions/preview-comment@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/preview-comment@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
           workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
@@ -80,15 +80,15 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/setup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/install@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-preview-cleanup
-        uses: tailor-platform/actions/preview-cleanup@aa06a6c4926268e1013eaca4aa292ff390883e44 # v2.3.4
+        uses: tailor-platform/actions/preview-cleanup@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           package-manager: __PACKAGE_MANAGER__
