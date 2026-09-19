@@ -10,6 +10,7 @@ export const entry = [
   "src/plugin/builtin/file-utils/index.ts",
   "src/plugin/builtin/seed/index.ts",
   "src/seed/index.ts",
+  "src/ai/index.ts",
   "src/vitest/index.ts",
   "src/vitest/environment.ts",
   "src/vitest/setup.ts",
