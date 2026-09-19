@@ -5,6 +5,24 @@ import { describe, expect, test } from "vitest";
 import { V2_NEXT_PENDING, allCodemods, getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
+  test("offers beta plugin export normalization when crossing the minor release boundary", () => {
+    expect(getApplicableCodemods("2.17.0", "2.18.0").map((codemod) => codemod.id)).toContain(
+      "v2/plugin-export-name-normalize",
+    );
+    expect(getApplicableCodemods("2.15.0", "2.18.0").map((codemod) => codemod.id)).toContain(
+      "v2/plugin-export-name-normalize",
+    );
+    expect(getApplicableCodemods("1.67.1", "2.18.0").map((codemod) => codemod.id)).toContain(
+      "v2/plugin-export-name-normalize",
+    );
+    expect(getApplicableCodemods("2.15.0", "2.17.0").map((codemod) => codemod.id)).not.toContain(
+      "v2/plugin-export-name-normalize",
+    );
+    expect(getApplicableCodemods("2.18.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
+      "v2/plugin-export-name-normalize",
+    );
+  });
+
   test("returns codemods when upgrading across their version boundary", () => {
     const codemods = getApplicableCodemods("1.33.0", "2.0.0");
     expect(codemods.length).toBeGreaterThan(0);

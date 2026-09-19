@@ -145,12 +145,12 @@ export default {
     expect(globalThis.__testExtendCalls).toHaveLength(1);
   });
 
-  test("leaves an array that mixes plugins with other values alone, as the CLI does", async () => {
+  test("rejects a `plugins` export containing an item that is not a plugin", async () => {
     writeTable('{ "first": {} }');
     writeConfig(`${extendingPlugin("first", "rank", "db.int()")}, "not a plugin"`);
     const order = await loadTable();
 
-    await expect(getExtendedTable(configPath, order)).rejects.toThrow('Plugin "first" not found');
+    await expect(getExtendedTable(configPath, order)).rejects.toThrow(/Invalid `plugins` export/);
   });
 
   test("reports a plugin the config does not register", async () => {
@@ -279,5 +279,102 @@ export default {
     );
 
     expect(table).toMatchObject({ name: "__placeholder_auditLog__", fields: {} });
+  });
+
+  describe("plugin export selection", () => {
+    test.each([
+      'tableConfigRequired: "yes"',
+      "tableConfigRequired: null",
+      'onTableLoaded() {}, importPath: ""',
+    ])("rejects invalid plugin options: %s", async (options) => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{ id: "invalid", description: "test", ${options} }];
+export default { db: { main: { files: [] } } };
+`,
+      );
+      await expect(getGeneratedTable(configPath, "invalid", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("ignores array exports under any name other than `plugins`", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const zzMixed = [{ id: "ignored", description: "test" }];
+export const generators = [{ id: "also-ignored", description: "test" }];
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "ignored", null, "auditLog")).rejects.toThrow(
+        /Plugin "ignored" not found/,
+      );
+    });
+
+    test("rejects a `plugins` export that is not an array", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = { id: "not-an-array", description: "test" };
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "not-an-array", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("rejects a `plugins` export that is explicitly undefined", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = undefined;
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "anything", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("rejects arrays decorated with plugin properties", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [Object.assign([], { id: "array", description: "test" })]; export default { db: {} };`,
+      );
+      await expect(getGeneratedTable(configPath, "array", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("rejects a `plugins` export containing an invalid item", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{ id: "valid", description: "test" }, { no: "shape" }];
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "valid", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("rejects duplicate plugin IDs in the `plugins` export", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [
+  { id: "dup", description: "first" },
+  { id: "dup", description: "second" },
+];
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+      await expect(getGeneratedTable(configPath, "dup", null, "auditLog")).rejects.toThrow(
+        /Duplicate plugin ID "dup"/,
+      );
+    });
   });
 });

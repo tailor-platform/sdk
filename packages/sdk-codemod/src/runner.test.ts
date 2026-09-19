@@ -81,6 +81,140 @@ describe("runCodemods", () => {
     ]);
   });
 
+  test.each([
+    [
+      "define-generators-to-plugins",
+      'import { defineGenerators as makeGenerators } from "@tailor-platform/sdk"; export const generators = makeGenerators(["@tailor-platform/kysely-type", {}]);',
+    ],
+    ["plugin-export-name-normalize", "export const generators = definePlugins();"],
+    [
+      "plugin-export-name-normalize",
+      'import { generators } from "./plugin-helper"; export { generators };',
+    ],
+    [
+      "plugin-export-name-normalize",
+      'import * as config from "./tailor.config"; console.log(config.generator);',
+    ],
+    [
+      "plugin-export-name-normalize",
+      'const config = await import("./tailor.config"); console.log(config.generators);',
+    ],
+    [
+      "plugin-export-name-normalize",
+      "const makePlugins = definePlugins; export const generators = makePlugins();",
+    ],
+    [
+      "plugin-export-name-normalize",
+      "const registered = definePlugins(); export const generators = registered;",
+    ],
+    ["plugin-export-name-normalize", 'export * from "./helpers";'],
+    [
+      "plugin-export-name-normalize",
+      'import { definePlugins as makePlugins } from "@tailor-platform/sdk"; export const generators = makePlugins();',
+    ],
+    [
+      "plugin-export-name-normalize",
+      'import * as sdk from "@tailor-platform/sdk"; export const generators = sdk.definePlugins();',
+    ],
+    ["plugin-export-name-normalize", 'export { generators } from "./helpers";'],
+    [
+      "define-generators-to-plugins",
+      'import { defineGenerators } from "@tailor-platform/sdk"; export const plugins = defineGenerators(["custom-plugin", {}]);',
+    ],
+    ["plugin-export-name-normalize", 'export { generator } from "./tailor.config";'],
+    ["plugin-export-name-normalize", 'export { generators as legacy } from "./tailor.config.mts";'],
+    ["plugin-export-name-normalize", "export const generators = [myPlugin()] as const;"],
+    ["plugin-export-name-normalize", "export const generators = [myPlugin()] satisfies Plugin[];"],
+    ["plugin-export-name-normalize", "export const generators = (definePlugins());"],
+    ["plugin-export-name-normalize", "export const generators = <Plugin[]>[myPlugin()];"],
+    ["plugin-export-name-normalize", "export const generators = [myPlugin()];"],
+    ["plugin-export-name-normalize", "export const plugins2 = [myPlugin()];"],
+    [
+      "plugin-export-name-normalize",
+      "const plugins = []; export let generators\n = definePlugins();",
+    ],
+    ["plugin-export-name-normalize", "const generators = definePlugins(); export { generators };"],
+    ["plugin-export-name-normalize", 'import { generator } from "./tailor.config.mts";'],
+    ["plugin-export-name-normalize", 'import { generators } from "./tailor.config.cts";'],
+    [
+      "define-generators-to-plugins",
+      'import { defineGenerators } from "@tailor-platform/sdk"; export const dbGenerators = defineGenerators(); export const enumGenerators = defineGenerators();',
+    ],
+    [
+      "define-generators-to-plugins",
+      'import { defineGenerators } from "@tailor-platform/sdk"; const generators = defineGenerators(); export { generators };',
+    ],
+  ])("reports manual migration for %s: %s", async (name, source) => {
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const codemod = allCodemods.find((entry) => entry.id === `v2/${name}`)!;
+    const { tmpDir: dir } = await createTestProject("tailor.config.ts", source);
+    tmpDir = dir;
+    const scriptPath = path.resolve(__dirname, `../codemods/v2/${name}/scripts/transform.ts`);
+    const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+    expect(result.warnings.length + result.llmReviews.length).toBeGreaterThan(0);
+  });
+
+  test.each([
+    'import { defineAuth } from "@tailor-platform/sdk"; export const auth = defineAuth("auth", {});',
+    'import { defineAuth as makeAuth } from "@tailor-platform/sdk"; export const auth = makeAuth("auth", {});',
+    'import * as sdk from "@tailor-platform/sdk"; export const auth = sdk.defineAuth("auth", {});',
+    "export const plugins = definePlugins();",
+    "const generators = definePlugins(); export { generators as plugins };",
+    "export const generators = definePlugins(); export { generators as plugins };",
+    "export const plugins = [myPlugin()];",
+    "function local() { const generators = definePlugins(); return generators; }",
+  ])("does not report canonical or unexported plugin bindings: %s", async (source) => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/plugin-export-name-normalize")!;
+    const { tmpDir: dir } = await createTestProject("tailor.config.ts", source);
+    tmpDir = dir;
+    const scriptPath = path.resolve(
+      __dirname,
+      "../codemods/v2/plugin-export-name-normalize/scripts/transform.ts",
+    );
+    const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+    expect(result.warnings).toEqual([]);
+    expect(result.llmReviews).toEqual([]);
+  });
+
+  test.each([true, false])(
+    "reports imports needing manual migration after chained conversion (dryRun: %s)",
+    async (dryRun) => {
+      using _stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+      const { tmpDir: dir } = await createTestProject(
+        "tailor.config.ts",
+        'import { defineGenerators } from "@tailor-platform/sdk"; export const generator = defineGenerators();',
+      );
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "a-consumer.ts"),
+        'import { generator } from "./tailor.config";',
+      );
+      const codemods = ["define-generators-to-plugins", "plugin-export-name-normalize"].map(
+        (name) => ({
+          codemod: allCodemods.find((entry) => entry.id === `v2/${name}`)!,
+          scriptPath: path.resolve(__dirname, `../codemods/v2/${name}/scripts/transform.ts`),
+        }),
+      );
+      const result = await runCodemods(codemods, dir, dryRun);
+      expect(result.llmReviews.some((review) => review.files.includes("a-consumer.ts"))).toBe(true);
+    },
+  );
+
+  test.each(['export * from "./tailor.config";', 'export * as config from "./tailor.config";'])(
+    "reports indirect consumer re-exports: %s",
+    async (source) => {
+      const { tmpDir: dir } = await createTestProject("consumer.ts", source);
+      tmpDir = dir;
+      const codemod = allCodemods.find((entry) => entry.id === "v2/plugin-export-name-normalize")!;
+      const scriptPath = path.resolve(
+        __dirname,
+        "../codemods/v2/plugin-export-name-normalize/scripts/transform.ts",
+      );
+      const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+      expect(result.llmReviews.some((review) => review.files.includes("consumer.ts"))).toBe(true);
+    },
+  );
+
   describe("chained transforms in dry-run", () => {
     // Transform A: renames "oldFunc" → "midFunc"
     const transformAPath = path.join(os.tmpdir(), "transform-a.ts");
