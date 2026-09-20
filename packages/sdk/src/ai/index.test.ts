@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import {
   createSystemOne,
+  createTypeSafeAITransport,
   SystemOneError,
   type ChoiceResult,
   type SystemOneErrorCode,
@@ -212,5 +213,134 @@ describe("createSystemOne", () => {
 
     await expect(promise).rejects.toBeInstanceOf(SystemOneError);
     await expect(promise).rejects.toMatchObject({ code: "MODEL_ERROR" });
+  });
+
+  test("uses an explicitly configured TypeSafe AI transport", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        model: "jev-latest",
+        answers: {
+          decision: {
+            type: "choice",
+            choice: "billing",
+            probabilities: { billing: 0.91, sales: 0.09 },
+            confidence: 0.88,
+          },
+        },
+        usage: { input_tokens: 10, output_tokens: 2 },
+      }),
+    );
+    const client = createSystemOne({
+      transport: createTypeSafeAITransport({
+        apiKey: "typesafe-token",
+        fetch: fetchMock,
+        retry: { maxRetries: 0 },
+      }),
+    });
+
+    const result = await client.choice({
+      state: { subject: "Charged twice" },
+      question: "Which department should handle this ticket?",
+      choices: ["billing", "sales"],
+    });
+
+    expect(result).toEqual({
+      value: "billing",
+      probabilities: { billing: 0.91, sales: 0.09 },
+      confidence: 0.88,
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer typesafe-token");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: "jev-latest",
+      state: { subject: "Charged twice" },
+      questions: {
+        decision: {
+          type: "choice",
+          instructions: "Which department should handle this ticket?",
+          criteria: { billing: null, sales: null },
+        },
+      },
+    });
+  });
+
+  test("normalizes TypeSafe AI boolean probabilities", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        model: "jev-latest",
+        answers: { decision: { type: "noul", noul: 0.2 } },
+        usage: { input_tokens: 8, output_tokens: 1 },
+      }),
+    );
+    const client = createSystemOne({
+      transport: createTypeSafeAITransport({
+        apiKey: "typesafe-token",
+        fetch: fetchMock,
+        retry: { maxRetries: 0 },
+      }),
+    });
+
+    const result = await client.boolean({ state: {}, question: "Continue?" });
+
+    expect(result).toEqual({ value: false, probability: 0.8 });
+  });
+
+  test("maps TypeSafe AI score probabilities to named levels", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        model: "jev-latest",
+        answers: {
+          decision: {
+            type: "score",
+            score: 1.6,
+            legend: { "0": "low", "1": "medium", "2": "high" },
+            probabilities: { "0": 0.05, "1": 0.3, "2": 0.65 },
+            confidence: 0.78,
+          },
+        },
+        usage: { input_tokens: 12, output_tokens: 2 },
+      }),
+    );
+    const client = createSystemOne({
+      transport: createTypeSafeAITransport({
+        apiKey: "typesafe-token",
+        fetch: fetchMock,
+        retry: { maxRetries: 0 },
+      }),
+    });
+
+    const result = await client.score({
+      state: {},
+      question: "Assess risk.",
+      levels: ["low", "medium", "high"],
+    });
+
+    expect(result).toEqual({
+      value: "high",
+      probabilities: { low: 0.05, medium: 0.3, high: 0.65 },
+      confidence: 0.78,
+    });
+  });
+
+  test("normalizes TypeSafe AI rate limit errors", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse({ message: "Too many requests" }, 429));
+    const client = createSystemOne({
+      transport: createTypeSafeAITransport({
+        apiKey: "typesafe-token",
+        fetch: fetchMock,
+        retry: { maxRetries: 0 },
+      }),
+    });
+
+    const promise = client.boolean({ state: {}, question: "Continue?" });
+
+    await expect(promise).rejects.toMatchObject({
+      name: "SystemOneError",
+      code: "RATE_LIMITED",
+      status: 429,
+    });
   });
 });
