@@ -23,50 +23,35 @@ const { url } = await aigateway.get("my-aigateway");
 const systemOne = createSystemOne({ baseURL: url });
 ```
 
-## Direct TypeSafe AI access
+When `transport` is omitted, `createSystemOne()` uses AI Gateway and requires `baseURL`.
 
-If your AI Gateway does not yet support System One, call TypeSafe AI directly from server-side code as a temporary integration. Do not set the TypeSafe API URL as `createSystemOne()`'s `baseURL`: TypeSafe AI uses a different request and response format from the AI Gateway System One endpoint.
+## TypeSafe AI transport
 
-Install the official client:
-
-```sh
-pnpm add @typesafe-ai/sdk
-```
-
-Store the TypeSafe API key in [Secret Manager](services/secret.md), then retrieve it only inside a resolver, executor, or workflow job:
+Until your AI Gateway supports System One, pass a TypeSafe AI transport to `createSystemOne()`. Store the API key in [Secret Manager](services/secret.md), then retrieve it only inside a resolver, executor, or workflow job:
 
 ```typescript
-import { choice, noul, score, TypeSafeClient } from "@typesafe-ai/sdk";
+import { createSystemOne, createTypeSafeAITransport } from "@tailor-platform/sdk/ai";
 import { secretmanager } from "@tailor-platform/sdk/runtime";
 
 const apiKey = await secretmanager.getSecret("typesafe-ai", "api-key");
-const client = new TypeSafeClient({ apiKey });
+if (!apiKey) {
+  throw new Error("TypeSafe AI API key is not configured.");
+}
 
-const result = await client.systemOne({
-  state: {
-    subject: "Charged twice",
-    message: "I was charged twice for my order.",
-  },
-  model: "jev-latest",
-  questions: {
-    department: choice("Which department should handle this ticket?", {
-      billing: null,
-      sales: null,
-      support: null,
-    }),
-    urgent: noul("Does this request require urgent handling?"),
-    risk: score("Assess the risk of this request.", ["Low risk", "Medium risk", "High risk"]),
-  },
+const systemOne = createSystemOne({
+  transport: createTypeSafeAITransport({ apiKey }),
 });
 
-const department = result.answers.department.choice;
-const urgencyProbability = result.answers.urgent.noul;
-const riskScore = result.answers.risk.score;
+const result = await systemOne.choice({
+  state: { subject: "Charged twice", message: "I was charged twice for my order." },
+  question: "Which department should handle this ticket?",
+  choices: ["billing", "sales", "support"],
+});
 ```
 
-TypeSafe calls its boolean primitive `noul`; it returns the probability of a yes answer rather than a boolean value. Its score primitive returns a probability-weighted numeric score, which can fall between the configured levels. These results therefore need a small application-level adapter if the rest of your code expects the `boolean()` and discrete `score()` results documented below.
+The transport adapts TypeSafe AI responses to the same `choice()`, `boolean()`, and `score()` results used with AI Gateway. For boolean decisions, values with a yes probability of at least `0.5` become `true`. For scores, the level with the highest probability becomes `value`.
 
-Keep this integration on the server. The TypeSafe client rejects browser use by default because browser code would expose the API key. Direct access also bypasses AI Gateway's workspace authentication, credential management, usage tracking, rate limiting, and audit controls. Once your AI Gateway supports System One, replace the direct client at this boundary with `createSystemOne()`.
+Keep this transport on the server because browser code would expose the API key. Direct access also bypasses AI Gateway's workspace authentication, credential management, usage tracking, rate limiting, and audit controls. Once AI Gateway supports System One, remove `transport` and provide the Gateway `baseURL` instead; decision call sites do not need to change.
 
 `jev-latest` follows TypeSafe's latest stable model. Pin a versioned model when calibrated thresholds must remain stable across model releases. See the [TypeSafe JavaScript SDK](https://docs.typesafe.ai/sdk/javascript), [API reference](https://docs.typesafe.ai/api), and [model catalog](https://docs.typesafe.ai/models) for provider-specific behavior.
 
@@ -112,6 +97,6 @@ const result = await systemOne.score({
 });
 ```
 
-All three methods accept an optional `model` override. When it is omitted, AI Gateway uses its default decision model.
+All three methods accept an optional `model` override. When it is omitted, the selected transport uses its default decision model.
 
 Failures throw `SystemOneError` with a provider-independent `code`. Applications can handle stable codes such as `RATE_LIMITED`, `PROVIDER_TIMEOUT`, and `PROVIDER_UNAVAILABLE` without depending on a model provider.
