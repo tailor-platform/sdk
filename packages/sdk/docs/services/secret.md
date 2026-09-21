@@ -62,7 +62,7 @@ export default defineConfig({
 });
 ```
 
-The exported `secrets` object provides type-safe `get()` and `getAll()` methods for runtime access from resolvers, executors, and workflows.
+The exported `secrets` object also carries the values you passed in, so import it only from `tailor.config.ts` itself — never from a resolver, executor, or workflow file. To read a secret at runtime, use the `secretmanager` API described below instead.
 
 ### Skipping Secrets with Missing Values
 
@@ -91,50 +91,52 @@ This allows you to set secret values once (e.g., via local `tailor deploy` or th
 
 ## Using Secrets
 
-### Runtime Access with `get()` / `getAll()`
+### Runtime Access with `secretmanager`
 
-Use the `secrets` object exported from `tailor.config.ts` to retrieve secret values at runtime. The vault and secret names are fully type-checked based on the `defineSecretManager()` configuration.
+Read secret values at runtime with the `secretmanager` API from `@tailor-platform/sdk/runtime`, the same module you use for other platform runtime APIs (`idp`, `workflow`, `authconnection`, etc.). Pass the vault and secret names as plain strings — they are not type-checked against `defineSecretManager()`, since this API works independently of your `tailor.config.ts` exports.
 
-#### `get(vault, secret)`
+#### `getSecret(vault, name)`
 
 Retrieves a single secret value.
 
 ```typescript
 import { createResolver } from "@tailor-platform/sdk";
-import { secrets } from "../tailor.config";
+import { secretmanager } from "@tailor-platform/sdk/runtime";
 
 export default createResolver({
   name: "call-stripe",
+  operation: "query",
   // ...
-  operation: async ({ input }) => {
-    const apiKey = await secrets.get("api-keys", "stripe-secret-key");
+  body: async ({ input }) => {
+    const apiKey = await secretmanager.getSecret("api-keys", "stripe-secret-key");
     // Use apiKey to call the Stripe API
   },
 });
 ```
 
-#### `getAll(vault, secrets)`
+#### `getSecrets(vault, names)`
 
 Retrieves multiple secret values at once from the same vault.
 
 ```typescript
 import { createResolver } from "@tailor-platform/sdk";
-import { secrets } from "../tailor.config";
+import { secretmanager } from "@tailor-platform/sdk/runtime";
 
 export default createResolver({
   name: "send-notification",
+  operation: "query",
   // ...
-  operation: async ({ input }) => {
-    const [apiKey, webhookSecret] = await secrets.getAll("api-keys", [
-      "sendgrid-api-key",
-      "stripe-secret-key",
-    ]);
+  body: async ({ input }) => {
+    const { "sendgrid-api-key": apiKey, "stripe-secret-key": webhookSecret } =
+      await secretmanager.getSecrets("api-keys", ["sendgrid-api-key", "stripe-secret-key"]);
     // Use the retrieved secrets
   },
 });
 ```
 
-Both methods return `Promise<string | undefined>` (or an array of them for `getAll`).
+`getSecret` returns `Promise<string | undefined>`; `getSecrets` returns a `Promise` of a partial record keyed by the requested names, omitting any name that has no value.
+
+Import `secretmanager` directly in resolver, executor, and workflow files — never the `secrets` object from `tailor.config.ts` (see [Declarative Configuration](#declarative-configuration) above).
 
 ### In Webhook Operations
 

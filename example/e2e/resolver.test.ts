@@ -26,7 +26,7 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(8);
+    expect(pipelineResolvers.length).toBe(9);
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
@@ -431,6 +431,25 @@ describe("dataplane", () => {
         result: 5, // 5 * env.foo (1)
         envBar: "hello",
         envBaz: true,
+      },
+    });
+  });
+
+  test("secret", async () => {
+    const query = gql`
+      query {
+        secret {
+          found
+          length
+        }
+      }
+    `;
+    const result = await graphQLClient.rawRequest(query);
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({
+      secret: {
+        found: true,
+        length: "example-secret-value".length,
       },
     });
   });
