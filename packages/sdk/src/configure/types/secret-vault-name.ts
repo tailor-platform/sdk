@@ -18,6 +18,16 @@ export type SecretVaultName = keyof SecretVaultNameRegistry extends never
   : keyof SecretVaultNameRegistry | (string & {});
 
 /**
+ * Secret name narrowed to the vault `V`, looked up in registry `R`.
+ *
+ * Generic over the registry so type-level tests can exercise this narrowing against
+ * a local, disposable registry shape instead of `declare module`-augmenting the real
+ * `SecretVaultNameRegistry` — that augmentation is ambient and leaks into every other
+ * file type-checked in the same program, not just the test file that declares it.
+ */
+export type SecretNameForRegistry<V, R> = V extends keyof R ? R[V] & string : string;
+
+/**
  * Secret name narrowed to the vault `V`.
  *
  * Inside a vault declared via `defineSecretManager()`, only that vault's declared
@@ -25,6 +35,4 @@ export type SecretVaultName = keyof SecretVaultNameRegistry extends never
  * an unlisted name is a typo. For any other vault (for example one managed only via
  * the CLI), falls back to `string`.
  */
-export type SecretNameFor<V> = V extends keyof SecretVaultNameRegistry
-  ? SecretVaultNameRegistry[V] & string
-  : string;
+export type SecretNameFor<V> = SecretNameForRegistry<V, SecretVaultNameRegistry>;
