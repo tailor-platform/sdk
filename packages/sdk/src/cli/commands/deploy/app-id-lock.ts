@@ -208,7 +208,11 @@ export type ResolveAppIdParams = {
  * is not yet recorded anywhere resolves to undefined rather than warning —
  * unlike a deploy or remove run, a plugin resolving this has no ownership
  * decision riding on it, so the warning `planAppIds` raises for that case
- * would be misleading here.
+ * would be misleading here. A config id that disagrees with the lock, or
+ * that is already recorded for a different, still-existing config, is an
+ * `APP_ID_CONFLICT` — the same ambiguous states `planAppIds` refuses to
+ * resolve automatically, since a plugin trusting the wrong side would act on
+ * another application's identity.
  * @param params - The config to resolve and the id its module evaluates to, if any
  * @returns The resolved id, or undefined when neither the lock nor the config carries one
  */
@@ -216,7 +220,34 @@ export function resolveAppId(params: ResolveAppIdParams): string | undefined {
   const { configPath, configId } = params;
   const lock = findAppIdLock(configPath);
   if (lock === null) return configId;
-  return lock.appIds[appIdLockKey(lock.root, configPath)] ?? configId;
+
+  const key = appIdLockKey(lock.root, configPath);
+  const recorded = lock.appIds[key];
+  if (recorded !== undefined) {
+    if (configId !== undefined && configId.toLowerCase() !== recorded.toLowerCase()) {
+      throw CLIError({
+        code: "APP_ID_CONFLICT",
+        message: `${TAILOR_LOCK_FILENAME} records app id "${recorded}" for ${key}, but the config's 'id' is "${configId}".`,
+        suggestion:
+          "Neither can be chosen automatically: remove the 'id' from the config to keep the recorded id, or replace the recorded value with the config's id.",
+      });
+    }
+    return recorded;
+  }
+
+  if (configId === undefined) return undefined;
+  const owner = Object.entries(lock.appIds).find(
+    ([, id]) => id.toLowerCase() === configId.toLowerCase(),
+  )?.[0];
+  if (owner !== undefined && owner !== key && fs.existsSync(path.join(lock.root, owner))) {
+    throw CLIError({
+      code: "APP_ID_CONFLICT",
+      message: `${configPath} carries the app id already recorded for ${owner} in ${TAILOR_LOCK_FILENAME}.`,
+      suggestion:
+        "If this config was copied from that app, delete its 'id' so it gets a fresh one.",
+    });
+  }
+  return configId;
 }
 
 /**

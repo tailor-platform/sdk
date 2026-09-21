@@ -212,10 +212,10 @@ describe("app-id-lock", () => {
       expect(resolveAppId({ configPath, configId: ID_B })).toBe(ID_B);
     });
 
-    test("prefers the lock entry over the config's own id", () => {
+    test("returns the shared id when the lock entry matches the config's own id", () => {
       writeLock({ version: 2, targets: [], appIds: { "tailor.config.ts": ID_A } });
       const configPath = writeConfig("tailor.config.ts");
-      expect(resolveAppId({ configPath, configId: ID_B })).toBe(ID_A);
+      expect(resolveAppId({ configPath, configId: ID_A })).toBe(ID_A);
     });
 
     test("returns undefined when neither the lock nor the config has one, without warning", () => {
@@ -224,6 +224,27 @@ describe("app-id-lock", () => {
       expect(resolveAppId({ configPath, configId: undefined })).toBeUndefined();
       expect(logger.warn).not.toHaveBeenCalled();
       expect(logger.info).not.toHaveBeenCalled();
+    });
+
+    test("rejects a config id that disagrees with its own lock entry", () => {
+      writeLock({ version: 2, targets: [], appIds: { "tailor.config.ts": ID_A } });
+      const configPath = writeConfig("tailor.config.ts");
+      expect(() => resolveAppId({ configPath, configId: ID_B })).toThrow(/records app id/);
+    });
+
+    test("rejects a config id already recorded for another, still-existing config", () => {
+      writeLock({ version: 2, targets: [], appIds: { "apps/a/tailor.config.ts": ID_A } });
+      writeConfig("apps/a/tailor.config.ts");
+      const configPath = writeConfig("apps/b/tailor.config.ts");
+      expect(() => resolveAppId({ configPath, configId: ID_A })).toThrow(
+        /already recorded for apps\/a\/tailor\.config\.ts/,
+      );
+    });
+
+    test("accepts a config id recorded for a config that no longer exists (treated as moved)", () => {
+      writeLock({ version: 2, targets: [], appIds: { "apps/a/tailor.config.ts": ID_A } });
+      const configPath = writeConfig("apps/b/tailor.config.ts");
+      expect(resolveAppId({ configPath, configId: ID_A })).toBe(ID_A);
     });
   });
 
