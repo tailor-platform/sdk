@@ -115,6 +115,7 @@ describe("getApplicableCodemods", () => {
       ),
     ).toBe(true);
     expect(patterns.some((pattern) => pattern.test("const configSecrets = secrets;"))).toBe(true);
+    expect(patterns.some((pattern) => pattern.test("const configSecrets = secrets\n"))).toBe(true);
     expect(patterns.some((pattern) => pattern.test('configSecrets.get("v", "k");'))).toBe(false);
   });
 
