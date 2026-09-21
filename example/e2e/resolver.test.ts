@@ -449,7 +449,7 @@ describe("dataplane", () => {
     expect(result.data).toEqual({
       secret: {
         found: true,
-        length: "example-secret-value".length,
+        length: (process.env.EXAMPLE_SECRET_TOKEN ?? "example-secret-value").length,
       },
     });
   });

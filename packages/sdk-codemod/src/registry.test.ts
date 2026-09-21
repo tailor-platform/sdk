@@ -102,6 +102,22 @@ describe("getApplicableCodemods", () => {
     ).toBe(true);
   });
 
+  test("flags aliased and reassigned secrets accessors for review, not just the direct call", () => {
+    const codemod = getApplicableCodemods("1.25.0", "3.0.0").find(
+      (entry) => entry.id === "v3/secrets-get-to-secretmanager",
+    );
+    const patterns = codemod?.suspiciousPatterns as RegExp[];
+
+    expect(patterns.some((pattern) => pattern.test('await secrets.get("v", "k");'))).toBe(true);
+    expect(
+      patterns.some((pattern) =>
+        pattern.test('import { secrets as configSecrets } from "../tailor.config";'),
+      ),
+    ).toBe(true);
+    expect(patterns.some((pattern) => pattern.test("const configSecrets = secrets;"))).toBe(true);
+    expect(patterns.some((pattern) => pattern.test('configSecrets.get("v", "k");'))).toBe(false);
+  });
+
   test("returns empty when both versions are before the codemod boundary", () => {
     expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
   });
