@@ -9,6 +9,7 @@ import {
   parseAppIds,
   planAppIds,
   readAppIdLock,
+  resolveAppId,
   resolveLockedAppIds,
   TAILOR_LOCK_FILENAME,
   TAILOR_LOCK_VERSION,
@@ -191,6 +192,38 @@ describe("app-id-lock", () => {
       expect(() => appIdLockKey(root, path.join(path.dirname(root), "tailor.config.ts"))).toThrow(
         /outside the repository/,
       );
+    });
+  });
+
+  describe("resolveAppId", () => {
+    test("returns the config's own id when there is no lock", () => {
+      const configPath = writeConfig("tailor.config.ts");
+      expect(resolveAppId({ configPath, configId: ID_A })).toBe(ID_A);
+    });
+
+    test("returns undefined when there is no lock and the config has no id", () => {
+      const configPath = writeConfig("tailor.config.ts");
+      expect(resolveAppId({ configPath, configId: undefined })).toBeUndefined();
+    });
+
+    test("falls back to the config's own id when the lock has no entry for it", () => {
+      writeLock({ version: 2, targets: [], appIds: { "other/tailor.config.ts": ID_A } });
+      const configPath = writeConfig("tailor.config.ts");
+      expect(resolveAppId({ configPath, configId: ID_B })).toBe(ID_B);
+    });
+
+    test("prefers the lock entry over the config's own id", () => {
+      writeLock({ version: 2, targets: [], appIds: { "tailor.config.ts": ID_A } });
+      const configPath = writeConfig("tailor.config.ts");
+      expect(resolveAppId({ configPath, configId: ID_B })).toBe(ID_A);
+    });
+
+    test("returns undefined when neither the lock nor the config has one, without warning", () => {
+      writeLock({ version: 2, targets: [], appIds: {} });
+      const configPath = writeConfig("tailor.config.ts");
+      expect(resolveAppId({ configPath, configId: undefined })).toBeUndefined();
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.info).not.toHaveBeenCalled();
     });
   });
 

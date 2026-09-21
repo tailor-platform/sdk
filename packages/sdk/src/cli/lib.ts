@@ -31,10 +31,12 @@ export { ensureConfigId } from "./commands/deploy/config-id-injector";
 export {
   TAILOR_LOCK_FILENAME,
   TAILOR_LOCK_VERSION,
+  appIdLockKey,
   findAppIdLock,
   parseAppIds,
   planAppIds,
   removeAdoptedConfigIds,
+  resolveAppId,
   type AppIdEntry,
   type AppIdEntryInput,
   type AppIdLock,
@@ -43,6 +45,7 @@ export {
   type AppIds,
   type PlanAppIdsParams,
   type RemoveAdoptedConfigIdsResult,
+  type ResolveAppIdParams,
 } from "./commands/deploy/app-id-lock";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";

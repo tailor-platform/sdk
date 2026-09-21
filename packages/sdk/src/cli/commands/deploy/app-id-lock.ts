@@ -195,6 +195,30 @@ export function appIdLockKey(root: string, configPath: string): string {
   return key;
 }
 
+/** Inputs to {@link resolveAppId}. */
+export type ResolveAppIdParams = {
+  configPath: string;
+  configId: string | undefined;
+};
+
+/**
+ * Resolve a config's app id for a plugin that only needs to read it: the same
+ * lock-first precedence `deploy` applies (see {@link planAppIds}), scoped to
+ * one config, with no lock write, config edit, or prompt. A config whose id
+ * is not yet recorded anywhere resolves to undefined rather than warning —
+ * unlike a deploy or remove run, a plugin resolving this has no ownership
+ * decision riding on it, so the warning `planAppIds` raises for that case
+ * would be misleading here.
+ * @param params - The config to resolve and the id its module evaluates to, if any
+ * @returns The resolved id, or undefined when neither the lock nor the config carries one
+ */
+export function resolveAppId(params: ResolveAppIdParams): string | undefined {
+  const { configPath, configId } = params;
+  const lock = findAppIdLock(configPath);
+  if (lock === null) return configId;
+  return lock.appIds[appIdLockKey(lock.root, configPath)] ?? configId;
+}
+
 /**
  * How a command may treat a config whose id is not yet recorded.
  *
