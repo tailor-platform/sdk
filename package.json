@@ -55,7 +55,7 @@
     "@types/node": "24.13.4",
     "eslint-plugin-zod": "4.13.1",
     "knip": "6.35.1",
-    "lefthook": "2.1.12",
+    "lefthook": "2.1.14",
     "madge": "8.0.0",
     "oxfmt": "0.67.0",
     "oxlint": "1.82.0",
