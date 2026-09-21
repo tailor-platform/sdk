@@ -93,7 +93,7 @@ This allows you to set secret values once (e.g., via local `tailor deploy` or th
 
 ### Runtime Access with `secretmanager`
 
-Read secret values at runtime with the `secretmanager` API from `@tailor-platform/sdk/runtime`, the same module you use for other platform runtime APIs (`idp`, `workflow`, `authconnection`, etc.). Pass the vault and secret names as plain strings — they are not type-checked against `defineSecretManager()`, since this API works independently of your `tailor.config.ts` exports.
+Read secret values at runtime with the `secretmanager` API from `@tailor-platform/sdk/runtime`, the same module you use for other platform runtime APIs (`idp`, `workflow`, `authconnection`, etc.). Pass the vault and secret names as strings. Once `tailor generate`/`tailor deploy` has run, vault names are autocompleted from `defineSecretManager()` (any other string still works, since vaults can also be managed imperatively via the CLI — see [Managing Secrets](#managing-secrets)), and inside a declared vault, secret names are checked against that vault's configuration.
 
 #### `getSecret(vault, name)`
 
@@ -110,6 +110,9 @@ export default createResolver({
   body: async ({ input }) => {
     const apiKey = await secretmanager.getSecret("api-keys", "stripe-secret-key");
     // Use apiKey to call the Stripe API
+
+    // await secretmanager.getSecret("api-keys", "unknown-key"); // Type error — "api-keys" only has "stripe-secret-key" and "sendgrid-api-key"
+    // await secretmanager.getSecret("cli-managed-vault", "anything"); // Fine — "cli-managed-vault" isn't declared in defineSecretManager(), so its secret names aren't checked
   },
 });
 ```
