@@ -1816,7 +1816,7 @@ export const allCodemods: CodemodPackage[] = [
     // and safely adding/removing the import requires tracing the `secrets`
     // binding back to defineSecretManager() to avoid rewriting an unrelated
     // same-named variable.
-    filePatterns: ["**/*.{ts,tsx,mts,cts}"],
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     suspiciousPatterns: [/\bsecrets\.get(?:All)?\(/],
     examples: [
       {
