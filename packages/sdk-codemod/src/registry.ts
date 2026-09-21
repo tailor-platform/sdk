@@ -1804,6 +1804,51 @@ export const allCodemods: CodemodPackage[] = [
       "Do not change unrelated upload APIs or already explicit encodings.",
     ].join("\n"),
   },
+  {
+    id: "v3/secrets-get-to-secretmanager",
+    name: "secrets.get()/getAll() (defineSecretManager) removed — use secretmanager from @tailor-platform/sdk/runtime",
+    description:
+      "The `get()`/`getAll()` methods on the object `defineSecretManager()` returns are removed in v3. Importing that object into a resolver, executor, or workflow file bundles the raw values passed to `defineSecretManager()` into that function's deployed code, which fails to build once any value comes from `process.env`. `secretmanager.getSecret()`/`getSecrets()` from `@tailor-platform/sdk/runtime` read the same secrets without importing the config object.",
+    since: "1.25.0",
+    until: "3.0.0",
+    // No scriptPath: getAll()'s array return (values in call order) has no
+    // context-free rewrite to getSecrets()'s partial-record-by-name return,
+    // and safely adding/removing the import requires tracing the `secrets`
+    // binding back to defineSecretManager() to avoid rewriting an unrelated
+    // same-named variable.
+    filePatterns: ["**/*.{ts,tsx,mts,cts}"],
+    suspiciousPatterns: [/\bsecrets\.get(?:All)?\(/],
+    examples: [
+      {
+        before:
+          'import { secrets } from "../tailor.config";\n\nconst apiKey = await secrets.get("api-keys", "stripe-secret-key");',
+        after:
+          'import { secretmanager } from "@tailor-platform/sdk/runtime";\n\nconst apiKey = await secretmanager.getSecret("api-keys", "stripe-secret-key");',
+      },
+      {
+        before:
+          'import { secrets } from "../tailor.config";\n\nconst [apiKey, webhookSecret] = await secrets.getAll("api-keys", [\n  "sendgrid-api-key",\n  "stripe-secret-key",\n]);',
+        after:
+          'import { secretmanager } from "@tailor-platform/sdk/runtime";\n\nconst { "sendgrid-api-key": apiKey, "stripe-secret-key": webhookSecret } =\n  await secretmanager.getSecrets("api-keys", ["sendgrid-api-key", "stripe-secret-key"]);',
+      },
+    ],
+    prompt: [
+      "`secrets.get()`/`getAll()` on the object `defineSecretManager()` returns are removed in v3.",
+      'Replace the import with `import { secretmanager } from "@tailor-platform/sdk/runtime";` and',
+      "call `secretmanager.getSecret(vault, name)` in place of `secrets.get(vault, name)`.",
+      "",
+      "`getAll()` needs more than a rename: `secrets.getAll(vault, names)` returned an array of",
+      "values in the same order as `names`, while `secretmanager.getSecrets(vault, names)` returns",
+      "a partial record keyed by each requested name (a name with no value is omitted instead of",
+      "being `undefined` at its index). Rewrite positional destructuring (`const [a, b] = await",
+      'secrets.getAll(v, ["A", "B"])`) into keyed destructuring (`const { A: a, B: b } = await',
+      'secretmanager.getSecrets(v, ["A", "B"])`).',
+      "",
+      "Also review: a `secrets` object re-exported or re-assigned to another name before use, and a",
+      "file that already imports something else named `secretmanager` (rename one of the two on",
+      "conflict).",
+    ].join("\n"),
+  },
 ];
 
 /**

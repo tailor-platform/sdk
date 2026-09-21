@@ -62,7 +62,7 @@ export default defineConfig({
 });
 ```
 
-The exported `secrets` object also carries the values you passed in, so import it only from `tailor.config.ts` itself — never from a resolver, executor, or workflow file. To read a secret at runtime, use the `secretmanager` API described below instead.
+The exported `secrets` object also carries the values you passed in, so import it only from `tailor.config.ts` itself — never from a resolver, executor, or workflow file. To read a secret at runtime, use the `secretmanager` API described below instead. Its `get()`/`getAll()` methods are deprecated for the same reason and will be removed in a future major version.
 
 ### Skipping Secrets with Missing Values
 
