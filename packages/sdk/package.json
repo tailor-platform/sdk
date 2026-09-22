@@ -232,7 +232,7 @@
     "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",
     "@types/mime-types": "3.0.1",
-    "@types/node": "24.13.4",
+    "@types/node": "24.13.6",
     "@types/semver": "7.8.0",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "5.0.0",
