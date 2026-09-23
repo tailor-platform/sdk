@@ -141,7 +141,7 @@ describe.each(variants)("%s template", (_name, layout, render) => {
       layout,
       previousIds: render.generatedIds,
       renderedIds: render.generatedIds,
-      dropOrphans: false,
+      force: false,
     });
     expect(result).toEqual({ content: render.content, dropped: [] });
   });
@@ -260,14 +260,14 @@ describe("computeManagedHash", () => {
 });
 
 describe("mergeUserContent", () => {
-  const merge = (current: string, next: RenderResult, dropOrphans = false) =>
+  const merge = (current: string, next: RenderResult, force = false) =>
     mergeUserContent({
       current,
       rendered: next.content,
       layout: "workflow",
       previousIds: render.generatedIds,
       renderedIds: next.generatedIds,
-      dropOrphans,
+      force,
     });
 
   test("keeps user steps, jobs, top-level keys, and editable fields across a template change", () => {
@@ -334,27 +334,26 @@ describe("mergeUserContent", () => {
     expect(content).toBe(render.content);
   });
 
-  test("rejects a user node whose id the new template now manages", () => {
+  test("rejects a user node whose id the new template now manages unless forced", () => {
     const edited = render.content.replace(
       /( {2}tailor-plan:[\s\S]*? {6}- id: tailor-install\n(?:        .*\n)+)/,
       "$1      - id: tailor-seed-validate\n        run: echo mine\n",
     );
-    const previousIds = render.generatedIds.filter(
-      (id) => id !== "tailor-plan/tailor-seed-validate",
+    const next = renderBranchWorkflow({ ...branchBase, seedValidate: true });
+    const args = {
+      current: edited,
+      rendered: next.content,
+      layout: "workflow" as const,
+      previousIds: render.generatedIds,
+      renderedIds: next.generatedIds,
+    };
+    expect(() => mergeUserContent({ ...args, force: false })).toThrow(
+      /tailor-plan\/tailor-seed-validate/,
     );
-    expect(() =>
-      mergeUserContent({
-        current: edited,
-        rendered: renderBranchWorkflow({ ...branchBase, seedValidate: true }).content,
-        layout: "workflow",
-        previousIds,
-        renderedIds: renderBranchWorkflow({ ...branchBase, seedValidate: true }).generatedIds,
-        dropOrphans: false,
-      }),
-    ).toThrow(/tailor-plan\/tailor-seed-validate/);
+    expect(mergeUserContent({ ...args, force: true }).content).toBe(next.content);
   });
 
-  test("rejects, or with dropOrphans drops, user steps whose managed job was removed", () => {
+  test("rejects, or with force drops, user steps whose managed job was removed", () => {
     const erd = renderBranchWorkflow({ ...branchBase, erdPreview: { namespaces: ["main"] } });
     const edited = erd.content.replace(
       /( {2}tailor-erd-preview-comment:[\s\S]*? {4}steps:\n)/,
@@ -367,10 +366,8 @@ describe("mergeUserContent", () => {
       previousIds: erd.generatedIds,
       renderedIds: render.generatedIds,
     };
-    expect(() => mergeUserContent({ ...args, dropOrphans: false })).toThrow(
-      /tailor-erd-preview-comment/,
-    );
-    expect(mergeUserContent({ ...args, dropOrphans: true })).toEqual({
+    expect(() => mergeUserContent({ ...args, force: false })).toThrow(/tailor-erd-preview-comment/);
+    expect(mergeUserContent({ ...args, force: true })).toEqual({
       content: render.content,
       dropped: ["tailor-erd-preview-comment/Mine"],
     });
@@ -386,7 +383,7 @@ describe("mergeUserContent", () => {
         layout: "workflow",
         previousIds: erd.generatedIds,
         renderedIds: render.generatedIds,
-        dropOrphans: true,
+        force: true,
       }),
     ).toThrow(/after-erd.*tailor-erd-preview/);
   });
@@ -405,7 +402,7 @@ describe("mergeUserContent", () => {
       layout: "action",
       previousIds: action.generatedIds,
       renderedIds: action.generatedIds,
-      dropOrphans: false,
+      force: false,
     });
     const doc = parseDocument(content).toJS() as {
       runs: { steps: Array<Record<string, unknown>> };
@@ -417,6 +414,20 @@ describe("mergeUserContent", () => {
       "tailor-notify",
     ]);
     expect(doc.runs.steps[0]?.["run"]).toBe("pnpm build\n");
+  });
+
+  test("keeps user nodes whose ids are Object.prototype keys", () => {
+    const edited = `${render.content}  constructor:\n    runs-on: ubuntu-latest\n    steps:\n      - id: toString\n        run: echo hi\n`;
+    expect(merge(edited, render).content).toBe(edited);
+
+    const action = renderActionWorkflow({ workspaceName: "my-app" });
+    const editedAction = action.content.replace(
+      /( {4}- id: tailor-apply\n)/,
+      "    - id: constructor\n      shell: bash\n      run: echo hi\n$1",
+    );
+    expect(computeManagedHash(editedAction, "action", action.generatedIds)).toBe(
+      computeManagedHash(action.content, "action", action.generatedIds),
+    );
   });
 
   test("throws on invalid YAML", () => {

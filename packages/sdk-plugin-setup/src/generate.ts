@@ -480,7 +480,7 @@ type Decision =
   | { action: "create" }
   | { action: "restore" }
   | { action: "adopt" }
-  | { action: "regenerate"; dropOrphans: boolean }
+  | { action: "regenerate"; force: boolean }
   | { action: "conflict"; reason: string };
 
 /**
@@ -513,7 +513,7 @@ export function decideAction(obj: {
 
   if (!fileExists || currentContent === null) return { action: "restore" };
   const currentHash = currentContentHash(existing, currentContent);
-  if (currentHash === existing.contentHash) return { action: "regenerate", dropOrphans: false };
+  if (currentHash === existing.contentHash) return { action: "regenerate", force: false };
   if (currentHash === null) {
     if (force) return { action: "adopt" };
     return {
@@ -522,7 +522,7 @@ export function decideAction(obj: {
         "This file is not valid YAML. Fix it, or re-run with --force to replace it with a fresh copy.",
     };
   }
-  if (force) return { action: "regenerate", dropOrphans: true };
+  if (force) return { action: "regenerate", force: true };
   return {
     action: "conflict",
     reason:
@@ -564,7 +564,7 @@ function reconcileContent(obj: {
       layout,
       previousIds: existing.generatedIds,
       renderedIds: render.generatedIds,
-      dropOrphans: decision.dropOrphans,
+      force: decision.force,
     });
     if (merged.dropped.length > 0) {
       logger.warn(

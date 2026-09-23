@@ -721,7 +721,7 @@ describe("decideAction", () => {
       true,
       withUserStep,
       false,
-      { action: "regenerate", dropOrphans: false },
+      { action: "regenerate", force: false },
     ],
     ["conflict: managed parts edited", target, true, managedEdit, false, { action: "conflict" }],
     [
@@ -730,7 +730,7 @@ describe("decideAction", () => {
       true,
       managedEdit,
       true,
-      { action: "regenerate", dropOrphans: true },
+      { action: "regenerate", force: true },
     ],
     ["conflict: invalid YAML", target, true, "jobs: [", false, { action: "conflict" }],
     ["--force replaces invalid YAML", target, true, "jobs: [", true, { action: "adopt" }],
@@ -741,7 +741,7 @@ describe("decideAction", () => {
       true,
       "managed",
       false,
-      { action: "regenerate", dropOrphans: false },
+      { action: "regenerate", force: false },
     ],
     [
       "conflict: legacy whole-file hash differs",
@@ -1075,6 +1075,25 @@ export default defineConfig({
       await setupTarget({ ...opts, force: true });
 
       expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
+    });
+
+    test("replaces an invalid YAML file of a legacy entry on --force", async () => {
+      const opts = baseOptions({ workspaceName: "my-app" });
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wfPath(), "utf-8");
+      fs.appendFileSync(wfPath(), "jobs: [\n");
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [{ ...target, contentHash: hashContent(generated) }],
+      });
+
+      await expect(setupTarget(opts)).rejects.toThrow(/not valid YAML/);
+      await setupTarget({ ...opts, force: true });
+
+      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(generated);
     });
   });
 

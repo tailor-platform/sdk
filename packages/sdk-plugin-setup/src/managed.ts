@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   isMap,
   isScalar,
@@ -84,9 +83,14 @@ function isPlainObject(value: unknown): value is Plain {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function tailorActionName(uses: unknown): string | undefined {
+function lookup<T>(record: Record<string, T>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
+function editableWithKeys(uses: unknown): readonly string[] | undefined {
   if (typeof uses !== "string") return undefined;
-  return /^tailor-platform\/actions\/([a-z0-9-]+)@/.exec(uses)?.[1];
+  const name = /^tailor-platform\/actions\/([a-z0-9-]+)@/.exec(uses)?.[1];
+  return name === undefined ? undefined : lookup(EDITABLE_WITH_KEYS, name);
 }
 
 function omit(value: Plain, keys: readonly string[]): Plain {
@@ -114,10 +118,10 @@ function projectSteps(
   return steps.filter(isPlainObject).flatMap((step) => {
     const id = step["id"];
     if (typeof id !== "string") return [];
-    const slotFields = slots[`${prefix}${id}`];
+    const slotFields = lookup(slots, `${prefix}${id}`);
     if (slotFields) return [omit(step, slotFields)];
     if (!managed.has(`${prefix}${id}`)) return [];
-    const editable = EDITABLE_WITH_KEYS[tailorActionName(step["uses"]) ?? ""] ?? [];
+    const editable = editableWithKeys(step["uses"]) ?? [];
     const withMap = step["with"];
     return [isPlainObject(withMap) ? { ...step, with: omit(withMap, editable) } : step];
   });
@@ -169,8 +173,7 @@ export function computeManagedHash(
         }),
     );
   }
-  const digest = createHash("sha256").update(canonicalJson(projection), "utf-8").digest("hex");
-  return `${MANAGED_HASH_PREFIX}sha256:${digest}`;
+  return `${MANAGED_HASH_PREFIX}${hashContent(canonicalJson(projection))}`;
 }
 
 function keyOf(pair: Pair): string | undefined {
@@ -238,17 +241,18 @@ type MergeContext = {
   previous: ReadonlySet<string>;
   rendered: ReadonlySet<string>;
   slots: Record<string, readonly string[]>;
-  dropOrphans: boolean;
+  force: boolean;
   dropped: string[];
 };
 
 function isSdkOwned(qualifiedId: string, stepId: string | undefined, ctx: MergeContext): boolean {
-  if (qualifiedId in ctx.slots || ctx.previous.has(qualifiedId)) return true;
+  if (Object.hasOwn(ctx.slots, qualifiedId) || ctx.previous.has(qualifiedId)) return true;
   if (stepId !== undefined && RETIRED_STEP_IDS.has(stepId)) return true;
   if (ctx.rendered.has(qualifiedId)) {
+    if (ctx.force) return true;
     throw new ManagedMergeError(
       `"${qualifiedId}" is now managed by the SDK but already exists as your own job or step. ` +
-        "Rename yours, then re-run setup.",
+        "Rename yours, or re-run with --force to replace it.",
     );
   }
   return false;
@@ -271,7 +275,7 @@ function mergeSteps(
   if (!isSeq(renderedSteps)) {
     if (userSteps.length === 0) return;
     const labels = userSteps.map((node) => `${prefix}${stepLabel(node)}`);
-    if (!ctx.dropOrphans) {
+    if (!ctx.force) {
       throw new ManagedMergeError(
         `Your steps ${labels.join(", ")} are inside a job the SDK no longer generates. ` +
           "Move them to your own job, or re-run with --force to drop them.",
@@ -285,12 +289,12 @@ function mergeSteps(
     if (id === undefined || !isMap(node)) continue;
     const match = renderedSteps.items.find((candidate) => stepIdOf(candidate) === id);
     if (!isMap(match)) continue;
-    const slotFields = ctx.slots[`${prefix}${id}`];
+    const slotFields = lookup(ctx.slots, `${prefix}${id}`);
     if (slotFields) {
       carryFields(node, match, slotFields);
       continue;
     }
-    const editable = EDITABLE_WITH_KEYS[tailorActionName(match.get("uses")) ?? ""];
+    const editable = editableWithKeys(match.get("uses"));
     const currentWith = mapAt(node, "with");
     const renderedWith = mapAt(match, "with");
     if (editable && currentWith && renderedWith) carryFields(currentWith, renderedWith, editable);
@@ -333,7 +337,7 @@ function assertNeedsResolve(root: YAMLMap): void {
  * @param params.layout - File layout
  * @param params.previousIds - Managed ids recorded when `current` was generated
  * @param params.renderedIds - Managed ids of `rendered`
- * @param params.dropOrphans - Drop user steps whose managed job no longer exists instead of failing
+ * @param params.force - Replace user nodes that collide with managed ids and drop user steps whose managed job no longer exists, instead of failing
  * @returns Merged content and the labels of any dropped user steps
  */
 export function mergeUserContent(params: {
@@ -342,7 +346,7 @@ export function mergeUserContent(params: {
   layout: Layout;
   previousIds: readonly string[];
   renderedIds: readonly string[];
-  dropOrphans: boolean;
+  force: boolean;
 }): { content: string; dropped: string[] } {
   const { layout } = params;
   const currentDoc = parse(params.current, "The file");
@@ -356,7 +360,7 @@ export function mergeUserContent(params: {
     previous: new Set(params.previousIds),
     rendered: new Set(params.renderedIds),
     slots: SLOTS[layout],
-    dropOrphans: params.dropOrphans,
+    force: params.force,
     dropped: [],
   };
 
@@ -438,11 +442,12 @@ export function currentContentHash(
   target: Pick<LockTarget, "kind" | "contentHash" | "generatedIds">,
   content: string,
 ): string | null {
-  if (!isManagedHash(target.contentHash)) {
-    return hashContent(target.kind === "action" ? normalizeActionContent(content) : content);
-  }
   try {
-    return computeManagedHash(content, layoutOf(target.kind), target.generatedIds);
+    if (isManagedHash(target.contentHash)) {
+      return computeManagedHash(content, layoutOf(target.kind), target.generatedIds);
+    }
+    parse(content, "The file");
+    return hashContent(target.kind === "action" ? normalizeActionContent(content) : content);
   } catch (error) {
     if (error instanceof ManagedMergeError) return null;
     throw error;
