@@ -41,7 +41,10 @@ const SLOTS: Record<Layout, Record<string, readonly string[]>> = {
 };
 
 // Non-`tailor-` step ids that earlier template versions wrote.
-const RETIRED_STEP_IDS = new Set(["slack-prereq"]);
+const RETIRED_IDS: Record<Layout, ReadonlySet<string>> = {
+  workflow: new Set(["tailor-deploy/slack-prereq"]),
+  action: new Set(),
+};
 
 const STRINGIFY_OPTIONS = { lineWidth: 0, flowCollectionPadding: false } as const;
 
@@ -66,6 +69,16 @@ export function layoutOf(kind: TargetKind): Layout {
  */
 export function isManagedHash(contentHash: string): boolean {
   return contentHash.startsWith(MANAGED_HASH_PREFIX);
+}
+
+function toPlain(doc: Document, label: string): unknown {
+  try {
+    return doc.toJS();
+  } catch (error) {
+    throw new ManagedMergeError(
+      `${label} could not be read: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 function parse(content: string, label: string): Document {
@@ -141,7 +154,7 @@ export function computeManagedHash(
   layout: Layout,
   managedIds: readonly string[],
 ): string {
-  const root: unknown = parse(content, "The file").toJS({ maxAliasCount: -1 });
+  const root = toPlain(parse(content, "The file"), "The file");
   const doc = isPlainObject(root) ? root : {};
   const managed = new Set(managedIds);
   const slots = SLOTS[layout];
@@ -241,13 +254,14 @@ type MergeContext = {
   previous: ReadonlySet<string>;
   rendered: ReadonlySet<string>;
   slots: Record<string, readonly string[]>;
+  retired: ReadonlySet<string>;
   force: boolean;
   dropped: string[];
 };
 
-function isSdkOwned(qualifiedId: string, stepId: string | undefined, ctx: MergeContext): boolean {
+function isSdkOwned(qualifiedId: string, ctx: MergeContext): boolean {
   if (Object.hasOwn(ctx.slots, qualifiedId) || ctx.previous.has(qualifiedId)) return true;
-  if (stepId !== undefined && RETIRED_STEP_IDS.has(stepId)) return true;
+  if (ctx.retired.has(qualifiedId)) return true;
   if (ctx.rendered.has(qualifiedId)) {
     if (ctx.force) return true;
     throw new ManagedMergeError(
@@ -268,7 +282,7 @@ function mergeSteps(
   if (!isSeq(currentSteps)) return;
   const owned = (node: unknown): boolean => {
     const id = stepIdOf(node);
-    return id !== undefined && isSdkOwned(`${prefix}${id}`, id, ctx);
+    return id !== undefined && isSdkOwned(`${prefix}${id}`, ctx);
   };
   const userSteps = currentSteps.items.filter((node) => !owned(node));
   const renderedSteps = rendered ? findPair(rendered, "steps")?.value : undefined;
@@ -360,6 +374,7 @@ export function mergeUserContent(params: {
     previous: new Set(params.previousIds),
     rendered: new Set(params.renderedIds),
     slots: SLOTS[layout],
+    retired: RETIRED_IDS[layout],
     force: params.force,
     dropped: [],
   };
@@ -381,9 +396,7 @@ export function mergeUserContent(params: {
     const currentJobs = mapAt(currentRoot, "jobs");
     const renderedJobs = mapAt(renderedRoot, "jobs");
     if (currentJobs && renderedJobs) {
-      const userJobs = currentJobs.items.filter(
-        (pair) => !isSdkOwned(keyOf(pair) ?? "", undefined, ctx),
-      );
+      const userJobs = currentJobs.items.filter((pair) => !isSdkOwned(keyOf(pair) ?? "", ctx));
       for (const pair of currentJobs.items) {
         if (userJobs.includes(pair) || !isMap(pair.value)) continue;
         const jobId = keyOf(pair) ?? "";
@@ -404,8 +417,8 @@ export function mergeUserContent(params: {
   const content = renderedDoc.toString(STRINGIFY_OPTIONS);
   const expected = computeManagedHash(params.rendered, layout, params.renderedIds);
   const roundTripped =
-    canonicalJson(renderedDoc.toJS({ maxAliasCount: -1 })) ===
-    canonicalJson(parse(content, "The merged file").toJS({ maxAliasCount: -1 }));
+    canonicalJson(toPlain(renderedDoc, "The merged file")) ===
+    canonicalJson(toPlain(parse(content, "The merged file"), "The merged file"));
   if (!roundTripped || computeManagedHash(content, layout, params.renderedIds) !== expected) {
     throw new ManagedMergeError(
       "Your edits could not be merged into the regenerated file automatically. " +

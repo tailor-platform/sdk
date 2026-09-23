@@ -723,6 +723,14 @@ describe("decideAction", () => {
       false,
       { action: "regenerate", force: false },
     ],
+    [
+      "--force carries over when managed parts are unchanged",
+      target,
+      true,
+      withUserStep,
+      true,
+      { action: "regenerate", force: true },
+    ],
     ["conflict: managed parts edited", target, true, managedEdit, false, { action: "conflict" }],
     [
       "--force resets managed edits",

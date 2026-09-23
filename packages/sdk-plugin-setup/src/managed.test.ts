@@ -245,6 +245,21 @@ describe("computeManagedHash", () => {
     expect(() => hashOf("jobs: [")).toThrow(ManagedMergeError);
   });
 
+  test("rejects an alias bomb instead of expanding it", () => {
+    const refs = (name: string, prev: string) =>
+      `${name}: &${name} [${Array(10).fill(`*${prev}`).join(", ")}]`;
+    const bomb = [
+      `${render.content}x0: &x0 [a]`,
+      refs("x1", "x0"),
+      refs("x2", "x1"),
+      refs("x3", "x2"),
+      refs("x4", "x3"),
+      refs("x5", "x4"),
+      "",
+    ].join("\n");
+    expect(() => hashOf(bomb)).toThrow(ManagedMergeError);
+  });
+
   test("ignores the build-site slot body but not its removal", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const hash = (c: string) => computeManagedHash(c, "action", action.generatedIds);
@@ -432,5 +447,13 @@ describe("mergeUserContent", () => {
 
   test("throws on invalid YAML", () => {
     expect(() => merge("jobs: [", render)).toThrow(ManagedMergeError);
+  });
+
+  test("keeps a user step that reuses a retired id outside its original job", () => {
+    const edited = render.content.replace(
+      /( {6}- id: tailor-plan\n)/,
+      "      - id: slack-prereq\n        run: echo mine\n$1",
+    );
+    expect(merge(edited, render).content).toBe(edited);
   });
 });

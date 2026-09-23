@@ -514,7 +514,7 @@ export function decideAction(obj: {
 
   if (!fileExists || currentContent === null) return { action: "restore" };
   const currentHash = currentContentHash(existing, currentContent);
-  if (currentHash === existing.contentHash) return { action: "regenerate", force: false };
+  if (currentHash === existing.contentHash) return { action: "regenerate", force };
   if (currentHash === null) {
     if (force) return { action: "adopt" };
     return {
