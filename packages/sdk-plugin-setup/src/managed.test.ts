@@ -349,7 +349,14 @@ describe("mergeUserContent", () => {
 
   test("drops a step the SDK wrote under a retired id", () => {
     const legacy = render.content.replaceAll("tailor-slack-prereq", "slack-prereq");
-    const { content } = merge(legacy, render);
+    const { content } = mergeUserContent({
+      current: legacy,
+      rendered: render.content,
+      layout: "workflow",
+      previousIds: render.generatedIds.filter((id) => id !== "tailor-deploy/tailor-slack-prereq"),
+      renderedIds: render.generatedIds,
+      force: false,
+    });
     expect(content).toBe(render.content);
   });
 
@@ -451,6 +458,49 @@ describe("mergeUserContent", () => {
 
   test("throws on invalid YAML", () => {
     expect(() => merge("jobs: [", render)).toThrow(ManagedMergeError);
+  });
+
+  test("keeps a user step with a retired id once the lock records its replacement", () => {
+    const edited = render.content.replace(
+      /( {6}- id: tailor-slack-prereq\n)/,
+      "      - id: slack-prereq\n        run: echo mine\n$1",
+    );
+    expect(merge(edited, render).content).toBe(edited);
+  });
+
+  test.each([
+    [
+      "at the end of the file",
+      (c: string) =>
+        `${c}  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo lint\n#  e2e:\n#    runs-on: ubuntu-latest\n`,
+      "#  e2e:",
+    ],
+    [
+      "above a user job placed first",
+      (c: string) =>
+        c.replace(
+          "jobs:\n",
+          "jobs:\n  # Runs on every push.\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo lint\n",
+        ),
+      "# Runs on every push.",
+    ],
+    [
+      "above a user step placed first in a managed job",
+      (c: string) =>
+        c.replace(
+          /( {2}tailor-deploy:[\s\S]*? {4}steps:\n)/,
+          "$1      # Free disk space first.\n      - name: Free disk\n        run: echo free\n",
+        ),
+      "# Free disk space first.",
+    ],
+  ])("keeps a comment %s", (_name, edit, comment) => {
+    expect(merge(edit(render.content), render).content).toContain(comment);
+  });
+
+  test("wraps an alias to an anchor on a managed node in a merge error", () => {
+    const edited = `${render.content.replace("permissions:", "permissions: &perms")}  mine:\n    runs-on: ubuntu-latest\n    permissions: *perms\n    steps:\n      - run: echo hi\n`;
+    expect(hashOf(edited)).toBe(lockHash);
+    expect(() => merge(edited, render)).toThrow(ManagedMergeError);
   });
 
   test("keeps a user step that reuses a retired id outside its original job", () => {

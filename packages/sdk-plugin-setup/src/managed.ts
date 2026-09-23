@@ -1,5 +1,7 @@
 import {
   isMap,
+  isNode,
+  isPair,
   isScalar,
   isSeq,
   parseDocument,
@@ -40,10 +42,11 @@ const SLOTS: Record<Layout, Record<string, readonly string[]>> = {
   action: { "build-site": ["run"] },
 };
 
-// Non-`tailor-` step ids that earlier template versions wrote.
-const RETIRED_IDS: Record<Layout, ReadonlySet<string>> = {
-  workflow: new Set(["tailor-deploy/slack-prereq"]),
-  action: new Set(),
+// Non-`tailor-` step ids that earlier template versions wrote, mapped to the
+// ids that replaced them.
+const RETIRED_IDS: Record<Layout, Record<string, string>> = {
+  workflow: { "tailor-deploy/slack-prereq": "tailor-deploy/tailor-slack-prereq" },
+  action: {},
 };
 
 const STRINGIFY_OPTIONS = { lineWidth: 0, flowCollectionPadding: false } as const;
@@ -255,18 +258,33 @@ function carryFields(current: YAMLMap, rendered: YAMLMap, keys: readonly string[
   placeAfterAnchors(current.items, rendered.items, (pair) => carried.includes(pair), keyOf);
 }
 
+// A comment above the first item of a collection is stored on the collection;
+// move it onto that item when the item is the user's.
+function carryLeadingComment(
+  collection: { commentBefore?: string | null },
+  firstItem: unknown,
+  userItems: readonly unknown[],
+): void {
+  const comment = collection.commentBefore;
+  if (!comment || !userItems.includes(firstItem)) return;
+  const target = isPair(firstItem) ? firstItem.key : firstItem;
+  if (!isNode(target)) return;
+  target.commentBefore = target.commentBefore ? `${comment}\n${target.commentBefore}` : comment;
+}
+
 type MergeContext = {
   previous: ReadonlySet<string>;
   rendered: ReadonlySet<string>;
   slots: Record<string, readonly string[]>;
-  retired: ReadonlySet<string>;
+  retired: Record<string, string>;
   force: boolean;
   dropped: string[];
 };
 
 function isSdkOwned(qualifiedId: string, ctx: MergeContext): boolean {
   if (Object.hasOwn(ctx.slots, qualifiedId) || ctx.previous.has(qualifiedId)) return true;
-  if (ctx.retired.has(qualifiedId)) return true;
+  const replacement = lookup(ctx.retired, qualifiedId);
+  if (replacement !== undefined && !ctx.previous.has(replacement)) return true;
   if (ctx.rendered.has(qualifiedId)) {
     if (ctx.force) return true;
     throw new ManagedMergeError(
@@ -318,6 +336,7 @@ function mergeSteps(
     const renderedWith = mapAt(match, "with");
     if (editable && currentWith && renderedWith) carryFields(currentWith, renderedWith, editable);
   }
+  carryLeadingComment(currentSteps, currentSteps.items[0], userSteps);
   placeAfterAnchors(
     currentSteps.items,
     renderedSteps.items,
@@ -409,6 +428,7 @@ export function mergeUserContent(params: {
         if (renderedJob) carryFields(pair.value, renderedJob, EDITABLE_JOB_KEYS);
         mergeSteps(pair.value, renderedJob, `${jobId}/`, ctx);
       }
+      carryLeadingComment(currentJobs, currentJobs.items[0], userJobs);
       placeAfterAnchors(
         currentJobs.items,
         renderedJobs.items,
@@ -419,16 +439,24 @@ export function mergeUserContent(params: {
     assertNeedsResolve(renderedRoot);
   }
 
-  const content = renderedDoc.toString(STRINGIFY_OPTIONS);
+  if (currentDoc.comment) renderedDoc.comment = currentDoc.comment;
+  const mergeFailed = (detail: string) =>
+    new ManagedMergeError(
+      `Your edits could not be merged into the regenerated file automatically${detail}. ` +
+        "Move your changes out, delete the file, and re-run setup.",
+    );
+  let content: string;
+  try {
+    content = renderedDoc.toString(STRINGIFY_OPTIONS);
+  } catch (error) {
+    throw mergeFailed(`: ${error instanceof Error ? error.message : String(error)}`);
+  }
   const expected = computeManagedHash(params.rendered, layout, params.renderedIds);
   const roundTripped =
     canonicalJson(toPlain(renderedDoc, "The merged file")) ===
     canonicalJson(toPlain(parse(content, "The merged file"), "The merged file"));
   if (!roundTripped || computeManagedHash(content, layout, params.renderedIds) !== expected) {
-    throw new ManagedMergeError(
-      "Your edits could not be merged into the regenerated file automatically. " +
-        "Move your changes out, delete the file, and re-run setup.",
-    );
+    throw mergeFailed("");
   }
   return { content, dropped: ctx.dropped };
 }

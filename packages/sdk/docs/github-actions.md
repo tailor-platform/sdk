@@ -220,7 +220,9 @@ them. Everything else is yours, and re-running `setup` keeps it:
   `tailor-notify`.
 - **The `run:` command of the `build-site` step** in a composite action.
 
-Comments inside managed jobs and steps are not kept.
+Comments above your own jobs and steps and at the end of the file are kept too.
+Comments inside managed jobs and steps, and edits to the header comment, are
+not kept.
 
 `setup check` reports an edit to a managed part, and re-running `setup` stops
 on it. Revert the edit, or pass `--force` to reset the managed parts to the

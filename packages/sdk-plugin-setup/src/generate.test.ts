@@ -1085,7 +1085,15 @@ export default defineConfig({
       if (!lock || !target) throw new Error("expected a lock target");
       writeLock(testDir, {
         ...lock,
-        targets: [{ ...target, contentHash: hashContent(generated) }],
+        targets: [
+          {
+            ...target,
+            contentHash: hashContent(generated),
+            generatedIds: target.generatedIds.filter(
+              (id) => id !== "tailor-deploy/tailor-slack-prereq",
+            ),
+          },
+        ],
       });
 
       await expect(setupTarget(opts)).rejects.toThrow(/--force/);
