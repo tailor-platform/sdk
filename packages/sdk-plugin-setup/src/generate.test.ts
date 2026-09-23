@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
-  normalizeActionContent,
   setupCoordinate,
   setupTarget,
   type BranchSetupOptions,
@@ -12,6 +11,7 @@ import {
 } from "./generate";
 import { detectDefaultBranch } from "./git";
 import { hashContent, LOCK_VERSION, readLock, writeLock } from "./lock";
+import { computeManagedHash, isManagedHash, normalizeActionContent } from "./managed";
 import {
   ACTIONS_SHA,
   ACTIONS_VERSION,
@@ -686,65 +686,86 @@ describe("detectDefaultBranch", () => {
 });
 
 describe("decideAction", () => {
+  const rendered = renderBranchWorkflow(branchBase);
   const target = {
     kind: "branch" as const,
     workspaceName: "my-app",
     file: ".github/workflows/tailor-my-app.yml",
     templateVersion: 1,
     inputs: {} as never,
-    generatedIds: [],
+    generatedIds: rendered.generatedIds,
     ejectedIds: [],
-    contentHash: hashContent("managed"),
+    contentHash: computeManagedHash(rendered.content, "workflow", rendered.generatedIds),
   };
+  const legacyTarget = { ...target, contentHash: hashContent("managed") };
+  const withUserStep = rendered.content.replace(
+    "      - id: tailor-apply\n",
+    "      - name: Mine\n        run: echo mine\n      - id: tailor-apply\n",
+  );
+  const managedEdit = rendered.content.replace('branches: ["main"]', 'branches: ["dev"]');
 
   test.each([
-    ["create: no lock entry, no file", undefined, false, null, false, "create"],
-    ["conflict: no lock entry but file exists", undefined, true, "x", false, "conflict"],
-    ["--force adopts an unmanaged file", undefined, true, "x", true, "regenerate"],
-    ["regenerate: lock entry, hash matches", target, true, "managed", false, "regenerate"],
+    ["create: no lock entry, no file", undefined, false, null, false, { action: "create" }],
     [
-      "conflict: lock entry, hash mismatch (hand edited)",
+      "conflict: no lock entry but file exists",
+      undefined,
+      true,
+      "x",
+      false,
+      { action: "conflict" },
+    ],
+    ["--force adopts an unmanaged file", undefined, true, "x", true, { action: "adopt" }],
+    [
+      "regenerate: managed parts unchanged",
       target,
+      true,
+      withUserStep,
+      false,
+      { action: "regenerate", dropOrphans: false },
+    ],
+    ["conflict: managed parts edited", target, true, managedEdit, false, { action: "conflict" }],
+    [
+      "--force resets managed edits",
+      target,
+      true,
+      managedEdit,
+      true,
+      { action: "regenerate", dropOrphans: true },
+    ],
+    ["conflict: invalid YAML", target, true, "jobs: [", false, { action: "conflict" }],
+    ["--force replaces invalid YAML", target, true, "jobs: [", true, { action: "adopt" }],
+    ["restore: lock entry, file missing", target, false, null, false, { action: "restore" }],
+    [
+      "regenerate: legacy whole-file hash matches",
+      legacyTarget,
+      true,
+      "managed",
+      false,
+      { action: "regenerate", dropOrphans: false },
+    ],
+    [
+      "conflict: legacy whole-file hash differs",
+      legacyTarget,
       true,
       "edited",
       false,
-      "conflict",
+      { action: "conflict" },
     ],
-    ["--force overrides a hand edit", target, true, "edited", true, "regenerate"],
-    ["restore: lock entry, file missing", target, false, null, false, "restore"],
   ] as const)("%s", (_name, existing, fileExists, currentContent, force, expected) => {
-    expect(decideAction({ existing, fileExists, currentContent, force }).action).toBe(expected);
+    expect(decideAction({ existing, fileExists, currentContent, force })).toMatchObject(expected);
   });
 
-  test("normalize: custom run: body normalises to regenerate", () => {
-    // The lock records the hash of the normalised content (placeholder run body).
-    // A user who changes the build command should not trigger drift.
-    const original = [
-      "    - id: build-site",
-      "      shell: bash",
-      "      run: |",
-      "        true",
-      "    - id: tailor-apply",
-    ].join("\n");
-    const edited = [
-      "    - id: build-site",
-      "      shell: bash",
-      "      run: |",
-      "        pnpm build",
-      "    - id: tailor-apply",
-    ].join("\n");
-    const normalizedTarget = {
+  test("legacy action entries compare the normalized build-site body", () => {
+    const original =
+      "    - id: build-site\n      shell: bash\n      run: |\n        true\n    - id: tailor-apply\n";
+    const edited = original.replace("        true", "        pnpm build");
+    const existing = {
       ...target,
+      kind: "action" as const,
       contentHash: hashContent(normalizeActionContent(original)),
     };
     expect(
-      decideAction({
-        existing: normalizedTarget,
-        fileExists: true,
-        currentContent: edited,
-        force: false,
-        normalize: normalizeActionContent,
-      }).action,
+      decideAction({ existing, fileExists: true, currentContent: edited, force: false }).action,
     ).toBe("regenerate");
   });
 });
@@ -811,7 +832,10 @@ describe("setupTarget (integration)", () => {
     const lock = readLock(testDir);
     expect(lock?.targets).toHaveLength(1);
     expect(lock?.targets[0]).toMatchObject({ kind: "branch", workspaceName: "cfg-app" });
-    expect(lock?.targets[0]?.contentHash).toBe(hashContent(fs.readFileSync(wf, "utf-8")));
+    const target = lock?.targets[0];
+    expect(target?.contentHash).toBe(
+      computeManagedHash(fs.readFileSync(wf, "utf-8"), "workflow", target?.generatedIds ?? []),
+    );
   });
 
   test("defaults the environment to the workspace name", async () => {
@@ -963,13 +987,102 @@ export default defineConfig({
     await expect(setupTarget(opts)).resolves.toBeUndefined();
   });
 
-  test("errors on a hand-edited file without --force", async () => {
+  test("errors on a hand edit to a managed part without --force", async () => {
     const opts = baseOptions({ workspaceName: "my-app" });
     await setupTarget(opts);
     const wf = path.join(testDir, ".github/workflows/tailor-my-app.yml");
-    fs.appendFileSync(wf, "\n# hand edit\n");
-    await expect(setupTarget(opts)).rejects.toThrow(/edited by hand|--force/);
-    await expect(setupTarget({ ...opts, force: true })).resolves.toBeUndefined();
+    const generated = fs.readFileSync(wf, "utf-8");
+    fs.writeFileSync(
+      wf,
+      generated.replace("timeout-minutes: 30", "timeout-minutes: 30\n    services: {}"),
+    );
+    await expect(setupTarget(opts)).rejects.toThrow(/edited by hand.*--force/);
+    await setupTarget({ ...opts, force: true });
+    expect(fs.readFileSync(wf, "utf-8")).toBe(generated);
+  });
+
+  test("records a managed hash that an older plugin cannot match", async () => {
+    const opts = baseOptions({ workspaceName: "my-app" });
+    await setupTarget(opts);
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    const contentHash = readLock(testDir)?.targets[0]?.contentHash ?? "";
+    expect(isManagedHash(contentHash)).toBe(true);
+    expect(contentHash).not.toBe(hashContent(wf));
+  });
+
+  describe("user-owned content", () => {
+    const wfPath = () => path.join(testDir, ".github/workflows/tailor-my-app.yml");
+    const addUserContent = (content: string): string =>
+      content
+        .replace(
+          "      - id: tailor-apply\n",
+          "      - name: Registry auth\n        run: echo auth\n      - id: tailor-apply\n",
+        )
+        .concat(
+          "  frontend:\n    needs: tailor-deploy\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo deploy\n",
+        );
+
+    test("survives a rerun without --force", async () => {
+      const opts = baseOptions({ workspaceName: "my-app" });
+      await setupTarget(opts);
+      const edited = addUserContent(fs.readFileSync(wfPath(), "utf-8"));
+      fs.writeFileSync(wfPath(), edited);
+      await setupTarget(opts);
+      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
+    });
+
+    test("survives --force while managed edits are reset", async () => {
+      const opts = baseOptions({ workspaceName: "my-app" });
+      await setupTarget(opts);
+      const withUser = addUserContent(fs.readFileSync(wfPath(), "utf-8"));
+      fs.writeFileSync(wfPath(), withUser.replace('branches: ["main"]', 'branches: ["dev"]'));
+      await expect(setupTarget(opts)).rejects.toThrow(/--force/);
+      await setupTarget({ ...opts, force: true });
+      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(withUser);
+    });
+
+    test("migrates a legacy whole-file lock entry and keeps the user content", async () => {
+      const opts = baseOptions({ workspaceName: "my-app" });
+      await setupTarget(opts);
+      const edited = addUserContent(fs.readFileSync(wfPath(), "utf-8"));
+      fs.writeFileSync(wfPath(), edited);
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, { ...lock, targets: [{ ...target, contentHash: hashContent(edited) }] });
+
+      await setupTarget(opts);
+
+      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
+      expect(isManagedHash(readLock(testDir)?.targets[0]?.contentHash ?? "")).toBe(true);
+    });
+
+    test("keeps the user content of a legacy entry on the first --force", async () => {
+      const opts = baseOptions({ workspaceName: "my-app" });
+      await setupTarget(opts);
+      const generated = fs.readFileSync(wfPath(), "utf-8");
+      const edited = addUserContent(generated);
+      fs.writeFileSync(wfPath(), edited.replaceAll("tailor-slack-prereq", "slack-prereq"));
+      const lock = readLock(testDir);
+      const [target] = lock?.targets ?? [];
+      if (!lock || !target) throw new Error("expected a lock target");
+      writeLock(testDir, {
+        ...lock,
+        targets: [{ ...target, contentHash: hashContent(generated) }],
+      });
+
+      await expect(setupTarget(opts)).rejects.toThrow(/--force/);
+      await setupTarget({ ...opts, force: true });
+
+      expect(fs.readFileSync(wfPath(), "utf-8")).toBe(edited);
+    });
+  });
+
+  test("records and renders --restrict-dispatch", async () => {
+    await setupTarget(baseOptions({ workspaceName: "my-app", restrictDispatch: true }));
+    const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-my-app.yml"), "utf-8");
+    expect(wf).toContain("github.ref == 'refs/heads/main'");
+    expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { restrictDispatch: true } });
   });
 
   test("errors on an unmanaged pre-existing file", async () => {

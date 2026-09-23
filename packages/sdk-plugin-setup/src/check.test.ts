@@ -260,6 +260,10 @@ describe("checkGitHub (integration)", () => {
   });
 
   const wfPath = (): string => path.join(testDir, ".github/workflows/tailor-my-app.yml");
+  const editManagedPart = (): void => {
+    const content = fs.readFileSync(wfPath(), "utf-8");
+    fs.writeFileSync(wfPath(), content.replace('branches: ["main"]', 'branches: ["dev"]'));
+  };
 
   const lockTarget = (file: string): LockTarget => ({
     kind: "branch",
@@ -305,7 +309,7 @@ describe("checkGitHub (integration)", () => {
 
     test("passes after --force regeneration following a hand edit", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      fs.appendFileSync(wfPath(), "\n# hand edit\n");
+      editManagedPart();
       // --force should overwrite edits and update the lock's contentHash
       await setupTarget(setupOptions({ workspaceName: "my-app", force: true }));
       await expect(check()).resolves.toBeUndefined();
@@ -323,15 +327,40 @@ describe("checkGitHub (integration)", () => {
       ).toBe(false);
     });
 
+    test("does not report comments or the user's own jobs and steps", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const content = fs.readFileSync(wfPath(), "utf-8");
+      fs.writeFileSync(
+        wfPath(),
+        content
+          .replace(
+            "      - id: tailor-apply\n",
+            "      - run: echo mine\n      - id: tailor-apply\n",
+          )
+          .concat(
+            "# note\n  mine:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n",
+          ),
+      );
+      await expect(check()).resolves.toBeUndefined();
+    });
+
+    test("reports a workflow file that is not valid YAML", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      fs.appendFileSync(wfPath(), "jobs: [\n");
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      await expect(check()).rejects.toThrow(/drift/);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/not valid YAML.*hand-edit/));
+    });
+
     test("detects a hand-edited workflow file", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      fs.appendFileSync(wfPath(), "\n# hand edit\n");
+      editManagedPart();
       await expect(check()).rejects.toThrow(/drift/);
     });
 
     test("emits the drift count marker after every finding", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
-      fs.appendFileSync(wfPath(), "\n# hand edit\n");
+      editManagedPart();
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
       using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
 
@@ -478,10 +507,9 @@ describe("checkGitHub (integration)", () => {
         loadConfigName: async () => "my-app",
         loadConfigId: async () => undefined,
       });
-      fs.appendFileSync(
-        path.join(testDir, ".github/workflows/tailor-my-app-preview.yml"),
-        "\n# hand edit\n",
-      );
+      const previewPath = path.join(testDir, ".github/workflows/tailor-my-app-preview.yml");
+      const preview = fs.readFileSync(previewPath, "utf-8");
+      fs.writeFileSync(previewPath, preview.replace('region: "us-west"', 'region: "eu-west"'));
       using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
 
       await expect(

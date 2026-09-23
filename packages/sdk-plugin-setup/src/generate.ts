@@ -16,7 +16,6 @@ import * as path from "pathe";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
-  hashContent,
   LOCK_VERSION,
   readLock,
   writeLock,
@@ -25,6 +24,13 @@ import {
   type LockTarget,
   type TargetKind,
 } from "./lock";
+import {
+  computeManagedHash,
+  currentContentHash,
+  layoutOf,
+  ManagedMergeError,
+  mergeUserContent,
+} from "./managed";
 import {
   detectPackageManager,
   renderActionWorkflow,
@@ -67,12 +73,14 @@ export type BranchSetupOptions = CommonSetupOptions & {
   kind: "branch";
   branch?: string;
   erdPreview: boolean;
+  restrictDispatch?: boolean;
 };
 
 type TagSetupOptions = CommonSetupOptions & {
   kind: "tag";
   tagPattern: string;
   branch?: string;
+  restrictDispatch?: boolean;
 };
 
 type PreviewSetupOptions = CommonSetupOptions & {
@@ -105,6 +113,7 @@ export type CoordinateSetupOptions = {
   branch?: string;
   tagPattern?: string;
   environment?: string;
+  restrictDispatch?: boolean;
   force: boolean;
   outputDir: string;
   /** Injectable git runner, for testing. */
@@ -387,6 +396,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       erdPreview: options.erdPreview ? { namespaces: erdNamespaces } : null,
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
+      restrictDispatch: options.restrictDispatch ?? false,
     });
   } else if (kind === "tag") {
     branch = options.branch ?? null;
@@ -404,6 +414,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
       packageManager,
       migrationDriftCheck: hasMigrations,
       seedValidate: hasSeeds,
+      restrictDispatch: options.restrictDispatch ?? false,
     });
   } else if (kind === "preview") {
     branchAutoDetected = options.branch === undefined;
@@ -447,6 +458,8 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     migrationDriftCheck: kind === "branch" || kind === "tag" ? hasMigrations : undefined,
     seedValidate: kind === "branch" || kind === "tag" ? hasSeeds : undefined,
     hasStaticWebsites: kind === "action" ? hasStaticWebsites : undefined,
+    restrictDispatch:
+      kind === "branch" || kind === "tag" ? (options.restrictDispatch ?? false) : undefined,
   };
 
   return {
@@ -465,57 +478,10 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
 
 type Decision =
   | { action: "create" }
-  | { action: "regenerate" }
   | { action: "restore" }
+  | { action: "adopt" }
+  | { action: "regenerate"; dropOrphans: boolean }
   | { action: "conflict"; reason: string };
-
-// Matches the user-editable run: body under the build-site step. Used to
-// normalise the content before hashing so that custom build commands do not
-// trigger false hand-edit drift.
-const BUILD_SITE_RUN_RE =
-  /([ \t]*- id: build-site\n(?:[ \t]+if: [^\n]+\n)?[ \t]+shell: bash\n[ \t]+run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/;
-
-/**
- * Strip the mutable run: body of the build-site step before hashing.
- * When hasStaticWebsites is true the step is present; users are expected to
- * replace the placeholder command with their actual build command.  We only
- * hash the structural parts (step id, shell declaration, run: key) so that
- * editing the build command does not look like unintended drift.
- * When hasStaticWebsites is false the step is absent, so the regex is a no-op.
- * @param content - Raw action workflow content
- * @returns Normalised content with the build-site run body replaced by a placeholder
- */
-export function normalizeActionContent(content: string): string {
-  return content.replace(
-    BUILD_SITE_RUN_RE,
-    (_, header, _body, tail) => `${header}\n        true${tail}`,
-  );
-}
-
-/**
- * Extract the run: body of the build-site step from action content.
- * Returns null when the step is absent (hasStaticWebsites is false).
- * @param content - Action workflow content
- * @returns The captured run body string (includes leading newline), or null
- */
-function extractBuildSiteRunBody(content: string): string | null {
-  const m = BUILD_SITE_RUN_RE.exec(content);
-  return m ? (m[2] ?? null) : null;
-}
-
-/**
- * Replace the run: body of the build-site step in action content.
- * No-op when the step is absent.
- * @param content - Target action workflow content
- * @param body - Run body to inject (includes leading newline and indentation)
- * @returns Content with the run body replaced
- */
-function injectBuildSiteRunBody(content: string, body: string): string {
-  return content.replace(
-    BUILD_SITE_RUN_RE,
-    (_, header, _placeholder, tail) => `${header}${body}${tail}`,
-  );
-}
 
 /**
  * Decide how to reconcile a target with the on-disk file and lock state.
@@ -524,7 +490,6 @@ function injectBuildSiteRunBody(content: string, body: string): string {
  * @param obj.fileExists - Whether the workflow file is present on disk
  * @param obj.currentContent - On-disk content when present
  * @param obj.force - Whether --force was passed
- * @param obj.normalize - Optional content normaliser applied before hashing
  * @returns The reconciliation action
  */
 export function decideAction(obj: {
@@ -532,13 +497,12 @@ export function decideAction(obj: {
   fileExists: boolean;
   currentContent: string | null;
   force: boolean;
-  normalize?: (content: string) => string;
 }): Decision {
-  const { existing, fileExists, currentContent, force, normalize } = obj;
+  const { existing, fileExists, currentContent, force } = obj;
 
   if (!existing) {
     if (!fileExists) return { action: "create" };
-    if (force) return { action: "regenerate" };
+    if (force) return { action: "adopt" };
     return {
       action: "conflict",
       reason:
@@ -547,21 +511,73 @@ export function decideAction(obj: {
     };
   }
 
-  // Lock has this target.
-  if (!fileExists) return { action: "restore" };
-  if (currentContent !== null) {
-    const normalizedContent = normalize ? normalize(currentContent) : currentContent;
-    if (hashContent(normalizedContent) === existing.contentHash) {
-      return { action: "regenerate" };
-    }
+  if (!fileExists || currentContent === null) return { action: "restore" };
+  const currentHash = currentContentHash(existing, currentContent);
+  if (currentHash === existing.contentHash) return { action: "regenerate", dropOrphans: false };
+  if (currentHash === null) {
+    if (force) return { action: "adopt" };
+    return {
+      action: "conflict",
+      reason:
+        "This file is not valid YAML. Fix it, or re-run with --force to replace it with a fresh copy.",
+    };
   }
-  if (force) return { action: "regenerate" };
+  if (force) return { action: "regenerate", dropOrphans: true };
   return {
     action: "conflict",
     reason:
-      "This workflow file has been edited by hand since it was generated. " +
-      "Re-run with --force to discard those edits and regenerate, or revert your changes.",
+      "SDK-managed parts of this file (tailor-* jobs/steps or top-level keys) were edited by hand. " +
+      "Revert those edits, or re-run with --force to reset them (your own jobs and steps are kept).",
   };
+}
+
+/**
+ * Compute the content to write for a target: the fresh render, with the
+ * user-owned parts of the current file carried over when it is managed.
+ * @param obj - Reconciliation inputs
+ * @param obj.file - Repository-relative file path, for error messages
+ * @param obj.kind - Target kind
+ * @param obj.decision - Reconciliation action from {@link decideAction}
+ * @param obj.existing - The matching lock target, if any
+ * @param obj.currentContent - On-disk content when present
+ * @param obj.render - Fresh template render
+ * @returns Content to write and the lock hash for it
+ */
+function reconcileContent(obj: {
+  file: string;
+  kind: TargetKind;
+  decision: Decision;
+  existing: LockTarget | undefined;
+  currentContent: string | null;
+  render: RenderResult;
+}): { content: string; contentHash: string } {
+  const { file, kind, decision, existing, currentContent, render } = obj;
+  const layout = layoutOf(kind);
+  const contentHash = computeManagedHash(render.content, layout, render.generatedIds);
+  if (decision.action !== "regenerate" || !existing || currentContent === null) {
+    return { content: render.content, contentHash };
+  }
+  try {
+    const merged = mergeUserContent({
+      current: currentContent,
+      rendered: render.content,
+      layout,
+      previousIds: existing.generatedIds,
+      renderedIds: render.generatedIds,
+      dropOrphans: decision.dropOrphans,
+    });
+    if (merged.dropped.length > 0) {
+      logger.warn(
+        `${file}: dropped your steps ${merged.dropped.join(", ")} because the SDK no longer ` +
+          "generates the job that contained them.",
+      );
+    }
+    return { content: merged.content, contentHash };
+  } catch (error) {
+    if (error instanceof ManagedMergeError)
+      throw new Error(`${file}: ${error.message}`, { cause: error });
+    throw error;
+  }
 }
 
 /**
@@ -646,14 +662,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
   const fileExists = fs.existsSync(absFile);
   const currentContent = fileExists ? fs.readFileSync(absFile, "utf-8") : null;
 
-  const normalize = resolved.kind === "action" ? normalizeActionContent : undefined;
-  const decision = decideAction({
-    existing,
-    fileExists,
-    currentContent,
-    force: options.force,
-    normalize,
-  });
+  const decision = decideAction({ existing, fileExists, currentContent, force: options.force });
 
   if (decision.action === "conflict") {
     throw new Error(`${resolved.file}: ${decision.reason}`);
@@ -685,19 +694,17 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     mode: "write",
   });
 
-  // For action targets, preserve the user-editable build-site run body when
-  // regenerating (hash matched after normalization) so that custom build commands
-  // survive non-forced reruns without being silently overwritten.
-  let contentToWrite = resolved.render.content;
-  if (decision.action === "regenerate" && normalize && currentContent !== null) {
-    const existingBody = extractBuildSiteRunBody(currentContent);
-    if (existingBody !== null) {
-      contentToWrite = injectBuildSiteRunBody(contentToWrite, existingBody);
-    }
-  }
+  const { content, contentHash } = reconcileContent({
+    file: resolved.file,
+    kind: resolved.kind,
+    decision,
+    existing,
+    currentContent,
+    render: resolved.render,
+  });
 
   fs.mkdirSync(path.dirname(absFile), { recursive: true });
-  fs.writeFileSync(absFile, contentToWrite, "utf-8");
+  fs.writeFileSync(absFile, content, "utf-8");
 
   const newTarget: LockTarget = {
     kind: resolved.kind,
@@ -707,9 +714,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     inputs: resolved.inputs,
     generatedIds: resolved.render.generatedIds,
     ejectedIds: existing?.ejectedIds ?? [],
-    contentHash: hashContent(
-      normalize ? normalize(resolved.render.content) : resolved.render.content,
-    ),
+    contentHash,
   };
 
   // Replace in place to keep the lock diff minimal when re-running setup for
@@ -733,7 +738,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
 
   if (decision.action === "restore") {
     logger.success(`Regenerated ${styles.path(resolved.file)} (was missing on disk)`);
-  } else if (decision.action === "regenerate") {
+  } else if (decision.action === "regenerate" || decision.action === "adopt") {
     logger.success(`Regenerated ${styles.path(resolved.file)}`);
   } else {
     logger.success(`Generated ${styles.path(resolved.file)}`);
@@ -853,6 +858,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     tagPattern: coordinateKind === "tag" ? tagPattern : undefined,
     environment,
     packageManager,
+    restrictDispatch: options.restrictDispatch ?? false,
   });
 
   const kindSuffix = coordinateKind === "tag" ? "-tag" : "";
@@ -870,8 +876,17 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     throw new Error(`${file}: ${decision.reason}`);
   }
 
+  const { content, contentHash } = reconcileContent({
+    file,
+    kind: "coordinate",
+    decision,
+    existing,
+    currentContent,
+    render,
+  });
+
   fs.mkdirSync(path.dirname(absFile), { recursive: true });
-  fs.writeFileSync(absFile, render.content, "utf-8");
+  fs.writeFileSync(absFile, content, "utf-8");
 
   // Generate the local tailor-setup action (user-owned: created once, never overwritten).
   const tailorSetupFile = ".github/actions/tailor-setup/action.yml";
@@ -896,10 +911,11 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       dir: ".",
       packageManager,
       actionDirs: actionGroups.flatMap((group) => group.apps.map((a) => a.dir)),
+      restrictDispatch: options.restrictDispatch ?? false,
     },
     generatedIds: render.generatedIds,
     ejectedIds: existing?.ejectedIds ?? [],
-    contentHash: hashContent(render.content),
+    contentHash,
   };
 
   const targets = [...lock.targets];
@@ -915,7 +931,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
 
   if (decision.action === "restore") {
     logger.success(`Regenerated ${styles.path(file)} (was missing on disk)`);
-  } else if (decision.action === "regenerate") {
+  } else if (decision.action === "regenerate" || decision.action === "adopt") {
     logger.success(`Regenerated ${styles.path(file)}`);
   } else {
     logger.success(`Generated ${styles.path(file)}`);

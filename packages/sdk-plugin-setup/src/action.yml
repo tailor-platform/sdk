@@ -1,8 +1,6 @@
 # __HEADER__
 name: __WORKSPACE_NAME__
-description: >-
-  Deploy __WORKSPACE_NAME__ to Tailor Platform.
-  Checkout and dependency installation are expected to be handled by the caller.
+description: Deploy __WORKSPACE_NAME__ to Tailor Platform. Checkout and dependency installation are expected to be handled by the caller.
 
 inputs:
   workspace-id:
@@ -62,9 +60,7 @@ runs:
       run: |
         # Replace with your static website build command.
         # Example: pnpm --filter <package-name> run build:static
-        # Note: this run: command is user-editable. Custom build commands are preserved across
-        # reruns and are not treated as drift by setup check. Other edits to this file are flagged
-        # as drift and will be overwritten if you re-run setup ci action with --force.
+        # This run: command is yours: re-running setup keeps it and setup check ignores it.
         true
     # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply
