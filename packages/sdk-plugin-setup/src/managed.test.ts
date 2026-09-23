@@ -241,8 +241,12 @@ describe("computeManagedHash", () => {
     expect(hashOf(edited)).not.toBe(lockHash);
   });
 
-  test("throws on invalid YAML", () => {
-    expect(() => hashOf("jobs: [")).toThrow(ManagedMergeError);
+  test.each([
+    ["invalid YAML", "jobs: ["],
+    ["a sequence root", "[]\n"],
+    ["an empty file", ""],
+  ])("throws on %s", (_name, content) => {
+    expect(() => hashOf(content)).toThrow(ManagedMergeError);
   });
 
   test("rejects an alias bomb instead of expanding it", () => {

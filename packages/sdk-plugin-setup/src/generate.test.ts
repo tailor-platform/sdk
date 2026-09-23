@@ -697,7 +697,7 @@ describe("decideAction", () => {
     ejectedIds: [],
     contentHash: computeManagedHash(rendered.content, "workflow", rendered.generatedIds),
   };
-  const legacyTarget = { ...target, contentHash: hashContent("managed") };
+  const legacyTarget = { ...target, contentHash: hashContent("name: managed\n") };
   const withUserStep = rendered.content.replace(
     "      - id: tailor-apply\n",
     "      - name: Mine\n        run: echo mine\n      - id: tailor-apply\n",
@@ -747,7 +747,7 @@ describe("decideAction", () => {
       "regenerate: legacy whole-file hash matches",
       legacyTarget,
       true,
-      "managed",
+      "name: managed\n",
       false,
       { action: "regenerate", force: false },
     ],
@@ -755,7 +755,7 @@ describe("decideAction", () => {
       "conflict: legacy whole-file hash differs",
       legacyTarget,
       true,
-      "edited",
+      "name: edited\n",
       false,
       { action: "conflict" },
     ],
@@ -774,7 +774,7 @@ describe("decideAction", () => {
 
   test("legacy action entries compare the normalized build-site body", () => {
     const original =
-      "    - id: build-site\n      shell: bash\n      run: |\n        true\n    - id: tailor-apply\n";
+      "runs:\n  steps:\n    - id: build-site\n      shell: bash\n      run: |\n        true\n    - id: tailor-apply\n";
     const edited = original.replace("        true", "        pnpm build");
     const existing = {
       ...target,

@@ -460,7 +460,7 @@ describe("checkGitHub (integration)", () => {
       const wfFile = ".github/workflows/tailor-coordinate-main.yml";
       const wfAbsPath = path.join(testDir, wfFile);
       fs.mkdirSync(path.dirname(wfAbsPath), { recursive: true });
-      const wfContent = "# coordinator\n";
+      const wfContent = "# coordinator\nname: main\n";
       fs.writeFileSync(wfAbsPath, wfContent);
       writeLock(testDir, {
         version: LOCK_VERSION,

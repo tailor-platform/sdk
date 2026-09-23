@@ -96,6 +96,12 @@ function isPlainObject(value: unknown): value is Plain {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function readMapping(content: string): Plain {
+  const root = toPlain(parse(content, "The file"), "The file");
+  if (!isPlainObject(root)) throw new ManagedMergeError("The file is not a YAML mapping.");
+  return root;
+}
+
 function lookup<T>(record: Record<string, T>, key: string): T | undefined {
   return Object.hasOwn(record, key) ? record[key] : undefined;
 }
@@ -154,8 +160,7 @@ export function computeManagedHash(
   layout: Layout,
   managedIds: readonly string[],
 ): string {
-  const root = toPlain(parse(content, "The file"), "The file");
-  const doc = isPlainObject(root) ? root : {};
+  const doc = readMapping(content);
   const managed = new Set(managedIds);
   const slots = SLOTS[layout];
   const projection: Plain = {};
@@ -459,7 +464,7 @@ export function currentContentHash(
     if (isManagedHash(target.contentHash)) {
       return computeManagedHash(content, layoutOf(target.kind), target.generatedIds);
     }
-    parse(content, "The file");
+    readMapping(content);
     return hashContent(target.kind === "action" ? normalizeActionContent(content) : content);
   } catch (error) {
     if (error instanceof ManagedMergeError) return null;
