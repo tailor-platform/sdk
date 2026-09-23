@@ -755,6 +755,15 @@ describe("decideAction", () => {
     expect(decideAction({ existing, fileExists, currentContent, force })).toMatchObject(expected);
   });
 
+  test.each([
+    ["an older whole-file", legacyTarget, /older setup version.*--force once/],
+    ["a managed-part", target, /SDK-managed parts/],
+  ])("explains a hand edit against %s lock hash", (_name, existing, reason) => {
+    expect(
+      decideAction({ existing, fileExists: true, currentContent: managedEdit, force: false }),
+    ).toEqual({ action: "conflict", reason: expect.stringMatching(reason) });
+  });
+
   test("legacy action entries compare the normalized build-site body", () => {
     const original =
       "    - id: build-site\n      shell: bash\n      run: |\n        true\n    - id: tailor-apply\n";

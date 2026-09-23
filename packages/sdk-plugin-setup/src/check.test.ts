@@ -157,6 +157,18 @@ describe("findTargetDrift", () => {
     expect(findings.map((f) => f.rule)).toEqual(["config-dir"]);
   });
 
+  test.each([
+    ["an older whole-file", "sha256:abc", /older setup version.*--force once/],
+    ["a managed-part", "managed-v1:sha256:abc", /SDK-managed parts/],
+  ])("explains a hand edit against %s lock hash", (_name, contentHash, message) => {
+    const findings = findTargetDrift(
+      baseTarget({ contentHash }),
+      cleanState({ currentHash: "sha256:zzz" }),
+    );
+    expect(findings.map((f) => f.rule)).toEqual(["hand-edit"]);
+    expect(findings[0]?.message).toMatch(message);
+  });
+
   test("accumulates multiple findings", () => {
     const findings = findTargetDrift(
       baseTarget({ templateVersion: TEMPLATE_VERSION - 1 }),
