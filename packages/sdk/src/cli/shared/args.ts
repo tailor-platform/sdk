@@ -185,27 +185,18 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 // Argument Definitions
 // ============================================================================
 
-/** Name and short alias of the `--json` flag, shared by its definition and the argv scan. */
+/** Name and short alias of the `--json` flag. */
 const JSON_ARG_NAME = "json";
 const JSON_ARG_ALIAS = "j";
 
 /**
  * Whether `--json` was passed explicitly, which the parsed value cannot answer
- * on its own because the flag defaults to `false`. Politty reports the source
- * only when the invoked command defines no arguments of its own, so fall back
- * to scanning the argv the process was started with. Every CLI entrypoint runs
- * through `runMain`, so the fallback only misreads a `runCommand` caller that
- * passes arguments the process was not started with.
+ * on its own because the flag defaults to `false`.
  * @param args - Validated global arguments for the current run
  * @returns `true` when the run set `--json` / `-j` explicitly
  */
 function isJsonExplicit(args: Readonly<Record<string, unknown>>): boolean {
-  const source = (args as { $source?: (name: string) => string }).$source?.(JSON_ARG_NAME);
-  if (source !== undefined) return source === "cli";
-  const spellings = [`--${JSON_ARG_NAME}`, `-${JSON_ARG_ALIAS}`];
-  return optionTokens(process.argv.slice(2)).some((token) =>
-    spellings.some((spelling) => token === spelling || token.startsWith(`${spelling}=`)),
-  );
+  return (args as { $source?: (name: string) => string }).$source?.(JSON_ARG_NAME) === "cli";
 }
 
 interface CommonArgsOptions {

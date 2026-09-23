@@ -497,6 +497,48 @@ describe("createCommonArgs effects", () => {
     },
   );
 
+  test.each([
+    {
+      label: "explicit --json=false wins over the env default",
+      argv: ["--json=false"],
+      want: false,
+    },
+    { label: "explicit --json wins over TAILOR_OUTPUT=table", argv: ["--json"], want: true },
+  ])(
+    "$label for a command with its own args when process.argv carries no flags",
+    async ({ argv, want }) => {
+      const previousJsonMode = logger.jsonMode;
+      const previousArgv = process.argv;
+      vi.stubEnv("TAILOR_OUTPUT", want ? "table" : "json");
+      let seen: unknown;
+      try {
+        logger.jsonMode = false;
+        // Programmatic callers pass argv directly; process.argv belongs to the host.
+        process.argv = [previousArgv[0] as string, "host"];
+        const command = defineAppCommand({
+          name: "noop",
+          description: "noop",
+          // strip unknown keys
+          args: z.object({ name: arg(z.string().optional(), { description: "Name" }) }),
+          run: (args) => {
+            seen = (args as { json?: boolean }).json;
+          },
+        });
+        const result = await runCommand(command, argv, {
+          // Strip unknown keys the same way the CLI entrypoint parses global args.
+          globalArgs: z.object(createCommonArgs()),
+        });
+        expect(result.exitCode).toBe(0);
+        expect(seen).toBe(want);
+        expect(logger.jsonMode).toBe(want);
+      } finally {
+        process.argv = previousArgv;
+        vi.unstubAllEnvs();
+        logger.jsonMode = previousJsonMode;
+      }
+    },
+  );
+
   test("verboseAlias adds a short alias for --verbose", async () => {
     const previousVerbose = logger.verbose;
     try {

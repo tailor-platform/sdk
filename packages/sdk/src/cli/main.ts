@@ -61,8 +61,10 @@ const bundledSkillsDir = resolve(dirname(packageJsonPath), "agent-skills");
 
 function defaultSkillsRunToAdd(command: AnyCommand): AnyCommand {
   const add = (command.subCommands ?? {}).add as AnyCommand;
+  // A command carries either `run` or `defaultSubCommand`, never both.
+  const { defaultSubCommand: _defaultSubCommand, ...rest } = command;
   return {
-    ...command,
+    ...rest,
     async run() {
       await runDefaultSubCommand(add);
     },
