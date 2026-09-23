@@ -225,7 +225,9 @@ Comments inside managed jobs and steps are not kept.
 `setup check` reports an edit to a managed part, and re-running `setup` stops
 on it. Revert the edit, or pass `--force` to reset the managed parts to the
 current template; `--force` still keeps your own jobs, steps, and settings.
-To start over from a clean template, delete the file and re-run `setup`.
+A managed job or step you renamed counts as your own, so `--force` adds the
+managed one back next to it; rename it back instead of forcing. To start over
+from a clean template, delete the file and re-run `setup`.
 
 When a template update removes a managed job that contains steps of yours, or
 a job of yours `needs` a removed job, `setup` stops and names them. Move those
