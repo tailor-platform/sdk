@@ -13,7 +13,7 @@
     "@types/node": "24.13.6",
     "eslint-plugin-zod": "4.13.1",
     "oxlint": "1.82.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxlint-tsgolint": "7.0.2002",
     "tsx": "4.23.13",
     "typescript": "6.0.3",
     "vitest": "5.0.0"
