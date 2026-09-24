@@ -33,6 +33,11 @@ export {
   type AuthNamespaceNameRegistry,
   type AuthNamespaceName,
 } from "#/configure/types/auth-namespace-name";
+export {
+  type SecretVaultNameRegistry,
+  type SecretVaultName,
+  type SecretNameFor,
+} from "#/configure/types/secret-vault-name";
 
 export * from "#/configure/services/index";
 

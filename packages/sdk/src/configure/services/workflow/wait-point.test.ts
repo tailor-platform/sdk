@@ -260,8 +260,8 @@ describe("createWaitPoint", () => {
 
     // `$` on its own names no param. The type says so, so the value has to
     // agree: `.wait()` rather than a `.with()` the type never showed.
-    // `deploy` is what rejects the key, and the registry is process-wide, so put
-    // it back before another test file runs the deploy-time check.
+    // `deploy` is what rejects the key, and the registry is process-wide, so
+    // put it back before another test file runs the deploy-time check.
     const mark = getRegisteredWaitPoints().length;
     try {
       const wp = createWaitPoint<undefined, string>("my-$");
