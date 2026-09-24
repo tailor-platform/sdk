@@ -61,7 +61,7 @@ describe("template READMEs", () => {
 
   test("the executor README lists every trigger the executor template uses", () => {
     const usedTriggers = new Set(
-      [...executorSource.matchAll(/\b([a-z][a-zA-Z]*Trigger)\(/g)].map(([, name]) => name),
+      [...executorSource.matchAll(/\b([a-z][a-zA-Z]*Trigger)\b/g)].map(([, name]) => name),
     );
     const unlisted = [...usedTriggers].filter((name) => !executorReadme.includes(`\`${name}\``));
     expect(unlisted).toEqual([]);
