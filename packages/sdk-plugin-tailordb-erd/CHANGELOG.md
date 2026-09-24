@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.2.4
+
+### Patch Changes
+
+- [#2391](https://github.com/tailor-platform/sdk/pull/2391) [`f92a680`](https://github.com/tailor-platform/sdk/commit/f92a680a86d1eebfdc9d7b1a409f084373ef3067) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency open to v11.0.4
+- Updated dependencies [[`5ecfb0f`](https://github.com/tailor-platform/sdk/commit/5ecfb0fe27e7d72dcea4421c5c8426ca9689284f), [`6b0fad4`](https://github.com/tailor-platform/sdk/commit/6b0fad4fa0cbd1140abde7538f334537e2a229e6), [`f92a680`](https://github.com/tailor-platform/sdk/commit/f92a680a86d1eebfdc9d7b1a409f084373ef3067)]:
+  - @tailor-platform/sdk@2.20.0
+
 ## 0.2.3
 
 ### Patch Changes
