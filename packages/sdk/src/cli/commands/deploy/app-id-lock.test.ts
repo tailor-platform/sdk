@@ -232,6 +232,17 @@ describe("app-id-lock", () => {
       expect(() => resolveAppId({ configPath, configId: ID_B })).toThrow(/records app id/);
     });
 
+    test("rejects a config id that is not a UUID, even without a lock", () => {
+      const configPath = writeConfig("tailor.config.ts");
+      expect(() => resolveAppId({ configPath, configId: "not-a-uuid" })).toThrow(/must be a UUID/);
+    });
+
+    test("rejects a config id that is not a UUID when a lock is present", () => {
+      writeLock({ version: 2, targets: [], appIds: {} });
+      const configPath = writeConfig("tailor.config.ts");
+      expect(() => resolveAppId({ configPath, configId: "not-a-uuid" })).toThrow(/must be a UUID/);
+    });
+
     test("rejects a config id already recorded for another, still-existing config", () => {
       writeLock({ version: 2, targets: [], appIds: { "apps/a/tailor.config.ts": ID_A } });
       writeConfig("apps/a/tailor.config.ts");

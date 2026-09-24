@@ -212,12 +212,18 @@ export type ResolveAppIdParams = {
  * that is already recorded for a different, still-existing config, is an
  * `APP_ID_CONFLICT` — the same ambiguous states `planAppIds` refuses to
  * resolve automatically, since a plugin trusting the wrong side would act on
- * another application's identity.
+ * another application's identity. A defined `configId` that is not itself a
+ * UUID is a `CONFIG_ID_INVALID` error, regardless of whether a lock governs
+ * the config, so a malformed value never comes back as a resolved id.
  * @param params - The config to resolve and the id its module evaluates to, if any
  * @returns The resolved id, or undefined when neither the lock nor the config carries one
  */
 export function resolveAppId(params: ResolveAppIdParams): string | undefined {
   const { configPath, configId } = params;
+  if (configId !== undefined && !uuidRegex.test(configId)) {
+    throw configIdInvalid(configPath);
+  }
+
   const lock = findAppIdLock(configPath);
   if (lock === null) return configId;
 
@@ -312,6 +318,21 @@ function claimedIdConflict(configPath: string, owner: string): CLIError {
     code: "APP_ID_CONFLICT",
     message: `${configPath} carries the app id already recorded for ${owner} in ${TAILOR_LOCK_FILENAME}.`,
     suggestion: "If this config was copied from that app, delete its 'id' so it gets a fresh one.",
+  });
+}
+
+/**
+ * The one error `resolveAppId` and `planAppIds` both raise when a config's
+ * own id, not recorded anywhere yet, is not itself a UUID. Shared so the two
+ * call sites cannot drift apart on wording or condition.
+ * @param configPath - Absolute path to the config carrying the invalid id
+ * @returns The validation error to throw
+ */
+function configIdInvalid(configPath: string): CLIError {
+  return CLIError({
+    code: "CONFIG_ID_INVALID",
+    message: `'id' in ${configPath} must be a UUID.`,
+    suggestion: "To use this config for a separate app, delete it.",
   });
 }
 
@@ -415,11 +436,7 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     }
     if (configId !== undefined) {
       if (!uuidRegex.test(configId)) {
-        throw CLIError({
-          code: "CONFIG_ID_INVALID",
-          message: `'id' in ${configPath} must be a UUID.`,
-          suggestion: "To use this config for a separate app, delete it.",
-        });
+        throw configIdInvalid(configPath);
       }
       const owner = claimed.get(configId.toLowerCase());
       const movedFrom = owner !== undefined && owner !== key && !exists(owner) ? owner : undefined;
