@@ -88,12 +88,20 @@ function describeReceivedValue(value: unknown): string {
   return `a ${type} (${truncateForDescription(String(value))})`;
 }
 
+function isDateRepresentationField(field: DateField): boolean {
+  const { type } = field;
+  const as = field.metadata.as;
+  return (
+    (type === "date" || type === "datetime" || type === "time") &&
+    (as === "date" || as === "temporal")
+  );
+}
+
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
   if (value === null || value === undefined) return value;
   const { type } = field;
-  const isDateTimeField = type === "date" || type === "datetime" || type === "time";
   const as = field.metadata.as;
-  if (isDateTimeField && (as === "date" || as === "temporal")) {
+  if (isDateRepresentationField(field)) {
     const expected =
       as === "date"
         ? Date
