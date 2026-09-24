@@ -1388,8 +1388,11 @@ function createTailorDBType<
   return brandValue(dbType, "tailordb-type");
 }
 
-const idField = uuid();
-type idField = typeof idField;
+function createIdField() {
+  return uuid();
+}
+type idField = ReturnType<typeof createIdField>;
+let idField: idField | undefined;
 type DBTable<
   F extends { id?: never } & Record<string, TailorAnyDBField>,
   Defined extends DefinedDBTypeMetadata = DefinedDBTypeMetadata,
@@ -1448,7 +1451,7 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
   return createTailorDBType<{ id: idField } & F>(
     typeName,
     {
-      id: idField,
+      id: (idField ??= createIdField()),
       ...fieldDef,
     },
     { pluralForm, description },
@@ -1465,16 +1468,19 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 // expr" test in parser/service/tailordb/field.precompiled.test.ts, which fails if it
 // ever drifts from what this hook's own source naturally produces.
 type TimestampsUpdatedAtHookFn = UpdateHookFn<string | Date | null, string | Date>;
-const timestampsUpdatedAtHook: TimestampsUpdatedAtHookFn = ({ input, now }) => input ?? now;
 const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey =
   "tailor-platform/sdk:precompiled-script-expr";
-const PRECOMPILED_EXPR_SYMBOL = Symbol.for(PRECOMPILED_EXPR_KEY);
-(timestampsUpdatedAtHook as unknown as Record<symbol, PrecompiledScriptExprMap>)[
-  PRECOMPILED_EXPR_SYMBOL
-] = {
+const precompiledExprs: PrecompiledScriptExprMap = {
   "hooks.update":
     "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })",
 };
+let timestampsUpdatedAtHook: TimestampsUpdatedAtHookFn | undefined;
+function getTimestampsUpdatedAtHook(): TimestampsUpdatedAtHookFn {
+  return (timestampsUpdatedAtHook ??= Object.assign(
+    ({ input, now }: Parameters<TimestampsUpdatedAtHookFn>[0]) => input ?? now,
+    { [Symbol.for(PRECOMPILED_EXPR_KEY)]: precompiledExprs },
+  ));
+}
 
 /** TailorDB schema builder utilities for defining tables and fields. */
 export const db = {
@@ -1506,7 +1512,7 @@ export const db = {
       createdAt: datetime().default("now").description("Record creation timestamp"),
       updatedAt: datetime()
         .default("now")
-        .hooks({ update: timestampsUpdatedAtHook })
+        .hooks({ update: getTimestampsUpdatedAtHook() })
         .description("Record update timestamp"),
     }),
   },

@@ -191,7 +191,7 @@ export function main() {
           workspaceId: defaultWorkspaceId,
         });
 
-        expect(result.bundledCode).not.toContain("@tailor-platform/sdk");
+        expect(result.bundledCode).not.toMatch(/from\s*["`']@tailor-platform\/sdk/);
       } finally {
         fs.rmSync(root, { recursive: true, force: true });
       }
@@ -215,7 +215,7 @@ export default {
       expect(result.scriptName).toBe("test-run--add.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
-      expect(result.bundledCode).not.toContain("@tailor-platform/sdk");
+      expect(result.bundledCode).not.toMatch(/from\s*["`']@tailor-platform\/sdk/);
       // Validation wrapper should be present
       expect(result.bundledCode).toContain("input");
     });
