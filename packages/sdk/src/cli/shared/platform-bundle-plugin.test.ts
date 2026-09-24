@@ -30,7 +30,7 @@ describe("platformBundleDefinePlugin", () => {
 
 describe("createPlatformBundleDefinePlugin", () => {
   const code =
-    "read(process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE, process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL);";
+    "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE, globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL);";
 
   test("keeps both date representations by default", () => {
     expect(run(code)).toBe("read(false, false);");

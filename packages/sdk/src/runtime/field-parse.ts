@@ -335,9 +335,16 @@ function parseAsTemporal(type: TailorFieldType, text: string): unknown {
 
 const allDateParsers: DateParsers = { date: parseAsDate, temporal: parseAsTemporal };
 
+type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
+
 const bundledDateParsers: DateParsers = {
-  date: process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE ? undefined : parseAsDate,
-  temporal: process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL ? undefined : parseAsTemporal,
+  date: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE
+    ? undefined
+    : parseAsDate,
+  temporal: (globalThis as MaybeProcessGlobal).process?.env
+    .__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL
+    ? undefined
+    : parseAsTemporal,
 };
 
 function deserializeDates(

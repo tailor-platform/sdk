@@ -165,9 +165,16 @@ function serializeAsTemporal(type: TailorFieldType, value: unknown, path: string
   }
 }
 
+type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
+
 const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = {
-  date: process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE ? undefined : serializeAsDate,
-  temporal: process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL ? undefined : serializeAsTemporal,
+  date: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE
+    ? undefined
+    : serializeAsDate,
+  temporal: (globalThis as MaybeProcessGlobal).process?.env
+    .__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL
+    ? undefined
+    : serializeAsTemporal,
 };
 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {

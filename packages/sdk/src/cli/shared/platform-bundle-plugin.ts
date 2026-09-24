@@ -20,9 +20,11 @@ const GATE = /(?<![\w$.])process\.env\.__TAILOR_PLATFORM_BUNDLE\b/g;
 // available on the Platform runtime and is unreachable there once the gate
 // folds — so resolve it as external rather than failing the build over an
 // import that never survives to the bundled output.
-const WITHOUT_DATE_GATE = /(?<![\w$.])process\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE\b/g;
+// Read at module top level, so unlike GATE they must not throw where `process` is absent.
+const WITHOUT_DATE_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE\b/g;
 const WITHOUT_TEMPORAL_GATE =
-  /(?<![\w$.])process\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL\b/g;
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL\b/g;
 
 /**
  * Date representations whose conversion code a bundle keeps.
@@ -43,7 +45,7 @@ export function createPlatformBundleDefinePlugin(
   return {
     name: "tailor-platform-bundle-define",
     transform(code) {
-      if (!code.includes("process.env.__TAILOR_PLATFORM_BUNDLE")) return null;
+      if (!code.includes("__TAILOR_PLATFORM_BUNDLE")) return null;
       return {
         code: code
           .replace(GATE, "true")
