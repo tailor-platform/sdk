@@ -274,13 +274,14 @@ function validateCustomField<T extends TailorFieldType>(args: FieldValidationArg
 
 export function parseInternal<T extends TailorFieldType, Output>(
   args: FieldParseRuntimeArgs<T>,
+  dateParsers: DateParsers = allDateParsers,
 ): StandardSchemaV1.Result<Output> {
   let { value } = args;
   const issues: StandardSchemaV1.Issue[] = [];
   const validationArgs = { ...args, issues };
   const baseValid = validateBaseField(validationArgs);
   if (baseValid) {
-    value = deserializeDates(validationArgs);
+    value = deserializeDates(validationArgs, dateParsers);
     if (issues.length === 0) {
       validateCustomField({ ...validationArgs, value });
     }
@@ -292,7 +293,45 @@ export function parseInternal<T extends TailorFieldType, Output>(
   return { value: (value ?? null) as Output };
 }
 
-function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
+type DateTimeFieldType = "date" | "datetime" | "time";
+type DateParser = (type: DateTimeFieldType, text: string) => unknown;
+
+type DateParsers = {
+  readonly date: DateParser | undefined;
+  readonly temporal: DateParser | undefined;
+};
+
+function parseAsDate(type: DateTimeFieldType, text: string): Date {
+  const date = new Date(
+    type === "date"
+      ? `${text}T00:00:00.000Z`
+      : type === "time"
+        ? `1970-01-01T${text}:00.000Z`
+        : text,
+  );
+  if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid Date");
+  if (type !== "time") {
+    const calendarDate = text.slice(0, 10);
+    if (formatDate(new Date(`${calendarDate}T00:00:00.000Z`)) !== calendarDate) {
+      throw new RangeError("Invalid calendar date");
+    }
+  }
+  return date;
+}
+
+function parseAsTemporal(type: DateTimeFieldType, text: string): unknown {
+  const Temporal = getTemporal();
+  if (type === "date") return Temporal.PlainDate.from(text);
+  if (type === "datetime") return Temporal.Instant.from(text);
+  return Temporal.PlainTime.from(text);
+}
+
+const allDateParsers: DateParsers = { date: parseAsDate, temporal: parseAsTemporal };
+
+function deserializeDates(
+  args: FieldValidationArgs<TailorFieldType>,
+  dateParsers: DateParsers,
+): unknown {
   const { field, value, issues, pathArray } = args;
   if (value === null || value === undefined) return value;
   const convert = (item: unknown, itemPath: string[]): unknown => {
@@ -301,32 +340,18 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
       (type === "date" || type === "datetime" || type === "time") &&
       (metadata.as === "date" || metadata.as === "temporal")
     ) {
+      const parse = dateParsers[metadata.as];
+      if (!parse) {
+        throw new Error(
+          `Parsing fields declared with as: "${metadata.as}" is not included in this bundle. Parse them with parseDateFields, exported by "@tailor-platform/sdk/runtime".`,
+        );
+      }
       try {
         const text = String(item);
         if (type === "datetime" && text.slice(17, 19) === "60") {
           throw new RangeError("Leap seconds are not supported");
         }
-        if (metadata.as === "temporal") {
-          const Temporal = getTemporal();
-          if (type === "date") return Temporal.PlainDate.from(text);
-          if (type === "datetime") return Temporal.Instant.from(text);
-          return Temporal.PlainTime.from(text);
-        }
-        const date = new Date(
-          type === "date"
-            ? `${text}T00:00:00.000Z`
-            : type === "time"
-              ? `1970-01-01T${text}:00.000Z`
-              : text,
-        );
-        if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid Date");
-        if (type !== "time") {
-          const calendarDate = text.slice(0, 10);
-          if (formatDate(new Date(`${calendarDate}T00:00:00.000Z`)) !== calendarDate) {
-            throw new RangeError("Invalid calendar date");
-          }
-        }
-        return date;
+        return parse(type, text);
       } catch (error) {
         if (!(error instanceof RangeError)) throw error;
         issues.push({
@@ -340,12 +365,15 @@ function deserializeDates(args: FieldValidationArgs<TailorFieldType>): unknown {
     const record = item as Record<string, unknown>;
     let result = record;
     for (const [key, child] of Object.entries(field.fields)) {
-      const converted = deserializeDates({
-        ...args,
-        field: child,
-        value: record[key],
-        pathArray: itemPath.concat(key),
-      });
+      const converted = deserializeDates(
+        {
+          ...args,
+          field: child,
+          value: record[key],
+          pathArray: itemPath.concat(key),
+        },
+        dateParsers,
+      );
       if (converted !== record[key]) {
         if (result === record) result = { ...record };
         Object.defineProperty(result, key, {
@@ -382,4 +410,22 @@ export function parseInputFields(args: ParseInputFieldsArgs): StandardSchemaV1.R
     field: { type: "nested", fields, _metadata: { required: true } },
     pathArray: [],
   });
+}
+
+type ParsableField<Output> = FieldRuntime & {
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
+};
+
+/**
+ * Parse a value like `field.parse`, converting fields declared with `as: "date"` or
+ * `as: "temporal"` even in bundles that leave that conversion out of `field.parse`.
+ * @param field - Field defining the value's shape
+ * @param args - Value to parse, with the context data and invoker passed to validators
+ * @returns Validation result with Date and Temporal fields converted
+ */
+export function parseDateFields<Output>(
+  field: ParsableField<Output>,
+  args: FieldParseArgs,
+): StandardSchemaV1.Result<Output> {
+  return parseInternal({ ...args, field, pathArray: [] }, allDateParsers);
 }
