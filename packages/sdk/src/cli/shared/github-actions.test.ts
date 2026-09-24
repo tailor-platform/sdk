@@ -20,15 +20,16 @@ function captureStderr(fn: () => void): string {
 }
 
 describe("github-actions", () => {
-  const originalEnv = { ...process.env };
+  const originalEnv = process.env;
 
   beforeEach(() => {
+    process.env = { ...originalEnv };
     delete process.env.GITHUB_ACTIONS;
     delete process.env.TAILOR_GITHUB_ACTIONS_ANNOTATIONS;
   });
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    process.env = originalEnv;
   });
 
   describe("annotationsEnabled", () => {
