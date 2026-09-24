@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import { describe, expect, test } from "vitest";
-import { V2_NEXT_PENDING, allCodemods, getApplicableCodemods } from "./registry";
+import { NEXT_RELEASE, V2_NEXT_PENDING, allCodemods, getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
   test("returns codemods when upgrading across their version boundary", () => {
@@ -238,6 +238,40 @@ describe("getApplicableCodemods", () => {
       allCodemods.push(pending);
       try {
         expect(getApplicableCodemods("2.0.0-next.4", "2.0.0")).toContain(pending);
+      } finally {
+        allCodemods.pop();
+      }
+    });
+  });
+
+  describe("a codemod whose until is NEXT_RELEASE", () => {
+    const unreleased = {
+      id: "v2/next-release-boundary-test",
+      name: "Next release boundary test",
+      description: "Next release boundary test",
+      since: "1.0.0",
+      until: NEXT_RELEASE,
+    };
+
+    test.each([
+      ["2.20.0", "2.21.0"],
+      ["1.67.1", "3.0.0"],
+      ["2.20.0", "2.21.0-next.1"],
+    ])("is not offered before its release resolves the boundary (%s → %s)", (from, to) => {
+      allCodemods.push(unreleased);
+      try {
+        expect(getApplicableCodemods(from, to)).not.toContain(unreleased);
+      } finally {
+        allCodemods.pop();
+      }
+    });
+
+    test("rejects a prereleaseUntil, which cannot be checked against an unknown until", () => {
+      allCodemods.push({ ...unreleased, prereleaseUntil: "2.21.0-next.1" });
+      try {
+        expect(() => getApplicableCodemods("2.20.0", "2.21.0")).toThrow(
+          "Codemod v2/next-release-boundary-test cannot combine until: NEXT_RELEASE with prereleaseUntil",
+        );
       } finally {
         allCodemods.pop();
       }

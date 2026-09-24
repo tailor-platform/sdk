@@ -3,6 +3,7 @@ import { parse } from "semver";
 // Tolerant of whitespace and CRLF, not just the exact oxfmt-formatted spacing this file
 // happens to use today, so a manual edit or formatter change doesn't stop this from matching.
 const PENDING_USAGE_PATTERN = /prereleaseUntil\s*:\s*V2_NEXT_PENDING\s*,/g;
+const NEXT_RELEASE_UNTIL_PATTERN = /(?<![A-Za-z])until\s*:\s*NEXT_RELEASE\s*,/g;
 // Includes a preceding JSDoc block (if any) so a new constant is inserted above it,
 // not between the comment and `V2_NEXT_PENDING` where it would attach to the wrong export.
 const PENDING_DECLARATION_PATTERN =
@@ -89,4 +90,35 @@ export function resolvePendingBoundaries(
   updated = updated.replace(PENDING_USAGE_PATTERN, `prereleaseUntil: ${constantName},`);
 
   return { changed: true, constantName, source: updated };
+}
+
+/**
+ * Rewrite `until: NEXT_RELEASE` usages in a registry.ts source to the stable version the
+ * release PR bumped `@tailor-platform/sdk` to. A no-op when no usage is present.
+ * @param source - Current contents of registry.ts
+ * @param resolvedVersion - The version the release PR bumped `@tailor-platform/sdk` to (e.g. "2.21.0")
+ * @returns The (possibly) rewritten source and whether it changed
+ */
+export function resolveNextReleaseUntil(
+  source: string,
+  resolvedVersion: string,
+): { changed: boolean; source: string } {
+  const parsed = parse(resolvedVersion);
+  if (parsed === null) {
+    throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
+  }
+  NEXT_RELEASE_UNTIL_PATTERN.lastIndex = 0;
+  if (!NEXT_RELEASE_UNTIL_PATTERN.test(source)) {
+    return { changed: false, source };
+  }
+  if (parsed.prerelease.length > 0) {
+    throw new Error(
+      `resolvedVersion must be a stable version to resolve until: NEXT_RELEASE: ${resolvedVersion}`,
+    );
+  }
+  NEXT_RELEASE_UNTIL_PATTERN.lastIndex = 0;
+  return {
+    changed: true,
+    source: source.replace(NEXT_RELEASE_UNTIL_PATTERN, `until: "${resolvedVersion}",`),
+  };
 }

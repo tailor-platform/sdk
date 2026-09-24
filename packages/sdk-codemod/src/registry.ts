@@ -113,6 +113,12 @@ const V2_NEXT_11 = "2.0.0-next.11";
  * can reference the sentinel directly.
  */
 export const V2_NEXT_PENDING = "pending";
+/**
+ * Sentinel `until` for a codemod whose shipping release is not known yet. `pnpm
+ * codemod:resolve-pending`, run in CI against the release PR, replaces it with the
+ * resolved stable version, so a published registry never contains it.
+ */
+export const NEXT_RELEASE = "NEXT_RELEASE";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -1903,6 +1909,14 @@ function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
         `Codemod ${codemod.id} since must be a valid semver version: ${codemod.since}`,
       );
     }
+    if (codemod.until === NEXT_RELEASE) {
+      if (codemod.prereleaseUntil !== undefined) {
+        throw new Error(
+          `Codemod ${codemod.id} cannot combine until: NEXT_RELEASE with prereleaseUntil`,
+        );
+      }
+      continue;
+    }
     const boundary = parse(codemod.until);
     if (boundary === null) {
       throw new Error(
@@ -1976,6 +1990,7 @@ export function getApplicableCodemods(fromVersion: string, toVersion: string): C
 
   return allCodemods.filter(
     (codemod) =>
+      codemod.until !== NEXT_RELEASE &&
       gte(fromVersion, codemod.since) &&
       lt(fromVersion, effectiveCodemodBoundary(codemod)) &&
       reachesCodemodBoundary(toVersion, codemod),

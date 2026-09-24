@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { automationLevel, renderMigrationDoc } from "./migration-doc";
+import { automationLevel, migrationDocMajor, renderMigrationDoc } from "./migration-doc";
+import { NEXT_RELEASE } from "./registry";
 import type { CodemodPackage } from "./types";
 
 function makeCodemod(overrides: Partial<CodemodPackage>): CodemodPackage {
@@ -13,6 +14,16 @@ function makeCodemod(overrides: Partial<CodemodPackage>): CodemodPackage {
     ...overrides,
   };
 }
+
+describe("migrationDocMajor", () => {
+  test("files a codemod under the major of its until", () => {
+    expect(migrationDocMajor(makeCodemod({ id: "v2/example", until: "3.0.0" }))).toBe(3);
+  });
+
+  test("files a NEXT_RELEASE codemod under the major in its id", () => {
+    expect(migrationDocMajor(makeCodemod({ id: "v2/example", until: NEXT_RELEASE }))).toBe(2);
+  });
+});
 
 describe("automationLevel", () => {
   test("transform with no residual signals is Automatic", () => {
