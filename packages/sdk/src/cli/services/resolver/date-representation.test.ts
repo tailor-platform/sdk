@@ -134,10 +134,11 @@ describe("resolver Date representation bundles", () => {
     await expect(run({ ...input, invalidOutput: true })).rejects.toThrow(
       "Invalid date at rows[0].day: Expected a Date with a 4-digit year (0000-9999), but received an invalid Date",
     );
+    expect(code).not.toContain("Temporal is unavailable");
   });
 
   test.each(["production", "function run"] as const)(
-    "leaves output date serialization out of %s bundles when no output field uses Date or Temporal",
+    "leaves date conversion out of %s bundles when no field uses Date or Temporal",
     async (mode) => {
       using tmp = tempCwd("sdk-date-representation-string-");
       const scopeDir = path.join(tmp.dir, "node_modules/@tailor-platform");
@@ -194,6 +195,68 @@ describe("resolver Date representation bundles", () => {
         rows: [{ day: "2024-02-29", at: "2024-02-29T15:45:12.123Z" }],
       });
       expect(code).not.toContain("the top-level value");
+      expect(code).not.toContain("Leap seconds are not supported");
+      expect(code).not.toContain("Temporal is unavailable");
+      expect(code).not.toContain("4-digit year");
+    },
+  );
+
+  test.each(["production", "function run"] as const)(
+    "points %s bundles without Date input parsing to parseDateFields",
+    async (mode) => {
+      using tmp = tempCwd("sdk-date-representation-manual-");
+      const scopeDir = path.join(tmp.dir, "node_modules/@tailor-platform");
+      fs.mkdirSync(scopeDir, { recursive: true });
+      fs.symlinkSync(path.resolve(__dirname, "../../../.."), path.join(scopeDir, "sdk"), "dir");
+      const sourceFile = path.join(tmp.dir, "resolver.mjs");
+      fs.writeFileSync(
+        sourceFile,
+        `
+      import { createResolver, t } from "@tailor-platform/sdk";
+      import { parseDateFields } from "@tailor-platform/sdk/runtime";
+      const payload = t.object({ due: t.date({ as: "date" }) });
+      export default createResolver({
+        name: "manualDateParse",
+        operation: "query",
+        input: { day: t.string(), helper: t.bool() },
+        body: async ({ input }) => {
+          const args = { value: { due: input.day }, data: {}, invoker: null };
+          const result = input.helper ? parseDateFields(payload, args) : payload.parse(args);
+          return result.value.due instanceof Date;
+        },
+        output: t.bool(),
+      });
+    `,
+      );
+      const detected = await detectFunctionType({ filePath: sourceFile });
+      const code =
+        mode === "production"
+          ? (
+              await bundleResolvers({
+                namespace: "date",
+                config: { files: ["./resolver.mjs"] },
+                baseDir: tmp.dir,
+              })
+            ).get("manualDateParse")!
+          : (
+              await bundleForRun({
+                detected,
+                sourceFile,
+                baseDir: tmp.dir,
+                machineUser: { name: "test", id: "test", attributes: null, attributeList: [] },
+                workspaceId: "test",
+              })
+            ).bundledCode;
+      const bundlePath = path.join(tmp.dir, "bundle.mjs");
+      fs.writeFileSync(bundlePath, code);
+      const { main } = await import(pathToFileURL(bundlePath).href);
+      const run = (value: unknown) =>
+        main(mode === "production" ? { input: value, caller: null, env: {} } : value);
+
+      await expect(run({ day: "2024-02-29", helper: true })).resolves.toBe(true);
+      await expect(run({ day: "2024-02-29", helper: false })).rejects.toThrow(
+        'Parsing fields declared with as: "date" is not included in this bundle. Parse them with parseDateFields, exported by "@tailor-platform/sdk/runtime".',
+      );
     },
   );
 
@@ -303,6 +366,8 @@ describe("resolver Date representation bundles", () => {
       await expect(run({ ...input, invalidOutput: true })).rejects.toThrow(
         "Expected a Temporal.PlainDate instance at rows[0].day",
       );
+      expect(code).not.toContain("Expected a Date with a 4-digit year");
+      expect(code).not.toContain("Invalid calendar date");
     },
   );
 });

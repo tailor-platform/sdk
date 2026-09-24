@@ -274,7 +274,7 @@ function validateCustomField<T extends TailorFieldType>(args: FieldValidationArg
 
 export function parseInternal<T extends TailorFieldType, Output>(
   args: FieldParseRuntimeArgs<T>,
-  dateParsers: DateParsers = allDateParsers,
+  dateParsers: DateParsers = bundledDateParsers,
 ): StandardSchemaV1.Result<Output> {
   let { value } = args;
   const issues: StandardSchemaV1.Issue[] = [];
@@ -301,7 +301,14 @@ type DateParsers = {
   readonly temporal: DateParser | undefined;
 };
 
+function rejectLeapSecond(type: DateTimeFieldType, text: string): void {
+  if (type === "datetime" && text.slice(17, 19) === "60") {
+    throw new RangeError("Leap seconds are not supported");
+  }
+}
+
 function parseAsDate(type: DateTimeFieldType, text: string): Date {
+  rejectLeapSecond(type, text);
   const date = new Date(
     type === "date"
       ? `${text}T00:00:00.000Z`
@@ -320,6 +327,7 @@ function parseAsDate(type: DateTimeFieldType, text: string): Date {
 }
 
 function parseAsTemporal(type: DateTimeFieldType, text: string): unknown {
+  rejectLeapSecond(type, text);
   const Temporal = getTemporal();
   if (type === "date") return Temporal.PlainDate.from(text);
   if (type === "datetime") return Temporal.Instant.from(text);
@@ -327,6 +335,11 @@ function parseAsTemporal(type: DateTimeFieldType, text: string): unknown {
 }
 
 const allDateParsers: DateParsers = { date: parseAsDate, temporal: parseAsTemporal };
+
+const bundledDateParsers: DateParsers = {
+  date: process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE ? undefined : parseAsDate,
+  temporal: process.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL ? undefined : parseAsTemporal,
+};
 
 function deserializeDates(
   args: FieldValidationArgs<TailorFieldType>,
@@ -347,11 +360,7 @@ function deserializeDates(
         );
       }
       try {
-        const text = String(item);
-        if (type === "datetime" && text.slice(17, 19) === "60") {
-          throw new RangeError("Leap seconds are not supported");
-        }
-        return parse(type, text);
+        return parse(type, String(item));
       } catch (error) {
         if (!(error instanceof RangeError)) throw error;
         issues.push({

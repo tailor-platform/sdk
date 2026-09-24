@@ -17,12 +17,16 @@ import {
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import {
+  createPlatformBundleDefinePlugin,
+  platformBundleDefinePlugin,
+} from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import {
   buildResolverResultSerialization,
   buildResolverValidatedInputExpr,
   INVOKER_EXPR,
+  resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
@@ -106,7 +110,9 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     plugins: [
       createGeneratedEntryResolverPlugin(entryPath, baseDir),
       createTsconfigPathsPlugin(),
-      platformBundleDefinePlugin,
+      detected.type === "resolver"
+        ? createPlatformBundleDefinePlugin(resolverDateRepresentations(detected.fields))
+        : platformBundleDefinePlugin,
     ],
     input: entryPath,
     write: false,
@@ -182,7 +188,9 @@ function generateEntry(options: GenerateEntryOptions): string {
         permission: detected.permission,
         defaultPermission,
       });
-      const { importStatement, resultExpr } = buildResolverResultSerialization(detected.output);
+      const { importStatement, resultExpr } = buildResolverResultSerialization(
+        detected.fields?.output,
+      );
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";

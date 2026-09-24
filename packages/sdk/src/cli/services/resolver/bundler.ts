@@ -9,12 +9,13 @@ import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { assertNoForbiddenRuntimeGlobals } from "#/cli/shared/forbidden-runtime-globals";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
-import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createPlatformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import {
   buildResolverResultSerialization,
   buildResolverValidatedInputExpr,
   INVOKER_EXPR,
+  resolverDateRepresentations,
 } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import {
@@ -31,6 +32,7 @@ interface ResolverInfo {
   name: string;
   sourceFile: string;
   permission: Resolver["permission"];
+  input: Resolver["input"];
   output: Resolver["output"];
 }
 
@@ -105,6 +107,7 @@ export async function bundleResolvers(
       name: resolver.name,
       sourceFile: file,
       permission: resolver.permission,
+      input: resolver.input,
       output: resolver.output,
     });
   }
@@ -212,7 +215,7 @@ async function bundleSingleResolver(
       }
       plugins.push(
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        platformBundleDefinePlugin,
+        createPlatformBundleDefinePlugin(resolverDateRepresentations(resolver)),
         ...cachePlugins,
       );
 
