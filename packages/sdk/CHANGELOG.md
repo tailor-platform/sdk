@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 2.20.0
+
+### Minor Changes
+
+- [#2370](https://github.com/tailor-platform/sdk/pull/2370) [`5ecfb0f`](https://github.com/tailor-platform/sdk/commit/5ecfb0fe27e7d72dcea4421c5c8426ca9689284f) Thanks [@toiroakr](https://github.com/toiroakr)! - `defineConfig({ env })` values now accept the `<name>:url` static website placeholder, the same one `cors`, OAuth2 redirect URIs, and IdP return origins already accept. On deploy, the CLI replaces such a value with the deployed website's URL before it reaches resolver, executor, workflow job, auth hook, and TailorDB migration script code, so `env.siteUrl` reads the site's actual deployed URL (e.g. `https://my-site.example.com`) at runtime instead of the literal string `"my-site:url"`. A path suffix works too (`"my-site:url/callback"`).
+  
+  This resolves even when the deploy that resolves `env` is also the one creating the referenced website, so a single `deploy` call still injects the real URL — no second, manually-triggered `deploy` needed. If the referenced website genuinely does not exist, the CLI warns and leaves the pattern in place instead. Any other lookup failure (a permission error, a transient platform error, ...) fails the deploy instead, so a raw pattern never reaches application code unnoticed. If the website's URL still isn't available after this rebuild, the deploy fails with a clear error rather than shipping the unresolved placeholder.
+  
+  TailorDB's pre-deploy migration state check now always runs first, before any resource is created or updated, so a stale migration checkpoint or schema fails the deploy without leaving other resources partially applied.
+
+### Patch Changes
+
+- [#2382](https://github.com/tailor-platform/sdk/pull/2382) [`6b0fad4`](https://github.com/tailor-platform/sdk/commit/6b0fad4fa0cbd1140abde7538f334537e2a229e6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​clack/prompts to v1.8.1
+
+- [#2391](https://github.com/tailor-platform/sdk/pull/2391) [`f92a680`](https://github.com/tailor-platform/sdk/commit/f92a680a86d1eebfdc9d7b1a409f084373ef3067) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency open to v11.0.4
+
 ## 2.19.0
 
 ### Minor Changes

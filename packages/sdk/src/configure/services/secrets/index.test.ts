@@ -10,7 +10,9 @@ describe("defineSecretManager", () => {
       },
     });
 
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated method still exists until it is removed.
     expect(typeof secrets.get).toBe("function");
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated method still exists until it is removed.
     expect(typeof secrets.getAll).toBe("function");
   });
 
@@ -24,7 +26,9 @@ describe("defineSecretManager", () => {
       },
     });
 
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated method still exists until it is removed.
     expect(typeof secrets.get).toBe("function");
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated method still exists until it is removed.
     expect(typeof secrets.getAll).toBe("function");
   });
 
@@ -54,7 +58,9 @@ describe("defineSecretManager", () => {
 
     expect(secrets.vaults["my-vault"]["missing-key"]).toBeUndefined();
     expect(secrets.options).toEqual({ ignoreNullishValues: true });
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated method still exists until it is removed.
     expect(typeof secrets.get).toBe("function");
+    // oxlint-disable-next-line typescript/no-deprecated -- Verify the deprecated method still exists until it is removed.
     expect(typeof secrets.getAll).toBe("function");
   });
 

@@ -11,6 +11,7 @@ import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants"
 import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
+import { secrets } from "./secrets";
 import { user } from "./tailordb/user";
 import { executionPolicies } from "./workflows/execution-policies";
 
@@ -145,6 +146,7 @@ export default defineConfig({
   },
   idp: [idp],
   auth,
+  secrets,
   executor: { files: ["./executors/*.ts"] },
   workflow: {
     files: ["./workflows/**/*.ts"],

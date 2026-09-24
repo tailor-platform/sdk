@@ -22,6 +22,7 @@ declare module "@tailor-platform/sdk" {
   interface AuthNamespaceNameRegistry {
     "main-auth": true;
   }
+  interface SecretVaultNameRegistry {}
 }
 
 export {};
