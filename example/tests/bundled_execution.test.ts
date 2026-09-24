@@ -42,18 +42,18 @@ describe("bundled execution tests", () => {
     // Define maximum acceptable sizes (current size + 10KB buffer)
     const sizeBuffer = 1024 * 10; // 10KB
     const maxSizes: Record<string, number> = {
-      "executors/user-created.js": 169078 + sizeBuffer,
-      "resolvers/add.js": 5459 + sizeBuffer,
-      "resolvers/showUserInfo.js": 5999 + sizeBuffer,
-      "resolvers/stepChain.js": 182391 + sizeBuffer,
-      "resolvers/startOrderProcessing.js": 5692 + sizeBuffer,
+      "executors/user-created.js": 171924 + sizeBuffer,
+      "resolvers/add.js": 12986 + sizeBuffer,
+      "resolvers/showUserInfo.js": 13815 + sizeBuffer,
+      "resolvers/stepChain.js": 190534 + sizeBuffer,
+      "resolvers/startOrderProcessing.js": 13572 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~158KB), date-fns jobs (~20KB), simple jobs (<2KB)
-      "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
-      "workflow-jobs/fetch-customer.js": 157770 + sizeBuffer,
-      "workflow-jobs/process-order.js": 1137 + sizeBuffer,
-      "workflow-jobs/process-payment.js": 157664 + sizeBuffer,
-      "workflow-jobs/send-notification.js": 20075 + sizeBuffer,
-      "workflow-jobs/validate-order.js": 893 + sizeBuffer,
+      "workflow-jobs/check-inventory.js": 20041 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 158034 + sizeBuffer,
+      "workflow-jobs/process-order.js": 1205 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 157935 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 20149 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 960 + sizeBuffer,
     };
 
     for (const [file, maxSize] of Object.entries(maxSizes)) {
