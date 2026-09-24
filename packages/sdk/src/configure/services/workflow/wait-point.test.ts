@@ -260,10 +260,16 @@ describe("createWaitPoint", () => {
 
     // `$` on its own names no param. The type says so, so the value has to
     // agree: `.wait()` rather than a `.with()` the type never showed.
-    // `deploy` is what rejects the key.
-    const wp = createWaitPoint<undefined, string>("my-$");
-    await wp.wait();
-    expect(waitCalls[0]).toEqual({ key: "my-$", payload: undefined });
+    // `deploy` is what rejects the key, and the registry is process-wide, so put
+    // it back before another test file runs the deploy-time check.
+    const mark = getRegisteredWaitPoints().length;
+    try {
+      const wp = createWaitPoint<undefined, string>("my-$");
+      await wp.wait();
+      expect(waitCalls[0]).toEqual({ key: "my-$", payload: undefined });
+    } finally {
+      restoreWaitPointRegistry(mark);
+    }
   });
 });
 
