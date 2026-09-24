@@ -28,17 +28,27 @@ describe("prompt", () => {
       await expect(prompt.text({ message: "test" })).rejects.toThrow(CIPromptError);
     });
 
-    test("does not suggest a JSON remedy in CI", async () => {
+    test("does not suggest a JSON remedy in CI even with TTYs", async () => {
       vi.doMock("std-env", () => ({ isCI: true }));
 
       const { prompt } = await import("./prompt");
       const { logger } = await import("./logger");
+      const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+      const stdoutDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+      Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true });
+      Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true });
       logger.setJsonMode(true, "flag");
-      const error = await prompt.confirm({ message: "proceed?" }).catch((e: unknown) => e);
-      logger.jsonMode = false;
-      const message = error instanceof Error ? error.message : String(error);
-      expect(message).not.toContain("--json");
-      expect(message).not.toContain("TAILOR_JSON_OUTPUT");
+
+      try {
+        const error = await prompt.confirm({ message: "proceed?" }).catch((e: unknown) => e);
+        const message = error instanceof Error ? error.message : String(error);
+        expect(message).not.toContain("--json");
+        expect(message).not.toContain("TAILOR_JSON_OUTPUT");
+      } finally {
+        logger.jsonMode = false;
+        if (stdinDescriptor) Object.defineProperty(process.stdin, "isTTY", stdinDescriptor);
+        if (stdoutDescriptor) Object.defineProperty(process.stdout, "isTTY", stdoutDescriptor);
+      }
     });
   });
 

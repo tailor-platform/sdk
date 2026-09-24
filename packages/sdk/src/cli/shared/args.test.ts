@@ -332,8 +332,12 @@ describe("createCommonArgs effects", () => {
   test.each([
     { output: undefined, argv: [], expected: false },
     { output: "true", argv: [], expected: true },
+    { output: "True", argv: [], expected: true },
+    { output: "T", argv: [], expected: true },
     { output: "1", argv: [], expected: true },
     { output: "false", argv: [], expected: false },
+    { output: "False", argv: [], expected: false },
+    { output: "F", argv: [], expected: false },
     { output: "0", argv: [], expected: false },
     { output: "true", argv: ["--json"], expected: true },
     { output: "false", argv: ["--json"], expected: true },
