@@ -1,10 +1,9 @@
+import { Lang, parse as parseSource } from "@ast-grep/napi";
 import { parse } from "semver";
 
 // Tolerant of whitespace and CRLF, not just the exact oxfmt-formatted spacing this file
 // happens to use today, so a manual edit or formatter change doesn't stop this from matching.
 const PENDING_USAGE_PATTERN = /prereleaseUntil\s*:\s*V2_NEXT_PENDING\s*,/g;
-const NEXT_RELEASE_UNTIL_PATTERN =
-  /(?<![A-Za-z])until\s*:\s*NEXT_RELEASE(?:\s*(,)|(?=\s*(?:\}|$)))/gm;
 // Includes a preceding JSDoc block (if any) so a new constant is inserted above it,
 // not between the comment and `V2_NEXT_PENDING` where it would attach to the wrong export.
 const PENDING_DECLARATION_PATTERN =
@@ -110,8 +109,13 @@ export function resolveNextReleaseUntil(
   if (parsed === null) {
     throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
   }
-  NEXT_RELEASE_UNTIL_PATTERN.lastIndex = 0;
-  if (!NEXT_RELEASE_UNTIL_PATTERN.test(source)) {
+  const root = parseSource(Lang.TypeScript, source).root();
+  const pendingValues = root
+    .findAll({ rule: { kind: "pair" } })
+    .filter((pair) => pair.field("key")?.text() === "until")
+    .map((pair) => pair.field("value"))
+    .filter((value) => value?.kind() === "identifier" && value.text() === "NEXT_RELEASE");
+  if (pendingValues.length === 0) {
     return { changed: false, source };
   }
   if (parsed.prerelease.length > 0) {
@@ -127,9 +131,8 @@ export function resolveNextReleaseUntil(
       `until: NEXT_RELEASE would resolve to ${resolvedVersion}, which was already the SDK version before this release; add an @tailor-platform/sdk changeset to the change that introduced it`,
     );
   }
-  NEXT_RELEASE_UNTIL_PATTERN.lastIndex = 0;
   return {
     changed: true,
-    source: source.replace(NEXT_RELEASE_UNTIL_PATTERN, `until: "${resolvedVersion}"$1`),
+    source: root.commitEdits(pendingValues.map((value) => value!.replace(`"${resolvedVersion}"`))),
   };
 }
