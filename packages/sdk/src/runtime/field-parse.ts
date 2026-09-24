@@ -1,4 +1,4 @@
-import { formatDate } from "./date";
+import { dateRepresentationOf, formatDate } from "./date";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
@@ -293,21 +293,20 @@ export function parseInternal<T extends TailorFieldType, Output>(
   return { value: (value ?? null) as Output };
 }
 
-type DateTimeFieldType = "date" | "datetime" | "time";
-type DateParser = (type: DateTimeFieldType, text: string) => unknown;
+type DateParser = (type: TailorFieldType, text: string) => unknown;
 
 type DateParsers = {
   readonly date: DateParser | undefined;
   readonly temporal: DateParser | undefined;
 };
 
-function rejectLeapSecond(type: DateTimeFieldType, text: string): void {
+function rejectLeapSecond(type: TailorFieldType, text: string): void {
   if (type === "datetime" && text.slice(17, 19) === "60") {
     throw new RangeError("Leap seconds are not supported");
   }
 }
 
-function parseAsDate(type: DateTimeFieldType, text: string): Date {
+function parseAsDate(type: TailorFieldType, text: string): Date {
   rejectLeapSecond(type, text);
   const date = new Date(
     type === "date"
@@ -326,7 +325,7 @@ function parseAsDate(type: DateTimeFieldType, text: string): Date {
   return date;
 }
 
-function parseAsTemporal(type: DateTimeFieldType, text: string): unknown {
+function parseAsTemporal(type: TailorFieldType, text: string): unknown {
   rejectLeapSecond(type, text);
   const Temporal = getTemporal();
   if (type === "date") return Temporal.PlainDate.from(text);
@@ -348,15 +347,13 @@ function deserializeDates(
   const { field, value, issues, pathArray } = args;
   if (value === null || value === undefined) return value;
   const convert = (item: unknown, itemPath: string[]): unknown => {
-    const { type, _metadata: metadata } = field;
-    if (
-      (type === "date" || type === "datetime" || type === "time") &&
-      (metadata.as === "date" || metadata.as === "temporal")
-    ) {
-      const parse = dateParsers[metadata.as];
+    const { type } = field;
+    const as = dateRepresentationOf(type, field._metadata.as);
+    if (as) {
+      const parse = dateParsers[as];
       if (!parse) {
         throw new Error(
-          `Parsing fields declared with as: "${metadata.as}" is not included in this bundle. Parse them with parseDateFields, exported by "@tailor-platform/sdk/runtime".`,
+          `Parsing fields declared with as: "${as}" is not included in this bundle. Parse them with parseDateFields, exported by "@tailor-platform/sdk/runtime".`,
         );
       }
       try {

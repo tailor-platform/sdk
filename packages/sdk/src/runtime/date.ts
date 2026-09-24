@@ -96,21 +96,32 @@ function describeReceivedValue(value: unknown): string {
 
 type DateRepresentation = "date" | "temporal";
 
+/**
+ * Get the Date or Temporal representation a field converts its values to.
+ * @param type - Field type
+ * @param as - The field's `as` option
+ * @returns The representation, or undefined when values stay strings
+ * @internal
+ */
+export function dateRepresentationOf(
+  type: TailorFieldType,
+  as: FieldMetadata["as"],
+): DateRepresentation | undefined {
+  return (type === "date" || type === "datetime" || type === "time") &&
+    (as === "date" || as === "temporal")
+    ? as
+    : undefined;
+}
+
 function isDateRepresentationField(
   field: DateRepresentationField,
   representation?: DateRepresentation,
 ): boolean {
-  const { type } = field;
-  const as = field.metadata.as;
-  return (
-    (type === "date" || type === "datetime" || type === "time") &&
-    (as === "date" || as === "temporal") &&
-    (representation === undefined || as === representation)
-  );
+  const as = dateRepresentationOf(field.type, field.metadata.as);
+  return as !== undefined && (representation === undefined || as === representation);
 }
 
-type DateTimeFieldType = "date" | "datetime" | "time";
-type DateSerializer = (type: DateTimeFieldType, value: unknown, path: string) => string;
+type DateSerializer = (type: TailorFieldType, value: unknown, path: string) => string;
 
 function throwInvalidDate(error: unknown, path: string): never {
   const reason = error instanceof Error ? error.message : String(error);
@@ -119,7 +130,7 @@ function throwInvalidDate(error: unknown, path: string): never {
   });
 }
 
-function serializeAsDate(type: DateTimeFieldType, value: unknown, path: string): string {
+function serializeAsDate(type: TailorFieldType, value: unknown, path: string): string {
   if (!(value instanceof Date)) {
     throw new TypeError(
       `Expected a Date instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
@@ -134,7 +145,7 @@ function serializeAsDate(type: DateTimeFieldType, value: unknown, path: string):
   }
 }
 
-function serializeAsTemporal(type: DateTimeFieldType, value: unknown, path: string): string {
+function serializeAsTemporal(type: TailorFieldType, value: unknown, path: string): string {
   const Temporal = getTemporal();
   const expected =
     type === "date"
@@ -162,11 +173,8 @@ const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
   if (value === null || value === undefined) return value;
   const { type } = field;
-  const as = field.metadata.as;
-  if (
-    (type === "date" || type === "datetime" || type === "time") &&
-    (as === "date" || as === "temporal")
-  ) {
+  const as = dateRepresentationOf(type, field.metadata.as);
+  if (as) {
     const serializeAs = dateSerializers[as];
     if (!serializeAs) {
       throw new Error(
