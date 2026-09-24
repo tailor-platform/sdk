@@ -47,6 +47,8 @@ export interface DetectedFunction {
   inputSchema?: InputSchema;
   /** For resolvers: the resolver's `permission` config, enforced the same way as production */
   permission?: Resolver["permission"];
+  /** For resolvers: the resolver's output field, used to decide whether dates need serializing */
+  output?: Resolver["output"];
 }
 
 interface DetectFunctionOptions {
@@ -89,6 +91,7 @@ export async function detectFunctionType(
       hasInput: rawInput != null,
       inputSchema,
       permission: resolverResult.data.permission,
+      output: resolverResult.data.output,
     };
   }
 

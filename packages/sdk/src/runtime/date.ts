@@ -52,6 +52,12 @@ type DateField = {
   readonly fields: Record<string, DateField>;
 };
 
+type DateRepresentationField = {
+  readonly type: TailorFieldType;
+  readonly metadata: Pick<FieldMetadata, "as">;
+  readonly fields: Record<string, DateRepresentationField>;
+};
+
 function serialize(field: DateField, value: unknown, path: string): unknown {
   if (field.metadata.array) {
     if (!Array.isArray(value)) return value;
@@ -88,7 +94,7 @@ function describeReceivedValue(value: unknown): string {
   return `a ${type} (${truncateForDescription(String(value))})`;
 }
 
-function isDateRepresentationField(field: DateField): boolean {
+function isDateRepresentationField(field: DateRepresentationField): boolean {
   const { type } = field;
   const as = field.metadata.as;
   return (
@@ -146,6 +152,19 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
     }
   }
   return result;
+}
+
+/**
+ * Check whether a field or any of its nested fields uses a Date or Temporal representation.
+ * @param field - Field to inspect
+ * @returns Whether serializeDateFields would convert any value of the field
+ * @internal
+ */
+export function hasDateRepresentationFields(field: DateRepresentationField): boolean {
+  return (
+    isDateRepresentationField(field) ||
+    Object.values(field.fields).some(hasDateRepresentationFields)
+  );
 }
 
 /**

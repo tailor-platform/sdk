@@ -137,6 +137,67 @@ describe("resolver Date representation bundles", () => {
   });
 
   test.each(["production", "function run"] as const)(
+    "leaves output date serialization out of %s bundles when no output field uses Date or Temporal",
+    async (mode) => {
+      using tmp = tempCwd("sdk-date-representation-string-");
+      const scopeDir = path.join(tmp.dir, "node_modules/@tailor-platform");
+      fs.mkdirSync(scopeDir, { recursive: true });
+      fs.symlinkSync(path.resolve(__dirname, "../../../.."), path.join(scopeDir, "sdk"), "dir");
+      const sourceFile = path.join(tmp.dir, "resolver.mjs");
+      fs.writeFileSync(
+        sourceFile,
+        `
+      import { createResolver, t } from "@tailor-platform/sdk";
+      export default createResolver({
+        name: "stringDateRoundTrip",
+        operation: "query",
+        input: { n: t.int() },
+        body: async ({ input }) => ({
+          n: input.n,
+          rows: [{ day: "2024-02-29", at: "2024-02-29T15:45:12.123Z" }],
+        }),
+        output: {
+          n: t.int(),
+          rows: t.object({ day: t.date(), at: t.datetime({ as: "string" }) }, { array: true }),
+        },
+      });
+    `,
+      );
+      const detected = await detectFunctionType({ filePath: sourceFile });
+      const code =
+        mode === "production"
+          ? (
+              await bundleResolvers({
+                namespace: "date",
+                config: { files: ["./resolver.mjs"] },
+                baseDir: tmp.dir,
+              })
+            ).get("stringDateRoundTrip")!
+          : (
+              await bundleForRun({
+                detected,
+                sourceFile,
+                baseDir: tmp.dir,
+                machineUser: { name: "test", id: "test", attributes: null, attributeList: [] },
+                workspaceId: "test",
+              })
+            ).bundledCode;
+      const bundlePath = path.join(tmp.dir, "bundle.mjs");
+      fs.writeFileSync(bundlePath, code);
+      const { main } = await import(pathToFileURL(bundlePath).href);
+      const input = { n: 1 };
+
+      await expect(
+        main(mode === "production" ? { input, caller: null, env: {} } : input),
+      ).resolves.toEqual({
+        n: 1,
+        rows: [{ day: "2024-02-29", at: "2024-02-29T15:45:12.123Z" }],
+      });
+      expect(code).not.toContain("the top-level value");
+    },
+  );
+
+  test.each(["production", "function run"] as const)(
     "converts Temporal.PlainDate through %s",
     async (mode) => {
       using tmp = tempCwd("sdk-date-representation-temporal-");
