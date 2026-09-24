@@ -213,6 +213,49 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain('"my-aigateway": true;');
     expect(result).toContain('"second-gateway": true;');
   });
+
+  test("should generate empty SecretVaultNameRegistry when no secrets provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface SecretVaultNameRegistry {}");
+  });
+
+  test("should generate SecretVaultNameRegistry with vault -> secret name unions", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        "api-keys": ["stripe-secret-key", "sendgrid-api-key"],
+        database: ["analytics-connection-string"],
+      },
+    );
+
+    expect(result).toContain("interface SecretVaultNameRegistry");
+    expect(result).toContain('"api-keys": "stripe-secret-key" | "sendgrid-api-key";');
+    expect(result).toContain('database: "analytics-connection-string";');
+  });
+
+  test("should generate never for a vault with no secret names", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { empty: [] },
+    );
+
+    expect(result).toContain("empty: never;");
+  });
 });
 
 describe("resolveTypeDefinitionPath", () => {
@@ -447,5 +490,78 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
 
     const content = generateTypeDefinition(undefined, undefined);
     expect(content).toContain("interface AuthNamespaceNameRegistry {}");
+  });
+
+  test("extracts Secret Manager vault names mapped to their secret names into SecretVaultNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      secrets: {
+        vaults: {
+          "api-keys": { "stripe-secret-key": "sk_test_123", "sendgrid-api-key": "SG.abc" },
+          database: { "analytics-connection-string": "postgres://..." },
+        },
+        options: { ignoreNullishValues: false },
+      } as never,
+    };
+
+    const { secretVaultNames } = extractAttributesFromConfig(config);
+    expect(secretVaultNames).toEqual({
+      "api-keys": ["stripe-secret-key", "sendgrid-api-key"],
+      database: ["analytics-connection-string"],
+    });
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      secretVaultNames,
+    );
+    expect(content).toContain("interface SecretVaultNameRegistry");
+    expect(content).toContain('"api-keys": "stripe-secret-key" | "sendgrid-api-key";');
+    expect(content).toContain('database: "analytics-connection-string";');
+  });
+
+  test("never leaks a vault's secret values, only its secret names", () => {
+    const config = {
+      name: "test-app",
+      secrets: {
+        vaults: {
+          "api-keys": { "stripe-secret-key": "LEAK_ME_IF_YOU_SEE_THIS" },
+        },
+        options: { ignoreNullishValues: false },
+      } as never,
+    };
+
+    const { secretVaultNames } = extractAttributesFromConfig(config);
+    expect(JSON.stringify(secretVaultNames)).not.toContain("LEAK_ME_IF_YOU_SEE_THIS");
+    expect(secretVaultNames).toEqual({ "api-keys": ["stripe-secret-key"] });
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      secretVaultNames,
+    );
+    expect(content).not.toContain("LEAK_ME_IF_YOU_SEE_THIS");
+  });
+
+  test("omits SecretVaultNameRegistry entries when no secrets are configured", () => {
+    const config = { name: "test-app" };
+
+    const { secretVaultNames } = extractAttributesFromConfig(config);
+    expect(secretVaultNames).toBeUndefined();
+
+    const content = generateTypeDefinition(undefined, undefined);
+    expect(content).toContain("interface SecretVaultNameRegistry {}");
   });
 });
