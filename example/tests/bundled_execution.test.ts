@@ -42,11 +42,11 @@ describe("bundled execution tests", () => {
     // Define maximum acceptable sizes (current size + 10KB buffer)
     const sizeBuffer = 1024 * 10; // 10KB
     const maxSizes: Record<string, number> = {
-      "executors/user-created.js": 171924 + sizeBuffer,
-      "resolvers/add.js": 12986 + sizeBuffer,
-      "resolvers/showUserInfo.js": 13815 + sizeBuffer,
-      "resolvers/stepChain.js": 190534 + sizeBuffer,
-      "resolvers/startOrderProcessing.js": 13572 + sizeBuffer,
+      "executors/user-created.js": 172278 + sizeBuffer,
+      "resolvers/add.js": 7206 + sizeBuffer,
+      "resolvers/showUserInfo.js": 8035 + sizeBuffer,
+      "resolvers/stepChain.js": 184694 + sizeBuffer,
+      "resolvers/startOrderProcessing.js": 7792 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~158KB), date-fns jobs (~20KB), simple jobs (<2KB)
       "workflow-jobs/check-inventory.js": 20041 + sizeBuffer,
       "workflow-jobs/fetch-customer.js": 158034 + sizeBuffer,
