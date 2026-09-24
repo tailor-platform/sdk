@@ -5,7 +5,8 @@ import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
-import { logger, outputEnvIsJson } from "./logger";
+import { logger } from "./logger";
+import { parseBoolean } from "./parse-boolean";
 
 type ArgsShape = Record<string, z.ZodType>;
 export type MachineUserInputSource = "option" | "env";
@@ -188,16 +189,7 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 /** Name and short alias of the `--json` flag. */
 const JSON_ARG_NAME = "json";
 const JSON_ARG_ALIAS = "j";
-
-/**
- * Whether `--json` was passed explicitly, which the parsed value cannot answer
- * on its own because the flag defaults to `false`.
- * @param args - Validated global arguments for the current run
- * @returns `true` when the run set `--json` / `-j` explicitly
- */
-function isJsonExplicit(args: Readonly<Record<string, unknown>>): boolean {
-  return (args as { $source?: (name: string) => string }).$source?.(JSON_ARG_NAME) === "cli";
-}
+const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
 
 interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
@@ -242,14 +234,12 @@ export function createCommonArgs(options: CommonArgsOptions = {}) {
     [JSON_ARG_NAME]: arg(z.boolean().default(false), {
       alias: JSON_ARG_ALIAS,
       description: "Output as JSON",
+      env: JSON_OUTPUT_ENV_VAR,
       effect: (value, { args }) => {
-        // An explicit flag always wins; TAILOR_OUTPUT only supplies the default.
-        const explicit = isJsonExplicit(args);
-        const fromEnv = !explicit && outputEnvIsJson();
-        const json = value || fromEnv;
-        logger.setJsonMode(json, fromEnv ? "env" : "flag");
-        // Commands branch on the parsed value, so keep both views in step.
-        (args as { json?: boolean }).json = json;
+        const source = args.$source?.(JSON_ARG_NAME);
+        const envAlsoEnabled =
+          source === "cli" && parseBoolean(process.env[JSON_OUTPUT_ENV_VAR]) === true;
+        logger.setJsonMode(value, source === "env" ? "env" : envAlsoEnabled ? "both" : "flag");
       },
     }),
   } satisfies ArgsShape;

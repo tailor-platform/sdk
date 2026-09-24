@@ -1,45 +1,36 @@
 import { formatWithOptions, type InspectOptions } from "node:util";
 import { color, renderFor } from "@tailor-platform/shared/color";
 import { formatDistanceToNowStrict } from "date-fns";
+import { isCI } from "std-env";
 import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
 
-/**
- * Environment variable selecting the default output format for every command.
- *
- * Set `TAILOR_OUTPUT=json` in agent and automation contexts so the CLI emits
- * JSON without passing `--json` on every call. An explicit `--json` always
- * wins, so `TAILOR_OUTPUT=table` restores table output only where no flag is
- * present. Because JSON mode also suppresses interactive prompts, prefer
- * setting this per invocation over exporting it from a shell profile.
- */
-const OUTPUT_ENV_VAR = "TAILOR_OUTPUT";
+/** Environment variable selecting JSON as the default output for every command. */
+const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
 
-/** What selected JSON output: an explicit `--json`, or `TAILOR_OUTPUT`. */
-export type JsonModeSource = "flag" | "env";
-
-/**
- * Whether `TAILOR_OUTPUT` selects JSON output.
- * @returns `true` when the variable is set to `json` (case-insensitive)
- */
-export function outputEnvIsJson(): boolean {
-  return process.env[OUTPUT_ENV_VAR]?.trim().toLowerCase() === "json";
-}
+/** What selected JSON output: an explicit `--json`, the environment, or both. */
+export type JsonModeSource = "flag" | "env" | "both";
 
 /**
  * Error thrown when a prompt is attempted in a non-interactive environment.
  *
  * JSON mode suppresses prompts, so name whatever selected it: an explicit
- * `--json` stays enabled however the environment is set, while `TAILOR_OUTPUT`
- * leaves nothing in the command line to explain the refusal.
+ * `--json` stays enabled however the environment is set, while
+ * `TAILOR_JSON_OUTPUT` leaves nothing in the command line to explain the
+ * refusal.
  */
 export class CIPromptError extends Error {
   constructor(message?: string) {
+    const promptWouldOtherwiseBeAvailable =
+      !isCI && process.stdin.isTTY === true && process.stdout.isTTY === true;
     const remedy =
       _jsonModeSource === "flag"
         ? " JSON output is enabled by --json; drop it to restore prompts."
-        : ` JSON output is enabled by ${OUTPUT_ENV_VAR}=json; unset it to restore prompts.`;
-    const reason = _jsonMode && _jsonModeSource !== undefined ? remedy : "";
+        : _jsonModeSource === "env"
+          ? ` JSON output is enabled by ${JSON_OUTPUT_ENV_VAR}; unset it to restore prompts.`
+          : ` JSON output is enabled by --json and ${JSON_OUTPUT_ENV_VAR}; drop the flag and unset the variable to restore prompts.`;
+    const reason =
+      _jsonMode && _jsonModeSource !== undefined && promptWouldOtherwiseBeAvailable ? remedy : "";
     super(
       (message ??
         "Interactive prompts are not available in this environment. Provide the required options explicitly.") +
