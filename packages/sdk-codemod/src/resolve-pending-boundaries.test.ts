@@ -271,4 +271,20 @@ describe("resolveNextReleaseUntil", () => {
       source,
     });
   });
+
+  test("resolves a NEXT_RELEASE until written as the last property without a trailing comma", () => {
+    const source = ['    { id: "v2/a", until: NEXT_RELEASE }', "    until: NEXT_RELEASE"].join(
+      "\n",
+    );
+
+    expect(resolveNextReleaseUntil(source, "2.21.0", "2.20.0").source).toBe(
+      ['    { id: "v2/a", until: "2.21.0" }', '    until: "2.21.0"'].join("\n"),
+    );
+  });
+
+  test("leaves prose mentioning until: NEXT_RELEASE untouched", () => {
+    const source = "      `Codemod ${id} cannot combine until: NEXT_RELEASE with prereleaseUntil`,";
+
+    expect(resolveNextReleaseUntil(source, "2.21.0", "2.20.0")).toEqual({ changed: false, source });
+  });
 });
