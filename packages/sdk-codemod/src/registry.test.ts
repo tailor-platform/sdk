@@ -6,19 +6,19 @@ import { NEXT_RELEASE, V2_NEXT_PENDING, allCodemods, getApplicableCodemods } fro
 
 describe("getApplicableCodemods", () => {
   test("offers beta plugin export normalization when crossing the minor release boundary", () => {
-    expect(getApplicableCodemods("2.17.0", "2.18.0").map((codemod) => codemod.id)).toContain(
+    expect(getApplicableCodemods("2.20.0", "2.21.0").map((codemod) => codemod.id)).toContain(
       "v2/plugin-export-name-normalize",
     );
-    expect(getApplicableCodemods("2.15.0", "2.18.0").map((codemod) => codemod.id)).toContain(
+    expect(getApplicableCodemods("2.15.0", "2.21.0").map((codemod) => codemod.id)).toContain(
       "v2/plugin-export-name-normalize",
     );
-    expect(getApplicableCodemods("1.67.1", "2.18.0").map((codemod) => codemod.id)).toContain(
+    expect(getApplicableCodemods("1.67.1", "2.21.0").map((codemod) => codemod.id)).toContain(
       "v2/plugin-export-name-normalize",
     );
-    expect(getApplicableCodemods("2.15.0", "2.17.0").map((codemod) => codemod.id)).not.toContain(
+    expect(getApplicableCodemods("2.15.0", "2.20.0").map((codemod) => codemod.id)).not.toContain(
       "v2/plugin-export-name-normalize",
     );
-    expect(getApplicableCodemods("2.18.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
+    expect(getApplicableCodemods("2.21.0", "3.0.0").map((codemod) => codemod.id)).not.toContain(
       "v2/plugin-export-name-normalize",
     );
   });

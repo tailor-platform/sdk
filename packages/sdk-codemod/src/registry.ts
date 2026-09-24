@@ -216,7 +216,7 @@ export const allCodemods: CodemodPackage[] = [
     description:
       "Rename the plugin config export (and its imports) from generator/generators to plugins",
     since: "1.0.0",
-    until: "2.18.0",
+    until: "2.21.0",
     scriptPath: "v2/plugin-export-name-normalize/scripts/transform.js",
     examples: [
       {
