@@ -10,13 +10,13 @@
     "lint:fix": "oxlint --type-aware . --fix"
   },
   "devDependencies": {
-    "@types/node": "24.13.4",
-    "eslint-plugin-zod": "4.13.1",
+    "@types/node": "24.13.6",
+    "eslint-plugin-zod": "4.14.2",
     "oxlint": "1.82.0",
-    "oxlint-tsgolint": "7.0.2001",
-    "tsx": "4.23.13",
+    "oxlint-tsgolint": "7.0.2002",
+    "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   },
   "engines": {
     "node": ">= 22.18.0"
