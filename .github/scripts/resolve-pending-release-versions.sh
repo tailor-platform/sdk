@@ -42,7 +42,8 @@ gh pr checkout "$PR_NUMBER"
 # Detach so the trap's reset only moves HEAD, not the local branch gh pr checkout made.
 git checkout --quiet --detach
 
-pnpm codemod:resolve-pending
+PREVIOUS_SDK_VERSION="$(git show "${original_ref}:packages/sdk/package.json" | jq -r .version)" \
+  pnpm codemod:resolve-pending
 pnpm deprecations:resolve-pending
 
 mapfile -t resolved_paths < <(git diff --name-only)

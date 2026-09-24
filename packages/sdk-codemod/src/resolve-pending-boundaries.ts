@@ -97,11 +97,13 @@ export function resolvePendingBoundaries(
  * release PR bumped `@tailor-platform/sdk` to. A no-op when no usage is present.
  * @param source - Current contents of registry.ts
  * @param resolvedVersion - The version the release PR bumped `@tailor-platform/sdk` to (e.g. "2.21.0")
+ * @param previousVersion - The `@tailor-platform/sdk` version before the release PR's bump
  * @returns The (possibly) rewritten source and whether it changed
  */
 export function resolveNextReleaseUntil(
   source: string,
   resolvedVersion: string,
+  previousVersion: string | undefined,
 ): { changed: boolean; source: string } {
   const parsed = parse(resolvedVersion);
   if (parsed === null) {
@@ -114,6 +116,14 @@ export function resolveNextReleaseUntil(
   if (parsed.prerelease.length > 0) {
     throw new Error(
       `resolvedVersion must be a stable version to resolve until: NEXT_RELEASE: ${resolvedVersion}`,
+    );
+  }
+  if (previousVersion === undefined) {
+    throw new Error("previousVersion is required to resolve until: NEXT_RELEASE");
+  }
+  if (resolvedVersion === previousVersion) {
+    throw new Error(
+      `until: NEXT_RELEASE would resolve to ${resolvedVersion}, which was already the SDK version before this release; add an @tailor-platform/sdk changeset to the change that introduced it`,
     );
   }
   NEXT_RELEASE_UNTIL_PATTERN.lastIndex = 0;

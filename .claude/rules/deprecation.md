@@ -90,9 +90,10 @@ check:deprecations` enforces the mechanical parts.
 - Use `prereleaseUntil: V2_NEXT_PENDING` while the prerelease that ships it is unknown; the same
   release step resolves it. `until: NEXT_RELEASE` is its stable counterpart and cannot be combined with
   `prereleaseUntil`. Until the release resolves it, `tailor upgrade` does not offer the codemod. It
-  resolves to the `@tailor-platform/sdk` version on the release PR, so use it only when the same change
-  carries an `@tailor-platform/sdk` changeset; a codemod for a change that already shipped takes that
-  release's concrete version.
+  resolves to the `@tailor-platform/sdk` version on the release PR, so the same change must carry an
+  `@tailor-platform/sdk` changeset — without one the release PR fails rather than resolve it to an
+  already-published version. A codemod for a change that already shipped takes that release's concrete
+  version.
 - Run `pnpm codemod:docs:update` so the generated migration doc matches the registry.
 - Never rewrite user code onto a name that is itself deprecated. When deprecating a name, search the
   registry for codemods whose output produces it and retarget them.
