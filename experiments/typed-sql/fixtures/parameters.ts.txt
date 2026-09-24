@@ -1,0 +1,15 @@
+import { sql } from "@typed-sql/postgres";
+import type { QueryParameters } from "@typed-sql/core";
+
+export const query = sql`
+  SELECT "email" FROM "Account"
+  WHERE "age" > ${18} AND "role" = ${"ADMIN"} AND "active" = ${true}
+`;
+
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
+  (<T>() => T extends B ? 1 : 2) ? true : false;
+type Assert<T extends true> = T;
+export type VerifyParameters = Assert<Equal<
+  QueryParameters<typeof query>,
+  readonly [number, "ADMIN" | "MEMBER", boolean]
+>>;
