@@ -6,6 +6,7 @@ import {
   isTailorConfigPath,
   isIntrinsicJsxName,
 } from "../../../../src/plugin-export-bindings";
+import migrateDefineGenerators from "../../define-generators-to-plugins/scripts/transform";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const OLD_NAMES = ["generator", "generators"] as const;
@@ -426,6 +427,7 @@ function sourceConfigRenameIsSafe(filePath: string, modulePath: string, oldName:
   } catch {
     return false;
   }
+  configSource = migrateDefineGenerators(configSource, resolved) ?? configSource;
 
   const configTree = parse(
     resolved.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript,

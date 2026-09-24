@@ -177,9 +177,9 @@ describe("runCodemods", () => {
   });
 
   test.each([true, false])(
-    "reports imports needing manual migration after chained conversion (dryRun: %s)",
+    "migrates imports visited before their config in chained conversion (dryRun: %s)",
     async (dryRun) => {
-      using _stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
       const { tmpDir: dir } = await createTestProject(
         "tailor.config.ts",
         'import { defineGenerators } from "@tailor-platform/sdk"; export const generator = defineGenerators();',
@@ -196,7 +196,7 @@ describe("runCodemods", () => {
         }),
       );
       const result = await runCodemods(codemods, dir, dryRun);
-      expect(result.llmReviews.some((review) => review.files.includes("a-consumer.ts"))).toBe(true);
+      expect(result.filesModified).toContain(path.join(dir, "a-consumer.ts"));
     },
   );
 
