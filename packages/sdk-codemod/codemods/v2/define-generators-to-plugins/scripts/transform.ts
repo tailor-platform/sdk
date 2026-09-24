@@ -45,17 +45,31 @@ function isTopLevelExportedDeclarator(decl: SgNode): boolean {
   return exportStmt.parent()?.kind() === "program";
 }
 
+const EXPRESSION_WRAPPER_KINDS = new Set([
+  "as_expression",
+  "satisfies_expression",
+  "parenthesized_expression",
+  "type_assertion",
+  "non_null_expression",
+]);
+
 /**
  * Find the variable_declarator that directly initializes a node — i.e. `node` is the
- * declarator's `value`, not merely nested somewhere inside it (e.g. a property value in an
- * object literal). Only matches a top-level exported declarator.
+ * declarator's `value` (optionally wrapped in type assertions or parentheses), not merely
+ * nested somewhere inside it (e.g. a property value in an object literal). Only matches a
+ * top-level exported declarator.
  * @param node - Node to check
  * @returns The declarator, or undefined if `node` is not a top-level export's direct initializer
  */
 function findEnclosingDeclarator(node: SgNode): SgNode | undefined {
-  const parent = node.parent();
+  let value = node;
+  let parent = node.parent();
+  while (parent && EXPRESSION_WRAPPER_KINDS.has(String(parent.kind()))) {
+    value = parent;
+    parent = parent.parent();
+  }
   if (!parent || parent.kind() !== "variable_declarator") return undefined;
-  if (parent.field("value")?.range().start.index !== node.range().start.index) return undefined;
+  if (parent.field("value")?.range().start.index !== value.range().start.index) return undefined;
   if (!isTopLevelExportedDeclarator(parent)) return undefined;
   return parent;
 }
