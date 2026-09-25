@@ -1,0 +1,13 @@
+{
+  "headers": [
+    {
+      "source": "**/*.@(html|json)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ]
+}

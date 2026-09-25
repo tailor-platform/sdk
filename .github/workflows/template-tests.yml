@@ -1,0 +1,57 @@
+name: Template Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - packages/**
+      - example/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/template-tests.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  template-tests:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    name: Template tests (${{ matrix.os }})
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      - parallel:
+          - name: Typecheck templates
+            run: >-
+              pnpm -r
+              --filter "./packages/create-sdk/templates/*"
+              run typecheck
+
+          - name: Run template unit tests
+            run: >-
+              pnpm -r
+              --filter "./packages/create-sdk/templates/tailordb"
+              --filter "./packages/create-sdk/templates/resolver"
+              --filter "./packages/create-sdk/templates/workflow"
+              --filter "./packages/create-sdk/templates/executor"
+              --filter "./packages/create-sdk/templates/generators"
+              run test:unit

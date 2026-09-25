@@ -1,0 +1,78 @@
+import { arg } from "@politty/zod";
+import { z } from "zod";
+import { workspaceArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { humanizeRelativeTime } from "#/cli/shared/format";
+import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseOptions } from "#/cli/shared/parse-options";
+import { appHealthInfo, type AppHealthInfo } from "./transform";
+
+// strip unknown keys
+const healthOptionsSchema = z.object({
+  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
+  profile: z.string().optional(),
+  name: z.string().min(1, { message: "name is required" }),
+});
+
+export type HealthOptions = z.input<typeof healthOptionsSchema>;
+
+async function loadOptions(options: HealthOptions) {
+  const validated = parseOptions(healthOptionsSchema, options);
+
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
+  });
+
+  return {
+    client,
+    workspaceId,
+    name: validated.name,
+  };
+}
+
+/**
+ * Get application schema health status.
+ * @param options - Health check options
+ * @returns Application health information
+ */
+export async function getAppHealth(options: HealthOptions): Promise<AppHealthInfo> {
+  const { client, workspaceId, name } = await loadOptions(options);
+
+  const response = await client.getApplicationSchemaHealth({
+    workspaceId,
+    applicationName: name,
+  });
+
+  return appHealthInfo(name, response);
+}
+
+export const healthCommand = defineAppCommand({
+  name: "health",
+  description: "Check application schema health",
+  args: z.strictObject({
+    ...workspaceArgs,
+    name: arg(z.string(), {
+      description: "Application name",
+      alias: "n",
+    }),
+  }),
+  run: async (args) => {
+    const health = await getAppHealth({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      name: args.name,
+    });
+
+    const formattedHealth = args.json
+      ? health
+      : {
+          ...health,
+          currentServingSchemaUpdatedAt: humanizeRelativeTime(health.currentServingSchemaUpdatedAt),
+          lastAttemptAt: humanizeRelativeTime(health.lastAttemptAt),
+        };
+
+    logger.out(formattedHealth);
+  },
+});

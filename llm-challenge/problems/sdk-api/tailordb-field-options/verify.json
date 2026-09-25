@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "customer-model-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "customer",
+      "flags": "i",
+      "description": "source includes the customer account domain"
+    },
+    {
+      "id": "field-behavior-declared",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "required|unique|enum|tier",
+      "flags": "i",
+      "description": "source declares field-level required, unique, or constrained-choice behavior"
+    }
+  ]
+}

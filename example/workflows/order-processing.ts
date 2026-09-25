@@ -1,0 +1,50 @@
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { fetchCustomer } from "./jobs/fetch-customer";
+import { sendNotification } from "./jobs/send-notification";
+// Note: We're NOT importing generateReport and archiveData
+// Those jobs should be completely excluded from the bundle
+
+export const processOrder = createWorkflowJob({
+  name: "process-order",
+  body: (input: { orderId: string; customerId: string }, { env }) => {
+    // Log env for demonstration
+    console.log("Environment:", env);
+
+    // Fetch customer information using start
+    const customer = fetchCustomer.start({
+      customerId: input.customerId,
+    });
+
+    if (!customer) {
+      throw new Error(`Customer ${input.customerId} not found`);
+    }
+
+    // Send notification to customer using start
+    const notification = sendNotification.start({
+      message: `Your order ${input.orderId} is being processed`,
+      recipient: customer.email,
+    });
+
+    return {
+      orderId: input.orderId,
+      customerId: input.customerId,
+      customerEmail: customer.email,
+      notificationSent: notification.sent,
+      processedAt: notification.timestamp,
+    };
+  },
+});
+
+export default createWorkflow({
+  name: "order-processing",
+  mainJob: processOrder,
+  retryPolicy: {
+    maxRetries: 3,
+    initialBackoff: "1s",
+    maxBackoff: "30s",
+    backoffMultiplier: 2,
+  },
+  concurrencyPolicy: {
+    maxConcurrentExecutions: 5,
+  },
+});

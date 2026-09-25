@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "tailordb-model-created",
+      "kind": "file-glob",
+      "glob": "tailordb/**/*.ts",
+      "minCount": 1,
+      "description": "workspace includes a TailorDB model source"
+    },
+    {
+      "id": "migration-script-created",
+      "kind": "file-glob",
+      "glob": "migrations/**/*.ts",
+      "minCount": 1,
+      "description": "CLI generated executable migration TypeScript artifacts"
+    },
+    {
+      "id": "migration-diff-created",
+      "kind": "file-glob",
+      "glob": "migrations/**/*.json",
+      "minCount": 1,
+      "description": "CLI generated migration diff or schema JSON artifacts"
+    }
+  ]
+}

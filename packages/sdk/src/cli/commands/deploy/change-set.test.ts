@@ -1,0 +1,63 @@
+import { describe, expect, test } from "vitest";
+import { createChangeSet, formatPlanSummary, summarizeChangeSets } from "./change-set";
+import type { HasName } from "./change-set";
+
+function createNamedChangeSet(title: string) {
+  return createChangeSet<HasName, HasName, HasName, HasName>(title);
+}
+
+describe("ChangeSet.lines", () => {
+  test("renders an item's optional details indented beneath it", () => {
+    const changeSet = createNamedChangeSet("Applications");
+    changeSet.updates.push({
+      name: "my-app",
+      details: ["~ get-user (httpAdapter)", "+ echo (httpAdapter)"],
+    });
+
+    const lines = changeSet.lines();
+    expect(lines.some((line) => line.includes("my-app"))).toBe(true);
+    expect(lines).toContain("    ~ get-user (httpAdapter)");
+    expect(lines).toContain("    + echo (httpAdapter)");
+  });
+
+  test("returns empty array when change set is empty", () => {
+    expect(createNamedChangeSet("Applications").lines()).toEqual([]);
+  });
+});
+
+describe("summarizeChangeSets", () => {
+  test("summarizes resource counts for plan output", () => {
+    const create = createNamedChangeSet("Executors");
+    create.creates.push({ name: "executor-a" }, { name: "executor-b" });
+
+    const update = createNamedChangeSet("Resolvers");
+    update.updates.push({ name: "resolver-a" }, { name: "resolver-b" }, { name: "resolver-c" });
+
+    const deleteSet = createNamedChangeSet("Secrets");
+    deleteSet.deletes.push({ name: "secret-a" });
+
+    const replace = createNamedChangeSet("OAuth2 clients");
+    replace.replaces.push({ name: "client-a" }, { name: "client-b" });
+
+    expect(summarizeChangeSets([create, update, deleteSet, replace])).toEqual({
+      create: 2,
+      update: 3,
+      delete: 1,
+      replace: 2,
+    });
+  });
+});
+
+describe("formatPlanSummary", () => {
+  test("omits replace count when there are no replacements", () => {
+    expect(formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 0 })).toBe(
+      "Plan: 1 to create, 2 to update, 0 to delete",
+    );
+  });
+
+  test("includes replace count when replacements exist", () => {
+    expect(formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 3 })).toBe(
+      "Plan: 1 to create, 2 to update, 0 to delete, 3 to replace",
+    );
+  });
+});

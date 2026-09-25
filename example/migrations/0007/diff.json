@@ -1,0 +1,28 @@
+{
+  "version": 5,
+  "namespace": "tailordb",
+  "createdAt": "2026-08-15T03:15:15.914Z",
+  "changes": [
+    {
+      "kind": "table_settings_modified",
+      "tableName": "NestedProfile",
+      "reason": "settings changed",
+      "before": {
+        "description": "Nested Profile Type",
+        "pluralForm": "NestedProfiles",
+        "settings": {}
+      },
+      "after": {
+        "description": "Nested Profile",
+        "pluralForm": "NestedProfiles",
+        "settings": {}
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": false,
+  "description": "rename the nested profile description"
+}

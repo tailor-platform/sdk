@@ -1,0 +1,267 @@
+/**
+ * Bundler for the function run command
+ *
+ * Bundles a single function file for server-side execution.
+ * Generates an entry file based on the detected function type and bundles
+ * with rolldown, following the same patterns as the existing bundlers.
+ */
+
+import * as fs from "node:fs";
+import * as path from "pathe";
+import * as rolldown from "rolldown";
+import { createBundleLog } from "#/cli/shared/bundle-log";
+import {
+  createLogLevelTreeshakeOptions,
+  resolveBundleLogLevel,
+} from "#/cli/shared/bundle-log-level";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
+import {
+  createPlatformBundleDefinePlugin,
+  platformBundleDefinePlugin,
+} from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import {
+  buildResolverResultSerialization,
+  buildResolverValidatedInputExpr,
+  INVOKER_EXPR,
+  resolverDateRepresentations,
+} from "#/cli/shared/runtime-exprs";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
+import type { LogLevelInput } from "#/configure/config/types";
+import type { Resolver } from "#/types/resolver.generated";
+import type { DetectedFunction } from "./detect";
+
+/** Machine user info resolved from config and API for bundle-time principal context. */
+export interface ResolvedMachineUser {
+  /** Machine user name */
+  name: string;
+  /** Machine user ID (UUID from API, or nil UUID if unavailable) */
+  id: string;
+  /** Attributes from config (null if not found in config, e.g. external auth) */
+  attributes: Record<string, unknown> | null;
+  /** Attribute list from config */
+  attributeList: unknown[];
+}
+
+interface BundleForRunOptions {
+  /** Detected function info */
+  detected: DetectedFunction;
+  /** Absolute path to the source file */
+  sourceFile: string;
+  /** Directory to resolve the bundler's tsconfig against (the owning config's directory) */
+  baseDir: string;
+  /** Environment variables (injected into workflow job bundles) */
+  env?: Record<string, string | number | boolean>;
+  /** Inline sourcemap config value from defineConfig */
+  inlineSourcemap?: boolean;
+  /** Log level config value from defineConfig */
+  logLevel?: LogLevelInput;
+  /** Machine user info for injecting principal context into the bundle */
+  machineUser: ResolvedMachineUser;
+  /** Workspace ID for user context */
+  workspaceId: string;
+  /** For resolvers: the `defaultPermission` of the namespace owning the file */
+  defaultPermission?: Resolver["permission"];
+}
+
+interface BundleForRunResult {
+  /** The bundled JavaScript code */
+  bundledCode: string;
+  /** Name used for the script */
+  scriptName: string;
+}
+
+/**
+ * Bundle a function file for `function run` execution.
+ * @param options - Bundle options
+ * @returns Bundled code and script name
+ */
+export async function bundleForRun(options: BundleForRunOptions): Promise<BundleForRunResult> {
+  const { detected, sourceFile, baseDir, env = {}, machineUser, workspaceId } = options;
+  const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
+  const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
+
+  const outputDir = path.resolve(getDistDir(), "test-run");
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const baseName = `test-run--${detected.name}`;
+  const scriptName = `${baseName}.js`;
+  const entryPath = path.join(outputDir, `${baseName}.entry.js`);
+
+  const entryContent = generateEntry({
+    detected,
+    sourceFile,
+    env,
+    machineUser,
+    workspaceId,
+    defaultPermission: options.defaultPermission,
+  });
+  fs.writeFileSync(entryPath, entryContent);
+
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
+
+  const bundleLog = createBundleLog({ tsconfig });
+  const buildResult = await rolldown.build({
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, baseDir),
+      createTsconfigPathsPlugin(),
+      detected.type === "resolver"
+        ? createPlatformBundleDefinePlugin(resolverDateRepresentations(detected.fields))
+        : platformBundleDefinePlugin,
+    ],
+    input: entryPath,
+    write: false,
+    output: {
+      format: "esm",
+      sourcemap: inlineSourcemap ? "inline" : true,
+      minify: inlineSourcemap
+        ? {
+            mangle: {
+              keepNames: true,
+            },
+          }
+        : true,
+      codeSplitting: false,
+      // Emit sourcemap `sources` relative to cwd so stack traces resolve
+      // back to paths a user can open (e.g. `resolvers/add.ts`), not the
+      // rolldown-default virtual output dir which produces spurious `..`
+      // segments.
+      dir: process.cwd(),
+    },
+    tsconfig,
+    treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(bundleLogLevel)]),
+    ...bundleLog.options,
+  } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
+
+  const bundledCode = buildResult.output[0].code;
+
+  return { bundledCode, scriptName };
+}
+
+type GenerateEntryOptions = {
+  detected: DetectedFunction;
+  /** Absolute path to the source file */
+  sourceFile: string;
+  /** Environment variables for workflow job bundles */
+  env: Record<string, string | number | boolean>;
+  machineUser: ResolvedMachineUser;
+  workspaceId: string;
+  /** For resolvers: the `defaultPermission` of the namespace owning the file */
+  defaultPermission?: Resolver["permission"];
+};
+
+/**
+ * Generate entry file content based on the detected function type.
+ * @param options - Detected function info and the context embedded into the entry
+ * @returns Entry file content string
+ */
+function generateEntry(options: GenerateEntryOptions): string {
+  const { detected, sourceFile, env, machineUser, workspaceId, defaultPermission } = options;
+  const absoluteSourcePath = path.resolve(sourceFile);
+
+  switch (detected.type) {
+    case "plain":
+      if (detected.namedMain) {
+        return ml /* js */ `
+          export { main } from "${absoluteSourcePath}";
+        `;
+      }
+      return ml /* js */ `
+        import _fn from "${absoluteSourcePath}";
+        export { _fn as main };
+      `;
+
+    case "resolver": {
+      // Mirrors the production resolver bundler (services/resolver/bundler.ts):
+      // both call buildResolverValidatedInputExpr so the permission
+      // guard and input validation can't drift between the two entry points.
+      // In production, the operationHook injects caller/env into context.
+      // For function run, we embed machine user info since there's no operationHook.
+      const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
+      const validatedInputExpr = buildResolverValidatedInputExpr({
+        permission: detected.permission,
+        defaultPermission,
+      });
+      const { importStatement, resultExpr } = buildResolverResultSerialization(
+        detected.fields?.output,
+      );
+      return ml /* js */ `
+        import _internalResolver from "${absoluteSourcePath}";
+        import { t } from "@tailor-platform/sdk";
+        ${importStatement}
+
+        const $tailor_resolver_body = async (rawInput) => {
+          const _caller = ${principalExpr};
+          const invoker = (${INVOKER_EXPR}) ?? _caller;
+          const context = { input: rawInput, env: ${JSON.stringify(env)}, caller: _caller, invoker };
+          const input = ${validatedInputExpr};
+          const result = await _internalResolver.body({ ...context, input });
+          return ${resultExpr};
+        };
+
+        export { $tailor_resolver_body as main };
+      `;
+    }
+
+    case "executor": {
+      // Mirrors the production executor bundler (services/executor/bundler.ts).
+      // In production, buildExecutorArgsExpr injects actor/env into args.
+      // For function run, we embed machine user as actor.
+      const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
+      return ml /* js */ `
+        import _internalExecutor from "${absoluteSourcePath}";
+
+        const _env = ${JSON.stringify(env)};
+        const _actor = ${principalExpr};
+
+        const __executor_function = async (args) => {
+          const _invoker = ${INVOKER_EXPR} ?? _actor;
+          return _internalExecutor.operation.body({ ...args, env: _env, actor: _actor, invoker: _invoker });
+        };
+
+        export { __executor_function as main };
+      `;
+    }
+
+    case "workflow-job": {
+      // Mirrors the production workflow bundler (services/workflow/bundler.ts).
+      // Note: user context is not available when executing workflow jobs this way.
+      // The production workflow bundler's user mapping is being fixed in fix/workflow-user.
+      const exportName = assertDefined(detected.exportName, "workflow job export name missing");
+      const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
+      return ml /* js */ `
+        import { ${exportName} } from "${absoluteSourcePath}";
+
+        const env = ${JSON.stringify(env)};
+        const fallbackInvoker = ${principalExpr};
+
+        export async function main(input) {
+          const invoker = ${INVOKER_EXPR} ?? fallbackInvoker;
+          return await ${exportName}.body(input, { env, invoker });
+        }
+      `;
+    }
+  }
+}
+
+/**
+ * Build a JSON expression for a machine user TailorPrincipal object.
+ * @param machineUser - Resolved machine user info
+ * @param workspaceId - Workspace ID
+ * @returns JSON string for the user expression
+ */
+function buildMachinePrincipalExpr(machineUser: ResolvedMachineUser, workspaceId: string): string {
+  return JSON.stringify({
+    id: machineUser.id,
+    type: "machine_user",
+    workspaceId,
+    attributes: machineUser.attributes ?? {},
+    attributeList: machineUser.attributeList,
+  });
+}

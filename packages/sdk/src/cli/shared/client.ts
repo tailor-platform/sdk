@@ -1,0 +1,1370 @@
+import { OAuth2Client } from "@badgateway/oauth2-client";
+import { create } from "@bufbuild/protobuf";
+import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
+import {
+  type Client,
+  Code,
+  ConnectError,
+  createClient,
+  type Interceptor,
+  type StreamResponse,
+  type Transport,
+  type UnaryResponse,
+} from "@connectrpc/connect";
+import { z } from "zod";
+import { createApplyLimiter } from "./apply-concurrency";
+import { withErrorDiagnostics } from "./error-diagnostics";
+import { CLIError } from "./errors";
+import { logger } from "./logger";
+import { parseBoolean } from "./parse-boolean";
+import { userAgent } from "./user-agent";
+import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
+
+export const defaultPlatformBaseUrl = "https://api.tailor.tech";
+export const defaultConsoleBaseUrl = "https://console.tailor.tech";
+
+const defaultOAuth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
+const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
+
+export type PlatformClientConfig = {
+  platformUrl?: string;
+  oauth2ClientId?: string;
+  consoleUrl?: string;
+};
+
+const tokenPlatformConfigs = new Map<string, PlatformClientConfig>();
+
+function getEnvPlatformUrl(): string | undefined {
+  return process.env.TAILOR_PLATFORM_URL ?? process.env.PLATFORM_URL;
+}
+
+function getEnvOAuth2ClientId(): string | undefined {
+  return process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? process.env.PLATFORM_OAUTH2_CLIENT_ID;
+}
+
+export function normalizeBaseUrl(value: string): string {
+  const url = new URL(value);
+  url.hash = "";
+  url.search = "";
+  return url.toString().replace(/\/$/, "");
+}
+
+export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
+  const platformUrl = config.platformUrl ?? getEnvPlatformUrl();
+  const oauth2ClientId = config.oauth2ClientId ?? getEnvOAuth2ClientId();
+  const consoleUrl = config.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL;
+  const effective = {
+    ...(platformUrl ? { platformUrl } : {}),
+    ...(oauth2ClientId ? { oauth2ClientId } : {}),
+    ...(consoleUrl ? { consoleUrl } : {}),
+  };
+  return Object.keys(effective).length > 0 ? effective : undefined;
+}
+
+export function rememberPlatformConfigForToken(accessToken: string, config?: PlatformClientConfig) {
+  const effectiveConfig = getEffectivePlatformConfig(config);
+  if (effectiveConfig) {
+    tokenPlatformConfigs.set(accessToken, effectiveConfig);
+  } else {
+    tokenPlatformConfigs.delete(accessToken);
+  }
+}
+
+function getPlatformConfigForToken(accessToken: string): PlatformClientConfig | undefined {
+  return tokenPlatformConfigs.get(accessToken);
+}
+
+export function getPlatformBaseUrl(config: PlatformClientConfig = {}) {
+  return normalizeBaseUrl(config.platformUrl ?? getEnvPlatformUrl() ?? defaultPlatformBaseUrl);
+}
+
+export function isDefaultPlatform(config?: PlatformClientConfig): boolean {
+  return getPlatformBaseUrl(config) === normalizeBaseUrl(defaultPlatformBaseUrl);
+}
+
+export function getOAuth2ClientId(config: PlatformClientConfig = {}) {
+  return config.oauth2ClientId ?? getEnvOAuth2ClientId() ?? defaultOAuth2ClientId;
+}
+
+function inferConsoleBaseUrl(platformBaseUrl: string) {
+  const platformUrl = new URL(platformBaseUrl);
+  if (platformUrl.hostname.startsWith("api.")) {
+    platformUrl.hostname = platformUrl.hostname.replace(/^api\./, "console.");
+    return normalizeBaseUrl(platformUrl.toString());
+  }
+  return defaultConsoleBaseUrl;
+}
+
+/**
+ * Redirect an inferred console URL to the console-next host when
+ * `TAILOR_CONSOLE_NEXT` is enabled. An explicitly configured console URL
+ * (`consoleUrl` / `TAILOR_PLATFORM_CONSOLE_URL`) is never rewritten.
+ * @param consoleBaseUrl - Inferred console base URL
+ * @returns The console-next base URL, or the input unchanged
+ */
+function applyConsoleNext(consoleBaseUrl: string): string {
+  if (parseBoolean(process.env.TAILOR_CONSOLE_NEXT) !== true) return consoleBaseUrl;
+  const url = new URL(consoleBaseUrl);
+  url.hostname = url.hostname.replace(/^console\./, "console-next.");
+  return normalizeBaseUrl(url.toString());
+}
+
+export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
+  if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
+  if (config.platformUrl) {
+    const inferredUrl = inferConsoleBaseUrl(config.platformUrl);
+    if (inferredUrl !== defaultConsoleBaseUrl) return applyConsoleNext(inferredUrl);
+  }
+  if (process.env.TAILOR_PLATFORM_CONSOLE_URL)
+    return normalizeBaseUrl(process.env.TAILOR_PLATFORM_CONSOLE_URL);
+  return applyConsoleNext(inferConsoleBaseUrl(getPlatformBaseUrl(config)));
+}
+
+/**
+ * Initialize an OAuth2 client for Tailor Platform.
+ * @param config - Optional platform connection settings
+ * @returns Configured OAuth2 client
+ */
+export function initOAuth2Client(config?: PlatformClientConfig) {
+  return new OAuth2Client({
+    clientId: getOAuth2ClientId(config),
+    server: getPlatformBaseUrl(config),
+    discoveryEndpoint: oauth2DiscoveryEndpoint,
+  });
+}
+
+export type OperatorClient = Client<typeof OperatorService>;
+
+/**
+ * Initialize an Operator client with the given access token.
+ * @param accessToken - Access token for authentication
+ * @param config - Optional platform connection settings
+ * @returns Configured Operator client
+ */
+export async function initOperatorClient(accessToken: string, config?: PlatformClientConfig) {
+  const platformConfig = config ?? getPlatformConfigForToken(accessToken);
+  const [{ createTracingInterceptor }, { OperatorService }] = await Promise.all([
+    import("#/cli/telemetry/interceptor"),
+    import("@tailor-platform/tailor-proto/service_pb"),
+  ]);
+
+  const interceptors: Interceptor[] = [
+    await userAgentInterceptor(),
+    await bearerTokenInterceptor(accessToken),
+    retryInterceptor(),
+    errorHandlingInterceptor(),
+    createTracingInterceptor(),
+    // Innermost: gates the actual network attempt so each retry re-acquires a
+    // slot and backoff waits happen outside the cap.
+    concurrencyLimitInterceptor(),
+  ];
+
+  const baseUrl = getPlatformBaseUrl(platformConfig);
+  const primary = await createTransport(baseUrl, interceptors);
+  const transport = createPooledStreamTransport(
+    primary,
+    () => createTransport(baseUrl, interceptors),
+    UPLOAD_POOL_MAX_CONNECTIONS,
+  );
+  return createClient(OperatorService, transport);
+}
+
+/**
+ * Create a Connect transport using connect-node (HTTP/2).
+ *
+ * connect-node works on both Node.js and Bun. connect-web is not used because
+ * it does not support client_streaming, which is required for function uploads.
+ * @param baseUrl - Base URL for the transport
+ * @param interceptors - Request interceptors
+ * @returns Configured transport
+ */
+export async function createTransport(
+  baseUrl: string,
+  interceptors: Interceptor[],
+): Promise<Transport> {
+  const { createConnectTransport } = await import("@connectrpc/connect-node");
+  return createConnectTransport({ httpVersion: "2", baseUrl, interceptors });
+}
+
+/**
+ * RPCs that upload a request body via client streaming and are affected by
+ * the connection-pooling workaround below. Deliberately an allowlist rather
+ * than `method.methodKind === "client_streaming"`: the workaround targets
+ * outbound-DATA scheduling for uploads specifically, so a future streaming
+ * RPC (client- or server-streaming) is routed to `primary` — unaffected and
+ * unpooled — until someone consciously adds it here.
+ *
+ * A drift guard (see client.test.ts) fails CI if any `client_streaming`
+ * OperatorService method is neither listed here nor explicitly exempt, so a
+ * newly added client-streaming RPC can't silently bypass the pool by omission.
+ * @internal
+ */
+export const POOLED_UPLOAD_METHODS: ReadonlySet<string> = new Set([
+  "CreateFunctionRegistry",
+  "UpdateFunctionRegistry",
+  "UploadFile",
+]);
+
+/**
+ * Hard cap on the number of HTTP/2 connections `createPooledStreamTransport`
+ * opens. Deliberately small and internal (not derived from
+ * `TAILOR_APPLY_CONCURRENCY`, which bounds unrelated RPC concurrency and can
+ * be set arbitrarily large by a user) rather than a public env var: the pool
+ * now queues callers past this limit instead of relying on the caller never
+ * exceeding it, so correctness does not depend on this exact number. Not
+ * validated against production connection limits — kept conservative until
+ * real-platform data says otherwise.
+ * @internal
+ */
+export const UPLOAD_POOL_MAX_CONNECTIONS = 4;
+
+/**
+ * Wrap a transport so upload RPCs (see `POOLED_UPLOAD_METHODS`) are spread
+ * across a bounded pool of connections instead of sharing one. Unary calls,
+ * and any streaming call not in `POOLED_UPLOAD_METHODS`, always use
+ * `primary`, unaffected.
+ *
+ * Since Node 22.23.0/24.2.0, nghttp2 dropped its legacy priority-tree
+ * scheduler. In our measurements this changed how Node's http2 client
+ * schedules concurrent outbound DATA streams: uploads sharing one connection
+ * can finish 12x+ apart in wall-clock time even though aggregate throughput
+ * is unchanged, and there is no request header or API that opts a stream
+ * into different client-side scheduling. Spreading uploads across
+ * independent connections sidesteps that rather than fixing it; see this
+ * change's changeset entry for the measurement.
+ *
+ * Acquiring a connection: reuse an idle one if any exists; otherwise open a
+ * new one if the pool is below `maxConnections`; otherwise wait for a
+ * connection to become idle. A connection is never reused for a second
+ * concurrent upload while the pool still has room to grow or a caller is
+ * waiting — at most one upload is ever in flight per connection, regardless
+ * of how many uploads are requested concurrently or how they're divided
+ * across call sites (independent limiters at different call sites no longer
+ * need to agree on a shared concurrency cap for this invariant to hold).
+ *
+ * The caller's `signal` and `timeoutMs` are honored while an upload is
+ * queued, not just once it's dispatched: an abort or an elapsed deadline
+ * rejects the queued call immediately and frees its place in line without
+ * consuming a pool slot, and time already spent queued is deducted from the
+ * deadline passed to the underlying transport once a connection is acquired.
+ * @internal
+ * @param primary - Transport used for unary calls, non-upload streams, and as the first pool slot
+ * @param createAdditional - Creates one more transport for the pool
+ * @param maxConnections - Maximum number of connections in the pool (>= 1)
+ * @returns A transport presenting the same interface, backed by the pool
+ */
+export function createPooledStreamTransport(
+  primary: Transport,
+  createAdditional: () => Promise<Transport>,
+  maxConnections: number,
+): Transport {
+  if (!Number.isInteger(maxConnections) || maxConnections < 1) {
+    throw new Error(
+      `createPooledStreamTransport: maxConnections must be a positive integer, got ${maxConnections}`,
+    );
+  }
+  const transports: Transport[] = [primary];
+  const idle: number[] = [0];
+  const waiters: Array<() => void> = [];
+  let pendingCreates = 0;
+
+  // Finds (or creates) a connection and marks it busy in the same
+  // synchronous step (no `await` in between) so that two `stream()` calls
+  // issued back to back (e.g. via `Promise.all(uploads.map(...))`, which
+  // starts each task synchronously) can't both claim the same idle
+  // transport before either marks it busy. Growth and waiting are the only
+  // async steps; every other transition (finding an idle slot, deciding to
+  // grow, waking a waiter) happens synchronously within one of these steps.
+  function acquireTransportIndex(
+    signal: AbortSignal | undefined,
+    deadline: number | undefined,
+  ): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      function cleanup(): void {
+        settled = true;
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        const waiterIndex = waiters.indexOf(attempt);
+        if (waiterIndex !== -1) waiters.splice(waiterIndex, 1);
+      }
+
+      function onAbort(): void {
+        cleanup();
+        reject(ConnectError.from(signal?.reason, Code.Canceled));
+      }
+
+      function onTimeout(): void {
+        cleanup();
+        reject(new ConnectError("the operation timed out", Code.DeadlineExceeded));
+      }
+
+      function claim(index: number): void {
+        if (settled) {
+          release(index);
+          return;
+        }
+        cleanup();
+        resolve(index);
+      }
+
+      function attempt(): void {
+        const idleIndex = idle.pop();
+        if (idleIndex !== undefined) {
+          claim(idleIndex);
+          return;
+        }
+        if (transports.length + pendingCreates < maxConnections) {
+          pendingCreates++;
+          createAdditional().then(
+            (transport) => {
+              pendingCreates--;
+              const index = transports.length;
+              transports.push(transport);
+              claim(index);
+            },
+            (error: unknown) => {
+              pendingCreates--;
+              cleanup();
+              reject(error instanceof Error ? error : new Error(String(error)));
+              // The failed connection never joins the pool, so a waiter
+              // stuck behind "pool full" would wait forever unless woken to
+              // retry (it may now see room to grow, or another release).
+              wakeOneWaiter();
+            },
+          );
+          return;
+        }
+        waiters.push(attempt);
+      }
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (deadline !== undefined) {
+        const remainingMs = deadline - performance.now();
+        if (remainingMs <= 0) {
+          onTimeout();
+          return;
+        }
+        timer = setTimeout(onTimeout, remainingMs);
+      }
+      attempt();
+    });
+  }
+
+  function wakeOneWaiter(): void {
+    waiters.shift()?.();
+  }
+
+  function release(index: number): void {
+    idle.push(index);
+    wakeOneWaiter();
+  }
+
+  return {
+    unary(method, signal, timeoutMs, header, input, contextValues) {
+      return primary.unary(method, signal, timeoutMs, header, input, contextValues);
+    },
+    async stream(method, signal, timeoutMs, header, input, contextValues) {
+      if (!POOLED_UPLOAD_METHODS.has(method.name)) {
+        return primary.stream(method, signal, timeoutMs, header, input, contextValues);
+      }
+      const deadline =
+        timeoutMs !== undefined && timeoutMs > 0 ? performance.now() + timeoutMs : undefined;
+      const index = await acquireTransportIndex(signal, deadline);
+      const transport = transports[index] as Transport;
+      let response: StreamResponse<typeof method.input, typeof method.output>;
+      try {
+        if (signal?.aborted) throw ConnectError.from(signal.reason, Code.Canceled);
+        const remainingMs =
+          deadline === undefined ? timeoutMs : Math.ceil(deadline - performance.now());
+        if (deadline !== undefined && remainingMs !== undefined && remainingMs <= 0) {
+          throw new ConnectError("the operation timed out", Code.DeadlineExceeded);
+        }
+        response = await transport.stream(
+          method,
+          signal,
+          remainingMs,
+          header,
+          input,
+          contextValues,
+        );
+      } catch (error) {
+        release(index);
+        throw error;
+      }
+      // `stream()` resolves once response headers arrive, not once the
+      // response is fully read (or the request body fully sent) — connect's
+      // node http2 client starts writing the request body without waiting
+      // for it, and only awaits headers here. Keep the connection marked
+      // busy until the caller finishes reading `message`, so a connection
+      // isn't reused while this upload is still in flight.
+      return { ...response, message: releaseAfter(response.message, () => release(index)) };
+    },
+  };
+}
+
+async function* releaseAfter<T>(iterable: AsyncIterable<T>, release: () => void): AsyncIterable<T> {
+  try {
+    yield* iterable;
+  } finally {
+    release();
+  }
+}
+
+/**
+ * Create an interceptor that sets a User-Agent header.
+ * @returns User-Agent interceptor
+ */
+async function userAgentInterceptor(): Promise<Interceptor> {
+  const ua = await userAgent();
+  return (next) => async (req) => {
+    req.header.set("User-Agent", ua);
+    return await next(req);
+  };
+}
+
+export { userAgent };
+
+/**
+ * Create an interceptor that sets the Authorization bearer token.
+ * @param accessToken - Access token to use
+ * @returns Bearer token interceptor
+ */
+async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor> {
+  return (next) => async (req) => {
+    req.header.set("Authorization", `Bearer ${accessToken}`);
+    return await next(req);
+  };
+}
+
+/**
+ * Create an interceptor that retries failed unary requests with backoff.
+ *
+ * Retries unary methods on `Unavailable`/`ResourceExhausted`, and
+ * `Aborted`/`Internal` only for methods declared side-effect-free or idempotent,
+ * up to 3 attempts. Workspace creation is excluded because it has no idempotency
+ * key and a lost response is ambiguous.
+ * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
+ * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
+ * success, since it means a prior attempt already committed the resource
+ * server-side. A first-attempt `AlreadyExists` from such a Create still
+ * surfaces, but is routed to crash/error reporting first (the top-level handler
+ * skips `ConnectError`), so the otherwise-silent compound-create race is
+ * trackable.
+ * @internal
+ * @returns Retry interceptor
+ */
+export function retryInterceptor(): Interceptor {
+  return (next) => async (req) => {
+    if (req.stream) {
+      return await next(req);
+    }
+
+    let lastError: unknown;
+    for (let i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
+      if (i > 0) {
+        await waitRetryBackoff(i);
+      }
+
+      try {
+        return await next(req);
+      } catch (error) {
+        // A retry that comes back AlreadyExists is treated as success: a prior
+        // attempt (the one whose retriable error sent us here) already created
+        // the resource server-side, but its response was lost as
+        // Unavailable/ResourceExhausted under load. The identical retry then
+        // races against that committed write and fails with `already_exists`.
+        // Restricted to RETRY_SAFE_CREATE_METHODS (deploy creates whose response
+        // body is unused) and to actual retries (i > 0).
+        if (isRetrySafeCreateAlreadyExists(error, req.method.name)) {
+          if (i > 0) {
+            logger.debug(
+              `retry: ${req.method.name} returned AlreadyExists on attempt ${i + 1}; ` +
+                `treating as success (prior attempt likely committed)`,
+            );
+            return synthesizeEmptyUnaryResponse(req);
+          }
+          // First-attempt AlreadyExists on a retry-safe create: no retry of ours
+          // preceded it, so the resource was committed out-of-band (a concurrent
+          // or non-idempotent compound create under load — #1350). The top-level
+          // handler skips ConnectError, so route it to error tracking here before
+          // letting it surface as the deploy error.
+          const { reportCrash } = await import("#/cli/crashreport/index");
+          await reportCrash(error, "handledError");
+        }
+        if (req.method.name !== "CreateWorkspace" && isRetirable(error, req.method.idempotency)) {
+          lastError = error;
+          logger.debug(
+            `retry: ${req.method.name} attempt ${i + 1} failed with ` +
+              `${retryErrorCodeName(error)}; retrying`,
+          );
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
+  };
+}
+
+/**
+ * Create an interceptor that caps the number of concurrent unary RPCs.
+ *
+ * A fresh-workspace apply fires one `create*` per resource at once; left
+ * unbounded, the platform sheds load as `Unavailable`/`ResourceExhausted`,
+ * which drives retries into the non-idempotent compound-create `already_exists`
+ * race (#1350). One shared limiter per client bounds total in-flight calls
+ * across every deploy resource, not just a single call site. Streaming RPCs
+ * (e.g. function uploads) are not gated.
+ * @internal
+ * @returns Concurrency-limiting interceptor
+ */
+export function concurrencyLimitInterceptor(): Interceptor {
+  const limit = createApplyLimiter();
+  return (next) => async (req) => {
+    if (req.stream) {
+      return await next(req);
+    }
+    return await limit(() => next(req));
+  };
+}
+
+/**
+ * Human-readable name for a retried error, for diagnostics.
+ * @param error - Error thrown by a request (a ConnectError or a transport disconnect)
+ * @returns The Connect Code name (e.g., "Unavailable"), the raw transport error code
+ * (e.g., "ECONNRESET"), or "unknown" if neither applies
+ */
+function retryErrorCodeName(error: unknown): string {
+  if (error instanceof ConnectError) return Code[error.code];
+  if (isTransportDisconnectError(error)) return error.code;
+  return "unknown";
+}
+
+/**
+ * Create RPCs for which a post-retry `AlreadyExists` may be treated as success.
+ *
+ * Membership is deliberately an allowlist, not `startsWith("Create")`: swallowing
+ * synthesizes an empty response (see `synthesizeEmptyUnaryResponse`), which is only
+ * safe when every caller tolerates an empty response body. These are the deploy/apply
+ * resource creations that fire under heavy parallelism and discard their response —
+ * except `CreateSecretManagerSecret`, whose caller reads `secret.updateTime` but
+ * degrades safely when it is absent (the next deploy re-updates the secret).
+ *
+ * Intentionally excluded because their callers read the response body — swallowing
+ * would hand back an empty message and corrupt downstream state:
+ * - `CreateIdPClient` (uses `resp.client.clientSecret` to seed the secret vault)
+ * - `CreateWorkflowJobFunction` (uses `response.jobFunction.version`)
+ * - `CreateWorkspace` / `CreatePersonalAccessToken` / `CreateDeployment` /
+ *   `CreateOrganizationFolder` (interactive commands that return created data)
+ *
+ * `CreateFunctionRegistry` is client-streaming and never reaches this path
+ * (streaming requests bypass the retry loop entirely).
+ *
+ * An allowlist miss is safe: the resource simply loses race protection and an
+ * `already_exists` surfaces loudly, as before — never a silent empty response.
+ *
+ * A drift guard (see client.test.ts) fails CI if any `client.create*` used in the
+ * deploy flow is neither listed here nor explicitly classified as response-consuming,
+ * so a newly added apply create cannot silently miss this list.
+ * @internal
+ */
+export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
+  "CreateAIGateway",
+  "CreateApplication",
+  "CreateAuthConnection",
+  "CreateAuthHook",
+  "CreateAuthIDPConfig",
+  "CreateAuthMachineUser",
+  "CreateAuthOAuth2Client",
+  "CreateAuthSCIMConfig",
+  "CreateAuthSCIMResource",
+  "CreateAuthService",
+  "CreateExecutorExecutor",
+  "CreateIdPService",
+  "CreatePipelineResolver",
+  "CreatePipelineService",
+  "CreateSecretManagerSecret",
+  "CreateSecretManagerVault",
+  "CreateStaticWebsite",
+  "CreateTailorDBGQLPermission",
+  "CreateTailorDBService",
+  "CreateTailorDBType",
+  "CreateTenantConfig",
+  "CreateUserProfileConfig",
+  "CreateWorkflow",
+  "CreateWorkflowJobFunctionExecutionPolicy",
+]);
+
+/**
+ * Whether an error is an `AlreadyExists` from a retry-safe Create RPC.
+ *
+ * Only `AlreadyExists` stands in for "my prior write already landed"; for other
+ * verbs/codes it would be a real conflict that must surface.
+ * @param error - Error thrown by the request
+ * @param methodName - RPC method name (e.g., "CreateTailorDBType")
+ * @returns True if the error is an `AlreadyExists` from a retry-safe Create method
+ */
+function isRetrySafeCreateAlreadyExists(error: unknown, methodName: string): boolean {
+  return (
+    error instanceof ConnectError &&
+    error.code === Code.AlreadyExists &&
+    RETRY_SAFE_CREATE_METHODS.has(methodName)
+  );
+}
+
+/**
+ * Build a default (empty) unary response for the request's output message.
+ *
+ * Used when a retried Create is determined to have already succeeded on a prior
+ * attempt: callers in the deploy pipeline ignore Create response bodies, so an
+ * empty message faithfully represents the already-applied state.
+ * @param req - Unary request whose output schema is used
+ * @returns A synthesized unary response with an empty output message
+ */
+function synthesizeEmptyUnaryResponse(req: {
+  service: UnaryResponse["service"];
+  method: UnaryResponse["method"];
+}): UnaryResponse {
+  return {
+    stream: false,
+    service: req.service,
+    method: req.method,
+    header: new Headers(),
+    message: create(req.method.output),
+    trailer: new Headers(),
+  };
+}
+
+/**
+ * Base delay (ms) for the first retry. Subsequent attempts double it.
+ *
+ * Kept relatively large so a retry does not immediately race an original request
+ * that is still settling server-side under load (e.g. a compound create whose
+ * response was lost), which is what triggers the `already_exists` race.
+ */
+const RETRY_BASE_DELAY_MS = 500;
+
+/** Maximum number of attempts, including the initial one, for a retried request. */
+const MAX_RETRY_ATTEMPTS = 3;
+
+/**
+ * Wait for an exponential backoff delay with jitter.
+ * @param attempt - Current retry attempt number (1-based)
+ * @returns Promise that resolves after the delay
+ */
+function waitRetryBackoff(attempt: number) {
+  const base = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  const jitter = 0.1 * (Math.random() * 2 - 1);
+  const backoff = base * (1 + jitter);
+  return new Promise((resolve) => setTimeout(resolve, backoff));
+}
+
+// Node/undici error codes for a connection torn down mid-request. Whether the
+// request reached the server is unknown, same ambiguity as Code.Aborted/Internal,
+// so retry is scoped the same way (idempotent/no-side-effect methods only).
+const TRANSPORT_DISCONNECT_ERROR_CODES: ReadonlySet<string> = new Set([
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EPIPE",
+]);
+
+/**
+ * Whether an error is a raw Node/undici transport disconnect (not a `ConnectError`).
+ * @param error - Error thrown by the request
+ * @returns True if `error.code` is a known transport disconnect code
+ */
+function isTransportDisconnectError(error: unknown): error is Error & { code: string } {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    TRANSPORT_DISCONNECT_ERROR_CODES.has(error.code)
+  );
+}
+
+/**
+ * Determine whether the given error is retriable for the method idempotency.
+ * @param error - Error thrown by the request
+ * @param idempotency - Method idempotency level
+ * @returns True if the error should be retried
+ */
+function isRetirable(error: unknown, idempotency: MethodOptions_IdempotencyLevel) {
+  const isIdempotentOrSideEffectFree =
+    idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+    idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT;
+
+  if (!(error instanceof ConnectError)) {
+    return isTransportDisconnectError(error) && isIdempotentOrSideEffectFree;
+  }
+
+  switch (error.code) {
+    case Code.ResourceExhausted:
+    case Code.Unavailable:
+      return true;
+    case Code.Aborted:
+    case Code.Internal:
+      return isIdempotentOrSideEffectFree;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Create an interceptor that enhances error messages from the Operator API.
+ * @internal
+ * @returns Error handling interceptor
+ */
+export function errorHandlingInterceptor(): Interceptor {
+  return (next) => async (req) => {
+    try {
+      return await next(req);
+    } catch (error) {
+      if (error instanceof ConnectError) {
+        const { operation, resourceType } = parseMethodName(req.method.name);
+        const identifiers = requestIdentifiers(req.message, req.method.name);
+        const parts = Object.entries(identifiers).map(([key, value]) => `${key}: ${value}`);
+        const identity = parts.length === 0 ? "" : ` (${parts.join(", ")})`;
+
+        // Re-throw as ConnectError with enhanced message to avoid re-wrapping
+        // Use rawMessage to avoid duplicating the error code prefix
+        throw withErrorDiagnostics(
+          new ConnectError(
+            `Failed to ${operation} ${resourceType}${identity}: ${error.rawMessage}`,
+            error.code,
+            error.metadata,
+          ),
+          { context: { method: req.method.name, identifiers } },
+        );
+      }
+      if (isTransportDisconnectError(error)) {
+        throw withErrorDiagnostics(error, {
+          code: "TRANSPORT_DISCONNECTED",
+          suggestion:
+            "Check network connectivity and platform availability. A write may already have completed; inspect the current resource state before retrying.",
+          context: {
+            method: req.method.name,
+            transportCode: error.code,
+            identifiers: requestIdentifiers(req.message, req.method.name),
+          },
+        });
+      }
+      throw error;
+    }
+  };
+}
+
+/**
+ * @internal
+ * @param methodName - RPC method name (e.g., "CreateWorkspace")
+ * @returns Parsed operation and resource type
+ */
+export function parseMethodName(methodName: string): {
+  operation: string;
+  resourceType: string;
+} {
+  const match = methodName.match(/^(Create|Update|Delete|Set|List|Get)(.+)$/);
+  if (!match) {
+    return { operation: "perform", resourceType: "resource" };
+  }
+
+  const [, action, resource] = match as [string, string, string];
+  return { operation: action.toLowerCase(), resourceType: resource };
+}
+
+// Identifier fields surfaced in enhanced error messages. Never add fields
+// that can carry secrets or PII (tokens, scripts, query args, secret values,
+// emails), and never add a suffix that could match them (e.g. "Key" would
+// match future key material).
+//
+// Platform-wide naming conventions: on every API, a top-level string field
+// with one of these names or suffixes is a resource identifier.
+const IDENTITY_KEYS = new Set(["name", "id"]);
+const IDENTITY_KEY_SUFFIXES = ["Name", "Id", "Namespace"];
+// Key read from nested resource messages (e.g. the type in a create request).
+// Only materialized protobuf messages (marked by $typeName) qualify: map and
+// Struct fields materialize without one, and their entries can carry values
+// the SDK does not control (e.g. metadata labels merged from the remote).
+const NESTED_IDENTITY_KEY = "name";
+// API-specific identifier fields, scoped to the RPC methods that define them
+// so a same-named field on an unrelated API is never surfaced by accident.
+const METHOD_IDENTITY_KEYS: Readonly<Record<string, readonly string[]>> = {
+  GetMetadata: ["trn"],
+  SetMetadata: ["trn"],
+  AddCustomDomain: ["domain"],
+  GetCustomDomain: ["domain"],
+  RemoveCustomDomain: ["domain"],
+  CreateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  UpdateWorkflowJobFunctionExecutionPolicy: ["executionPolicyKey"],
+  GetWorkflowJobFunctionExecutionPolicyByKey: ["executionPolicyKey"],
+};
+
+function isIdentityKey(key: string, methodName: string): boolean {
+  if (key.startsWith("$")) {
+    return false;
+  }
+  return (
+    IDENTITY_KEYS.has(key) ||
+    IDENTITY_KEY_SUFFIXES.some((suffix) => key.endsWith(suffix)) ||
+    (METHOD_IDENTITY_KEYS[methodName]?.includes(key) ?? false)
+  );
+}
+
+/**
+ * Extract allowlisted resource identifiers for error diagnostics.
+ *
+ * Only resource identifiers are included — the rest of the request payload
+ * can carry credentials and must never reach terminal or CI logs.
+ * @param message - Request message to extract identifiers from
+ * @param methodName - RPC method name used to resolve method-scoped identifiers
+ * @returns Resource identifiers keyed by request field
+ */
+function requestIdentifiers(message: unknown, methodName: string): Record<string, string> {
+  if (typeof message !== "object" || message === null) {
+    return {};
+  }
+  const identifiers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(message)) {
+    if (typeof value === "string" && value !== "" && isIdentityKey(key, methodName)) {
+      identifiers[key] = value;
+    } else if (
+      !key.startsWith("$") &&
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).$typeName === "string"
+    ) {
+      const nestedName = (value as Record<string, unknown>)[NESTED_IDENTITY_KEY];
+      if (typeof nestedName === "string" && nestedName !== "") {
+        identifiers[`${key}.${NESTED_IDENTITY_KEY}`] = nestedName;
+      }
+    }
+  }
+  return identifiers;
+}
+
+export const MAX_PAGE_SIZE = 1000;
+
+/**
+ * Fetch all paginated resources by repeatedly calling the given function.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @returns All fetched items
+ */
+export async function fetchAll<T>(
+  fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
+) {
+  const items: T[] = [];
+  let pageToken = "";
+
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  while (true) {
+    const [batch, nextPageToken] = await fn(pageToken, MAX_PAGE_SIZE);
+    items.push(...batch);
+    // loop exits when the platform stops returning a page token
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+  }
+  return items;
+}
+
+/**
+ * @internal
+ * @param error - Error value to inspect
+ * @returns Whether the error is a Connect NotFound error
+ */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ConnectError && error.code === Code.NotFound;
+}
+
+/**
+ * Fetch all paginated resources, treating an absent resource group as empty.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @returns Items fetched before pagination completes or the fetcher raises NotFound
+ */
+export async function fetchAllTolerant<T>(
+  fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
+): Promise<T[]> {
+  return await fetchAll(async (pageToken, maxPageSize) => {
+    try {
+      return await fn(pageToken, maxPageSize);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return [[], ""];
+      }
+      throw error;
+    }
+  });
+}
+
+/**
+ * Fetch a single resource, treating NotFound as an absent value.
+ * @template T
+ * @param fn - Resource getter
+ * @returns Fetched resource, or undefined when the getter raises NotFound
+ */
+export async function getOrNull<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+interface FetchPagedOptions {
+  /** Maximum number of items to return. 0 or undefined means unlimited. */
+  limit?: number;
+}
+
+/**
+ * Fetch paginated resources with an optional upper bound on the number of
+ * items returned. When `limit` is 0 or undefined the function behaves
+ * like `fetchAll` and returns every page. When `limit` is positive the
+ * function stops once enough items are collected, requesting smaller
+ * pages as it approaches the boundary.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @param options - Pagination options
+ * @returns Fetched items (length <= limit when limit > 0)
+ */
+export async function fetchPaged<T>(
+  fn: (pageToken: string, pageSize: number) => Promise<[T[], string]>,
+  options?: FetchPagedOptions,
+): Promise<T[]> {
+  const limit = options?.limit;
+  const unbounded = limit === undefined || limit === 0;
+  const items: T[] = [];
+  let pageToken = "";
+
+  // loop exits when the platform stops returning a page token
+  // oxlint-disable-next-line typescript/no-unnecessary-condition
+  while (true) {
+    const pageSize = unbounded ? MAX_PAGE_SIZE : Math.min(limit - items.length, MAX_PAGE_SIZE);
+    if (!unbounded && pageSize <= 0) break;
+
+    const [batch, nextPageToken] = await fn(pageToken, pageSize);
+    items.push(...batch);
+    if (!unbounded && items.length >= limit) break;
+    // loop exits when the platform stops returning a page token
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+  }
+
+  if (!unbounded && items.length > limit) {
+    return items.slice(0, limit);
+  }
+  return items;
+}
+
+/**
+ * Fetch user info from the Tailor Platform userinfo endpoint.
+ * @param accessToken - Access token for the current user
+ * @param config - Optional platform connection settings
+ * @returns Parsed user info
+ */
+export async function fetchUserInfo(accessToken: string, config?: PlatformClientConfig) {
+  const userInfoUrl = new URL("/auth/platform/userinfo", getPlatformBaseUrl(config)).href;
+  const resp = await fetch(userInfoUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "User-Agent": await userAgent(),
+    },
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch user info: ${resp.statusText}`);
+  }
+
+  const rawJson: unknown = await resp.json();
+  // strip unknown keys
+  const schema = z.object({
+    sub: z.string(),
+    email: z.string(),
+  });
+  return schema.parse(rawJson);
+}
+
+// Converting "name:url" patterns to actual Static Website URLs
+/**
+ * Options for `resolveStaticWebsiteUrls`.
+ */
+export type ResolveStaticWebsiteUrlsOptions = {
+  /**
+   * Names of static websites that are defined locally in the current
+   * configuration. When the platform-side lookup for a name in this set
+   * fails specifically with a `NotFound` error, the warning is suppressed
+   * and the original `name:url[/path]` pattern is returned unresolved
+   * instead of being dropped.
+   *
+   * Use this from plan-phase callers to avoid noisy warnings on the first
+   * deployment, where the static website will be created later in the same
+   * apply run. Other failure modes ("URL not yet assigned", transient RPC
+   * errors, permission errors) are unaffected by this option: they still log
+   * a warning, and separately, `failOnUnexpectedError` decides whether they
+   * abort instead.
+   */
+  expectedLocalNames?: ReadonlySet<string>;
+  /**
+   * When true, an entry that cannot be resolved keeps its original
+   * `name:url[/path]` pattern instead of being dropped, and the warning says
+   * so. Callers whose target is a fixed-shape value (an env var, for example)
+   * rather than a list use this, because silently dropping the value would
+   * change the shape of what user code receives.
+   */
+  keepUnresolved?: boolean;
+  /**
+   * When true, a lookup failure other than `NotFound` (a permission error, a
+   * transient RPC failure, ...) is re-thrown instead of being downgraded to a
+   * warning. A site that exists but has no URL assigned yet is treated the
+   * same way, unless its name is in `expectedLocalNames` -- there, a rebuild
+   * is expected to resolve it, so it is kept unresolved with a warning
+   * instead. Callers where the fallback value ends up embedded in deployed
+   * code use this, since shipping it silently is worse than failing the
+   * deploy. A `NotFound` for a name in `expectedLocalNames` is unaffected.
+   */
+  failOnUnexpectedError?: boolean;
+  /**
+   * Shared `getStaticWebsite` lookups, keyed by site name. Pass the same map
+   * across multiple calls that may reference the same site (for example, one
+   * call per `env` key) so only the first caller for a given name issues the
+   * platform lookup; the rest reuse its result.
+   */
+  siteLookupCache?: Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>;
+};
+
+/** `name:url[/path]` static website placeholder, anchored at the end. */
+const STATIC_WEBSITE_URL_PATTERN = /:url(\/.*)?$/;
+
+/**
+ * Check whether a value is a `name:url[/path]` static website placeholder.
+ * @param value - Value to test; non-strings are never placeholders
+ * @returns True when the value still needs static website resolution
+ */
+export function hasStaticWebsiteUrlPlaceholder(value: unknown): value is string {
+  return typeof value === "string" && STATIC_WEBSITE_URL_PATTERN.test(value);
+}
+
+/**
+ * Extract the static website name from a `name:url[/path]` placeholder.
+ * @param value - A value already confirmed via {@link hasStaticWebsiteUrlPlaceholder}
+ * @returns The site name, or the whole value if it does not actually match (defensive fallback)
+ */
+export function staticWebsiteNameFromPlaceholder(value: string): string {
+  const match = value.match(STATIC_WEBSITE_URL_PATTERN);
+  return match?.index !== undefined ? value.substring(0, match.index) : value;
+}
+
+/**
+ * Resolve "name:url" patterns to actual Static Website URLs.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param urls - URLs or name:url patterns
+ * @param context - Logging context (e.g., "CORS", "OAuth2 redirect URIs")
+ * @param options - Optional behavior overrides
+ * @returns Resolved URLs (or the original pattern for entries marked as
+ *   expected-but-not-yet-deployed via `options.expectedLocalNames`)
+ */
+export async function resolveStaticWebsiteUrls(
+  client: OperatorClient,
+  workspaceId: string,
+  urls: string[] | undefined,
+  context: string, // for logging context (e.g., "CORS", "OAuth2 redirect URIs")
+  options: ResolveStaticWebsiteUrlsOptions = {},
+): Promise<string[]> {
+  if (!urls) {
+    return [];
+  }
+
+  const { expectedLocalNames, keepUnresolved = false, failOnUnexpectedError = false } = options;
+  const unresolved = (url: string) => (keepUnresolved ? [url] : []);
+  const fallbackNote = keepUnresolved
+    ? `Leaving the ${context} value unresolved.`
+    : `Excluding from ${context}.`;
+  const siteLookupCache: NonNullable<ResolveStaticWebsiteUrlsOptions["siteLookupCache"]> =
+    options.siteLookupCache ?? new Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>();
+  const lookupSite = (siteName: string) => {
+    let lookup = siteLookupCache.get(siteName);
+    if (!lookup) {
+      lookup = client.getStaticWebsite({ workspaceId, name: siteName });
+      siteLookupCache.set(siteName, lookup);
+    }
+    return lookup;
+  };
+
+  const results = await Promise.all(
+    urls.map(async (url) => {
+      const match = url.match(STATIC_WEBSITE_URL_PATTERN);
+
+      if (match && match.index !== undefined) {
+        const siteName = url.substring(0, match.index);
+        const pathSuffix = match[1] || "";
+
+        try {
+          const response = await lookupSite(siteName);
+
+          if (response.staticwebsite?.url) {
+            return [response.staticwebsite.url + pathSuffix];
+          }
+          // A site outside `expectedLocalNames` has no pending rebuild that
+          // will ever re-check it, so this deploy is the only chance to catch
+          // a missing URL -- keeping it unresolved here would ship the
+          // literal placeholder with nothing left to fail on.
+          if (!expectedLocalNames?.has(siteName) && failOnUnexpectedError) {
+            throw CLIError({
+              code: "STATIC_WEBSITE_URL_NOT_ASSIGNED",
+              message: `Static website "${siteName}" exists but has no URL assigned yet.`,
+              suggestion: "Re-run the deploy once the static website's URL is available.",
+            });
+          }
+          logger.warn(`Static website "${siteName}" has no URL assigned yet. ${fallbackNote}`);
+          return unresolved(url);
+        } catch (error) {
+          if (isNotFoundError(error)) {
+            if (expectedLocalNames?.has(siteName)) {
+              return [url];
+            }
+          } else if (failOnUnexpectedError) {
+            throw error;
+          }
+          logger.warn(
+            `Static website "${siteName}" not found for ${context} configuration. ${fallbackNote}`,
+          );
+          return unresolved(url);
+        }
+      }
+      return [url];
+    }),
+  );
+
+  return results.flat();
+}
+
+/** Application `env` as declared by `defineConfig({ env })`. */
+export type ApplicationEnv = Readonly<Record<string, string | number | boolean>>;
+
+/**
+ * Resolve `name:url` patterns held by an application's `env` values.
+ *
+ * `env` reaches user code verbatim -- it is embedded in the executor args and
+ * resolver operationHook expressions -- so an unresolved placeholder is
+ * delivered as the literal string `"my-site:url"`. Each placeholder value goes
+ * through `resolveStaticWebsiteUrls`, which keeps the same first-deployment
+ * semantics as `cors` and OAuth2 redirect URIs for a website this deploy run
+ * is about to create (left as-is, with a warning naming the site and noting
+ * this deploy will rebuild to inject the real URL once it exists), but --
+ * unlike `cors` -- fails the deploy on any other lookup failure instead of
+ * shipping the unresolved placeholder into deployed code.
+ *
+ * Values that are not placeholders -- and the record itself when it holds no
+ * placeholder at all -- are returned untouched, so the common case costs no
+ * platform round trip.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param env - Application env record
+ * @param options - Optional behavior overrides
+ * @returns An env record with resolvable placeholders replaced by URLs
+ */
+export async function resolveStaticWebsiteUrlsInEnv(
+  client: OperatorClient,
+  workspaceId: string,
+  env: ApplicationEnv | undefined,
+  options: Omit<ResolveStaticWebsiteUrlsOptions, "keepUnresolved" | "failOnUnexpectedError"> = {},
+): Promise<ApplicationEnv> {
+  if (!env || !Object.values(env).some(hasStaticWebsiteUrlPlaceholder)) {
+    return env ?? {};
+  }
+
+  // Shared across every key below, so two keys referencing the same site
+  // (e.g. `siteUrl` and `callbackUrl`) issue one getStaticWebsite call, not
+  // one per key.
+  const siteLookupCache: NonNullable<ResolveStaticWebsiteUrlsOptions["siteLookupCache"]> =
+    new Map();
+
+  const entries = await Promise.all(
+    Object.entries(env).map(async ([key, value]) => {
+      if (!hasStaticWebsiteUrlPlaceholder(value)) {
+        return [key, value] as const;
+      }
+      const [resolved] = await resolveStaticWebsiteUrls(
+        client,
+        workspaceId,
+        [value],
+        `env "${key}"`,
+        { ...options, keepUnresolved: true, failOnUnexpectedError: true, siteLookupCache },
+      );
+      return [key, resolved ?? value] as const;
+    }),
+  );
+
+  const resolved: ApplicationEnv = Object.fromEntries<string | number | boolean>(entries);
+  warnUnresolvedEnvPlaceholders(resolved, options.expectedLocalNames);
+  return resolved;
+}
+
+/**
+ * Warn about env values that are still `name:url` placeholders after
+ * resolution, so a gap surfaces at deploy time instead of as a malformed URL
+ * inside a running function.
+ * @param env - Env record after resolution
+ * @param expectedLocalNames - Static websites this deploy run creates later
+ */
+function warnUnresolvedEnvPlaceholders(
+  env: ApplicationEnv,
+  expectedLocalNames: ReadonlySet<string> | undefined,
+): void {
+  for (const [key, value] of Object.entries(env)) {
+    if (!hasStaticWebsiteUrlPlaceholder(value)) continue;
+    const siteName = value.slice(0, value.search(STATIC_WEBSITE_URL_PATTERN));
+    if (expectedLocalNames?.has(siteName)) {
+      logger.warn(
+        `env "${key}" keeps the unresolved value "${value}" for now because static website "${siteName}" ` +
+          `isn't available yet; this deploy rebuilds automatically once it is, to inject the real URL.`,
+      );
+      continue;
+    }
+    logger.warn(
+      `env "${key}" keeps the unresolved value "${value}". ` +
+        `The literal pattern is passed to your code at runtime.`,
+    );
+  }
+}
+
+/**
+ * Fetch an OAuth2 access token for a machine user.
+ * @param url - OAuth2 server base URL
+ * @param clientId - Client ID for the machine user
+ * @param clientSecret - Client secret for the machine user
+ * @returns Access token
+ */
+export async function fetchMachineUserToken(url: string, clientId: string, clientSecret: string) {
+  logger.registerSecret(clientSecret);
+  const tokenEndpoint = new URL("/oauth2/token", url).href;
+  const formData = new URLSearchParams();
+  formData.append("grant_type", "client_credentials");
+  formData.append("client_id", clientId);
+  formData.append("client_secret", clientSecret);
+
+  const request = {
+    method: "POST",
+    headers: {
+      "User-Agent": await userAgent(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData,
+  };
+  const resp = await withConnectTimeoutRetry("machine user token request", () =>
+    fetch(tokenEndpoint, request),
+  );
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new Error(
+      `Failed to fetch machine user token: ${resp.status} ${resp.statusText} ${body.slice(0, 500)}`,
+    );
+  }
+  const rawJson: unknown = await resp.json();
+
+  // strip unknown keys
+  const schema = z.object({
+    token_type: z.string(),
+    access_token: z.string(),
+    expires_in: z.number(),
+  });
+  const token = schema.parse(rawJson);
+  logger.registerSecret(token.access_token);
+  return token;
+}
+
+function isUndiciConnectTimeout(error: unknown): boolean {
+  if (!(error instanceof TypeError)) {
+    return false;
+  }
+  const cause = error.cause;
+  return cause instanceof Error && "code" in cause && cause.code === "UND_ERR_CONNECT_TIMEOUT";
+}
+
+/**
+ * Retry a request that failed before the connection was established.
+ *
+ * Only `UND_ERR_CONNECT_TIMEOUT` is retried: the request provably never reached
+ * the server, so replaying it cannot duplicate a server-side effect.
+ * @param label - Request description for the retry debug log
+ * @param send - Sends the request; called once per attempt
+ * @returns The first successful result
+ */
+async function withConnectTimeoutRetry<T>(label: string, send: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await send();
+    } catch (error) {
+      if (!isUndiciConnectTimeout(error) || attempt >= MAX_RETRY_ATTEMPTS) {
+        throw error;
+      }
+      logger.debug(
+        `retry: ${label} attempt ${attempt} failed with UND_ERR_CONNECT_TIMEOUT; retrying`,
+      );
+      await waitRetryBackoff(attempt);
+    }
+  }
+}
+
+/**
+ * Fetch an OAuth2 token for a platform machine user via client_credentials grant.
+ * @param clientId - Client ID for the platform machine user
+ * @param clientSecret - Client secret for the platform machine user
+ * @param config - Optional platform connection settings
+ * @returns OAuth2 token
+ */
+export async function fetchPlatformMachineUserToken(
+  clientId: string,
+  clientSecret: string,
+  config?: PlatformClientConfig,
+) {
+  logger.registerSecret(clientSecret);
+  const server = getPlatformBaseUrl(config);
+  // A new client per attempt: OAuth2Client caches its discovery promise even when
+  // it rejects, so a reused client would replay the failure without re-requesting.
+  const token = await withConnectTimeoutRetry("platform machine user token request", () =>
+    new OAuth2Client({
+      clientId,
+      clientSecret,
+      server,
+      discoveryEndpoint: oauth2DiscoveryEndpoint,
+    }).clientCredentials(),
+  );
+  logger.registerSecret(token.accessToken);
+  if (token.refreshToken) logger.registerSecret(token.refreshToken);
+  return token;
+}
+
+/**
+ * Close the global HTTP connection pool to prevent libuv UV_HANDLE_CLOSING
+ * assertion failure on Windows at process exit (Node.js 23.x+).
+ * See: https://github.com/nodejs/node/issues/56645
+ *
+ * The pool is reached through the global dispatcher symbol rather than the `undici`
+ * package: importing that package installs its own Agent over these same globals,
+ * replacing the HTTP stack Node's `fetch` already uses. The symbol is versioned per
+ * Dispatcher API generation, and the newest one wins because older symbols hold a
+ * wrapper around that same pool — closing both would destroy it twice.
+ */
+export async function closeConnectionPool() {
+  const globals = globalThis as Record<symbol, { close?: () => Promise<void> } | undefined>;
+  const dispatcher =
+    globals[Symbol.for("undici.globalDispatcher.2")] ??
+    globals[Symbol.for("undici.globalDispatcher.1")];
+  if (typeof dispatcher?.close === "function") {
+    await dispatcher.close();
+  }
+}

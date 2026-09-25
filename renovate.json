@@ -1,0 +1,114 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>tailor-inc/renovate-config",
+    "github>aquaproj/aqua-renovate-config#2.13.0",
+    ":pinAllExceptPeerDependencies",
+    ":disableDependencyDashboard"
+  ],
+  "gitIgnoredAuthors": ["247949890+tailor-platform-pr-trigger[bot]@users.noreply.github.com"],
+  "dependencyDashboardApproval": false,
+  "timezone": "Asia/Tokyo",
+  "schedule": ["* 9-18 * * 1-5"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^packages/sdk-plugin-setup/src/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "uses:\\s+(?<depName>[\\w-]+/[\\w-]+)(?<subpath>(?:/[\\w-]+)?)@(?<currentDigest>[a-f0-9]+)\\s+#\\s+(?<currentValue>v[\\d.]+)"
+      ],
+      "depNameTemplate": "{{depName}}{{subpath}}",
+      "packageNameTemplate": "{{depName}}",
+      "autoReplaceStringTemplate": "uses: {{depName}}@{{newDigest}} # {{newValue}}",
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^packages/sdk-plugin-setup/src/templates\\.ts$/"],
+      "matchStrings": [
+        "export const ACTIONS_SHA = \"(?<currentDigest>[a-f0-9]+)\";\\nexport const ACTIONS_VERSION = \"(?<currentValue>v[\\d.]+)\";"
+      ],
+      "depNameTemplate": "tailor-platform/actions",
+      "autoReplaceStringTemplate": "export const ACTIONS_SHA = \"{{newDigest}}\";\nexport const ACTIONS_VERSION = \"{{newValue}}\";",
+      "datasourceTemplate": "github-tags"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Enable major updates without dashboard approval (dashboard is disabled)",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": false
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@connectrpc/*"],
+      "groupName": "@connectrpc"
+    },
+    {
+      "description": "Group changesets ecosystem (cli + changelog generators must stay in sync)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@changesets/*"],
+      "groupName": "@changesets"
+    },
+    {
+      "description": "Group ESLint ecosystem (core + plugins need compatible versions)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["eslint", "eslint-*", "@eslint/*", "typescript-eslint"],
+      "groupName": "eslint"
+    },
+    {
+      "description": "Group oxc-project packages (parser + types must stay in sync, overrides eslint group for eslint-plugin-oxlint)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "@oxc-project/*",
+        "oxc-parser",
+        "oxlint",
+        "oxfmt",
+        "eslint-plugin-oxlint"
+      ],
+      "groupName": "oxc"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@opentelemetry/*"],
+      "groupName": "@opentelemetry"
+    },
+    {
+      "description": "Group bufbuild ecosystem (protovalidate depends on protobuf)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@bufbuild/*"],
+      "groupName": "@bufbuild"
+    },
+    {
+      "description": "Group pnpm with the action that installs it, so the CI-pinned version and packageManager stay in sync",
+      "matchPackageNames": ["pnpm", "pnpm/action-setup"],
+      "groupName": "pnpm"
+    },
+    {
+      "description": "Group aquaproj tooling to reduce review overhead",
+      "matchPackageNames": ["aquaproj/*"],
+      "groupName": "aquaproj"
+    },
+    {
+      "description": "Group all tailor-platform/actions pins so every generated reference bumps atomically",
+      "matchPackageNames": ["tailor-platform/actions"],
+      "groupName": "tailor-platform/actions"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@inquirer/*"],
+      "groupName": "@inquirer"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["vitest", "@vitest/*"],
+      "groupName": "vitest"
+    },
+    {
+      "description": "Group rolldown bundler ecosystem (tsdown depends on rolldown)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["rolldown", "tsdown"],
+      "groupName": "rolldown"
+    }
+  ]
+}

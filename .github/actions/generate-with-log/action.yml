@@ -1,0 +1,34 @@
+name: Generate with diagnostics
+description: Run generation and retain its original log and failure summary
+
+runs:
+  using: composite
+  steps:
+    - name: Test generate log capture
+      shell: bash
+      run: node --test .github/scripts/run-generate-with-log.test.mjs
+
+    - name: Run generate
+      id: generate
+      shell: bash
+      env:
+        GENERATE_LOG_DIR: ${{ runner.temp }}/generate-diagnostics
+        GENERATE_LOG_ARTIFACT: generate-${{ runner.os }}-${{ github.run_attempt }}
+      run: node .github/scripts/run-generate-with-log.mjs bash -c 'pnpm -r run generate'
+
+    - name: Upload generate log
+      id: generate-log
+      if: always() && steps.generate.outcome != 'skipped'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: generate-${{ runner.os }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/generate-diagnostics/generate.log
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Link generate log
+      if: always() && steps.generate-log.outputs.artifact-url != ''
+      shell: bash
+      env:
+        ARTIFACT_URL: ${{ steps.generate-log.outputs.artifact-url }}
+      run: printf '\n[Download full generate log](%s)\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"

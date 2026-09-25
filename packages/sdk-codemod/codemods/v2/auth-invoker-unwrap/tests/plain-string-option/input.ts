@@ -1,0 +1,4 @@
+startWorkflow({
+  workflow,
+  authInvoker: "kiosk",
+});

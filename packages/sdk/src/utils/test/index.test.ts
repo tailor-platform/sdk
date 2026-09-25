@@ -1,0 +1,578 @@
+import { describe, expect, test } from "vitest";
+import { db } from "#/configure/services/tailordb/schema";
+import { t } from "#/configure/types/index";
+import { createStandardSchema, createTailorDBHook } from "./index";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+describe("createTailorDBHook", () => {
+  describe("id field", () => {
+    test("uses existing id from data when provided", () => {
+      const type = db.table("Test", { name: db.string() });
+      const result = createTailorDBHook(type)({
+        id: "00000000-0000-0000-0000-000000000001",
+        name: "a",
+      });
+      expect(result.id).toBe("00000000-0000-0000-0000-000000000001");
+    });
+
+    test.each([
+      ["data has no id", { name: "b" }],
+      ["data is null", null],
+      ["data is undefined", undefined],
+    ])("generates a UUID when %s", (_label, data) => {
+      const type = db.table("Test", { name: db.string() });
+      const result = createTailorDBHook(type)(data);
+      expect(result.id).toMatch(UUID_REGEX);
+    });
+  });
+
+  describe("plain field passthrough", () => {
+    test("passes through scalar field values unchanged", () => {
+      const type = db.table("Test", {
+        name: db.string(),
+        age: db.int(),
+        active: db.bool(),
+      });
+      const result = createTailorDBHook(type)({
+        name: "alice",
+        age: 30,
+        active: true,
+      });
+      expect(result).toMatchObject({ name: "alice", age: 30, active: true });
+    });
+
+    test.each([
+      ["data is null", null],
+      ["data is a non-object primitive", "not-an-object"],
+    ])("does not set scalar fields when %s", (_label, data) => {
+      const type = db.table("Test", { name: db.string() });
+      const result = createTailorDBHook(type)(data);
+      expect(result.name).toBeUndefined();
+    });
+
+    test("preserves explicit null values from data", () => {
+      const type = db.table("Test", { nickname: db.string({ optional: true }) });
+      const result = createTailorDBHook(type)({ nickname: null });
+      expect(result.nickname).toBeNull();
+    });
+
+    test("keeps a field the data does not carry as an undefined key", () => {
+      const type = db.table("Test", {
+        name: db.string(),
+        nickname: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)({ name: "alice" });
+      // The key has to stay: a database schema inferred from these records reads
+      // the `undefined` as a null and makes the column nullable, which is what
+      // lets a row that omits the field be inserted at all.
+      expect(Object.hasOwn(result, "nickname")).toBe(true);
+      expect(result.nickname).toBeUndefined();
+    });
+
+    test("does not take a field named after an Object member off the prototype", () => {
+      const type = db.table("Test", {
+        name: db.string(),
+        toString: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)({ name: "alice" });
+      expect(Object.entries(result)).toContainEqual(["toString", undefined]);
+    });
+
+    test("passes through a field named after an Object member when the data carries it", () => {
+      const type = db.table("Test", {
+        name: db.string(),
+        toString: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)({ name: "alice", toString: "kept" });
+      expect(Object.entries(result)).toContainEqual(["toString", "kept"]);
+    });
+
+    test.each([
+      ["the data carries it", '{"__proto__":"kept"}', "kept"],
+      ["the data omits it", '{"name":"alice"}', undefined],
+    ])("records a `__proto__` field as a data property when %s", (_label, json, expected) => {
+      const type = db.table("Test", {
+        name: db.string(),
+        // A quoted key in an object literal would set the prototype instead.
+        ["__proto__"]: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)(JSON.parse(json));
+      // Assigning would go through the inherited setter: the value would be lost
+      // and an object value would replace the record's prototype.
+      expect(Object.entries(result)).toContainEqual(["__proto__", expected]);
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    });
+  });
+
+  describe("single nested object field", () => {
+    test("recursively processes the nested object", () => {
+      const type = db.table("Test", {
+        user: db.object({ name: db.string(), age: db.int() }),
+      });
+      const result = createTailorDBHook(type)({
+        user: { name: "alice", age: 30 },
+      });
+      expect(result.user).toMatchObject({ name: "alice", age: 30 });
+    });
+
+    test("generates a nested id when the nested object has an id field", () => {
+      const type = db.table("Test", {
+        nested: db.object({ id: db.uuid(), name: db.string() }),
+      });
+      const result = createTailorDBHook(type)({ nested: { name: "x" } });
+      expect((result.nested as { id: string }).id).toMatch(UUID_REGEX);
+    });
+
+    test("invokes nested sub-field hooks", () => {
+      const type = db.table("Test", {
+        user: db.object({
+          // @ts-expect-error hooks on nested inner fields are now type-blocked
+          name: db.string().hooks({
+            create: ({ input }) => `hooked:${input as string}`,
+          }),
+        }),
+      });
+      const result = createTailorDBHook(type)({ user: { name: "alice" } });
+      expect(result.user).toMatchObject({ name: "hooked:alice" });
+    });
+
+    test.each([
+      ["passes through null for an optional nested field", { address: null }, null],
+      ["passes through undefined for an omitted optional nested field", {}, undefined],
+    ])("%s", (_label, data, expected) => {
+      const type = db.table("Test", {
+        address: db.object({ city: db.string() }, { optional: true }),
+      });
+      expect(createTailorDBHook(type)(data).address).toBe(expected);
+    });
+
+    test.each([
+      ["a string", "X"],
+      ["an array", [{ city: "Tokyo" }]],
+      ["a Date", new Date("2026-01-01T00:00:00.000Z")],
+    ])(
+      "passes through %s without recursing (so the validator surfaces a clear error)",
+      (_label, bogus) => {
+        const type = db.table("Test", { address: db.object({ city: db.string() }) });
+        // Recursing would turn the value into an object of the nested fields, leaving
+        // downstream validation unable to report "Expected an object".
+        expect(createTailorDBHook(type)({ address: bogus }).address).toBe(bogus);
+      },
+    );
+  });
+
+  describe("nested object array field", () => {
+    test("preserves array values when array is provided", () => {
+      const type = db.table("Test", {
+        lines: db.object({ kind: db.string(), days: db.int() }, { array: true }),
+      });
+      const value = [
+        { kind: "NET_DAYS", days: 30 },
+        { kind: "NET_DAYS", days: 60 },
+      ];
+      const result = createTailorDBHook(type)({ lines: value });
+      expect(result.lines).toEqual(value);
+    });
+
+    test("recursively processes each array element so nested ids are generated", () => {
+      const type = db.table("Test", {
+        lines: db.object({ id: db.uuid(), kind: db.string() }, { array: true }),
+      });
+      const result = createTailorDBHook(type)({
+        lines: [{ kind: "A" }, { kind: "B" }],
+      });
+      expect(Array.isArray(result.lines)).toBe(true);
+      expect(result.lines).toHaveLength(2);
+      expect((result.lines as { id: string }[])[0]!.id).toMatch(UUID_REGEX);
+      expect((result.lines as { id: string }[])[1]!.id).toMatch(UUID_REGEX);
+    });
+
+    test("invokes per-element sub-field hooks", () => {
+      const calls: unknown[] = [];
+      const type = db.table("Test", {
+        lines: db.object(
+          {
+            // @ts-expect-error hooks on nested inner fields are now type-blocked
+            stamp: db.string().hooks({
+              create: ({ input }) => {
+                calls.push(input);
+                return `stamped:${input as string}`;
+              },
+            }),
+          },
+          { array: true },
+        ),
+      });
+      const result = createTailorDBHook(type)({
+        lines: [{ stamp: "x" }, { stamp: "y" }],
+      });
+      expect(calls).toEqual(["x", "y"]);
+      expect(result.lines).toEqual([{ stamp: "stamped:x" }, { stamp: "stamped:y" }]);
+    });
+
+    test("preserves an empty array as an empty array", () => {
+      const type = db.table("Test", {
+        lines: db.object({ kind: db.string() }, { array: true }),
+      });
+      const result = createTailorDBHook(type)({ lines: [] });
+      expect(result.lines).toEqual([]);
+    });
+
+    test.each([
+      ["passes through null for optional array field", { lines: null }, null],
+      ["passes through undefined for omitted optional array field", {}, undefined],
+    ])("%s", (_label, data, expected) => {
+      const type = db.table("Test", {
+        lines: db.object({ kind: db.string() }, { optional: true, array: true }),
+      });
+      expect(createTailorDBHook(type)(data).lines).toBe(expected);
+    });
+
+    test.each([
+      ["a string", "X"],
+      ["null", null],
+      ["a Date", new Date("2026-01-01T00:00:00.000Z")],
+    ])("passes through %s as an element without recursing", (_label, item) => {
+      const type = db.table("Test", {
+        lines: db.object({ kind: db.string() }, { array: true }),
+      });
+      const lines = createTailorDBHook(type)({ lines: [item] }).lines as unknown[];
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toBe(item);
+    });
+
+    test("passes through non-array values without recursing (so the validator surfaces a clear error)", () => {
+      const type = db.table("Test", {
+        lines: db.object({ kind: db.string() }, { array: true }),
+      });
+      // Pass an object instead of an array; the hook must not corrupt it into a single
+      // recursed object — otherwise downstream validation cannot report "Expected an array".
+      const bogus = { kind: "X" };
+      const result = createTailorDBHook(type)({ lines: bogus });
+      expect(result.lines).toBe(bogus);
+    });
+  });
+
+  describe("table-level create hook", () => {
+    test("invokes the create hook and applies field overrides", () => {
+      const seen: { input: unknown; invoker: unknown }[] = [];
+      const type = db.table("Order", { total: db.float(), tax: db.float() }).hooks({
+        create: ({ input, invoker }) => {
+          seen.push({ input, invoker });
+          return { tax: (input as { total: number }).total * 0.1 };
+        },
+      });
+      const result = createTailorDBHook(type)({ total: 100, tax: undefined });
+      expect(result.tax).toBe(10);
+      expect(seen).toEqual([
+        {
+          input: { total: 100, tax: undefined },
+          invoker: null,
+        },
+      ]);
+    });
+
+    test("normalizes a Date returned from the type hook to an ISO string", () => {
+      const fixed = new Date("2026-04-15T00:00:00.000Z");
+      const type = db
+        .table("Test", { createdAt: db.datetime() })
+        .hooks({ create: () => ({ createdAt: fixed }) });
+      expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
+    });
+
+    test("shares the same now timestamp between field-level and table-level hooks", () => {
+      let fieldNow: Date | undefined;
+      let typeNow: Date | undefined;
+      const type = db
+        .table("Test", {
+          createdAt: db.datetime().hooks({ create: ({ now }) => (fieldNow = now) }),
+          label: db.string(),
+        })
+        .hooks({ create: ({ now }) => ((typeNow = now), { label: "x" }) });
+      createTailorDBHook(type)({});
+      expect(fieldNow).toBeInstanceOf(Date);
+      expect(typeNow).toBe(fieldNow);
+    });
+
+    test("does not invoke a hook that only defines update (createTailorDBHook is create-only)", () => {
+      let updateCalled = false;
+      const type = db.table("Test", { updatedAt: db.datetime() }).hooks({
+        update: () => {
+          updateCalled = true;
+          return { updatedAt: new Date() };
+        },
+      });
+      const result = createTailorDBHook(type)({ updatedAt: "2026-01-01T00:00:00.000Z" });
+      expect(updateCalled).toBe(false);
+      expect(result.updatedAt).toBe("2026-01-01T00:00:00.000Z");
+    });
+  });
+});
+
+describe("createStandardSchema", () => {
+  const buildSchema = () => {
+    const type = db.table("PurchaseOrder", {
+      paymentTermSnapshotLines: db.object(
+        { kind: db.string(), days: db.int() },
+        { optional: true, array: true },
+      ),
+    });
+    const schemaType = t.object({
+      id: t.uuid(),
+      paymentTermSnapshotLines: t.object(
+        { kind: t.string(), days: t.int() },
+        { optional: true, array: true },
+      ),
+    });
+    return createStandardSchema(schemaType, createTailorDBHook(type));
+  };
+
+  test("returns a value when the hooked data passes validation (array)", () => {
+    const result = buildSchema()["~standard"].validate({
+      paymentTermSnapshotLines: [{ kind: "NET_DAYS", days: 30 }],
+    });
+    expect(result).toHaveProperty("value");
+    expect((result as { value: unknown }).value).toMatchObject({
+      paymentTermSnapshotLines: [{ kind: "NET_DAYS", days: 30 }],
+    });
+  });
+
+  test.each([
+    ["null", { paymentTermSnapshotLines: null }],
+    ["omitted", {}],
+  ])("returns a value when the optional array field is %s", (_label, input) => {
+    const result = buildSchema()["~standard"].validate(input);
+    expect(result).toHaveProperty("value");
+  });
+
+  test("returns issues for a table-level validate failure, naming the field", () => {
+    const type = db
+      .table("Range", { start: db.int(), end: db.int() })
+      .validate(({ newRecord }, issues) => {
+        if (newRecord.start > newRecord.end) {
+          issues("start", "start must be <= end");
+        }
+      });
+    const schemaType = t.object({ id: t.uuid(), start: t.int(), end: t.int() });
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+
+    // Reported, not thrown: the seed run names the file and row like it does for
+    // any other issue instead of ending at the first offending record.
+    const result = schema["~standard"].validate({ start: 10, end: 5 });
+    expect(result).toMatchObject({
+      issues: [{ message: "start must be <= end", path: ["start"] }],
+    });
+    expect(schema["~standard"].validate({ start: 1, end: 10 })).toHaveProperty("value");
+  });
+
+  test("leaves a table-level validate out of it when the table is not given", () => {
+    const type = db
+      .table("Range", { start: db.int(), end: db.int() })
+      .validate((_record, issues) => issues("start", "always fails"));
+    const schemaType = t.object({ id: t.uuid(), start: t.int(), end: t.int() });
+
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type));
+
+    expect(schema["~standard"].validate({ start: 1, end: 2 })).toHaveProperty("value");
+  });
+
+  test("returns issues when the hooked data fails validation", () => {
+    const type = db.table("Test", { name: db.string() });
+    const schemaType = t.object({ id: t.uuid(), name: t.string() });
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type));
+
+    // name is required as a string; passing a number triggers a type issue.
+    const result = schema["~standard"].validate({ name: 42 });
+    expect(result).toHaveProperty("issues");
+    expect((result as { issues: unknown[] }).issues.length).toBeGreaterThan(0);
+  });
+
+  test("returns a value when a field named after an Object member is omitted", () => {
+    const type = db.table("Test", {
+      name: db.string(),
+      toString: db.string({ optional: true }),
+    });
+    const schemaType = t.object({
+      id: t.uuid(),
+      name: t.string(),
+      toString: t.string({ optional: true }),
+    });
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type));
+
+    // The validator reads the hooked record by key, so `toString` has to resolve
+    // to the field rather than to `Object.prototype.toString`.
+    const result = schema["~standard"].validate({ name: "alice" });
+    expect(result).toHaveProperty("value");
+  });
+
+  describe("optional nested object", () => {
+    const buildSchema = () => {
+      const type = db.table("Order", {
+        address: db.object({ city: db.string() }, { optional: true }),
+      });
+      const schemaType = t.object({
+        id: t.uuid(),
+        address: t.object({ city: t.string() }, { optional: true }),
+      });
+      return createStandardSchema(schemaType, createTailorDBHook(type), type);
+    };
+
+    test.each([
+      ["omitted", {}],
+      ["null", { address: null }],
+    ])("accepts a row that leaves the field %s", (_label, data) => {
+      expect(buildSchema()["~standard"].validate(data)).toHaveProperty("value");
+    });
+
+    test.each([
+      ["a string", "Tokyo"],
+      ["a Date", new Date("2026-01-01T00:00:00.000Z")],
+    ])("reports the wrong shape when the field is given %s", (_label, value) => {
+      const result = buildSchema()["~standard"].validate({ address: value });
+      expect(result).toMatchObject({
+        issues: [{ message: expect.stringContaining("Expected an object"), path: ["address"] }],
+      });
+    });
+  });
+
+  describe("required nested object", () => {
+    test("reports the field itself, not its children, when the row omits it", () => {
+      const type = db.table("Order", { address: db.object({ city: db.string() }) });
+      const schemaType = t.object({ id: t.uuid(), address: t.object({ city: t.string() }) });
+      const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+      expect(schema["~standard"].validate({})).toMatchObject({
+        issues: [{ message: "Required field is missing", path: ["address"] }],
+      });
+    });
+  });
+});
+
+describe("createStandardSchema unknown fields", () => {
+  const type = db.table("Order", {
+    note: db.string({ optional: true }),
+    seq: db.int().serial({ start: 1 }),
+    lines: db.object({ kind: db.string(), qty: db.int() }, { optional: true, array: true }),
+    address: db.object({ city: db.string({ optional: true }) }, { optional: true }),
+  });
+  const schemaType = t.object({
+    id: t.uuid(),
+    note: t.string({ optional: true }),
+    lines: t.object({ kind: t.string(), qty: t.int() }, { optional: true, array: true }),
+    address: t.object({ city: t.string({ optional: true }) }, { optional: true }),
+  });
+  const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+
+  test("reports a top-level key the table does not declare", () => {
+    const result = schema["~standard"].validate({ note: "n", legacyCode: "X" });
+    expect(result).toMatchObject({
+      issues: [{ message: expect.stringContaining("not declared"), path: ["legacyCode"] }],
+    });
+  });
+
+  test("names the key in the message, so an unreadable path still identifies it", () => {
+    const result = schema["~standard"].validate({ note: "n", "a.b": 1, "": 2 });
+    expect(result).toMatchObject({
+      issues: [
+        { message: expect.stringContaining('Field "a.b" is not declared'), path: ["a.b"] },
+        { message: expect.stringContaining('Field "" is not declared'), path: [""] },
+      ],
+    });
+  });
+
+  test("accepts a serial field that the seed schema itself omits", () => {
+    expect(schema["~standard"].validate({ note: "n", seq: 3 })).toHaveProperty("value");
+  });
+
+  test("accepts the id the table adds on its own", () => {
+    const result = schema["~standard"].validate({
+      id: "00000000-0000-0000-0000-000000000001",
+      note: "n",
+    });
+    expect(result).toHaveProperty("value");
+  });
+
+  test("accepts a declared nested field that is null", () => {
+    const result = schema["~standard"].validate({ note: "n", address: null, lines: null });
+    expect(result).toHaveProperty("value");
+  });
+
+  test("reports an undeclared key inside a nested object", () => {
+    const result = schema["~standard"].validate({ address: { city: "Tokyo", zip: "100" } });
+    expect(result).toMatchObject({ issues: [{ path: ["address", "zip"] }] });
+  });
+
+  test("reports an undeclared key inside a nested array element by index", () => {
+    const result = schema["~standard"].validate({
+      lines: [
+        { kind: "A", qty: 1 },
+        { kind: "B", qty: 2, extra: true },
+      ],
+    });
+    expect(result).toMatchObject({ issues: [{ path: ["lines", "[1]", "extra"] }] });
+  });
+
+  test("skips array elements that are not objects and still checks the ones that are", () => {
+    const result = schema["~standard"].validate({
+      lines: [null, "A", { kind: "B", qty: 2, extra: true }],
+    });
+    expect(result).toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["lines", "[2]", "extra"] }),
+      ]),
+    });
+    expect(
+      (result as { issues: unknown[] }).issues.filter((issue) =>
+        String((issue as { message: string }).message).includes("not declared"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("leaves a nested value of the wrong shape to the field validation", () => {
+    const result = schema["~standard"].validate({ lines: "A" });
+    expect(result).toMatchObject({
+      issues: [{ message: "Expected an array", path: ["lines"] }],
+    });
+  });
+
+  test("reports undeclared keys together with the field issues of the same row", () => {
+    const result = schema["~standard"].validate({ note: 42, legacyCode: "X" });
+    expect(result).toMatchObject({
+      issues: [{ path: ["legacyCode"] }, { path: ["note"] }],
+    });
+  });
+
+  test("reports undeclared keys together with a table-level validate failure", () => {
+    const range = db
+      .table("Range", { start: db.int(), end: db.int() })
+      .validate(({ newRecord }, issues) => {
+        if (newRecord.start > newRecord.end) {
+          issues("start", "start must be <= end");
+        }
+      });
+    const rangeSchema = createStandardSchema(
+      t.object({ id: t.uuid(), start: t.int(), end: t.int() }),
+      createTailorDBHook(range),
+      range,
+    );
+    const result = rangeSchema["~standard"].validate({ start: 10, end: 5, legacyCode: "X" });
+    expect(result).toMatchObject({
+      issues: [{ path: ["legacyCode"] }, { message: "start must be <= end", path: ["start"] }],
+    });
+  });
+
+  test("reports a key spelled like an Object member as undeclared", () => {
+    const result = schema["~standard"].validate(JSON.parse('{"note":"n","__proto__":{}}'));
+    expect(result).toMatchObject({ issues: [{ path: ["__proto__"] }] });
+  });
+
+  test("checks nothing when the table is not given", () => {
+    const user = createStandardSchema(
+      t.object({ name: t.string(), password: t.string() }),
+      (data: unknown) => data as Record<string, unknown>,
+    );
+    expect(
+      user["~standard"].validate({ name: "alice", password: "pw", attributes: { role: "x" } }),
+    ).toHaveProperty("value");
+  });
+});

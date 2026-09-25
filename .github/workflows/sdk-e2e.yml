@@ -1,0 +1,168 @@
+name: "SDK E2E Test"
+
+on:
+  pull_request:
+  # The coverage workflow no longer runs the subprocess-driven e2e suite, so
+  # cover merge commits on main here.
+  push:
+    branches: [main]
+
+concurrency:
+  # Per-SHA groups on push: the ref-wide group has a single pending slot, so a
+  # later push would replace a queued run and leave its commit unverified.
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  changes:
+    name: Detect changes
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            changes:
+              - .github/workflows/sdk-e2e.yml
+              - .github/actions/**
+              - packages/**
+              - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
+              - pnpm-lock.yaml
+
+  sdk-e2e:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
+    concurrency:
+      group: sdk-e2e-main-sdk-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    name: SDK package e2e
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor login --machine-user
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+      - name: Run SDK e2e tests
+        working-directory: packages/sdk
+        run: pnpm run test:e2e
+        env:
+          TAILOR_PLATFORM_E2E_RUN_ID: ${{ github.run_id }}-sdk
+          TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          TAILOR_PLATFORM_WORKSPACE_REGION: us-west
+
+      - name: Cleanup e2e workspaces
+        if: always()
+        working-directory: packages/sdk
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="${RUN_ID}-sdk"
+
+  template-workflow-e2e:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
+    concurrency:
+      group: sdk-e2e-main-template-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-latest
+    name: Template workflow e2e
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor login --machine-user
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+      - name: Run template workflow e2e tests
+        working-directory: packages/create-sdk/templates/workflow
+        run: pnpm test:e2e
+        env:
+          CI: "true"
+          TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          TAILOR_PLATFORM_WORKSPACE_NAME: template-e2e-${{ github.run_id }}-template
+          TAILOR_PLATFORM_WORKSPACE_REGION: us-west
+
+      - name: Cleanup e2e workspaces
+        if: always()
+        working-directory: packages/sdk
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="${RUN_ID}-template"
+
+  sdk-e2e-result:
+    name: SDK E2E result
+    needs: [changes, sdk-e2e, template-workflow-e2e]
+    if: >-
+      always() &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check result
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
+          SDK_E2E_RESULT: ${{ needs.sdk-e2e.result }}
+          TEMPLATE_WORKFLOW_E2E_RESULT: ${{ needs.template-workflow-e2e.result }}
+        run: |
+          # Fail closed: if the paths-filter job itself failed, should_run is
+          # empty and must not be mistaken for "no relevant changes".
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Changes job did not succeed (result=$CHANGES_RESULT)"
+            exit 1
+          fi
+          if [[ "$SHOULD_RUN" != "true" ]]; then
+            echo "Skipped - no relevant changes"
+            exit 0
+          fi
+          if [[ "$SDK_E2E_RESULT" != "success" ]]; then
+            echo "SDK package e2e job failed"
+            exit 1
+          fi
+          if [[ "$TEMPLATE_WORKFLOW_E2E_RESULT" != "success" ]]; then
+            echo "Template workflow e2e job failed"
+            exit 1
+          fi
+          echo "SDK E2E job succeeded"

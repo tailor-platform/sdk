@@ -1,0 +1,404 @@
+import * as fs from "node:fs";
+import { parseSync } from "oxc-parser";
+import { isCI } from "std-env";
+import { CLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
+import { parseBoolean } from "#/cli/shared/parse-boolean";
+import { assertDefined } from "#/utils/assert";
+import type { CallExpression, ObjectExpression, ObjectProperty } from "@oxc-project/types";
+
+const SEPARATE_APP_HINT = "To use this config for a separate app, delete it.";
+
+export interface EnsureConfigIdResult {
+  id: string;
+  injected: boolean;
+}
+
+/**
+ * Warn when a command that decides resource ownership resolved a config
+ * without an app id.
+ *
+ * Injection only reaches an inline `defineConfig({...})` call, so a config
+ * that re-exports one from another file resolves without an id and nothing
+ * says so. Ownership then falls back to the application name, and resources
+ * tagged with an id from an earlier deploy read as another application's.
+ * @param appId - Application id from the resolved config, when it has one
+ */
+export function warnMissingAppId(appId: string | undefined): void {
+  if (appId) return;
+  logger.warn("The config resolved without an 'id'.");
+  logger.log(
+    "  Resources tagged with an id from an earlier deploy read as another application's:\n" +
+      "  deploy asks before taking them over, and remove leaves them in place. Only resources\n" +
+      "  carrying no id are matched by application name.\n" +
+      "  Add an 'id' to the object passed to defineConfig() — a config that re-exports it from\n" +
+      "  another file cannot have one injected automatically. 'tailor deploy' can add it for you.",
+  );
+}
+
+type ASTNode = Record<string, unknown>;
+
+// The user-facing id is a plain UUID. A label-compatible prefix is added
+// at the metadata boundary in `cli/commands/deploy/label.ts`, so the
+// in-config value does not need to satisfy the platform label-value regex.
+export const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface ConfigCallSite {
+  callExpr: CallExpression;
+  configObj: ObjectExpression | null;
+}
+
+function findDefineConfigCalls(node: unknown, results: ConfigCallSite[]): void {
+  if (!node || typeof node !== "object") return;
+  const n = node as ASTNode;
+
+  if (n.type === "CallExpression") {
+    const ce = n as unknown as CallExpression;
+    if (ce.callee.type === "Identifier" && ce.callee.name === "defineConfig") {
+      const arg = ce.arguments[0];
+      // callee may be a ComputedMemberExpression at runtime
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
+      const configObj = arg && arg.type === "ObjectExpression" ? arg : null;
+      results.push({ callExpr: ce, configObj });
+    }
+  }
+
+  for (const key of Object.keys(n)) {
+    const child = n[key];
+    if (Array.isArray(child)) {
+      for (const c of child) findDefineConfigCalls(c, results);
+    } else if (child && typeof child === "object") {
+      findDefineConfigCalls(child, results);
+    }
+  }
+}
+
+function findIdProperties(obj: ObjectExpression): ObjectProperty[] {
+  const found: ObjectProperty[] = [];
+  for (const prop of obj.properties) {
+    if (prop.type !== "Property") continue;
+    const keyName =
+      prop.key.type === "Identifier"
+        ? prop.key.name
+        : prop.key.type === "Literal"
+          ? (prop.key as { value?: unknown }).value
+          : null;
+    if (keyName === "id") found.push(prop);
+  }
+  return found;
+}
+
+function findIdProperty(obj: ObjectExpression): ObjectProperty | null {
+  return findIdProperties(obj)[0] ?? null;
+}
+
+function namesId(node: ASTNode | undefined): boolean {
+  return (
+    (node?.type === "Identifier" && node.name === "id") ||
+    (node?.type === "Literal" && node.value === "id")
+  );
+}
+
+// `app.id`, `app["id"]`, and `const { id } = app` all observe a removed property.
+function readsIdMember(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const n = node as ASTNode;
+  if (n.type === "MemberExpression" && namesId(n.property as ASTNode | undefined)) return true;
+  if (n.type === "ObjectPattern") {
+    const properties = n.properties as ASTNode[];
+    if (properties.some((p) => p.type === "Property" && namesId(p.key as ASTNode))) return true;
+  }
+  return Object.values(n).some((child) =>
+    Array.isArray(child) ? child.some(readsIdMember) : readsIdMember(child),
+  );
+}
+
+/**
+ * Ensure `tailor.config.ts` has an `id` property on the `defineConfig({...})`
+ * argument. Generates a UUID when missing and writes it back to the file.
+ * Returns null when the file does not contain a `defineConfig()` call (e.g.
+ * a wrapper that re-exports another config).
+ * @param configPath - Absolute path to the config file
+ * @returns Resolved id and whether it was newly injected, or null if skipped
+ */
+export async function ensureConfigId(configPath: string): Promise<EnsureConfigIdResult | null> {
+  const source = await fs.promises.readFile(configPath, "utf-8");
+  const { program } = parseSync(configPath, source);
+
+  const calls: ConfigCallSite[] = [];
+  findDefineConfigCalls(program, calls);
+
+  if (calls.length === 0) {
+    // Wrapper/re-export file: defineConfig is in another file. Nothing to do here.
+    return null;
+  }
+  if (calls.length > 1) {
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `Multiple defineConfig() calls found in ${configPath}. Only one is supported.`,
+    });
+  }
+
+  const { configObj } = assertDefined(calls[0], "defineConfig call site missing");
+  if (!configObj) {
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
+    });
+  }
+
+  const idProp = findIdProperty(configObj);
+  if (idProp) {
+    const value = idProp.value;
+    if (value.type !== "Literal") {
+      throw CLIError({
+        code: "CONFIG_ID_INVALID",
+        message: `'id' field in ${configPath} must be a string literal.`,
+        suggestion: SEPARATE_APP_HINT,
+      });
+    }
+    const literalValue = (value as { value?: unknown }).value;
+    if (typeof literalValue !== "string" || literalValue === "") {
+      throw CLIError({
+        code: "CONFIG_ID_INVALID",
+        message: `'id' field in ${configPath} must be a non-empty string literal.`,
+        suggestion: SEPARATE_APP_HINT,
+      });
+    }
+    if (!uuidRegex.test(literalValue)) {
+      throw CLIError({
+        code: "CONFIG_ID_INVALID",
+        message: `'id' field in ${configPath} must be a UUID.`,
+        suggestion: SEPARATE_APP_HINT,
+      });
+    }
+    return { id: literalValue, injected: false };
+  }
+
+  const id = crypto.randomUUID();
+  const newSource = insertIdProperty(source, configObj, id);
+  await fs.promises.writeFile(configPath, newSource, "utf-8");
+
+  logger.info(`Generated app id and wrote to ${configPath}: ${id}`);
+
+  return { id, injected: true };
+}
+
+/**
+ * Read the resolved `defineConfig({...})` `id` from a config file without
+ * mutating it. Returns null when the file has no inline `defineConfig()` call
+ * (wrapper/re-export config), and `{ id: null }` when the call exists but has
+ * no usable `id` property.
+ * @param configPath - Absolute path to the config file
+ * @returns The existing id (or null when absent), or null for wrapper configs
+ */
+async function readConfigId(configPath: string): Promise<{ id: string | null } | null> {
+  const source = await fs.promises.readFile(configPath, "utf-8");
+  const { program } = parseSync(configPath, source);
+  const calls: ConfigCallSite[] = [];
+  findDefineConfigCalls(program, calls);
+  if (calls.length === 0) return null;
+  // Mirror ensureConfigId's shape validation so CI fails loudly on config
+  // shapes whose id it cannot reliably read.
+  if (calls.length > 1) {
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `Multiple defineConfig() calls found in ${configPath}. Only one is supported.`,
+    });
+  }
+  const { configObj } = assertDefined(calls[0], "defineConfig call site missing");
+  if (!configObj) {
+    throw CLIError({
+      code: "CONFIG_ID_UNMANAGEABLE",
+      message: `defineConfig() argument must be an inline object literal in ${configPath} so the SDK can manage the 'id' field.`,
+    });
+  }
+  const idProp = findIdProperty(configObj);
+  if (!idProp || idProp.value.type !== "Literal") return { id: null };
+  const value = (idProp.value as { value?: unknown }).value;
+  return { id: typeof value === "string" && value !== "" ? value : null };
+}
+
+/**
+ * Read-only CI check: the config must already carry a valid app id.
+ * Wrapper/re-export configs (no inline defineConfig call) are exempt,
+ * mirroring the local behavior where {@link ensureConfigId} no-ops.
+ * @param configPath - Absolute path to the config file
+ */
+async function assertConfigIdInCI(configPath: string): Promise<void> {
+  const result = await readConfigId(configPath);
+  if (result === null) {
+    return;
+  }
+  if (!result.id) {
+    throw CLIError({
+      code: "CONFIG_ID_REQUIRED_IN_CI",
+      message: "tailor.config.ts is missing an 'id'.",
+      details:
+        "CI does not auto-generate one (each run would be treated as a separate app and break resource ownership).",
+      suggestion: "Run 'tailor deploy' locally and commit the injected id.",
+    });
+  }
+  // Keep CI and local behavior aligned: ensureConfigId() enforces the same
+  // format when injecting locally.
+  if (!uuidRegex.test(result.id)) {
+    throw CLIError({
+      code: "CONFIG_ID_INVALID",
+      message: `'id' in ${configPath} must be a UUID.`,
+      suggestion: SEPARATE_APP_HINT,
+    });
+  }
+}
+
+/**
+ * Ensure the config has an app id for a deploy run.
+ *
+ * Locally, the id is auto-injected when missing (via {@link ensureConfigId}).
+ * In CI, the id is never auto-injected — a missing id is a hard error, because
+ * generating one per run would create a fresh app each time and break resource
+ * ownership. CI dry-runs (plan) perform the same check read-only, so a
+ * forgotten id fails at PR time instead of at deploy. Ephemeral pipelines that
+ * intentionally deploy a fresh app per run (such as e2e harnesses) can opt
+ * back into injection with `TAILOR_CI_ALLOW_ID_INJECTION=true`.
+ * Local dry-run and build-only flows skip both injection and the check (no
+ * on-disk side effects are expected, and build-only never talks to the
+ * platform).
+ * @param obj - Inputs
+ * @param obj.configPath - Absolute path to the config file
+ * @param obj.dryRun - Whether this is a dry-run
+ * @param obj.buildOnly - Whether this is a build-only run
+ */
+export async function ensureConfigIdForDeploy(obj: {
+  configPath: string;
+  dryRun: boolean;
+  buildOnly: boolean;
+}): Promise<void> {
+  const { configPath, dryRun, buildOnly } = obj;
+  if (buildOnly) return;
+
+  const allowCIInjection = parseBoolean(process.env.TAILOR_CI_ALLOW_ID_INJECTION) === true;
+  const strictCI = isCI && !allowCIInjection;
+
+  if (dryRun) {
+    if (strictCI) {
+      await assertConfigIdInCI(configPath);
+    }
+    return;
+  }
+
+  if (strictCI) {
+    await assertConfigIdInCI(configPath);
+    return;
+  }
+
+  await ensureConfigId(configPath);
+}
+
+const idComment =
+  "// SDK-managed app id — do not edit, except when copying this config to a separate app.";
+
+function insertIdProperty(source: string, configObj: ObjectExpression, id: string): string {
+  const idLiteral = `id: ${JSON.stringify(id)}`;
+  if (configObj.properties.length > 0) {
+    const firstProp = assertDefined(configObj.properties[0], "first property missing");
+    const lineStart = source.lastIndexOf("\n", firstProp.start - 1) + 1;
+    const indent = source.slice(lineStart, firstProp.start);
+    if (!/^[\t ]*$/.test(indent)) {
+      // The first property shares its line with other code (single-line
+      // object literal): insert inline, where a `//` comment would swallow
+      // the rest of the line and reusing the prefix as indent would
+      // duplicate it.
+      return source.slice(0, firstProp.start) + `${idLiteral}, ` + source.slice(firstProp.start);
+    }
+    const insertion = `${idComment}\n${indent}${idLiteral},\n${indent}`;
+    return source.slice(0, firstProp.start) + insertion + source.slice(firstProp.start);
+  }
+  // Empty object: insert on its own lines so the `//` comment does not
+  // bleed into the closing `}` / `)`. Derive indent from the line that
+  // contains the opening brace.
+  const openBracePos = configObj.start + 1;
+  const braceLineStart = source.lastIndexOf("\n", configObj.start) + 1;
+  const baseIndent = source.slice(braceLineStart).match(/^[\t ]*/)?.[0] ?? "";
+  const innerIndent = `${baseIndent}  `;
+  const insertion = `\n${innerIndent}${idComment}\n${innerIndent}${idLiteral},\n${baseIndent}`;
+  return source.slice(0, openBracePos) + insertion + source.slice(openBracePos);
+}
+
+function removeIdProperty(
+  source: string,
+  configObj: ObjectExpression,
+  prop: ObjectProperty,
+): string {
+  const edited = removeIdPropertyText(source, prop);
+  if (configObj.properties.length > 1) return edited;
+  // The object became empty: collapse it unless it still holds a user comment.
+  const objectEnd = configObj.end - (source.length - edited.length);
+  const inner = edited.slice(configObj.start + 1, objectEnd - 1);
+  return inner.trim() === ""
+    ? `${edited.slice(0, configObj.start + 1)}${edited.slice(objectEnd - 1)}`
+    : edited;
+}
+
+function removeIdPropertyText(source: string, prop: ObjectProperty): string {
+  let end = prop.end;
+  const trailingComma = /^[\t ]*,/.exec(source.slice(end));
+  if (trailingComma) end += trailingComma[0].length;
+
+  const lineStart = source.lastIndexOf("\n", prop.start - 1) + 1;
+  const newlineAfter = source.indexOf("\n", end);
+  const lineEnd = newlineAfter === -1 ? source.length : newlineAfter + 1;
+  const ownLine =
+    /^[\t ]*$/.test(source.slice(lineStart, prop.start)) &&
+    /^[\t \r]*$/.test(source.slice(end, lineEnd).replace(/\n$/, ""));
+  if (ownLine) {
+    let removeStart = lineStart;
+    if (lineStart > 1) {
+      const prevLineStart = source.lastIndexOf("\n", lineStart - 2) + 1;
+      if (source.slice(prevLineStart, lineStart).trim() === idComment) removeStart = prevLineStart;
+    }
+    return source.slice(0, removeStart) + source.slice(lineEnd);
+  }
+  if (trailingComma) {
+    const spacing = /^[\t ]*/.exec(source.slice(end))?.[0].length ?? 0;
+    return source.slice(0, prop.start) + source.slice(end + spacing);
+  }
+  // Last property of a single-line object: the separator to drop is the one before it.
+  const before = source.slice(0, prop.start);
+  const separator = /,?[\t ]*$/.exec(before)?.[0].length ?? 0;
+  return before.slice(0, before.length - separator) + source.slice(end);
+}
+
+/**
+ * Remove the `id` property from the inline `defineConfig({...})` argument once
+ * the id is recorded elsewhere (the inverse of {@link ensureConfigId}). The
+ * injected `// SDK-managed app id` comment goes with it.
+ *
+ * Only edits a shape it can read back unambiguously: exactly one inline
+ * `defineConfig({...})` call whose single `id` property is a string literal
+ * equal to `expectedId` (UUIDs compare case-insensitively), no `.id` read
+ * anywhere in the module that could observe the removal, and an edited source
+ * that still parses. Returns false without touching the file otherwise, so the
+ * caller can ask for a manual edit.
+ * @param configPath - Absolute path to the config file
+ * @param expectedId - The id the property must hold to be removed
+ * @returns Whether the file was edited
+ */
+export async function removeConfigId(configPath: string, expectedId: string): Promise<boolean> {
+  const source = await fs.promises.readFile(configPath, "utf-8");
+  const { program } = parseSync(configPath, source);
+  const calls: ConfigCallSite[] = [];
+  findDefineConfigCalls(program, calls);
+  const configObj = calls.length === 1 ? calls[0]?.configObj : null;
+  if (!configObj || readsIdMember(program)) return false;
+
+  const idProps = findIdProperties(configObj);
+  const idProp = idProps.length === 1 ? idProps[0] : undefined;
+  if (!idProp || idProp.value.type !== "Literal") return false;
+  const value = (idProp.value as { value?: unknown }).value;
+  if (typeof value !== "string" || value.toLowerCase() !== expectedId.toLowerCase()) return false;
+
+  const edited = removeIdProperty(source, configObj, idProp);
+  if (parseSync(configPath, edited).errors.length > 0) return false;
+  await fs.promises.writeFile(configPath, edited, "utf-8");
+  return true;
+}

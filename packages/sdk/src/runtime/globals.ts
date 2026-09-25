@@ -1,0 +1,141 @@
+/**
+ * Ambient global type definitions for the Tailor Platform Function runtime.
+ *
+ * The Tailor Platform Function runtime injects `tailor.*` and `tailordb`
+ * objects into the global scope. This file declares their type signatures so
+ * they can be referenced from any TypeScript code that runs in (or is bundled
+ * for) the runtime.
+ * @example
+ * // Side-effect import to enable the global types in a single file:
+ * import "@tailor-platform/sdk/runtime/globals";
+ *
+ * // Or register globally in tsconfig.json:
+ * // "compilerOptions": { "types": ["@tailor-platform/sdk/runtime/globals"] }
+ *
+ * Most users do not need to import this directly — `@tailor-platform/sdk/runtime`
+ * exposes typed wrappers that cover the same surface without relying on globals.
+ *
+ * The value declarations (`var tailor` / `var tailordb`) are typed via the
+ * `TailorRuntime` / `TailordbRuntime` aggregates re-exported from `.`, which in
+ * turn compose the per-service `TailorXxxAPI` types declared alongside each
+ * wrapper. Type-only `namespace tailor` / `namespace tailordb` declarations
+ * are merged with those vars so callers can write `tailor.idp.User` or
+ * `tailor.context.Invoker` in type position as well.
+ */
+
+/* eslint-disable @typescript-eslint/no-namespace */
+
+import type {
+  TailordbClientInstance,
+  TailordbCommandType,
+  TailordbQueryResult,
+  TailordbRuntime,
+  TailorRuntime,
+} from ".";
+import type { ContextInvoker } from "./context";
+import type { TailorDBFileErrorCode } from "./file";
+import type { IconvInstance } from "./iconv";
+import type {
+  ClientConfig as IdpClientConfig,
+  CreateUserInput as IdpCreateUserInput,
+  IdpClientInstance,
+  ListUsersOptions as IdpListUsersOptions,
+  ListUsersResponse as IdpListUsersResponse,
+  SendPasswordResetEmailInput as IdpSendPasswordResetEmailInput,
+  UnenrollMfaInput as IdpUnenrollMfaInput,
+  UpdateUserInput as IdpUpdateUserInput,
+  User as IdpUser,
+  UserQuery as IdpUserQuery,
+} from "./idp";
+import type { LogAttributeValue, LogAttributes } from "./logger";
+import type {
+  Invoker as WorkflowInvoker,
+  StartWorkflowOptions as WorkflowStartWorkflowOptions,
+} from "./workflow";
+
+type TailorIdpClientConfig = IdpClientConfig;
+type TailorIdpCreateUserInput = IdpCreateUserInput;
+type TailorIdpClientInstance = IdpClientInstance;
+type TailorIdpListUsersOptions = IdpListUsersOptions;
+type TailorIdpListUsersResponse = IdpListUsersResponse;
+type TailorIdpSendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
+type TailorIdpUnenrollMfaInput = IdpUnenrollMfaInput;
+type TailorIdpUpdateUserInput = IdpUpdateUserInput;
+type TailorIdpUser = IdpUser;
+type TailorIdpUserQuery = IdpUserQuery;
+type TailorWorkflowInvoker = WorkflowInvoker;
+type TailorWorkflowStartWorkflowOptions = WorkflowStartWorkflowOptions;
+type TailorLoggerLogAttributeValue = LogAttributeValue;
+type TailorLoggerLogAttributes = LogAttributes;
+
+declare global {
+  namespace tailordb {
+    type QueryResult<T> = TailordbQueryResult<T>;
+    type CommandType = TailordbCommandType;
+    type Client = TailordbClientInstance;
+  }
+
+  // eslint-disable-next-line no-var
+  var tailordb: TailordbRuntime;
+
+  namespace tailor {
+    namespace iconv {
+      type Iconv = IconvInstance;
+    }
+
+    namespace idp {
+      type Client = TailorIdpClientInstance;
+      type ClientConfig = TailorIdpClientConfig;
+      type User = TailorIdpUser;
+      type UserQuery = TailorIdpUserQuery;
+      type ListUsersOptions = TailorIdpListUsersOptions;
+      type ListUsersResponse = TailorIdpListUsersResponse;
+      type CreateUserInput = TailorIdpCreateUserInput;
+      type UpdateUserInput = TailorIdpUpdateUserInput;
+      type SendPasswordResetEmailInput = TailorIdpSendPasswordResetEmailInput;
+      type UnenrollMfaInput = TailorIdpUnenrollMfaInput;
+    }
+
+    namespace workflow {
+      type Invoker = TailorWorkflowInvoker;
+      type StartWorkflowOptions = TailorWorkflowStartWorkflowOptions;
+    }
+
+    namespace context {
+      type Invoker = ContextInvoker;
+    }
+
+    namespace logger {
+      type LogAttributeValue = TailorLoggerLogAttributeValue;
+      type LogAttributes = TailorLoggerLogAttributes;
+    }
+  }
+
+  // eslint-disable-next-line no-var
+  var tailor: TailorRuntime;
+
+  /** Custom error class for TailorDB File operations. */
+  class TailorDBFileError extends Error {
+    constructor(message: string, code?: TailorDBFileErrorCode, cause?: unknown);
+    name: "TailorDBFileError";
+    code?: TailorDBFileErrorCode;
+    cause?: unknown;
+  }
+
+  /** Individual error entry attached to {@link TailorErrors}. */
+  interface TailorErrorItem {
+    message: string;
+    path: (string | number)[];
+  }
+
+  /**
+   * Aggregate validation error raised by the Tailor Platform Function runtime.
+   * The runtime serializes the items into the `message` (`"TailorErrors: {...}"`)
+   * and also exposes them on `.errors`.
+   */
+  class TailorErrors extends Error {
+    constructor(errors: TailorErrorItem[]);
+    name: "TailorErrors";
+    errors: TailorErrorItem[];
+  }
+}

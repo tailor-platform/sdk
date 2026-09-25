@@ -1,0 +1,1375 @@
+# @tailor-platform/create-sdk
+
+## 2.20.0
+
+No changes in this release.
+
+## 2.19.0
+
+No changes in this release.
+
+## 2.18.0
+
+No changes in this release.
+
+## 2.17.0
+
+### Patch Changes
+
+- [#2364](https://github.com/tailor-platform/sdk/pull/2364) [`fa5b087`](https://github.com/tailor-platform/sdk/commit/fa5b0872e637d1b4c5d1fb9c7f8f38074dffd545) Thanks [@dqn](https://github.com/dqn)! - Remove the unused empty `.prettierrc` from the `generators` template, completing the same cleanup already applied to the other templates. The template formats with `oxfmt`, and `.oxfmtrc.json` keeps the generated `src/generated/` and `src/seed/` output out of formatting.
+
+## 2.16.0
+
+### Minor Changes
+
+- [#2313](https://github.com/tailor-platform/sdk/pull/2313) [`9817890`](https://github.com/tailor-platform/sdk/commit/98178900a5208a734fb3977eeab94fa103cce6c3) Thanks [@dqn](https://github.com/dqn)! - Add two lint rules that flag, in files defining a resolver, executor, workflow job, or HTTP adapter, the Node-only globals (`no-node-only-globals`) and Node built-in module imports (`no-node-builtin-imports`) that the Tailor Platform runtime does not provide. Both print the same suggested alternative the build does, and both leave configuration, scripts, and tests alone. Enabled in newly scaffolded projects.
+
+- [#2314](https://github.com/tailor-platform/sdk/pull/2314) [`8351e86`](https://github.com/tailor-platform/sdk/commit/8351e866d65a07109b965f11f56d55d8207fbe2c) Thanks [@dqn](https://github.com/dqn)! - Add three lint rules that check literal values against constraints the build otherwise validates only at `tailor generate` / `tailor deploy` time: `valid-execution-policy-definition` (a workflow execution policy `name` or `key` outside the platform grammar), `valid-workflow-retry-policy` (a `retryPolicy` outside the platform limits, such as `initialBackoff` greater than `maxBackoff`), and `valid-resolver-permission` (a permission with no `permit: true` policy, or a condition that does not compare exactly one `user` operand to a string or a boolean). Values the rules cannot resolve to literals are left to the build. Enabled in newly scaffolded projects.
+
+- [#2312](https://github.com/tailor-platform/sdk/pull/2312) [`c2ae1ac`](https://github.com/tailor-platform/sdk/commit/c2ae1acd688dd13df0a0d21d8d76ebc756415ab4) Thanks [@dqn](https://github.com/dqn)! - Add lint rules that catch workflow mistakes the build otherwise reports only at `tailor generate` / `tailor deploy` time: `valid-workflow-job-definition` (a `createWorkflowJob` `name` that is not a string literal or a `body` that is not an inline function), `no-job-start-outside-body` (a job's `.start()` called outside any job body in the same file), `no-direct-exec-job-function` (calling `execJobFunction` directly instead of `.start()`), and `valid-workflow-exports` (a `createWorkflow` result that is not the default export, or a job that is not a named export). Enabled in newly scaffolded projects.
+
+## 2.15.0
+
+### Patch Changes
+
+- [#2295](https://github.com/tailor-platform/sdk/pull/2295) [`e9ca76d`](https://github.com/tailor-platform/sdk/commit/e9ca76d8e18670ae71d1203cb930cf14f8c6e816) Thanks [@renovate](https://github.com/apps/renovate)! - Depend on `@politty/zod` directly instead of the `politty` wrapper package. `politty` re-exported everything from `@politty/zod` unchanged, so this is an internal dependency swap with no effect on CLI behavior.
+
+- [#2275](https://github.com/tailor-platform/sdk/pull/2275) [`c2c0d93`](https://github.com/tailor-platform/sdk/commit/c2c0d932d52759d9b7a3db3cfa3679b7ff44df80) Thanks [@dqn](https://github.com/dqn)! - Support Vitest 5 in `@tailor-platform/sdk/vitest` and scaffold new projects with Vitest 5. `tailorRuntime({ config })` now seeds each project's secrets from that project's own root, so a run combining projects with different roots no longer loads one project's config for all of them. Projects keep resolving the same environment they did on Vitest 4: a project that omits `extends` inherits the root `tailor-runtime` environment only on Vitest 5, where that is Vitest's own default. The `tailor-runtime` environment no longer removes the `performance` global during tests: Vitest 5's module loader reads it while resolving `import()` calls, and the deploy-time free-variable check already treats `performance` as a runtime global.
+
+## 2.14.2
+
+No changes in this release.
+
+## 2.14.1
+
+No changes in this release.
+
+## 2.14.0
+
+### Patch Changes
+
+- [#2270](https://github.com/tailor-platform/sdk/pull/2270) [`1023fc5`](https://github.com/tailor-platform/sdk/commit/1023fc5f12462a2753a4452760c9ed2e0fa7bc07) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Document why the `hello-world` template ships with fully open permissions: `src/db/user.ts` now explains that the template defines no auth and that production projects should define conditions in `.permission()` / `.gqlPermission()`, and the README gained a Security section listing the open `unsafeAllowAll*Permission` grants and the `allowAnonymous` resolver default that must be replaced before real use.
+
+- [#2270](https://github.com/tailor-platform/sdk/pull/2270) [`bc46936`](https://github.com/tailor-platform/sdk/commit/bc4693632116451935a83fb7b39d487c66e3a093) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Document why the `multi-application` template ships with fully open permissions: the README gained a Security section listing the open `unsafeAllowAllTypePermission` / `unsafeAllowAllGqlPermission` grants on the `User` and `AdminNote` tables and pointing at the TailorDB Permission documentation for what to replace them with.
+
+## 2.13.1
+
+### Patch Changes
+
+- [#2263](https://github.com/tailor-platform/sdk/pull/2263) [`ec80f8c`](https://github.com/tailor-platform/sdk/commit/ec80f8c7fbb5878010cc702a6336f6cb5b3d9bfb) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Fix the `hello-world` template docs so they match the tooling the template actually ships: the README now documents `oxfmt` / `oxlint` (instead of Prettier / ESLint) and the `generate` script, and the setup commands use `npx @tailor-platform/sdk <command>`. The unused empty `.prettierrc` is no longer generated.
+
+- [#2263](https://github.com/tailor-platform/sdk/pull/2263) [`9495e4e`](https://github.com/tailor-platform/sdk/commit/9495e4e2b77a0a3e680fff22dda0cb5493756c6c) Thanks [@tailor-bobbin](https://github.com/apps/tailor-bobbin)! - Fix the same stale-tooling docs issue across the remaining `create-sdk` templates (executor, inventory-management, multi-application, resolver, static-web-site, tailordb, workflow): remove the unused empty `.prettierrc` files, and update the `inventory-management` / `multi-application` READMEs' Scripts sections to document `oxfmt` / `oxlint` (instead of Prettier / ESLint), matching the tooling their `package.json` actually ships. The `inventory-management` README's Scripts section also referenced a nonexistent `gen` script; it now documents the actual `generate` script.
+
+## 2.13.0
+
+## 2.12.0
+
+### Minor Changes
+
+- [#2247](https://github.com/tailor-platform/sdk/pull/2247) [`b7b0f3f`](https://github.com/tailor-platform/sdk/commit/b7b0f3fe22a57dcda3b544cb652f5fc984c899e3) Thanks [@dqn](https://github.com/dqn)! - Enable deprecation diagnostics in newly scaffolded projects so their lint command flags APIs annotated as deprecated.
+
+## 2.11.0
+
+## 2.10.0
+
+## 2.9.0
+
+## 2.8.0
+
+## 2.7.0
+
+## 2.6.0
+
+### Patch Changes
+
+- [#2136](https://github.com/tailor-platform/sdk/pull/2136) [`6fba096`](https://github.com/tailor-platform/sdk/commit/6fba09676fc20e08e3325c26c0e72dc9ed4fd8f6) Thanks [@toiroakr](https://github.com/toiroakr)! - Update scaffolded project templates to use `.relation()`'s `toward.table` option instead of the deprecated `toward.type`.
+
+- [#2160](https://github.com/tailor-platform/sdk/pull/2160) [`3cbfdc9`](https://github.com/tailor-platform/sdk/commit/3cbfdc99db5012f84dde6ab8f26dce8565834e97) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate value imports in newly generated projects while preserving separate type imports and loader query semantics.
+
+## 2.5.0
+
+### Patch Changes
+
+- [#2125](https://github.com/tailor-platform/sdk/pull/2125) [`17f449b`](https://github.com/tailor-platform/sdk/commit/17f449bac29a78d5a6084260a73a39c10b47e05e) Thanks [@dqn](https://github.com/dqn)! - Keep generated seed data excluded from Oxfmt in newly created projects.
+
+- [#2107](https://github.com/tailor-platform/sdk/pull/2107) [`ff35c1e`](https://github.com/tailor-platform/sdk/commit/ff35c1e0f3ac0ce0db0b7fc6d9fde4ff1dc854f6) Thanks [@dqn](https://github.com/dqn)! - Internal error-handling and prompt-flow cleanups surfaced by newly enabled async-correctness lint rules; no behavior change.
+
+## 2.4.0
+
+### Patch Changes
+
+- [#2069](https://github.com/tailor-platform/sdk/pull/2069) [`d07a120`](https://github.com/tailor-platform/sdk/commit/d07a120950c5bac0bd8b5d2e341ad80dd6694448) Thanks [@dqn](https://github.com/dqn)! - The remaining published docs that named a `db.table()` definition a type now say table: the migration guide's rebaseline description, the testing guide's executor trigger description, and the create-sdk `tailordb` template README's feature list (`field-level and table-level` validations).
+
+- [#2062](https://github.com/tailor-platform/sdk/pull/2062) [`153a780`](https://github.com/tailor-platform/sdk/commit/153a78038c65f4376f2f9f75eec8a7a37ea3f6dc) Thanks [@dqn](https://github.com/dqn)! - `tailor seed` now calls a `db.table()` definition a table instead of a type, in its help, progress, and errors — `Seeding 3 tables via Kysely batch insert`. The `fillSeedData` documentation and the `create-sdk` template hint follow.
+  
+  Messages that list the seed targets say entities rather than tables, because `_User` is an IdP entity rather than a TailorDB table and can appear in the same list.
+  
+  The positional is now named `entities`, so `--help` shows `[entities]` instead of `[types]`. Positionals are matched by argv order, so existing invocations are unaffected.
+
+- [#2063](https://github.com/tailor-platform/sdk/pull/2063) [`5d16dc9`](https://github.com/tailor-platform/sdk/commit/5d16dc918f77bd4c76d0d90811207ec15ac30f4e) Thanks [@dqn](https://github.com/dqn)! - The remaining docs and editor tooltips now describe a `db.table()` definition as a table instead of a type. The TailorDB docs say table-level (matching the sentences around them that already say table), the file-upload runtime API documents its `typeName` parameters as table names, and the create-sdk tailordb template's test titles follow suit.
+
+## 2.3.0
+
+### Patch Changes
+
+- [#2025](https://github.com/tailor-platform/sdk/pull/2025) [`2574bdd`](https://github.com/tailor-platform/sdk/commit/2574bdd69947b0f6e050c3c0af224fc3f18c6435) Thanks [@dqn](https://github.com/dqn)! - Template Vitest configs now collect migration script tests (`migrations/**/*.test.ts`) scaffolded by `tailordb migration script --with-test`.
+
+- [#2023](https://github.com/tailor-platform/sdk/pull/2023) [`9dc826f`](https://github.com/tailor-platform/sdk/commit/9dc826fc0a83aa926de5b07245513f67c1ace877) Thanks [@dqn](https://github.com/dqn)! - Guide users through the v2 type-only import requirement. The CLI loads TypeScript by stripping types from each file in isolation, so a plain import of a type-only export fails at load time with `SyntaxError: ... does not provide an export named '<name>'` and no indication that the import form is the cause.
+  
+  - The CLI now appends a suggestion to that error: import the name with `import type` and set `"verbatimModuleSyntax": true` in tsconfig.json to catch violations at typecheck.
+  - Projects scaffolded by `tailor init` now enable `verbatimModuleSyntax` in their tsconfig.json, so new projects catch violations at typecheck instead of at load time.
+  - The v2 migration guide gains a `v2/type-only-imports` entry documenting the requirement, the failure mode, and the migration steps, offered by `tailor upgrade` when crossing the v2 boundary.
+
+## 2.2.0
+
+### Minor Changes
+
+- [#1975](https://github.com/tailor-platform/sdk/pull/1975) [`b5ca25b`](https://github.com/tailor-platform/sdk/commit/b5ca25b796e8a5e4262ea2e3527973d77cab766a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor seed fill` to fill in the values a record gets on create for the JSONL seed data rows that are missing them. It fills `id` by default, so rows can reference each other by id, and `--fields` names any other create-time field:
+  
+  ```bash
+  # ./seed/data/Customer.jsonl: {"name":"Acme Corporation"}
+  tailor seed fill
+  # ./seed/data/Customer.jsonl: {"id":"0b6b6f5e-...","name":"Acme Corporation"}
+  
+  # also stamp a creation time on rows that have none
+  tailor seed fill --fields id,createdAt
+  ```
+  
+  The values come from the type itself — its `id`, its field defaults, its create hooks — applied to each row on its own. Nothing is validated, so a row can be filled while a required field is still missing or while another file references an id that does not exist yet; that is the point, since the ids are what you need in order to write the rows that reference them. Run `tailor seed validate` when the data is ready.
+  
+  Only the named fields are written, and only into a row that has no value for them, so a value already in the file is never replaced. A line that gains nothing is left byte for byte as it was; a line that takes a value is written with its keys in the order the type declares its fields, so a filled-in `id` lands at the front. A field the type gives no value to is skipped, so `--fields id` covers a whole data directory and leaves the IdP `_User` data alone, and naming a field the platform assigns — a `serial` field, for instance — fills nothing and says so.
+  
+  `tailor seed apply --upsert` now points at the command when a row has no `id`, since that is the run it blocks, and newly scaffolded projects get a `seed:fill` script next to `seed:validate`.
+  
+  The generated seed schema files now export the type's create hook, which is where the values come from. Run `tailor generate` after upgrading; until then `tailor seed fill` reports which file needs regenerating.
+  
+  `createTailorDBHook` from `@tailor-platform/sdk/test` no longer runs the type's own `validate`. Computing the values a record gets on create and deciding whether a record is acceptable are separate jobs, and the second one now sits where the field-level validation already was: `createStandardSchema` takes the type as a third argument and reports type-level issues through its result.
+  
+  `tailor seed validate` also stops printing two markers on the header of a failed run (`\u2716 \u2717 Found 2 error(s) in ...`), now that it hands the CLI a report that is already formatted.
+  
+  That also fixes how `tailor seed validate` reports them. A type-level `validate` failure used to end the run at the first offending row with a bare message; it now lands in the same report as every other issue, naming the file and every row that fails.
+  
+  A test calling `createTailorDBHook` directly to assert a type-level `validate` throws needs to go through `createStandardSchema` instead.
+  
+  The same operation is available as `fillSeedData` from `@tailor-platform/sdk/seed`.
+
+### Patch Changes
+
+- [#2008](https://github.com/tailor-platform/sdk/pull/2008) [`f2135ab`](https://github.com/tailor-platform/sdk/commit/f2135ab6dd3d130d88803b9829a26024de930ed3) Thanks [@toiroakr](https://github.com/toiroakr)! - Consistently call a TailorDB schema definition a "table" instead of a "type" across the docs, matching the `db.type()` → `db.table()` rename. Also fix three leftover `db.type(...)` code samples in `docs/services/tailordb.md` that should have read `db.table(...)`.
+  
+  Update the `v2/idp-publish-events-rename` codemod registry description to say "tables" instead of "types", matching the same wording fix.
+
+## 2.1.0
+
+## 2.0.1
+
+### Patch Changes
+
+- [#1957](https://github.com/tailor-platform/sdk/pull/1957) [`a465547`](https://github.com/tailor-platform/sdk/commit/a465547df712ca8c607c1e42cf12c15fe3e830d1) Thanks [@toiroakr](https://github.com/toiroakr)! - Invoke the CLI as `npx @tailor-platform/sdk <command>` wherever an invocation is written for you. `npx` resolves a command it cannot find locally as a package name, so `npx tailor` fell through to an unrelated `tailor` package on npm whenever the SDK was not installed in the project — including in CI, where npm installs without prompting. Omitting the version specifier keeps using the project's installed SDK when there is one.
+  
+  - Setup examples in the README, the quickstart, and the scaffolded project READMEs now use the package-runner form. Bun examples use `bun tailor <command>`, which resolves the local binary without fetching from the registry.
+  - Workflows generated by `tailor setup` use `npx @tailor-platform/sdk` for npm projects and `bun run tailor` for Bun projects. `tailor setup check` reports the template as outdated so existing projects regenerate; re-run `tailor setup` to pick it up.
+  - The `v2/seed-exec-to-cli-plugin` and `v2/sdk-skills-shim` codemods write the package-runner form when the invocation they produce goes through a runner that installs from the registry (`npx`, `bunx`, `pnpm`/`yarn dlx`, `npm exec`). A runner that resolves project binaries, such as `pnpm exec`, still gets the bare `tailor` binary.
+
+## 2.0.0
+
+### Major Changes
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`1a055c9`](https://github.com/tailor-platform/sdk/commit/1a055c9909ac951f807fc2249c9abc1d5805398f) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename the TailorDB schema builder from `db.type()` to `db.table()`.
+  
+  Update TailorDB definitions:
+  
+  ```diff
+   import { db } from "@tailor-platform/sdk";
+  
+  -export const user = db.type("User", {
+  +export const user = db.table("User", {
+     name: db.string(),
+   });
+  ```
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`3dcd82d`](https://github.com/tailor-platform/sdk/commit/3dcd82d54d6c059df90f2dc4788a7059fe4004ab) Thanks [@toiroakr](https://github.com/toiroakr)! - Restore Tailor field outputs for UUID, date, datetime, time, and decimal fields to plain string-compatible types and remove the strict scalar string migration guidance.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`a3bd9fb`](https://github.com/tailor-platform/sdk/commit/a3bd9fb1c22d7062c8627c80ebc5ebb3b1db0dc3) Thanks [@toiroakr](https://github.com/toiroakr)! - Set `db.fields.timestamps()` `updatedAt` when records are created and make the generated field non-null. `createdAt` keeps its existing create-time behavior, while `updatedAt` keeps its update-time behavior and now also gets a create hook that preserves provided values and falls back to the current time.
+  
+  Update create-sdk templates so scaffolded projects use the new non-null `updatedAt` Kysely types and seed schemas.
+  
+  Existing TailorDB schemas that already use this helper will change `updatedAt` from optional to required. Backfill existing records that have `updatedAt: null` before applying the schema change.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`eeb235d`](https://github.com/tailor-platform/sdk/commit/eeb235debe910c05f755f036486878e7c763cb7e) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `defineWaitPoint` and `defineWaitPoints` to `createWaitPoint` and `createWaitPoints`.
+  
+  These functions create runtime instances with `.wait()` and `.resolve()` methods that call the platform API at runtime, so the `create*` prefix is more accurate. Update any usages:
+  
+  ```diff
+  -import { defineWaitPoint, defineWaitPoints } from "@tailor-platform/sdk";
+  +import { createWaitPoint, createWaitPoints } from "@tailor-platform/sdk";
+  
+  -export const approval = defineWaitPoint<Payload, Result>("approval");
+  +export const approval = createWaitPoint<Payload, Result>("approval");
+  
+  -export const waitPoints = defineWaitPoints((define) => ({ ... }));
+  +export const waitPoints = createWaitPoints((define) => ({ ... }));
+  ```
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`93b68ac`](https://github.com/tailor-platform/sdk/commit/93b68ace83dcb0af2a8b0afa8aa3336cb18c818b) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary:
+  
+  ```diff
+   const inventory = checkInventory.trigger({ orderId: input.orderId });
+  +const inventory = checkInventory.start({ orderId: input.orderId });
+  
+  -const workflowRunId = await orderProcessingWorkflow.trigger(args, { invoker: "manager" });
+  +const workflowRunId = await orderProcessingWorkflow.start(args, { invoker: "manager" });
+  ```
+  
+  `mockWorkflow()`'s `wf.job(definition)` / `wf.workflow(definition)` now return a mock of the `.start` method, and `wf.setTriggerHandler` / `wf.triggeredJobs` are renamed to `wf.setStartHandler` / `wf.startedJobs`. No codemod ships for the `.trigger()` → `.start()` call-site rename itself — see the `v2/workflow-start-rename` migration guide entry for manual migration steps.
+
+### Minor Changes
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`152a2de`](https://github.com/tailor-platform/sdk/commit/152a2de92db8565791dc1ec8aab29f2a75c94913) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a lint rule (`no-execute-script-arg-stringify`) that flags passing a `JSON.stringify(...)` result as `executeScript`'s `arg` option — `executeScript` serializes `arg` internally, so a pre-stringified value silently double-encodes at runtime. Enabled in newly scaffolded projects.
+
+### Patch Changes
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`6519a54`](https://github.com/tailor-platform/sdk/commit/6519a5434f0cc664a609ef2cae2398b19cad4673) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename auth attribute module augmentation from `AttributeMap` to `Attributes`.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`039389d`](https://github.com/tailor-platform/sdk/commit/039389d17ddf3014fc53ffdb756ec6ea1425826c) Thanks [@toiroakr](https://github.com/toiroakr)! - Generate the `Env` interface in `tailor.d.ts` from the type of each `defineConfig({ env })` value instead of the value itself. The resolved value used to be written in as a literal type, so running `generate` or `deploy` with real environment variables loaded stamped those values into a file that is normally committed.
+  
+  ```diff
+   interface Env {
+  -  API_BASE: "https://api.example.com";
+  -  RETRIES: 3;
+  -  VERBOSE: true;
+  +  API_BASE: string;
+  +  RETRIES: number;
+  +  VERBOSE: boolean;
+   }
+  ```
+  
+  `env` keys that aren't valid TypeScript identifiers (for example `"API-BASE"`) are now quoted as well; previously they were emitted bare and produced a `tailor.d.ts` that failed to parse.
+  
+  Run `tailor generate` after upgrading to refresh the file. Code that relied on the literal narrowing — comparing `env.STAGE` against a literal union, for example — has to widen its own types or read the value through a local narrowing check. If a `tailor.d.ts` you already committed contains a sensitive value, treat that value as exposed and rotate it; keep secrets in [Secret Manager](https://github.com/tailor-platform/sdk/blob/main/packages/sdk/docs/services/secret.md) rather than `env`.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`cd48fda`](https://github.com/tailor-platform/sdk/commit/cd48fdab46746aa2e8f5d8dd43073e3b4832c07c) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename resolver, executor, workflow trigger, and typed workflow start machine-user options from `authInvoker` to `invoker`.
+  
+  Update create-sdk templates and the v2 auth invoker codemod to generate the new `invoker` option.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`0676403`](https://github.com/tailor-platform/sdk/commit/0676403f0c2686a9b861047af105661bf52e9d9a) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the deprecated `openDownloadStream` file streaming API. Use `downloadStream` for streamed file downloads.
+  
+  The generated file utilities now emit `downloadFileStream`, which calls `downloadStream` and returns `FileDownloadStreamResponse`, instead of the removed `openFileDownloadStream` helper.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`20aa5a9`](https://github.com/tailor-platform/sdk/commit/20aa5a95167d370b4b3cc7352cb60a22a695d673) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the APIs that were marked `@deprecated` on the way to v2, so 2.0.0 ships without deprecated aliases. Each removal has migration coverage in `tailor upgrade`:
+  
+  - `@tailor-platform/sdk/cli` no longer re-exports `kyselyTypePlugin`, `enumConstantsPlugin`, `fileUtilsPlugin`, and `seedPlugin`. Import them from `@tailor-platform/sdk/plugin/kysely-type`, `/plugin/enum-constants`, `/plugin/file-utils`, and `/plugin/seed` (codemod `v2/plugin-cli-import`).
+  - `tailor.workflow.startJobFunction` and the `StartJobFunctionOptions` type are removed; use the canonical `execJobFunction` / `ExecJobFunctionOptions` (new codemod `v2/exec-job-function-rename`). `mockWorkflow()` no longer exposes the `startJobFunction` alias — assert on its `execJobFunction` mock instead — and `v2/workflow-trigger-rename` now rewrites `triggerJobFunction` straight to `execJobFunction`.
+  - `@tailor-platform/sdk/test` no longer exports the platform-global mocks `setupTailordbMock`, `setupWorkflowMock`, `setupWaitPointMock`, `setupInvokerMock`, and `setupTailorErrorsMock`, nor the bundled-output helper `createImportMain`. Use the `tailor-runtime` environment from `@tailor-platform/sdk/vitest` with `mockTailordb` / `mockWorkflow` (migration guidance: `v2/sdk-test-mocks-to-vitest`). `createTailorDBHook`, `createStandardSchema`, and `unauthenticatedTailorUser` are unchanged.
+  - The programmatic CLI functions no longer accept name-keyed options: `GetWorkflowOptions`, `StartWorkflowOptions`, `ListWorkflowExecutionsOptions`, `GetExecutorOptions`, `TriggerExecutorOptions`, `ListExecutorJobsOptions`, `GetExecutorJobOptions`, and `WatchExecutorJobOptions` are removed along with the overloads that took them. Pass the definition itself — `startWorkflow({ workflow: myWorkflow, invoker: "admin" })`, `watchExecutorJob({ executor: myExecutor, jobId })` — which also types `arg` and `payload` from the definition (migration guidance: `v2/cli-typed-options`). The name-keyed entry points remain available as CLI commands (`tailor workflow start <name>`, `tailor executor trigger <name>`).
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`8b03f82`](https://github.com/tailor-platform/sdk/commit/8b03f827642e64f3b3af5a05ecdef405028a803a) Thanks [@toiroakr](https://github.com/toiroakr)! - Standardize SDK-owned environment variables on the `TAILOR_*` namespace.
+  
+  Replace the removed SDK-specific environment variables with their new names: `TAILOR_CONFIG_PATH`, `TAILOR_DTS_PATH`, `TAILOR_CI_ALLOW_ID_INJECTION`, `TAILOR_DEPLOY_BUILD_ONLY`, `TAILOR_BUILD_OUTPUT_DIR`, `TAILOR_SKILLS_SOURCE`, `TAILOR_TEMPLATE_SDK_VERSION`, `TAILOR_PLATFORM_URL`, `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`, `TAILOR_INLINE_SOURCEMAP`, `TAILOR_QUERY_NEWLINE_ON_ENTER`, and `TAILOR_APP_LOG_LEVEL`. The deprecated `TAILOR_TOKEN` fallback is removed; use `TAILOR_PLATFORM_TOKEN`. The v2 codemod rewrites unambiguous removed SDK environment variable names and flags generic names such as `LOG_LEVEL` and `PLATFORM_URL` for manual review.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`04ca361`](https://github.com/tailor-platform/sdk/commit/04ca3619c4d2d88afe8ee3b25d4ba47ac799de51) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove flat value and default exports from `@tailor-platform/sdk/runtime/*` subpath modules. Import each subpath through its self-named namespace export instead, for example `import { iconv } from "@tailor-platform/sdk/runtime/iconv"`.
+  
+  The aggregate `@tailor-platform/sdk/runtime` entry remains named-only, and its deprecated `file.deleteFile` alias is removed in favor of `file.delete`. The v2 codemod rewrites straightforward namespace-star subpath imports, flat named value imports, and aggregate `file.deleteFile` calls to the new namespace-object style.
+  
+  `TailorContextAPI` and `TailorWorkflowAPI` now describe the SDK wrapper objects. Code that types the platform-provided `globalThis.tailor.context` or `globalThis.tailor.workflow` objects directly must use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`bf11bf8`](https://github.com/tailor-platform/sdk/commit/bf11bf8d3bad6195c86ed289c764490dc6d680ee) Thanks [@toiroakr](https://github.com/toiroakr)! - Update politty to v0.11.3
+
+## 2.0.0-next.11
+
+### Minor Changes
+
+- [#1890](https://github.com/tailor-platform/sdk/pull/1890) [`9fdacdc`](https://github.com/tailor-platform/sdk/commit/9fdacdcbbdcb18f4b324470ac34ca70215f962aa) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a lint rule (`no-execute-script-arg-stringify`) that flags passing a `JSON.stringify(...)` result as `executeScript`'s `arg` option — `executeScript` serializes `arg` internally, so a pre-stringified value silently double-encodes at runtime. Enabled in newly scaffolded projects.
+
+### Patch Changes
+
+- [#1915](https://github.com/tailor-platform/sdk/pull/1915) [`dc691ec`](https://github.com/tailor-platform/sdk/commit/dc691ec1e2181400c6715233f0588a1b5150038f) Thanks [@toiroakr](https://github.com/toiroakr)! - Generate the `Env` interface in `tailor.d.ts` from the type of each `defineConfig({ env })` value instead of the value itself. The resolved value used to be written in as a literal type, so running `generate` or `deploy` with real environment variables loaded stamped those values into a file that is normally committed.
+  
+  ```diff
+   interface Env {
+  -  API_BASE: "https://api.example.com";
+  -  RETRIES: 3;
+  -  VERBOSE: true;
+  +  API_BASE: string;
+  +  RETRIES: number;
+  +  VERBOSE: boolean;
+   }
+  ```
+  
+  `env` keys that aren't valid TypeScript identifiers (for example `"API-BASE"`) are now quoted as well; previously they were emitted bare and produced a `tailor.d.ts` that failed to parse.
+  
+  Run `tailor generate` after upgrading to refresh the file. Code that relied on the literal narrowing — comparing `env.STAGE` against a literal union, for example — has to widen its own types or read the value through a local narrowing check. If a `tailor.d.ts` you already committed contains a sensitive value, treat that value as exposed and rotate it; keep secrets in [Secret Manager](https://github.com/tailor-platform/sdk/blob/main/packages/sdk/docs/services/secret.md) rather than `env`.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`a4cdee0`](https://github.com/tailor-platform/sdk/commit/a4cdee079707105213f8e5833dcaa613f39c8464) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the APIs that were marked `@deprecated` on the way to v2, so 2.0.0 ships without deprecated aliases. Each removal has migration coverage in `tailor upgrade`:
+  
+  - `@tailor-platform/sdk/cli` no longer re-exports `kyselyTypePlugin`, `enumConstantsPlugin`, `fileUtilsPlugin`, and `seedPlugin`. Import them from `@tailor-platform/sdk/plugin/kysely-type`, `/plugin/enum-constants`, `/plugin/file-utils`, and `/plugin/seed` (codemod `v2/plugin-cli-import`).
+  - `tailor.workflow.startJobFunction` and the `StartJobFunctionOptions` type are removed; use the canonical `execJobFunction` / `ExecJobFunctionOptions` (new codemod `v2/exec-job-function-rename`). `mockWorkflow()` no longer exposes the `startJobFunction` alias — assert on its `execJobFunction` mock instead — and `v2/workflow-trigger-rename` now rewrites `triggerJobFunction` straight to `execJobFunction`.
+  - `@tailor-platform/sdk/test` no longer exports the platform-global mocks `setupTailordbMock`, `setupWorkflowMock`, `setupWaitPointMock`, `setupInvokerMock`, and `setupTailorErrorsMock`, nor the bundled-output helper `createImportMain`. Use the `tailor-runtime` environment from `@tailor-platform/sdk/vitest` with `mockTailordb` / `mockWorkflow` (migration guidance: `v2/sdk-test-mocks-to-vitest`). `createTailorDBHook`, `createStandardSchema`, and `unauthenticatedTailorUser` are unchanged.
+  - The programmatic CLI functions no longer accept name-keyed options: `GetWorkflowOptions`, `StartWorkflowOptions`, `ListWorkflowExecutionsOptions`, `GetExecutorOptions`, `TriggerExecutorOptions`, `ListExecutorJobsOptions`, `GetExecutorJobOptions`, and `WatchExecutorJobOptions` are removed along with the overloads that took them. Pass the definition itself — `startWorkflow({ workflow: myWorkflow, invoker: "admin" })`, `watchExecutorJob({ executor: myExecutor, jobId })` — which also types `arg` and `payload` from the definition (migration guidance: `v2/cli-typed-options`). The name-keyed entry points remain available as CLI commands (`tailor workflow start <name>`, `tailor executor trigger <name>`).
+
+## 2.0.0-next.10
+
+### Patch Changes
+
+- [#1837](https://github.com/tailor-platform/sdk/pull/1837) [`b74966b`](https://github.com/tailor-platform/sdk/commit/b74966bcefa499df1cbb5ef7e36ca76442658579) Thanks [@toiroakr](https://github.com/toiroakr)! - Update politty to v0.11.3
+
+## 2.0.0-next.9
+
+## 1.85.0
+
+## 1.84.0
+
+## 1.83.0
+
+## 1.82.0
+
+## 1.81.0
+
+## 1.80.1
+
+## 1.80.0
+
+### Minor Changes
+
+- [#1737](https://github.com/tailor-platform/sdk/pull/1737) [`e349b9e`](https://github.com/tailor-platform/sdk/commit/e349b9e3d9c61f324f21dea92dd08055493a2c6d) Thanks [@dqn](https://github.com/dqn)! - Add lint rules that flag the external /api prefix in HTTP adapter path patterns and permission settings that grant access unconditionally, and enable them in newly scaffolded projects.
+
+## 1.79.0
+
+## 2.0.0-next.8
+
+## 2.0.0-next.7
+
+### Major Changes
+
+- [#1782](https://github.com/tailor-platform/sdk/pull/1782) [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary:
+  
+  ```diff
+   const inventory = checkInventory.trigger({ orderId: input.orderId });
+  +const inventory = checkInventory.start({ orderId: input.orderId });
+  
+  -const workflowRunId = await orderProcessingWorkflow.trigger(args, { invoker: "manager" });
+  +const workflowRunId = await orderProcessingWorkflow.start(args, { invoker: "manager" });
+  ```
+  
+  `mockWorkflow()`'s `wf.job(definition)` / `wf.workflow(definition)` now return a mock of the `.start` method, and `wf.setTriggerHandler` / `wf.triggeredJobs` are renamed to `wf.setStartHandler` / `wf.startedJobs`. No codemod ships for the `.trigger()` → `.start()` call-site rename itself — see the `v2/workflow-start-rename` migration guide entry for manual migration steps.
+
+### Minor Changes
+
+- [#1737](https://github.com/tailor-platform/sdk/pull/1737) [`e349b9e`](https://github.com/tailor-platform/sdk/commit/e349b9e3d9c61f324f21dea92dd08055493a2c6d) Thanks [@dqn](https://github.com/dqn)! - Add lint rules that flag the external /api prefix in HTTP adapter path patterns and permission settings that grant access unconditionally, and enable them in newly scaffolded projects.
+
+## 2.0.0-next.6
+
+## 2.0.0-next.5
+
+### Patch Changes
+
+- [#1753](https://github.com/tailor-platform/sdk/pull/1753) [`6bff945`](https://github.com/tailor-platform/sdk/commit/6bff94505f3dbe11a8be36ef301e3641ee2cba89) Thanks [@dqn](https://github.com/dqn)! - Add typed, service-specific Vitest mock controls for runtime APIs and update generated project tests to use them.
+
+## 2.0.0-next.4
+
+### Major Changes
+
+- [#1693](https://github.com/tailor-platform/sdk/pull/1693) [`4751214`](https://github.com/tailor-platform/sdk/commit/4751214c0923e094a844f9ce322279a47e871075) Thanks [@dqn](https://github.com/dqn)! - Rename the TailorDB schema builder from `db.type()` to `db.table()`.
+  
+  Update TailorDB definitions:
+  
+  ```diff
+   import { db } from "@tailor-platform/sdk";
+  
+  -export const user = db.type("User", {
+  +export const user = db.table("User", {
+     name: db.string(),
+   });
+  ```
+
+### Patch Changes
+
+- [#1704](https://github.com/tailor-platform/sdk/pull/1704) [`9c81d9c`](https://github.com/tailor-platform/sdk/commit/9c81d9c18b1d29b3e9307ea17fe54c8ce55f4dda) Thanks [@dqn](https://github.com/dqn)! - Remove flat value and default exports from `@tailor-platform/sdk/runtime/*` subpath modules. Import each subpath through its self-named namespace export instead, for example `import { iconv } from "@tailor-platform/sdk/runtime/iconv"`.
+  
+  The aggregate `@tailor-platform/sdk/runtime` entry remains named-only, and its deprecated `file.deleteFile` alias is removed in favor of `file.delete`. The v2 codemod rewrites straightforward namespace-star subpath imports, flat named value imports, and aggregate `file.deleteFile` calls to the new namespace-object style.
+  
+  `TailorContextAPI` and `TailorWorkflowAPI` now describe the SDK wrapper objects. Code that types the platform-provided `globalThis.tailor.context` or `globalThis.tailor.workflow` objects directly must use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
+
+## 2.0.0-next.3
+
+### Major Changes
+
+- [#1684](https://github.com/tailor-platform/sdk/pull/1684) [`de3ef5e`](https://github.com/tailor-platform/sdk/commit/de3ef5e7421a998624154df5e90da62e17664524) Thanks [@dqn](https://github.com/dqn)! - Restore Tailor field outputs for UUID, date, datetime, time, and decimal fields to plain string-compatible types and remove the strict scalar string migration guidance.
+
+- [#1556](https://github.com/tailor-platform/sdk/pull/1556) [`645949e`](https://github.com/tailor-platform/sdk/commit/645949ed64bda8b82fc44c0db54928698b12a2eb) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `defineWaitPoint` and `defineWaitPoints` to `createWaitPoint` and `createWaitPoints`.
+  
+  These functions create runtime instances with `.wait()` and `.resolve()` methods that call the platform API at runtime, so the `create*` prefix is more accurate. Update any usages:
+  
+  ```diff
+  -import { defineWaitPoint, defineWaitPoints } from "@tailor-platform/sdk";
+  +import { createWaitPoint, createWaitPoints } from "@tailor-platform/sdk";
+  
+  -export const approval = defineWaitPoint<Payload, Result>("approval");
+  +export const approval = createWaitPoint<Payload, Result>("approval");
+  
+  -export const waitPoints = defineWaitPoints((define) => ({ ... }));
+  +export const waitPoints = createWaitPoints((define) => ({ ... }));
+  ```
+
+### Patch Changes
+
+- [#1559](https://github.com/tailor-platform/sdk/pull/1559) [`ff8ef1c`](https://github.com/tailor-platform/sdk/commit/ff8ef1c1323daf81812c182e146fd53da20e676e) Thanks [@dqn](https://github.com/dqn)! - Rename auth attribute module augmentation from `AttributeMap` to `Attributes`.
+
+- [#1563](https://github.com/tailor-platform/sdk/pull/1563) [`501e8bf`](https://github.com/tailor-platform/sdk/commit/501e8bfdd2bca7201a1c9b036bf72087476da416) Thanks [@dqn](https://github.com/dqn)! - Standardize SDK-owned environment variables on the `TAILOR_*` namespace.
+  
+  Replace the removed SDK-specific environment variables with their new names: `TAILOR_CONFIG_PATH`, `TAILOR_DTS_PATH`, `TAILOR_CI_ALLOW_ID_INJECTION`, `TAILOR_DEPLOY_BUILD_ONLY`, `TAILOR_BUILD_OUTPUT_DIR`, `TAILOR_SKILLS_SOURCE`, `TAILOR_TEMPLATE_SDK_VERSION`, `TAILOR_PLATFORM_URL`, `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`, `TAILOR_INLINE_SOURCEMAP`, `TAILOR_QUERY_NEWLINE_ON_ENTER`, and `TAILOR_APP_LOG_LEVEL`. The deprecated `TAILOR_TOKEN` fallback is removed; use `TAILOR_PLATFORM_TOKEN`. The v2 codemod rewrites unambiguous removed SDK environment variable names and flags generic names such as `LOG_LEVEL` and `PLATFORM_URL` for manual review.
+
+## 2.0.0-next.2
+### Major Changes
+
+
+
+- [#1498](https://github.com/tailor-platform/sdk/pull/1498) [`83145db`](https://github.com/tailor-platform/sdk/commit/83145db9a0d243aa68c1b641c2b6026771a62188) Thanks [@dqn](https://github.com/dqn)! - Set `db.fields.timestamps()` `updatedAt` when records are created and make the generated field non-null. `createdAt` keeps its existing create-time behavior, while `updatedAt` keeps its update-time behavior and now also gets a create hook that preserves provided values and falls back to the current time.
+
+  Update create-sdk templates so scaffolded projects use the new non-null `updatedAt` Kysely types and seed schemas.
+
+  Existing TailorDB schemas that already use this helper will change `updatedAt` from optional to required. Backfill existing records that have `updatedAt: null` before applying the schema change.
+
+### Patch Changes
+
+
+
+- [#1509](https://github.com/tailor-platform/sdk/pull/1509) [`7cadaa7`](https://github.com/tailor-platform/sdk/commit/7cadaa7c4987b81130ca80ba80bc5d5b26276394) Thanks [@dqn](https://github.com/dqn)! - Rename resolver, executor, workflow trigger, and typed workflow start machine-user options from `authInvoker` to `invoker`.
+
+  Update create-sdk templates and the v2 auth invoker codemod to generate the new `invoker` option.
+
+
+- [#1484](https://github.com/tailor-platform/sdk/pull/1484) [`a376dc8`](https://github.com/tailor-platform/sdk/commit/a376dc8cd053d20744c90104e8b44ed2729ffe8c) Thanks [@dqn](https://github.com/dqn)! - Remove the deprecated `openDownloadStream` file streaming API. Use `downloadStream` for streamed file downloads.
+
+  The generated file utilities now emit `downloadFileStream`, which calls `downloadStream` and returns `FileDownloadStreamResponse`, instead of the removed `openFileDownloadStream` helper.
+
+## 2.0.0-next.1
+
+## 2.0.0-next.0
+
+## 1.66.0
+
+## 1.71.0
+
+## 1.75.0
+
+## 1.74.1
+
+## 1.74.0
+
+## 1.73.3
+
+## 1.73.2
+
+## 1.73.1
+
+## 1.73.0
+
+## 1.72.0
+
+## 1.70.1
+### Patch Changes
+
+
+
+- [#1569](https://github.com/tailor-platform/sdk/pull/1569) [`259dec9`](https://github.com/tailor-platform/sdk/commit/259dec92592c7927bcfb0e2d5dcbbd0e206eeba3) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB migration drift checks to normalize reconstructed snapshots and remote schemas through the same snapshot shape before comparison.
+
+## 1.70.0
+
+## 1.69.0
+### Patch Changes
+
+
+
+- [#1533](https://github.com/tailor-platform/sdk/pull/1533) [`e3bc2ce`](https://github.com/tailor-platform/sdk/commit/e3bc2ce65ab30ee53e5de0eb48ca6c24049fcd1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.9.2
+
+## 1.68.0
+
+## 1.67.1
+
+## 1.67.0
+
+## 1.66.1
+
+## 1.66.0
+## 1.65.0
+
+## 1.64.0
+
+## 1.63.0
+
+## 1.62.0
+
+## 1.61.0
+
+## 1.60.3
+
+## 1.60.2
+
+## 1.60.1
+
+## 1.60.0
+
+## 1.59.0
+
+## 1.58.0
+
+## 1.57.0
+
+## 1.56.1
+
+## 1.56.0
+
+## 1.55.2
+
+## 1.55.1
+
+## 1.55.0
+
+## 1.54.3
+
+## 1.54.2
+
+## 1.54.1
+
+## 1.54.0
+
+## 1.53.0
+
+## 1.52.0
+
+### Patch Changes
+
+- [#1186](https://github.com/tailor-platform/sdk/pull/1186) [`57e00d6`](https://github.com/tailor-platform/sdk/commit/57e00d6bfc2f9602af0ac9c0235da6ec0e04b12e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `workflowMock.setEnv()` to control the `env` value passed to job bodies when `createWorkflowJob().trigger()` is invoked locally. Tests using the `tailor-runtime` Vitest environment can now configure the env through the same `workflowMock` helper they use for `setJobHandler` / `setWaitHandler`, without touching `process.env`.
+
+  ```typescript
+  import { workflowMock } from "@tailor-platform/sdk/vitest";
+
+  afterEach(() => workflowMock.reset());
+
+  test("workflow.mainJob.trigger() executes all jobs", async () => {
+    workflowMock.setEnv({ STAGE: "test" });
+    await workflow.mainJob.trigger({ orderId: "order-1", amount: 100 });
+  });
+  ```
+
+  The previous env-var-based pattern is now deprecated. A non-breaking fallback is retained, but `workflowMock.setEnv()` takes priority when both are set.
+
+## 1.51.2
+
+## 1.51.1
+
+## 1.51.0
+
+## 1.50.1
+
+## 1.50.0
+
+## 1.49.0
+
+## 1.48.0
+
+## 1.47.1
+
+## 1.47.0
+
+### Patch Changes
+
+- [#1115](https://github.com/tailor-platform/sdk/pull/1115) [`8dd619e`](https://github.com/tailor-platform/sdk/commit/8dd619e9c58f4662b117bbd968ecf9528d688fe4) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `@tailor-platform/sdk/vitest` (beta) — a Vitest plugin and environment that emulates the Tailor Platform function runtime locally. Catches `node:*` imports and Node.js globals usage that would fail at deploy time, and provides mock control objects (`tailordbMock`, `workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`) for all platform APIs with response configuration and call recording.
+
+  Revamp `packages/sdk/docs/testing.md` into a 2-layer model (Unit Tests / E2E Tests). The previous structure split Unit, Bundled, and Workflow tests across overlapping sections and contained broken vitest imports and references to a non-existent `--template testing`. The new docs cover testing resolvers (simple, with TailorDB mocks, with DI, and with wait points) and workflow jobs (simple, with `triggerJobFunction` mocks, with wait-point mocks, and full-workflow integration), all anchored on the actual `resolver` and `workflow` templates.
+
+  Mark `createImportMain` and `setupInvokerMock` from `@tailor-platform/sdk/test` as `@deprecated`. `createImportMain` is an SDK-internal helper for verifying bundled output; applications should test their TypeScript source directly (unit) and verify deployed behavior via E2E. `setupInvokerMock` is superseded by the `tailor-runtime` Vitest environment, where bundled tests can drive the invoker via `vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue(...)` and unit tests can pass `invoker` directly to `.body()`. Both exports remain in place for now to avoid a breaking change and will be removed in a future release.
+
+  Remove the broken `tests/bundled.test.ts` from the `resolver` and `workflow` templates along with the related `bundled` vitest project and `test:bundled` / `test:bundled:prepare` scripts. These tests were not exercised by CI and had drifted out of sync with the SDK, producing failures on a fresh scaffold.
+
+  Fix a broken anchor in `docs/services/workflow.md` that pointed at the removed `#testing-wait-points` heading; it now links to `../testing.md#jobs-that-wait-on-approval` to match the new testing docs structure.
+
+## 1.46.0
+
+## 1.45.2
+
+## 1.45.1
+
+### Patch Changes
+
+- [#1110](https://github.com/tailor-platform/sdk/pull/1110) [`ba93ca3`](https://github.com/tailor-platform/sdk/commit/ba93ca3543c2927857dc79616ec680ed2b008ad1) Thanks [@toiroakr](https://github.com/toiroakr)! - Drop the `multiline-ts` dependency in favour of an in-tree implementation. The upstream package ships a `preinstall: npx only-allow pnpm` hook that, when a fresh copy is resolved (e.g. `npx create-tailor-sdk@latest`), causes npm's exec lock to time out with `ECOMPROMISED`. Replacing the dependency removes that failure path. Also drops `multiline-ts` from the `pnpm-workspace.yaml` `allowBuilds` list emitted by `create-tailor-sdk`.
+
+## 1.45.0
+
+## 1.44.2
+
+## 1.44.1
+
+## 1.44.0
+
+## 1.43.0
+
+## 1.42.0
+
+## 1.41.0
+
+## 1.40.1
+
+## 1.40.0
+
+## 1.39.1
+
+## 1.39.0
+
+## 1.38.0
+
+## 1.37.0
+
+## 1.36.0
+
+## 1.35.2
+
+## 1.35.1
+
+## 1.35.0
+
+## 1.34.0
+
+## 1.33.2
+
+## 1.33.1
+
+## 1.33.0
+
+## 1.32.1
+
+### Patch Changes
+
+- [#826](https://github.com/tailor-platform/sdk/pull/826) [`72c2842`](https://github.com/tailor-platform/sdk/commit/72c2842046b2841571e095e10187339fdf66acd5) Thanks [@toiroakr](https://github.com/toiroakr)! - Bundle `@tailor-platform/function-types` as a dependency of `@tailor-platform/sdk`. Users no longer need to install `@tailor-platform/function-types` separately or add it to their `tsconfig.json` types array. The ambient types are automatically available when importing from `@tailor-platform/sdk`.
+
+## 1.32.0
+
+## 1.31.0
+
+## 1.30.0
+
+## 1.29.0
+
+## 1.28.0
+
+## 1.27.0
+
+## 1.26.0
+
+## 1.25.4
+
+## 1.25.3
+
+## 1.25.2
+
+### Patch Changes
+
+- [#719](https://github.com/tailor-platform/sdk/pull/719) [`60b882d`](https://github.com/tailor-platform/sdk/commit/60b882d631bd959f1b2e760430030edc68aa3dba) Thanks [@toiroakr](https://github.com/toiroakr)! - Upgrade politty to v0.4.9 and migrate to native globalArgs, cleanup, and arg effect patterns, eliminating the withCommonArgs wrapper
+
+## 1.25.1
+
+## 1.25.0
+
+## 1.24.0
+
+## 1.23.0
+
+## 1.22.0
+
+## 1.21.0
+
+## 1.20.0
+
+## 1.19.0
+
+## 1.18.0
+
+## 1.17.1
+
+### Patch Changes
+
+- [#627](https://github.com/tailor-platform/sdk/pull/627) [`b75a0cd`](https://github.com/tailor-platform/sdk/commit/b75a0cd124a707befaaf77b5da0dafe8835b7263) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove redundant kysely and @tailor-platform/function-kysely-tailordb dependencies from create-sdk templates, as these are already provided through @tailor-platform/sdk
+
+## 1.17.0
+
+## 1.16.0
+
+## 1.15.2
+
+## 1.15.1
+
+## 1.15.0
+
+## 1.14.2
+
+## 1.14.1
+
+## 1.14.0
+
+## 1.13.0
+
+## 1.12.0
+
+## 1.11.1
+
+## 1.11.0
+
+## 1.10.1
+
+## 1.10.0
+
+## 1.9.3
+
+### Patch Changes
+
+- [#551](https://github.com/tailor-platform/sdk/pull/551) [`67b9ce0`](https://github.com/tailor-platform/sdk/commit/67b9ce038315252c44622b2ddcfadac890d2d6f1) Thanks [@riku99](https://github.com/riku99)! - Use changeset publish for git tag and GitHub release creation
+
+## 1.9.2
+
+## 1.9.1
+
+## 1.9.0
+
+## 1.8.0
+
+## 1.7.0
+
+## 1.6.3
+
+## 1.6.2
+
+## 1.6.1
+
+## 1.6.0
+
+## 1.5.0
+
+### Minor Changes
+
+- [#478](https://github.com/tailor-platform/sdk/pull/478) [`dce0040`](https://github.com/tailor-platform/sdk/commit/dce0040f0477c2603b604ab3aac17383ec03f3e7) Thanks [@toiroakr](https://github.com/toiroakr)! - Add local testing support for workflows
+
+  - `createWorkflowJob`: `.trigger()` now executes body directly for local testing
+  - `createWorkflow`: `.trigger()` now calls `mainJob.trigger()` for local testing
+  - Export `WORKFLOW_TEST_ENV_KEY` from `@tailor-platform/sdk/test` for env configuration
+  - Add workflow trigger test examples to testing template
+
+## 1.4.2
+
+### Patch Changes
+
+- [#475](https://github.com/tailor-platform/sdk/pull/475) [`d8b0ab0`](https://github.com/tailor-platform/sdk/commit/d8b0ab07c417eb932f58a58e2a5cb59e6cee2fa0) Thanks [@haru0017](https://github.com/haru0017)! - Remove unused @tailor-platform/function-types from hello-world and multi-application template
+
+## 1.4.1
+
+## 1.4.0
+
+## 1.3.0
+
+## 1.2.6
+
+## 1.2.5
+
+## 1.2.4
+
+## 1.2.3
+
+## 1.2.2
+
+## 1.2.1
+
+### Patch Changes
+
+- [#353](https://github.com/tailor-platform/sdk/pull/353) [`2f5e2bf`](https://github.com/tailor-platform/sdk/commit/2f5e2bf80174e48c6e7ffd4e057d740a88b178e7) Thanks [@riku99](https://github.com/riku99)! - Use oxlint and oxfmt in example and create-sdk/templates
+
+## 1.2.0
+
+## 1.1.3
+
+## 1.1.2
+
+## 1.1.1
+
+## 1.1.0
+
+## 1.0.0
+
+## 0.24.0
+
+## 0.23.4
+
+## 0.23.3
+
+## 0.23.2
+
+## 0.23.1
+
+## 0.23.0
+
+## 0.22.4
+
+## 0.22.3
+
+## 0.22.2
+
+## 0.22.1
+
+## 0.22.0
+
+## 0.21.4
+
+## 0.21.3
+
+## 0.21.2
+
+### Patch Changes
+
+- [#235](https://github.com/tailor-platform/sdk/pull/235) [`e501f94`](https://github.com/tailor-platform/sdk/commit/e501f947a918b37ad1f9bacdbfd6a3e26aa0742a) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: use Node v24
+
+## 0.21.1
+
+## 0.21.0
+
+## 0.20.0
+
+## 0.19.0
+
+## 0.18.2
+
+## 0.18.1
+
+## 0.18.0
+
+## 0.17.0
+
+### Patch Changes
+
+- [#182](https://github.com/tailor-platform/sdk/pull/182) [`a74af85`](https://github.com/tailor-platform/sdk/commit/a74af854b796cfdb701a1f8f78dbabcdfbd3fe02) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: Add comprehensive documentation
+
+## 0.16.3
+
+## 0.16.2
+
+## 0.16.1
+
+## 0.16.0
+
+## 0.15.1
+
+## 0.15.0
+
+### Minor Changes
+
+- [#151](https://github.com/tailor-platform/sdk/pull/151) [`b2b26b4`](https://github.com/tailor-platform/sdk/commit/b2b26b4affc4b8b97b193d7421d1a5455f23a331) Thanks [@toiroakr](https://github.com/toiroakr)! - feat!: add workflow test
+
+## 0.14.3
+
+## 0.14.2
+
+## 0.14.1
+
+## 0.14.0
+
+## 0.13.0
+
+## 0.12.4
+
+## 0.12.3
+
+### Patch Changes
+
+- [#101](https://github.com/tailor-platform/sdk/pull/101) [`029bd30`](https://github.com/tailor-platform/sdk/commit/029bd30b7c12ba9b69d7c61357da7bd312b72dad) Thanks [@remiposo](https://github.com/remiposo)! - Include .gitignore when running with npm
+
+  Fixed an issue where .gitignore was renamed to .npmignore when running with npm.
+
+## 0.12.2
+
+## 0.12.1
+
+### Patch Changes
+
+- [#79](https://github.com/tailor-platform/sdk/pull/79) [`f68247d`](https://github.com/tailor-platform/sdk/commit/f68247deded52ee8687fdf750e5321f7a8c8da4e) Thanks [@remiposo](https://github.com/remiposo)! - Added the multi-application template
+
+## 0.12.0
+
+## 0.11.3
+
+## 0.11.2
+
+## 0.11.1
+
+## 0.11.0
+
+## 0.10.4
+
+## 0.10.3
+
+## 0.10.2
+
+## 0.10.1
+
+## 0.10.0
+
+## 0.9.0
+
+## 0.8.6
+
+## 0.8.5
+
+## 0.8.4
+
+### Patch Changes
+
+- [#19](https://github.com/tailor-platform/sdk/pull/19) [`58e3486`](https://github.com/tailor-platform/sdk/commit/58e34866f5af9027c05d80f9164ffba8b1d1ff55) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: remove unused Serial type and track utility type usage in Kysely generator
+
+## 0.8.3
+
+## 0.8.2
+
+## 0.8.1
+
+## 0.8.0
+
+### Minor Changes
+
+- [#3](https://github.com/tailor-platform/sdk/pull/3) [`b9c3dba`](https://github.com/tailor-platform/sdk/commit/b9c3dbaa4b1df4beb27f5b1da7fe23a83a278637) Thanks [@toiroakr](https://github.com/toiroakr)! - chore!: rename tailor-sdk to sdk
+
+## 0.7.6
+
+## 0.7.5
+
+## 0.7.4
+
+## 0.7.3
+
+## 0.7.2
+
+## 0.7.1
+
+## 0.7.0
+
+## 0.6.2
+
+### Patch Changes
+
+- [#701](https://github.com/tailor-platform/sdk/pull/701) [`1d9e798`](https://github.com/tailor-platform/sdk/commit/1d9e798c667e75734da9b9119770442ce62a48ac) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: seed generator
+
+## 0.6.1
+
+## 0.6.0
+
+## 0.5.6
+
+### Patch Changes
+
+- [#691](https://github.com/tailor-platform/sdk/pull/691) [`4e949b6`](https://github.com/tailor-platform/sdk/commit/4e949b67291ce8775c189a793a99f768ab8904db) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add seed generator
+
+  Added `@tailor-platform/seed` generator that automatically generates seed data files from TailorDB type definitions. This generator creates:
+
+  - GraphQL Ingest mapping files (`mappings/*.json`) and GraphQL files for bulk data loading via [gql-ingest](https://github.com/jackchuka/gql-ingest)
+  - lines-db schema files (`data/*.schema.ts`) for validation via [lines-db](https://github.com/toiroakr/lines-db)
+  - Configuration file (`config.yaml`) defining entity dependencies
+
+  **Usage:**
+
+  ```typescript
+  import { defineGenerators } from "@tailor-platform/sdk";
+
+  export const generators = defineGenerators([
+    ["@tailor-platform/seed", { distPath: "./seed" }],
+  ]);
+  ```
+
+  This will generate seed data infrastructure based on your TailorDB types, enabling validation with [`lines-db`](https://github.com/toiroakr/lines-db) and data ingestion with [`gql-ingest`](https://github.com/jackchuka/gql-ingest).
+
+## 0.5.5
+
+## 0.5.4
+
+### Patch Changes
+
+- [#682](https://github.com/tailor-platform/sdk/pull/682) [`7678f09`](https://github.com/tailor-platform/sdk/commit/7678f09909e4d604604e8845d39e86be3e7fa47a) Thanks [@remiposo](https://github.com/remiposo)! - Renamed from Tailor SDK to Tailor Platform SDK
+
+## 0.5.3
+
+### Patch Changes
+
+- [#680](https://github.com/tailor-platform/sdk/pull/680) [`4550297`](https://github.com/tailor-platform/sdk/commit/455029768e43a9d9bffbae0b93fdabd75e905a53) Thanks [@remiposo](https://github.com/remiposo)! - Added @tailor-platform/function-types to testing
+
+## 0.5.2
+
+### Patch Changes
+
+- [#675](https://github.com/tailor-platform/sdk/pull/675) [`8cb1c77`](https://github.com/tailor-platform/sdk/commit/8cb1c77582da17f7fa4171ea15fe4d5aa465a9bd) Thanks [@remiposo](https://github.com/remiposo)! - Added testing guides
+
+## 0.5.1
+
+## 0.5.0
+
+## 0.4.0
+
+### Minor Changes
+
+- [#665](https://github.com/tailor-platform/sdk/pull/665) [`16e7cf2`](https://github.com/tailor-platform/sdk/commit/16e7cf2045cfa7dff717ce9001a2925cd5588d5f) Thanks [@toiroakr](https://github.com/toiroakr)! - chore!: rename pipeline -> resolver
+
+## 0.3.0
+
+### Minor Changes
+
+- [#661](https://github.com/tailor-platform/sdk/pull/661) [`bf4583c`](https://github.com/tailor-platform/sdk/commit/bf4583cef16bcc7b88118d2814b2beec28b825dd) Thanks [@t](https://github.com/t)! - feat!: remove TailorType and set typename for resolver
+
+  ## Breaking Changes
+
+  ### Removed `t.type()` - use plain objects for input and `t.object()` for output
+
+  The `t.type()` wrapper has been removed from resolver definitions. Input fields are now passed directly as an object, and output uses `t.object()` instead.
+
+  **Before:**
+
+  ```typescript
+  createResolver({
+    name: "add",
+    operation: "query",
+    input: t.type({
+      a: t.int(),
+      b: t.int(),
+    }),
+    output: t.type({
+      result: t.int(),
+    }),
+    body: (context) => {
+      return { result: context.input.a + context.input.b };
+    },
+  });
+  ```
+
+  **After:**
+
+  ```typescript
+  createResolver({
+    name: "add",
+    operation: "query",
+    input: {
+      a: t.int(),
+      b: t.int(),
+    },
+    output: t.object({
+      result: t.int(),
+    }),
+    body: (context) => {
+      return { result: context.input.a + context.input.b };
+    },
+  });
+  ```
+
+  ## New Feature
+
+  ### Added `typeName()` method for custom GraphQL type names
+
+  You can now set custom GraphQL type names for enum and nested object fields using the `.typeName()` method. This is useful when you want to control the generated GraphQL type names.
+
+  ```typescript
+  createResolver({
+    name: "stepChain",
+    operation: "query",
+    input: {
+
+        .object({
+          name: t.object({
+            first: t.string(),
+            last: t.string(),
+          }),
+          activatedAt: t.datetime({ optional: true }),
+        })
+        .typeName("StepChainUser"),
+    },
+    output: t.object({
+      result: t.string(),
+    }),
+    body: (context) => {
+      return {
+        result: `${context.input.user.name.first} ${context.input.user.name.last}`,
+      };
+    },
+  });
+  ```
+
+## 0.2.1
+
+## 0.2.0
+
+## 0.1.1
+
+## 0.1.0
+
+### Minor Changes
+
+- [#643](https://github.com/tailor-platform/sdk/pull/643) [`793a792`](https://github.com/tailor-platform/sdk/commit/793a7924bd6df4b5c23c5747e1935772ada0c152) Thanks [@toiroakr](https://github.com/toiroakr)! - feat!: remove assertNonNull option
+
+  ## Breaking Changes
+
+  ### Removed `assertNonNull` option from field definitions
+
+  The `assertNonNull` option has been removed from field configurations. This option was previously used with `.hooks()` to ensure fields always return non-null values in resolver outputs, even when marked as `optional: true`.
+
+  **Before:**
+
+  ```typescript
+  const model = db.type("Model", {
+    field: db.string({ optional: true, assertNonNull: true }).hooks({
+      create: () => "default-value",
+    }),
+  });
+  ```
+
+  **After:**
+
+  ```typescript
+  const model = db.type("Model", {
+    field: db.string().hooks({
+      create: () => "default-value",
+    }),
+  });
+  ```
+
+  When you use `.hooks()` with a `create` hook that always provides a value, the field should be defined as non-nullable (without `optional: true`).
+
+  ### Serial fields must be non-nullable
+
+  The `.serial()` method can now only be used on non-nullable fields. If you were using `serial()` with `optional: true`, you must remove the `optional: true` option.
+
+  **Before:**
+
+  ```typescript
+  const invoice = db.type("Invoice", {
+    invoiceNumber: db.string({ optional: true }).serial({
+      start: 1000,
+      format: "INV-%05d",
+    }),
+  });
+  ```
+
+  **After:**
+
+  ```typescript
+  const invoice = db.type("Invoice", {
+    invoiceNumber: db.string().serial({
+      start: 1000,
+      format: "INV-%05d",
+    }),
+  });
+  ```
+
+  ### Hook function argument types
+
+  The `data` parameter in hook functions now treats all fields as optional (`T | null | undefined`), regardless of whether they are required in the schema.
+
+  **Before:**
+
+  ```typescript
+  fullAddress: db.string({ optional: true }).hooks({
+    create: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
+    // data.postalCode was guaranteed to be present
+  });
+  ```
+
+  **After:**
+
+  ```typescript
+  fullAddress: db.string({ optional: true }).hooks({
+    create: ({ data }) =>
+      `${data.postalCode ?? ""} ${data.address ?? ""} ${data.city ?? ""}`,
+    // All fields may be undefined - use ?? or add null checks
+  });
+  ```
+
+## 0.0.99
+
+## 0.0.98
+
+## 0.0.97
+
+## 0.0.96
+
+## 0.0.95
+
+### Patch Changes
+
+- [#627](https://github.com/tailor-platform/sdk/pull/627) [`6582379`](https://github.com/tailor-platform/sdk/commit/6582379d81c7d5469e27d672c9313a1cb9b81c50) Thanks [@toiroakr](https://github.com/toiroakr)! - feat!: unnest resolver input type
+
+  ## Breaking Changes
+
+  The structure of resolver input arguments in GraphQL queries/mutations has changed. Previously, all input fields were nested under a single `input` argument, but now they are passed as flat, top-level arguments.
+
+  ### Migration Guide
+
+  You have two migration options:
+
+  #### Option 1: Update GraphQL queries
+
+  Update your GraphQL queries to pass arguments as flat parameters.
+
+  **Before:**
+
+  ```gql
+  query {
+    add(input: { a: 1, b: 2 }) {
+      result
+    }
+  }
+  ```
+
+  **After:**
+
+  ```gql
+  query {
+    add(a: 1, b: 2) {
+      result
+    }
+  }
+  ```
+
+  #### Option 2: Wrap input type to maintain existing GraphQL API
+
+  If you need to maintain backward compatibility with existing GraphQL queries, wrap your input type in a single `input` field:
+
+  ```typescript
+  createResolver({
+    name: "add",
+    operation: "query",
+    input: t.type({
+      input: t.object({
+        a: t.int(),
+        b: t.int(),
+      }),
+    }),
+    body: (context) => {
+      return { result: context.input.input.a + context.input.input.b };
+    },
+    output: t.type({ result: t.int() }),
+  });
+  ```
+
+  This way, your existing GraphQL queries with `add(input: { a: 1, b: 2 })` will continue to work.
+
+## 0.0.94
+
+## 0.0.93
+
+### Patch Changes
+
+- [#617](https://github.com/tailor-platform/sdk/pull/617) [`d45fe83`](https://github.com/tailor-platform/sdk/commit/d45fe834398426c94e5239e9bc94a5736df87016) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add tailordb.Client mock for apply
+
+## 0.0.92
+
+### Patch Changes
+
+- [#607](https://github.com/tailor-platform/sdk/pull/607) [`ab2cadd`](https://github.com/tailor-platform/sdk/commit/ab2cadd9f92ac488ae1963d0768e2ca96ec66e0f) Thanks [@toiroakr](https://github.com/toiroakr)! - refactor: move inflection to out of configuration
+
+## 0.0.91
+
+### Patch Changes
+
+- [#606](https://github.com/tailor-platform/sdk/pull/606) [`f1be4bf`](https://github.com/tailor-platform/sdk/commit/f1be4bf0f324e5ea1896fa4c1a9415b48eb0b134) Thanks [@toiroakr](https://github.com/toiroakr)! - feat!: kysely-db generator renewal
+
+## 0.0.90
+
+### Patch Changes
+
+- [#598](https://github.com/tailor-platform/sdk/pull/598) [`7b2ffaf`](https://github.com/tailor-platform/sdk/commit/7b2ffaf47b8f324bf489c7734f566be320dd69cc) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: improve url schema
+
+- [#600](https://github.com/tailor-platform/sdk/pull/600) [`ec16341`](https://github.com/tailor-platform/sdk/commit/ec16341c0d5aaf5c786f03216ab5642ff4fe7683) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: remove callbackUrl from defineStaticWebsite
+
+## 0.0.89
+
+### Patch Changes
+
+- [#597](https://github.com/tailor-platform/sdk/pull/597) [`36ea41c`](https://github.com/tailor-platform/sdk/commit/36ea41c4fea9c4d6ff4b5b1d7fd8582ceae09c89) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: stricter define function types
+
+- [#595](https://github.com/tailor-platform/sdk/pull/595) [`2d3f019`](https://github.com/tailor-platform/sdk/commit/2d3f01977bcf271a8874fc5f6d273d6c1c1561f8) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add defineIdp
+
+## 0.0.88
+
+### Patch Changes
+
+- [#594](https://github.com/tailor-platform/sdk/pull/594) [`ac244cd`](https://github.com/tailor-platform/sdk/commit/ac244cd7769cfe92a962ea48918559dd403991df) Thanks [@toiroakr](https://github.com/toiroakr)! - feat: add defineStaticWebsite
+
+- [#589](https://github.com/tailor-platform/sdk/pull/589) [`5195548`](https://github.com/tailor-platform/sdk/commit/5195548158aa61fe7b33a75a4812d5345adde3da) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: type guard for workspaceId
+
+## 0.0.87
+
+### Patch Changes
+
+- [#585](https://github.com/tailor-platform/sdk/pull/585) [`3f13d44`](https://github.com/tailor-platform/sdk/commit/3f13d4463047862cfe438f71d87629e49320c6eb) Thanks [@toiroakr](https://github.com/toiroakr)! - chore: update resolver schema
+
+## 0.0.86
+
+### Patch Changes
+
+- [#575](https://github.com/tailor-platform/sdk/pull/575) [`0d64a86`](https://github.com/tailor-platform/sdk/commit/0d64a869766049ffb8462dace6222db53e23dbce) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: strict resolver output type
+
+## 0.0.85
+
+### Patch Changes
+
+- [#573](https://github.com/tailor-platform/sdk/pull/573) [`11cae3e`](https://github.com/tailor-platform/sdk/commit/11cae3e8aa89fc8d71993a0bb9e28c02123f185f) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: generated type reference
+
+## 0.0.84
+
+## 0.0.83
+
+### Patch Changes
+
+- [#559](https://github.com/tailor-platform/sdk/pull/559) [`ebcb667`](https://github.com/tailor-platform/sdk/commit/ebcb6674bbc1fc3ac819bb0e2930255a660ade1b) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove steps from resolver
+
+## 0.0.82
+
+## 0.0.81
+
+### Patch Changes
+
+- [#552](https://github.com/tailor-platform/sdk/pull/552) [`c9f10c5`](https://github.com/tailor-platform/sdk/commit/c9f10c5ca80ebb1e282b3639e2b7a24b4aefba7d) Thanks [@toiroakr](https://github.com/toiroakr)! - Simplified permission definitions with automatic type generation
+
+## 0.0.80
+
+### Patch Changes
+
+- [#548](https://github.com/tailor-platform/sdk/pull/548) [`ce834be`](https://github.com/tailor-platform/sdk/commit/ce834bec7c7d80a3f56a520339a569fef9225888) Thanks [@toiroakr](https://github.com/toiroakr)! - kysely-type generator: support assertNonNull
+
+## 0.0.79
+
+### Patch Changes
+
+- [#545](https://github.com/tailor-platform/sdk/pull/545) [`e82a038`](https://github.com/tailor-platform/sdk/commit/e82a038b022ebf58dd377a247b7bdf1fa608701c) Thanks [@remiposo](https://github.com/remiposo)! - chore: Add LICENSE
+
+## 0.0.78
+
+## 0.0.77
+
+## 0.0.76
+
+### Patch Changes
+
+- [#521](https://github.com/tailor-platform/sdk/pull/521) [`f380645`](https://github.com/tailor-platform/sdk/commit/f3806455815ed4efd80cfe11428bd7862c77b401) Thanks [@remiposo](https://github.com/remiposo)! - chore: Update CHANGELOG.md format
+
+## 0.0.75
+
+### Patch Changes
+
+- dca9f5b: Separate generator config from defineConfig
+
+## 0.0.74
+
+## 0.0.73
+
+### Patch Changes
+
+- 9be7344: Change defineConfig to be tailored specifically for a single app
+
+## 0.0.72
+
+## 0.0.71
+
+### Patch Changes
+
+- 9f7a52c: Add CHANGELOG.md

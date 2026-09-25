@@ -1,0 +1,158 @@
+# Runtime API
+
+`@tailor-platform/sdk/runtime` provides typed wrappers for the `tailor.*` and `tailordb.file` APIs that the Tailor Platform Function runtime injects into the global scope at execution time. The wrappers are thin and delegate to the platform-provided globals; they exist so that you can:
+
+- Reach the runtime API without relying on a separate ambient `.d.ts` package
+- Get IDE-friendly imports (`iconv.convert`, `idp.Client`, …) instead of unmemorable `tailor.iconv.convert(...)` calls
+- Use the same module surface in resolvers, executors, and workflows
+
+The wrappers and their associated types are self-contained — you do not need to activate any ambient globals to use them. If you also want `tailor.iconv.convert(...)` calls to type-check, opt into the globals via the [Activating the global types](#activating-the-global-types) section below.
+
+## Quick Start
+
+```ts
+import {
+  iconv,
+  secretmanager,
+  authconnection,
+  idp,
+  workflow,
+  context,
+  file,
+  aigateway,
+  logger,
+} from "@tailor-platform/sdk/runtime";
+
+const utf8 = iconv.convert(sjisBuffer, "Shift_JIS", "UTF-8");
+
+const apiKey = await secretmanager.getSecret("my-vault", "API_KEY");
+
+const token = await authconnection.getConnectionToken("google");
+
+const client = new idp.Client({ namespace: "my-namespace" });
+const { users } = await client.users({ first: 10 });
+
+const executionId = await workflow.startWorkflow("approval", { reportId });
+
+const invoker = context.getInvoker();
+
+const { metadata } = await file.upload("my-namespace", "Document", "attachment", recordId, bytes);
+
+const { url } = await aigateway.get("my-aigateway");
+
+logger.info("order processed", { orderId: "o-1", total: 99.5 });
+```
+
+## Uploading files
+
+Pass bytes directly to `file.upload`. For strings, specify how to interpret the input:
+
+```ts
+import { file } from "@tailor-platform/sdk/runtime";
+
+await file.upload("my-namespace", "Document", "attachment", recordId, text, {
+  encoding: "utf8",
+  contentType: "text/plain",
+});
+
+await file.upload("my-namespace", "Document", "attachment", recordId, imageBase64, {
+  encoding: "base64",
+  contentType: "image/png",
+});
+```
+
+`encoding` controls the input string's interpretation; `contentType` describes the stored file.
+Setting `contentType: "image/png"` does not decode Base64. Byte arrays and buffers are uploaded
+unchanged, even when `encoding` is supplied. Omitting `contentType` with `encoding: "utf8"`
+stores the file as `text/plain; charset=utf-8`; omitting it with `"base64"` leaves the content
+type unset, unless the Base64 string is a `data:<contentType>;base64,<data>` URL, in which case
+`<contentType>` is used. An explicit `contentType` option always takes precedence over one
+found in a data URL.
+
+Base64 input may omit padding and contain ASCII whitespace. Invalid characters and invalid
+padding are rejected with `TypeError` before upload. Decoding Base64 does not validate the
+resulting file's format.
+
+Uploading a string without `encoding` still stores it as text, but that overload is deprecated
+and will be removed in v3. Add `encoding: "utf8"` to preserve existing behavior, or choose
+`"base64"` when decoding is intended. Calls with byte arrays or buffers are not deprecated.
+The generated `uploadFile` helper supports the same options; run `tailor generate` to update it.
+
+The encoding option is available on the imported SDK `file.upload` and generated helpers.
+For code using the global `tailordb.file.upload`, switch to the imported `file.upload` before
+using this option.
+
+## Subpath imports
+
+Each namespace can also be imported individually so you only pull what you need:
+
+```ts
+import { iconv } from "@tailor-platform/sdk/runtime/iconv";
+import { idp, type ListUsersResponse, type ClientConfig } from "@tailor-platform/sdk/runtime/idp";
+```
+
+`TailorContextAPI` and `TailorWorkflowAPI` describe the imported SDK wrapper objects. When typing direct access to the platform-provided globals or a runtime mock, use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
+
+## Activating the global types
+
+Most users do not need to touch the globals entry — `@tailor-platform/sdk/runtime` (and its subpath modules) cover the same surface without depending on any ambient declaration.
+
+Importing from `@tailor-platform/sdk` does not activate the ambient `tailor.*` / `tailordb.*` declarations. If you want to opt into the globals, add a single side-effect import anywhere in your project:
+
+```ts
+import "@tailor-platform/sdk/runtime/globals";
+```
+
+Or register the entry in `tsconfig.json`:
+
+```jsonc
+{
+  "compilerOptions": {
+    "types": ["@tailor-platform/sdk/runtime/globals"],
+  },
+}
+```
+
+The globals entry exposes the lowercase `tailordb.*` namespace only. If your project still references the removed capital-cased `Tailordb.*` namespace from `@tailor-platform/function-types`, migrate before upgrading in two steps: run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to rewrite `Tailordb.*` references to lowercase `tailordb.*`, then add the `import "@tailor-platform/sdk/runtime/globals"` opt-in above so the rewritten references resolve.
+
+## Namespaces
+
+The runtime entry re-exports the following namespaces. Detailed signatures, parameters, and return types live in the JSDoc next to each export — hover the symbol in your IDE or browse the source.
+
+- `iconv` — character encoding conversion (`convert`, `convertBuffer`, `decode`, `encode`, `encodings`, `Iconv`)
+- `secretmanager` — secret-vault access (`getSecret`, `getSecrets`)
+- `authconnection` — OAuth-style connection tokens (`getConnectionToken`)
+- `idp` — IdP user management (`new Client({ namespace })`)
+- `workflow` — workflow & job control (`startWorkflow`, `resumeWorkflowExecution`, `execJobFunction`, `wait`, `resolve`)
+- `context` — execution context (`getInvoker`)
+- `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`)
+- `aigateway` — AI Gateway URL resolution (`get`)
+- `logger` — structured logging with severity and attributes; the message is written to standard output, the full entry with its attributes is exported over OpenTelemetry where the attributes are queryable (`debug`, `info`, `warn`, `error`, `setAttributes`)
+
+## Testing
+
+`@tailor-platform/sdk/vitest` ships mock controllers for every runtime namespace. Pair them with the `tailor-runtime` Vitest environment so your unit tests run against the same wrappers your production code does. Each controller is a factory — acquire it with a `using` declaration and its state is reset automatically when the test scope exits (no `beforeEach(() => mock.reset())` needed). Requires TypeScript ≥ 5.2 and a runtime with `Symbol.dispose` (Node ≥ 20.4; the SDK targets Node ≥ 22).
+
+```ts
+import { iconv, secretmanager } from "@tailor-platform/sdk/runtime";
+import { mockIconv, mockSecretmanager } from "@tailor-platform/sdk/vitest";
+import { expect, test } from "vitest";
+
+test("encodes via iconv", () => {
+  using iconvM = mockIconv();
+  iconvM.convert.mockReturnValue(new Uint8Array([0x82, 0xa0]));
+
+  const out = iconv.convert("あ", "UTF-8", "Shift_JIS");
+
+  expect(out).toEqual(new Uint8Array([0x82, 0xa0]));
+  expect(iconvM.convert).toHaveBeenCalledWith("あ", "UTF-8", "Shift_JIS");
+}); // iconvM disposed here — the iconv mock is removed (previous state restored)
+
+test("reads from a vault", async () => {
+  using sm = mockSecretmanager({ secrets: { "my-vault": { API_KEY: "sk-123" } } });
+
+  await expect(secretmanager.getSecret("my-vault", "API_KEY")).resolves.toBe("sk-123");
+});
+```
+
+See [Testing Guide](./testing.md#runtime-environment-emulation-beta) for the full list of mock controllers and the `tailor-runtime` environment setup.

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4.0.0/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "tailor-platform/sdk" }],
+  "commit": false,
+  "fixed": [["@tailor-platform/sdk", "@tailor-platform/create-sdk"]],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [],
+  "privatePackages": { "version": false },
+  "format": false
+}

@@ -1,0 +1,7 @@
+# .tailor-sdk/
+.tailor-sdk/cache
+docs: `.tailor-sdk/` was the old generated directory
+prefix/.tailor-sdk/
+ .tailor-sdk/
+.tailor-sdk/extra
+.tailor-sdk-old/

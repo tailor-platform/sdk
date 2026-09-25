@@ -1,0 +1,567 @@
+import * as path from "pathe";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { defineAuth } from "#/configure/services/auth/index";
+import { t } from "#/configure/types/type";
+import {
+  extractAttributesFromConfig,
+  generateTypeDefinition,
+  resolveTypeDefinitionPath,
+} from "./type-generator";
+import type { AttributeListConfig, AttributesConfig } from "./type-generator";
+
+describe("generateTypeDefinition", () => {
+  test.each<{
+    name: string;
+    args: Parameters<typeof generateTypeDefinition>;
+    expected: string[];
+  }>([
+    {
+      name: "generates tuple type in __tuple property",
+      args: [undefined, ["attr1", "attr2"]],
+      expected: ["__tuple?: [string, string]"],
+    },
+    {
+      name: "generates Attributes interface",
+      args: [{ role: { type: '"MANAGER" | "STAFF"' }, isActive: { type: "boolean" } }, undefined],
+      expected: ["interface Attributes", 'role: "MANAGER" | "STAFF"', "isActive: boolean"],
+    },
+    {
+      name: "generates optional key for an optional-field-derived attribute",
+      args: [{ nickname: { type: "string", optional: true } }, undefined],
+      expected: ["nickname?: string;"],
+    },
+    {
+      name: "generates empty Attributes when no attributes",
+      args: [undefined, undefined],
+      expected: ["interface Attributes {}", "interface AttributeList", "__tuple?: []"],
+    },
+    {
+      name: "includes proper file header and structure",
+      args: [undefined, undefined],
+      expected: [
+        "// This file is auto-generated",
+        'declare module "@tailor-platform/sdk"',
+        "export {};",
+      ],
+    },
+    {
+      name: "generates empty MachineUserNameRegistry when no machine users provided",
+      args: [undefined, undefined],
+      expected: ["interface MachineUserNameRegistry {}"],
+    },
+    {
+      name: "generates empty IdpNameRegistry when no idps provided",
+      args: [undefined, undefined],
+      expected: ["interface IdpNameRegistry {}"],
+    },
+    {
+      name: "generates IdpNameRegistry with idp names",
+      args: [undefined, undefined, undefined, undefined, ["primary-idp", "backoffice"]],
+      expected: ["interface IdpNameRegistry", '"primary-idp": true;', "backoffice: true;"],
+    },
+  ])("should $name", ({ args, expected }) => {
+    const result = generateTypeDefinition(...args);
+    for (const substring of expected) {
+      expect(result).toContain(substring);
+    }
+  });
+
+  test("should generate interface AttributeList for declaration merging", () => {
+    const attributes: AttributesConfig = {
+      role: { type: '"MANAGER" | "STAFF"' },
+    };
+    const attributeList: AttributeListConfig = [];
+
+    const result = generateTypeDefinition(attributes, attributeList);
+
+    expect(result).toContain("interface AttributeList");
+    expect(result).not.toContain("type AttributeList =");
+    expect(result).toContain("__tuple?: []");
+  });
+
+  test("should generate Attributes interface", () => {
+    const attributes: AttributesConfig = {
+      role: { type: '"MANAGER" | "STAFF"' },
+      isActive: { type: "boolean" },
+    };
+
+    const result = generateTypeDefinition(attributes, undefined);
+
+    expect(result).toContain("interface Attributes");
+    expect(result).toContain('role: "MANAGER" | "STAFF"');
+    expect(result).toContain("isActive: boolean");
+  });
+
+  test("should generate empty Attributes when no attributes", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface Attributes {}");
+    expect(result).toContain("interface AttributeList");
+    expect(result).toContain("__tuple?: []");
+  });
+
+  test("should include proper file header and structure", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("// This file is auto-generated");
+    expect(result).toContain('declare module "@tailor-platform/sdk"');
+    expect(result).toContain("export {};");
+  });
+
+  test("should generate Env interface with value types", () => {
+    const env = {
+      hoge: 1,
+      fuga: "hello",
+      piyo: true,
+    };
+
+    const result = generateTypeDefinition(undefined, undefined, env);
+
+    expect(result).toContain("interface Env");
+    expect(result).toContain("hoge: number;");
+    expect(result).toContain("fuga: string;");
+    expect(result).toContain("piyo: boolean;");
+  });
+
+  test("should never emit env values into the generated file", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      TOKEN: "xoxb-must-not-leak",
+      RETRIES: 3,
+      ENABLED: false,
+    });
+
+    expect(result).not.toContain("xoxb-must-not-leak");
+    expect(result).not.toContain("RETRIES: 3");
+    expect(result).not.toContain("ENABLED: false");
+  });
+
+  test("should quote env keys that are not valid identifiers", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      "API-BASE": "https://example.com",
+      appName: "my-app",
+    });
+
+    expect(result).toContain('"API-BASE": string;');
+    // Valid identifiers stay unquoted (matches formatter output)
+    expect(result).toContain("appName: string;");
+    expect(result).not.toContain('"appName"');
+  });
+
+  test("should generate empty Env interface when no env provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface Env {}");
+  });
+
+  test("should generate empty MachineUserNameRegistry when no machine users provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface MachineUserNameRegistry {}");
+    expect(result).not.toContain('declare module "@tailor-platform/sdk/cli"');
+  });
+
+  test("should generate MachineUserNameRegistry with machine user names", () => {
+    const result = generateTypeDefinition(undefined, undefined, undefined, [
+      "manager-machine-user",
+      "kiosk",
+    ]);
+
+    expect(result).toContain("interface MachineUserNameRegistry");
+    expect(result).not.toContain('declare module "@tailor-platform/sdk/cli"');
+    // Names with hyphens are quoted
+    expect(result).toContain('"manager-machine-user": true;');
+    // Valid identifiers are emitted unquoted (matches formatter output)
+    expect(result).toContain("kiosk: true;");
+    expect(result).not.toContain('"kiosk": true;');
+  });
+
+  test("should generate empty ConnectionNameRegistry when no connections provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface ConnectionNameRegistry {}");
+  });
+
+  test("should generate ConnectionNameRegistry with connection names", () => {
+    const result = generateTypeDefinition(undefined, undefined, undefined, undefined, undefined, [
+      "google-oauth",
+      "ms365-oauth",
+    ]);
+
+    expect(result).toContain("interface ConnectionNameRegistry");
+    expect(result).toContain('"google-oauth": true;');
+    expect(result).toContain('"ms365-oauth": true;');
+  });
+
+  test("should generate empty AIGatewayNameRegistry when no AI Gateways provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface AIGatewayNameRegistry {}");
+  });
+
+  test("should generate AIGatewayNameRegistry with AI Gateway names", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ["my-aigateway", "second-gateway"],
+    );
+
+    expect(result).toContain("interface AIGatewayNameRegistry");
+    expect(result).toContain('"my-aigateway": true;');
+    expect(result).toContain('"second-gateway": true;');
+  });
+
+  test("should generate empty SecretVaultNameRegistry when no secrets provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface SecretVaultNameRegistry {}");
+  });
+
+  test("should generate SecretVaultNameRegistry with vault -> secret name unions", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        "api-keys": ["stripe-secret-key", "sendgrid-api-key"],
+        database: ["analytics-connection-string"],
+      },
+    );
+
+    expect(result).toContain("interface SecretVaultNameRegistry");
+    expect(result).toContain('"api-keys": "stripe-secret-key" | "sendgrid-api-key";');
+    expect(result).toContain('database: "analytics-connection-string";');
+  });
+
+  test("should generate never for a vault with no secret names", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { empty: [] },
+    );
+
+    expect(result).toContain("empty: never;");
+  });
+});
+
+describe("resolveTypeDefinitionPath", () => {
+  const originalEnv = process.env.TAILOR_DTS_PATH;
+
+  beforeEach(() => {
+    delete process.env.TAILOR_DTS_PATH;
+  });
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.TAILOR_DTS_PATH = originalEnv;
+    } else {
+      delete process.env.TAILOR_DTS_PATH;
+    }
+  });
+
+  test("should default to tailor.d.ts next to config file", () => {
+    const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
+    expect(result).toBe(path.resolve("/project", "tailor.d.ts"));
+  });
+
+  test("should use TAILOR_DTS_PATH when set to an absolute path", () => {
+    process.env.TAILOR_DTS_PATH = "/custom/output/types.d.ts";
+    const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
+    expect(result).toBe("/custom/output/types.d.ts");
+  });
+
+  test("should resolve TAILOR_DTS_PATH relative to cwd when relative", () => {
+    process.env.TAILOR_DTS_PATH = "custom/types.d.ts";
+    const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
+    expect(result).toBe(path.resolve("custom/types.d.ts"));
+  });
+});
+
+describe("extractAttributesFromConfig + generateTypeDefinition", () => {
+  test("renders machineUserAttributes into Attributes", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {
+          role: t.enum(["ADMIN", "WORKER"]),
+          roles: t.enum(["ADMIN", "WORKER"], { array: true }),
+          isActive: t.bool(),
+          tags: t.string({ array: true }),
+          nickname: t.string({ optional: true }),
+        },
+        machineUsers: {
+          admin: {
+            attributes: {
+              role: "ADMIN",
+              roles: ["ADMIN"],
+              isActive: true,
+              tags: ["root"],
+            },
+          },
+        },
+      }),
+    };
+
+    const { attributes } = extractAttributesFromConfig(config);
+    const content = generateTypeDefinition(attributes, undefined);
+
+    expect(content).toContain('role: "ADMIN" | "WORKER";');
+    expect(content).toContain('roles: ("ADMIN" | "WORKER")[];');
+    expect(content).toContain("isActive: boolean;");
+    expect(content).toContain("tags: string[];");
+    // A field derived from an optional source field renders as an optional key,
+    // matching the machine user's own ability to omit it.
+    expect(content).toContain("nickname?: string;");
+    expect(content).not.toContain("nickname: string;");
+  });
+
+  test("extracts machine user names into MachineUserNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {
+          role: t.enum(["ADMIN", "WORKER"]),
+        },
+        machineUsers: {
+          admin: { attributes: { role: "ADMIN" } },
+          worker: { attributes: { role: "WORKER" } },
+        },
+      }),
+    };
+
+    const { attributes, machineUserNames } = extractAttributesFromConfig(config);
+    expect(machineUserNames).toEqual(["admin", "worker"]);
+
+    const content = generateTypeDefinition(attributes, undefined, undefined, machineUserNames);
+    expect(content).toContain("interface MachineUserNameRegistry");
+    expect(content).toContain("admin: true;");
+    expect(content).toContain("worker: true;");
+  });
+
+  test("extracts idp names into IdpNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      idp: [{ name: "primary-idp" } as never, { name: "backoffice" } as never],
+    };
+
+    const { idpNames } = extractAttributesFromConfig(config);
+    expect(idpNames).toEqual(["primary-idp", "backoffice"]);
+
+    const content = generateTypeDefinition(undefined, undefined, undefined, undefined, idpNames);
+    expect(content).toContain("interface IdpNameRegistry");
+    expect(content).toContain('"primary-idp": true;');
+    expect(content).toContain("backoffice: true;");
+  });
+
+  test("de-duplicates idp names so the registry has unique keys", () => {
+    const config = {
+      name: "test-app",
+      idp: [
+        { name: "primary-idp" } as never,
+        { name: "backoffice" } as never,
+        { name: "primary-idp" } as never,
+      ],
+    };
+
+    const { idpNames } = extractAttributesFromConfig(config);
+    expect(idpNames).toEqual(["primary-idp", "backoffice"]);
+  });
+
+  test("extracts connection names into ConnectionNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {},
+        machineUsers: {},
+        connections: {
+          "google-oauth": {
+            type: "oauth2",
+            providerUrl: "https://accounts.google.com",
+            issuerUrl: "https://accounts.google.com",
+            clientId: "x",
+            clientSecret: "y",
+          },
+          "ms365-oauth": {
+            type: "oauth2",
+            providerUrl: "https://login.microsoftonline.com",
+            issuerUrl: "https://login.microsoftonline.com",
+            clientId: "x",
+            clientSecret: "y",
+          },
+        },
+      }),
+    };
+
+    const { connectionNames } = extractAttributesFromConfig(config);
+    expect(connectionNames).toEqual(["google-oauth", "ms365-oauth"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      connectionNames,
+    );
+    expect(content).toContain("interface ConnectionNameRegistry");
+    expect(content).toContain('"google-oauth": true;');
+    expect(content).toContain('"ms365-oauth": true;');
+  });
+
+  test("extracts AI Gateway names into AIGatewayNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      aiGateways: [{ name: "my-aigateway" } as never, { name: "second-gateway" } as never],
+    };
+
+    const { aiGatewayNames } = extractAttributesFromConfig(config);
+    expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      aiGatewayNames,
+    );
+    expect(content).toContain("interface AIGatewayNameRegistry");
+    expect(content).toContain('"my-aigateway": true;');
+    expect(content).toContain('"second-gateway": true;');
+  });
+
+  test("de-duplicates AI Gateway names so the registry has unique keys", () => {
+    const config = {
+      name: "test-app",
+      aiGateways: [
+        { name: "my-aigateway" } as never,
+        { name: "second-gateway" } as never,
+        { name: "my-aigateway" } as never,
+      ],
+    };
+
+    const { aiGatewayNames } = extractAttributesFromConfig(config);
+    expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
+  });
+
+  test("extracts the local auth service's name into AuthNamespaceNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: { name: "my-auth", machineUsers: {} } as never,
+    };
+
+    const { authNamespaceNames } = extractAttributesFromConfig(config);
+    expect(authNamespaceNames).toEqual(["my-auth"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      authNamespaceNames,
+    );
+    expect(content).toContain("interface AuthNamespaceNameRegistry");
+    expect(content).toContain('"my-auth": true;');
+  });
+
+  test("omits AuthNamespaceNameRegistry entries when no auth is configured", () => {
+    const config = { name: "test-app" };
+
+    const { authNamespaceNames } = extractAttributesFromConfig(config);
+    expect(authNamespaceNames).toBeUndefined();
+
+    const content = generateTypeDefinition(undefined, undefined);
+    expect(content).toContain("interface AuthNamespaceNameRegistry {}");
+  });
+
+  test("extracts Secret Manager vault names mapped to their secret names into SecretVaultNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      secrets: {
+        vaults: {
+          "api-keys": { "stripe-secret-key": "sk_test_123", "sendgrid-api-key": "SG.abc" },
+          database: { "analytics-connection-string": "postgres://..." },
+        },
+        options: { ignoreNullishValues: false },
+      } as never,
+    };
+
+    const { secretVaultNames } = extractAttributesFromConfig(config);
+    expect(secretVaultNames).toEqual({
+      "api-keys": ["stripe-secret-key", "sendgrid-api-key"],
+      database: ["analytics-connection-string"],
+    });
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      secretVaultNames,
+    );
+    expect(content).toContain("interface SecretVaultNameRegistry");
+    expect(content).toContain('"api-keys": "stripe-secret-key" | "sendgrid-api-key";');
+    expect(content).toContain('database: "analytics-connection-string";');
+  });
+
+  test("never leaks a vault's secret values, only its secret names", () => {
+    const config = {
+      name: "test-app",
+      secrets: {
+        vaults: {
+          "api-keys": { "stripe-secret-key": "LEAK_ME_IF_YOU_SEE_THIS" },
+        },
+        options: { ignoreNullishValues: false },
+      } as never,
+    };
+
+    const { secretVaultNames } = extractAttributesFromConfig(config);
+    expect(JSON.stringify(secretVaultNames)).not.toContain("LEAK_ME_IF_YOU_SEE_THIS");
+    expect(secretVaultNames).toEqual({ "api-keys": ["stripe-secret-key"] });
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      secretVaultNames,
+    );
+    expect(content).not.toContain("LEAK_ME_IF_YOU_SEE_THIS");
+  });
+
+  test("omits SecretVaultNameRegistry entries when no secrets are configured", () => {
+    const config = { name: "test-app" };
+
+    const { secretVaultNames } = extractAttributesFromConfig(config);
+    expect(secretVaultNames).toBeUndefined();
+
+    const content = generateTypeDefinition(undefined, undefined);
+    expect(content).toContain("interface SecretVaultNameRegistry {}");
+  });
+});

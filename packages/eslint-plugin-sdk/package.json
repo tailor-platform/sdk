@@ -1,0 +1,58 @@
+{
+  "name": "@tailor-platform/eslint-plugin-sdk",
+  "version": "0.3.0",
+  "description": "Lint rules for Tailor Platform SDK applications",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tailor-platform/sdk.git",
+    "directory": "packages/eslint-plugin-sdk"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "knip": "knip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepare": "tsdown",
+    "publint": "publint --strict"
+  },
+  "dependencies": {
+    "@types/eslint": "9.6.1"
+  },
+  "devDependencies": {
+    "@tailor-platform/shared": "workspace:^",
+    "@types/node": "24.13.6",
+    "eslint": "10.11.0",
+    "oxlint": "1.82.0",
+    "tsdown": "0.23.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
+  },
+  "peerDependencies": {
+    "eslint": ">=9.0.0"
+  },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}

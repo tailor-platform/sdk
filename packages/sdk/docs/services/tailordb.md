@@ -1,0 +1,736 @@
+# TailorDB
+
+TailorDB is a type-safe database service for defining and managing data models on the Tailor Platform.
+
+## Overview
+
+TailorDB provides:
+
+- Type-safe schema definitions using TypeScript
+- Automatic GraphQL API generation (CRUD operations)
+- Relations between tables with automatic index and foreign key constraints
+- Permission system for access control
+- Field-level hooks and validations
+
+For the official Tailor Platform documentation, see [TailorDB Guide](https://docs.tailor.tech/guides/tailordb/overview).
+
+## Table Definition
+
+Define TailorDB tables in files matching glob patterns specified in `tailor.config.ts`.
+
+**Definition Rules:**
+
+- **Multiple tables per file**: You can define multiple TailorDB tables in a single file
+- **Export method**: Use named exports (`export const`)
+- **Export both value and type**: Always export both the runtime value and TypeScript type
+- **Uniqueness**: Table names must be unique across all TailorDB namespaces in the application
+
+```typescript
+import { db } from "@tailor-platform/sdk";
+
+// Export both value and type
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  age: db.int(),
+  ...db.fields.timestamps(),
+});
+export type user = typeof user;
+
+// You can define multiple tables in the same file
+export const role = db.table("Role", {
+  name: db.string().unique(),
+});
+export type role = typeof role;
+```
+
+Specify plural form by passing an array as first argument:
+
+```typescript
+db.table(["User", "UserList"], {
+  name: db.string(),
+});
+```
+
+Pass a description as second argument:
+
+```typescript
+db.table("User", "User in the system", {
+  name: db.string(),
+});
+```
+
+## Field Types
+
+| Method                            | TailorDB | TypeScript     |
+| --------------------------------- | -------- | -------------- |
+| `db.string()`                     | String   | string         |
+| `db.int()`                        | Integer  | number         |
+| `db.float()`                      | Float    | number         |
+| [`db.decimal()`](#decimal-fields) | Decimal  | string         |
+| `db.bool()`                       | Boolean  | boolean        |
+| `db.date()`                       | Date     | Date \| string |
+| `db.datetime()`                   | DateTime | Date \| string |
+| `db.time()`                       | Time     | string         |
+| `db.uuid()`                       | UUID     | string         |
+| [`db.enum()`](#enum-fields)       | Enum     | string         |
+| [`db.object()`](#object-fields)   | Nested   | object         |
+
+### Optional and Array Fields
+
+```typescript
+db.string({ optional: true });
+db.string({ array: true });
+db.string({ optional: true, array: true });
+```
+
+### Decimal Fields
+
+Decimal fields are stored as strings to preserve precision. The optional `scale`
+parameter sets the number of digits after the decimal point and must be an
+integer between 0 and 12. When `scale` is omitted, the platform default of 6 is
+used.
+
+```typescript
+// Default scale (6 decimal places)
+db.decimal();
+
+// Custom scale (2 decimal places)
+db.decimal({ scale: 2 });
+
+// Optional with custom scale
+db.decimal({ scale: 4, optional: true });
+```
+
+Values are rounded half-up to fit the configured scale before being stored.
+Negative values follow the same rule based on absolute magnitude:
+
+| Input         | Scale | Stored       |
+| ------------- | ----- | ------------ |
+| `"1.234"`     | 2     | `"1.23"`     |
+| `"1.235"`     | 2     | `"1.24"`     |
+| `"-1.235"`    | 2     | `"-1.24"`    |
+| `"1.5"`       | 0     | `"2"`        |
+| `"1.123456"`  | 6     | `"1.123456"` |
+| `"1.1234567"` | 6     | `"1.123457"` |
+
+### Enum Fields
+
+Enum fields must define at least one allowed value. Empty arrays are rejected during `tailor deploy` and `tailor tailordb migration generate`.
+
+```typescript
+db.enum(["red", "green", "blue"]);
+db.enum([
+  { value: "active", description: "Active status" },
+  { value: "inactive", description: "Inactive status" },
+]);
+```
+
+### Object Fields
+
+```typescript
+// Object field
+db.object({
+  street: db.string(),
+  city: db.string(),
+  country: db.string(),
+});
+
+// Object array field
+db.object(
+  {
+    id: db.uuid(),
+    name: db.string(),
+    size: db.int(),
+  },
+  { array: true },
+);
+
+// Optional object array field
+db.object(
+  {
+    kind: db.string(),
+    days: db.int(),
+  },
+  { optional: true, array: true },
+);
+```
+
+## Field Modifiers
+
+### Description
+
+```typescript
+db.string().description("User's full name");
+```
+
+### Index / Unique
+
+```typescript
+db.string().index();
+db.string().unique();
+```
+
+### Relations
+
+Add a relation to field with automatic index and foreign key constraint:
+
+```typescript
+const role = db.table("Role", {
+  name: db.string(),
+});
+
+const user = db.table("User", {
+  name: db.string(),
+  roleId: db.uuid().relation({
+    type: "n-1",
+    toward: { table: role },
+  }),
+});
+```
+
+`toward.type` is a deprecated alias for `toward.table` and will be removed in v3; `tailor upgrade` offers a codemod to rewrite it.
+
+For one-to-one relations, use `type: "1-1"`:
+
+```typescript
+const userProfile = db.table("UserProfile", {
+  userId: db.uuid().relation({
+    type: "1-1",
+    toward: { table: user },
+  }),
+  bio: db.string(),
+});
+```
+
+For foreign key constraint without creating a relation, use `type: "keyOnly"`:
+
+```typescript
+const user = db.table("User", {
+  roleId: db.uuid().relation({
+    type: "keyOnly",
+    toward: { table: role },
+  }),
+});
+```
+
+Create relations against different fields using `toward.key`:
+
+```typescript
+const user = db.table("User", {
+  email: db.string().unique(),
+});
+
+const userProfile = db.table("UserProfile", {
+  userEmail: db.string().relation({
+    type: "1-1",
+    toward: { table: user, key: "email", as: "user" },
+  }),
+});
+```
+
+`userEmail` does not end in `ID`, `Id`, or `id`, so this example specifies the forward relation
+name with `toward.as`.
+
+Customize relation names using `toward.as` / `backward` options:
+
+```typescript
+const userProfile = db.table("UserProfile", {
+  userId: db.uuid().relation({
+    type: "1-1",
+    toward: { table: user, as: "base" },
+    backward: "profile",
+  }),
+});
+```
+
+This generates the following GraphQL types:
+
+```graphql
+type UserProfile {
+  userId: ID!
+  base: User # toward.as: access User from UserProfile
+}
+
+type User {
+  id: ID!
+  profile: UserProfile # backward: access UserProfile from User
+}
+```
+
+- `toward.as` - Customizes the field name for accessing the related table from this table
+- `backward` - Customizes the field name for accessing this table from the related table
+
+Relation names share the same GraphQL field namespace as fields, files, and other relations on
+the table. The SDK rejects duplicate or empty relation names. When `toward.as` is omitted, the
+default forward name comes from the relation field name with a trailing `ID`, `Id`, or `id`
+removed. This lets multiple fields point to the same target table with distinct forward names:
+
+```typescript
+const post = db.table("Post", {
+  authorID: db.uuid().relation({
+    type: "n-1",
+    toward: { table: user },
+    backward: "authoredPosts",
+  }),
+  reviewerID: db.uuid().relation({
+    type: "n-1",
+    toward: { table: user },
+    backward: "reviewedPosts",
+  }),
+});
+```
+
+These fields generate the forward names `author` and `reviewer`. A relation field without one of
+the recognized ID suffixes needs an explicit `toward.as`, because its generated forward name
+would conflict with the field itself.
+
+Use `toward.as` or `backward` when a generated relation name would conflict with an existing
+field, files entry, or relation on the same table.
+
+### Hooks
+
+Add hooks to execute functions during data creation or update.
+
+#### Field-level Hooks
+
+Set hooks directly on individual fields.
+
+Create hooks receive:
+
+- `input`: The field value from the input (null when not provided)
+- `invoker`: Principal performing the operation
+- `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
+
+Update hooks receive the same arguments plus:
+
+- `oldValue`: The previous field value (null only for optional fields)
+
+```typescript
+db.string().hooks({
+  create: ({ invoker }) => invoker?.id ?? "",
+  update: ({ input, oldValue }) => input ?? oldValue,
+});
+```
+
+Field-level hooks operate on a single field and cannot access other fields. Use table-level hooks for cross-field logic.
+
+#### Table-level Hooks
+
+Set hooks across multiple fields using `db.table().hooks()`. The hook returns an object with the fields to override. When both field-level and table-level hooks exist for the same field, table-level hooks take priority.
+
+Create hooks receive:
+
+- `input`: The submitted record data. When field-level hooks or defaults exist, `input` reflects their applied results
+- `invoker`: Principal performing the operation
+- `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
+
+Update hooks receive the same arguments plus:
+
+- `oldRecord`: The existing record (non-null)
+
+```typescript
+export const customer = db
+  .table("Customer", {
+    firstName: db.string(),
+    lastName: db.string(),
+    fullName: db.string(),
+  })
+  .hooks({
+    create: ({ input }) => ({
+      fullName: `${input.firstName} ${input.lastName}`,
+    }),
+    update: ({ input, oldRecord }) => ({
+      fullName: `${input.firstName ?? oldRecord.firstName} ${input.lastName ?? oldRecord.lastName}`,
+    }),
+  });
+```
+
+Use `now` to stamp several fields with the exact same instant:
+
+```typescript
+export const order = db
+  .table("Order", {
+    createdAt: db.datetime(),
+    updatedAt: db.datetime(),
+  })
+  .hooks({
+    create: ({ now }) => ({ createdAt: now, updatedAt: now }),
+    update: ({ now }) => ({ updatedAt: now }),
+  });
+```
+
+**Note:** `.hooks()` can only be called once on a table. Duplicate table-level calls fail at compile time and throw at runtime.
+
+### Validation
+
+Add validation rules to fields. Validators run after hooks.
+
+**Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
+
+```typescript
+// value is string[], not string
+db.string({ array: true }).validate(({ value }) => value.length >= 2);
+```
+
+#### Field-level Validation
+
+Set validators directly on individual fields. Each validator receives `{ value }` (the field value after hooks) and returns an error message string to fail, or void to pass:
+
+```typescript
+db.string().validate(
+  ({ value }) => (value.includes("@") ? undefined : "Must contain @"),
+  ({ value }) => (value.length >= 5 ? undefined : "Must be at least 5 characters"),
+);
+```
+
+#### Table-level Validation
+
+Set a validator across all fields using `db.table().validate()`. The validator receives `{ newRecord, oldRecord, invoker }` and an `issues()` callback to report errors per field:
+
+```typescript
+export const user = db
+  .table("User", {
+    name: db.string(),
+    email: db.string(),
+  })
+  .validate(({ newRecord }, issues) => {
+    if (newRecord.name.length <= 5) {
+      issues("name", "Name must be longer than 5 characters");
+    }
+    if (!newRecord.email.includes("@")) {
+      issues("email", "Must contain @");
+    }
+  });
+```
+
+### Defaults
+
+Set a default value for a required field on create. The field becomes optional in the create input — the default fills in when no value is provided:
+
+```typescript
+db.int().default(0);
+db.string().default("pending");
+```
+
+For datetime/date/time fields, pass `"now"` to use the operation timestamp:
+
+```typescript
+db.datetime().default("now");
+```
+
+**Note:** `.validate()` can only be called once on a table. Duplicate table-level calls fail at compile time and throw at runtime.
+
+### Vector Search
+
+```typescript
+db.string().vector();
+```
+
+### Serial / Auto-increment
+
+```typescript
+db.int().serial({
+  start: 0,
+  maxValue: 100,
+});
+
+db.string().serial({
+  start: 0,
+  format: "CUST_%d",
+});
+```
+
+### Common Fields
+
+```typescript
+export const user = db.table("User", {
+  name: db.string(),
+  ...db.fields.timestamps(),
+});
+```
+
+`db.fields.timestamps()` adds non-null `createdAt` and `updatedAt` datetime fields. Both fields are populated when a record is created; provided values are preserved so seed data can use historical timestamps. `updatedAt` is also refreshed automatically when a record is updated.
+
+## Table Modifiers
+
+Table builder methods that set one table-level configuration can be called only once on the same table. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+
+Conditional assignment is still supported when only one branch calls the method:
+
+```typescript
+let user = db.table("User", {
+  name: db.string(),
+});
+
+if (enableFiles) {
+  user = user.files({
+    avatar: "profile image",
+  });
+}
+```
+
+### Composite Indexes
+
+```typescript
+db.table("User", {
+  firstName: db.string(),
+  lastName: db.string(),
+}).indexes({
+  fields: ["firstName", "lastName"],
+  unique: true,
+  name: "user_name_idx",
+});
+```
+
+### File Fields
+
+```typescript
+db.table("User", {
+  name: db.string(),
+}).files({
+  avatar: "profile image",
+});
+```
+
+### Features
+
+```typescript
+db.table("User", {
+  name: db.string(),
+}).features({
+  aggregation: true,
+  bulkUpsert: true,
+});
+```
+
+#### Event Publishing
+
+Enable event publishing for a table to trigger executors on record changes:
+
+```typescript
+db.table("User", {
+  name: db.string(),
+}).features({
+  publishEvents: true,
+});
+```
+
+**Behavior:**
+
+- When `publishEvents: true`, record creation/update/deletion events are published
+- When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
+- An executor declared with `disabled: true` never runs, so it does not count as using the table
+- While a `deploy` applies pending migrations, every table in the migrating namespace is read-only: create, update, delete, and bulk-upsert operations are disabled while the existing read setting is preserved. Record event publishing is also switched off so a migration script's writes do not reach executors from the previous deploy. After success, the configured settings take effect. If a later migration fails, settings from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior settings and leaves its newly created tables restricted until a successful retry. Restoration is skipped if the checkpoint number or migration history changed concurrently, or if checkpoint ownership cannot be verified. A table left behind by a failed post-checkpoint deletion also remains read-only for manual recovery
+
+**Use cases:**
+
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it
+
+   ```typescript
+   // publishEvents is automatically enabled because an executor uses this table
+   export const order = db.table("Order", {
+     status: db.string(),
+   });
+
+   // In executor file:
+   export default createExecutor({
+     trigger: recordCreatedTrigger(order),
+     // ...
+   });
+   ```
+
+2. **Manual enable**: Enable event publishing for external consumers or debugging
+
+   ```typescript
+   db.table("AuditLog", {
+     action: db.string(),
+   }).features({
+     publishEvents: true, // Enable even without executor triggers
+   });
+   ```
+
+3. **Explicit disable**: Disable event publishing for a table that doesn't need it (error if an executor taking part in the same run uses it)
+
+   ```typescript
+   db.table("TempData", {
+     data: db.string(),
+   }).features({
+     publishEvents: false, // Explicitly disable
+   });
+   ```
+
+**Sharing a table across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the table to keep it on regardless of which configs take part.
+
+#### GraphQL Operations
+
+Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a table. All operations are enabled by default.
+
+While a `deploy` applies pending migrations, every GraphQL operation — `create`, `update`, `delete`, `read`, and bulk upsert — is switched off across the migrating namespace, so nothing reads or writes an intermediate schema. After success, the configured operations take effect. If a later migration fails, operations from the last confirmed checkpoint are restored; an uncommitted migration restores existing tables' prior operations and leaves its newly created tables restricted until a successful retry. Restoration is skipped if the checkpoint number or migration history changed concurrently.
+
+```typescript
+db.table("Order", {
+  status: db.string(),
+}).features({
+  gqlOperations: {
+    delete: false, // Disable the delete mutation
+  },
+});
+```
+
+Use the `"query"` alias to disable all mutations at once (read-only table: `create`/`update`/`delete` false, `read` true):
+
+```typescript
+db.table("AuditLog", {
+  action: db.string(),
+}).features({
+  gqlOperations: "query",
+});
+```
+
+**Namespace-level default**
+
+Set a default for every table in a TailorDB namespace in `tailor.config.ts`. A table's own `.features({ gqlOperations })` always takes precedence over this default.
+
+```typescript
+// tailor.config.ts
+export default defineConfig({
+  db: {
+    tailordb: {
+      files: ["./tailordb/*.ts"],
+      gqlOperations: { delete: false }, // Default for every table in this namespace
+    },
+  },
+});
+```
+
+This default is re-evaluated on every `tailor deploy`, so changing it also updates tables that already exist on the platform, not only newly created ones.
+
+### Field Extraction (`pickFields` / `omitFields`)
+
+Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executors, seed schemas, etc.
+
+#### `pickFields(keys, options)`
+
+Select specific fields and optionally modify their properties:
+
+```typescript
+const user = db.table("User", {
+  id: db.uuid(),
+  name: db.string(),
+  email: db.string().unique(),
+  ...db.fields.timestamps(),
+});
+
+// Pick id, createdAt, and updatedAt, making them optional
+user.pickFields(["id", "createdAt", "updatedAt"], { optional: true });
+```
+
+Available options:
+
+| Option     | Effect                                |
+| ---------- | ------------------------------------- |
+| `optional` | Makes the selected fields optional    |
+| `array`    | Makes the selected fields array types |
+
+**Note:** The `array` option cannot change fields with custom validation — their validators expect the original value shape. Define a new field with a matching validator instead.
+
+#### `omitFields(keys)`
+
+Return all fields except the specified ones:
+
+```typescript
+// All fields except id, createdAt, and updatedAt
+user.omitFields(["id", "createdAt", "updatedAt"]);
+```
+
+#### Common Pattern: Input Schema Composition
+
+The typical use case is combining `pickFields` and `omitFields` with spread syntax to build input schemas where identifiers are optional but other fields remain required:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+import { user } from "../tailordb/user";
+
+export default createResolver({
+  name: "createUser",
+  operation: "mutation",
+  input: {
+    // id/createdAt/updatedAt are optional (auto-generated), other fields are required
+    ...user.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
+    ...user.omitFields(["id", "createdAt", "updatedAt"]),
+  },
+  output: t.object({ id: t.uuid() }),
+  body: async (context) => {
+    // ...
+    return { id: "..." };
+  },
+});
+```
+
+This is also used in seed data schemas:
+
+```typescript
+import { t } from "@tailor-platform/sdk";
+import { invoice } from "../../tailordb/invoice";
+
+const schemaType = t.object({
+  ...invoice.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
+  ...invoice.omitFields(["id", "createdAt", "updatedAt", "invoiceNumber", "sequentialId"]),
+});
+```
+
+### Permissions
+
+Configure Permission and GQLPermission. For details, see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).
+
+**Important**: Following the secure-by-default principle, all operations are denied if permissions are not configured. You must explicitly grant permissions for each operation (create, read, update, delete).
+
+`generate`/`deploy` reject a table that has no `.permission()`, or no `.gqlPermission()` while GraphQL operations are enabled for it (see [GraphQL Operations](#graphql-operations) above). Disable GraphQL exposure entirely with `.features({ gqlOperations: { create: false, update: false, delete: false, read: false } })` if a table only needs record-level permission.
+
+```typescript
+db.table("User", {
+  name: db.string(),
+  role: db.enum(["admin", "user"]).index(),
+})
+  .permission({
+    create: [[{ user: "role" }, "=", "admin"]],
+    read: [
+      [{ user: "role" }, "=", "admin"],
+      [{ record: "id" }, "=", { user: "id" }],
+    ],
+    update: [[{ user: "role" }, "=", "admin"]],
+    delete: [[{ user: "role" }, "=", "admin"]],
+  })
+  .gqlPermission([
+    { conditions: [[{ user: "role" }, "=", "admin"]], actions: "all" },
+    { conditions: [[{ user: "role" }, "=", "user"]], actions: ["read"] },
+  ]);
+```
+
+#### Development/Test Helpers
+
+For local development, prototyping, or testing, the SDK provides helper constants that grant full access without conditions:
+
+```typescript
+import {
+  db,
+  unsafeAllowAllTypePermission,
+  unsafeAllowAllGqlPermission,
+} from "@tailor-platform/sdk";
+
+db.table("User", {
+  name: db.string(),
+})
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+```
+
+**Warning**: Do not use `unsafeAllowAllTypePermission` or `unsafeAllowAllGqlPermission` in production environments as they effectively disable authorization checks.
+
+## Migrations
+
+When you change a TailorDB table definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor deploy`. See the [TailorDB Migrations guide](./tailordb-migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
+
+For the CLI command reference, see [`tailordb migration`](../cli/tailordb.md#tailordb-migration).

@@ -1,6 +1,60 @@
-.challenge/
+# Dependency directories
 node_modules/
-.pnpm-store/
-.pnpm-home/
-.cache/
-.tailor/cache/
+
+# TypeScript compiled output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Eslint cache
+.eslintcache
+
+# Bundle analysis
+.sonda/
+bundle-size.json
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# IDEs and editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Tailor Platform SDK
+**/.tailor/**
+tailor.d.ts
+!packages/create-sdk/templates/*/tailor.d.ts
+
+.mcp.json
+
+# AI
+.agent/
+.claude/*
+!.claude/rules/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/llm-challenge
+!.claude/skills/docs-check
+!.claude/skills/tailor
+!.claude/skills/e2e-test
+/.agents/skills/e2e-setup/ids.local.env
+AGENTS.local.md
+CLAUDE.local.md
+
+.claude/tmp/
+
+# llm-challenge artifacts
+llm-challenge/results/
+llm-challenge/.cache/
+llm-challenge/.tmp/

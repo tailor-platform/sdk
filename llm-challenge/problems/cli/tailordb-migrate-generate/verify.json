@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "tailor-config-created",
+      "kind": "file-exists",
+      "path": "tailor.config.ts",
+      "description": "workspace includes a Tailor project config"
+    },
+    {
+      "id": "tailordb-model-created",
+      "kind": "file-glob",
+      "glob": "tailordb/**/*.ts",
+      "minCount": 1,
+      "description": "workspace includes a TailorDB model source"
+    },
+    {
+      "id": "migration-json-created",
+      "kind": "file-glob",
+      "glob": "migrations/**/*.json",
+      "minCount": 1,
+      "description": "CLI generated migration JSON artifacts"
+    }
+  ]
+}

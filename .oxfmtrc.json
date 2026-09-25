@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "sortImports": {
+    "groups": ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
+    "newlinesBetween": false,
+    "ignoreCase": true,
+    "order": "asc"
+  },
+  "ignorePatterns": [
+    "**/CHANGELOG.md",
+    "node_modules/",
+    "pnpm-lock.yaml",
+    "dist/",
+    "build/",
+    "out/",
+    "*.tsbuildinfo",
+    "logs",
+    "*.log",
+    "npm-debug.log*",
+    "yarn-debug.log*",
+    "yarn-error.log*",
+    "pnpm-debug.log*",
+    "lerna-debug.log*",
+    "coverage/",
+    ".tailor",
+    "example/tests/fixtures/",
+    "example/seed/",
+    "packages/create-sdk/templates/*/src/seed/",
+    "packages/tailor-proto/",
+    "packages/sdk-codemod/codemods/**/tests/",
+    "packages/sdk/docs/migration/v2.md",
+    "generated/"
+  ]
+}

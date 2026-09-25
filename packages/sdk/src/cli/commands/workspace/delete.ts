@@ -1,0 +1,126 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "@politty/zod";
+import { z } from "zod";
+import { confirmationArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
+import { parseOptions } from "#/cli/shared/parse-options";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { removeProfilesForWorkspaces } from "./profile-cleanup";
+import { resolveWorkspaceFolderName, workspaceDisplayName } from "./transform";
+
+// strip unknown keys
+const deleteWorkspaceOptionsSchema = z.object({
+  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
+});
+
+export type DeleteWorkspaceOptions = z.input<typeof deleteWorkspaceOptionsSchema>;
+
+async function loadOptions(options: DeleteWorkspaceOptions) {
+  // Validate options with zod schema
+  const validated = parseOptions(deleteWorkspaceOptionsSchema, options);
+
+  const accessToken = await loadAccessToken();
+  const client = await initOperatorClient(accessToken);
+
+  return {
+    client,
+    workspaceId: validated.workspaceId,
+  };
+}
+
+/**
+ * Delete a workspace by ID.
+ * @param options - Workspace deletion options
+ * @returns Promise that resolves when deletion completes
+ */
+export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<void> {
+  // Load and validate options
+  const { client, workspaceId } = await loadOptions(options);
+
+  // Delete workspace
+  await client.deleteWorkspace({
+    workspaceId,
+  });
+}
+
+export const deleteCommand = defineAppCommand({
+  name: "delete",
+  description: "Delete a Tailor Platform workspace.",
+  args: z.strictObject({
+    "workspace-id": arg(z.string(), {
+      alias: "w",
+      description: "Workspace ID",
+    }),
+    ...confirmationArgs,
+  }),
+  run: async (args) => {
+    await assertWritable();
+    // Load and validate options
+    const { client, workspaceId } = await loadOptions({
+      workspaceId: args["workspace-id"],
+    });
+
+    // Check if workspace exists
+    let workspace;
+    try {
+      workspace = await client.getWorkspace({
+        workspaceId,
+      });
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        throw CLIError({
+          code: "WORKSPACE_NOT_FOUND",
+          message: `Workspace "${workspaceId}" not found.`,
+          cause: error,
+        });
+      }
+      throw error;
+    }
+
+    const workspaceResource = workspace.workspace;
+    const workspaceName = workspaceResource?.name ?? workspaceId;
+    const folderName = workspaceResource
+      ? await resolveWorkspaceFolderName(client, workspaceResource)
+      : "";
+    const displayName = workspaceDisplayName({ name: workspaceName, folderName });
+
+    // Confirm deletion if not forced
+    if (!args.yes) {
+      const confirmation = await prompt.text({
+        message: `Enter the workspace name to confirm deletion (${displayName}):`,
+      });
+      if (confirmation !== workspaceName && confirmation !== displayName) {
+        logger.info("Workspace deletion cancelled.");
+        return;
+      }
+    }
+
+    // Delete workspace
+    try {
+      await client.deleteWorkspace({
+        workspaceId,
+      });
+    } catch (error) {
+      // A failed call can still have removed the workspace server-side (a timeout after the
+      // server committed), so the local profile is cleaned up before the error propagates.
+      await removeProfilesForWorkspaces(new Set([workspaceId]));
+      throw error;
+    }
+
+    const profilesToDelete = await removeProfilesForWorkspaces(new Set([workspaceId]));
+
+    // Show success message
+    if (profilesToDelete.length > 0) {
+      logger.success(
+        `Workspace "${displayName}" and ${profilesToDelete.length} associated profile(s) deleted successfully.`,
+      );
+    } else {
+      logger.success(`Workspace "${displayName}" deleted successfully.`);
+    }
+  },
+});

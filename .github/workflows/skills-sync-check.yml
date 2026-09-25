@@ -1,0 +1,73 @@
+name: Skills Sync
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk/agent-skills/**"
+      - ".github/workflows/skills-sync-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/sdk/agent-skills/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  sync:
+    name: Sync skills
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout the repository
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Sync skills to root
+        run: |
+          # Copy public skills from packages/sdk/agent-skills/ to skills/.
+          # The bundled copy lives under a non-`skills/` directory so that
+          # `gh skill`'s recursive `**/skills/*/SKILL.md` match resolves to a
+          # single entry (the repo-root mirror). Root `skills/` is what both
+          # `gh skill install` and `npx skills add <repo>` actually pick up.
+
+          for skill_dir in packages/sdk/agent-skills/*/; do
+            skill_name=$(basename "$skill_dir")
+            mkdir -p "skills/$skill_name"
+            cp -r "$skill_dir"* "skills/$skill_name/"
+            echo "✓ Synced $skill_name"
+          done
+
+      - name: Upgrade gh CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh --version
+          # Upgrade to latest gh CLI (v2.90.0+ required for gh skill)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install gh -y
+          gh --version
+
+      - name: Validate skills
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh skill publish --dry-run
+
+      # Omitting `files` lets commit-action list the files itself with
+      # `git ls-files --modified --others --exclude-standard`, which also
+      # covers untracked output. It no-ops when nothing changed.
+      - name: Commit changes
+        uses: suzuki-shunsuke/commit-action@5eaa5ecce3ffe93d09a85b946dc5136e3713b1b7 # v1.1.0
+        with:
+          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          commit_message: "chore: sync skills"

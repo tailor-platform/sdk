@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "runtime-config-defined",
+      "kind": "content-match",
+      "glob": "**/tailor.config.ts",
+      "pattern": "\\benv\\s*:",
+      "description": "top-level Tailor config defines runtime configuration values"
+    },
+    {
+      "id": "resolver-env-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "createResolver\\s*\\((?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S])*?(?:\\bbody\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*(?:=>|\\{)(?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S]){0,1200}(?:\\benv\\s*(?:\\.|\\[)|\\}\\s*=\\s*env\\b|\\b[A-Za-z_$][\\w$]*\\.env\\s*(?:\\.|\\[)|\\}\\s*=\\s*[A-Za-z_$][\\w$]*\\.env\\b)|\\bbody\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\benv\\s*:\\s*\\{[^)]*\\)|\\{[^}]*\\benv\\s*:\\s*\\{[^}]*\\})\\s*(?:=>|\\{))",
+      "flags": "i",
+      "description": "resolver body reads values from the SDK-provided env object"
+    },
+    {
+      "id": "executor-env-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "createExecutor\\s*\\((?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S])*?(?:\\bbody\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*(?:=>|\\{)(?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S]){0,1200}(?:\\benv\\s*(?:\\.|\\[)|\\}\\s*=\\s*env\\b|\\b[A-Za-z_$][\\w$]*\\.env\\s*(?:\\.|\\[)|\\}\\s*=\\s*[A-Za-z_$][\\w$]*\\.env\\b)|\\bbody\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\benv\\s*:\\s*\\{[^)]*\\)|\\{[^}]*\\benv\\s*:\\s*\\{[^}]*\\})\\s*(?:=>|\\{))",
+      "flags": "i",
+      "description": "executor body reads values from the SDK-provided env object"
+    },
+    {
+      "id": "workflow-env-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "createWorkflowJob\\s*\\((?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S])*?(?:\\bbody\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*(?:=>|\\{)(?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S]){0,1200}(?:\\benv\\s*(?:\\.|\\[)|\\}\\s*=\\s*env\\b|\\b[A-Za-z_$][\\w$]*\\.env\\s*(?:\\.|\\[)|\\}\\s*=\\s*[A-Za-z_$][\\w$]*\\.env\\b)|\\bbody\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\benv\\s*:\\s*\\{[^)]*\\)|\\{[^}]*\\benv\\s*:\\s*\\{[^}]*\\})\\s*(?:=>|\\{))",
+      "flags": "i",
+      "description": "workflow job body reads values from the SDK-provided env object"
+    },
+    {
+      "id": "auth-hook-env-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "beforeLogin\\s*:\\s*\\{(?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S])*?(?:\\bhandler\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*(?:=>|\\{)(?:(?!\\b(?:createResolver|createExecutor|createWorkflowJob|beforeLogin)\\b)[\\s\\S]){0,1200}(?:\\benv\\s*(?:\\.|\\[)|\\}\\s*=\\s*env\\b|\\b[A-Za-z_$][\\w$]*\\.env\\s*(?:\\.|\\[)|\\}\\s*=\\s*[A-Za-z_$][\\w$]*\\.env\\b)|\\bhandler\\s*:\\s*(?:async\\s*)?(?:(?:function\\s*)?\\([^)]*\\benv\\s*:\\s*\\{[^)]*\\)|\\{[^}]*\\benv\\s*:\\s*\\{[^}]*\\})\\s*(?:=>|\\{))",
+      "flags": "i",
+      "description": "before-login hook handler reads values from the SDK-provided env object"
+    },
+    {
+      "id": "explanation-note-created",
+      "kind": "file-glob",
+      "glob": "**/*.md",
+      "minCount": 1,
+      "description": "workspace includes the requested note about runtime configuration"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "my-app",
+  "scripts": {
+    "fn:test": "tailor function test-run resolvers/add.ts --arg '{\"a\":1}'",
+    "unrelated": "vitest run"
+  }
+}

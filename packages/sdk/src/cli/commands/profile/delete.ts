@@ -1,0 +1,31 @@
+import { arg } from "@politty/zod";
+import { z } from "zod";
+import { defineAppCommand } from "#/cli/shared/command";
+import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
+
+export const deleteCommand = defineAppCommand({
+  name: "delete",
+  description: "Delete a profile.",
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
+  }),
+  run: async (args) => {
+    const config = await readPlatformConfig();
+
+    // Check if profile exists
+    if (!config.profiles[args.name]) {
+      throw CLIError({ code: "PROFILE_NOT_FOUND", message: `Profile "${args.name}" not found.` });
+    }
+
+    // Delete profile
+    delete config.profiles[args.name];
+    writePlatformConfig(config);
+
+    logger.success(`Profile "${args.name}" deleted successfully.`);
+  },
+});

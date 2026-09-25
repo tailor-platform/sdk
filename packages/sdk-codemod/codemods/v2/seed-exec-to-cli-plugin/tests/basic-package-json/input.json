@@ -1,0 +1,10 @@
+{
+  "name": "my-app",
+  "scripts": {
+    "seed": "node --env-file-if-exists=.env seed/exec.mjs",
+    "seed:reset": "node --env-file-if-exists=.env seed/exec.mjs --truncate --yes",
+    "seed:validate": "node --env-file-if-exists=.env seed/exec.mjs validate",
+    "seed:types": "node ./src/seed/exec.mjs User Order",
+    "build": "node scripts/build.mjs"
+  }
+}

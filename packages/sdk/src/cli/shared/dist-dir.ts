@@ -1,0 +1,11 @@
+let distPath: string | null = null;
+
+export const getDistDir = (): string => {
+  const configured = process.env.TAILOR_BUILD_OUTPUT_DIR;
+  if (configured && configured !== distPath) {
+    distPath = configured;
+  } else if (distPath === null) {
+    distPath = configured || ".tailor";
+  }
+  return distPath;
+};

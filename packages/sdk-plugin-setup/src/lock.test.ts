@@ -1,0 +1,167 @@
+import * as fs from "node:fs";
+import { TAILOR_LOCK_VERSION } from "@tailor-platform/sdk/cli";
+import * as path from "pathe";
+import { aroundEach, describe, expect, test } from "vitest";
+import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock, type LockFile } from "./lock";
+
+function makeLock(): LockFile {
+  return {
+    version: LOCK_VERSION,
+    targets: [
+      {
+        kind: "branch",
+        workspaceName: "my-app",
+        file: ".github/workflows/tailor-my-app.yml",
+        templateVersion: 1,
+        inputs: {
+          branch: "main",
+          tagPattern: null,
+          environment: "my-app",
+          dir: ".",
+          packageManager: "pnpm",
+        },
+        generatedIds: ["tailor-deploy", "tailor-deploy/tailor-apply"],
+        ejectedIds: [],
+        contentHash: hashContent("hello"),
+      },
+    ],
+  };
+}
+
+describe("LOCK_VERSION", () => {
+  test("matches the version the SDK writes", () => {
+    expect(LOCK_VERSION).toBe(TAILOR_LOCK_VERSION);
+  });
+});
+
+describe("hashContent", () => {
+  test("is a stable sha256 prefix", () => {
+    expect(hashContent("hello")).toBe(hashContent("hello"));
+    expect(hashContent("hello")).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(hashContent("a")).not.toBe(hashContent("b"));
+  });
+});
+
+describe("readLock / writeLock", () => {
+  const testDir = path.join(
+    "/tmp",
+    `lock-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  const outsideDir = `${testDir}-outside`;
+
+  aroundEach(async (runTest) => {
+    fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  });
+
+  test("returns null when no lock exists", () => {
+    expect(readLock(testDir)).toBeNull();
+  });
+
+  test("round-trips through disk with 2-space indent and trailing newline", () => {
+    const lock = makeLock();
+    writeLock(testDir, lock);
+    const raw = fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8");
+    expect(raw.endsWith("\n")).toBe(true);
+    expect(raw).toContain(`  "version": ${String(LOCK_VERSION)}`);
+    expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("refuses to read a lock through a symbolic link", () => {
+    const outsideLock = path.join(outsideDir, "tailor.lock");
+    const content = `${JSON.stringify(makeLock(), null, 2)}\n`;
+    fs.mkdirSync(path.dirname(outsideLock), { recursive: true });
+    fs.writeFileSync(outsideLock, content);
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.symlinkSync(outsideLock, path.join(testDir, ".github/tailor.lock"));
+
+    expect(() => readLock(testDir)).toThrow(/symbolic link/);
+    expect(fs.readFileSync(outsideLock, "utf-8")).toBe(content);
+  });
+
+  test("refuses to write a lock through a symbolic link", () => {
+    const outsideLock = path.join(outsideDir, "tailor.lock");
+    fs.mkdirSync(path.dirname(outsideLock), { recursive: true });
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.symlinkSync(outsideLock, path.join(testDir, ".github/tailor.lock"));
+
+    expect(() => writeLock(testDir, makeLock())).toThrow(/symbolic link/);
+    expect(fs.existsSync(outsideLock)).toBe(false);
+  });
+
+  test("refuses to write a lock through a symbolic-link directory", () => {
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.symlinkSync(outsideDir, path.join(testDir, ".github"));
+
+    expect(() => writeLock(testDir, makeLock())).toThrow(/symbolic link/);
+    expect(fs.existsSync(path.join(outsideDir, "tailor.lock"))).toBe(false);
+  });
+
+  test("round-trips the appIds section", () => {
+    const lock: LockFile = {
+      ...makeLock(),
+      appIds: { "tailor.config.ts": "11111111-1111-4111-8111-111111111111" },
+    };
+    writeLock(testDir, lock);
+    expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("accepts a version 1 lock without appIds", () => {
+    const lock = { ...makeLock(), version: 1 };
+    writeLock(testDir, lock);
+    expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("rejects an appIds section that is not config paths to UUIDs", () => {
+    writeLock(testDir, {
+      ...makeLock(),
+      appIds: { "tailor.config.ts": "not-a-uuid" },
+    });
+    expect(() => readLock(testDir)).toThrow(/must be a UUID/);
+  });
+
+  test("throws on a forward-incompatible version", () => {
+    const lock = makeLock();
+    lock.version = LOCK_VERSION + 1;
+    writeLock(testDir, lock);
+    expect(() => readLock(testDir)).toThrow(/newer SDK/);
+  });
+
+  test.each([
+    {
+      title: "throws with restore guidance when the version field is missing",
+      content: () => {
+        const lock = makeLock() as unknown as Record<string, unknown>;
+        delete lock.version;
+        return `${JSON.stringify(lock, null, 2)}\n`;
+      },
+      error: /no valid 'version'/,
+    },
+    {
+      title: "throws with restore guidance when targets is not an array",
+      content: () => `${JSON.stringify({ version: LOCK_VERSION }, null, 2)}\n`,
+      error: /no valid 'targets'/,
+    },
+    {
+      title: "throws on invalid JSON",
+      content: () => "{ not json",
+      error: /not valid JSON/,
+    },
+  ])("$title", ({ content, error }) => {
+    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
+    fs.writeFileSync(path.join(testDir, ".github/tailor.lock"), content());
+    expect(() => readLock(testDir)).toThrow(error);
+  });
+});
+
+describe("findTarget", () => {
+  test("matches by (kind, workspaceName)", () => {
+    const lock = makeLock();
+    expect(findTarget(lock, "branch", "my-app")?.workspaceName).toBe("my-app");
+    expect(findTarget(lock, "tag", "my-app")).toBeUndefined();
+    expect(findTarget(lock, "branch", "other")).toBeUndefined();
+    expect(findTarget(null, "branch", "my-app")).toBeUndefined();
+  });
+});
