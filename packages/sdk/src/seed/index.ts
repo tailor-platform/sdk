@@ -13,7 +13,7 @@ import { LinesDB, ErrorFormatter, findSchemaFile, unwrap } from "@toiroakr/lines
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join } from "pathe";
 import { firstErrorLocation } from "./record-lines";
-import type { JsonObject, ValidationErrorDetail } from "@toiroakr/lines-db";
+import type { JsonObject, JsonlParseError, ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
 export type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
@@ -95,6 +95,10 @@ function formatWarnings(warnings: string[]): string[] {
   return [...warnings.map((warning) => `⚠ ${warning}`), ""];
 }
 
+function isJsonlParseError(error: Error): error is JsonlParseError {
+  return error.name === "JsonlParseError";
+}
+
 function formatValidationErrors(errors: ValidationErrorDetail[], verbose: boolean): string {
   const formatter = new ErrorFormatter({ verbose });
   const errorLines: string[] = [];
@@ -156,12 +160,27 @@ export async function validateSeedData(
   const { dataDir, tableName } = await resolveSeedDataTarget(resolvedPath);
 
   const db = LinesDB.create({ dataDir });
-  let result;
+  let initialized;
   try {
-    result = unwrap(await db.initialize({ tableName, detailedValidate: true }));
+    initialized = await db.initialize({ tableName, detailedValidate: true });
   } finally {
     unwrap(await db.close());
   }
+  if (!initialized.ok && isJsonlParseError(initialized.error)) {
+    const { file, line, message } = initialized.error;
+    return {
+      valid: false,
+      output: "",
+      error: [
+        new ErrorFormatter({ verbose }).formatErrorHeader(1, file),
+        "",
+        `  Line ${line}: ${message}`,
+        "",
+      ].join("\n"),
+      location: { file, line },
+    };
+  }
+  const result = unwrap(initialized);
 
   const outputLines = formatWarnings(result.warnings);
 
