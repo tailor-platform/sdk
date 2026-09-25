@@ -5,7 +5,7 @@ import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
-import { logger } from "./logger";
+import { JSON_OUTPUT_ENV_VAR, logger } from "./logger";
 import { parseBoolean } from "./parse-boolean";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -189,7 +189,6 @@ export function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg)
 /** Name and short alias of the `--json` flag. */
 const JSON_ARG_NAME = "json";
 const JSON_ARG_ALIAS = "j";
-const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
 
 interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */

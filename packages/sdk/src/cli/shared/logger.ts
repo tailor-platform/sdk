@@ -6,7 +6,7 @@ import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
 
 /** Environment variable selecting JSON as the default output for every command. */
-const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
+export const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
 
 /** What selected JSON output: an explicit `--json`, the environment, or both. */
 export type JsonModeSource = "flag" | "env" | "both";
