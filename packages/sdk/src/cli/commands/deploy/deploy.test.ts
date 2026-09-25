@@ -1066,6 +1066,47 @@ describe("printPlanResults", () => {
     ]);
   });
 
+  test("marks a forced service update that has no child entries", () => {
+    const results = emptyResults();
+    results.pipeline.changeSet.service.updates.push({
+      name: "my-pipeline",
+      forcedBySdkVersion: true,
+    } as never);
+
+    printPlanResults(results, { dryRun: true });
+
+    const lines = String(outSpy.mock.calls[0]?.[0]).split("\n");
+    expect(lines.find((line) => line.includes("my-pipeline"))).toContain("[forced by SDK version]");
+  });
+
+  test("keeps the forced marker on plain change-set entries in JSON dry-run changes", () => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.staticWebsite.changeSet.updates.push({
+      name: "my-site",
+      forcedBySdkVersion: true,
+    } as never);
+    results.idp.changeSet.client.updates.push({
+      name: "my-client",
+      namespaceName: "my-idp",
+      forcedBySdkVersion: true,
+    } as never);
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { update: number; forcedBySdkVersion: number };
+      changes: Array<Record<string, unknown>>;
+    };
+    expect(payload.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "my-site", forcedBySdkVersion: true }),
+        expect.objectContaining({ name: "my-client", forcedBySdkVersion: true }),
+      ]),
+    );
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+  });
+
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
     using _json = jsonMode();
 

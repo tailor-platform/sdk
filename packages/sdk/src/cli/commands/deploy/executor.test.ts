@@ -1562,6 +1562,29 @@ describe("formatExecutorChangeEntries", () => {
     },
   );
 
+  test("keeps the forced marker on an ungrouped function registry update", () => {
+    const entries = formatExecutorChangeEntries(
+      { creates: [], updates: [], deletes: [], replaces: [] },
+      {},
+      {
+        creates: [],
+        updates: [{ name: "executor--user-created", forcedBySdkVersion: true }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: symbols.update,
+        name: "user-created",
+        labels: ["function"],
+        forcedBySdkVersion: true,
+      },
+    ]);
+  });
+
   test("groups function executor deletes with related function registry deletes", () => {
     const entries = formatExecutorChangeEntries(
       {
