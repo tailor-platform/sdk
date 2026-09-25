@@ -22,9 +22,10 @@
 set -euo pipefail
 
 original_ref="$(git rev-parse HEAD)"
+content_file="$(mktemp)"
 # --hard: the resolvers and oxfmt below leave tracked files modified, and a
 # plain `git checkout` refuses to switch away from a dirty tracked file.
-trap 'git reset --hard --quiet "$original_ref"' EXIT
+trap 'rm -f "$content_file"; git reset --hard --quiet "$original_ref"' EXIT
 
 # changesets/action applies `changeset version`'s file
 # edits (package.json bumps, CHANGELOG.md, consumed .changeset/*.md deletions)
@@ -57,13 +58,13 @@ pnpm exec oxfmt --write "${resolved_paths[@]}"
 # branch, and the blob sha is re-read per file so a preceding push in this loop
 # does not invalidate the next one.
 for path in "${resolved_paths[@]}"; do
-  content_b64="$(base64 <"$path" | tr -d '\n')"
+  base64 <"$path" | tr -d '\n' >"$content_file"
   sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${PR_BRANCH}" -q .sha)"
 
   gh api "repos/${GITHUB_REPOSITORY}/contents/${path}" \
     -X PUT \
     -f message="chore: resolve pending release version in ${path}" \
-    -f content="${content_b64}" \
+    -F content=@"$content_file" \
     -f sha="${sha}" \
     -f branch="${PR_BRANCH}"
 done
