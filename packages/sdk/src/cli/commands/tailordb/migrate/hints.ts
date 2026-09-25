@@ -19,8 +19,8 @@ export interface MigrationScriptCommandOptions {
  * Render the `tailor tailordb migration script` command as a remediation
  * hint, reproducing the current run's invocation context.
  * @param {MigrationScriptCommandOptions} options - Target migration and invocation context
- * @param {CommandHintRenderers} renderers - Wording for the shell and argv renderings
- * @returns {string} The hint produced by the renderer that matches the platform shell
+ * @param {CommandHintRenderers} renderers - Wording for one shared command line or one per shell
+ * @returns {string} The hint produced by the renderer that matches the command lines
  */
 export function formatMigrationScriptHint(
   options: MigrationScriptCommandOptions,
