@@ -43,6 +43,18 @@ function forcedFunctionUpdateNames(changes?: RelatedFunctionRegistryChanges): Se
   );
 }
 
+function unforcedFunctionChangeNames(changes?: RelatedFunctionRegistryChanges): Set<string> {
+  if (!changes) return new Set();
+  return new Set(
+    [
+      ...changes.creates,
+      ...changes.deletes,
+      ...changes.replaces,
+      ...changes.updates.filter((item) => !item.forcedBySdkVersion),
+    ].map((item) => item.name),
+  );
+}
+
 /**
  * Convert grouped function registry changes into mutable name sets.
  * @param changes - Grouped function registry changes
@@ -175,9 +187,9 @@ function buildRemainingFunctionRegistryEntries(
  * For each item in creates/updates/deletes, calls `getFunctionRegistryNames` to
  * derive zero or more function registry names. When a matching function registry
  * change exists for the same action, the item is displayed with both the resource
- * label and "function". A grouped update is forced by the SDK version only
- * when the item and every grouped function registry update are. Ungrouped function
- * registry changes are appended.
+ * label and "function". An update stays forced by the SDK version only when
+ * none of its function registry entries has a change that is not itself forced.
+ * Ungrouped function registry changes are appended.
  * @param resourceLabel - Label for the resource kind (e.g. "executor", "resolver")
  * @param changeSet - Resource change set with creates/updates/deletes/replaces
  * @param changeSet.creates - Created resources
@@ -213,6 +225,7 @@ export function formatChangeEntriesWithFunctionRegistry<
   const { getNamespace, getDisplayName } = options ?? {};
   const functionNames = createRelatedFunctionRegistryNameSets(functionRegistryChanges);
   const forcedFunctionUpdates = forcedFunctionUpdateNames(functionRegistryChanges);
+  const unforcedFunctionChanges = unforcedFunctionChangeNames(functionRegistryChanges);
   const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
 
   function processItems(
@@ -222,14 +235,13 @@ export function formatChangeEntriesWithFunctionRegistry<
     consumedSet: Set<string>,
   ): GroupedDisplayEntry[] {
     return items.map((item) => {
-      const matchedNames = getFunctionRegistryNames(item, action).filter((name) =>
-        fnNameSet.has(name),
-      );
+      const relatedNames = getFunctionRegistryNames(item, action);
+      const matchedNames = relatedNames.filter((name) => fnNameSet.has(name));
       for (const name of matchedNames) {
         consumedSet.add(name);
       }
       const forcedBySdkVersion =
-        item.forcedBySdkVersion && matchedNames.every((name) => forcedFunctionUpdates.has(name));
+        item.forcedBySdkVersion && !relatedNames.some((name) => unforcedFunctionChanges.has(name));
       return {
         action,
         symbol: ACTION_SYMBOLS[action],

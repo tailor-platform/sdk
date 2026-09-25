@@ -1336,6 +1336,54 @@ describe("formatWorkflowChangeEntries", () => {
     ]);
   });
 
+  test.each([
+    { name: "a forced update", functionChanges: { updates: [{ forced: true }] }, expected: true },
+    {
+      name: "an unforced update",
+      functionChanges: { updates: [{ forced: false }] },
+      expected: false,
+    },
+    { name: "a create", functionChanges: { creates: [{}] }, expected: false },
+  ])(
+    "keeps a forced workflow update's marker only when its job function has $name",
+    ({ functionChanges, expected }) => {
+      const functionItems = (items: ReadonlyArray<{ forced?: boolean }> | undefined) =>
+        (items ?? []).map(({ forced }) => ({
+          name: "workflow--process-order",
+          ...(forced && { forcedBySdkVersion: true as const }),
+        }));
+      const entries = formatWorkflowChangeEntries(
+        {
+          creates: [],
+          updates: [
+            {
+              name: "order-processing",
+              workspaceId: "ws",
+              workflow: {
+                name: "order-processing",
+                mainJob: { name: "process-order", body: () => {}, start: () => {} },
+              },
+              usedJobNames: ["process-order"],
+              metaRequest: { trn: "t", labels: {} },
+              forcedBySdkVersion: true,
+            },
+          ],
+          deletes: [],
+          replaces: [],
+        },
+        {
+          creates: functionItems("creates" in functionChanges ? functionChanges.creates : []),
+          updates: functionItems("updates" in functionChanges ? functionChanges.updates : []),
+          deletes: [],
+          replaces: [],
+        },
+      );
+
+      const workflowEntry = entries.find((entry) => entry.labels.includes("workflow"));
+      expect(workflowEntry?.forcedBySdkVersion).toBe(expected ? true : undefined);
+    },
+  );
+
   test("keeps unrelated workflow job function changes visible", () => {
     const entries = formatWorkflowChangeEntries(
       {
