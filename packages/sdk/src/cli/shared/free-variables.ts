@@ -73,9 +73,6 @@ function isBoundInScope(scope: Scope, name: string): boolean {
   return false;
 }
 
-const NEGATIVE_EQUALITY_OPERATORS = new Set(["!==", "!="]);
-const POSITIVE_EQUALITY_OPERATORS = new Set(["===", "=="]);
-
 /**
  * Read the static string value of a string literal or a template literal with
  * no interpolated expressions (e.g. `` `object` ``, which minifiers use in
@@ -95,23 +92,34 @@ function staticStringValue(node: Node): string | undefined {
   return undefined;
 }
 
+function compareStrings(operator: string, a: string, b: string): boolean | undefined {
+  switch (operator) {
+    case "===":
+    case "==":
+      return a === b;
+    case "!==":
+    case "!=":
+      return a !== b;
+    case "<":
+      return a < b;
+    case ">":
+      return a > b;
+    default:
+      return undefined;
+  }
+}
+
 /**
- * If `expr` is a `typeof x === "..."` / `typeof x !== "..."` comparison that
- * is only true while `x` is declared, return `x`'s name. `typeof` never
- * throws on an undeclared identifier, so `typeof x !== "undefined" && x` (and
- * `typeof x === "<anything but undefined>" && x`) cannot actually reference
- * `x` when it is undeclared — this is the cross-environment global-detection
- * idiom used by es-toolkit, lodash, core-js, etc. The opposite direction —
- * `typeof x === "undefined" && x` or `typeof x !== "<anything but
- * undefined>" && x` — is true precisely when `x` is NOT safely usable (or
- * says nothing about it), so it must not be treated as a guard. Loose
- * equality (`==`/`!=`) is included because minifiers rewrite `===`/`!==`
- * against a `typeof` result to the loose form (the result is always a
- * string, so the two are equivalent there).
+ * If `expr` compares `typeof x` against a static string, return `x`'s name
+ * and the comparison's result while `x` is undeclared (`typeof x` is
+ * `"undefined"`). A comparison that is true while `x` is undeclared, such as
+ * `typeof x === "undefined"`, is false whenever `x` cannot be read safely, so
+ * the alternate branch of `typeof x === "undefined" ? fallback : x` never
+ * reads an undeclared `x`.
  * @param expr - Candidate comparison AST node.
- * @returns The guarded identifier's name, or undefined if `expr` doesn't guard one.
+ * @returns The compared identifier's name and the comparison's result while it is undeclared, or undefined if `expr` isn't such a comparison.
  */
-function typeofGuardTarget(expr: Node): string | undefined {
+function typeofComparison(expr: Node): { name: string; isTrueWhenUndeclared: boolean } | undefined {
   if (expr.type !== "BinaryExpression") return undefined;
   const { left, right, operator } = expr;
   const [typeofSide, literalSide] =
@@ -127,12 +135,33 @@ function typeofGuardTarget(expr: Node): string | undefined {
   if (!typeofSide) return undefined;
   const literalValue = staticStringValue(literalSide);
   if (literalValue === undefined) return undefined;
-  const comparesToUndefined = literalValue === "undefined";
-  const isSafe =
-    (NEGATIVE_EQUALITY_OPERATORS.has(operator) && comparesToUndefined) ||
-    (POSITIVE_EQUALITY_OPERATORS.has(operator) && !comparesToUndefined);
-  if (!isSafe) return undefined;
-  return (typeofSide.argument as { name: string }).name;
+  const isTrueWhenUndeclared =
+    typeofSide === left
+      ? compareStrings(operator, "undefined", literalValue)
+      : compareStrings(operator, literalValue, "undefined");
+  if (isTrueWhenUndeclared === undefined) return undefined;
+  return { name: (typeofSide.argument as { name: string }).name, isTrueWhenUndeclared };
+}
+
+/**
+ * If `expr` is a `typeof x` comparison that is only true while `x` is
+ * declared, return `x`'s name. `typeof` never throws on an undeclared
+ * identifier, so `typeof x !== "undefined" && x` (and
+ * `typeof x === "<anything but undefined>" && x`) cannot actually reference
+ * `x` when it is undeclared — this is the cross-environment global-detection
+ * idiom used by es-toolkit, lodash, core-js, etc. The opposite direction —
+ * `typeof x === "undefined" && x` or `typeof x !== "<anything but
+ * undefined>" && x` — is true precisely when `x` is NOT safely usable (or
+ * says nothing about it), so it must not be treated as a guard. Minifiers
+ * rewrite these comparisons to loose equality (`==`/`!=`) and to
+ * `typeof x < "u"` (`"undefined"` is the only `typeof` result not ordered
+ * before `"u"`), which are evaluated the same way.
+ * @param expr - Candidate comparison AST node.
+ * @returns The guarded identifier's name, or undefined if `expr` doesn't guard one.
+ */
+function typeofGuardTarget(expr: Node): string | undefined {
+  const comparison = typeofComparison(expr);
+  return comparison && !comparison.isTrueWhenUndeclared ? comparison.name : undefined;
 }
 
 /**
@@ -141,7 +170,7 @@ function typeofGuardTarget(expr: Node): string | undefined {
  * Computed property expressions along the chain are still walked for their
  * own free variables (e.g. the `z` in `x.y[z]`) — only the guarded root
  * identifier is treated as safe.
- * @param node - Candidate right-hand side of a `typeof`-guarded `&&`.
+ * @param node - Candidate right-hand side of a `typeof`-guarded `&&`, or branch of a `typeof`-guarded ternary.
  * @param guardedName - The identifier name the `typeof` check guards.
  * @param walk - The AST walker, used to visit computed property expressions.
  * @returns Whether `node` is entirely covered by the guard.
@@ -282,6 +311,22 @@ export function findUndefinedReferences(
           return;
         }
         walk(node.right);
+        return;
+      }
+
+      case "ConditionalExpression": {
+        const comparison = options?.includeGuardedReferences
+          ? undefined
+          : typeofComparison(node.test);
+        walk(node.test);
+        const isConsequentGuarded =
+          comparison?.isTrueWhenUndeclared === false &&
+          walkGuardedChain(node.consequent, comparison.name, walk);
+        if (!isConsequentGuarded) walk(node.consequent);
+        const isAlternateGuarded =
+          comparison?.isTrueWhenUndeclared === true &&
+          walkGuardedChain(node.alternate, comparison.name, walk);
+        if (!isAlternateGuarded) walk(node.alternate);
         return;
       }
 
