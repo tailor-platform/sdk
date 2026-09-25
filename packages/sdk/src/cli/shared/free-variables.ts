@@ -140,6 +140,57 @@ function typeofGuardTarget(expr: Node): string | undefined {
   return (typeofSide.argument as { name: string }).name;
 }
 
+function compareStrings(operator: string, a: string, b: string): boolean | undefined {
+  switch (operator) {
+    case "===":
+    case "==":
+      return a === b;
+    case "!==":
+    case "!=":
+      return a !== b;
+    case "<":
+      return a < b;
+    case ">":
+      return a > b;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * If `expr` compares `typeof x` against a static string, return `x`'s name
+ * and the comparison's result while `x` is undeclared (`typeof x` is
+ * `"undefined"`). A comparison that is true while `x` is undeclared, such as
+ * `typeof x === "undefined"`, is false whenever `x` cannot be read safely, so
+ * the alternate branch of `typeof x === "undefined" ? fallback : x` never
+ * reads an undeclared `x`.
+ * @param expr - Candidate comparison AST node.
+ * @returns The compared identifier's name and the comparison's result while it is undeclared, or undefined if `expr` isn't such a comparison.
+ */
+function typeofComparison(expr: Node): { name: string; isTrueWhenUndeclared: boolean } | undefined {
+  if (expr.type !== "BinaryExpression") return undefined;
+  const { left, right, operator } = expr;
+  const [typeofSide, literalSide] =
+    left.type === "UnaryExpression" &&
+    left.operator === "typeof" &&
+    left.argument.type === "Identifier"
+      ? [left, right]
+      : right.type === "UnaryExpression" &&
+          right.operator === "typeof" &&
+          right.argument.type === "Identifier"
+        ? [right, left]
+        : [undefined, undefined];
+  if (!typeofSide) return undefined;
+  const literalValue = staticStringValue(literalSide);
+  if (literalValue === undefined) return undefined;
+  const isTrueWhenUndeclared =
+    typeofSide === left
+      ? compareStrings(operator, "undefined", literalValue)
+      : compareStrings(operator, literalValue, "undefined");
+  if (isTrueWhenUndeclared === undefined) return undefined;
+  return { name: (typeofSide.argument as { name: string }).name, isTrueWhenUndeclared };
+}
+
 /**
  * Check whether `node` is `guardedName` itself, or a member-expression chain
  * rooted at it (`x.y`, `x.y[z]`), as in `typeof x !== "undefined" && x.y`.
@@ -298,7 +349,12 @@ export function findUndefinedReferences(
           guardedName !== undefined &&
           walkGuardedChain(node.consequent, guardedName, walk);
         if (!isConsequentGuarded) walk(node.consequent);
-        walk(node.alternate);
+        const comparison = typeofComparison(node.test);
+        const isAlternateGuarded =
+          !options?.includeGuardedReferences &&
+          comparison?.isTrueWhenUndeclared === true &&
+          walkGuardedChain(node.alternate, comparison.name, walk);
+        if (!isAlternateGuarded) walk(node.alternate);
         return;
       }
 

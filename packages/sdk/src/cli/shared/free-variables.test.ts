@@ -92,6 +92,16 @@ describe("findUndefinedReferences", () => {
       ["global"],
     ],
     [
+      "does not flag the alternate branch of a ternary that tests typeof === 'undefined'",
+      "() => typeof window === 'undefined' ? {} : window",
+      [],
+    ],
+    [
+      "does not flag the alternate branch of a ternary after a minifier rewrites === 'undefined' to > 'u'",
+      "() => typeof window>`u`?{}:window",
+      [],
+    ],
+    [
       "still flags a global in the alternate branch of a typeof-guarded ternary",
       "() => typeof global !== 'undefined' ? global : process.env",
       ["process"],
