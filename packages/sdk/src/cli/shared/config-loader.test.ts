@@ -35,6 +35,32 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
+  test("preserves class plugin state when invoking generation hooks", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      class StatefulPlugin {
+        id = "stateful";
+        description = "Plugin with private state";
+        #content = "preserved";
+        onTailorDBReady() {
+          return { files: [{ path: "output.txt", content: this.#content }] };
+        }
+      }
+      export const plugins = [new StatefulPlugin()];
+    `);
+
+    const { plugins } = await loadConfig(configPath);
+
+    expect(
+      await plugins[0]!.onTailorDBReady!({
+        tailordb: [],
+        baseDir: path.dirname(configPath),
+        configPath,
+        pluginConfig: undefined,
+      }),
+    ).toEqual({ files: [{ path: "output.txt", content: "preserved" }] });
+  });
+
   test("collects valid plugin arrays without accepting a partially invalid array", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app", db: { marker: "preserved" } };

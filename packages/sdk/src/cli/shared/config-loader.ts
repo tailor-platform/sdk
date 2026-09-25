@@ -100,12 +100,14 @@ export async function loadConfig(
     : undefined;
 
   // Collect all plugin exports (plugins, plugins2, etc.); an array with an
-  // item the schema rejects is left out as a whole.
+  // item the schema rejects is left out as a whole. Validation must not
+  // replace class instances or the state their hooks use, so push the
+  // originals rather than the schema-parsed copies.
   const allPlugins: Plugin[] = [];
   for (const items of pickPluginArrays(configModule)) {
     const parsed = items.map((item) => PluginConfigSchema.safeParse(item));
     if (parsed.every((result) => result.success)) {
-      allPlugins.push(...parsed.map((result) => result.data));
+      allPlugins.push(...(items as Plugin[]));
     }
   }
 
