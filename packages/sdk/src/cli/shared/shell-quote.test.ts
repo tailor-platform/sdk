@@ -117,6 +117,8 @@ const CAPTURE_SCRIPT =
 interface ShellConfig {
   name: string;
   bin: string;
+  /** An unquoted reference the shell expands to `_TAILOR_QUOTE_PROBE`'s value. */
+  unquotedExpansion: string;
   commandLine: (lines: ShellCommandLines) => string;
   expectedMarker: (commandLine: string) => string;
   spawnArgs: (commandLine: string) => { file: string; args: string[]; verbatim?: boolean };
@@ -144,6 +146,7 @@ function powershellConfig(name: string, exe: string, bin: string, prelude = ""):
   return {
     name,
     bin,
+    unquotedExpansion: "$env:_TAILOR_QUOTE_PROBE",
     commandLine: (lines) => (lines.kind === "shared" ? lines.commandLine : lines.powershell),
     expectedMarker: (commandLine) => (commandLine.startsWith("cmd ") ? "npm-cmd" : "npm-ps1"),
     spawnArgs: (commandLine) => ({
@@ -174,6 +177,7 @@ function shellConfigs(root: string): ShellConfig[] {
       {
         name: "sh",
         bin,
+        unquotedExpansion: "$_TAILOR_QUOTE_PROBE",
         commandLine: (lines) => {
           if (lines.kind !== "shared") throw new Error("expected one shared command line");
           return lines.commandLine;
@@ -191,6 +195,7 @@ function shellConfigs(root: string): ShellConfig[] {
   const cmdConfig = (name: string, bin: string, marker: string): ShellConfig => ({
     name,
     bin,
+    unquotedExpansion: "%_TAILOR_QUOTE_PROBE%",
     commandLine: (lines) => (lines.kind === "shared" ? lines.commandLine : lines.cmd),
     expectedMarker: () => marker,
     spawnArgs: (commandLine) => ({
@@ -275,6 +280,26 @@ describe("formatShellCommandLines", () => {
     }
   });
 
+  test("runs commands through shells that expand an unquoted variable reference", async () => {
+    const outcomes = await Promise.all(
+      configs.map((config, configIndex) =>
+        runInShell(
+          config,
+          `tailor probe ${config.unquotedExpansion}`,
+          path.join(tempDir, `control-${configIndex}.json`),
+        ),
+      ),
+    );
+
+    expect(configs).toHaveLength(isWindows ? 5 : 1);
+    expect(outcomes).toEqual(
+      configs.map((config) => ({
+        marker: config.expectedMarker("tailor"),
+        argv: ["probe", "expanded"],
+      })),
+    );
+  }, 120_000);
+
   test("delivers every argument unchanged when the rendered command runs in each shell", async () => {
     const cases = [
       ...SAMPLE_ARGS.map((arg) => ({ name: JSON.stringify(arg), args: ["probe", arg, "--end"] })),
@@ -299,6 +324,7 @@ describe("formatShellCommandLines", () => {
       },
     );
 
+    expect(outcomes).toHaveLength(configs.length * cases.length);
     expect(Object.fromEntries(outcomes.map(({ key, outcome }) => [key, outcome]))).toEqual(
       Object.fromEntries(outcomes.map(({ key, expected }) => [key, expected])),
     );
