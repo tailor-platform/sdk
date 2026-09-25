@@ -96,14 +96,15 @@ is unchanged. Workflows that already echo their own `::error::` around the CLI k
 those messages describe the workflow's own checks, which can fail even when the CLI succeeds.
 
 When the failure has a known source, the annotation carries it: `seed validate` reports the
-offending JSONL file and line, and a rejected config reports its file — or, when the config or a
-file it imports cannot be parsed, that file and the line it failed on. Locations are written
-relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a location rather than with
-a path the runner cannot resolve.
+offending JSONL file and line, including a line that is not valid JSON, and a rejected config
+reports its file — or, when the config or a file it imports cannot be parsed, that file and the line
+it failed on. Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated
+without a location rather than with a path the runner cannot resolve.
 
 For a JSONL file containing a blank line, the annotation's line and the line printed in the report
 text differ: the annotation counts every line in the file, while the printed line counts only the
-records. The annotation points at the row as an editor numbers it.
+records. The annotation points at the row as an editor numbers it. A line that is not valid JSON is
+printed with the line an editor shows, so both agree.
 
 `generate` and `deploy` do not group their per-service progress.
 
