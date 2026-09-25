@@ -3,5 +3,3 @@ version: "1.0.0"
 description: "Normalize the plugin config export name (generator/generators) to plugins"
 engine: jssg
 language: typescript
-since: "1.0.0"
-until: "2.21.0"
