@@ -138,9 +138,7 @@ export interface PluginExecutorInfo {
 }
 
 /**
- * Manages plugin registration and processing.
- * Callers must ensure `plugins` carries no duplicate IDs. CLI and runtime config
- * loaders validate this before constructing the manager.
+ * Manages plugin registration and processing
  */
 export class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
@@ -154,6 +152,11 @@ export class PluginManager {
 
   constructor(plugins: Plugin[] = []) {
     for (const plugin of plugins) {
+      if (this.plugins.has(plugin.id)) {
+        throw new Error(
+          `Duplicate plugin ID "${plugin.id}" detected. Each plugin must have a unique ID.`,
+        );
+      }
       this.plugins.set(plugin.id, plugin);
     }
   }

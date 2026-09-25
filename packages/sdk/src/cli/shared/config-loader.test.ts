@@ -61,23 +61,61 @@ describe("loadConfig", () => {
     ).toEqual({ files: [{ path: "output.txt", content: "preserved" }] });
   });
 
-  test("collects valid plugin arrays without accepting a partially invalid array", async () => {
+  test("collects plugins from the `plugins` export", async () => {
     const configPath = writeConfig(`
       export default { name: "test-app", db: { marker: "preserved" } };
       export const plugins = [{ id: "first", description: "First plugin", custom: "kept" }];
-      export const plugins2 = [{ id: "second", description: "Second plugin" }];
-      export const mixed = [{ id: "discarded", description: "Valid item" }, null];
-      export const unrelated = { id: "not-an-array", description: "Ignored" };
     `);
 
     const { config, plugins } = await loadConfig(configPath);
 
     expect(config.db).toEqual({ marker: "preserved" });
-    expect(plugins).toEqual([
-      { id: "first", description: "First plugin", custom: "kept" },
-      { id: "second", description: "Second plugin" },
-    ]);
+    expect(plugins).toEqual([{ id: "first", description: "First plugin", custom: "kept" }]);
   });
+
+  test("ignores array exports under any name other than `plugins`", async () => {
+    const configPath = writeConfig(`
+      export default { name: "test-app" };
+      export const generators = [{ id: "legacy", description: "Legacy export name" }];
+      export const plugins2 = [{ id: "second", description: "Second plugin" }];
+    `);
+
+    const { plugins } = await loadConfig(configPath);
+
+    expect(plugins).toEqual([]);
+  });
+
+  test.each([
+    [
+      "is not an array",
+      `{ id: "not-an-array", description: "Invalid" }`,
+      /Invalid `plugins` export/,
+    ],
+    ["is explicitly undefined", "undefined", /Invalid `plugins` export/],
+    [
+      "contains an invalid item",
+      `[{ id: "valid", description: "Valid item" }, null]`,
+      /Invalid `plugins` export/,
+    ],
+    [
+      "repeats a plugin ID",
+      `[{ id: "dup", description: "First" }, { id: "dup", description: "Second" }]`,
+      /Duplicate plugin ID "dup"/,
+    ],
+  ])(
+    "rejects a `plugins` export that %s, pointing at the config file",
+    async (_case, pluginsExport, message) => {
+      const configPath = writeConfig(`
+        export default { name: "test-app" };
+        export const plugins = ${pluginsExport};
+      `);
+
+      const error = await rejectionOf(loadConfig(configPath));
+
+      expect(error.message).toMatch(message);
+      expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
+    },
+  );
 
   test("rejects a module without a default export, pointing at the config file", async () => {
     const configPath = writeConfig(`export const name = "test-app";`);
