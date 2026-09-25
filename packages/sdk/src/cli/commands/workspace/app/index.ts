@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { healthCommand } from "./health";
 import { listCommand } from "./list";
 
@@ -10,7 +9,5 @@ export const appCommand = defineCommand({
     health: healthCommand,
     list: listCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listCommand);
-  },
+  defaultSubCommand: "list",
 });

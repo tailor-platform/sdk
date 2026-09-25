@@ -1,5 +1,4 @@
 import { defineCommand } from "@politty/zod";
-import { runDefaultSubCommand } from "#/cli/shared/command";
 import { createSecretCommand } from "./create";
 import { deleteSecretCommand } from "./delete";
 import { listSecretCommand } from "./list";
@@ -16,7 +15,5 @@ export const secretCommand = defineCommand({
     list: listSecretCommand,
     delete: deleteSecretCommand,
   },
-  async run() {
-    await runDefaultSubCommand(vaultCommand);
-  },
+  defaultSubCommand: "vault",
 });
