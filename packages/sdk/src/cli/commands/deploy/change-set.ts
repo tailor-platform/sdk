@@ -17,13 +17,15 @@ export interface HasName {
  */
 export type UpdateAnnotation = { forcedBySdkVersion?: true };
 
+const FORCED_BY_SDK_VERSION = "forced by SDK version";
+
 /**
  * Render the plan-line suffix that marks an update forced by the SDK version.
  * @param item - Plan item that may carry the annotation
  * @returns Suffix to append to the item's line, or an empty string
  */
 export function forcedBySdkVersionSuffix(item: UpdateAnnotation): string {
-  return item.forcedBySdkVersion ? ` ${styles.dim("[forced by SDK version]")}` : "";
+  return item.forcedBySdkVersion ? ` ${styles.dim(`[${FORCED_BY_SDK_VERSION}]`)}` : "";
 }
 
 export type ChangeSet<
@@ -141,7 +143,7 @@ export function formatPlanSummary(summary: PlanSummary): string {
   const parts = [
     `${summary.create} to create`,
     summary.forcedBySdkVersion > 0
-      ? `${summary.update} to update (${summary.forcedBySdkVersion} forced by SDK version)`
+      ? `${summary.update} to update (${summary.forcedBySdkVersion} ${FORCED_BY_SDK_VERSION})`
       : `${summary.update} to update`,
     `${summary.delete} to delete`,
   ];
