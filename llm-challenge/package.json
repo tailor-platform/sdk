@@ -12,7 +12,7 @@
   "devDependencies": {
     "@types/node": "24.13.6",
     "eslint-plugin-zod": "4.14.2",
-    "oxlint": "1.82.0",
+    "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2002",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
