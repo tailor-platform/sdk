@@ -35,7 +35,6 @@ import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs } from "./shared/args";
-import { runDefaultSubCommand } from "./shared/command";
 import { getErrorDiagnostics } from "./shared/error-diagnostics";
 import { serializeError } from "./shared/error-json";
 import { isCLIError, typeOnlyImportHint } from "./shared/errors";
@@ -60,15 +59,8 @@ const packageJsonPath = await resolvePackageJSON(import.meta.url);
 const bundledSkillsDir = resolve(dirname(packageJsonPath), "agent-skills");
 
 function defaultSkillsRunToAdd(command: AnyCommand): AnyCommand {
-  const add = (command.subCommands ?? {}).add as AnyCommand;
-  // A command carries either `run` or `defaultSubCommand`, never both.
-  const { defaultSubCommand: _defaultSubCommand, ...rest } = command;
-  return {
-    ...rest,
-    async run() {
-      await runDefaultSubCommand(add);
-    },
-  };
+  const { run: _run, ...rest } = command;
+  return { ...rest, defaultSubCommand: "add" };
 }
 
 const commandWithSkills = withSkillCommand(

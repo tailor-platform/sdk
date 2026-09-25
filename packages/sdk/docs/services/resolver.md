@@ -141,6 +141,27 @@ GraphQL still accepts and returns `YYYY-MM-DD` strings. The SDK converts input t
 
 This option also works in nested objects and with `array: true` or `optional: true`. Input must be a valid calendar date, and output must be a valid `Date` with a 4-digit UTC year (0000-9999). Both deployed resolvers and `tailor function run` perform these conversions.
 
+A resolver bundle only includes the conversion code for the representations (`as: "date"` or `as: "temporal"`) its `input` and `output` use. To parse other values with such fields inside `body`, for example an external API response, use `parseDateFields` instead of `.parse()`. It takes the same arguments and returns the same result as `.parse()`. Calling `.parse()` on a field whose representation the bundle leaves out throws an error that points to `parseDateFields`.
+
+```typescript
+import { parseDateFields } from "@tailor-platform/sdk/runtime";
+
+const payload = t.object({ due: t.date({ as: "date" }) });
+
+createResolver({
+  name: "importDueDate",
+  operation: "mutation",
+  input: { id: t.string() },
+  body: async ({ input }) => {
+    const response = await fetchDueDate(input.id);
+    const result = parseDateFields(payload, { value: response, data: response, invoker: null });
+    if (result.issues) throw new Error(result.issues[0].message);
+    return result.value.due.toISOString();
+  },
+  output: t.string(),
+});
+```
+
 An executor subscribing to the resolver with `resolverExecutedTrigger` receives the event as JSON, so `result` holds the `YYYY-MM-DD` string rather than a `Date`.
 
 Use `t.date({ as: "temporal" })` to work with the [`Temporal.PlainDate`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/PlainDate) value instead:

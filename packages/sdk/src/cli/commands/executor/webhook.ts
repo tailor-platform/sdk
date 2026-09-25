@@ -8,7 +8,7 @@ import {
   workspaceArgs,
 } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
-import { defineAppCommand, runDefaultSubCommand } from "#/cli/shared/command";
+import { defineAppCommand } from "#/cli/shared/command";
 import { formatCopyableCommand } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -111,7 +111,5 @@ export const webhookCommand = defineCommand({
   subCommands: {
     list: listWebhookCommand,
   },
-  async run() {
-    await runDefaultSubCommand(listWebhookCommand);
-  },
+  defaultSubCommand: "list",
 });

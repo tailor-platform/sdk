@@ -52,6 +52,12 @@ type DateField = {
   readonly fields: Record<string, DateField>;
 };
 
+type DateRepresentationField = {
+  readonly type: TailorFieldType;
+  readonly metadata: Pick<FieldMetadata, "as">;
+  readonly fields: Record<string, DateRepresentationField>;
+};
+
 function serialize(field: DateField, value: unknown, path: string): unknown {
   if (field.metadata.array) {
     if (!Array.isArray(value)) return value;
@@ -88,39 +94,101 @@ function describeReceivedValue(value: unknown): string {
   return `a ${type} (${truncateForDescription(String(value))})`;
 }
 
+type DateRepresentation = "date" | "temporal";
+
+/**
+ * Get the Date or Temporal representation a field converts its values to.
+ * @param type - Field type
+ * @param as - The field's `as` option
+ * @returns The representation, or undefined when values stay strings
+ * @internal
+ */
+export function dateRepresentationOf(
+  type: TailorFieldType,
+  as: FieldMetadata["as"],
+): DateRepresentation | undefined {
+  return (type === "date" || type === "datetime" || type === "time") &&
+    (as === "date" || as === "temporal")
+    ? as
+    : undefined;
+}
+
+function isDateRepresentationField(
+  field: DateRepresentationField,
+  representation?: DateRepresentation,
+): boolean {
+  const as = dateRepresentationOf(field.type, field.metadata.as);
+  return as !== undefined && (representation === undefined || as === representation);
+}
+
+type DateSerializer = (type: TailorFieldType, value: unknown, path: string) => string;
+
+function throwInvalidDate(error: unknown, path: string): never {
+  const reason = error instanceof Error ? error.message : String(error);
+  throw new RangeError(`Invalid date at ${describePathTarget(path)}: ${reason}`, {
+    cause: error,
+  });
+}
+
+function serializeAsDate(type: TailorFieldType, value: unknown, path: string): string {
+  if (!(value instanceof Date)) {
+    throw new TypeError(
+      `Expected a Date instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+    );
+  }
+  try {
+    if (type === "datetime") return formatDateTime(value);
+    if (type === "time") return formatTime(value);
+    return formatDate(value);
+  } catch (error) {
+    return throwInvalidDate(error, path);
+  }
+}
+
+function serializeAsTemporal(type: TailorFieldType, value: unknown, path: string): string {
+  const Temporal = getTemporal();
+  const expected =
+    type === "date"
+      ? Temporal.PlainDate
+      : type === "datetime"
+        ? Temporal.Instant
+        : Temporal.PlainTime;
+  if (!(value instanceof expected)) {
+    throw new TypeError(
+      `Expected a Temporal.${expected.name} instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+    );
+  }
+  try {
+    return formatTemporal(value);
+  } catch (error) {
+    return throwInvalidDate(error, path);
+  }
+}
+
+type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
+
+const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = {
+  date: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE
+    ? undefined
+    : serializeAsDate,
+  temporal: (globalThis as MaybeProcessGlobal).process?.env
+    .__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL
+    ? undefined
+    : serializeAsTemporal,
+};
+
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
   if (value === null || value === undefined) return value;
   const { type } = field;
-  const isDateTimeField = type === "date" || type === "datetime" || type === "time";
-  const as = field.metadata.as;
-  if (isDateTimeField && (as === "date" || as === "temporal")) {
-    const expected =
-      as === "date"
-        ? Date
-        : type === "date"
-          ? getTemporal().PlainDate
-          : type === "datetime"
-            ? getTemporal().Instant
-            : getTemporal().PlainTime;
-    if (!(value instanceof expected)) {
-      const name = as === "date" ? "Date" : `Temporal.${expected.name}`;
-      throw new TypeError(
-        `Expected a ${name} instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+  const as = dateRepresentationOf(type, field.metadata.as);
+  if (as) {
+    const serializeAs = dateSerializers[as];
+    if (!serializeAs) {
+      throw new Error(
+        `Serializing fields declared with as: "${as}" is not included in this bundle.`,
       );
     }
-    try {
-      if (value instanceof Date) {
-        if (type === "datetime") return formatDateTime(value);
-        if (type === "time") return formatTime(value);
-        return formatDate(value);
-      }
-      return formatTemporal(value);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      throw new RangeError(`Invalid date at ${describePathTarget(path)}: ${reason}`, {
-        cause: error,
-      });
-    }
+    return serializeAs(type, value, path);
   }
   if (type !== "nested" || typeof value !== "object" || Array.isArray(value)) return value;
   const record = value as Record<string, unknown>;
@@ -138,6 +206,23 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
     }
   }
   return result;
+}
+
+/**
+ * Check whether a field or any of its nested fields uses a Date or Temporal representation.
+ * @param field - Field to inspect
+ * @param representation - Only match fields using this representation
+ * @returns Whether serializeDateFields would convert any value of the field
+ * @internal
+ */
+export function hasDateRepresentationFields(
+  field: DateRepresentationField,
+  representation?: DateRepresentation,
+): boolean {
+  return (
+    isDateRepresentationField(field, representation) ||
+    Object.values(field.fields).some((child) => hasDateRepresentationFields(child, representation))
+  );
 }
 
 /**

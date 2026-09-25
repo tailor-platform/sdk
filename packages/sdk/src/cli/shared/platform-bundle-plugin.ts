@@ -20,14 +20,44 @@ const GATE = /(?<![\w$.])process\.env\.__TAILOR_PLATFORM_BUNDLE\b/g;
 // available on the Platform runtime and is unreachable there once the gate
 // folds — so resolve it as external rather than failing the build over an
 // import that never survives to the bundled output.
-export const platformBundleDefinePlugin: rolldown.Plugin = {
-  name: "tailor-platform-bundle-define",
-  transform(code) {
-    if (!code.includes("process.env.__TAILOR_PLATFORM_BUNDLE")) return null;
-    return { code: code.replace(GATE, "true") };
-  },
-  resolveId(source) {
-    if (source === "node:async_hooks") return { id: source, external: true };
-    return null;
-  },
+// Read at module top level, so unlike GATE they must not throw where `process` is absent.
+const WITHOUT_DATE_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE\b/g;
+const WITHOUT_TEMPORAL_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL\b/g;
+
+/**
+ * Date representations whose conversion code a bundle keeps.
+ */
+export type BundledDateRepresentations = {
+  date: boolean;
+  temporal: boolean;
 };
+
+/**
+ * Create the platform bundle define plugin.
+ * @param dateRepresentations - Date representations whose conversion code the bundle keeps
+ * @returns Rolldown plugin folding the platform bundle gates
+ */
+export function createPlatformBundleDefinePlugin(
+  dateRepresentations: BundledDateRepresentations = { date: true, temporal: true },
+): rolldown.Plugin {
+  return {
+    name: "tailor-platform-bundle-define",
+    transform(code) {
+      if (!code.includes("__TAILOR_PLATFORM_BUNDLE")) return null;
+      return {
+        code: code
+          .replace(GATE, "true")
+          .replace(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
+          .replace(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal)),
+      };
+    },
+    resolveId(source) {
+      if (source === "node:async_hooks") return { id: source, external: true };
+      return null;
+    },
+  };
+}
+
+export const platformBundleDefinePlugin: rolldown.Plugin = createPlatformBundleDefinePlugin();
