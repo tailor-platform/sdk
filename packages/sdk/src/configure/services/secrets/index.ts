@@ -15,7 +15,7 @@ type DefinedSecrets<T extends SecretsInputNullish> = {
   readonly options: SecretsOptions;
   /**
    * Retrieve a single secret value.
-   * @deprecated since NEXT_RELEASE — import `secretmanager` from `@tailor-platform/sdk/runtime` and call `secretmanager.getSecret()` instead. Importing this object into a resolver, executor, or workflow file bundles the raw values passed to `defineSecretManager()` into that function's deployed code, which fails to build once any value comes from `process.env`. codemod: v3/secrets-get-to-secretmanager
+   * @deprecated since 2.21.0 — import `secretmanager` from `@tailor-platform/sdk/runtime` and call `secretmanager.getSecret()` instead. Importing this object into a resolver, executor, or workflow file bundles the raw values passed to `defineSecretManager()` into that function's deployed code, which fails to build once any value comes from `process.env`. codemod: v3/secrets-get-to-secretmanager
    * @param vault - Vault name
    * @param secret - Secret name
    * @returns The secret value, or undefined if not present
@@ -26,7 +26,7 @@ type DefinedSecrets<T extends SecretsInputNullish> = {
   ): Promise<string | undefined>;
   /**
    * Retrieve multiple secret values from the same vault.
-   * @deprecated since NEXT_RELEASE — import `secretmanager` from `@tailor-platform/sdk/runtime` and call `secretmanager.getSecrets()` instead (it returns a partial record keyed by name, not an array in call order). Importing this object into a resolver, executor, or workflow file bundles the raw values passed to `defineSecretManager()` into that function's deployed code, which fails to build once any value comes from `process.env`. codemod: v3/secrets-get-to-secretmanager
+   * @deprecated since 2.21.0 — import `secretmanager` from `@tailor-platform/sdk/runtime` and call `secretmanager.getSecrets()` instead (it returns a partial record keyed by name, not an array in call order). Importing this object into a resolver, executor, or workflow file bundles the raw values passed to `defineSecretManager()` into that function's deployed code, which fails to build once any value comes from `process.env`. codemod: v3/secrets-get-to-secretmanager
    * @param vault - Vault name
    * @param secrets - Secret names to fetch
    * @returns Values in the same order as `secrets`; `undefined` for any not present
