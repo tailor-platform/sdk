@@ -471,7 +471,14 @@ export default function transform(source: string, filePath?: string): string | n
           }
 
           const cleaned = importText.slice(0, removeFrom) + importText.slice(removeTo);
-          edits.push(importStmt.replace(cleaned));
+          // When defineGenerators was the sole named specifier and there was no
+          // default/namespace binding, `cleaned` reads `import { } from "…"`.
+          // The construct parses but is dead; remove the whole statement.
+          if (/^\s*import\s*(?:type\s+)?{\s*}\s*from/.test(cleaned)) {
+            edits.push(importStmt.replace(""));
+          } else {
+            edits.push(importStmt.replace(cleaned));
+          }
         }
       } else {
         edits.push(identNode.replace("definePlugins"));
