@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { resolvePendingBoundaries } from "./resolve-pending-boundaries";
+import { resolveNextReleaseUntil, resolvePendingBoundaries } from "./resolve-pending-boundaries";
 
 const V2_NEXT_4_DECL = 'const V2_NEXT_4 = "2.0.0-next.4";';
 const PENDING_DECL = 'export const V2_NEXT_PENDING = "pending";';
@@ -203,5 +203,94 @@ describe("resolvePendingBoundaries", () => {
 
     expect(result.source).toContain('const V2_NEXT_5 = "2.0.0-next.5";\r\n');
     expect(result.source).not.toMatch(/[^\r]\n/);
+  });
+});
+
+function codemodEntries(...properties: string[]): string {
+  return [
+    "export const allCodemods = [",
+    ...properties.map((p) => `  { id: "v2/x", ${p} },`),
+    "];",
+  ].join("\n");
+}
+
+const PENDING_ENTRY = codemodEntries("until: NEXT_RELEASE");
+
+describe("resolveNextReleaseUntil", () => {
+  test("is a no-op when no codemod's until is NEXT_RELEASE", () => {
+    const source = codemodEntries('until: "2.0.0"');
+
+    expect(resolveNextReleaseUntil(source, "2.21.0", "2.20.0")).toEqual({ changed: false, source });
+  });
+
+  test("rewrites every NEXT_RELEASE until to the released version", () => {
+    const source = codemodEntries("until: NEXT_RELEASE", 'until: "2.0.0"', "until:NEXT_RELEASE");
+    const result = resolveNextReleaseUntil(source, "2.21.0", "2.20.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toBe(
+      codemodEntries('until: "2.21.0"', 'until: "2.0.0"', 'until:"2.21.0"'),
+    );
+  });
+
+  test("rewrites a multi-line entry whose until is the last property without a trailing comma", () => {
+    const source = ["const c = {", '  id: "v2/x",', "  until: NEXT_RELEASE", "};"].join("\n");
+
+    expect(resolveNextReleaseUntil(source, "2.21.0", "2.20.0").source).toBe(
+      ["const c = {", '  id: "v2/x",', '  until: "2.21.0"', "};"].join("\n"),
+    );
+  });
+
+  test("leaves the NEXT_RELEASE declaration itself untouched", () => {
+    const source = ['export const NEXT_RELEASE = "NEXT_RELEASE";', PENDING_ENTRY].join("\n");
+
+    expect(resolveNextReleaseUntil(source, "2.21.0", "2.20.0").source).toContain(
+      'export const NEXT_RELEASE = "NEXT_RELEASE";',
+    );
+  });
+
+  test("leaves string literals and comments that mention until: NEXT_RELEASE untouched", () => {
+    const source = [
+      "// until: NEXT_RELEASE, resolved at release time",
+      codemodEntries(
+        'description: "Use until: NEXT_RELEASE, when the release is unknown"',
+        "message: `cannot combine until: NEXT_RELEASE with prereleaseUntil`",
+      ),
+    ].join("\n");
+
+    expect(resolveNextReleaseUntil(source, "2.21.0", "2.20.0")).toEqual({ changed: false, source });
+  });
+
+  test("throws for a prerelease, since until must be a stable version", () => {
+    expect(() => resolveNextReleaseUntil(PENDING_ENTRY, "2.21.0-next.1", "2.20.0")).toThrow(
+      "resolvedVersion must be a stable version to resolve until: NEXT_RELEASE: 2.21.0-next.1",
+    );
+  });
+
+  test("throws when the resolved version is not valid semver", () => {
+    expect(() => resolveNextReleaseUntil(PENDING_ENTRY, "not-a-version", "2.20.0")).toThrow(
+      "resolvedVersion must be a valid semver version",
+    );
+  });
+
+  test("throws when the SDK version was not bumped, which would resolve to a published release", () => {
+    expect(() => resolveNextReleaseUntil(PENDING_ENTRY, "2.20.0", "2.20.0")).toThrow(
+      "until: NEXT_RELEASE would resolve to 2.20.0, which was already the SDK version before this release",
+    );
+  });
+
+  test("throws when the pre-release SDK version is unknown", () => {
+    expect(() => resolveNextReleaseUntil(PENDING_ENTRY, "2.21.0", undefined)).toThrow(
+      "previousVersion is required to resolve until: NEXT_RELEASE",
+    );
+  });
+
+  test("needs no pre-release SDK version when nothing is pending", () => {
+    const source = codemodEntries('until: "2.0.0"');
+
+    expect(resolveNextReleaseUntil(source, "2.21.0", undefined)).toEqual({
+      changed: false,
+      source,
+    });
   });
 });

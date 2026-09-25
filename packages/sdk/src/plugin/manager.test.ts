@@ -19,6 +19,13 @@ describe("getRawPluginTableName", () => {
 });
 
 describe("PluginManager", () => {
+  test("rejects two plugins that share an ID instead of keeping only the last", () => {
+    const first: Plugin = { id: "dup", description: "first" };
+    const second: Plugin = { id: "dup", description: "second" };
+
+    expect(() => new PluginManager([first, second])).toThrow(/Duplicate plugin ID "dup"/);
+  });
+
   test("collects namespace plugin-generated tables", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",

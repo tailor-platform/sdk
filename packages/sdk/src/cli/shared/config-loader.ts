@@ -3,7 +3,6 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
-import { pickPluginArrays } from "#/plugin/guards";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
@@ -99,13 +98,40 @@ export async function loadConfig(
       )
     : undefined;
 
-  // Collect all plugin exports (plugins, plugins2, etc.); an array with an
-  // item the schema rejects is left out as a whole.
   const allPlugins: Plugin[] = [];
-  for (const items of pickPluginArrays(configModule)) {
-    const parsed = items.map((item) => PluginConfigSchema.safeParse(item));
-    if (parsed.every((result) => result.success)) {
-      allPlugins.push(...parsed.map((result) => result.data));
+  if (Object.hasOwn(configModule, "plugins")) {
+    const pluginsExport = (configModule as Record<string, unknown>).plugins;
+    if (!Array.isArray(pluginsExport)) {
+      throw atConfigFile(
+        new Error(
+          `Invalid \`plugins\` export in ${resolvedPath}: expected an array returned by definePlugins(), got ${typeof pluginsExport}`,
+        ),
+        resolvedPath,
+      );
+    }
+    const seenIds = new Set<string>();
+    for (const item of pluginsExport) {
+      const result = PluginConfigSchema.safeParse(item);
+      if (!result.success) {
+        const issues = result.error.issues
+          .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+          .join("\n");
+        throw atConfigFile(
+          new Error(`Invalid \`plugins\` export in ${resolvedPath}:\n${issues}`),
+          resolvedPath,
+        );
+      }
+      if (seenIds.has(result.data.id)) {
+        throw atConfigFile(
+          new Error(
+            `Duplicate plugin ID "${result.data.id}" detected in ${resolvedPath}. Each plugin must have a unique ID.`,
+          ),
+          resolvedPath,
+        );
+      }
+      seenIds.add(result.data.id);
+      // Not result.data: parsing copies into a plain object, dropping a class plugin's methods and private state.
+      allPlugins.push(item as Plugin);
     }
   }
 

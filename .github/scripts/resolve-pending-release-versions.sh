@@ -3,8 +3,8 @@
 # changesets/action has decided the next release version, against the version
 # the release PR just bumped `@tailor-platform/sdk` to:
 #
-#   - `prereleaseUntil: V2_NEXT_PENDING` codemod boundaries
-#     (packages/sdk-codemod/src/registry.ts)
+#   - `prereleaseUntil: V2_NEXT_PENDING` and `until: NEXT_RELEASE` codemod
+#     boundaries (packages/sdk-codemod/src/registry.ts)
 #   - `@deprecated since NEXT_RELEASE` markers (packages/sdk/src/**)
 #
 # Both describe the version a change ships in, which is unknown while the
@@ -42,7 +42,8 @@ gh pr checkout "$PR_NUMBER"
 # Detach so the trap's reset only moves HEAD, not the local branch gh pr checkout made.
 git checkout --quiet --detach
 
-pnpm codemod:resolve-pending
+PREVIOUS_SDK_VERSION="$(git show "${original_ref}:packages/sdk/package.json" | jq -r .version)" \
+  pnpm codemod:resolve-pending
 pnpm deprecations:resolve-pending
 
 mapfile -t resolved_paths < <(git diff --name-only)

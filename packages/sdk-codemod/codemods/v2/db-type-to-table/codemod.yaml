@@ -3,5 +3,3 @@ version: "1.0.0"
 description: "Rename TailorDB schema builder calls from db.type() to db.table()"
 engine: jssg
 language: typescript
-since: "1.0.0"
-until: "2.0.0"

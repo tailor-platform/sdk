@@ -145,12 +145,12 @@ export default {
     expect(globalThis.__testExtendCalls).toHaveLength(1);
   });
 
-  test("leaves an array that mixes plugins with other values alone, as the CLI does", async () => {
+  test("rejects a `plugins` export that mixes plugins with other values, as the CLI does", async () => {
     writeTable('{ "first": {} }');
     writeConfig(`${extendingPlugin("first", "rank", "db.int()")}, "not a plugin"`);
     const order = await loadTable();
 
-    await expect(getExtendedTable(configPath, order)).rejects.toThrow('Plugin "first" not found');
+    await expect(getExtendedTable(configPath, order)).rejects.toThrow(/Invalid `plugins` export/);
   });
 
   test("reports a plugin the config does not register", async () => {
@@ -267,6 +267,67 @@ export default {
       expect(first.name).toBe("OrderArchive");
       expect(second).toBe(first);
       expect(globalThis.__testProcessTableCalls).toEqual(["Order:30:main"]);
+    });
+  });
+
+  describe("plugin export selection", () => {
+    const writeConfig = (pluginsExport: string) =>
+      fs.writeFileSync(
+        configPath,
+        `${pluginsExport}
+export default { db: { main: { files: [] } } };
+`,
+      );
+
+    test.each([
+      'tableConfigRequired: "yes"',
+      "tableConfigRequired: null",
+      'onTableLoaded() {}, importPath: ""',
+    ])("rejects invalid plugin options: %s", async (options) => {
+      writeConfig(`export const plugins = [{ id: "invalid", description: "test", ${options} }];`);
+
+      await expect(getGeneratedTable(configPath, "invalid", null, "auditLog")).rejects.toThrow(
+        /Invalid `plugins` export/,
+      );
+    });
+
+    test("ignores array exports under any name other than `plugins`", async () => {
+      writeConfig(`export const plugins2 = [{ id: "ignored", description: "test" }];
+export const generators = [{ id: "also-ignored", description: "test" }];`);
+
+      await expect(getGeneratedTable(configPath, "ignored", null, "auditLog")).rejects.toThrow(
+        /Plugin "ignored" not found/,
+      );
+    });
+
+    test.each([
+      [
+        "is not an array",
+        `{ id: "not-an-array", description: "test" }`,
+        /Invalid `plugins` export/,
+      ],
+      ["is explicitly undefined", "undefined", /Invalid `plugins` export/],
+      [
+        "contains an array decorated with plugin properties",
+        `[Object.assign([], { id: "array", description: "test" })]`,
+        /Invalid `plugins` export/,
+      ],
+      [
+        "contains an invalid item",
+        `[{ id: "valid", description: "test" }, { no: "shape" }]`,
+        /Invalid `plugins` export/,
+      ],
+      [
+        "repeats a plugin ID",
+        `[{ id: "dup", description: "first" }, { id: "dup", description: "second" }]`,
+        /Duplicate plugin ID "dup"/,
+      ],
+    ])("rejects a `plugins` export that %s", async (_case, pluginsExport, message) => {
+      writeConfig(`export const plugins = ${pluginsExport};`);
+
+      await expect(getGeneratedTable(configPath, "anything", null, "auditLog")).rejects.toThrow(
+        message,
+      );
     });
   });
 

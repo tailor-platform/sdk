@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test } from "vitest";
+import migrateGenerators from "../codemods/v2/define-generators-to-plugins/scripts/transform";
+import normalizePluginExport from "../codemods/v2/plugin-export-name-normalize/scripts/transform";
 import type { TransformFn } from "./runner";
 
 const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
@@ -50,7 +53,14 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
   for (const c of cases) {
     const inputPath = path.join(c.caseDir, c.inputFile);
     const input = await fs.promises.readFile(inputPath, "utf-8");
-    const result = await transform(input, inputPath);
+    // These fixtures model config modules, even though their source is stored as input.ts.
+    const transformPath = [
+      "v2/define-generators-to-plugins",
+      "v2/plugin-export-name-normalize",
+    ].includes(codemodPath)
+      ? path.join(c.caseDir, "tailor.config.ts")
+      : inputPath;
+    const result = await transform(input, transformPath);
     const expected = c.expectedFile
       ? await fs.promises.readFile(path.join(c.caseDir, c.expectedFile), "utf-8")
       : null;
@@ -59,8 +69,413 @@ async function runFixtureCases(codemodPath: string): Promise<void> {
 }
 
 describe("codemod transforms", () => {
+  test.each([
+    ["consumer.ts", "plugins as generator"],
+    ["tailor.config.mts", "plugins"],
+  ])("preserves the appropriate public export in %s", (fileName, exportSpecifier) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-local-reexport-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source = 'import { generator } from "./tailor.config.ts"; export { generator };';
+      expect(normalizePluginExport(source, path.join(dir, fileName))).toBe(
+        `import { plugins } from "./tailor.config.ts"; export { ${exportSpecifier} };`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("adds the canonical plugin import beside an existing aliased import", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+import { kyselyTypePlugin as makeKyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+export const generators = defineGenerators(["@tailor-platform/kysely-type", {}]);`;
+    const result = migrateGenerators(source, "/project/tailor.config.ts");
+    expect(result).toContain(
+      'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+    );
+    expect(result).toContain("import { kyselyTypePlugin as makeKyselyTypePlugin }");
+    expect(result).toContain("export const plugins = definePlugins(kyselyTypePlugin({}));");
+  });
+
+  test.each([
+    'import { kyselyTypePlugin } from "./helper";',
+    "const kyselyTypePlugin = () => [];",
+    "function helper(kyselyTypePlugin) { return kyselyTypePlugin(); }",
+  ])("preserves conflicting generated plugin bindings: %s", (binding) => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+${binding}
+export const generators = defineGenerators(["@tailor-platform/kysely-type", {}]);`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test("keeps a direct plugin factory binding beside an aliased plugin import", () => {
+    const source = `import { defineGenerators, definePlugins as makePlugins } from "@tailor-platform/sdk";
+export const generators = defineGenerators();`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBe(
+      `import { definePlugins, definePlugins as makePlugins } from "@tailor-platform/sdk";
+export const plugins = definePlugins();`,
+    );
+  });
+
+  test("preserves a shadowed legacy factory", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+export const generators = defineGenerators();
+function read(defineGenerators) { return defineGenerators(); }`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test("preserves a conflicting plugin factory binding", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+const definePlugins = () => [];
+export const generators = defineGenerators();`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test("preserves legacy factories referenced indirectly", () => {
+    const source = `import { defineGenerators } from "@tailor-platform/sdk";
+const makeGenerators = defineGenerators;
+export const generators = makeGenerators();`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves intrinsic JSX tag names during %s", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); export const view = <generators><generators />{generators}</generators>;`;
+    expect(transform(source, "/project/tailor.config.tsx")).toBe(
+      'import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins(); export const view = <generators><generators />{plugins}</generators>;',
+    );
+  });
+
+  test("leaves aliased legacy factories intact for manual migration", () => {
+    const source = `import { defineGenerators as makeGenerators } from "@tailor-platform/sdk";
+export const generators = makeGenerators(["@tailor-platform/kysely-type", {}]);`;
+    expect(migrateGenerators(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test("renames references inside JSX without rewriting expression syntax", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-tsx-consumer-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source =
+        'import { generator } from "./tailor.config"; export const view = <div>{generator}</div>;';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.tsx"))).toBe(
+        'import { plugins } from "./tailor.config"; export const view = <div>{plugins}</div>;',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves JSX expression syntax in %s configs", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); export const view = <div>{generators}</div>;`;
+    expect(transform(source, "/project/tailor.config.tsx")).toBe(
+      'import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins(); export const view = <div>{plugins}</div>;',
+    );
+  });
+
+  test.each([
+    "",
+    "function definePlugins() { return []; }",
+    'import { definePlugins } from "./other";',
+  ])("preserves an unrelated definePlugins binding: %s", (binding) => {
+    const source = `${binding} export const generators = definePlugins();`;
+    expect(normalizePluginExport(source, "/project/tailor.config.ts")).toBeNull();
+  });
+
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves helper exports during %s", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}();`;
+    const result = transform(source, "/project/helpers.ts") ?? source;
+    expect(result).toContain("export const generators = definePlugins()");
+  });
+
+  describe.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("%s TypeScript binding safety", (_name, transform, factory) => {
+    test.each([
+      'export * as plugins from "./other";',
+      "enum plugins { A }",
+      "namespace plugins {}",
+      'import plugins = require("./other");',
+      "import plugins = Other.member;",
+      "const f = function plugins() { return generators; };",
+      "const c = class plugins {};",
+      "function* plugins() {}",
+      "const f = function* plugins() {};",
+    ])("preserves a conflicting declaration: %s", (declaration) => {
+      const source = `import { ${factory} } from "@tailor-platform/sdk"; ${declaration} export const generators = ${factory}();`;
+      expect(transform(source)).toBeNull();
+    });
+
+    test.each(["generators", "plugins"])("preserves rest-parameter bindings: %s", (name) => {
+      const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); function read(...${name}) { return generators; }`;
+      expect(transform(source) ?? source).not.toContain("export const plugins");
+    });
+
+    test("preserves a shadowing enum binding", () => {
+      const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); function f() { enum generators { A } return generators.A; }`;
+      const output = transform(source) ?? source;
+      expect(output).not.toContain("export const plugins");
+      expect(output).toContain("enum generators");
+    });
+  });
+
+  test("preserves an unrelated exported alias when renaming a local import", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-exported-alias-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source =
+        'import { generator } from "./tailor.config"; const other = 1; export { other as generator }; console.log(generator);';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBe(
+        'import { plugins } from "./tailor.config"; const other = 1; export { other as generator }; console.log(plugins);',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["normalize", normalizePluginExport, "definePlugins"],
+    ["legacy", migrateGenerators, "defineGenerators"],
+  ] as const)("preserves unrelated source re-exports during %s", (_name, transform, factory) => {
+    const source = `import { ${factory} } from "@tailor-platform/sdk"; export const generators = ${factory}(); export { generators as legacy } from "./other";`;
+    const result = transform(source);
+    expect(result).toContain("export const plugins = definePlugins()");
+    expect(result).toContain('export { generators as legacy } from "./other"');
+  });
+
+  test.each([
+    'import { generators } from "./other/tailor.config";',
+    'import { definePlugins } from "@tailor-platform/sdk"; export const generators = definePlugins();',
+  ])("skips competing new local bindings: %s", (otherBinding) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-target-collision-"));
+    try {
+      fs.mkdirSync(path.join(dir, "other"));
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      fs.writeFileSync(
+        path.join(dir, "other/tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generators = definePlugins();',
+      );
+      const source = `import { generator } from "../tailor.config";\n${otherBinding.replace("./other/", "../other/")}`;
+      expect(normalizePluginExport(source, path.join(dir, "combined/tailor.config.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves an explicitly named config before other extensions", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-explicit-config-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins();',
+      );
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.mts"),
+        "export const generator = makeGenerator();",
+      );
+      const source = 'import { generator } from "./tailor.config.mts";';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each(["mts", "cts", "mjs", "cjs"])(
+    "does not substitute a .ts config for a missing explicit .%s module",
+    (extension) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-missing-config-"));
+      try {
+        fs.writeFileSync(
+          path.join(dir, "tailor.config.ts"),
+          'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+        );
+        const source = `import { generator } from "./tailor.config.${extension}";`;
+        expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each([
+    ["mjs", "mts"],
+    ["cjs", "cts"],
+  ])("resolves .%s imports to .%s sources", (emittedExtension, sourceExtension) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-emitted-config-"));
+    try {
+      fs.writeFileSync(path.join(dir, "tailor.config.ts"), "export const generator = 1;");
+      fs.writeFileSync(
+        path.join(dir, `tailor.config.${sourceExtension}`),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source = `import { generator } from "./tailor.config.${emittedExtension}";`;
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBe(
+        `import { plugins } from "./tailor.config.${emittedExtension}";`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves an existing plugins import alias while renaming its remote name", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-import-alias-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();',
+      );
+      const source =
+        'import { generator as plugins } from "./tailor.config"; console.log(plugins);';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBe(
+        'import { plugins as plugins } from "./tailor.config"; console.log(plugins);',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves a plugin export already available through an exported alias", () => {
+    const source =
+      'import { definePlugins } from "@tailor-platform/sdk"; export const generators = definePlugins(); export { generators as plugins };';
+    expect(normalizePluginExport(source)).toBeNull();
+  });
+
+  test("preserves an exported plugins alias when converting legacy generators", () => {
+    const source =
+      'import { defineGenerators } from "@tailor-platform/sdk"; export const generators = defineGenerators(); export { generators as plugins };';
+    expect(migrateGenerators(source)).toBeNull();
+  });
+
+  test.each(["mts", "cts"])("renames imports from tailor.config.%s", (extension) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-extension-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, `tailor.config.${extension}`),
+        'import { definePlugins } from "@tailor-platform/sdk"; export const generator = definePlugins();\n',
+      );
+      const source = `import { generator } from "./tailor.config.${extension}";\nconsole.log(generator);\n`;
+      expect(normalizePluginExport(source, path.join(dir, `consumer.${extension}`))).toBe(
+        `import { plugins } from "./tailor.config.${extension}";\nconsole.log(plugins);\n`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    "export const generator = makeGenerator();",
+    "export function generator() {}",
+    "const unrelated = makeGenerator(); export { unrelated as generator };",
+    'export { generator } from "./other";',
+  ])("preserves unrelated config exports: %s", (unrelatedExport) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-unrelated-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "tailor.config.ts"),
+        `import { definePlugins } from "@tailor-platform/sdk"; export const plugins = definePlugins();\n${unrelatedExport}\n`,
+      );
+      const source = 'import { generator } from "./tailor.config";\nconsole.log(generator);\n';
+      expect(normalizePluginExport(source, path.join(dir, "consumer.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves imports when multiple legacy exports prevent config normalization", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-export-normalize-"));
+    try {
+      const config = `import { definePlugins } from "@tailor-platform/sdk";
+export const generator = definePlugins();
+export const generators = definePlugins();
+`;
+      const configPath = path.join(dir, "tailor.config.ts");
+      fs.writeFileSync(configPath, config);
+      expect(normalizePluginExport(config, configPath)).toBeNull();
+      const consumer = `import { generator } from "./tailor.config";
+console.log(generator);
+`;
+      expect(normalizePluginExport(consumer, path.join(dir, "consumer.ts"))).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    { define: "defineGenerators", transform: migrateGenerators },
+    { define: "definePlugins", transform: normalizePluginExport },
+  ])("$define preserves remote names in unrelated aliased imports", ({ define, transform }) => {
+    const source = `import { ${define} } from "@tailor-platform/sdk";
+import { generators as unrelated } from "./other";
+export const generators = ${define}();
+console.log(generators, unrelated);
+`;
+    const expected = `import { definePlugins } from "@tailor-platform/sdk";
+import { generators as unrelated } from "./other";
+export const plugins = definePlugins();
+console.log(plugins, unrelated);
+`;
+    expect(transform(source)).toBe(expected);
+  });
+
+  test.each([
+    { define: "defineGenerators", transform: migrateGenerators },
+    { define: "definePlugins", transform: normalizePluginExport },
+  ])("$define preserves defaulted destructuring bindings", ({ define, transform }) => {
+    const source = `import { ${define} } from "@tailor-platform/sdk";
+export const generators = ${define}();
+function read(value: { generators?: unknown[] }) {
+  const { generators = [] } = value;
+  return generators;
+}
+`;
+    const expected = `import { definePlugins } from "@tailor-platform/sdk";
+export const generators = definePlugins();
+function read(value: { generators?: unknown[] }) {
+  const { generators = [] } = value;
+  return generators;
+}
+`;
+    expect(transform(source) ?? source).toBe(expected);
+  });
+
+  test.each([
+    { define: "defineGenerators", transform: migrateGenerators },
+    { define: "definePlugins", transform: normalizePluginExport },
+  ])("$define preserves references when plugins is a parameter", ({ define, transform }) => {
+    const source = `import { ${define} } from "@tailor-platform/sdk";
+export const generators = ${define}();
+export function read(plugins: unknown) { return generators; }
+`;
+    expect(transform(source)).toBeNull();
+  });
+
   test("v2/define-generators-to-plugins transforms correctly", async () => {
     await expect(runFixtureCases("v2/define-generators-to-plugins")).resolves.toBeUndefined();
+  });
+
+  test("v2/plugin-export-name-normalize transforms correctly", async () => {
+    await expect(runFixtureCases("v2/plugin-export-name-normalize")).resolves.toBeUndefined();
   });
 
   test("v2/plugin-cli-import transforms correctly", async () => {
