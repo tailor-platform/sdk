@@ -107,7 +107,10 @@ function staticStringValue(node: Node): string | undefined {
  * says nothing about it), so it must not be treated as a guard. Loose
  * equality (`==`/`!=`) is included because minifiers rewrite `===`/`!==`
  * against a `typeof` result to the loose form (the result is always a
- * string, so the two are equivalent there).
+ * string, so the two are equivalent there). Minifiers also rewrite
+ * `typeof x !== "undefined"` to `typeof x < "u"`: `"undefined"` is the only
+ * `typeof` result not ordered before `"u"`, so the relational form is only
+ * true while `x` is declared.
  * @param expr - Candidate comparison AST node.
  * @returns The guarded identifier's name, or undefined if `expr` doesn't guard one.
  */
@@ -128,9 +131,11 @@ function typeofGuardTarget(expr: Node): string | undefined {
   const literalValue = staticStringValue(literalSide);
   if (literalValue === undefined) return undefined;
   const comparesToUndefined = literalValue === "undefined";
+  const isTypeofLeft = typeofSide === left;
   const isSafe =
     (NEGATIVE_EQUALITY_OPERATORS.has(operator) && comparesToUndefined) ||
-    (POSITIVE_EQUALITY_OPERATORS.has(operator) && !comparesToUndefined);
+    (POSITIVE_EQUALITY_OPERATORS.has(operator) && !comparesToUndefined) ||
+    (operator === (isTypeofLeft ? "<" : ">") && literalValue <= "undefined");
   if (!isSafe) return undefined;
   return (typeofSide.argument as { name: string }).name;
 }
@@ -282,6 +287,18 @@ export function findUndefinedReferences(
           return;
         }
         walk(node.right);
+        return;
+      }
+
+      case "ConditionalExpression": {
+        const guardedName = typeofGuardTarget(node.test);
+        walk(node.test);
+        const isConsequentGuarded =
+          !options?.includeGuardedReferences &&
+          guardedName !== undefined &&
+          walkGuardedChain(node.consequent, guardedName, walk);
+        if (!isConsequentGuarded) walk(node.consequent);
+        walk(node.alternate);
         return;
       }
 
