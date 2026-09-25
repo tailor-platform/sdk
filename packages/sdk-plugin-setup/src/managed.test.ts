@@ -264,6 +264,15 @@ describe("computeManagedHash", () => {
     expect(() => hashOf(bomb)).toThrow(ManagedMergeError);
   });
 
+  test("rejects a recursive alias instead of recursing forever", () => {
+    const recursive = render.content.replace(
+      "permissions:\n  contents: read\n",
+      "permissions: &p {contents: read, self: *p}\n",
+    );
+    expect(recursive).not.toBe(render.content);
+    expect(() => hashOf(recursive)).toThrow(ManagedMergeError);
+  });
+
   test("ignores the build-site slot body but not its removal", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const hash = (c: string) => computeManagedHash(c, "action", action.generatedIds);

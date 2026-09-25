@@ -119,15 +119,24 @@ function omit(value: Plain, keys: readonly string[]): Plain {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
 }
 
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (isPlainObject(value)) {
-    const entries = Object.keys(value)
-      .toSorted()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`);
-    return `{${entries.join(",")}}`;
+function canonicalJson(value: unknown, seen = new WeakSet<object>()): string {
+  if (typeof value === "object" && value !== null) {
+    if (seen.has(value)) throw new ManagedMergeError("The file contains a recursive alias.");
+    seen.add(value);
   }
-  return JSON.stringify(value) ?? "null";
+  try {
+    if (Array.isArray(value))
+      return `[${value.map((item) => canonicalJson(item, seen)).join(",")}]`;
+    if (isPlainObject(value)) {
+      const entries = Object.keys(value)
+        .toSorted()
+        .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key], seen)}`);
+      return `{${entries.join(",")}}`;
+    }
+    return JSON.stringify(value) ?? "null";
+  } finally {
+    if (typeof value === "object" && value !== null) seen.delete(value);
+  }
 }
 
 function projectSteps(
