@@ -27,6 +27,14 @@ human-readable text or empty stdout.
 Commands that only perform side effects and do not define a structured result may leave stdout empty
 even when `--json` is passed.
 
+Set `TAILOR_JSON_OUTPUT=true` (or `1`) to default every command to JSON without passing `--json`
+each time. This is intended for agents, scripts, and CI steps that parse CLI output. An explicit
+flag always wins, so `--json=false` forces table output even when the variable is enabled. The values
+`true`, `True`, `TRUE`, `t`, `T`, and `1` enable JSON; `false`, `False`, `FALSE`, `f`, `F`, and `0`
+keep table output. Other values are rejected. JSON mode also disables interactive prompts, so set the
+variable per invocation or per job rather than exporting it from a shell profile; a command that
+needed a prompt names what selected JSON when it refuses.
+
 Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
 a command failure under `--json` emits a JSON error envelope to stderr. Failures you can act on — an
 invalid or missing option, a resource that does not exist, an invalid configuration, or an unmet
@@ -219,7 +227,8 @@ Resolution rules:
   then forwarded, so when the same flag appears on both sides the later one wins. A flag the host
   does not define — including one only some commands declare, such as `--profile` — still has to be
   typed after the plugin's own subcommand. `--help` and `--version` are answered by the host CLI and
-  never dispatch a plugin.
+  never dispatch a plugin. Setting `TAILOR_JSON_OUTPUT=true` also works, which plugins inherit from
+  the environment.
 
 Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
 `node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is
