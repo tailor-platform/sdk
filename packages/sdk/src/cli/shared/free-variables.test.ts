@@ -82,6 +82,11 @@ describe("findUndefinedReferences", () => {
       [],
     ],
     [
+      "does not flag a typeof-guarded && chain after a minifier rewrites !== 'undefined' to < 'u'",
+      "() => typeof process<`u`&&process.env",
+      [],
+    ],
+    [
       "still flags a reference guarded by the minified wrong-direction comparison (> 'u')",
       "() => typeof global>`u`?global:{}",
       ["global"],

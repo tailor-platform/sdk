@@ -146,7 +146,7 @@ function typeofGuardTarget(expr: Node): string | undefined {
  * Computed property expressions along the chain are still walked for their
  * own free variables (e.g. the `z` in `x.y[z]`) — only the guarded root
  * identifier is treated as safe.
- * @param node - Candidate right-hand side of a `typeof`-guarded `&&`.
+ * @param node - Candidate right-hand side of a `typeof`-guarded `&&`, or consequent of a `typeof`-guarded ternary.
  * @param guardedName - The identifier name the `typeof` check guards.
  * @param walk - The AST walker, used to visit computed property expressions.
  * @returns Whether `node` is entirely covered by the guard.
