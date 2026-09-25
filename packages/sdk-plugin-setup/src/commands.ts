@@ -112,7 +112,6 @@ const branchCommand = defineAppCommand({
       description:
         "Deploy on manual dispatch only from the target branch; dry runs stay unrestricted",
     }),
-
     dir: arg(z.string().min(1).default("."), {
       alias: "d",
       description: "App directory (for monorepo setups)",
@@ -155,7 +154,6 @@ const tagCommand = defineAppCommand({
       description:
         "Deploy on manual dispatch only from a tag (reachable from --branch when set); dry runs stay unrestricted",
     }),
-
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
     }),
