@@ -273,6 +273,28 @@ describe("computeManagedHash", () => {
     expect(() => hashOf(recursive)).toThrow(ManagedMergeError);
   });
 
+  test("ignores user-mapping on a coordinator step that calls an app action", () => {
+    const coordinate = variants.find(([name]) => name === "coordinate branch")?.[2];
+    if (!coordinate) throw new Error("missing coordinate variant");
+    const hash = (c: string) => computeManagedHash(c, "workflow", coordinate.generatedIds);
+    const edited = coordinate.content.replace(
+      /( {6}- id: tailor-deploy-api\n(?:        .*\n)*? {8}with:\n)/,
+      "$1          user-mapping: ${{ vars.TAILOR_SLACK_USER_MAPPING }}\n",
+    );
+    expect(edited).not.toBe(coordinate.content);
+    expect(hash(edited)).toBe(hash(coordinate.content));
+
+    const { content } = mergeUserContent({
+      current: edited,
+      rendered: coordinate.content,
+      layout: "workflow",
+      previousIds: coordinate.generatedIds,
+      renderedIds: coordinate.generatedIds,
+      force: true,
+    });
+    expect(content).toBe(edited);
+  });
+
   test("ignores the build-site slot body but not its removal", () => {
     const action = renderActionWorkflow({ workspaceName: "my-app", hasStaticWebsites: true });
     const hash = (c: string) => computeManagedHash(c, "action", action.generatedIds);

@@ -217,7 +217,7 @@ them. Everything else is yours, and re-running `setup` keeps it:
   `tailor-drift-check`, `fail-on-drift` on `tailor-drift-check`,
   `install-command` on `tailor-install`, `node-version-file` on
   `tailor-setup`, `label` on `tailor-plan`, and `user-mapping` on
-  `tailor-notify`.
+  `tailor-notify` and on a coordinator's steps that call an app action.
 - **The `run:` command of the `build-site` step** in a composite action.
 
 Comments above your own jobs and steps and at the end of the file are kept too.

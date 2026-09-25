@@ -36,6 +36,10 @@ const EDITABLE_WITH_KEYS: Record<string, readonly string[]> = {
   setup: ["node-version-file"],
 };
 
+// Coordinator steps call an app's generated composite action.
+const APP_ACTION_USES = /^\.\/\.github\/actions\/tailor-[^/]+$/;
+const APP_ACTION_EDITABLE_WITH_KEYS = ["user-mapping"];
+
 // Slots are SDK-placed steps whose listed fields belong to the user.
 const SLOTS: Record<Layout, Record<string, readonly string[]>> = {
   workflow: {},
@@ -111,6 +115,7 @@ function lookup<T>(record: Record<string, T>, key: string): T | undefined {
 
 function editableWithKeys(uses: unknown): readonly string[] | undefined {
   if (typeof uses !== "string") return undefined;
+  if (APP_ACTION_USES.test(uses)) return APP_ACTION_EDITABLE_WITH_KEYS;
   const name = /^tailor-platform\/actions\/([a-z0-9-]+)@/.exec(uses)?.[1];
   return name === undefined ? undefined : lookup(EDITABLE_WITH_KEYS, name);
 }
