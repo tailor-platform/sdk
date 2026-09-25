@@ -178,6 +178,7 @@ export async function planSecretManager(context: PlanContext) {
           vaultChangeSet.updates.push({
             name: vaultName,
             workspaceId,
+            ...(owned && { forcedBySdkVersion: true }),
           });
         }
         delete existingVaults[vaultName];
@@ -234,6 +235,7 @@ export async function planSecretManager(context: PlanContext) {
               workspaceId,
               vaultName,
               value: secret.value,
+              ...(unchanged && { forcedBySdkVersion: true }),
             });
           }
           existingSet.delete(secret.name);

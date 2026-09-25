@@ -157,11 +157,8 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
         unmanaged,
       });
 
-      if (
-        owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areExecutorsEqual(existing.resource, desiredExecutor)
-      ) {
+      const configUnchanged = owned && areExecutorsEqual(existing.resource, desiredExecutor);
+      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: executor.name });
       } else {
         changeSet.updates.push({
@@ -171,6 +168,7 @@ export async function planExecutor(context: PlanContext, previousExisting?: Exis
             executor: desiredExecutor,
           },
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingExecutors[executor.name];

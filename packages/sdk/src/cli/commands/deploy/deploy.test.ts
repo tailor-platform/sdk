@@ -266,6 +266,7 @@ describe("summarizePlanResults", () => {
       update: 4,
       delete: 1,
       replace: 0,
+      forcedBySdkVersion: 0,
     });
   });
 
@@ -281,6 +282,7 @@ describe("summarizePlanResults", () => {
       update: 1,
       delete: 0,
       replace: 0,
+      forcedBySdkVersion: 0,
     });
   });
 
@@ -295,6 +297,7 @@ describe("summarizePlanResults", () => {
       update: 0,
       delete: 0,
       replace: 0,
+      forcedBySdkVersion: 0,
     });
   });
 
@@ -318,6 +321,33 @@ describe("summarizePlanResults", () => {
       update: 2,
       delete: 0,
       replace: 0,
+      forcedBySdkVersion: 0,
+    });
+  });
+
+  test("counts updates forced by the SDK version across entries, services, and change sets", () => {
+    const results = emptyResults();
+    results.staticWebsite.changeSet.updates.push({
+      name: "my-site",
+      forcedBySdkVersion: true,
+    } as never);
+    results.aiGateway.changeSet.updates.push({ name: "my-gateway" } as never);
+    const displayEntries: GroupedDisplayEntry[] = [
+      { ...entry("update", "Customer"), forcedBySdkVersion: true },
+      entry("update", "Order"),
+    ];
+    const serviceActions: NamespaceAction[] = [
+      { name: "tailordb", action: "update", forcedBySdkVersion: true },
+    ];
+
+    const summary = summarizePlanResults(results, displayEntries, serviceActions);
+
+    expect(summary).toEqual({
+      create: 0,
+      update: 5,
+      delete: 0,
+      replace: 0,
+      forcedBySdkVersion: 3,
     });
   });
 });
@@ -918,6 +948,124 @@ describe("printPlanResults", () => {
     expect(String(outSpy.mock.calls[0]?.[0])).toContain("migration checkpoint 0005 → 0000");
   });
 
+  test("marks updates forced by the SDK version in human output and summary", () => {
+    const results = emptyResults();
+    results.tailorDB.changeSet.service.updates.push({
+      name: "tailordb",
+      forcedBySdkVersion: true,
+    } as never);
+    results.tailorDB.changeSet.type.updates.push({
+      name: "Customer",
+      request: { namespaceName: "tailordb" },
+      forcedBySdkVersion: true,
+    } as never);
+    results.tailorDB.changeSet.type.updates.push({
+      name: "Order",
+      request: { namespaceName: "tailordb" },
+    } as never);
+    results.staticWebsite.changeSet.updates.push({
+      name: "my-site",
+      forcedBySdkVersion: true,
+    } as never);
+
+    const summary = printPlanResults(results, { dryRun: true });
+
+    const lines = String(outSpy.mock.calls[0]?.[0]).split("\n");
+    expect(lines.find((line) => line.includes("tailordb"))).toContain("[forced by SDK version]");
+    expect(lines.find((line) => line.includes("Customer"))).toContain("[forced by SDK version]");
+    expect(lines.find((line) => line.includes("Order"))).not.toContain("forced by SDK version");
+    expect(lines.find((line) => line.includes("my-site"))).toContain("[forced by SDK version]");
+    expect(lines).toContain(
+      "Plan: 0 to create, 4 to update (3 forced by SDK version), 0 to delete",
+    );
+    expect(summary.forcedBySdkVersion).toBe(3);
+  });
+
+  test("marks updates forced by the SDK version in JSON dry-run changes and summary", () => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.tailorDB.changeSet.service.updates.push({
+      name: "tailordb",
+      forcedBySdkVersion: true,
+    } as never);
+    results.aiGateway.changeSet.updates.push({ name: "my-gateway" } as never);
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { update: number; forcedBySdkVersion: number };
+      changes: Array<Record<string, unknown>>;
+    };
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 1 });
+    expect(payload.changes).toContainEqual({
+      action: "update",
+      name: "tailordb",
+      labels: ["tailorDB"],
+      namespace: undefined,
+      forcedBySdkVersion: true,
+    });
+    const gatewayChange = payload.changes.find((change) => change.name === "my-gateway");
+    expect(gatewayChange).toBeDefined();
+    expect(gatewayChange).not.toHaveProperty("forcedBySdkVersion");
+  });
+
+  test.each([
+    {
+      name: "a table and gqlPermission merged into one line are forced only when both are",
+      typeForced: true,
+      permissionForced: false,
+      expected: false,
+    },
+    {
+      name: "a merged table and gqlPermission both forced are forced",
+      typeForced: true,
+      permissionForced: true,
+      expected: true,
+    },
+  ])("$name", ({ typeForced, permissionForced, expected }) => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.tailorDB.changeSet.type.updates.push({
+      name: "Customer",
+      request: { namespaceName: "tailordb" },
+      ...(typeForced && { forcedBySdkVersion: true }),
+    } as never);
+    results.tailorDB.changeSet.gqlPermission.updates.push({
+      name: "Customer",
+      request: { namespaceName: "tailordb" },
+      ...(permissionForced && { forcedBySdkVersion: true }),
+    } as never);
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { update: number; forcedBySdkVersion: number };
+      changes: Array<Record<string, unknown>>;
+    };
+    expect(payload.changes).toHaveLength(1);
+    expect(payload.changes[0]?.["forcedBySdkVersion"]).toBe(expected ? true : undefined);
+    expect(payload.summary).toMatchObject({ update: 1, forcedBySdkVersion: expected ? 1 : 0 });
+  });
+
+  test("keeps a gqlPermission-only update's forced marker", () => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.tailorDB.changeSet.gqlPermission.updates.push({
+      name: "Customer",
+      request: { namespaceName: "tailordb" },
+      forcedBySdkVersion: true,
+    } as never);
+
+    printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      changes: Array<Record<string, unknown>>;
+    };
+    expect(payload.changes).toEqual([
+      expect.objectContaining({ labels: ["gqlPermission"], forcedBySdkVersion: true }),
+    ]);
+  });
+
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
     using _json = jsonMode();
 
@@ -960,6 +1108,34 @@ describe("printDeploymentPlans", () => {
     );
     expect(payload.warnings).toEqual([]);
     expect(payload.conflicts).toEqual([]);
+
+    outSpy.mockRestore();
+  });
+  test("sums updates forced by the SDK version across configs", () => {
+    using _json = jsonMode();
+    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+
+    const first = emptyResults();
+    first.staticWebsite.changeSet.updates.push({
+      name: "buyer-site",
+      forcedBySdkVersion: true,
+    } as never);
+    const second = emptyResults();
+    second.aiGateway.changeSet.updates.push({
+      name: "supplier-gateway",
+      forcedBySdkVersion: true,
+    } as never);
+
+    const summary = printDeploymentPlans(
+      [plannedDeployment("buyer", first), plannedDeployment("supplier", second)],
+      { dryRun: true },
+    );
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { update: number; forcedBySdkVersion: number };
+    };
+    expect(summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
+    expect(payload.summary).toMatchObject({ update: 2, forcedBySdkVersion: 2 });
 
     outSpy.mockRestore();
   });

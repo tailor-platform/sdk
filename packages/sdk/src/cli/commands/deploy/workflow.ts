@@ -641,9 +641,10 @@ export async function planWorkflow(
         unmanaged,
       });
 
+      const sdkVersionMatches = hasMatchingSdkVersion(existing.allLabels, metaRequest.labels);
       if (
         owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        sdkVersionMatches &&
         canTreatWorkflowAsUnchanged({
           existing: existing.resource,
           workflow: desiredWorkflow,
@@ -658,12 +659,19 @@ export async function planWorkflow(
           unchangedWorkflowJobNames.add(jobName);
         }
       } else {
+        // Job function content is judged by their own function registry updates.
+        const forcedBySdkVersion =
+          owned &&
+          !sdkVersionMatches &&
+          !usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName)) &&
+          areWorkflowsEqual(existing.resource, desiredWorkflow, usedJobNames);
         changeSet.updates.push({
           name: workflow.name,
           workspaceId,
           workflow: desiredWorkflow,
           usedJobNames,
           metaRequest,
+          ...(forcedBySdkVersion && { forcedBySdkVersion: true }),
         });
       }
       delete existingWorkflows[workflow.name];

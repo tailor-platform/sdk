@@ -437,6 +437,31 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.service.deletes[0]!.name).toBe("my-tailordb");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
+
+    test.each([
+      { name: "marks", label: appName, sdkVersion: "v0-9-0", forced: true },
+      { name: "does not mark", label: "other-app", sdkVersion: undefined, forced: false },
+    ])(
+      "$name a service update forced by the SDK version (owner $label)",
+      async ({ label, sdkVersion, forced }) => {
+        const client = createMockClient([{ name: "my-tailordb", label, sdkVersion }]);
+        const application = createMockApplication([createMockTailorDBService("my-tailordb")]);
+
+        const result = await planTailorDB({
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+          noSchemaCheck: true,
+        });
+
+        expect(result.changeSet.service.updates).toHaveLength(1);
+        expect(result.changeSet.service.updates[0]?.forcedBySdkVersion).toBe(
+          forced ? true : undefined,
+        );
+      },
+    );
   });
 
   describe("nested field manifest mapping", () => {
@@ -963,7 +988,107 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(ctx);
 
       expect(result.changeSet.type.updates).toHaveLength(1);
+      expect(result.changeSet.type.updates[0]?.forcedBySdkVersion).toBe(true);
       expect(result.changeSet.type.unchanged).toHaveLength(0);
+    });
+
+    describe("forceApplyAll markers", () => {
+      const invoiceType = (gql?: TailorDBType["permissions"]["gql"]): TailorDBType => ({
+        name: "Invoice",
+        pluralForm: "Invoices",
+        description: "Invoice table",
+        fields: {
+          code: { name: "code", config: { type: "string", required: true } },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: gql ? { gql } : {},
+        files: {},
+      });
+      const readPolicy = {
+        conditions: [],
+        actions: ["read"],
+        permit: "allow",
+        description: "Can read invoices",
+      } as const;
+
+      async function planInvoice(options: {
+        local: TailorDBType;
+        remoteDescription?: string;
+        remotePermission?: TailorDBType;
+        forceApplyAll?: boolean;
+      }) {
+        const service = (type: TailorDBType) => {
+          const tailorDBService = createMockTailorDBService("test-tailordb");
+          Object.defineProperty(tailorDBService, "types", { value: { [type.name]: type } });
+          return tailorDBService;
+        };
+        const baseCtx = { workspaceId, forRemoval: false, config: mockConfig, noSchemaCheck: true };
+        const desired = await planTailorDB({
+          ...baseCtx,
+          client: createMockClient([]),
+          application: createMockApplication([service(options.remotePermission ?? options.local)]),
+        });
+        const client = createRemoteTypeClient("test-tailordb", {
+          name: "Invoice",
+          description: options.remoteDescription ?? "Invoice table",
+          pluralForm: "invoices",
+          fields: {
+            code: {
+              type: "string",
+              required: true,
+              allowedValues: [],
+              description: "",
+              validate: [],
+              array: false,
+              index: false,
+              unique: false,
+              foreignKey: false,
+              vector: false,
+              fields: {},
+            },
+          },
+        });
+        const permission = desired.changeSet.gqlPermission.creates[0]?.request.permission;
+        (client.listTailorDBGQLPermissions as ReturnType<typeof vi.fn>).mockResolvedValue({
+          permissions: permission ? [{ typeName: "Invoice", permission }] : [],
+          nextPageToken: "",
+        });
+        return planTailorDB({
+          ...baseCtx,
+          client,
+          application: createMockApplication([service(options.local)]),
+          forceApplyAll: options.forceApplyAll ?? true,
+        });
+      }
+
+      test("does not mark a type update whose schema differs from remote", async () => {
+        const result = await planInvoice({
+          local: invoiceType(),
+          remoteDescription: "Outdated description",
+        });
+
+        expect(result.changeSet.type.updates).toHaveLength(1);
+        expect(result.changeSet.type.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+      });
+
+      test("marks a gqlPermission update that matches remote", async () => {
+        const result = await planInvoice({ local: invoiceType([readPolicy]) });
+
+        expect(result.changeSet.gqlPermission.updates).toHaveLength(1);
+        expect(result.changeSet.gqlPermission.updates[0]?.forcedBySdkVersion).toBe(true);
+      });
+
+      test("does not mark a gqlPermission update that differs from remote", async () => {
+        const result = await planInvoice({
+          local: invoiceType([{ ...readPolicy, permit: "deny" }]),
+          remotePermission: invoiceType([readPolicy]),
+        });
+
+        expect(result.changeSet.gqlPermission.updates).toHaveLength(1);
+        expect(result.changeSet.gqlPermission.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+      });
     });
 
     test("treats a redeploy of the exact type previously sent as unchanged when the platform echoes it as a proto message", async () => {

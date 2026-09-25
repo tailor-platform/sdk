@@ -169,17 +169,22 @@ describe("planFunctionRegistry", () => {
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0]!.name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.updates[0]).not.toHaveProperty("forcedBySdkVersion");
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
 
     test.each([
-      ["ownership metadata is missing", {}, { unmanaged: 1, conflicts: 0 }],
-      ["owned by another app", { label: "other-app" }, { unmanaged: 0, conflicts: 1 }],
+      ["ownership metadata is missing", {}, { unmanaged: 1, conflicts: 0, forced: false }],
+      [
+        "owned by another app",
+        { label: "other-app" },
+        { unmanaged: 0, conflicts: 1, forced: false },
+      ],
       [
         "sdk version differs",
         { label: appName, sdkVersion: "v0-9-0" },
-        { unmanaged: 0, conflicts: 0 },
+        { unmanaged: 0, conflicts: 0, forced: true },
       ],
     ] as const)(
       "matching function content is updated when %s",
@@ -192,6 +197,9 @@ describe("planFunctionRegistry", () => {
         const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
 
         expect(result.changeSet.updates).toHaveLength(1);
+        expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(
+          expected.forced ? true : undefined,
+        );
         expect(result.changeSet.unchanged).toHaveLength(0);
         expect(result.unmanaged).toHaveLength(expected.unmanaged);
         expect(result.conflicts).toHaveLength(expected.conflicts);

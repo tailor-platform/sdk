@@ -770,6 +770,88 @@ describe("planWorkflow", () => {
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
+    describe("SDK-version-forced updates", () => {
+      const jobNames = ["validate-order", "check-inventory", "process-payment"];
+      const mainJobDeps = { "validate-order": jobNames };
+
+      function planSampleWorkflow(options: {
+        sdkVersion?: string;
+        mainJobFunctionName?: string;
+        unchangedJobFunctions?: ReadonlySet<string>;
+        publishExecutionEvents?: boolean;
+      }) {
+        const jobFunctionLabels = Object.fromEntries(
+          jobNames.map((jobName) => [
+            jobName,
+            {
+              label: appName,
+              sdkVersion: options.sdkVersion,
+              publishExecutionEvents: options.publishExecutionEvents,
+            },
+          ]),
+        );
+        const client = createMockClient(
+          [
+            {
+              id: "1",
+              name: "sample-workflow",
+              label: appName,
+              sdkVersion: options.sdkVersion,
+              resource: {
+                id: "1",
+                name: "sample-workflow",
+                mainJobFunctionName: options.mainJobFunctionName ?? "validate-order",
+                jobFunctions: Object.fromEntries(jobNames.map((jobName) => [jobName, "5"])),
+              },
+            },
+          ],
+          jobFunctionLabels,
+        );
+        return planWorkflow(
+          client,
+          workspaceId,
+          appName,
+          undefined,
+          { "sample-workflow": createMockWorkflow("sample-workflow", "validate-order") },
+          mainJobDeps,
+          options.unchangedJobFunctions ?? new Set(),
+          options.publishExecutionEvents === undefined
+            ? {}
+            : {
+                jobExecution: { workflowNames: new Set(["sample-workflow"]) },
+                jobPublishEvents: new Map(),
+              },
+        );
+      }
+
+      test("marks a workflow whose definition matches but whose sdk-version differs", async () => {
+        const result = await planSampleWorkflow({ sdkVersion: "v0-9-0" });
+
+        expect(result.changeSet.updates).toHaveLength(1);
+        expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(true);
+      });
+
+      test.each([
+        {
+          name: "its definition differs",
+          options: { sdkVersion: "v0-9-0", mainJobFunctionName: "check-inventory" },
+        },
+        {
+          name: "a job's publishing flag drifts",
+          options: { sdkVersion: "v0-9-0", publishExecutionEvents: false },
+        },
+        {
+          name: "only its job functions changed while its sdk-version matches",
+          options: {},
+        },
+      ])("does not mark a workflow update when $name", async ({ options }) => {
+        const result = await planSampleWorkflow(options);
+
+        expect(result.changeSet.updates).toHaveLength(1);
+        expect(result.changeSet.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+      });
+    });
+
     test("workflow with retryPolicy is unchanged when remote bigint durations match local parsed durations", async () => {
       const client = createMockClient([
         {

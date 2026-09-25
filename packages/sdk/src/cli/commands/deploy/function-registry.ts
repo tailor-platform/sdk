@@ -353,11 +353,8 @@ export async function planFunctionRegistry(
         unmanaged,
       });
 
-      if (
-        existing.resource.contentHash === entry.contentHash &&
-        owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
-      ) {
+      const configUnchanged = owned && existing.resource.contentHash === entry.contentHash;
+      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({
           name: entry.name,
         });
@@ -366,6 +363,7 @@ export async function planFunctionRegistry(
           name: entry.name,
           entry,
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingMap[entry.name];
