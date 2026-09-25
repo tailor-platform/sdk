@@ -340,13 +340,8 @@ export function summarizePlanResults(
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
   ]);
-  summary.create += nonGrouped.create;
-  summary.update += nonGrouped.update;
-  summary.delete += nonGrouped.delete;
-  summary.replace += nonGrouped.replace;
-  summary.forcedBySdkVersion += nonGrouped.forcedBySdkVersion;
 
-  return summary;
+  return sumPlanSummaries([summary, nonGrouped]);
 }
 function sumPlanSummaries(summaries: ReadonlyArray<PlanSummary>): PlanSummary {
   return summaries.reduce<PlanSummary>(

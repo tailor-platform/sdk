@@ -175,7 +175,7 @@ function buildRemainingFunctionRegistryEntries(
  * For each item in creates/updates/deletes, calls `getFunctionRegistryNames` to
  * derive zero or more function registry names. When a matching function registry
  * change exists for the same action, the item is displayed with both the resource
- * label and "functionRegistry". A grouped update is forced by the SDK version only
+ * label and "function". A grouped update is forced by the SDK version only
  * when the item and every grouped function registry update are. Ungrouped function
  * registry changes are appended.
  * @param resourceLabel - Label for the resource kind (e.g. "executor", "resolver")

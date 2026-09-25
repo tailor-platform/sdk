@@ -12,8 +12,8 @@ export interface HasName {
 
 /**
  * Marks an update whose config the current SDK found unchanged, so it is
- * planned only because the resource was last applied by a different SDK
- * version.
+ * planned only because the application's resources were last applied by a
+ * different SDK version.
  */
 export type UpdateAnnotation = { forcedBySdkVersion?: true };
 

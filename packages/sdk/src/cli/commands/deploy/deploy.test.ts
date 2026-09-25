@@ -1111,6 +1111,7 @@ describe("printDeploymentPlans", () => {
 
     outSpy.mockRestore();
   });
+
   test("sums updates forced by the SDK version across configs", () => {
     using _json = jsonMode();
     const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});

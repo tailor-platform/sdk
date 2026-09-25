@@ -167,7 +167,7 @@ Before applying changes, `deploy` shows a preview of the planned resource change
 - `-` means the resource will be deleted
 - `±` means the resource will be replaced
 
-An update marked `[forced by SDK version]` shows no configuration difference from what is deployed. It is applied again only because the resource was last deployed with a different SDK version.
+An update marked `[forced by SDK version]` shows no configuration difference from what is deployed. It is applied again only because resources of this application were last deployed with a different SDK version.
 
 After the detailed list, a summary line is printed:
 

@@ -641,17 +641,16 @@ export async function planWorkflow(
         unmanaged,
       });
 
+      const configUnchanged =
+        owned &&
+        // Job functions are only re-registered while applying a workflow create/update.
+        !usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName)) &&
+        areWorkflowsEqual(existing.resource, desiredWorkflow, usedJobNames);
       const sdkVersionMatches = hasMatchingSdkVersion(existing.allLabels, metaRequest.labels);
       if (
-        owned &&
+        configUnchanged &&
         sdkVersionMatches &&
-        canTreatWorkflowAsUnchanged({
-          existing: existing.resource,
-          workflow: desiredWorkflow,
-          usedJobNames,
-          unchangedJobFunctions,
-          staleJobFunctionNames,
-        })
+        usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName))
       ) {
         // The definition matches, but the records may not, so the labels still go.
         changeSet.unchanged.push({ name: workflow.name, metaRequest });
@@ -660,18 +659,13 @@ export async function planWorkflow(
         }
       } else {
         // Job function content is judged by their own function registry updates.
-        const forcedBySdkVersion =
-          owned &&
-          !sdkVersionMatches &&
-          !usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName)) &&
-          areWorkflowsEqual(existing.resource, desiredWorkflow, usedJobNames);
         changeSet.updates.push({
           name: workflow.name,
           workspaceId,
           workflow: desiredWorkflow,
           usedJobNames,
           metaRequest,
-          ...(forcedBySdkVersion && { forcedBySdkVersion: true }),
+          ...(configUnchanged && !sdkVersionMatches && { forcedBySdkVersion: true }),
         });
       }
       delete existingWorkflows[workflow.name];
@@ -851,26 +845,6 @@ type ExistingWorkflowResource = {
   jobFunctions?: Record<string, string | bigint>;
   publishExecutionEvents?: boolean;
 };
-
-type CanTreatWorkflowAsUnchangedParams = {
-  existing: ExistingWorkflowResource;
-  workflow: Workflow;
-  usedJobNames: string[];
-  unchangedJobFunctions: ReadonlySet<string>;
-  staleJobFunctionNames: ReadonlySet<string>;
-};
-
-function canTreatWorkflowAsUnchanged(params: CanTreatWorkflowAsUnchangedParams) {
-  const { existing, workflow, usedJobNames, unchangedJobFunctions, staleJobFunctionNames } = params;
-  if (!usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName))) {
-    return false;
-  }
-  // Job functions are only re-registered while applying a workflow create/update.
-  if (usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName))) {
-    return false;
-  }
-  return areWorkflowsEqual(existing, workflow, usedJobNames);
-}
 
 function areWorkflowsEqual(
   existing: ExistingWorkflowResource,
