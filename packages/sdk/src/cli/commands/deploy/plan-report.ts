@@ -178,12 +178,10 @@ function buildPlanReport(results: PlanResults): PlanReport {
   ];
 
   const serviceEntries = (serviceActions: ReadonlyArray<NamespaceAction>, label: string) =>
-    serviceActions.map(({ action, name, forcedBySdkVersion }) => ({
-      action,
-      name,
+    serviceActions.map((serviceAction) => ({
+      ...serviceAction,
       labels: [label],
       namespace: undefined,
-      ...(forcedBySdkVersion && { forcedBySdkVersion }),
     }));
   const allEntries = [
     ...allDisplayEntries,
