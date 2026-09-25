@@ -220,6 +220,7 @@ describe("assertWritable", () => {
       profiles: {
         rw: { user: "u@example.com", workspace_id: validUUID },
         ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
+        ro$1: { user: "u@example.com", workspace_id: validUUID, readonly: true },
         ro_false: { user: "u@example.com", workspace_id: validUUID, readonly: false },
       },
       current_user: null,
@@ -260,6 +261,25 @@ describe("assertWritable", () => {
   test("throws CLIError with PROFILE_READONLY code when profile is readonly", async () => {
     await expect(assertWritable({ profile: "ro" })).rejects.toMatchObject({
       code: "PROFILE_READONLY",
+    });
+  });
+
+  test("shell-quotes the profile in the profile update suggestion", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    await expect(assertWritable({ profile: "ro$1" })).rejects.toMatchObject({
+      suggestion:
+        "Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run `tailor profile update --permission write -- 'ro$1'`.",
+    });
+  });
+
+  test("lists the profile update arguments as JSON when the Windows shell cannot keep the profile literal", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    await expect(assertWritable({ profile: "ro$1" })).rejects.toMatchObject({
+      suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run \`tailor\` with each item of this JSON array as one argument: ${JSON.stringify(
+        ["profile", "update", "--permission", "write", "--", "ro$1"],
+      )}.`,
     });
   });
 });

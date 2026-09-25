@@ -18,7 +18,7 @@ import {
   rememberPlatformConfigForToken,
   type PlatformClientConfig,
 } from "./client";
-import { CLIError } from "./errors";
+import { CLIError, formatCommandHint } from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -674,7 +674,16 @@ export async function loadMachineUserName(
         code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
         message: `Profile "${profile}" denies overriding the machine user.`,
         details,
-        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run 'tailor profile update ${profile} --machine-user-override allow'.`,
+        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or ${formatCommandHint(
+          {
+            command: "tailor",
+            args: ["profile", "update", "--machine-user-override", "allow", "--", profile],
+          },
+          {
+            shell: (commandLine) => `run \`${commandLine}\``,
+            argv: (instruction) => `run ${instruction}`,
+          },
+        )}.`,
       });
     }
     return entry.machine_user;

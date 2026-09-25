@@ -455,13 +455,13 @@ describe("loadMachineUserName", () => {
     const envOverrideDetails =
       'The machine user is being set to "other-bot" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile\'s pinned machine user "profile-bot".';
 
-    beforeEach(() => {
+    const writeLockedProfile = (profileName: string) => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
         users: {},
         profiles: {
-          locked: {
+          [profileName]: {
             user: "u",
             workspace_id: validUUID,
             machine_user: "profile-bot",
@@ -470,6 +470,10 @@ describe("loadMachineUserName", () => {
         },
         current_user: null,
       });
+    };
+
+    beforeEach(() => {
+      writeLockedProfile("locked");
     });
 
     test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when opts.machineUser differs", async () => {
@@ -479,6 +483,36 @@ describe("loadMachineUserName", () => {
       }).catch((e: unknown) => e);
       expect(isCLIError(err)).toBe(true);
       expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+    });
+
+    test("shell-quotes the profile in the override suggestion", async () => {
+      using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+      writeLockedProfile("locked$1");
+
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "locked$1",
+      }).catch((e: unknown) => e);
+
+      expect((err as { suggestion?: string }).suggestion).toBe(
+        "Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run `tailor profile update --machine-user-override allow -- 'locked$1'`.",
+      );
+    });
+
+    test("lists the override arguments as JSON when the Windows shell cannot keep the profile literal", async () => {
+      using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+      writeLockedProfile("locked$1");
+
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "locked$1",
+      }).catch((e: unknown) => e);
+
+      expect((err as { suggestion?: string }).suggestion).toBe(
+        `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run \`tailor\` with each item of this JSON array as one argument: ${JSON.stringify(
+          ["profile", "update", "--machine-user-override", "allow", "--", "locked$1"],
+        )}.`,
+      );
     });
 
     test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when env var differs", async () => {
