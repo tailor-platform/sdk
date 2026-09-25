@@ -8,7 +8,7 @@
 
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { LinesDB, ErrorFormatter, findSchemaFile } from "@toiroakr/lines-db";
+import { LinesDB, ErrorFormatter, findSchemaFile, unwrap } from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join } from "pathe";
@@ -158,7 +158,7 @@ export async function validateSeedData(
   const db = LinesDB.create({ dataDir });
   let result;
   try {
-    result = await db.initialize({ tableName, detailedValidate: true });
+    result = unwrap(await db.initialize({ tableName, detailedValidate: true }));
   } finally {
     await db.close();
   }
