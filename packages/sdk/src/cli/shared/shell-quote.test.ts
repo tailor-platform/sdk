@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { aroundAll, describe, expect, test } from "vitest";
+import { aroundAll, describe, expect, test, vi } from "vitest";
 import { formatShellCommandLines, type ShellCommandLines } from "./shell-quote";
 
 const isWindows = process.platform === "win32";
@@ -37,6 +37,7 @@ const SAMPLE_ARGS = [
   "C:\\work\\!SECRET!\\tailor.config.ts",
   "C:\\Users\\Jane Doe\\tailor.config.ts",
   "C:\\Jane Doe\\",
+  "C:\\work\\",
   '{"key":"value"}',
   'say "hi" now',
   'a"&b',
@@ -304,6 +305,7 @@ describe("formatShellCommandLines", () => {
     const cases = [
       ...SAMPLE_ARGS.map((arg) => ({ name: JSON.stringify(arg), args: ["probe", arg, "--end"] })),
       { name: "all samples in one command", args: ["probe", ...SAMPLE_ARGS, "--end"] },
+      { name: "a trailing backslash ends the command", args: ["probe", 'a"b', "C:\\work\\"] },
     ];
     const jobs = configs.flatMap((config, configIndex) =>
       cases.map((testCase, caseIndex) => ({ config, testCase, configIndex, caseIndex })),
@@ -329,6 +331,25 @@ describe("formatShellCommandLines", () => {
       Object.fromEntries(outcomes.map(({ key, expected }) => [key, expected])),
     );
   }, 600_000);
+
+  test("keeps one Windows command line for a bare value that ends in a backslash", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    expect(formatShellCommandLines(["tailor", "probe", "C:\\work\\"])).toEqual({
+      kind: "shared",
+      commandLine: "tailor probe C:\\work\\",
+    });
+  });
+
+  test("ends a command routed through cmd on a quote so PowerShell 7 keeps a trailing backslash", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    expect(formatShellCommandLines(["tailor", "probe", 'a"b', "C:\\work\\"])).toEqual({
+      kind: "perShell",
+      powershell: `cmd /d /s /c 'tailor probe "a""b" "C:\\work\\\\"'`,
+      cmd: 'tailor probe "a""b" "C:\\work\\\\"',
+    });
+  });
 
   test("keeps one shared command line when no argument needs shell-specific quoting", () => {
     expect(

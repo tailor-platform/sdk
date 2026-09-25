@@ -37,7 +37,9 @@ function quotePowerShellArg(value: string): string {
 }
 
 function quoteCmdArg(value: string): string {
-  if (CMD_BARE_ARG.test(value)) return value;
+  // Quoting a trailing backslash keeps a command routed through `cmd /c` from ending in one,
+  // which PowerShell 7 doubles when it quotes the line.
+  if (CMD_BARE_ARG.test(value) && !value.endsWith("\\")) return value;
   let quoted = '"';
   let backslashes = 0;
   for (const char of value) {
@@ -57,7 +59,12 @@ function quoteCmdArg(value: string): string {
 }
 
 function formatWindowsCommandLines(argv: readonly string[]): ShellCommandLines {
-  if (argv.every((value) => value !== "" && !WINDOWS_DOUBLE_QUOTE_UNSAFE.test(value))) {
+  if (
+    argv.every(
+      (value) =>
+        isPowerShellBare(value) || (value !== "" && !WINDOWS_DOUBLE_QUOTE_UNSAFE.test(value)),
+    )
+  ) {
     return {
       kind: "shared",
       commandLine: argv.map((value) => (isPowerShellBare(value) ? value : `"${value}"`)).join(" "),
