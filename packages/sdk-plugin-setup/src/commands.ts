@@ -36,8 +36,12 @@ const coordinateCommand = defineAppCommand({
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the plan/deploy jobs",
     }),
+    "restrict-dispatch": arg(z.boolean().default(false), {
+      description:
+        "Deploy on manual dispatch only from the target branch (branch) or a tag (--tag); dry runs stay unrestricted",
+    }),
     force: arg(z.boolean().default(false), {
-      description: "Discard hand edits and regenerate",
+      description: "Reset hand edits to SDK-managed parts (your own jobs and steps are kept)",
     }),
   }),
   run: async (args) => {
@@ -48,6 +52,7 @@ const coordinateCommand = defineAppCommand({
       actions: args.action,
       branch: args.branch,
       environment: args.environment,
+      restrictDispatch: args["restrict-dispatch"],
       force: args.force,
       outputDir: process.cwd(),
     });
@@ -71,7 +76,7 @@ const actionCommand = defineAppCommand({
       description: "GitHub Environment (defaults to the workspace name)",
     }),
     force: arg(z.boolean().default(false), {
-      description: "Discard hand edits and regenerate",
+      description: "Reset hand edits to SDK-managed parts (your own steps are kept)",
     }),
   }),
   run: async (args) => {
@@ -103,12 +108,17 @@ const branchCommand = defineAppCommand({
     "erd-preview": arg(z.boolean().default(false), {
       description: "Add PR ERD viewer artifacts with current/diff previews for TailorDB namespaces",
     }),
+    "restrict-dispatch": arg(z.boolean().default(false), {
+      description:
+        "Deploy on manual dispatch only from the target branch; dry runs stay unrestricted",
+    }),
     dir: arg(z.string().min(1).default("."), {
       alias: "d",
       description: "App directory (for monorepo setups)",
     }),
     force: arg(z.boolean().default(false), {
-      description: "Discard hand edits / take over unmanaged files and regenerate",
+      description:
+        "Reset hand edits to SDK-managed parts (your own jobs and steps are kept) / take over unmanaged files",
     }),
   }),
   run: async (args) => {
@@ -118,6 +128,7 @@ const branchCommand = defineAppCommand({
       branch: args.target,
       environment: args.environment,
       erdPreview: args["erd-preview"],
+      restrictDispatch: args["restrict-dispatch"],
       dir: args.dir,
       force: args.force,
       outputDir: process.cwd(),
@@ -139,6 +150,10 @@ const tagCommand = defineAppCommand({
     branch: arg(z.string().min(1).optional(), {
       description: "Tag-reachability guard branch (no guard when omitted)",
     }),
+    "restrict-dispatch": arg(z.boolean().default(false), {
+      description:
+        "Deploy on manual dispatch only from a tag (reachable from --branch when set); dry runs stay unrestricted",
+    }),
     environment: arg(z.string().min(1).optional(), {
       description: "GitHub Environment for the plan/deploy jobs (defaults to the workspace name)",
     }),
@@ -147,7 +162,8 @@ const tagCommand = defineAppCommand({
       description: "App directory (for monorepo setups)",
     }),
     force: arg(z.boolean().default(false), {
-      description: "Discard hand edits / take over unmanaged files and regenerate",
+      description:
+        "Reset hand edits to SDK-managed parts (your own jobs and steps are kept) / take over unmanaged files",
     }),
   }),
   run: async (args) => {
@@ -156,6 +172,7 @@ const tagCommand = defineAppCommand({
       workspaceName: args.name,
       tagPattern: args["tag-pattern"],
       branch: args.branch,
+      restrictDispatch: args["restrict-dispatch"],
       environment: args.environment,
       dir: args.dir,
       force: args.force,
@@ -189,7 +206,8 @@ const previewCommand = defineAppCommand({
       description: "App directory (for monorepo setups)",
     }),
     force: arg(z.boolean().default(false), {
-      description: "Discard hand edits / take over unmanaged files and regenerate",
+      description:
+        "Reset hand edits to SDK-managed parts (your own jobs and steps are kept) / take over unmanaged files",
     }),
   }),
   run: async (args) => {

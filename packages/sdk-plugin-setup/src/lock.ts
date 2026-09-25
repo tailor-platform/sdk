@@ -52,6 +52,8 @@ export type LockInputs = {
   seedValidate?: boolean;
   /** Whether the config had staticWebsites when setup was last run (action kind only). */
   hasStaticWebsites?: boolean;
+  /** Whether manual dispatch may deploy only the target branch or a tag (branch/tag/coordinate). */
+  restrictDispatch?: boolean;
 };
 
 export type LockTarget = {
@@ -65,7 +67,10 @@ export type LockTarget = {
   generatedIds: string[];
   /** Reserved for future eject semantics; preserved as-is across regenerations. */
   ejectedIds: string[];
-  /** `sha256:<hex>` of the written file content. */
+  /**
+   * `managed-v1:sha256:<hex>` of the SDK-managed parts of the rendered file.
+   * Entries written by older plugins hold `sha256:<hex>` of the whole file.
+   */
   contentHash: string;
 };
 

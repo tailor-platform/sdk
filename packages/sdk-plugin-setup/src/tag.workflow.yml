@@ -85,8 +85,8 @@ jobs:
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
   tailor-deploy:
-    needs: tailor-plan
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs['dry-run']) }}
+    # __DEPLOY_NEEDS__
+    # __DEPLOY_IF__
     environment: __ENVIRONMENT__
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -125,7 +125,7 @@ jobs:
           # Example: node scripts/seed.mjs
           true
       # __SEED_DATA_END__
-      - id: slack-prereq
+      - id: tailor-slack-prereq
         if: always()
         shell: bash
         env:
@@ -136,7 +136,7 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
       - id: tailor-notify
-        if: always() && steps.slack-prereq.outputs.ready == 'true'
+        if: always() && steps.tailor-slack-prereq.outputs.ready == 'true'
         uses: tailor-platform/actions/notify@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
         with:
           provider: slack
@@ -144,4 +144,4 @@ jobs:
           workspace-name: __WORKSPACE_NAME__
           slack-token: ${{ secrets.TAILOR_SLACK_BOT_TOKEN }}
           slack-channel-id: ${{ vars.TAILOR_SLACK_CHANNEL_ID }}
-          # user-mapping: ${{ vars.TAILOR_SLACK_USER_MAPPING }}
+          # editable: user-mapping: ${{ vars.TAILOR_SLACK_USER_MAPPING }}
