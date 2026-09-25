@@ -195,6 +195,57 @@ export function appIdLockKey(root: string, configPath: string): string {
   return key;
 }
 
+/** Inputs to {@link resolveAppId}. */
+export type ResolveAppIdParams = {
+  configPath: string;
+  configId: string | undefined;
+};
+
+/**
+ * Resolve a config's app id for a plugin that only needs to read it: the same
+ * lock-first precedence `deploy` applies (see {@link planAppIds}), scoped to
+ * one config, with no lock write, config edit, or prompt. A config whose id
+ * is not yet recorded anywhere resolves to undefined rather than warning —
+ * unlike a deploy or remove run, a plugin resolving this has no ownership
+ * decision riding on it, so the warning `planAppIds` raises for that case
+ * would be misleading here. A config id that disagrees with the lock, or
+ * that is already recorded for a different, still-existing config, is an
+ * `APP_ID_CONFLICT` — the same ambiguous states `planAppIds` refuses to
+ * resolve automatically, since a plugin trusting the wrong side would act on
+ * another application's identity. A defined `configId` that is not itself a
+ * UUID is a `CONFIG_ID_INVALID` error, regardless of whether a lock governs
+ * the config, so a malformed value never comes back as a resolved id.
+ * @param params - The config to resolve and the id its module evaluates to, if any
+ * @returns The resolved id, or undefined when neither the lock nor the config carries one
+ */
+export function resolveAppId(params: ResolveAppIdParams): string | undefined {
+  const { configPath, configId } = params;
+  if (configId !== undefined && !uuidRegex.test(configId)) {
+    throw configIdInvalid(configPath);
+  }
+
+  const lock = findAppIdLock(configPath);
+  if (lock === null) return configId;
+
+  const key = appIdLockKey(lock.root, configPath);
+  const recorded = lock.appIds[key];
+  if (recorded !== undefined) {
+    if (configId !== undefined && configId.toLowerCase() !== recorded.toLowerCase()) {
+      throw recordedIdConflict(key, recorded, configId);
+    }
+    return recorded;
+  }
+
+  if (configId === undefined) return undefined;
+  const owner = Object.entries(lock.appIds).find(
+    ([, id]) => id.toLowerCase() === configId.toLowerCase(),
+  )?.[0];
+  if (owner !== undefined && owner !== key && fs.existsSync(path.join(lock.root, owner))) {
+    throw claimedIdConflict(configPath, owner);
+  }
+  return configId;
+}
+
 /**
  * How a command may treat a config whose id is not yet recorded.
  *
@@ -235,6 +286,55 @@ export type PlanAppIdsParams = {
   entries: readonly AppIdEntryInput[];
   mode: AppIdPlanMode;
 };
+
+/**
+ * The one error `resolveAppId` and `planAppIds` both raise when a config's
+ * own id disagrees with the id its key already has recorded in the lock.
+ * Shared so the two call sites cannot drift apart on wording or condition.
+ * @param key - The config's lock key
+ * @param recorded - The id already recorded for `key` in the lock
+ * @param configId - The disagreeing id the config's module evaluates to
+ * @returns The conflict error to throw
+ */
+function recordedIdConflict(key: string, recorded: string, configId: string): CLIError {
+  return CLIError({
+    code: "APP_ID_CONFLICT",
+    message: `${TAILOR_LOCK_FILENAME} records app id "${recorded}" for ${key}, but the config's 'id' is "${configId}".`,
+    suggestion:
+      "Neither can be chosen automatically: remove the 'id' from the config to keep the recorded id, or replace the recorded value with the config's id.",
+  });
+}
+
+/**
+ * The one error `resolveAppId` and `planAppIds` both raise when a config's
+ * own id is already recorded in the lock for a different config. Shared so
+ * the two call sites cannot drift apart on wording or condition.
+ * @param configPath - Absolute path to the config carrying the claimed id
+ * @param owner - The lock key that already owns the id
+ * @returns The conflict error to throw
+ */
+function claimedIdConflict(configPath: string, owner: string): CLIError {
+  return CLIError({
+    code: "APP_ID_CONFLICT",
+    message: `${configPath} carries the app id already recorded for ${owner} in ${TAILOR_LOCK_FILENAME}.`,
+    suggestion: "If this config was copied from that app, delete its 'id' so it gets a fresh one.",
+  });
+}
+
+/**
+ * The one error `resolveAppId` and `planAppIds` both raise when a config's
+ * own id, not recorded anywhere yet, is not itself a UUID. Shared so the two
+ * call sites cannot drift apart on wording or condition.
+ * @param configPath - Absolute path to the config carrying the invalid id
+ * @returns The validation error to throw
+ */
+function configIdInvalid(configPath: string): CLIError {
+  return CLIError({
+    code: "CONFIG_ID_INVALID",
+    message: `'id' in ${configPath} must be a UUID.`,
+    suggestion: "To use this config for a separate app, delete it.",
+  });
+}
 
 function warnConfigStillCarriesId(key: string): void {
   logger.warn(
@@ -327,12 +427,7 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     const recorded = appIds[key];
     if (recorded !== undefined) {
       if (configId !== undefined && configId.toLowerCase() !== recorded.toLowerCase()) {
-        throw CLIError({
-          code: "APP_ID_CONFLICT",
-          message: `${TAILOR_LOCK_FILENAME} records app id "${recorded}" for ${key}, but the config's 'id' is "${configId}".`,
-          suggestion:
-            "Neither can be chosen automatically: remove the 'id' from the config to keep the recorded id, or replace the recorded value with the config's id.",
-        });
+        throw recordedIdConflict(key, recorded, configId);
       }
       const removeConfigId = configId !== undefined && mode === "write";
       if (configId !== undefined && !removeConfigId) warnConfigStillCarriesId(key);
@@ -341,21 +436,12 @@ export async function planAppIds(params: PlanAppIdsParams): Promise<AppIdPlan> {
     }
     if (configId !== undefined) {
       if (!uuidRegex.test(configId)) {
-        throw CLIError({
-          code: "CONFIG_ID_INVALID",
-          message: `'id' in ${configPath} must be a UUID.`,
-          suggestion: "To use this config for a separate app, delete it.",
-        });
+        throw configIdInvalid(configPath);
       }
       const owner = claimed.get(configId.toLowerCase());
       const movedFrom = owner !== undefined && owner !== key && !exists(owner) ? owner : undefined;
       if (owner !== undefined && owner !== key && movedFrom === undefined) {
-        throw CLIError({
-          code: "APP_ID_CONFLICT",
-          message: `${configPath} carries the app id already recorded for ${owner} in ${TAILOR_LOCK_FILENAME}.`,
-          suggestion:
-            "If this config was copied from that app, delete its 'id' so it gets a fresh one.",
-        });
+        throw claimedIdConflict(configPath, owner);
       }
       claimed.set(configId.toLowerCase(), key);
       const removeConfigId = mode === "write";
