@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { runCommand } from "./process";
+import { runCommand, withoutInheritedGitEnv } from "./process";
 import { buildRunArtifactPaths, type RunArtifactPaths } from "./report";
 import { isObject } from "./utils";
 import type { Problem, SdkProfile } from "./types";
@@ -205,20 +205,18 @@ function npmrcKey(line: string): string | undefined {
 }
 
 async function initializeWorkspaceGit(worktreePath: string): Promise<void> {
-  await runCommand("git", ["init"], { cwd: worktreePath });
-  await runCommand("git", ["config", "user.name", "llm-challenge"], { cwd: worktreePath });
-  await runCommand("git", ["config", "user.email", "llm-challenge@example.invalid"], {
-    cwd: worktreePath,
-  });
-  await runCommand("git", ["config", "commit.gpgSign", "false"], { cwd: worktreePath });
-  await runCommand("git", ["add", "."], { cwd: worktreePath });
-  const status = await runCommand("git", ["status", "--short"], { cwd: worktreePath });
+  const git = (args: string[]) =>
+    runCommand("git", args, { cwd: worktreePath, env: withoutInheritedGitEnv() });
+  await git(["init"]);
+  await git(["config", "user.name", "llm-challenge"]);
+  await git(["config", "user.email", "llm-challenge@example.invalid"]);
+  await git(["config", "commit.gpgSign", "false"]);
+  await git(["add", "."]);
+  const status = await git(["status", "--short"]);
   if (status.stdout.trim().length === 0) {
     return;
   }
-  await runCommand("git", ["commit", "-m", "chore: initialize challenge workspace"], {
-    cwd: worktreePath,
-  });
+  await git(["commit", "-m", "chore: initialize challenge workspace"]);
 }
 
 async function readJsonObject(filePath: string): Promise<Record<string, unknown>> {

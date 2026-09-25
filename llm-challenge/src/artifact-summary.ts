@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { runCommand } from "./process";
+import { runCommand, withoutInheritedGitEnv } from "./process";
 import { isObject, tailText } from "./utils";
 import { listWorkspaceFiles } from "./workspace-files";
 import type { Problem, SolverFailureKind } from "./types";
@@ -114,6 +114,7 @@ async function readGitStatus(worktreePath: string): Promise<string[]> {
   try {
     const result = await runCommand("git", ["status", "--short", "--untracked-files=all"], {
       cwd: worktreePath,
+      env: withoutInheritedGitEnv(),
     });
     return result.stdout.split(/\r?\n/).filter(Boolean);
   } catch {

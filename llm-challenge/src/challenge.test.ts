@@ -7,7 +7,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
-import { runCommand } from "./process";
+import { runCommand, withoutInheritedGitEnv } from "./process";
 import { applyNoDocsProfile, stripJsDocBlocks } from "./profile";
 import { buildRunArtifactPaths, createRunReport, reportPath, writeReport } from "./report";
 import {
@@ -308,7 +308,7 @@ describe("artifact summary", () => {
     await fs.writeFile(path.join(worktreePath, ".pnpm-home/store/index.db"), "");
     await fs.writeFile(path.join(worktreePath, ".tailor/cache/generated.json"), "{}");
     await fs.writeFile(path.join(worktreePath, ".turbo/cache/state.json"), "{}");
-    await runCommand("git", ["init"], { cwd: worktreePath });
+    await runCommand("git", ["init"], { cwd: worktreePath, env: withoutInheritedGitEnv() });
 
     const tracePath = path.join(dir, "trace.jsonl");
     const solverStdoutPath = path.join(dir, "solver.stdout.log");
@@ -390,6 +390,35 @@ describe("artifact summary", () => {
     expect(summary.failedCommands[1].command).toBe("pnpm lint");
     expect(summary.failedCommands[1].outputTail).toHaveLength(1_000);
     expect(summary.errors).toEqual(["solver error"]);
+  });
+
+  test("records the workspace git status rather than the repository named by an inherited GIT_DIR", async () => {
+    const dir = await makeTempDir();
+    const outerRepoPath = await makeCommittedRepo(path.join(dir, "outer"));
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "src/app.ts"), "export {};\n");
+    await runCommand("git", ["init"], { cwd: worktreePath, env: withoutInheritedGitEnv() });
+    const artifactSummaryPath = path.join(dir, "artifact-summary.json");
+    vi.stubEnv("GIT_DIR", path.join(outerRepoPath, ".git"));
+
+    await writeArtifactSummary({
+      problem: makeProblem(),
+      runIndex: 0,
+      worktreePath,
+      tracePath: path.join(dir, "trace.jsonl"),
+      solverStdoutPath: path.join(dir, "solver.stdout.log"),
+      solverStderrPath: path.join(dir, "solver.stderr.log"),
+      artifactSummaryPath,
+      solverExitCode: 0,
+      timedOut: false,
+      failureKind: "none",
+    });
+
+    const summary = JSON.parse(await fs.readFile(artifactSummaryPath, "utf8")) as {
+      gitStatus: string[];
+    };
+    expect(summary.gitStatus).toEqual(["?? src/app.ts"]);
   });
 
   test("classifies timeout, successful, usage-limit, and runner-startup failures", async () => {
@@ -1072,6 +1101,39 @@ describe("verification summary", () => {
 });
 
 describe("workspace preparation", () => {
+  test("initializes the workspace repository without touching the repository named by an inherited GIT_DIR", async () => {
+    const dir = await makeTempDir();
+    const outerRepoPath = await makeCommittedRepo(path.join(dir, "outer"));
+    const outerGit = (args: string[]) =>
+      runCommand("git", args, { cwd: outerRepoPath, env: withoutInheritedGitEnv() });
+    const outerHead = (await outerGit(["rev-parse", "HEAD"])).stdout;
+    const problemRoot = path.join(dir, "problem");
+    const scaffoldPath = path.join(problemRoot, "scaffold");
+    await fs.mkdir(scaffoldPath, { recursive: true });
+    await fs.writeFile(path.join(problemRoot, "prompt.md"), "Do the task.\n");
+    await fs.writeFile(path.join(scaffoldPath, "note.txt"), "scaffold\n");
+    await fs.writeFile(path.join(dir, "sdk.tgz"), "tarball");
+    vi.stubEnv("GIT_DIR", path.join(outerRepoPath, ".git"));
+    vi.stubEnv("GIT_INDEX_FILE", path.join(outerRepoPath, ".git", "index"));
+
+    const paths = await prepareWorkspace({
+      outputDir: path.join(dir, "results/run"),
+      problem: makeProblem({ promptPath: path.join(problemRoot, "prompt.md"), scaffoldPath }),
+      runIndex: 0,
+      sdkTarballPath: path.join(dir, "sdk.tgz"),
+    });
+
+    vi.unstubAllEnvs();
+    await expect(outerGit(["rev-parse", "HEAD"])).resolves.toMatchObject({ stdout: outerHead });
+    await expect(outerGit(["status", "--short"])).resolves.toMatchObject({ stdout: "" });
+    await expect(
+      runCommand("git", ["log", "-1", "--format=%s"], {
+        cwd: paths.worktreePath,
+        env: withoutInheritedGitEnv(),
+      }),
+    ).resolves.toMatchObject({ stdout: "chore: initialize challenge workspace\n" });
+  });
+
   test("copies scaffold, prompt, and the selected SDK tarball", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
@@ -1126,7 +1188,10 @@ describe("workspace preparation", () => {
       fs.readFile(path.join(paths.worktreePath, ".git", "config"), "utf8"),
     ).resolves.toContain("llm-challenge@example.invalid");
     await expect(
-      runCommand("git", ["config", "--get", "commit.gpgSign"], { cwd: paths.worktreePath }),
+      runCommand("git", ["config", "--get", "commit.gpgSign"], {
+        cwd: paths.worktreePath,
+        env: withoutInheritedGitEnv(),
+      }),
     ).resolves.toMatchObject({ stdout: "false\n" });
     const packageJson = JSON.parse(
       await fs.readFile(path.join(paths.worktreePath, "package.json"), "utf8"),
@@ -1231,6 +1296,27 @@ describe("codex runner", () => {
     );
   });
 });
+
+async function makeCommittedRepo(repoPath: string): Promise<string> {
+  await fs.mkdir(repoPath, { recursive: true });
+  await fs.writeFile(path.join(repoPath, "keep.txt"), "outer\n");
+  const git = (args: string[]) =>
+    runCommand("git", args, { cwd: repoPath, env: withoutInheritedGitEnv() });
+  await git(["init"]);
+  await git(["add", "."]);
+  await git([
+    "-c",
+    "user.name=outer",
+    "-c",
+    "user.email=outer@example.invalid",
+    "-c",
+    "commit.gpgSign=false",
+    "commit",
+    "-m",
+    "outer",
+  ]);
+  return repoPath;
+}
 
 async function makeTempDir(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "llm-challenge-test-"));

@@ -55,3 +55,11 @@ export async function runCommand(
     }
   });
 }
+
+export function withoutInheritedGitEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.keys(process.env)
+      .filter((key) => key.startsWith("GIT_"))
+      .map((key) => [key, undefined]),
+  );
+}
