@@ -1,5 +1,0 @@
-name: "@tailor-platform/exec-job-function-rename"
-version: "1.0.0"
-description: "Rename tailor.workflow startJobFunction call sites and the StartJobFunctionOptions type to execJobFunction / ExecJobFunctionOptions"
-engine: jssg
-language: typescript

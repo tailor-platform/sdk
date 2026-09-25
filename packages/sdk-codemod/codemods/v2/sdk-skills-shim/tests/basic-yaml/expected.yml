@@ -1,5 +1,0 @@
-jobs:
-  install-skills:
-    runs-on: ubuntu-latest
-    steps:
-      - run: tailor skills add

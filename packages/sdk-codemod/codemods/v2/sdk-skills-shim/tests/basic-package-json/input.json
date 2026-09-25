@@ -1,7 +1,0 @@
-{
-  "name": "demo",
-  "scripts": {
-    "postinstall": "tailor-sdk-skills",
-    "skills": "pnpm exec tailor-sdk-skills"
-  }
-}

@@ -1,28 +1,12 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
+    "target": "ES2022",
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "noEmit": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitOverride": true,
-    "noImplicitReturns": true,
-    "noUncheckedSideEffectImports": true,
     "strict": true,
-    "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["**/*.ts", "**/*.js"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "packages",
-    "example",
-    "llm-challenge/problems/**/scaffold",
-    "llm-challenge/results",
-    "llm-challenge/.tmp"
+  "include": [
+    "**/*.ts"
   ]
 }

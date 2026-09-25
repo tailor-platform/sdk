@@ -1,1 +1,0 @@
-export { AuthConnectionConfigSchema } from "./schema";
