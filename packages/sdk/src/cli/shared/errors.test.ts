@@ -4,7 +4,7 @@ import { errorToJson, serializeError } from "./error-json";
 import {
   CLIError,
   errorSummary,
-  formatCopyableCommand,
+  formatCommandHint,
   internalError,
   isCLIError,
   toError,
@@ -155,7 +155,7 @@ describe("errorToJson", () => {
     );
   });
 
-  test("renders Windows arguments with shell expansions as an argv array", () => {
+  test("describes Windows arguments with shell expansions as JSON array arguments", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     const error = CLIError({
       code: "WORKSPACE_SELECTION_REQUIRED",
@@ -166,30 +166,51 @@ describe("errorToJson", () => {
       },
     });
 
-    expect(error.format()).toContain(
-      'argv ["tailor","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
+    const formatted = error.format();
+
+    expect(formatted).toContain(
+      'Run `tailor` with each item of this JSON array as one argument: ["deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"].',
     );
+    expect(formatted).not.toContain("argv [");
   });
 
-  test("leaves shell-safe copyable command values unquoted", () => {
-    expect(formatCopyableCommand(["tailor", "deploy", "--config=custom.config.ts"])).toBe(
-      "tailor deploy --config=custom.config.ts",
-    );
-  });
+  const hintRenderers = {
+    shell: (commandLine: string) => `shell: ${commandLine}`,
+    argv: (instruction: string) => `argv: ${instruction}`,
+  };
 
-  test("single-quotes POSIX-unsafe copyable command values", () => {
+  test("leaves shell-safe command hint values unquoted", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
 
-    expect(formatCopyableCommand(["tailor", "deploy", "--config=weird $config.ts"])).toBe(
-      "tailor deploy '--config=weird $config.ts'",
-    );
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config=custom.config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe("shell: tailor deploy --config=custom.config.ts");
   });
 
-  test("renders copyable commands with Windows expansion characters as argv", () => {
+  test("single-quotes POSIX-unsafe command hint values", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config=weird $config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe("shell: tailor deploy '--config=weird $config.ts'");
+  });
+
+  test("hands command hints with Windows expansion characters to the argv renderer", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 
-    expect(formatCopyableCommand(["tailor", "deploy", "--config=%APPDATA%.config.ts"])).toBe(
-      'argv ["tailor","deploy","--config=%APPDATA%.config.ts"]',
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config=%APPDATA%.config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe(
+      'argv: `tailor` with each item of this JSON array as one argument: ["deploy","--config=%APPDATA%.config.ts"]',
     );
   });
 

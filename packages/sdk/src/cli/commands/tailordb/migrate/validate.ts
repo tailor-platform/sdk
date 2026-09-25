@@ -7,7 +7,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError, errorSummary } from "#/cli/shared/errors";
+import { CLIError, type CommandHintRenderers, errorSummary } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { PluginManager } from "#/plugin/manager";
@@ -23,7 +23,7 @@ import {
   type MigrationDiff,
   type WarningChangeInfo,
 } from "./diff-calculator";
-import { formatMigrationScriptCommand } from "./hints";
+import { formatMigrationScriptHint } from "./hints";
 import {
   checkMigrationDiffs,
   logMissingCheckpointGuidance,
@@ -134,6 +134,11 @@ interface CollectedValidationReports {
   remoteError?: unknown;
 }
 
+const listedCommandHint: CommandHintRenderers = {
+  shell: (commandLine) => commandLine,
+  argv: (instruction) => `Run ${instruction}`,
+};
+
 /**
  * Walk the local migration history once to assert that every required
  * migration script exists, no migration carries both a --no-script
@@ -187,7 +192,7 @@ function assertMigrationScriptsReady(
     const clearCommands = conflicting
       .map(
         (migrationNumber) =>
-          `  ${formatMigrationScriptCommand({ migrationNumber, namespace, configPath })}`,
+          `  ${formatMigrationScriptHint({ migrationNumber, namespace, configPath }, listedCommandHint)}`,
       )
       .join("\n");
     throw CLIError({
@@ -530,12 +535,15 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
     for (const report of missingAcknowledgments) {
       for (const migration of report.warningAcknowledgments?.missing ?? []) {
         logger.info(
-          `  ${formatMigrationScriptCommand({
-            migrationNumber: migration.migrationNumber,
-            namespace: report.namespace,
-            configPath,
-            noScript: true,
-          })}`,
+          `  ${formatMigrationScriptHint(
+            {
+              migrationNumber: migration.migrationNumber,
+              namespace: report.namespace,
+              configPath,
+              noScript: true,
+            },
+            listedCommandHint,
+          )}`,
           { mode: "plain" },
         );
       }

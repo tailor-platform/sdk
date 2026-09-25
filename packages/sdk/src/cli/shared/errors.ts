@@ -62,26 +62,40 @@ function needsArgvRendering(argv: readonly string[]): boolean {
 }
 
 /**
- * Render an argv array as a copyable command line for the current platform's shell
- * @param {readonly string[]} argv - Executable name followed by its arguments
- * @returns {string} A shell-quoted command line, or an `argv [...]` JSON rendering when the platform shell cannot keep a value literal
+ * Wording for a command hint. Both renderers are required so a caller cannot
+ * present the argument list as a command line to paste into a shell.
  */
-export function formatCopyableCommand(argv: readonly string[]): string {
-  if (needsArgvRendering(argv)) {
-    return `argv ${JSON.stringify(argv)}`;
-  }
-  return argv.map(shellQuote).join(" ");
+export interface CommandHintRenderers {
+  /** Wraps a command line quoted for the current platform's shell. */
+  shell: (commandLine: string) => string;
+  /** Wraps an instruction naming the executable and its arguments as a JSON array, used when no shell quoting keeps every argument literal. */
+  argv: (instruction: string) => string;
 }
 
 /**
- * Format an executable and argv as a shell-safe user-facing command.
- * @param next - Executable and arguments to format
- * @returns Shell command, or an argv representation when shell quoting is unsafe
+ * Render a command as a user-facing hint for the current platform's shell
+ * @param {CLIErrorNextAction} action - Executable and arguments to suggest
+ * @param {CommandHintRenderers} renderers - Wording for the shell and argv renderings
+ * @returns {string} The hint produced by the renderer that matches the platform shell
  */
-export function formatNextAction(next: CLIErrorNextAction): string {
-  const argv = [next.command, ...next.args];
-  const rendered = formatCopyableCommand(argv);
-  return needsArgvRendering(argv) ? `with ${rendered}` : `\`${rendered}\``;
+export function formatCommandHint(
+  action: CLIErrorNextAction,
+  renderers: CommandHintRenderers,
+): string {
+  const argv = [action.command, ...action.args];
+  if (needsArgvRendering(argv)) {
+    return renderers.argv(
+      `\`${action.command}\` with each item of this JSON array as one argument: ${JSON.stringify(action.args)}`,
+    );
+  }
+  return renderers.shell(argv.map(shellQuote).join(" "));
+}
+
+function formatNextAction(next: CLIErrorNextAction): string {
+  return formatCommandHint(next, {
+    shell: (commandLine) => `Run \`${commandLine}\`.`,
+    argv: (instruction) => `Run ${instruction}.`,
+  });
 }
 
 /**
@@ -109,7 +123,7 @@ function formatError(error: CLIError): string {
   }
 
   if (error.next) {
-    parts.push(`\n  ${styles.info("Next:")} Run ${formatNextAction(error.next)}.`);
+    parts.push(`\n  ${styles.info("Next:")} ${formatNextAction(error.next)}`);
   }
 
   return parts.join("");

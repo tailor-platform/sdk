@@ -55,7 +55,7 @@ describe("executor webhook list", () => {
     );
   });
 
-  test("renders the whole hint as argv when the Windows shell cannot keep the profile literal", async () => {
+  test("lists the trigger arguments as JSON when the Windows shell cannot keep the profile literal", async () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     using _stdout = captureStdout();
     using info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
@@ -64,15 +64,9 @@ describe("executor webhook list", () => {
 
     expect(result.success).toBe(true);
     expect(info).toHaveBeenCalledWith(
-      `To test a webhook, run: argv ${JSON.stringify([
-        "tailor",
-        "executor",
-        "trigger",
-        "<name>",
-        "-d",
-        '{"key":"value"}',
-        "--profile=dev$1",
-      ])}`,
+      `To test a webhook, run \`tailor\` with each item of this JSON array as one argument: ${JSON.stringify(
+        ["executor", "trigger", "<name>", "-d", '{"key":"value"}', "--profile=dev$1"],
+      )}`,
     );
   });
 });
