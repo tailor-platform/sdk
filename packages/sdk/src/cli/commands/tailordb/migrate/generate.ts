@@ -1458,7 +1458,7 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
   const commandOptions = { migrationNumber, namespace, configPath };
   const indentedHint: CommandHintRenderers = {
     shell: (commandLine) => `  ${styles.bold(commandLine)}`,
-    argv: (instruction) => `  ${instruction}`,
+    perShell: (instruction) => `  ${instruction}`,
   };
   logger.log("To add a custom migrate.ts, run:");
   logger.log(formatMigrationScriptHint(commandOptions, indentedHint));

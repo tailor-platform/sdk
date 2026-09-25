@@ -94,7 +94,7 @@ export const listCommand = defineAppCommand({
         logger.info(
           formatCommandHint(listWebhooks, {
             shell: (commandLine) => `To see webhook URLs, run: ${commandLine}`,
-            argv: (instruction) => `To see webhook URLs, run ${instruction}`,
+            perShell: (instruction) => `To see webhook URLs, run ${instruction}`,
           }),
         );
       }

@@ -155,28 +155,25 @@ describe("errorToJson", () => {
     );
   });
 
-  test("describes Windows arguments with shell expansions as JSON array arguments", () => {
+  test("names a PowerShell and a cmd.exe next command when the Windows shells quote differently", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     const error = CLIError({
       code: "WORKSPACE_SELECTION_REQUIRED",
       message: "Choose a workspace.",
       next: {
         command: "tailor",
-        args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"],
+        args: ["deploy", "--config", "C:\\work\\%APPDATA%\\tailor.config.ts"],
       },
     });
 
-    const formatted = error.format();
-
-    expect(formatted).toContain(
-      'Run `tailor` with each item of this JSON array as one argument: ["deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"].',
+    expect(error.format()).toContain(
+      `Run \`tailor deploy --config 'C:\\work\\%APPDATA%\\tailor.config.ts'\` in PowerShell or \`tailor deploy --config "C:\\work\\%%cd:~,%APPDATA%%cd:~,%\\tailor.config.ts"\` in cmd.exe.`,
     );
-    expect(formatted).not.toContain("argv [");
   });
 
   const hintRenderers = {
     shell: (commandLine: string) => `shell: ${commandLine}`,
-    argv: (instruction: string) => `argv: ${instruction}`,
+    perShell: (instruction: string) => `perShell: ${instruction}`,
   };
 
   test("leaves shell-safe command hint values unquoted", () => {
@@ -201,7 +198,18 @@ describe("errorToJson", () => {
     ).toBe("shell: tailor deploy '--config=weird $config.ts'");
   });
 
-  test("hands command hints with Windows expansion characters to the argv renderer", () => {
+  test("keeps one Windows command line when both shells read the double-quoted arguments alike", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe('shell: tailor deploy --config "C:\\work\\!SECRET!\\tailor.config.ts"');
+  });
+
+  test("hands command hints to the per-shell renderer when the Windows shells quote differently", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 
     expect(
@@ -210,7 +218,7 @@ describe("errorToJson", () => {
         hintRenderers,
       ),
     ).toBe(
-      'argv: `tailor` with each item of this JSON array as one argument: ["deploy","--config=%APPDATA%.config.ts"]',
+      `perShell: \`tailor deploy '--config=%APPDATA%.config.ts'\` in PowerShell or \`tailor deploy "--config=%%cd:~,%APPDATA%%cd:~,%.config.ts"\` in cmd.exe`,
     );
   });
 

@@ -136,7 +136,7 @@ interface CollectedValidationReports {
 
 const listedCommandHint: CommandHintRenderers = {
   shell: (commandLine) => commandLine,
-  argv: (instruction) => `Run ${instruction}`,
+  perShell: (instruction) => `Run ${instruction}`,
 };
 
 /**

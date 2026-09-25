@@ -45,7 +45,7 @@ export async function assertWritable(opts?: AssertWritableOptions): Promise<void
       },
       {
         shell: (commandLine) => `run \`${commandLine}\``,
-        argv: (instruction) => `run ${instruction}`,
+        perShell: (instruction) => `run ${instruction}`,
       },
     )}.`,
   });

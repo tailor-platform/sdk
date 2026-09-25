@@ -400,7 +400,7 @@ async function createWorkspace(
       },
       {
         shell: (commandLine) => `Reuse this workspace with: ${commandLine}`,
-        argv: (instruction) => `Reuse this workspace by running ${instruction}`,
+        perShell: (instruction) => `Reuse this workspace by running ${instruction}`,
       },
     ),
   );

@@ -273,13 +273,11 @@ describe("assertWritable", () => {
     });
   });
 
-  test("lists the profile update arguments as JSON when the Windows shell cannot keep the profile literal", async () => {
+  test("names a PowerShell and a cmd.exe profile update command when the Windows shells quote the profile differently", async () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 
     await expect(assertWritable({ profile: "ro$1" })).rejects.toMatchObject({
-      suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run \`tailor\` with each item of this JSON array as one argument: ${JSON.stringify(
-        ["profile", "update", "--permission", "write", "--", "ro$1"],
-      )}.`,
+      suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run \`tailor profile update --permission write '--' 'ro$1'\` in PowerShell or \`tailor profile update --permission write -- "ro$1"\` in cmd.exe.`,
     });
   });
 });

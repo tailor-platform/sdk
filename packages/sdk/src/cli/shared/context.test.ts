@@ -499,7 +499,7 @@ describe("loadMachineUserName", () => {
       );
     });
 
-    test("lists the override arguments as JSON when the Windows shell cannot keep the profile literal", async () => {
+    test("names a PowerShell and a cmd.exe override command when the Windows shells quote the profile differently", async () => {
       using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
       writeLockedProfile("locked$1");
 
@@ -509,9 +509,7 @@ describe("loadMachineUserName", () => {
       }).catch((e: unknown) => e);
 
       expect((err as { suggestion?: string }).suggestion).toBe(
-        `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run \`tailor\` with each item of this JSON array as one argument: ${JSON.stringify(
-          ["profile", "update", "--machine-user-override", "allow", "--", "locked$1"],
-        )}.`,
+        `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run \`tailor profile update --machine-user-override allow '--' 'locked$1'\` in PowerShell or \`tailor profile update --machine-user-override allow -- "locked$1"\` in cmd.exe.`,
       );
     });
 

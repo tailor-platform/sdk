@@ -366,7 +366,7 @@ function schemaDriftError(
     },
     {
       shell: (commandLine) => `Refresh the generated types with ${commandLine}`,
-      argv: (instruction) => `Refresh the generated types by running ${instruction}`,
+      perShell: (instruction) => `Refresh the generated types by running ${instruction}`,
     },
   );
   const override = formatCommandHint(
@@ -376,7 +376,7 @@ function schemaDriftError(
     },
     {
       shell: (commandLine) => `run anyway with ${commandLine}`,
-      argv: (instruction) => `run anyway by running ${instruction}`,
+      perShell: (instruction) => `run anyway by running ${instruction}`,
     },
   );
   return CLIError({

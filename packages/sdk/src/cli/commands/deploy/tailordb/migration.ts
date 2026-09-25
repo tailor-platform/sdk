@@ -81,7 +81,7 @@ interface ExecutionResult {
 
 const inlineCommandHint: CommandHintRenderers = {
   shell: (commandLine) => commandLine,
-  argv: (instruction) => `run ${instruction}`,
+  perShell: (instruction) => `run ${instruction}`,
 };
 
 /**

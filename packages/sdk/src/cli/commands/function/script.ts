@@ -251,7 +251,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
         { command: "tailor", args: runArgs },
         {
           shell: (commandLine) => `Next: edit the script, then run ${commandLine}`,
-          argv: (instruction) => `Next: edit the script, then run ${instruction}`,
+          perShell: (instruction) => `Next: edit the script, then run ${instruction}`,
         },
       ),
     );

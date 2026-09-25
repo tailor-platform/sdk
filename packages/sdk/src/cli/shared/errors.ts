@@ -1,4 +1,5 @@
 import { styles } from "./logger";
+import { formatShellCommandLines } from "./shell-quote";
 import type { Jsonifiable } from "type-fest";
 
 /**
@@ -46,55 +47,40 @@ type CLIErrorInternal = Error & {
   format(): string;
 };
 
-function shellQuote(value: string): string {
-  if (process.platform === "win32") {
-    if (/^[A-Za-z0-9_./:=@+\\-]+$/.test(value)) return value;
-    return `"${value.replaceAll('"', '\\"')}"`;
-  }
-  if (/^[A-Za-z0-9_./:=@+-]+$/.test(value)) return value;
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-function needsArgvRendering(argv: readonly string[]): boolean {
-  // cmd.exe/PowerShell expand %, $, and ! even inside double quotes, so no
-  // quoting can keep such values literal on Windows.
-  return process.platform === "win32" && argv.some((value) => /[%$!]/.test(value));
-}
-
 /**
- * Wording for a command hint. Both renderers are required so a caller cannot
- * present the argument list as a command line to paste into a shell.
+ * Wording for a command hint. Both renderers are required because on Windows the hint may name
+ * a PowerShell and a cmd.exe command line, which reads differently from a single command.
  */
 export interface CommandHintRenderers {
-  /** Wraps a command line quoted for the current platform's shell. */
+  /** Wraps a command line that every shell on the current platform runs as shown. */
   shell: (commandLine: string) => string;
-  /** Wraps an instruction that names the executable and lists its arguments as a JSON array, used when no shell quoting keeps every argument literal. */
-  argv: (instruction: string) => string;
+  /** Wraps an instruction naming a PowerShell and a cmd.exe command line, used on Windows when no single quoting suits both shells. */
+  perShell: (instruction: string) => string;
 }
 
 /**
- * Render a command as a user-facing hint for the current platform's shell
+ * Render a command as a user-facing hint that can be copied into the current platform's shells
  * @param {CLIErrorNextAction} action - Executable and arguments to suggest
- * @param {CommandHintRenderers} renderers - Wording for the shell and argv renderings
- * @returns {string} The hint produced by the renderer that matches the platform shell
+ * @param {CommandHintRenderers} renderers - Wording for one shared command line or one per shell
+ * @returns {string} The hint produced by the renderer that matches the command lines
  */
 export function formatCommandHint(
   action: CLIErrorNextAction,
   renderers: CommandHintRenderers,
 ): string {
-  const argv = [action.command, ...action.args];
-  if (needsArgvRendering(argv)) {
-    return renderers.argv(
-      `\`${action.command}\` with each item of this JSON array as one argument: ${JSON.stringify(action.args)}`,
-    );
+  const commandLines = formatShellCommandLines([action.command, ...action.args]);
+  if (commandLines.kind === "shared") {
+    return renderers.shell(commandLines.commandLine);
   }
-  return renderers.shell(argv.map(shellQuote).join(" "));
+  return renderers.perShell(
+    `\`${commandLines.powershell}\` in PowerShell or \`${commandLines.cmd}\` in cmd.exe`,
+  );
 }
 
 function formatNextAction(next: CLIErrorNextAction): string {
   return formatCommandHint(next, {
     shell: (commandLine) => `Run \`${commandLine}\`.`,
-    argv: (instruction) => `Run ${instruction}.`,
+    perShell: (instruction) => `Run ${instruction}.`,
   });
 }
 

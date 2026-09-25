@@ -78,7 +78,7 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
       },
       {
         shell: (commandLine) => commandLine,
-        argv: (instruction) => `Run ${instruction}`,
+        perShell: (instruction) => `Run ${instruction}`,
       },
     );
     const { client, workspaceId } = await loadOperatorWorkspaceContext({

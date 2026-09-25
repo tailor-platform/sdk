@@ -128,7 +128,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     { command: "tailor", args: ["tailordb", "migration", "generate", "--config", config.path] },
     {
       shell: (commandLine) => `Run \`${commandLine}\` first.`,
-      argv: (instruction) => `First run ${instruction}.`,
+      perShell: (instruction) => `First run ${instruction}.`,
     },
   );
 
@@ -214,7 +214,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     },
     {
       shell: (commandLine) => `Run \`${commandLine}\``,
-      argv: (instruction) => `Run ${instruction}`,
+      perShell: (instruction) => `Run ${instruction}`,
     },
   );
   const deploySuggestion = formatCommandHint(
@@ -222,7 +222,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     {
       shell: (commandLine) =>
         `run \`${commandLine}\` with schema checks enabled after resolving the connection error.`,
-      argv: (instruction) =>
+      perShell: (instruction) =>
         `after resolving the connection error, deploy with schema checks enabled by running ${instruction}.`,
     },
   );

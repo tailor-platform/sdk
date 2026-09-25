@@ -681,7 +681,7 @@ export async function loadMachineUserName(
           },
           {
             shell: (commandLine) => `run \`${commandLine}\``,
-            argv: (instruction) => `run ${instruction}`,
+            perShell: (instruction) => `run ${instruction}`,
           },
         )}.`,
       });

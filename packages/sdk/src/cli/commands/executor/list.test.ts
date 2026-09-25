@@ -53,7 +53,7 @@ describe("executor list", () => {
     );
   });
 
-  test("lists the webhook list arguments as JSON when the Windows shell cannot keep the profile literal", async () => {
+  test("names a PowerShell and a cmd.exe webhook list command when the Windows shells quote the profile differently", async () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     using _stdout = captureStdout();
     using info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
@@ -67,9 +67,7 @@ describe("executor list", () => {
 
     expect(result.success).toBe(true);
     expect(info).toHaveBeenCalledWith(
-      `To see webhook URLs, run \`tailor\` with each item of this JSON array as one argument: ${JSON.stringify(
-        ["executor", "webhook", "list", `--workspace-id=${workspaceId}`, "--profile=dev$1"],
-      )}`,
+      `To see webhook URLs, run \`tailor executor webhook list --workspace-id=${workspaceId} '--profile=dev$1'\` in PowerShell or \`tailor executor webhook list --workspace-id=${workspaceId} "--profile=dev$1"\` in cmd.exe`,
     );
   });
 });

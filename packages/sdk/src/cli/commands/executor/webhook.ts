@@ -105,7 +105,7 @@ const listWebhookCommand = defineAppCommand({
       logger.info(
         formatCommandHint(trigger, {
           shell: (commandLine) => `To test a webhook, run: ${commandLine}`,
-          argv: (instruction) => `To test a webhook, run ${instruction}`,
+          perShell: (instruction) => `To test a webhook, run ${instruction}`,
         }),
       );
     }

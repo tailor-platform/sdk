@@ -176,7 +176,7 @@ describe("authconnection authorize", () => {
     }
   });
 
-  test("lists the Console fallback arguments as JSON when the Windows shell cannot keep the profile literal", async () => {
+  test("names a PowerShell and a cmd.exe Console fallback when the Windows shells quote the profile differently", async () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     fetchMock.mockResolvedValue({
       ok: true,
@@ -205,9 +205,7 @@ describe("authconnection authorize", () => {
       expect(result.success).toBe(false);
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining(
-          `instead:\n  Run \`tailor\` with each item of this JSON array as one argument: ${JSON.stringify(
-            ["authconnection", "open", "--workspace-id=workspace-id", "--profile=dev$1"],
-          )}`,
+          `instead:\n  Run \`tailor authconnection open --workspace-id=workspace-id '--profile=dev$1'\` in PowerShell or \`tailor authconnection open --workspace-id=workspace-id "--profile=dev$1"\` in cmd.exe`,
         ),
       );
     } finally {
