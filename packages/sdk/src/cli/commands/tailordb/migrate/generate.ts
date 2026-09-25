@@ -16,7 +16,7 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, type CommandHintRenderers } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
@@ -1456,9 +1456,9 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
   }
 
   const commandOptions = { migrationNumber, namespace, configPath };
-  const indentedHint = {
-    shell: (commandLine: string) => `  ${styles.bold(commandLine)}`,
-    argv: (instruction: string) => `  ${instruction}`,
+  const indentedHint: CommandHintRenderers = {
+    shell: (commandLine) => `  ${styles.bold(commandLine)}`,
+    argv: (instruction) => `  ${instruction}`,
   };
   logger.log("To add a custom migrate.ts, run:");
   logger.log(formatMigrationScriptHint(commandOptions, indentedHint));

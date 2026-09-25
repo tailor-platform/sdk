@@ -1,5 +1,5 @@
 /**
- * Copyable command hints for migration remediation
+ * Command hints for migration remediation
  */
 
 import { formatConfigArg } from "#/cli/shared/args";
