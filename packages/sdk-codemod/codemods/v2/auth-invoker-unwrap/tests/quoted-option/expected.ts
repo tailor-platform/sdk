@@ -1,4 +1,0 @@
-startWorkflow({
-  workflow,
-  "invoker": "kiosk",
-});

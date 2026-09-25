@@ -1,47 +1,6 @@
-nodeLinker: isolated
-enableGlobalVirtualStore: true
-saveExact: true
-
-minimumReleaseAge: 4320 # 3 days
-minimumReleaseAgeStrict: true
-minimumReleaseAgeIgnoreMissingTime: false
-minimumReleaseAgeExclude:
-  - "@tailor-platform/*"
-
-blockExoticSubdeps: true
-trustPolicy: no-downgrade
-trustPolicyExclude:
-  # Pre-existing transitive version without provenance attestation.
-  - "@swc/core@1.12.11"
-
-packages:
-  - packages/*
-  - packages/create-sdk/templates/*
-  - example
-  - llm-challenge
-
 allowBuilds:
+  "@prisma/engines": true
   "@swc/core": true
+  "@tailor-platform/sdk": true
   esbuild: true
-  lefthook: true
-  # Postinstall scripts not needed for our workspace:
-  # - multiline-ts: only has `preinstall: npx only-allow pnpm` (pnpm guard for
-  #   its own dev, not us).
-  # - oxc-resolver / unrs-resolver / @prisma/engines / protobufjs: napi-style
-  #   binary packages whose top-level install hook is unused — runtime loads
-  #   the per-platform `@<scope>/binding-*` sub-package directly.
-  multiline-ts: false
-  oxc-resolver: false
-  "@prisma/engines": false
-  protobufjs: false
-  unrs-resolver: false
-
-overrides:
-  brace-expansion@>=5.0.5 <5.0.8: 5.0.12
-  esbuild@>=0.17.0 <0.28.1: 0.28.2
-
-peerDependencyRules:
-  allowedVersions:
-    # madge@8 still declares typescript ^5.4.4, but its parser
-    # (detective-typescript) supports typescript 6 and madge runs fine on it.
-    madge>typescript: "6"
+  protobufjs: true
