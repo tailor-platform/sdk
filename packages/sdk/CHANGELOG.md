@@ -1,5 +1,37 @@
 # @tailor-platform/sdk
 
+## 2.22.0
+
+### Minor Changes
+
+- [#2346](https://github.com/tailor-platform/sdk/pull/2346) [`87a6579`](https://github.com/tailor-platform/sdk/commit/87a65793bb8d8c6d5335f69d672db4ce4bc6ab9c) Thanks [@dqn](https://github.com/dqn)! - Add the `TAILOR_JSON_OUTPUT` environment variable to default CLI output to JSON without passing `--json` on every call, for agents, scripts, and CI. Set it to `true` or `1` to enable JSON; `false` or `0` keeps table output. An explicit `--json` still wins, and with the variable unset every command keeps its current output, so existing pipes and CI steps are unaffected. Dispatched CLI plugins inherit the variable from the environment.
+
+- [#2403](https://github.com/tailor-platform/sdk/pull/2403) [`7c3e1cc`](https://github.com/tailor-platform/sdk/commit/7c3e1cc540230173e3f699085019879781bd309e) Thanks [@toiroakr](https://github.com/toiroakr)! - `@tailor-platform/sdk/cli` now exports `appIdLockKey` and `resolveAppId`, so a CLI plugin can read a config's application id the same way `deploy` does — preferring the id recorded in `.github/tailor.lock`, falling back to the id the config module evaluates to. `resolveAppId` never writes the lock, edits the config, or prompts, and resolves to `undefined` without warning when neither source has an id. A config id that disagrees with the lock, or that already belongs to a different, still-existing config, throws `APP_ID_CONFLICT` instead of guessing.
+
+- [#2339](https://github.com/tailor-platform/sdk/pull/2339) [`1d60b6a`](https://github.com/tailor-platform/sdk/commit/1d60b6ab84089d4b645fbcc4b96fbceb59b3ce6f) Thanks [@toiroakr](https://github.com/toiroakr)! - Lock the beta plugin config export name to `plugins`. `definePlugins()` must be assigned to `export const plugins` in `tailor.config.ts`; any other export name (`plugins2`, `generator`, `generators`, etc.) is no longer read for plugins, matching the documented convention. A `plugins` export that is not an array, or that contains an item that is not a valid plugin, now fails config loading with a descriptive error instead of being silently dropped. A duplicate plugin ID within `plugins` now fails config loading in every code path instead of silently keeping only the last one.
+  
+  Provide a v2 minor-release upgrade codemod for existing `generator`/`generators` exports. Preserve unrelated imports and shadowed variables, and leave imports unchanged when their config cannot be safely renamed. Include `.mts` and `.cts` imports and report remaining split exports or multiple plugin arrays for manual migration.
+
+### Patch Changes
+
+- [#2428](https://github.com/tailor-platform/sdk/pull/2428) [`1f18ce8`](https://github.com/tailor-platform/sdk/commit/1f18ce802e65f2e49958696d9bd3ff09b50f8cbf) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `FORBIDDEN_RUNTIME_GLOBAL` wrongly rejecting workflow jobs and executors whose dependencies detect the environment with `typeof` ternaries such as `typeof global !== "undefined" ? global : ...` or `typeof window === "undefined" ? {} : window`, including after the bundle is minified
+  
+  Fix TailorDB hooks and validators dropping a constant from the same file when they read it behind a `typeof` check such as `typeof DEFAULT_VALUE !== "undefined" && DEFAULT_VALUE`
+
+- [#2426](https://github.com/tailor-platform/sdk/pull/2426) [`3ebdc0c`](https://github.com/tailor-platform/sdk/commit/3ebdc0ca1eac2c1c0f2c02d7eb2ce43dffe5a715) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​toiroakr/lines-db to v0.13.0
+
+- [#2429](https://github.com/tailor-platform/sdk/pull/2429) [`214e199`](https://github.com/tailor-platform/sdk/commit/214e199c48d4cfeecfaf1766186a9a2805cdbeb4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency get-east-asian-width to v1.7.0
+
+- [#2430](https://github.com/tailor-platform/sdk/pull/2430) [`b6a0146`](https://github.com/tailor-platform/sdk/commit/b6a014646bc7ff8ca540cb1ae1ce5ce7efdd10ce) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.10.0
+
+- [#2431](https://github.com/tailor-platform/sdk/pull/2431) [`716c337`](https://github.com/tailor-platform/sdk/commit/716c3373cfd30a1535a2396594f6a95d4f97e6c9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#2426](https://github.com/tailor-platform/sdk/pull/2426) [`f3a0671`](https://github.com/tailor-platform/sdk/commit/f3a067173226f5eced1b24ca544a02da7607762f) Thanks [@renovate](https://github.com/apps/renovate)! - `tailor seed validate` now reports a JSONL line that is not valid JSON with its file and line, and points the GitHub Actions annotation at that line.
+
+- [#2419](https://github.com/tailor-platform/sdk/pull/2419) [`c984ba0`](https://github.com/tailor-platform/sdk/commit/c984ba08adb6effa9717645f7fe836be63476ff7) Thanks [@dqn](https://github.com/dqn)! - Re-running `tailor setup ci` now keeps your own jobs, steps, and top-level keys in generated workflows and composite actions, along with `runs-on` / `timeout-minutes` / `container` / `env` on managed jobs and the documented editable inputs (such as `user-mapping` on `tailor-notify`). `tailor setup check` only reports edits to SDK-managed parts, and `--force` resets those parts without discarding your additions. Files generated by an older version need one `--force` re-run if you had edited them.
+  
+  `setup ci branch`, `setup ci tag`, and `setup ci coordinate` accept `--restrict-dispatch`, which lets a manual `workflow_dispatch` deploy only the target branch (branch targets) or a tag, which must also pass the reachability guard when `--branch` is set (tag targets). Dry runs stay available from any ref.
+
 ## 2.21.0
 
 ### Minor Changes

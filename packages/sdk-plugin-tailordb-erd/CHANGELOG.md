@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.2.6
+
+### Patch Changes
+
+- [#2346](https://github.com/tailor-platform/sdk/pull/2346) [`87a6579`](https://github.com/tailor-platform/sdk/commit/87a65793bb8d8c6d5335f69d672db4ce4bc6ab9c) Thanks [@dqn](https://github.com/dqn)! - Add the `TAILOR_JSON_OUTPUT` environment variable to default CLI output to JSON without passing `--json` on every call, for agents, scripts, and CI. Set it to `true` or `1` to enable JSON; `false` or `0` keeps table output. An explicit `--json` still wins, and with the variable unset every command keeps its current output, so existing pipes and CI steps are unaffected. Dispatched CLI plugins inherit the variable from the environment.
+- Updated dependencies [[`87a6579`](https://github.com/tailor-platform/sdk/commit/87a65793bb8d8c6d5335f69d672db4ce4bc6ab9c), [`1f18ce8`](https://github.com/tailor-platform/sdk/commit/1f18ce802e65f2e49958696d9bd3ff09b50f8cbf), [`7c3e1cc`](https://github.com/tailor-platform/sdk/commit/7c3e1cc540230173e3f699085019879781bd309e), [`1d60b6a`](https://github.com/tailor-platform/sdk/commit/1d60b6ab84089d4b645fbcc4b96fbceb59b3ce6f), [`3ebdc0c`](https://github.com/tailor-platform/sdk/commit/3ebdc0ca1eac2c1c0f2c02d7eb2ce43dffe5a715), [`214e199`](https://github.com/tailor-platform/sdk/commit/214e199c48d4cfeecfaf1766186a9a2805cdbeb4), [`b6a0146`](https://github.com/tailor-platform/sdk/commit/b6a014646bc7ff8ca540cb1ae1ce5ce7efdd10ce), [`716c337`](https://github.com/tailor-platform/sdk/commit/716c3373cfd30a1535a2396594f6a95d4f97e6c9), [`f3a0671`](https://github.com/tailor-platform/sdk/commit/f3a067173226f5eced1b24ca544a02da7607762f), [`c984ba0`](https://github.com/tailor-platform/sdk/commit/c984ba08adb6effa9717645f7fe836be63476ff7)]:
+  - @tailor-platform/sdk@2.22.0
+
 ## 0.2.5
 
 ### Patch Changes
