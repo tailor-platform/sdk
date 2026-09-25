@@ -160,7 +160,7 @@ export async function validateSeedData(
   try {
     result = unwrap(await db.initialize({ tableName, detailedValidate: true }));
   } finally {
-    await db.close();
+    unwrap(await db.close());
   }
 
   const outputLines = formatWarnings(result.warnings);
