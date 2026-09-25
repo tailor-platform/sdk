@@ -1,5 +1,19 @@
 # @tailor-platform/sdk-codemod
 
+## 0.8.13
+
+### Patch Changes
+
+- [#2399](https://github.com/tailor-platform/sdk/pull/2399) [`78e3b5e`](https://github.com/tailor-platform/sdk/commit/78e3b5eccb7e4c088303d7eac6c6b4bdf17a44e4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.13.5
+
+- [#2421](https://github.com/tailor-platform/sdk/pull/2421) [`a04b239`](https://github.com/tailor-platform/sdk/commit/a04b239c58b73224a8db29c1a79b4163397816b6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.3.0
+
+- [#2402](https://github.com/tailor-platform/sdk/pull/2402) [`e8651de`](https://github.com/tailor-platform/sdk/commit/e8651deceadfc411c943543b2e89bc31d8e267c7) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix the Secret Manager runtime-access guidance: reading a secret from a resolver, executor, or workflow via the `secrets` object exported by `defineSecretManager()` fails to build with `FORBIDDEN_RUNTIME_GLOBAL (process)` once any vault value comes from `process.env`, because that object also carries the raw config values into the deployed bundle. The docs now recommend `secretmanager.getSecret()` / `getSecrets()` from `@tailor-platform/sdk/runtime` instead, which never touches the config object.
+  
+  `secretmanager.getSecret()` / `getSecrets()`'s vault and secret name arguments are now type-checked and autocompleted, the same way `aigateway.get()` and `authconnection.getConnectionToken()` already are: after `tailor generate`/`tailor deploy`, vault names declared via `defineSecretManager()` are suggested (any other string still works, since vaults can also be managed via the CLI), and secret names inside a declared vault are checked against that vault's configuration.
+  
+  `defineSecretManager()`'s `get()` / `getAll()` methods are now `@deprecated` for the same reason and will be removed in a future major version; a codemod (`v3/secrets-get-to-secretmanager`) is registered to guide the migration.
+
 ## 0.8.12
 
 ### Patch Changes

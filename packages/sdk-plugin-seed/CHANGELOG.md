@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.3.4
+
+### Patch Changes
+
+- [#2399](https://github.com/tailor-platform/sdk/pull/2399) [`78e3b5e`](https://github.com/tailor-platform/sdk/commit/78e3b5eccb7e4c088303d7eac6c6b4bdf17a44e4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @​types/node to v24.13.5
+
+- [#2421](https://github.com/tailor-platform/sdk/pull/2421) [`a04b239`](https://github.com/tailor-platform/sdk/commit/a04b239c58b73224a8db29c1a79b4163397816b6) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @​politty/zod to v0.3.0
+- Updated dependencies [[`78e3b5e`](https://github.com/tailor-platform/sdk/commit/78e3b5eccb7e4c088303d7eac6c6b4bdf17a44e4), [`6fa2839`](https://github.com/tailor-platform/sdk/commit/6fa28393a75580153ec96534fc101a93472ddc0a), [`759cd65`](https://github.com/tailor-platform/sdk/commit/759cd658279539130c25b437bdb11f82ffe4548b), [`cd150c4`](https://github.com/tailor-platform/sdk/commit/cd150c41aa2b3fb1982cd2d61118cf65400013d0), [`6298636`](https://github.com/tailor-platform/sdk/commit/62986365ccb6e2c7113e453fb9c46b827c7c6d5e), [`7de777d`](https://github.com/tailor-platform/sdk/commit/7de777d43b6946c9bfb23ad40d150643502ad370), [`a04b239`](https://github.com/tailor-platform/sdk/commit/a04b239c58b73224a8db29c1a79b4163397816b6), [`d121b73`](https://github.com/tailor-platform/sdk/commit/d121b7318e1dd225e7556f9251fe1bc6158cd19a), [`f9f2791`](https://github.com/tailor-platform/sdk/commit/f9f279148ed2b8c03ce9cc1b7833d872add9597d), [`e8651de`](https://github.com/tailor-platform/sdk/commit/e8651deceadfc411c943543b2e89bc31d8e267c7)]:
+  - @tailor-platform/sdk@2.21.0
+
 ## 0.3.3
 
 ### Patch Changes
