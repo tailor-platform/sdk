@@ -113,7 +113,7 @@ After the detailed list, a summary line is printed:
 Plan: 5 to create, 3 to update, 1 to delete
 ```
 
-When some updates are forced by the SDK version, the summary says how many of them are:
+When some updates are forced by the SDK version, the summary line also shows how many:
 
 ```text
 Plan: 0 to create, 12 to update (11 forced by SDK version), 0 to delete
