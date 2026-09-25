@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OAuth2 Callback</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Processing login...</h1>
+      <p id="status">Exchanging authorization code for access token...</p>
+    </div>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const error = params.get("error");
+
+      if (error) {
+        document.getElementById("status").textContent = "Login failed: " + error;
+      } else if (code) {
+        document.getElementById("status").textContent =
+          "Authorization code received. Implement token exchange on your backend.";
+        // In production, exchange the code for tokens via your backend
+        // For demo purposes, we just show the code was received
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 3000);
+      } else {
+        document.getElementById("status").textContent = "No authorization code received.";
+      }
+    </script>
+  </body>
+</html>

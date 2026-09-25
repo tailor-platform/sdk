@@ -1,0 +1,349 @@
+import { type MessageInitShape } from "@bufbuild/protobuf";
+import {
+  type AddCustomDomainRequestSchema,
+  type CreateStaticWebsiteRequestSchema,
+  type DeleteStaticWebsiteRequestSchema,
+  type RemoveCustomDomainRequestSchema,
+  type UpdateStaticWebsiteRequestSchema,
+} from "@tailor-platform/tailor-proto/staticwebsite_pb";
+import { getOrNull, type OperatorClient } from "#/cli/shared/client";
+import { createChangeSet } from "./change-set";
+import { areNormalizedEqual } from "./compare";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
+
+/**
+ * Apply static website changes for the given phase.
+ * @param client - Operator client instance
+ * @param result - Planned static website changes
+ * @param phase - Apply phase
+ * @returns Promise that resolves when static websites are applied
+ */
+export async function applyStaticWebsite(
+  client: OperatorClient,
+  result: Awaited<ReturnType<typeof planStaticWebsite>>,
+  phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
+) {
+  const { changeSet, customDomainChangeSet } = result;
+  if (phase === "create-update") {
+    // StaticWebsites
+    await Promise.all([
+      ...changeSet.creates.map(async (create) => {
+        await client.createStaticWebsite(create.request);
+        await writeMetadataLabels(client, create.metaRequest);
+      }),
+      ...changeSet.updates.map(async (update) => {
+        await client.updateStaticWebsite(update.request);
+        await writeMetadataLabels(client, update.metaRequest);
+      }),
+    ]);
+    // Custom domains
+    await Promise.all([
+      ...customDomainChangeSet.creates.map(async (add) => {
+        await client.addCustomDomain(add.request);
+        await writeMetadataLabels(client, add.metaRequest);
+      }),
+      ...customDomainChangeSet.deletes.map((del) => client.removeCustomDomain(del.request)),
+    ]);
+  } else {
+    // Delete in reverse order of dependencies
+    // StaticWebsites
+    await Promise.all(changeSet.deletes.map((del) => client.deleteStaticWebsite(del.request)));
+  }
+}
+
+type CreateStaticWebsite = {
+  name: string;
+  request: MessageInitShape<typeof CreateStaticWebsiteRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+type UpdateStaticWebsite = {
+  name: string;
+  request: MessageInitShape<typeof UpdateStaticWebsiteRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+type DeleteStaticWebsite = {
+  name: string;
+  request: MessageInitShape<typeof DeleteStaticWebsiteRequestSchema>;
+};
+
+type AddCustomDomainEntry = {
+  name: string;
+  request: MessageInitShape<typeof AddCustomDomainRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+type RemoveCustomDomainEntry = {
+  name: string;
+  request: MessageInitShape<typeof RemoveCustomDomainRequestSchema>;
+};
+
+type ComparableStaticWebsite = {
+  description: string;
+  allowedIpAddresses: string[];
+};
+
+type ComparableStaticWebsiteInput = {
+  description?: string;
+  allowedIpAddresses?: readonly string[];
+};
+
+function customDomainTrn(workspaceId: string, websiteName: string, domain: string) {
+  return `trn:v1:workspace:${workspaceId}:staticwebsite:${websiteName}:custom_domain:${domain}`;
+}
+
+function normalizeComparableStaticWebsiteShape(
+  input: Pick<ComparableStaticWebsite, "description" | "allowedIpAddresses">,
+): ComparableStaticWebsite {
+  return {
+    description: input.description,
+    allowedIpAddresses: input.allowedIpAddresses.toSorted(),
+  };
+}
+
+function normalizeComparableStaticWebsite(
+  input: ComparableStaticWebsiteInput,
+): ComparableStaticWebsite {
+  return normalizeComparableStaticWebsiteShape({
+    description: input.description || "",
+    allowedIpAddresses: [...(input.allowedIpAddresses || [])],
+  });
+}
+
+function areStaticWebsitesEqual(
+  existing: ProtoStaticWebsite,
+  desired: ComparableStaticWebsiteInput,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableStaticWebsite(existing),
+    normalizeComparableStaticWebsite(desired),
+  );
+}
+
+/**
+ * Static website names expected to exist after this deploy run.
+ * @param context - Planning context
+ * @returns Names from the deploy-run scope when set, otherwise the application's own websites
+ */
+export function expectedLocalStaticWebsiteNames(context: PlanContext): ReadonlySet<string> {
+  return (
+    context.expectedLocalStaticWebsiteNames ??
+    new Set(context.application.staticWebsiteServices.map((website) => website.name))
+  );
+}
+
+/**
+ * Plan static website changes based on current and desired state.
+ * @param context - Planning context
+ * @returns Planned changes
+ */
+export async function planStaticWebsite(context: PlanContext) {
+  const { client, workspaceId, application, forRemoval } = context;
+  const changeSet = createChangeSet<CreateStaticWebsite, UpdateStaticWebsite, DeleteStaticWebsite>(
+    "StaticWebsites",
+  );
+  const customDomainChangeSet = createChangeSet<
+    AddCustomDomainEntry,
+    never,
+    RemoveCustomDomainEntry
+  >("CustomDomains");
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
+  const resourceOwners = new Set<string>();
+
+  const existingWebsites = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, pageSize) => {
+      const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
+        workspaceId,
+        pageToken,
+        pageSize,
+      });
+      return [staticwebsites, nextPageToken];
+    },
+    getName: (resource) => resource.name,
+    getTrn: (name) => resourceTrn(workspaceId, "staticwebsite", name),
+  });
+
+  // Track owned website names to plan custom domains afterward
+  const ownedWebsiteNames = new Set<string>();
+
+  const staticWebsiteServices = forRemoval ? [] : application.staticWebsiteServices;
+  for (const websiteService of staticWebsiteServices) {
+    const config = websiteService;
+    const name = websiteService.name;
+    const existing = existingWebsites[name];
+    const metaRequest = await buildMetaRequest({
+      trn: resourceTrn(workspaceId, "staticwebsite", name),
+      appName: application.name,
+      appId: application.id,
+    });
+    const desired = normalizeComparableStaticWebsite(config);
+    const request = {
+      workspaceId,
+      staticwebsite: {
+        name,
+        description: config.description || "",
+        allowedIpAddresses: config.allowedIpAddresses || [],
+      },
+    };
+
+    if (existing) {
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName: application.name,
+        appId: application.id,
+        resourceType: "StaticWebsite",
+        resourceName: name,
+        conflicts,
+        unmanaged,
+      });
+
+      if (
+        owned &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        areStaticWebsitesEqual(existing.resource, desired)
+      ) {
+        changeSet.unchanged.push({ name });
+      } else {
+        changeSet.updates.push({
+          name,
+          request,
+          metaRequest,
+        });
+      }
+
+      if (owned) {
+        ownedWebsiteNames.add(name);
+      }
+      delete existingWebsites[name];
+    } else {
+      changeSet.creates.push({
+        name,
+        request,
+        metaRequest,
+      });
+      // New websites are owned by this app
+      ownedWebsiteNames.add(name);
+    }
+  }
+  Object.entries(existingWebsites).forEach(([name]) => {
+    const entry = existingWebsites[name];
+    const label = entry?.label;
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: label,
+      appName: application.name,
+      appId: application.id,
+      resourceOwners,
+    });
+    if (owned) {
+      changeSet.deletes.push({
+        name,
+        request: {
+          workspaceId,
+          name,
+        },
+      });
+    }
+  });
+
+  // Plan custom domain changes for owned websites
+  const desiredDomainsByWebsite = new Map<string, readonly string[]>();
+  for (const service of staticWebsiteServices) {
+    if (service.customDomains !== undefined && ownedWebsiteNames.has(service.name)) {
+      desiredDomainsByWebsite.set(service.name, service.customDomains);
+    }
+  }
+
+  // Fetch existing custom domains and their labels for owned websites that already exist
+  type ExistingDomainInfo = { domain: string; allLabels: Record<string, string> | undefined };
+  const existingDomainsByWebsite = new Map<string, ExistingDomainInfo[]>();
+  const websitesToFetchDomains = [...ownedWebsiteNames].filter(
+    (name) => !changeSet.creates.some((c) => c.name === name),
+  );
+  await Promise.all(
+    websitesToFetchDomains.map(async (name) => {
+      const domainsWithLabels = await getOrNull(async () => {
+        const { customDomains } = await client.listCustomDomains({
+          workspaceId,
+          staticWebsiteName: name,
+        });
+        return await Promise.all(
+          customDomains.map(async (d) => {
+            const { metadata } = await client.getMetadata({
+              trn: customDomainTrn(workspaceId, name, d.domain),
+            });
+            return {
+              domain: d.domain,
+              allLabels: metadata?.labels,
+            };
+          }),
+        );
+      });
+      if (domainsWithLabels) {
+        existingDomainsByWebsite.set(name, domainsWithLabels);
+      }
+    }),
+  );
+
+  // Diff custom domains for each owned website
+  for (const name of ownedWebsiteNames) {
+    const desired = new Set(desiredDomainsByWebsite.get(name) ?? []);
+    const existingDomains = existingDomainsByWebsite.get(name) ?? [];
+    const existingSet = new Set(existingDomains.map((d) => d.domain));
+    const sdkOwnedDomains = new Set(
+      existingDomains
+        .filter((d) => isOwnedByApp(d.allLabels, application.name, application.id))
+        .map((d) => d.domain),
+    );
+
+    for (const domain of desired) {
+      if (!existingSet.has(domain)) {
+        const metaRequest = await buildMetaRequest({
+          trn: customDomainTrn(workspaceId, name, domain),
+          appName: application.name,
+          appId: application.id,
+        });
+        customDomainChangeSet.creates.push({
+          name: domain,
+          request: { workspaceId, staticWebsiteName: name, domain },
+          metaRequest,
+        });
+      } else {
+        customDomainChangeSet.unchanged.push({ name: domain });
+      }
+    }
+
+    // Only remove SDK-owned domains not in desired if customDomains is explicitly specified
+    if (desiredDomainsByWebsite.has(name)) {
+      for (const domain of sdkOwnedDomains) {
+        if (!desired.has(domain)) {
+          customDomainChangeSet.deletes.push({
+            name: domain,
+            request: { workspaceId, domain },
+          });
+        }
+      }
+    }
+  }
+
+  return { changeSet, customDomainChangeSet, conflicts, unmanaged, resourceOwners };
+}

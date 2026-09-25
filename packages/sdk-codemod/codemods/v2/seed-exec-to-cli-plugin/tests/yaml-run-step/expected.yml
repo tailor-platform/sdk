@@ -1,0 +1,4 @@
+jobs:
+  seed:
+    steps:
+      - run: tailor seed apply --yes

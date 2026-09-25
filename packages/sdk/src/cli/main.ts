@@ -1,0 +1,195 @@
+#!/usr/bin/env node
+
+import { defineCommand, runMain, type AnyCommand } from "@politty/zod";
+import { withCompletionCommand } from "@politty/zod/completion";
+import { withSkillCommand } from "@politty/zod/skill";
+import { dirname, resolve } from "pathe";
+import { resolvePackageJSON } from "pkg-types";
+import { z } from "zod";
+import { apiCommand } from "./commands/api";
+import { authCommand } from "./commands/auth";
+import { authconnectionCommand } from "./commands/authconnection";
+import { crashReportCommand } from "./commands/crashreport";
+import { deployCommand } from "./commands/deploy";
+import { executorCommand } from "./commands/executor";
+import { functionCommand } from "./commands/function";
+import { generateCommand } from "./commands/generate";
+import { initCommand } from "./commands/init";
+import { loginCommand } from "./commands/login";
+import { logoutCommand } from "./commands/logout";
+import { machineuserCommand } from "./commands/machineuser";
+import { oauth2clientCommand } from "./commands/oauth2client";
+import { openCommand } from "./commands/open";
+import { organizationCommand } from "./commands/organization";
+import { pluginCommand } from "./commands/plugin";
+import { profileCommand } from "./commands/profile";
+import { removeCommand } from "./commands/remove";
+import { secretCommand } from "./commands/secret";
+import { showCommand } from "./commands/show";
+import { staticwebsiteCommand } from "./commands/staticwebsite";
+import { tailordbCommand } from "./commands/tailordb";
+import { upgradeCommand } from "./commands/upgrade";
+import { userCommand } from "./commands/user";
+import { workflowCommand } from "./commands/workflow";
+import { workspaceCommand } from "./commands/workspace";
+import { initCrashReporting } from "./crashreport";
+import { queryCommand } from "./query";
+import { commonArgs } from "./shared/args";
+import { runDefaultSubCommand } from "./shared/command";
+import { getErrorDiagnostics } from "./shared/error-diagnostics";
+import { serializeError } from "./shared/error-json";
+import { isCLIError, typeOnlyImportHint } from "./shared/errors";
+import { annotateTerminalError } from "./shared/github-actions";
+import { logger, styles } from "./shared/logger";
+import { readPackageJson } from "./shared/package-json";
+import { dispatchPluginWithInstallHint } from "./shared/plugin";
+import { registerTsHook } from "./shared/register-ts-hook";
+
+await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
+
+// Runs before globalArgs effects load --env-file, so env file overrides for
+// TAILOR_CRASH_REPORTS_* are not available for early startup failures.
+// This is intentional: we want crash reporting active before argument parsing,
+// and env files require parsing to be complete. Shell-level env vars still work.
+initCrashReporting();
+
+const packageJson = await readPackageJson();
+const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor";
+const packageName = packageJson.name ?? "@tailor-platform/sdk";
+const packageJsonPath = await resolvePackageJSON(import.meta.url);
+const bundledSkillsDir = resolve(dirname(packageJsonPath), "agent-skills");
+
+function defaultSkillsRunToAdd(command: AnyCommand): AnyCommand {
+  const add = (command.subCommands ?? {}).add as AnyCommand;
+  return {
+    ...command,
+    async run() {
+      await runDefaultSubCommand(add);
+    },
+  };
+}
+
+const commandWithSkills = withSkillCommand(
+  defineCommand({
+    name: cliName,
+    description:
+      packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
+    notes: `CLI plugins (beta): an unknown subcommand is dispatched to an external plugin executable named \`${cliName}-<name>\` (found on your PATH or in node_modules/.bin), similar to \`gh\` extensions.
+Run \`${cliName} plugin list\` to see which plugins are installed and where they resolve from.
+The \`setup\` commands are provided by the @tailor-platform/sdk-plugin-setup CLI plugin.`,
+    subCommands: {
+      api: apiCommand,
+      auth: authCommand,
+      authconnection: authconnectionCommand,
+      crashreport: crashReportCommand,
+      deploy: deployCommand,
+      executor: executorCommand,
+      function: functionCommand,
+      generate: generateCommand,
+      init: initCommand,
+      login: loginCommand,
+      logout: logoutCommand,
+      machineuser: machineuserCommand,
+      oauth2client: oauth2clientCommand,
+      open: openCommand,
+      organization: organizationCommand,
+      plugin: pluginCommand,
+      profile: profileCommand,
+      query: queryCommand,
+      remove: removeCommand,
+      secret: secretCommand,
+      show: showCommand,
+      staticwebsite: staticwebsiteCommand,
+      tailordb: tailordbCommand,
+      upgrade: upgradeCommand,
+      user: userCommand,
+      workflow: workflowCommand,
+      workspace: workspaceCommand,
+    },
+  }),
+  {
+    sourceDir: bundledSkillsDir,
+    package: packageName,
+    mode: "copy",
+    descriptionAppend: false,
+    // strip unknown keys
+    globalArgs: z.object(commonArgs),
+    commandMap: { add: ["add"], remove: ["remove"] },
+    unknownKeys: "strict",
+    descriptions: {
+      skills: "Manage Tailor SDK agent skills.",
+      add: "Install Tailor SDK agent skills.",
+      list: "List Tailor SDK agent skills.",
+      remove: "Remove installed Tailor SDK agent skills.",
+      sync: "Remove and reinstall Tailor SDK agent skills.",
+    },
+  },
+);
+
+export const mainCommand = withCompletionCommand({
+  ...commandWithSkills,
+  subCommands: {
+    ...commandWithSkills.subCommands,
+    skills: defaultSkillsRunToAdd(commandWithSkills.subCommands.skills),
+  },
+});
+
+void runMain(mainCommand, {
+  version: packageJson.version,
+  // strip unknown keys
+  globalArgs: z.object(commonArgs),
+  displayErrors: false,
+  // CLI plugin dispatch: an unknown subcommand at any level execs the external
+  // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
+  onUnknownSubcommand: ({ commandPath, name, args, precedingArgs }) =>
+    dispatchPluginWithInstallHint({
+      commandPath,
+      name,
+      // Prepend, so a repeated flag stays last-wins and a preceding one is not
+      // pushed past a trailing `--` into positional territory.
+      args: [...precedingArgs, ...args],
+      cliName,
+      profile: process.env.TAILOR_PLATFORM_PROFILE,
+    }),
+  cleanup: async ({ error }) => {
+    if (error) {
+      let suggestion: string | undefined;
+      if (logger.jsonMode) {
+        logger.log(serializeError(error, { includeStack: logger.verbose }));
+      } else if (isCLIError(error)) {
+        logger.log(error.format());
+        if (logger.verbose && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else if (error instanceof Error) {
+        logger.error(error.message);
+        suggestion = getErrorDiagnostics(error).suggestion ?? typeOnlyImportHint(error);
+        if (suggestion) {
+          logger.log(`  ${styles.info("Suggestion:")} ${suggestion}`);
+        }
+        if (logger.verbose && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else {
+        logger.error(`Unknown error: ${error}`);
+      }
+      annotateTerminalError(error, { jsonMode: logger.jsonMode, suggestion });
+
+      // Report programming bugs (native error types that indicate code defects).
+      // Skip domain errors like ConnectError, CIPromptError, and plain Error
+      // used for user-facing validation/not-found messages.
+      // Exclude SyntaxError/ReferenceError: at runtime these typically come from
+      // dynamically imported user config files, not from SDK code.
+      const shouldReport =
+        !isCLIError(error) &&
+        (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
+      if (shouldReport) {
+        // Lazy import to match shutdownTelemetry pattern and keep cleanup handler lightweight.
+        const { reportCrash } = await import("#/cli/crashreport/index");
+        await reportCrash(error, "handledError");
+      }
+    }
+    const { shutdownTelemetry } = await import("#/cli/telemetry/index");
+    await shutdownTelemetry();
+  },
+});

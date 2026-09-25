@@ -1,0 +1,32 @@
+/**
+ * Tests for `@tailor-platform/sdk/runtime/authconnection` typed wrappers.
+ */
+import { aroundEach, describe, expect, test } from "vitest";
+import { authconnection } from "#/runtime/authconnection";
+import { mockAuthconnection, injectMocks } from "#/vitest/mock";
+
+describe("@tailor-platform/sdk/runtime/authconnection", () => {
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
+  });
+
+  test("getConnectionToken forwards to global and records call", async () => {
+    using ac = mockAuthconnection();
+    ac.setTokens({
+      google: { access_token: "ya29.xxx" },
+    });
+
+    const result = await authconnection.getConnectionToken("google");
+
+    expect(result).toEqual({ access_token: "ya29.xxx" });
+    expect(ac.calls).toEqual([{ connectionName: "google" }]);
+  });
+
+  test("returns default token for unknown connection", async () => {
+    using _ac = mockAuthconnection();
+    const result = await authconnection.getConnectionToken("unknown");
+
+    expect(result).toEqual({ access_token: "mock-token" });
+  });
+});

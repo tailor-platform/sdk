@@ -1,0 +1,94 @@
+import { z } from "zod";
+import { workspaceArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
+import { humanizeRelativeTime } from "#/cli/shared/format";
+import { logger } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { parseOptions } from "#/cli/shared/parse-options";
+import { fetchWorkspaceExpiry, reportedExpiry, type ReportedExpiry } from "./expiry";
+import {
+  workspaceDetailsWithFolderName,
+  workspaceNameTransformer,
+  type WorkspaceDetails,
+} from "./transform";
+
+// strip unknown keys
+const getWorkspaceOptionsSchema = z.object({
+  workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
+  profile: z.string().optional(),
+});
+
+export type GetWorkspaceOptions = z.input<typeof getWorkspaceOptionsSchema>;
+
+async function loadOptions(options: GetWorkspaceOptions) {
+  const validated = parseOptions(getWorkspaceOptionsSchema, options);
+
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: validated.profile,
+    workspaceId: validated.workspaceId,
+  });
+
+  return {
+    client,
+    workspaceId,
+  };
+}
+
+/** A workspace's details, plus the prune expiry it records. */
+export type WorkspaceDetailsWithExpiry = WorkspaceDetails & { expiresAt: ReportedExpiry };
+
+/**
+ * Get detailed information about a workspace.
+ * @param options - Workspace get options
+ * @returns Workspace details
+ */
+export async function getWorkspace(
+  options: GetWorkspaceOptions,
+): Promise<WorkspaceDetailsWithExpiry> {
+  const { client, workspaceId } = await loadOptions(options);
+
+  const response = await client.getWorkspace({
+    workspaceId,
+  });
+
+  if (!response.workspace) {
+    throw CLIError({
+      code: "WORKSPACE_NOT_FOUND",
+      message: `Workspace "${workspaceId}" not found.`,
+    });
+  }
+
+  const [details, expiry] = await Promise.all([
+    workspaceDetailsWithFolderName(client, response.workspace),
+    fetchWorkspaceExpiry(client, workspaceId, new Date()),
+  ]);
+
+  return { ...details, expiresAt: reportedExpiry(expiry) };
+}
+
+export const getCommand = defineAppCommand({
+  name: "get",
+  description: "Show detailed information about a workspace",
+  args: z.strictObject({
+    ...workspaceArgs,
+  }),
+  run: async (args) => {
+    const workspace = await getWorkspace({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+    });
+
+    const formattedWorkspace = args.json
+      ? workspace
+      : {
+          ...workspace,
+          createdAt: humanizeRelativeTime(workspace.createdAt),
+          updatedAt: humanizeRelativeTime(workspace.updatedAt),
+        };
+
+    logger.out(formattedWorkspace, {
+      display: { name: workspaceNameTransformer, folderName: null },
+    });
+  },
+});

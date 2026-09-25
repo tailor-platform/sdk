@@ -1,0 +1,310 @@
+import type { Workflow } from "#/configure/services/workflow/workflow";
+import type { MachineUserName } from "#/configure/types/machine-user";
+import type { TailorPrincipal } from "#/runtime/types";
+import type {
+  FunctionOperation as ParserFunctionOperation,
+  GqlOperation as ParserGqlOperation,
+  WebhookOperation as ParserWebhookOperation,
+  WorkflowOperation as ParserWorkflowOperation,
+} from "#/types/executor.generated";
+import type { Client } from "@urql/core";
+
+/** Function-based executor operation. The body receives the trigger args and the `invoker`. */
+export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "invoker"> & {
+  body: (args: Args & { invoker: TailorPrincipal | null }) => void | Promise<void>;
+  invoker?: MachineUserName;
+};
+
+type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
+
+/** GraphQL-based executor operation. Executes a GraphQL query or mutation. */
+export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" | "invoker"> & {
+  query: UrqlOperationArgs[0];
+  variables?: (args: Args) => UrqlOperationArgs[1];
+  invoker?: MachineUserName;
+};
+
+type RequestHeader =
+  | "A-IM"
+  | "Accept"
+  | "Accept-Additions"
+  | "Accept-CH"
+  | "Accept-Charset"
+  | "Accept-Datetime"
+  | "Accept-Encoding"
+  | "Accept-Features"
+  | "Accept-Language"
+  | "Accept-Patch"
+  | "Accept-Post"
+  | "Accept-Ranges"
+  | "Accept-Signature"
+  | "Access-Control"
+  | "Access-Control-Allow-Credentials"
+  | "Access-Control-Allow-Headers"
+  | "Access-Control-Allow-Methods"
+  | "Access-Control-Allow-Origin"
+  | "Access-Control-Expose-Headers"
+  | "Access-Control-Max-Age"
+  | "Access-Control-Request-Headers"
+  | "Access-Control-Request-Method"
+  | "Age"
+  | "Allow"
+  | "ALPN"
+  | "Alt-Svc"
+  | "Alt-Used"
+  | "Alternates"
+  | "AMP-Cache-Transform"
+  | "Apply-To-Redirect-Ref"
+  | "Authentication-Control"
+  | "Authentication-Info"
+  | "Authorization"
+  | "Available-Dictionary"
+  | "C-Ext"
+  | "C-Man"
+  | "C-Opt"
+  | "C-PEP"
+  | "C-PEP-Info"
+  | "Cache-Control"
+  | "Cache-Status"
+  | "Cal-Managed-ID"
+  | "CalDAV-Timezones"
+  | "Capsule-Protocol"
+  | "CDN-Cache-Control"
+  | "CDN-Loop"
+  | "Cert-Not-After"
+  | "Cert-Not-Before"
+  | "Clear-Site-Data"
+  | "Client-Cert"
+  | "Client-Cert-Chain"
+  | "Close"
+  | "CMCD-Object"
+  | "CMCD-Request"
+  | "CMCD-Session"
+  | "CMCD-Status"
+  | "CMSD-Dynamic"
+  | "CMSD-Static"
+  | "Concealed-Auth-Export"
+  | "Configuration-Context"
+  | "Connection"
+  | "Content-Base"
+  | "Content-Digest"
+  | "Content-Disposition"
+  | "Content-Encoding"
+  | "Content-ID"
+  | "Content-Language"
+  | "Content-Length"
+  | "Content-Location"
+  | "Content-MD5"
+  | "Content-Range"
+  | "Content-Script-Type"
+  | "Content-Security-Policy"
+  | "Content-Security-Policy-Report-Only"
+  | "Content-Style-Type"
+  | "Content-Type"
+  | "Content-Version"
+  | "Cookie"
+  | "Cookie2"
+  | "Cross-Origin-Embedder-Policy"
+  | "Cross-Origin-Embedder-Policy-Report-Only"
+  | "Cross-Origin-Opener-Policy"
+  | "Cross-Origin-Opener-Policy-Report-Only"
+  | "Cross-Origin-Resource-Policy"
+  | "CTA-Common-Access-Token"
+  | "DASL"
+  | "Date"
+  | "DAV"
+  | "Default-Style"
+  | "Delta-Base"
+  | "Deprecation"
+  | "Depth"
+  | "Derived-From"
+  | "Destination"
+  | "Differential-ID"
+  | "Dictionary-ID"
+  | "Digest"
+  | "DPoP"
+  | "DPoP-Nonce"
+  | "Early-Data"
+  | "EDIINT-Features"
+  | "ETag"
+  | "Expect"
+  | "Expect-CT"
+  | "Expires"
+  | "Ext"
+  | "Forwarded"
+  | "From"
+  | "GetProfile"
+  | "Hobareg"
+  | "Host"
+  | "HTTP2-Settings"
+  | "If"
+  | "If-Match"
+  | "If-Modified-Since"
+  | "If-None-Match"
+  | "If-Range"
+  | "If-Schedule-Tag-Match"
+  | "If-Unmodified-Since"
+  | "IM"
+  | "Include-Referred-Token-Binding-ID"
+  | "Isolation"
+  | "Keep-Alive"
+  | "Label"
+  | "Last-Event-ID"
+  | "Last-Modified"
+  | "Link"
+  | "Link-Template"
+  | "Location"
+  | "Lock-Token"
+  | "Man"
+  | "Max-Forwards"
+  | "Memento-Datetime"
+  | "Meter"
+  | "Method-Check"
+  | "Method-Check-Expires"
+  | "MIME-Version"
+  | "Negotiate"
+  | "NEL"
+  | "OData-EntityId"
+  | "OData-Isolation"
+  | "OData-MaxVersion"
+  | "OData-Version"
+  | "Opt"
+  | "Optional-WWW-Authenticate"
+  | "Ordering-Type"
+  | "Origin"
+  | "Origin-Agent-Cluster"
+  | "OSCORE"
+  | "OSLC-Core-Version"
+  | "Overwrite"
+  | "P3P"
+  | "PEP"
+  | "PEP-Info"
+  | "Permissions-Policy"
+  | "PICS-Label"
+  | "Ping-From"
+  | "Ping-To"
+  | "Position"
+  | "Pragma"
+  | "Prefer"
+  | "Preference-Applied"
+  | "Priority"
+  | "ProfileObject"
+  | "Protocol"
+  | "Protocol-Info"
+  | "Protocol-Query"
+  | "Protocol-Request"
+  | "Proxy-Authenticate"
+  | "Proxy-Authentication-Info"
+  | "Proxy-Authorization"
+  | "Proxy-Features"
+  | "Proxy-Instruction"
+  | "Proxy-Status"
+  | "Public"
+  | "Public-Key-Pins"
+  | "Public-Key-Pins-Report-Only"
+  | "Range"
+  | "Redirect-Ref"
+  | "Referer"
+  | "Referer-Root"
+  | "Referrer-Policy"
+  | "Refresh"
+  | "Repeatability-Client-ID"
+  | "Repeatability-First-Sent"
+  | "Repeatability-Request-ID"
+  | "Repeatability-Result"
+  | "Replay-Nonce"
+  | "Reporting-Endpoints"
+  | "Repr-Digest"
+  | "Retry-After"
+  | "Safe"
+  | "Schedule-Reply"
+  | "Schedule-Tag"
+  | "Sec-GPC"
+  | "Sec-Purpose"
+  | "Sec-Token-Binding"
+  | "Sec-WebSocket-Accept"
+  | "Sec-WebSocket-Extensions"
+  | "Sec-WebSocket-Key"
+  | "Sec-WebSocket-Protocol"
+  | "Sec-WebSocket-Version"
+  | "Security-Scheme"
+  | "Server"
+  | "Server-Timing"
+  | "Set-Cookie"
+  | "Set-Cookie2"
+  | "SetProfile"
+  | "Signature"
+  | "Signature-Input"
+  | "SLUG"
+  | "SoapAction"
+  | "Status-URI"
+  | "Strict-Transport-Security"
+  | "Sunset"
+  | "Surrogate-Capability"
+  | "Surrogate-Control"
+  | "TCN"
+  | "TE"
+  | "Timeout"
+  | "Timing-Allow-Origin"
+  | "Topic"
+  | "Traceparent"
+  | "Tracestate"
+  | "Trailer"
+  | "Transfer-Encoding"
+  | "TTL"
+  | "Upgrade"
+  | "Urgency"
+  | "URI"
+  | "Use-As-Dictionary"
+  | "User-Agent"
+  | "Variant-Vary"
+  | "Vary"
+  | "Via"
+  | "Want-Content-Digest"
+  | "Want-Digest"
+  | "Want-Repr-Digest"
+  | "Warning"
+  | "WWW-Authenticate"
+  | "X-Content-Type-Options"
+  | "X-Frame-Options"
+  | (string & {});
+
+/** Outbound webhook executor operation. Sends HTTP requests to external URLs. */
+export type WebhookOperation<Args> = Omit<
+  ParserWebhookOperation,
+  "url" | "requestBody" | "headers"
+> & {
+  url: (args: Args) => string;
+  requestBody?: (args: Args) => Record<string, unknown>;
+  headers?: {
+    [key in RequestHeader]?: string | { vault: string; key: string };
+  };
+};
+
+/**
+ * Extract mainJob's Input type from Workflow.
+ * Workflow<Job> -> Job is WorkflowJob<Name, Input, Output> -> Input
+ */
+type WorkflowInput<W extends Workflow> = Parameters<W["start"]>[0];
+
+type WorkflowArgs<Args, W extends Workflow> = WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
+
+type WorkflowArgsProperty<Args, W extends Workflow> =
+  undefined extends WorkflowInput<W>
+    ? { args?: WorkflowArgs<Args, W> }
+    : { args: WorkflowArgs<Args, W> };
+
+/** Workflow-triggering executor operation. Triggers a workflow in response to an event. */
+export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
+  ParserWorkflowOperation,
+  "workflowName" | "args" | "invoker"
+> & {
+  workflow: W;
+  invoker?: MachineUserName;
+} & WorkflowArgsProperty<Args, W>;
+
+export type Operation<Args> =
+  | FunctionOperation<Args>
+  | GqlOperation<Args>
+  | WebhookOperation<Args>
+  | WorkflowOperation<Args>;

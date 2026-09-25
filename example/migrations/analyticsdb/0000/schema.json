@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "namespace": "analyticsdb",
+  "createdAt": "2026-06-17T14:01:24.799Z",
+  "types": {
+    "Event": {
+      "name": "Event",
+      "pluralForm": "Events",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "name": {
+          "type": "enum",
+          "required": true,
+          "allowedValues": [
+            {
+              "value": "CLICK"
+            },
+            {
+              "value": "VIEW"
+            },
+            {
+              "value": "PURCHASE"
+            }
+          ]
+        },
+        "createdAt": {
+          "type": "datetime",
+          "required": true,
+          "description": "Record creation timestamp",
+          "hooks": {
+            "create": {
+              "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        },
+        "updatedAt": {
+          "type": "datetime",
+          "required": false,
+          "description": "Record last update timestamp",
+          "hooks": {
+            "update": {
+              "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+            }
+          }
+        }
+      },
+      "settings": {},
+      "files": {
+        "screenshot": "screenshot image"
+      }
+    }
+  }
+}

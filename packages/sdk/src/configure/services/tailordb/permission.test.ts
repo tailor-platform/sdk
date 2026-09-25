@@ -1,0 +1,147 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { describe, expectTypeOf, test } from "vitest";
+import type { PermissionCondition } from "./permission";
+
+describe("tailordb permission types", () => {
+  type User = {
+    id: string;
+    roles: string[];
+    isAdmin: boolean;
+  };
+
+  describe("record level", () => {
+    test("literal values - string and boolean", () => {
+      // String literals
+      const _strOk = ["string", "=", "string"] satisfies PermissionCondition;
+      const _strArrOk = ["string", "in", ["string"]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: string vs boolean
+      const _strErr = ["string", "=", true] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: string vs boolean[]
+      const _strArrErr = ["string", "in", [true]] satisfies PermissionCondition;
+
+      // Boolean literals
+      const _boolOk = [true, "=", false] satisfies PermissionCondition;
+      const _boolArrOk = [true, "in", [true]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: boolean vs string
+      const _boolErr = [true, "=", "string"] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: boolean vs string[]
+      const _boolArrErr = [true, "in", ["string"]] satisfies PermissionCondition;
+    });
+
+    test("user operand - string field", () => {
+      const _ok = [{ user: "id" }, "=", "u_123"] satisfies PermissionCondition<"record", User>;
+      const _okReverse = ["u_123", "=", { user: "id" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string field vs boolean value
+      const _err = [{ user: "id" }, "=", true] satisfies PermissionCondition<"record", User>;
+    });
+
+    test("user operand - boolean field", () => {
+      const _ok = [{ user: "isAdmin" }, "=", true] satisfies PermissionCondition<"record", User>;
+      const _okReverse = [false, "=", { user: "isAdmin" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: boolean field vs string value
+      const _err = [{ user: "isAdmin" }, "=", "string"] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+    });
+
+    test("user operand - array field", () => {
+      const _ok = ["MANAGER", "in", { user: "roles" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string[] field vs string field
+      const _err = ["MANAGER", "in", { user: "id" }] satisfies PermissionCondition<"record", User>;
+    });
+  });
+
+  describe("hasAny operator", () => {
+    test("string array operands", () => {
+      const _arrOk = [["a", "b"], "hasAny", ["c", "d"]] satisfies PermissionCondition;
+      const _notHasAnyOk = [["a"], "not hasAny", ["b"]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: scalar string vs string[] expected
+      const _scalarErr = ["a", "hasAny", ["b"]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: scalar string vs string[] expected
+      const _scalarErr2 = [["a"], "hasAny", "b"] satisfies PermissionCondition;
+    });
+
+    test("user string array operand", () => {
+      const _ok = [{ user: "roles" }, "hasAny", ["admin", "manager"]] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      const _okReverse = [["admin"], "hasAny", { user: "roles" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string field vs string[] expected
+      const _err = [{ user: "id" }, "hasAny", ["admin"]] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string field vs string[] expected
+      const _errReverse = [["admin"], "hasAny", { user: "id" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+    });
+  });
+
+  describe("common pitfalls", () => {
+    test("array field must be on RHS, not LHS when using 'in' operator", () => {
+      const _ok = ["MANAGER", "in", { user: "roles" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+
+      // Common mistake: array field on LHS (this was an actual bug)
+      // @ts-expect-error Array field must be on RHS, not LHS
+      const _err = [{ user: "roles" }, "in", "MANAGER"] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+    });
+  });
+});
+
+describe("tailordb permission types with optional user attribute fields", () => {
+  type OptionalUser = {
+    role?: string;
+    permissions?: string[];
+    isAdmin?: boolean;
+    flags?: boolean[];
+  };
+
+  test("user operand accepts keys derived from optional fields", () => {
+    const _str = [{ user: "role" }, "=", "ADMIN"] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+    const _bool = [{ user: "isAdmin" }, "=", true] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+    const _strArr = ["a", "in", { user: "permissions" }] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+    const _boolArr = [true, "in", { user: "flags" }] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+  });
+
+  test("does not leak undefined into user operand keys", () => {
+    type UserOperandKeys = Extract<
+      PermissionCondition<"record", OptionalUser>[0],
+      { user: unknown }
+    >["user"];
+    expectTypeOf<undefined>().not.toExtend<UserOperandKeys>();
+  });
+});

@@ -1,0 +1,178 @@
+import * as fs from "node:fs";
+import { runCommand } from "@politty/zod";
+import * as path from "pathe";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { writePlatformConfig } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { resetKeyringState } from "#/cli/shared/token-store";
+import { listCommand } from "./list";
+import { profileCommand } from ".";
+
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-list-${Date.now()}-${Math.random()}`);
+
+vi.mock("xdg-basedir", () => ({
+  xdgConfig: xdgTempDir,
+}));
+
+vi.mock("@napi-rs/keyring", () => ({
+  Entry: class {
+    setPassword() {}
+    getPassword(): string | null {
+      return null;
+    }
+    deletePassword() {}
+  },
+}));
+
+aroundAll(async (runSuite) => {
+  fs.mkdirSync(xdgTempDir, { recursive: true });
+  await runSuite();
+  fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
+
+describe("profile list", () => {
+  aroundEach(async (runTest) => {
+    resetKeyringState();
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+
+    await runTest();
+
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("with jsonMode emits an empty JSON array when no profiles exist", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    expect(stdout.output).not.toBe("");
+    expect(JSON.parse(stdout.output)).toEqual([]);
+  });
+
+  test("honors logger jsonMode when parent command delegates without json args", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(profileCommand, []);
+
+    expect(stdout.output).not.toBe("");
+    expect(JSON.parse(stdout.output)).toEqual([]);
+  });
+
+  test.each<
+    [
+      name: string,
+      profileFields: { machine_user: string; machine_user_override?: "allow" | "deny" },
+      expectedMatch: object,
+    ]
+  >([
+    [
+      "includes machineUser in JSON output when profile has machine_user set",
+      { machine_user: "bot" },
+      { name: "myprofile", machineUser: "bot" },
+    ],
+    [
+      "includes machineUserOverride: deny when machine_user_override is set",
+      { machine_user: "bot", machine_user_override: "deny" },
+      { machineUser: "bot", machineUserOverride: "deny" },
+    ],
+    [
+      "includes machineUserOverride: allow when machine_user is set but override is absent",
+      { machine_user: "bot" },
+      { machineUser: "bot", machineUserOverride: "allow" },
+    ],
+  ])("%s", async (_name, profileFields, expectedMatch) => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          ...profileFields,
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject(expectedMatch);
+  });
+
+  test("omits machineUser from JSON output when profile has no machine_user", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).not.toHaveProperty("machineUser");
+  });
+
+  test("includes platform settings in JSON output when profile has them", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(listCommand, []);
+
+    const parsed = JSON.parse(stdout.output);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      name: "dev",
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+});

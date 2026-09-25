@@ -1,0 +1,393 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { ensureConfigId, removeConfigId, warnMissingAppId } from "./config-id-injector";
+
+vi.mock("#/cli/shared/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), log: vi.fn() },
+  styles: { dim: (s: string) => s },
+}));
+
+const THROW_CASES = [
+  {
+    name: "throws when id is not a string literal",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+const id = "computed";
+export default defineConfig({
+  id,
+  name: "my-app",
+});
+`,
+    error: /string literal/,
+  },
+  {
+    name: "throws when id is an empty string",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  id: "",
+  name: "my-app",
+});
+`,
+    error: /non-empty string literal/,
+  },
+  {
+    name: "throws when id is not a UUID",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  id: "not-a-uuid",
+  name: "my-app",
+});
+`,
+    error: /UUID/,
+  },
+  {
+    name: "throws when defineConfig is called more than once",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+defineConfig({ name: "first" });
+export default defineConfig({ name: "second" });
+`,
+    error: /Multiple defineConfig/,
+  },
+  {
+    name: "throws when defineConfig argument is not an object literal",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+const config = { name: "my-app" };
+export default defineConfig(config);
+`,
+    error: /inline object literal/,
+  },
+];
+
+describe("ensureConfigId", () => {
+  let tempDir: string;
+
+  aroundEach(async (runTest) => {
+    tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "config-id-injector-"));
+    await runTest();
+    await fs.promises.rm(tempDir, { recursive: true, force: true });
+  });
+
+  async function writeConfig(source: string): Promise<string> {
+    const filePath = path.join(tempDir, "tailor.config.ts");
+    await fs.promises.writeFile(filePath, source, "utf-8");
+    return filePath;
+  }
+
+  test("injects an id into defineConfig with no existing id", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "my-app",
+});
+`,
+    );
+
+    const result = await ensureConfigId(filePath);
+
+    expect(result).not.toBeNull();
+    expect(result?.injected).toBe(true);
+    expect(result?.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+    const updated = await fs.promises.readFile(filePath, "utf-8");
+    expect(updated).toContain(`id: "${result?.id}"`);
+    expect(updated).toContain(`name: "my-app"`);
+    expect(updated).toContain(
+      "// SDK-managed app id — do not edit, except when copying this config to a separate app.",
+    );
+  });
+
+  test("returns the existing id when already present", async () => {
+    const existingId = "c98794dd-9bf1-480f-a5c9-bf92b3679d42";
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  id: "${existingId}",
+  name: "my-app",
+});
+`,
+    );
+
+    const before = await fs.promises.readFile(filePath, "utf-8");
+    const result = await ensureConfigId(filePath);
+
+    expect(result).toEqual({ id: existingId, injected: false });
+    const after = await fs.promises.readFile(filePath, "utf-8");
+    expect(after).toBe(before);
+  });
+
+  test("returns null when defineConfig is not present (wrapper file)", async () => {
+    const filePath = await writeConfig(
+      `export { default } from "./other.config";
+`,
+    );
+
+    const result = await ensureConfigId(filePath);
+    expect(result).toBeNull();
+  });
+
+  test.each(THROW_CASES)("$name", async ({ source, error }) => {
+    const filePath = await writeConfig(source);
+    await expect(ensureConfigId(filePath)).rejects.toThrow(error);
+  });
+
+  test("injects id into an empty defineConfig object without producing invalid syntax", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({});
+`,
+    );
+
+    const result = await ensureConfigId(filePath);
+    expect(result).not.toBeNull();
+    expect(result?.injected).toBe(true);
+
+    const updated = await fs.promises.readFile(filePath, "utf-8");
+    // The injected id must remain on a line that is not commented out by `//`.
+    const idLine = updated.split("\n").find((line) => line.includes(`id: "${result?.id}"`));
+    expect(idLine).toBeDefined();
+    expect(idLine?.trimStart().startsWith("//")).toBe(false);
+    // The closing `})` must still be present and not consumed by the line comment.
+    expect(updated).toContain("})");
+  });
+
+  test("injects id inline into a single-line defineConfig without breaking syntax", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({ name: "my-app" });
+`,
+    );
+
+    const result = await ensureConfigId(filePath);
+    expect(result).not.toBeNull();
+    expect(result?.injected).toBe(true);
+
+    const updated = await fs.promises.readFile(filePath, "utf-8");
+    expect(updated).toContain(`defineConfig({ id: "${result?.id}", name: "my-app" });`);
+
+    // The updated file must still parse as a single defineConfig with the
+    // same id: a second run reads it back instead of failing or re-injecting.
+    const second = await ensureConfigId(filePath);
+    expect(second).toEqual({ id: result?.id, injected: false });
+  });
+
+  test("inserts id at the top while preserving formatting", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "my-app",
+  db: {
+    main: { files: ["./tailordb/*.ts"] },
+  },
+});
+`,
+    );
+
+    const result = await ensureConfigId(filePath);
+    expect(result).not.toBeNull();
+
+    const updated = await fs.promises.readFile(filePath, "utf-8");
+    const lines = updated.split("\n");
+    const idLineIndex = lines.findIndex((line) => line.includes("id:"));
+    const nameLineIndex = lines.findIndex((line) => line.includes("name:"));
+    expect(idLineIndex).toBeGreaterThan(-1);
+    expect(nameLineIndex).toBeGreaterThan(idLineIndex);
+  });
+});
+
+describe("warnMissingAppId", () => {
+  async function warnCalls(id: string | undefined): Promise<string[]> {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.log).mockClear();
+    warnMissingAppId(id);
+    return [...vi.mocked(logger.warn).mock.calls, ...vi.mocked(logger.log).mock.calls].map((call) =>
+      String(call[0]),
+    );
+  }
+
+  test("warns when the config resolved without an id", async () => {
+    // A config that re-exports defineConfig() from another file gets no id
+    // injected, and used to reach the platform without saying so.
+    const said = (await warnCalls(undefined)).join("\n");
+    expect(said).toContain("without an 'id'");
+    // Name-based ownership covers only the resources carrying no id; the ones
+    // that carry one read as another application's, which is the opposite.
+    expect(said).toContain("another application's");
+    expect(said).toContain("carrying no id");
+  });
+
+  test("stays quiet when the config resolved with an id", async () => {
+    expect(await warnCalls("3f2ac91d-0000-4000-8000-000000000000")).toEqual([]);
+  });
+});
+
+describe("removeConfigId", () => {
+  let tempDir: string;
+
+  aroundEach(async (runTest) => {
+    tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "config-id-remove-"));
+    await runTest();
+    await fs.promises.rm(tempDir, { recursive: true, force: true });
+  });
+
+  async function writeConfig(source: string): Promise<string> {
+    const filePath = path.join(tempDir, "tailor.config.ts");
+    await fs.promises.writeFile(filePath, source, "utf-8");
+    return filePath;
+  }
+
+  const existingId = "c98794dd-9bf1-480f-a5c9-bf92b3679d42";
+
+  test.each([
+    {
+      name: "a multi-line object",
+      source: `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "my-app",
+  db: {
+    main: { files: ["./tailordb/*.ts"] },
+  },
+});
+`,
+    },
+    {
+      name: "an empty object",
+      source: `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({});
+`,
+    },
+    {
+      name: "a single-line object",
+      source: `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({ name: "my-app" });
+`,
+    },
+  ])("restores the original source after injection into $name", async ({ source }) => {
+    const filePath = await writeConfig(source);
+    const injected = await ensureConfigId(filePath);
+    expect(injected?.injected).toBe(true);
+
+    await expect(removeConfigId(filePath, injected?.id ?? "")).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(source);
+  });
+
+  test("removes a hand-written id line without touching neighbouring lines", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "my-app",
+  id: "${existingId}",
+  cors: ["https://example.com"],
+});
+`,
+    );
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "my-app",
+  cors: ["https://example.com"],
+});
+`,
+    );
+  });
+
+  test("keeps a user comment when the id was the only property", async () => {
+    const filePath = await writeConfig(
+      `export default defineConfig({\n  // keep me\n  id: "${existingId}",\n});\n`,
+    );
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(
+      `export default defineConfig({\n  // keep me\n});\n`,
+    );
+  });
+
+  test("removes a trailing inline id together with its separator", async () => {
+    const filePath = await writeConfig(
+      `export default defineConfig({ name: "my-app", id: "${existingId}" });\n`,
+    );
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(
+      `export default defineConfig({ name: "my-app" });\n`,
+    );
+  });
+
+  test("matches the expected id case-insensitively", async () => {
+    const filePath = await writeConfig(
+      `export default defineConfig({ id: "${existingId.toUpperCase()}", name: "my-app" });\n`,
+    );
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(
+      `export default defineConfig({ name: "my-app" });\n`,
+    );
+  });
+
+  test("handles CRLF line endings", async () => {
+    const filePath = await writeConfig(
+      `export default defineConfig({\r\n  id: "${existingId}",\r\n  name: "my-app",\r\n});\r\n`,
+    );
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(true);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(
+      `export default defineConfig({\r\n  name: "my-app",\r\n});\r\n`,
+    );
+  });
+
+  test.each([
+    {
+      name: "the id differs from the expected value",
+      source: `export default defineConfig({ id: "d077ac82-179a-4d76-bb22-46c346a67ce1" });\n`,
+    },
+    {
+      name: "the id is not a string literal",
+      source: `const id = "${existingId}";\nexport default defineConfig({ id });\n`,
+    },
+    {
+      name: "the id property is duplicated",
+      source: `export default defineConfig({ id: "${existingId}", id: "${existingId}" });\n`,
+    },
+    {
+      name: "the file re-exports another config",
+      source: `export { default } from "./base.config";\n`,
+    },
+    {
+      name: "the module reads the id back",
+      source: `const app = defineConfig({ id: "${existingId}", name: "my-app" });\nexport const label = app.id;\nexport default app;\n`,
+    },
+    {
+      name: "the module reads the id back through a computed key",
+      source: `const app = defineConfig({ id: "${existingId}", name: "my-app" });\nexport const label = app["id"];\nexport default app;\n`,
+    },
+    {
+      name: "the module destructures the id",
+      source: `const app = defineConfig({ id: "${existingId}", name: "my-app" });\nexport const { id } = app;\nexport default app;\n`,
+    },
+    {
+      name: "defineConfig is called more than once",
+      source: `defineConfig({ id: "${existingId}" });\nexport default defineConfig({ id: "${existingId}" });\n`,
+    },
+    {
+      name: "the argument is not an object literal",
+      source: `const config = { id: "${existingId}" };\nexport default defineConfig(config);\n`,
+    },
+  ])("leaves the file untouched when $name", async ({ source }) => {
+    const filePath = await writeConfig(source);
+    await expect(removeConfigId(filePath, existingId)).resolves.toBe(false);
+    expect(await fs.promises.readFile(filePath, "utf-8")).toBe(source);
+  });
+});

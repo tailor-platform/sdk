@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "customer-model-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "customer",
+      "flags": "i",
+      "description": "source includes the customer record domain"
+    },
+    {
+      "id": "record-change-events-mentioned",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "\\b(create|created|creation)\\b[\\s\\S]*\\b(update|updated)\\b|\\b(update|updated)\\b[\\s\\S]*\\b(create|created|creation)\\b",
+      "flags": "i",
+      "description": "source references both record creation and update activity"
+    }
+  ]
+}

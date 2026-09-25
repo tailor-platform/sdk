@@ -1,0 +1,3 @@
+# Ignore .turbo to prevent it from being included in npm packages.
+# For some reason, `.turbo/` doesn't work properly, so we use `*/.turbo/`.
+*/.turbo/

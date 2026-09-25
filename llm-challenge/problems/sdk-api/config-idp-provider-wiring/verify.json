@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "identity-provider-configured",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "issuer|client|callback|redirect",
+      "flags": "i",
+      "description": "configuration contains identity provider connection settings"
+    },
+    {
+      "id": "employee-domain-present",
+      "kind": "content-match",
+      "glob": "**/*",
+      "pattern": "employee",
+      "flags": "i",
+      "description": "workspace uses the employee sign-in domain from the prompt"
+    }
+  ]
+}

@@ -1,0 +1,466 @@
+name: Dependencies PR Auto Review with Claude
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  dependencies-review:
+    name: Review dependencies
+    if: |
+      github.event.pull_request.user.login == 'renovate[bot]'
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout the PR branch
+      pull-requests: write # upsert the dependency review comment
+      id-token: write # OIDC for the Claude Code action
+    env:
+      REVIEW_BODY_FILE: ${{ github.workspace }}/dependency-review.md
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review dependencies with Claude
+        uses: anthropics/claude-code-action@8cf3482550831fb35a4fc3fbf7ca139cf8028b4c # v1.0.233
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "renovate[bot]"
+          prompt: |
+            # Automated Dependency Update Review
+
+            **PR**: https://github.com/${{ github.repository }}/pull/${{ github.event.number }}
+
+            Please investigate and analyze the dependency updates in this PR
+            following the steps below, then write a review report **to a file**.
+            A later workflow step posts the comment for you.
+
+            ## Note on contributor handles
+
+            Release notes and changelogs often contain contributor handles
+            (e.g. `Thanks @octocat`, "New Contributors: @foo, @bar"). These add
+            no review value, so prefer linking to the release notes URL over
+            pasting raw "New Contributors" / "Thanks to" sections. You do not
+            need to manually escape handles: a deterministic post-processing step
+            neutralizes every `@mention` before the comment is posted, so no
+            unrelated user is ever notified regardless of what you write.
+
+            ## Investigation Steps
+
+            ### 1. Retrieve PR Information and Review Diff
+
+            First, retrieve the basic PR information and changes using the following commands:
+
+            ```bash
+            gh pr view ${{ github.event.number }} --json title,body,files
+            gh pr diff ${{ github.event.number }}
+            ```
+
+            ### 2. Identify Updated Libraries
+
+            From the package.json diff, identify the following:
+            - Library name being updated
+            - Version before update
+            - Version after update
+            - Semantic versioning type (major/minor/patch)
+
+            ### 3. Research Release Notes and Changelogs
+
+            Use WebFetch or WebSearch tools to find release notes from these sources:
+
+            - GitHub repository Releases page (e.g., `https://github.com/{org}/{repo}/releases`)
+            - CHANGELOG.md or HISTORY.md
+            - Official documentation release notes section
+            - npm Changes tab (for npm packages)
+
+            **Important**: For updates spanning multiple versions, review the changes for each version.
+
+            ### 4. Summarize and Categorize Changes
+
+            Extract and organize the following from release notes:
+
+            #### 🚨 Breaking Changes
+            - API changes or removals
+            - Behavior changes
+            - Minimum requirements changes (Node.js version, dependencies, etc.)
+
+            #### ✨ New Features
+            - Added features
+            - Performance improvements
+
+            #### 🐛 Bug Fixes
+            - Fixed bugs
+            - Security fixes
+
+            #### 📦 Dependency Changes
+            - Added, updated, or removed dependencies
+
+            **Explanation Guidelines**:
+            - Minimize technical jargon; provide brief explanations when using it
+            - Explain in plain language that engineers unfamiliar with the library can understand
+
+            ### 5. Security Assessment
+
+            Dependency updates are a common supply-chain attack vector. Assess
+            the security posture of this update — this is a required step.
+
+            #### 5.1 Known Vulnerabilities (CVE / GHSA)
+            - Use WebSearch / WebFetch to determine whether the **old** version
+              has known advisories that this update fixes, and whether the
+              **new** version has any newly disclosed advisories.
+            - Sources: GitHub Advisory Database (`https://github.com/advisories`),
+              the npm advisory page, OSV (`https://osv.dev`), and the project's
+              security releases / `SECURITY.md`.
+            - If the update resolves a known vulnerability, call it out clearly
+              as a reason to merge promptly (include the CVE/GHSA id).
+
+            #### 5.2 Supply-chain Red Flags
+            Use `pnpm view <pkg> ...` together with the release notes to look for:
+            - **Maintainer / ownership changes**: new publishers, transferred
+              repositories, or a package that recently changed hands.
+            - **Suspicious lifecycle scripts**: newly added or changed
+              `postinstall` / `preinstall` / `install` scripts
+              (`pnpm view <pkg> scripts`).
+            - **Unexpected new dependencies**, especially ones that execute code
+              or access the network/filesystem at install time.
+            - **Abnormal version jumps**, republished/duplicated versions, or a
+              very fresh release adopted unusually quickly.
+            - **Obfuscated or pre-bundled source** shipped in a package that is
+              not expected to ship build output.
+
+            #### 5.3 Risk Rating
+            Rate the security risk of merging as 🟢 Low / 🟡 Medium / 🔴 High and
+            briefly justify it. If nothing concerning is found, state that
+            explicitly rather than omitting the section.
+
+            ### 6. Analyze Impact on Existing Code
+
+            **Important**: To ensure nothing is missed, **execute all steps in order**.
+
+            #### 6.1 Understand Library Features
+            - Understand the main features and APIs provided by the library being updated
+            - Reference official documentation and repository README to list main exports, components, and functions
+
+            #### 6.2 Conduct Phased Searches
+
+            Execute the following searches **in order**. Replace `{library-name}` with the actual library name.
+
+            **Phase 1: Comprehensive Search by Library Name**
+
+            Use the Grep tool to search for **all** usages of the library being updated.
+
+            **For JavaScript/TypeScript/Node.js packages:**
+            - ES Module import (`import ... from 'library-name'`)
+            - CommonJS require (`require('library-name')`)
+            - Dynamic import (`import('library-name')`)
+            - Re-export (`export ... from 'library-name'`)
+            - TypeScript type import (`import type ... from 'library-name'`)
+            - Subpath imports (`library-name/...`)
+
+            **For other languages:**
+            - Python: `import library-name`, `from library-name import`
+            - Go: `import "library-name"`
+            - Search using the appropriate import/require syntax for other languages
+
+            **Phase 2: Library-Specific Usage Pattern Search**
+
+            Execute additional searches based on the library type:
+
+            - **For React/Vue component libraries**:
+              - Search for main component names in JSX/templates
+              - Example: `pattern: <ComponentName` (opening tag)
+
+            - **For CLI tools**:
+              - Check the scripts section in package.json using the Read tool (Node.js)
+              - Search for the library's command name
+
+            - **For configuration file libraries**:
+              - Search configuration files (`.config.js`, `.rc`, `package.json`, etc.)
+              - Examples: `eslint`, `prettier`, `webpack`, etc.
+
+            - **For libraries used in build processes**:
+              - Search for usage in Dockerfile (especially `.docker/` directory)
+              - Check usage in docker-compose.yml
+              - Usage in asset builds and compile steps
+              - Usage in CI/CD configuration files (`.github/workflows/`, etc.)
+
+            - **For type definition libraries** (`@types/*`):
+              - Search for usage locations of the corresponding implementation library
+
+            **Phase 3: Search for Main APIs**
+
+            If there are main APIs or functions changed in release notes:
+            - Search the entire codebase for those names
+            - Use the Read tool to verify found files and avoid false positives
+
+            #### 6.3 Validate Search Results
+
+            **If results are found**:
+            1. **Important**: Use the Read tool to open **all found files** and verify actual usage
+            2. For **all found files**, record:
+               - File path and line number (markdown link format: `[filename](path#Lline-number)`)
+               - Relevant code snippet (including surrounding lines)
+               - Which API/feature is being used
+               - Expected impact (if there are breaking changes)
+            3. **No omissions**: Do not abbreviate with "...etc." or "others" - report all usage locations found in the search
+
+            **If 0 results are found**:
+            1. Use the Read tool to check package.json and verify the library is actually in dependencies/devDependencies
+            2. If included:
+               - Try different search patterns (case sensitivity, aliases, global variables, etc.)
+               - Investigate possibility of indirect dependency (used internally by another library)
+            3. If not included:
+               - Note that it may be a transitive dependency
+
+            #### 6.4 Impact Scope Criteria
+
+            - ✅ **Should be included in impact scope**:
+              - Locations directly calling the library's API
+              - Locations using the library's components
+              - Locations using the library's type definitions
+              - Locations referencing the library in configuration files
+              - Locations using the library in Dockerfile or build processes
+              - Locations using the library in asset compilation or precompilation
+              - Locations using the library in CI/CD pipelines
+
+            - ❌ **Should not be included in impact scope**:
+              - Import statements that are not actually used (dead code)
+              - Mentions only in comments
+              - Indirect dependencies where no direct code changes are required
+
+            #### 6.5 Report Format
+
+            **If usage locations are found**:
+
+            **Important**: List **all files** found in the search as a numbered list. Omissions are strictly prohibited.
+
+            ```markdown
+            #### 📁 Usage Locations
+            `{library-name}` is used in the following **N files**:
+
+            1. [filename](relative-path#Lline-number)
+               ```language
+               code snippet
+               ```
+               - **Feature used**: Feature or API name
+               - **Impact**: Impact if there are breaking changes
+
+            2. [filename](relative-path#Lline-number)
+               ```language
+               code snippet
+               ```
+               - **Feature used**: Feature or API name
+               - **Impact**: Impact if there are breaking changes
+
+            ... (continue with all found files in the same format)
+
+            N. [filename](relative-path#Lline-number)
+               ```language
+               code snippet
+               ```
+               - **Feature used**: Feature or API name
+               - **Impact**: Impact if there are breaking changes
+            ```
+
+            **Notes**:
+            - Always include the actual count in the "N files" section
+            - Do not abbreviate with "..." or "others" - list all usage locations
+            - Even if there are many files (10 or more), list all of them
+
+            **If no usage locations are found**:
+            ```markdown
+            #### 📁 Usage Locations
+            No direct usage locations were found.
+
+            - `{library-name}` is included in package.json dependencies,
+              but no locations directly importing or using it were detected in the codebase.
+            - It may be an indirect dependency (used internally by another library).
+            ```
+
+            **Verification Completion Checklist**:
+            - [ ] Executed all search patterns in Phase 1
+            - [ ] Checked library-specific patterns in Phase 2
+            - [ ] Searched for main APIs in Phase 3 (if applicable)
+            - [ ] Confirmed **all found files** with Read
+            - [ ] Included **all usage locations** in the report (no omissions)
+            - [ ] Verified dependencies in package.json
+
+            ## Write the Review Report
+
+            Compile your investigation results into the markdown format below and
+            **write it to the file `${{ env.REVIEW_BODY_FILE }}` using the Write
+            tool**.
+
+            Do **not** post a comment yourself — you have no tools to do so. A
+            later workflow step reads this file, neutralizes any `@mentions`, and
+            posts (or updates) the comment for you. Your only deliverable is the
+            file.
+
+            **Recommended Actions heading**: This and the Update Summary
+            section below are the only parts shown without collapsing, so
+            reviewers must be able to tell at a glance whether the comment
+            requires action **and** which library/version it is about (some
+            renovate PRs group multiple libraries under a title that shows
+            no version, e.g. "chore(deps): update eslint" bumping both
+            `eslint` and `eslint-plugin-zod`). Choose the heading based on
+            your conclusion:
+            - `### ✅ Recommended Actions` — no action is required (safe to
+              merge as-is). Write a one-line reason, e.g. "None — safe to
+              merge as-is."
+            - `### ❌ Recommended Actions` — action is required (e.g.
+              breaking changes need code updates, a security risk should
+              block merge, or the update should be held). List the concrete
+              steps the reviewer must take.
+
+            The heading line must appear exactly as
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`,
+            before any `<details>` block — a later workflow step checks for
+            this exact text at the top of the file and asks you to fix it
+            if it's missing, so don't paraphrase or add extra words to the
+            line.
+
+            ```markdown
+            ## 🤖 Claude Dependency Review
+
+            ### {✅ or ❌} Recommended Actions
+            {If no action is needed, state so explicitly. If action is
+            needed, list the concrete steps.}
+
+            ### 📦 Update Summary
+            - **Library**: {library name}
+            - **Version**: {old version} → {new version}
+            - **Change Type**: {Major/Minor/Patch}
+
+            <details>
+            <summary>📝 Release Notes</summary>
+
+            {Release notes URL}
+
+            </details>
+
+            <details>
+            <summary>🔐 Security Assessment</summary>
+
+            - **Risk**: {🟢 Low / 🟡 Medium / 🔴 High}
+            - **Known vulnerabilities**: {CVE/GHSA fixed or introduced, or "None found"}
+            - **Supply-chain notes**: {maintainer/script/dependency red flags, or "None"}
+
+            </details>
+
+            <details>
+            <summary>🚨 Breaking Changes</summary>
+
+            {Only include if there are breaking changes}
+
+            </details>
+
+            <details>
+            <summary>✨ Main Changes</summary>
+
+            {Summary of changes}
+
+            </details>
+
+            <details>
+            <summary>🔍 Impact Analysis</summary>
+
+            {Usage location analysis results}
+
+            </details>
+
+            ---
+            <!-- dependencies-claude-review -->
+            ```
+
+            Always include the identifier `<!-- dependencies-claude-review -->`
+            at the end so the post step can de-duplicate the comment.
+
+            ## Notes
+            - The PR branch is already checked out
+            - Do not produce a conversational response; your output is the file
+              `${{ env.REVIEW_BODY_FILE }}`
+            - If unsure or uncertain about anything, honestly state so
+            - If multiple libraries are being updated, investigate each one
+
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(pnpm view:*),WebSearch,WebFetch,Read,Glob,Grep,Write"
+
+      - name: Validate Recommended Actions heading
+        id: validate-heading
+        if: always()
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          elif awk '/<details>/{exit} {print}' "$REVIEW_BODY_FILE" \
+              | grep -qE '^### (✅|❌) Recommended Actions$'; then
+            echo "needs_fix=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_fix=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fix Recommended Actions heading with Claude
+        if: always() && steps.validate-heading.outputs.needs_fix == 'true'
+        uses: anthropics/claude-code-action@8cf3482550831fb35a4fc3fbf7ca139cf8028b4c # v1.0.233
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "renovate[bot]"
+          prompt: |
+            The file `${{ env.REVIEW_BODY_FILE }}` is missing a
+            `### ✅ Recommended Actions` or `### ❌ Recommended Actions`
+            heading (the exact literal text on its own line, appearing
+            before any `<details>` block).
+
+            Read the file, decide from its existing content whether action
+            is required, then fix **only** the heading — either correct its
+            text, or move it (or add it, if entirely absent) so it reads
+            exactly `### ✅ Recommended Actions` (no action needed) or
+            `### ❌ Recommended Actions` (action needed) as the first
+            heading in the file, before any `<details>` block. Do not change
+            any other content in the file. Save your change with the Write
+            tool.
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Read,Write"
+
+      - name: Post dependency review comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.number }}
+          REPO: ${{ github.repository }}
+          MARKER: "<!-- dependencies-claude-review -->"
+        run: |
+          if [ ! -s "$REVIEW_BODY_FILE" ]; then
+            echo "No review body was produced; nothing to post."
+            exit 0
+          fi
+
+          # Neutralizes @mentions so unrelated contributors quoted from
+          # release notes are never notified. Node is guaranteed present
+          # (the Claude action runs on it).
+          node .github/scripts/neutralize-mentions.mjs "$REVIEW_BODY_FILE"
+
+          # Guarantee the upsert marker is present even if the model omitted it.
+          if ! grep -qF "$MARKER" "$REVIEW_BODY_FILE"; then
+            printf '\n\n%s\n' "$MARKER" >> "$REVIEW_BODY_FILE"
+          fi
+
+          # --- Upsert the comment ----------------------------------------------
+          COMMENT_ID=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n 1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" \
+              -F body=@"$REVIEW_BODY_FILE"
+          else
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" \
+              -F body=@"$REVIEW_BODY_FILE"
+          fi

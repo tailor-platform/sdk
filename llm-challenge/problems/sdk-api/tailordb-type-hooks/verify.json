@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "support-ticket-domain-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "ticket",
+      "flags": "i",
+      "description": "source includes the support ticket domain"
+    },
+    {
+      "id": "write-time-behavior-declared",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "normalize|validate|before|hook|priority|status",
+      "flags": "i",
+      "description": "source declares write-time normalization or validation behavior"
+    }
+  ]
+}

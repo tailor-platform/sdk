@@ -1,0 +1,7 @@
+{
+  "name": "demo",
+  "scripts": {
+    "seed": "tailor-sdk function test-run resolvers/seed.ts --arg '{\"users\":[]}'",
+    "build": "tsdown"
+  }
+}

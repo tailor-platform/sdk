@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "resolver-source-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "resolver",
+      "flags": "i",
+      "description": "source includes a resolver-style operation"
+    },
+    {
+      "id": "context-data-used",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "context|caller|env|request",
+      "flags": "i",
+      "description": "resolver source references runtime context data"
+    }
+  ]
+}

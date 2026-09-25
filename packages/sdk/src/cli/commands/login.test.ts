@@ -1,0 +1,389 @@
+import * as fs from "node:fs";
+import { runCommand } from "@politty/zod";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import {
+  closeConnectionPool,
+  fetchPlatformMachineUserToken,
+  fetchUserInfo,
+  initOAuth2Client,
+} from "#/cli/shared/client";
+import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { isCLIError } from "#/cli/shared/errors";
+import { resetKeyringState } from "#/cli/shared/token-store";
+import { loginCommand } from "./login";
+
+function failureText(result: { error?: Error }): string {
+  const { error } = result;
+  if (!isCLIError(error)) return error?.message ?? "";
+  return [error.message, error.details, error.suggestion].filter(Boolean).join("\n");
+}
+
+const xdgTempDir = vi.hoisted(() => `/tmp/sdk-login-test-${Date.now()}-${Math.random()}`);
+const openMock = vi.hoisted(() => vi.fn());
+const getAuthorizeUriMock = vi.hoisted(() => vi.fn());
+const getTokenFromCodeRedirectMock = vi.hoisted(() => vi.fn());
+
+vi.mock("xdg-basedir", () => ({
+  xdgConfig: xdgTempDir,
+}));
+
+vi.mock("open", () => ({
+  default: openMock,
+}));
+
+vi.mock("@napi-rs/keyring", () => ({
+  Entry: class {
+    setPassword() {}
+    getPassword(): string | null {
+      return null;
+    }
+    deletePassword() {}
+  },
+}));
+
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
+  closeConnectionPool: vi.fn(),
+  fetchPlatformMachineUserToken: vi.fn(),
+  fetchUserInfo: vi.fn(),
+  initOAuth2Client: vi.fn(() => ({
+    authorizationCode: {
+      getAuthorizeUri: getAuthorizeUriMock,
+      getTokenFromCodeRedirect: getTokenFromCodeRedirectMock,
+    },
+  })),
+}));
+
+const validUUID = "12345678-1234-4abc-8def-123456789012";
+
+aroundAll(async (runSuite) => {
+  fs.mkdirSync(xdgTempDir, { recursive: true });
+  await runSuite();
+  fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
+
+describe("login --profile", () => {
+  aroundEach(async (runTest) => {
+    resetKeyringState();
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    await runTest();
+  });
+
+  test("rejects a profile user mismatch with a profile update command", async () => {
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile",
+      "dev",
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(fetchPlatformMachineUserToken).toHaveBeenCalledWith("machine-client", "secret", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+    expect(failureText(result)).toContain(
+      'Profile "dev" is configured for "u@example.com", but login authenticated "machine-client".',
+    );
+    expect(failureText(result)).toContain("tailor profile update --user 'machine-client' -- 'dev'");
+    expect(failureText(result)).toContain("Then retry the original machine-user login command.");
+    expect(failureText(result)).not.toContain("tailor login --profile 'dev'");
+
+    const pfConfig = await readPlatformConfig();
+    expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
+    expect(pfConfig.current_user).toBeNull();
+    expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+    expect(closeConnectionPool).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects a browser profile user mismatch with a profile update command", async () => {
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    getTokenFromCodeRedirectMock.mockResolvedValue({
+      accessToken: "browser-token",
+      refreshToken: "browser-refresh-token",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    vi.mocked(fetchUserInfo).mockResolvedValue({
+      sub: "browser@example.com",
+      email: "browser@example.com",
+    });
+    openMock.mockImplementation(async () => {
+      await fetch("http://localhost:8085/callback?code=browser-code&state=browser-state");
+    });
+
+    const result = await runCommand(loginCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(false);
+    expect(initOAuth2Client).toHaveBeenCalledWith({
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+    expect(getTokenFromCodeRedirectMock).toHaveBeenCalledWith(
+      "http://localhost:8085/callback?code=browser-code&state=browser-state",
+      {
+        redirectUri: "http://localhost:8085/callback",
+        state: expect.any(String),
+        codeVerifier: expect.any(String),
+      },
+    );
+    expect(fetchUserInfo).toHaveBeenCalledWith("browser-token", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+    expect(failureText(result)).toContain(
+      'Profile "dev" is configured for "u@example.com", but login authenticated "browser@example.com".',
+    );
+    expect(failureText(result)).toContain(
+      "tailor profile update --user 'browser@example.com' -- 'dev'",
+    );
+    expect(failureText(result)).toContain("Then run:\n  tailor login --profile 'dev'");
+    expect(failureText(result)).not.toContain(
+      "Then retry the original machine-user login command.",
+    );
+
+    const pfConfig = await readPlatformConfig();
+    expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
+    expect(pfConfig.current_user).toBeNull();
+    expect(pfConfig.users["https://api.dev.tailor.tech|browser@example.com"]).toMatchObject({
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+    expect(closeConnectionPool).toHaveBeenCalledTimes(1);
+  });
+
+  test("fails login when the authorization URL cannot be prepared", async () => {
+    getAuthorizeUriMock.mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await runCommand(loginCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(false);
+    const error = (result as { error?: Error }).error;
+    expect(error?.message).toContain("fetch failed");
+    // A native error type would be classified as an SDK bug and crash-reported.
+    expect(error).not.toBeInstanceOf(TypeError);
+  });
+
+  test("quotes dynamic profile update command arguments", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        "dev profile": {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile",
+      "dev profile",
+      "--machine-user",
+      "--client-id",
+      "machine client; echo nope",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(failureText(result)).toContain(
+      "tailor profile update --user 'machine client; echo nope' -- 'dev profile'",
+    );
+    expect(failureText(result)).toContain("Then retry the original machine-user login command.");
+  });
+
+  test("terminates profile update flags before profile names that start with a dash", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        "-dev": {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile=-dev",
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(failureText(result)).toContain(
+      "tailor profile update --user 'machine-client' -- '-dev'",
+    );
+    expect(failureText(result)).not.toContain(
+      "tailor profile update '-dev' --user 'machine-client'",
+    );
+  });
+
+  test("uses Windows-compatible recovery command arguments on Windows", async () => {
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32" });
+
+    try {
+      const result = await runCommand(loginCommand, [
+        "--profile",
+        "dev",
+        "--machine-user",
+        "--client-id",
+        "machine-client",
+        "--client-secret",
+        "secret",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(failureText(result)).toContain("tailor profile update --user machine-client -- dev");
+      expect(failureText(result)).toContain("Then retry the original machine-user login command.");
+      expect(failureText(result)).not.toContain("tailor login --profile dev");
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, "platform", platformDescriptor);
+      }
+    }
+  });
+
+  test("avoids copy-paste recovery commands for unsafe Windows arguments", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        "%USERNAME%": {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32" });
+
+    try {
+      const result = await runCommand(loginCommand, [
+        "--profile",
+        "%USERNAME%",
+        "--machine-user",
+        "--client-id",
+        "machine-client",
+        "--client-secret",
+        "secret",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(failureText(result)).toContain(
+        "tailor profile update --user <authenticated-user> -- <profile>",
+      );
+      expect(failureText(result)).toContain('profile = "%USERNAME%"');
+      expect(failureText(result)).toContain('authenticated user = "machine-client"');
+      expect(failureText(result)).not.toContain(
+        "tailor profile update %USERNAME% --user machine-client",
+      );
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, "platform", platformDescriptor);
+      }
+    }
+  });
+
+  test("keeps current user when machine-user login targets a non-default platform profile", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "default@example.com": {
+          storage: "file",
+          access_token: "default-token",
+          token_expires_at: "2099-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "machine-client",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: "default@example.com",
+    });
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile",
+      "dev",
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(true);
+    const pfConfig = await readPlatformConfig();
+    expect(pfConfig.current_user).toBe("default@example.com");
+    expect(pfConfig.users["default@example.com"]).toMatchObject({
+      access_token: "default-token",
+    });
+    expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
+    });
+  });
+});

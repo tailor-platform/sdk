@@ -1,0 +1,1 @@
+export { PluginConfigSchema } from "./schema";

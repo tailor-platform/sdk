@@ -1,0 +1,1511 @@
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import { describe, expect, expectTypeOf, test } from "vitest";
+import { t } from "#/configure/types/index";
+import { Temporal } from "../../../runtime/temporal";
+import { createResolver } from "../resolver";
+import { db } from "../tailordb";
+import { createWorkflow, createWorkflowJob } from "../workflow";
+import { createExecutor } from "./executor";
+import {
+  recordCreatedTrigger,
+  recordDeletedTrigger,
+  recordUpdatedTrigger,
+  recordTrigger,
+  resolverExecutedTrigger,
+  idpUserTrigger,
+  authAccessTokenTrigger,
+  workflowExecutionTrigger,
+  workflowJobExecutionTrigger,
+} from "./trigger/event";
+import { scheduleTrigger } from "./trigger/schedule";
+import { incomingWebhookTrigger } from "./trigger/webhook";
+import type { TailorPrincipal } from "#/runtime/types";
+import type { Operation } from "./operation";
+
+const createUserType = () =>
+  db.table("User", {
+    name: db.string(),
+    age: db.int(),
+  });
+
+const createBoolResolver = () =>
+  createResolver({
+    name: "test",
+    operation: "query",
+    body: () => ({ result: true }),
+    output: t.object({ result: t.bool() }),
+  });
+
+describe("createExecutor", () => {
+  test.each([
+    { description: "A test executor", disabled: true, expectedDisabled: true },
+    { description: undefined, disabled: true, expectedDisabled: true },
+    { description: "A test executor", disabled: undefined, expectedDisabled: undefined },
+    { description: undefined, disabled: undefined, expectedDisabled: undefined },
+  ])(
+    "can disable executor (description: $description, disabled: $disabled)",
+    ({ description, disabled, expectedDisabled }) => {
+      const executor = createExecutor({
+        name: "test-executor",
+        ...(description !== undefined && { description }),
+        ...(disabled !== undefined && { disabled }),
+        trigger: incomingWebhookTrigger(),
+        operation: {
+          kind: "function",
+          body: () => {},
+        },
+      });
+      expect(executor.description).toBe(description);
+      expect(executor.disabled).toBe(expectedDisabled);
+    },
+  );
+
+  test("preserves compatibility for explicit legacy generic args", () => {
+    type Args = {
+      body: { id: string };
+      headers: { "x-custom-header": string };
+      method: "POST" | "GET" | "PUT" | "DELETE";
+      rawBody: string;
+    };
+
+    createExecutor<Args, Operation<Args>>({
+      name: "legacy-generic-executor",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toEqualTypeOf<Args & { invoker: TailorPrincipal | null }>();
+        },
+      },
+    });
+  });
+});
+
+describe("workflow execution triggers", () => {
+  test("preserves workflow filters and event names", () => {
+    const job = createWorkflowJob({ name: "main", body: () => {} });
+    const workflow = createWorkflow({ name: "orders", mainJob: job });
+
+    expect(
+      workflowExecutionTrigger({
+        workflow,
+        events: ["started", "completed"],
+      }),
+    ).toMatchObject({
+      kind: "workflowExecution",
+      workflowName: "orders",
+      events: ["workflow.workflow_execution.started", "workflow.workflow_execution.completed"],
+    });
+    expect(workflowJobExecutionTrigger({ workflow, events: ["wait_started"] })).toMatchObject({
+      kind: "workflowJobExecution",
+      workflowName: "orders",
+      events: ["workflow.workflow_execution.job_execution.wait_started"],
+    });
+  });
+
+  test("infers completed event results as a discriminated union", () => {
+    const job = createWorkflowJob({ name: "completed-main", body: () => {} });
+    const workflow = createWorkflow({ name: "completed-orders", mainJob: job });
+
+    createExecutor({
+      name: "on-workflow-completed",
+      trigger: workflowExecutionTrigger({ workflow, events: ["completed"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.success) {
+            expectTypeOf(args.error).toEqualTypeOf<undefined>();
+          } else {
+            expectTypeOf(args.error).toEqualTypeOf<string>();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("scheduleTrigger", () => {
+  test("can specify valid cron", () => {
+    const trigger = scheduleTrigger({
+      cron: "* * * * *",
+    });
+    expect(trigger.cron).toBe("* * * * *");
+  });
+
+  test("can not specify invalid cron", () => {
+    scheduleTrigger({
+      // @ts-expect-error invalid cron
+      cron: "* * * *",
+    });
+  });
+
+  test("can specify timezone", () => {
+    const trigger = scheduleTrigger({
+      cron: "* * * * *",
+      timezone: "Asia/Tokyo",
+    });
+    expect(trigger.timezone).toBe("Asia/Tokyo");
+  });
+
+  test("can not specify invalid timezone", () => {
+    scheduleTrigger({
+      cron: "* * * * *",
+      // @ts-expect-error invalid timezone
+      timezone: "Invalid/Timezone",
+    });
+  });
+});
+
+describe("webhookTrigger", () => {
+  test("function args include webhook args", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            body: Record<string, unknown>;
+            headers: Record<string, string>;
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+        },
+      },
+    });
+  });
+
+  test("can narrow webhook args", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+        },
+      },
+    });
+  });
+});
+
+describe("webhookTrigger response", () => {
+  test("can specify response as function shorthand", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { challenge: string };
+        headers: Record<string, string>;
+      }>({
+        response: (args) => ({ challenge: args.body.challenge }),
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+    expect(executor.trigger.response).toEqual({ body: expect.any(Function) });
+  });
+
+  test("can specify response with body and statusCode", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { challenge: string };
+        headers: Record<string, string>;
+      }>({
+        response: {
+          body: (args) => ({ challenge: args.body.challenge }),
+          statusCode: 200,
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+    expect(executor.trigger.response).toEqual({
+      body: expect.any(Function),
+      statusCode: 200,
+    });
+  });
+
+  test("can specify response with statusCode only", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger({
+        response: {
+          statusCode: 202,
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+    expect(executor.trigger.response).toEqual({ statusCode: 202 });
+  });
+
+  test("response body args are typed from trigger generic", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { challenge: string };
+        headers: { "x-custom": string };
+      }>({
+        response: (args) => {
+          expectTypeOf(args.body.challenge).toEqualTypeOf<string>();
+          expectTypeOf(args.headers).toExtend<{ "x-custom": string }>();
+          return { challenge: args.body.challenge };
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+  });
+
+  test("response body cannot return non-JSON value", () => {
+    incomingWebhookTrigger({
+      // @ts-expect-error Date is not JsonValue
+      response: () => new Date(),
+    });
+
+    incomingWebhookTrigger({
+      response: {
+        // @ts-expect-error undefined is not JsonValue
+        body: () => undefined,
+      },
+    });
+  });
+});
+
+describe("recordCreatedTrigger", () => {
+  test("can omit condition", () => {
+    recordCreatedTrigger({
+      type: createUserType(),
+    });
+  });
+
+  test("can specify condition", () => {
+    recordCreatedTrigger({
+      type: createUserType(),
+      condition: (args) => args.newRecord.age >= 18,
+    });
+  });
+
+  test("can not return invalid type from condition", () => {
+    recordCreatedTrigger({
+      type: createUserType(),
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
+    });
+  });
+
+  test("function args include event args", () => {
+    createExecutor({
+      name: "test",
+      trigger: recordCreatedTrigger({
+        type: createUserType(),
+        condition: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+            newRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+          }>();
+          return true;
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+            newRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+          }>();
+        },
+      },
+    });
+  });
+});
+
+describe("recordUpdatedTrigger", () => {
+  test("can omit condition", () => {
+    recordUpdatedTrigger({
+      type: createUserType(),
+    });
+  });
+
+  test("can specify condition", () => {
+    recordUpdatedTrigger({
+      type: createUserType(),
+      condition: (args) => args.oldRecord.age < 18 && args.newRecord.age >= 18,
+    });
+  });
+
+  test("can not return invalid type from condition", () => {
+    recordUpdatedTrigger({
+      type: createUserType(),
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
+    });
+  });
+
+  test("function args include and event args", () => {
+    createExecutor({
+      name: "test",
+      trigger: recordUpdatedTrigger({
+        type: createUserType(),
+        condition: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+            newRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+            oldRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+          }>();
+          return true;
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+            newRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+            oldRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+          }>();
+        },
+      },
+    });
+  });
+});
+
+describe("recordDeletedTrigger", () => {
+  test("can omit condition", () => {
+    recordDeletedTrigger({
+      type: createUserType(),
+    });
+  });
+
+  test("can specify condition", () => {
+    recordDeletedTrigger({
+      type: createUserType(),
+      condition: (args) => args.oldRecord.age < 18,
+    });
+  });
+
+  test("can not return invalid type from condition", () => {
+    recordDeletedTrigger({
+      type: createUserType(),
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
+    });
+  });
+
+  test("function args include event args", () => {
+    createExecutor({
+      name: "test",
+      trigger: recordDeletedTrigger({
+        type: createUserType(),
+        condition: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+            oldRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+          }>();
+          return true;
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+            oldRecord: {
+              id: string;
+              name: string;
+              age: number;
+            };
+          }>();
+        },
+      },
+    });
+  });
+});
+
+describe("resolverExecutedTrigger", () => {
+  test("can omit condition", () => {
+    resolverExecutedTrigger({
+      resolver: createBoolResolver(),
+    });
+  });
+
+  test("can specify condition", () => {
+    resolverExecutedTrigger({
+      resolver: createBoolResolver(),
+      condition: (args) => !args.error,
+    });
+  });
+
+  test("can not return invalid type from condition", () => {
+    resolverExecutedTrigger({
+      resolver: createBoolResolver(),
+      // @ts-expect-error invalid return type
+      condition: () => {
+        return "invalid";
+      },
+    });
+  });
+
+  test("function args include client and event args with success tag", () => {
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver: createBoolResolver(),
+        condition: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            resolverName: string;
+            success: boolean;
+          }>();
+          return true;
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            resolverName: string;
+            success: boolean;
+          }>();
+
+          // Test tagged union narrowing with success
+          if (args.success) {
+            expectTypeOf(args.result).toEqualTypeOf<{ result: boolean }>();
+            expectTypeOf(args.error).toEqualTypeOf<undefined>();
+          } else {
+            expectTypeOf(args.result).toEqualTypeOf<undefined>();
+            expectTypeOf(args.error).toEqualTypeOf<string>();
+          }
+        },
+      },
+    });
+  });
+
+  test("result type is correctly inferred from resolver output (not any)", () => {
+    // This test ensures that the result type is correctly inferred from the resolver's output type,
+    // preventing regression where result becomes `any` due to type inference issues.
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ data: { items: ["a", "b", "c"] }, count: 3 }),
+      output: t.object({
+        data: t.object({
+          items: t.string({ array: true }),
+        }),
+        count: t.int(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          // Verify success is a boolean for tagged union
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+
+          // Verify exact type structure when success is true
+          if (args.success) {
+            // result should not be `any` - if it were, this test would pass incorrectly
+            expectTypeOf(args.result).not.toBeAny();
+            expectTypeOf(args.result.data).not.toBeAny();
+            expectTypeOf(args.result.data.items).toEqualTypeOf<string[]>();
+            expectTypeOf(args.result.count).toEqualTypeOf<number>();
+
+            // This should cause a type error (property doesn't exist)
+            // @ts-expect-error - nonExistent property should not exist
+            void args.result.nonExistent;
+          } else {
+            // error should be string when success is false
+            expectTypeOf(args.error).toEqualTypeOf<string>();
+          }
+        },
+      },
+    });
+  });
+
+  test("result type reports date fields as strings because events arrive as JSON", () => {
+    const resolver = createResolver({
+      name: "dateOutput",
+      operation: "query",
+      body: () => ({
+        day: new Date("2026-09-07"),
+        days: [new Date("2026-09-07")],
+        absent: null,
+        rows: [{ day: new Date("2026-09-07") }],
+        plain: "2026-09-07",
+        at: new Date("2026-09-07T12:00:00Z"),
+        dateAt: new Date("2026-09-07T12:30:00Z"),
+        dateTime: new Date("1970-01-01T12:30:00Z"),
+        instant: Temporal.Instant.from("2026-09-07T12:30:00Z"),
+        times: [Temporal.PlainTime.from("12:30")],
+        temporalDay: Temporal.PlainDate.from("2026-09-07"),
+        temporalDays: [Temporal.PlainDate.from("2026-09-07")],
+        temporalRows: [{ day: Temporal.PlainDate.from("2026-09-07") }],
+      }),
+      output: t.object({
+        day: t.date({ as: "date" }),
+        days: t.date({ as: "date", array: true }),
+        absent: t.date({ as: "date", optional: true }),
+        rows: t.object({ day: t.date({ as: "date" }) }, { array: true }),
+        plain: t.date(),
+        at: t.datetime(),
+        dateAt: t.datetime({ as: "date" }),
+        dateTime: t.time({ as: "date" }),
+        instant: t.datetime({ as: "temporal" }),
+        times: t.time({ as: "temporal", array: true }),
+        temporalDay: t.date({ as: "temporal" }),
+        temporalDays: t.date({ as: "temporal", array: true }),
+        temporalRows: t.object({ day: t.date({ as: "temporal" }) }, { array: true }),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (!args.success) return;
+          expectTypeOf(args.result.day).toEqualTypeOf<string>();
+          expectTypeOf(args.result.days).toEqualTypeOf<string[]>();
+          expectTypeOf(args.result.absent).toEqualTypeOf<string | null | undefined>();
+          expectTypeOf(args.result.rows).toEqualTypeOf<{ day: string }[]>();
+          expectTypeOf(args.result.plain).toEqualTypeOf<string>();
+          expectTypeOf(args.result.at).toEqualTypeOf<string>();
+          expectTypeOf(args.result.dateAt).toEqualTypeOf<string>();
+          expectTypeOf(args.result.dateTime).toEqualTypeOf<string>();
+          expectTypeOf(args.result.instant).toEqualTypeOf<string>();
+          expectTypeOf(args.result.times).toEqualTypeOf<string[]>();
+          expectTypeOf(args.result.temporalDay).toEqualTypeOf<string>();
+          expectTypeOf(args.result.temporalDays).toEqualTypeOf<string[]>();
+          expectTypeOf(args.result.temporalRows).toEqualTypeOf<{ day: string }[]>();
+        },
+      },
+    });
+  });
+
+  test("result type is a string when the whole output is a date field", () => {
+    const resolver = createResolver({
+      name: "day",
+      operation: "query",
+      body: () => new Date("2026-09-07"),
+      output: t.date({ as: "date" }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (!args.success) return;
+          expectTypeOf(args.result).toEqualTypeOf<string>();
+        },
+      },
+    });
+  });
+
+  test("result type preserves nested object structure from resolver output", () => {
+    const resolver = createResolver({
+      name: "nestedOutput",
+      operation: "query",
+      body: () => ({
+        user: {
+          profile: {
+            name: "John",
+            settings: {
+              theme: "dark",
+            },
+          },
+        },
+      }),
+      output: t.object({
+        user: t.object({
+          profile: t.object({
+            name: t.string(),
+            settings: t.object({
+              theme: t.string(),
+            }),
+          }),
+        }),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.success) {
+            // Deeply nested properties should be correctly typed
+            expectTypeOf(args.result.user.profile.name).toEqualTypeOf<string>();
+            expectTypeOf(args.result.user.profile.settings.theme).toEqualTypeOf<string>();
+
+            // Invalid property access should fail
+            // @ts-expect-error - invalid nested property
+            void args.result.user.invalid;
+          }
+        },
+      },
+    });
+  });
+
+  test("webhook operation also receives correctly typed result", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ id: "123", status: "active" }),
+      output: t.object({
+        id: t.string(),
+        status: t.string(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "webhook",
+        url: (args) => {
+          // success tag should be available in webhook url function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            expectTypeOf(args.result.id).toEqualTypeOf<string>();
+            expectTypeOf(args.result.status).toEqualTypeOf<string>();
+          }
+          return "https://example.com/webhook";
+        },
+        requestBody: (args) => {
+          // success tag should be available in webhook body function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            return { data: args.result };
+          }
+          return { error: args.error };
+        },
+      },
+    });
+  });
+
+  test("graphql operation variables receives correctly typed result", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ userId: "user-123" }),
+      output: t.object({
+        userId: t.string(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: "query { test }",
+        variables: (args) => {
+          // success tag should be available in graphql variables function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            expectTypeOf(args.result.userId).toEqualTypeOf<string>();
+            return { id: args.result.userId };
+          }
+          return { error: args.error };
+        },
+      },
+    });
+  });
+
+  test("workflow operation args receives correctly typed result", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ orderId: "order-123", total: 100 }),
+      output: t.object({
+        orderId: t.string(),
+        total: t.int(),
+      }),
+    });
+
+    const processOrder = createWorkflowJob({
+      name: "process-order",
+      body: (input: { orderId: string; total: number }) => ({ processed: true, ...input }),
+    });
+
+    const workflow = createWorkflow({
+      name: "order-workflow",
+      mainJob: processOrder,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+      }),
+      operation: {
+        kind: "workflow",
+        workflow,
+        args: (args) => {
+          // success tag should be available in workflow args function
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          if (args.success) {
+            expectTypeOf(args.result.orderId).toEqualTypeOf<string>();
+            expectTypeOf(args.result.total).toEqualTypeOf<number>();
+            return { orderId: args.result.orderId, total: args.result.total };
+          }
+          return { orderId: "unknown", total: 0 };
+        },
+      },
+    });
+  });
+
+  test("condition function can narrow type using success", () => {
+    const resolver = createResolver({
+      name: "test",
+      operation: "query",
+      body: () => ({ value: 42 }),
+      output: t.object({
+        value: t.int(),
+      }),
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: resolverExecutedTrigger({
+        resolver,
+        // Condition can use success to filter only successful executions
+        condition: (args) => {
+          expectTypeOf(args.success).toEqualTypeOf<boolean>();
+          // Type narrowing should work in condition
+          if (args.success) {
+            expectTypeOf(args.result.value).toEqualTypeOf<number>();
+            return args.result.value > 0;
+          }
+          return false;
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+  });
+});
+
+describe("record trigger table name", () => {
+  test.each([
+    ["recordCreatedTrigger", recordCreatedTrigger],
+    ["recordUpdatedTrigger", recordUpdatedTrigger],
+    ["recordDeletedTrigger", recordDeletedTrigger],
+  ])("%s carries the table name", (_name, trigger) => {
+    expect(trigger({ type: createUserType() }).tableName).toBe("User");
+  });
+});
+
+describe("recordTrigger (multi-event)", () => {
+  test("can specify multiple events", () => {
+    const trigger = recordTrigger({
+      type: createUserType(),
+      events: ["created", "updated"],
+    });
+    expect(trigger.kind).toBe("tailordb");
+    expect(trigger.events).toEqual([
+      "tailordb.type_record.created",
+      "tailordb.type_record.updated",
+    ]);
+    expect(trigger.tableName).toBe("User");
+  });
+
+  test("args are a union of selected events with kind discriminant", () => {
+    createExecutor({
+      name: "test",
+      trigger: recordTrigger({
+        type: createUserType(),
+        events: ["created", "updated"],
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          // Args should be a union of RecordCreatedArgs and RecordUpdatedArgs
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+          }>();
+
+          // Can narrow by kind
+          if (args.event === "created") {
+            expectTypeOf(args.newRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+          if (args.event === "updated") {
+            expectTypeOf(args.newRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+            expectTypeOf(args.oldRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+        },
+      },
+    });
+  });
+
+  test("condition args are union type", () => {
+    recordTrigger({
+      type: createUserType(),
+      events: ["created", "deleted"],
+      condition: (args) => {
+        if (args.event === "created") {
+          return args.newRecord.age >= 18;
+        }
+        return true;
+      },
+    });
+  });
+
+  test("all three events produce full union", () => {
+    createExecutor({
+      name: "test",
+      trigger: recordTrigger({
+        type: createUserType(),
+        events: ["created", "updated", "deleted"],
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.event === "deleted") {
+            expectTypeOf(args.oldRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("idpUserTrigger (multi-event)", () => {
+  test("can specify multiple events", () => {
+    const trigger = idpUserTrigger({ events: ["created", "deleted"] });
+    expect(trigger.kind).toBe("idpUser");
+    expect(trigger.events).toEqual(["idp.user.created", "idp.user.deleted"]);
+    expect(trigger.idp).toBeUndefined();
+  });
+
+  test("can specify an idp namespace", () => {
+    const trigger = idpUserTrigger({ events: ["created"], idp: "my-idp" });
+    expect(trigger.idp).toBe("my-idp");
+  });
+
+  test("args have kind discriminant", () => {
+    createExecutor({
+      name: "test",
+      trigger: idpUserTrigger({ events: ["created", "updated"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            namespaceName: string;
+            userId: string;
+          }>();
+          if (args.event === "created") {
+            expectTypeOf(args.event).toEqualTypeOf<"created">();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("authAccessTokenTrigger (multi-event)", () => {
+  test("can specify multiple events", () => {
+    const trigger = authAccessTokenTrigger({ events: ["issued", "revoked"] });
+    expect(trigger.kind).toBe("authAccessToken");
+    expect(trigger.events).toEqual(["auth.access_token.issued", "auth.access_token.revoked"]);
+  });
+
+  test("args have kind discriminant", () => {
+    createExecutor({
+      name: "test",
+      trigger: authAccessTokenTrigger({ events: ["issued", "refreshed", "revoked"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            namespaceName: string;
+            userId: string;
+          }>();
+          if (args.event === "issued") {
+            expectTypeOf(args.event).toEqualTypeOf<"issued">();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("functionTarget", () => {
+  test("can return void from fn", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: () => {
+          return;
+        },
+      },
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: async () => {
+          return;
+        },
+      },
+    });
+  });
+
+  test("can not return invalid type from fn", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        // @ts-expect-error invalid return type
+        body: () => {
+          return "invalid";
+        },
+      },
+    });
+  });
+
+  test("can extract body with type", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "function",
+        body: (_args) => {},
+      },
+    });
+
+    expectTypeOf(executor.operation.body).parameters.toExtend<
+      [
+        {
+          body: { id: string };
+          headers: { "x-custom-header": string };
+          method: "POST" | "GET" | "PUT" | "DELETE";
+          rawBody: string;
+        },
+      ]
+    >();
+  });
+
+  test("body args include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.invoker).toEqualTypeOf<TailorPrincipal | null>();
+        },
+      },
+    });
+  });
+});
+
+describe("gqlTarget", () => {
+  test("can specify query as string", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: `
+          query TestQuery {
+            testField
+          }
+        `,
+      },
+    });
+  });
+
+  test("can specify variables", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: `
+          query TestQuery($id: ID!) {
+            testField(id: $id)
+          }
+        `,
+        variables: () => ({
+          id: "test-id",
+        }),
+      },
+    });
+  });
+
+  test("variables receive args", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: `
+          query TestQuery($id: ID!) {
+            testField(id: $id)
+          }
+        `,
+        variables: (args) => {
+          expectTypeOf(args).toExtend<{
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+          return {
+            id: args.body.id,
+          };
+        },
+      },
+    });
+  });
+
+  test("variables args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        query: "query { __typename }",
+        variables: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return {};
+        },
+      },
+    });
+  });
+});
+
+describe("webhookTarget", () => {
+  test("url receive args", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "webhook",
+        url: (args) => {
+          expectTypeOf(args).toExtend<{
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+          return `https://example.com/webhook/${args.body.id}`;
+        },
+      },
+    });
+  });
+
+  test("can not return invalid type from url", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
+        // @ts-expect-error invalid return type
+        url: () => {
+          return 123;
+        },
+      },
+    });
+  });
+
+  test("body receive args", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "webhook",
+        url: () => "https://example.com/webhook",
+        requestBody: (args) => {
+          expectTypeOf(args).toExtend<{
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+          return {
+            id: args.body.id,
+          };
+        },
+      },
+    });
+  });
+
+  test("can not return invalid type from requestBody", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
+        url: () => "https://example.com/webhook",
+        // @ts-expect-error invalid return type
+        requestBody: () => {
+          return 123;
+        },
+      },
+    });
+  });
+
+  test("can specify headers", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
+        url: () => "https://example.com/webhook",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: { vault: "my-vault", key: "my-secret" },
+        },
+      },
+    });
+  });
+
+  test("url/requestBody args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
+        url: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return "https://example.com";
+        },
+        requestBody: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return {};
+        },
+      },
+    });
+  });
+});
+
+describe("workflowTarget", () => {
+  const testJob = createWorkflowJob({
+    name: "test-job",
+    body: (input: { orderId: string }) => ({ processed: input.orderId }),
+  });
+
+  const testWorkflow = createWorkflow({
+    name: "test-workflow",
+    mainJob: testJob,
+  });
+
+  test("can specify workflow target with static args", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: { orderId: "test-id" },
+      },
+    });
+    expect(executor.operation.kind).toBe("workflow");
+    expect(executor.operation.workflow.name).toBe("test-workflow");
+  });
+
+  test("requires args for workflow with required input", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      // @ts-expect-error - args is required by the workflow's main job input
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+      },
+    });
+  });
+
+  test("accepts primitive static args", () => {
+    const primitiveJob = createWorkflowJob({
+      name: "primitive-input-job",
+      body: (input: string) => input,
+    });
+    const primitiveWorkflow = createWorkflow({
+      name: "primitive-input-workflow",
+      mainJob: primitiveJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: primitiveWorkflow,
+        args: "hello",
+      },
+    });
+  });
+
+  test("accepts array static args", () => {
+    const arrayJob = createWorkflowJob({
+      name: "array-input-job",
+      body: (input: string[]) => input.length,
+    });
+    const arrayWorkflow = createWorkflow({
+      name: "array-input-workflow",
+      mainJob: arrayJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: arrayWorkflow,
+        args: ["hello"],
+      },
+    });
+  });
+
+  test("args can be a function", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: Record<string, string>;
+      }>(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: (triggerArgs) => ({ orderId: triggerArgs.body.id }),
+      },
+    });
+  });
+
+  test("args function receives trigger args", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: (args) => {
+          expectTypeOf(args).toExtend<{
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
+          return { orderId: args.body.id };
+        },
+      },
+    });
+  });
+
+  test("args type must match workflow mainJob input", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        // @ts-expect-error - args doesn't match mainJob input type
+        args: { wrongField: "value" },
+      },
+    });
+  });
+
+  test("args function must return workflow mainJob input type", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: Record<string, string>;
+      }>(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        // @ts-expect-error - function return type doesn't match mainJob input
+        args: (args) => ({ wrongField: args.body.id }),
+      },
+    });
+  });
+
+  test("can specify invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: { orderId: "test-id" },
+        invoker: "admin",
+      },
+    });
+  });
+
+  test("can omit args for workflow with undefined input", () => {
+    const noInputJob = createWorkflowJob({
+      name: "no-input-job",
+      body: () => ({ result: "done" }),
+    });
+
+    const noInputWorkflow = createWorkflow({
+      name: "no-input-workflow",
+      mainJob: noInputJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: noInputWorkflow,
+      },
+    });
+  });
+
+  test("args function args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return { orderId: "test-id" };
+        },
+      },
+    });
+  });
+});

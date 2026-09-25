@@ -1,0 +1,114 @@
+name: Lockfile Audit Auto-fix
+
+# Runs the full lockfile audit daily, independent of any specific PR, and
+# opens (or updates) a PR with the lockfile changes whenever pnpm can
+# automatically resolve a fix. This keeps day-to-day PR reviews from being
+# blocked by pre-existing vulnerabilities they didn't introduce (see the
+# regression-only check in lockfile-audit.yml), while still keeping
+# pnpm-lock.yaml free of known-vulnerable dependency versions.
+#
+# The audit, fix, verification, and pnpm-workspace.yaml policy pruning are
+# all delegated to the lockfile-audit-fix action; this workflow only turns
+# its outputs into a changeset and a pull request.
+#
+# When the resulting change only touches devDependencies and/or that pruning,
+# no published package's consumers are affected, so the PR gets the
+# skip-changeset label instead of a changeset.
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily, 03:00 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  audit-fix:
+    name: Audit and fix lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          standalone: true
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.21.0"
+
+      - name: Audit and fix lockfile
+        id: audit_fix
+        uses: tailor-platform/actions/lockfile-audit-fix@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+
+      - name: Add changeset
+        if: steps.audit_fix.outputs.changed == 'true' && steps.audit_fix.outputs.runtime-deps-changed == 'true'
+        id: add_changeset
+        run: |
+          cat > .changeset/lockfile-audit-fix.md <<'EOF'
+          ---
+          "@tailor-platform/sdk": patch
+          ---
+
+          fix(deps): automated lockfile security fix
+          EOF
+
+      - name: Determine repository name
+        if: steps.audit_fix.outputs.changed == 'true'
+        id: repo
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "name=${REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Get GitHub App token
+        if: steps.audit_fix.outputs.changed == 'true'
+        id: get_access_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: ${{ steps.repo.outputs.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Create or update pull request
+        if: steps.audit_fix.outputs.changed == 'true'
+        uses: tailor-platform/actions/create-signed-pr@19c81ce6530e0c79e7ab7753dea32233997006e7 # v2.3.5
+        with:
+          token: ${{ steps.get_access_token.outputs.token }}
+          branch: chore/lockfile-audit-fix
+          commit-message: "fix(deps): automated lockfile security fix"
+          title: "fix(deps): automated lockfile security fix"
+          body: ${{ steps.audit_fix.outputs.summary }}
+          paths: |
+            pnpm-lock.yaml
+            pnpm-workspace.yaml
+            package.json
+            ${{ steps.add_changeset.outcome == 'success' && '.changeset/lockfile-audit-fix.md' || '' }}
+          labels: |
+            security
+            ${{ steps.add_changeset.outcome != 'success' && 'skip-changeset' || '' }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SDK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n \
+            --arg run "$RUN_URL" \
+            '{text: ":rotating_light: Lockfile audit auto-fix workflow <\($run)|failed>"}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"

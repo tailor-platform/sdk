@@ -1,0 +1,276 @@
+import type {
+  UserBooleanArrayOperand,
+  UserBooleanOperand,
+  UserStringArrayOperand,
+  UserStringOperand,
+} from "#/configure/types/permission-operand.types";
+import type { InferredAttributes } from "#/runtime/types";
+
+// --- Permission types (UX-focused, for configure layer) ---
+
+/**
+ * Record-level permission configuration for a TailorDB table.
+ * Defines create, read, update, and delete permissions.
+ *
+ * Prefer object format with explicit `conditions` and `permit` for readability.
+ * Shorthand array format is supported for compatibility, but less readable.
+ *
+ * For update operations, use `newRecord`/`oldRecord` operands instead of `record`.
+ * @example
+ * const permission: TailorTypePermission = {
+ *   create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+ *   read: [{ conditions: [[{ record: "isPublic" }, "=", true]], permit: true }],
+ *   update: [{ conditions: [[{ newRecord: "ownerId" }, "=", { user: "id" }]], permit: true }],
+ *   delete: [{ conditions: [[{ record: "ownerId" }, "=", { user: "id" }]], permit: true }],
+ * };
+ */
+export type TailorTypePermission<
+  User extends object = InferredAttributes,
+  Type extends object = object,
+> = {
+  create: readonly ActionPermission<"record", User, Type, false>[];
+  read: readonly ActionPermission<"record", User, Type, false>[];
+  update: readonly ActionPermission<"record", User, Type, true>[];
+  delete: readonly ActionPermission<"record", User, Type, false>[];
+};
+
+type ActionPermission<
+  Level extends "record" | "gql" = "record" | "gql",
+  User extends object = InferredAttributes,
+  Type extends object = object,
+  Update extends boolean = boolean,
+> =
+  | {
+      conditions:
+        | PermissionCondition<Level, User, Update, Type>
+        | readonly PermissionCondition<Level, User, Update, Type>[];
+      description?: string | undefined;
+      /**
+       * Whether matching records are granted (`true`) or denied (`false`).
+       * Omitting `permit` in this object form defaults to `deny` and emits a
+       * warning; set it explicitly. (The array shorthand defaults to `allow`.)
+       */
+      permit?: boolean;
+    }
+  | readonly [...PermissionCondition<Level, User, Update, Type>, ...([] | [boolean])] // single array condition
+  | readonly [...PermissionCondition<Level, User, Update, Type>[], ...([] | [boolean])]; // multiple array condition
+
+export type TailorTypeGqlPermission<
+  User extends object = InferredAttributes,
+  Type extends object = object,
+> = readonly GqlPermissionPolicy<User, Type>[];
+
+type GqlPermissionPolicy<User extends object = InferredAttributes, Type extends object = object> = {
+  conditions: readonly PermissionCondition<"gql", User, boolean, Type>[];
+  actions: "all" | readonly GqlPermissionAction[];
+  /**
+   * Whether matching requests are granted (`true`) or denied (`false`).
+   * Omitting `permit` defaults to `deny` and emits a warning; set it explicitly.
+   */
+  permit?: boolean;
+  description?: string;
+};
+
+type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
+
+type EqualityOperator = "=" | "!=";
+type ContainsOperator = "in" | "not in";
+type HasAnyOperator = "hasAny" | "not hasAny";
+
+type RecordOperand<Type extends object, Update extends boolean = false> = Update extends true
+  ? { oldRecord: (keyof Type & string) | "id" } | { newRecord: (keyof Type & string) | "id" }
+  : { record: (keyof Type & string) | "id" };
+
+type StringEqualityCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | (Level extends "gql" ? readonly [string, EqualityOperator, boolean] : never)
+  | readonly [string, EqualityOperator, string]
+  | readonly [UserStringOperand<User>, EqualityOperator, string]
+  | readonly [string, EqualityOperator, UserStringOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              EqualityOperator,
+              string | UserStringOperand<User>,
+            ]
+          | readonly [
+              string | UserStringOperand<User>,
+              EqualityOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type BooleanEqualityCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | readonly [boolean, EqualityOperator, boolean]
+  | readonly [UserBooleanOperand<User>, EqualityOperator, boolean]
+  | readonly [boolean, EqualityOperator, UserBooleanOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              EqualityOperator,
+              boolean | UserBooleanOperand<User>,
+            ]
+          | readonly [
+              boolean | UserBooleanOperand<User>,
+              EqualityOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type EqualityCondition<
+  Level extends "record" | "gql" = "record",
+  User extends object = InferredAttributes,
+  Update extends boolean = boolean,
+  Type extends object = object,
+> =
+  | StringEqualityCondition<Level, User, Update, Type>
+  | BooleanEqualityCondition<Level, User, Update, Type>;
+
+type StringContainsCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | readonly [string, ContainsOperator, string[]]
+  | readonly [UserStringOperand<User>, ContainsOperator, string[]]
+  | readonly [string, ContainsOperator, UserStringArrayOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              ContainsOperator,
+              string[] | UserStringArrayOperand<User>,
+            ]
+          | readonly [
+              string | UserStringOperand<User>,
+              ContainsOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type BooleanContainsCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | (Level extends "gql" ? readonly [string, ContainsOperator, boolean[]] : never)
+  | readonly [boolean, ContainsOperator, boolean[]]
+  | readonly [UserBooleanOperand<User>, ContainsOperator, boolean[]]
+  | readonly [boolean, ContainsOperator, UserBooleanArrayOperand<User>]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              ContainsOperator,
+              boolean[] | UserBooleanArrayOperand<User>,
+            ]
+          | readonly [
+              boolean | UserBooleanOperand<User>,
+              ContainsOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+type ContainsCondition<
+  Level extends "record" | "gql" = "record",
+  User extends object = InferredAttributes,
+  Update extends boolean = boolean,
+  Type extends object = object,
+> =
+  | StringContainsCondition<Level, User, Update, Type>
+  | BooleanContainsCondition<Level, User, Update, Type>;
+
+type HasAnyCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | readonly [
+      string[] | UserStringArrayOperand<User>,
+      HasAnyOperator,
+      string[] | UserStringArrayOperand<User>,
+    ]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              HasAnyOperator,
+              string[] | UserStringArrayOperand<User>,
+            ]
+          | readonly [
+              string[] | UserStringArrayOperand<User>,
+              HasAnyOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
+/**
+ * Type representing a permission condition that combines user attributes, record fields, and literal values using comparison operators.
+ *
+ * The User type is extended by `tailor.d.ts`, which is automatically generated when running `tailor generate`.
+ * Attributes enabled in the config file's `auth.userProfile.attributes` (or
+ * `auth.machineUserAttributes` when userProfile is omitted) become available as types.
+ * @example
+ * ```ts
+ * // tailor.config.ts
+ * export const auth = defineAuth("my-auth", {
+ *   userProfile: {
+ *     type: user,
+ *     attributes: {
+ *       isAdmin: true,
+ *       roles: true,
+ *     }
+ *   }
+ * });
+ * ```
+ */
+export type PermissionCondition<
+  Level extends "record" | "gql" = "record",
+  User extends object = InferredAttributes,
+  Update extends boolean = boolean,
+  Type extends object = object,
+> =
+  | EqualityCondition<Level, User, Update, Type>
+  | ContainsCondition<Level, User, Update, Type>
+  | HasAnyCondition<Level, User, Update, Type>;
+
+// --- Runtime constants ---
+
+/**
+ * Grants full record-level access without any conditions.
+ *
+ * Unsafe and intended only for local development, prototyping, or tests.
+ * Do not use this in production environments, as it effectively disables
+ * authorization checks.
+ */
+export const unsafeAllowAllTypePermission: TailorTypePermission = {
+  create: [{ conditions: [], permit: true }],
+  read: [{ conditions: [], permit: true }],
+  update: [{ conditions: [], permit: true }],
+  delete: [{ conditions: [], permit: true }],
+};
+
+/**
+ * Grants full GraphQL access (all actions) without any conditions.
+ *
+ * Unsafe and intended only for local development, prototyping, or tests.
+ * Do not use this in production environments, as it effectively disables
+ * authorization checks.
+ */
+export const unsafeAllowAllGqlPermission: TailorTypeGqlPermission = [
+  { conditions: [], actions: "all", permit: true },
+];

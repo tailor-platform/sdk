@@ -1,0 +1,5 @@
+name: "@tailor-platform/tailordb-namespace"
+version: "1.0.0"
+description: "Rename the removed capital-cased `Tailordb` ambient namespace to lowercase `tailordb` (e.g. `Tailordb.QueryResult` → `tailordb.QueryResult`)"
+engine: jssg
+language: typescript

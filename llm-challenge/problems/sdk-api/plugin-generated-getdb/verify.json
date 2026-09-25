@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "local-plugin-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "plugin",
+      "flags": "i",
+      "description": "source includes a local plugin"
+    },
+    {
+      "id": "database-helper-generated",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "get.*db|get.*database|database.*helper",
+      "flags": "i",
+      "description": "source includes a generated database helper concept"
+    },
+    {
+      "id": "helper-usage-site-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "usage|use|get.*db|get.*database",
+      "flags": "i",
+      "description": "source includes a usage site for the helper"
+    }
+  ]
+}

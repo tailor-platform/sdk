@@ -1,0 +1,462 @@
+import { createRequire } from "node:module";
+import { dirname, isAbsolute, matchesGlob, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
+import type { Plugin } from "vitest/config";
+
+const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
+
+interface ExportSpecifierNode {
+  type?: string;
+  exported?: { name?: unknown } | null;
+}
+
+interface ImportLikeNode {
+  type: string;
+  start: number;
+  end: number;
+  source?: { value?: unknown } | null;
+  specifiers?: ExportSpecifierNode[] | null;
+  exported?: { name?: unknown } | null;
+}
+
+const IMPORT_LIKE_TYPES = new Set([
+  "ImportDeclaration",
+  "ExportNamedDeclaration",
+  "ExportAllDeclaration",
+]);
+
+// Re-export specifiers (`export { x as Y } from "..."`) accept any
+// `IdentifierName` for `Y` — including reserved words like `delete`. But
+// `export const Y = ...` requires a `BindingIdentifier`, which forbids
+// reserved words and the strict-mode-banned `arguments` / `eval`. Synthesizing
+// `export const delete = ...` would yield a syntax error, so we fall back to
+// plain `throw` for unsafe names.
+const UNSAFE_BINDING_NAMES = new Set([
+  // ReservedWord (ES2022+)
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  // Strict-mode reserved (ESM is always strict)
+  "let",
+  "static",
+  "implements",
+  "interface",
+  "package",
+  "private",
+  "protected",
+  "public",
+  // Module-specific reserved
+  "await",
+  // Banned as binding names in strict mode
+  "arguments",
+  "eval",
+]);
+
+const ID_START = /^[A-Za-z_$]/;
+const ID_CONT = /^[A-Za-z0-9_$]*$/;
+
+function isSafeBindingName(name: string): boolean {
+  if (UNSAFE_BINDING_NAMES.has(name)) return false;
+  if (name.length === 0) return false;
+  // Restrict to ASCII identifiers — Unicode bindings are valid JS but rare
+  // for re-exports of node:* modules, and a regex over the full
+  // ID_Start/ID_Continue sets adds substantial weight for marginal gain.
+  const firstChar = name[0];
+  if (firstChar === undefined) return false;
+  return ID_START.test(firstChar) && ID_CONT.test(name.slice(1));
+}
+
+function buildBlockedReplacement(node: ImportLikeNode, message: string): string {
+  // JSON.stringify yields a fully-escaped string literal (including the
+  // surrounding quotes), so we don't need to manually handle backslashes,
+  // newlines, or other control characters that may appear in the message.
+  const literal = JSON.stringify(message);
+  const throwStmt = `throw new Error(${literal});`;
+  const throwExpr = `(() => { throw new Error(${literal}); })()`;
+
+  if (node.type === "ExportNamedDeclaration") {
+    const specs = node.specifiers ?? [];
+    const stubs: string[] = [];
+    for (const spec of specs) {
+      const exportedName = spec.exported?.name;
+      if (typeof exportedName !== "string") continue;
+      if (exportedName === "default") {
+        stubs.push(`export default ${throwExpr};`);
+        continue;
+      }
+      // Reserved words can be re-export names but not binding names.
+      // Bail to a plain throw rather than emit invalid syntax.
+      if (!isSafeBindingName(exportedName)) return throwStmt;
+      stubs.push(`export const ${exportedName} = ${throwExpr};`);
+    }
+    return stubs.length > 0 ? stubs.join(" ") : throwStmt;
+  }
+
+  if (node.type === "ExportAllDeclaration") {
+    const exportedName = node.exported?.name;
+    if (typeof exportedName === "string" && isSafeBindingName(exportedName)) {
+      return `export const ${exportedName} = ${throwExpr};`;
+    }
+    return throwStmt;
+  }
+
+  return throwStmt;
+}
+
+const toFileList = (value: string | string[] | undefined): string[] =>
+  Array.isArray(value) ? value : value ? [value] : [];
+
+// Vitest 5 inherits an inline project's config from its declaring config file
+// by default; Vitest 4 only does so when the project sets `extends: true`.
+// Reading the resolved peer's major lets a project that omits `extends` be
+// treated as inheriting the root environment on 5 without changing what the
+// same config resolved to on 4.
+let cachedSupportsDefaultProjectInheritance: boolean | undefined;
+function supportsDefaultProjectInheritance(): boolean {
+  if (cachedSupportsDefaultProjectInheritance === undefined) {
+    try {
+      const { version } = createRequire(import.meta.url)("vitest/package.json") as {
+        version: string;
+      };
+      cachedSupportsDefaultProjectInheritance = Number.parseInt(version, 10) >= 5;
+    } catch {
+      // Unresolvable peer: assume the explicit-opt-in model so a project that
+      // would not have inherited anything is never forced into tailor-runtime.
+      cachedSupportsDefaultProjectInheritance = false;
+    }
+  }
+  return cachedSupportsDefaultProjectInheritance;
+}
+
+/**
+ * Vite plugin that blocks Node.js built-in module imports from production code.
+ *
+ * Uses the `transform` hook to walk the Rollup-provided AST of non-test source
+ * files for static `node:*` imports and re-exports.
+ * `ImportDeclaration` and bare `export * from "..."` are replaced with a
+ * `throw new Error(...)` statement so the failure surfaces at evaluation time.
+ * `ExportNamedDeclaration` (`export { x, y as z } from "..."`) and namespaced
+ * `export * as ns from "..."` are rewritten to per-binding stub exports
+ * (`export const x = (() => { throw new Error(...) })();`). The IIFE throws
+ * eagerly during module evaluation (same timing as a top-level `throw`), but
+ * preserving the declared export bindings ensures the surfaced error is the
+ * actual "node:* not available" message rather than an opaque
+ * "missing export" raised by the loader.
+ * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
+ * source-level transformation is the only reliable interception point.
+ * Runs in the default phase (no `enforce: "pre"`) so esbuild's TypeScript
+ * transform strips `import type` first; only runtime imports reach this hook.
+ * Node.js globals not in the platform runtime are removed by the environment (whitelist-based).
+ * Test file patterns are read from the resolved Vitest config (`test.include`).
+ * Vitest setup files (`test.setupFiles`) and global-setup files
+ * (`test.globalSetup`) are also exempted: they run in the test runner host,
+ * not in the emulated platform runtime, so they may freely use `node:*`
+ * modules (e.g. `node:url` for `pathToFileURL`).
+ * @returns Vite plugin
+ */
+export function createBlockPlugin(): Plugin {
+  let isTestFile: (id: string) => boolean = () => false;
+  let isUserSourceFile: (id: string) => boolean = () => false;
+
+  return {
+    name: "tailor-runtime-block-node",
+
+    configResolved(config) {
+      type HostFileTestConfig = {
+        include?: string[];
+        setupFiles?: string | string[];
+        globalSetup?: string | string[];
+        root?: string;
+      };
+      // Read `test` as the user-facing shape rather than Vitest's resolved
+      // config type: this hook may see the config before Vitest fills in
+      // defaults, so every field keeps its fallback.
+      const testConfig = (config as { test?: unknown }).test as
+        | (HostFileTestConfig & { projects?: { test?: HostFileTestConfig }[] })
+        | undefined;
+      const root = testConfig?.root ?? config.root;
+      // Setup files and global-setup files run in the Vitest host (not the
+      // emulated runtime), so they may freely import node:* modules. Collect
+      // them from the top-level config AND from each `test.projects[i]` —
+      // per-project setup files run in the host too and would otherwise be
+      // transformed as production code, breaking node:* imports inside them.
+      const toAbsolutePaths = (value: string | string[] | undefined, baseRoot: string) =>
+        toFileList(value).map((f) => resolve(baseRoot, f));
+      const exemptHostFiles = new Set<string>([
+        ...toAbsolutePaths(testConfig?.setupFiles, root),
+        ...toAbsolutePaths(testConfig?.globalSetup, root),
+      ]);
+      // Vitest projects can each define their own `test.include` (and root).
+      // A project that uses non-default patterns (e.g. `tests/**/*.spec.ts`)
+      // must also be considered when classifying test files — otherwise its
+      // tests would be treated as production code and have node:* imports
+      // rewritten. Build a list of (root, patterns) pairs covering top-level
+      // + every project, and accept a file if any pair matches.
+      const includePairs: { root: string; patterns: string[] }[] = [
+        { root, patterns: testConfig?.include ?? DEFAULT_TEST_INCLUDE },
+      ];
+      for (const project of testConfig?.projects ?? []) {
+        const projectTest = project.test;
+        if (!projectTest) continue;
+        const projectRoot = projectTest.root ?? root;
+        for (const f of toAbsolutePaths(projectTest.setupFiles, projectRoot)) {
+          exemptHostFiles.add(f);
+        }
+        for (const f of toAbsolutePaths(projectTest.globalSetup, projectRoot)) {
+          exemptHostFiles.add(f);
+        }
+        includePairs.push({
+          root: projectRoot,
+          patterns: projectTest.include ?? DEFAULT_TEST_INCLUDE,
+        });
+      }
+      isTestFile = (id: string) => {
+        if (exemptHostFiles.has(id)) return true;
+        return includePairs.some(({ root: r, patterns }) => {
+          const candidate = isAbsolute(id) ? relative(r, id) : id;
+          return patterns.some((pattern) => matchesGlob(candidate, pattern));
+        });
+      };
+      // Only transform files inside the project root. With pnpm workspaces,
+      // dependencies are symlinked and Vite resolves them to absolute paths
+      // outside `node_modules`, so the substring check alone is insufficient.
+      // Non-absolute ids are Vite-internal: virtual modules (`\0...`,
+      // `virtual:...`), bare specifiers, etc. Those are never user source
+      // files and must not be parsed/transformed.
+      isUserSourceFile = (id: string) => {
+        if (!isAbsolute(id)) return false;
+        const rel = relative(root, id);
+        return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+      };
+    },
+
+    transform(code, id) {
+      // Vite can pass ids with query/hash suffixes (e.g. `file.ts?import`,
+      // `file.ts?v=hash`). Strip them so exact-path lookups (Set membership,
+      // glob matching, absolute-path checks) match what callers configured.
+      const queryIdx = id.search(/[?#]/);
+      const cleanId = queryIdx === -1 ? id : id.slice(0, queryIdx);
+
+      if (isTestFile(cleanId)) return undefined;
+      if (cleanId.includes("node_modules")) return undefined;
+      if (!isUserSourceFile(cleanId)) return undefined;
+
+      let ast: { body: ImportLikeNode[] };
+      try {
+        ast = this.parse(code) as unknown as { body: ImportLikeNode[] };
+      } catch {
+        // Not parseable as ESM (e.g. JSON, asset). Let other plugins handle it.
+        return undefined;
+      }
+
+      const replacements: { start: number; end: number; replacement: string }[] = [];
+      for (const node of ast.body) {
+        if (!IMPORT_LIKE_TYPES.has(node.type)) continue;
+        const specifier = node.source?.value;
+        if (typeof specifier !== "string") continue;
+        if (isBlockedModule(specifier)) {
+          replacements.push({
+            start: node.start,
+            end: node.end,
+            replacement: buildBlockedReplacement(node, getBlockedMessage(specifier)),
+          });
+        }
+      }
+
+      if (replacements.length === 0) return undefined;
+
+      let transformed = code;
+      for (const r of replacements.toSorted((a, b) => b.start - a.start)) {
+        transformed = transformed.slice(0, r.start) + r.replacement + transformed.slice(r.end);
+      }
+
+      return { code: transformed, map: null };
+    },
+  };
+}
+
+const ENVIRONMENT_NAME = "tailor-runtime";
+
+// Channel that carries the resolved `tailor.config.ts` path to setup.ts, which
+// runs in a separate worker process. Set through Vitest's `test.env` rather
+// than `process.env` so each project carries its own value: the config hook
+// runs once per project in the same parent process, and a process-global slot
+// would let the last project resolved win for every worker. The leading `__`
+// marks it plugin-private, so overwriting a pre-existing value is safe.
+const CONFIG_ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
+
+// An empty value reads as "no config" in setup.ts and, unlike omitting the
+// key, overrides a stale value inherited from the root `test.env`.
+function setConfigEnv(
+  target: Record<string, unknown> & { env?: Record<string, string> },
+  configAbsPath: string,
+): void {
+  target.env = { ...target.env, [CONFIG_ENV_VAR]: configAbsPath };
+}
+
+/**
+ * Vite plugin that resolves the tailor-runtime environment and injects setup files.
+ *
+ * Vitest resolves environments starting with "." or "/" as file paths.
+ * This plugin rewrites `environment: "tailor-runtime"` to the absolute path
+ * of the bundled environment module, both at the top-level and per-project.
+ * It also injects the setup file that seeds the SecretManager mock from
+ * `tailor.config.ts`.
+ * @param options - Optional configuration
+ * @param options.config - Path to tailor.config.ts to load SecretManager values into mock
+ * @returns Vite plugin
+ */
+export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const environmentPath = resolve(currentDir, "environment.mjs");
+  const setupPath = resolve(currentDir, "setup.mjs");
+  // Vitest re-runs the config for inline projects that need their own Vite
+  // server, so a rewritten absolute path still counts as tailor-runtime.
+  const selectsTailorRuntime = (environment: unknown): boolean =>
+    environment === ENVIRONMENT_NAME || environment === environmentPath;
+
+  return {
+    name: "tailor-runtime-environment",
+
+    config(config) {
+      const testConfig = config.test as
+        | (Record<string, unknown> & {
+            projects?: (string | Record<string, unknown>)[];
+            setupFiles?: string | string[];
+            env?: Record<string, string>;
+          })
+        | undefined;
+
+      // Rewrite environment name to absolute path at top-level
+      const rootSelectsTailorRuntime = !!testConfig && selectsTailorRuntime(testConfig.environment);
+      if (testConfig && rootSelectsTailorRuntime) {
+        testConfig.environment = environmentPath;
+      }
+
+      // Rewrite in each inline project config. Since Vitest 5 inline projects
+      // no longer receive the `setupFiles` this hook returns for the root
+      // config, the setup file is added directly to whichever projects select
+      // the tailor-runtime environment — not to every project, since setup.ts
+      // statically imports "node:url" and would fail to even load in a
+      // project whose environment cannot resolve Node builtins (e.g. Vitest
+      // browser mode).
+      //
+      // A project that declares no `environment` of its own inherits the
+      // root's, but Vitest 5 inherits the literal name rather than the path
+      // this hook rewrote it to, so it has to be rewritten here as well —
+      // only when the project actually inherits from the root. A string
+      // `extends` points at another config file, whose environment must not
+      // be overridden here. Omitting `extends` only inherits on Vitest 5;
+      // on 4 such a project resolves independently and must be left alone.
+      if (testConfig?.projects) {
+        for (const project of testConfig.projects) {
+          if (typeof project === "string") continue;
+          const projectTest = (project.test ??= {}) as Record<string, unknown> & {
+            setupFiles?: string | string[];
+            env?: Record<string, string>;
+            root?: string;
+          };
+          const inheritsRootEnvironment =
+            projectTest.environment === undefined &&
+            rootSelectsTailorRuntime &&
+            (project.extends === true ||
+              (project.extends === undefined && supportsDefaultProjectInheritance()));
+          if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) {
+            // Blank the key so a project on another environment cannot pick up
+            // the root's value through Vitest's root-into-project env merge.
+            if (options?.config) setConfigEnv(projectTest, "");
+            continue;
+          }
+          projectTest.environment = environmentPath;
+          const projectSetupFiles = toFileList(projectTest.setupFiles);
+          if (!projectSetupFiles.includes(setupPath)) {
+            projectTest.setupFiles = [...projectSetupFiles, setupPath];
+          }
+          if (options?.config) {
+            // A project may set its own `root`, so a relative options.config
+            // resolves per project rather than once against the root config.
+            const projectRoot =
+              (project.root as string | undefined) ??
+              projectTest.root ??
+              config.root ??
+              process.cwd();
+            setConfigEnv(projectTest, resolve(projectRoot, options.config));
+          }
+        }
+      }
+
+      // Seed the config path for setup.ts, which reads it in the worker. Each
+      // tailor-runtime project already carries its own value from the loop
+      // above; this covers a root config that selects tailor-runtime itself,
+      // including the standalone (no `projects`) case.
+      if (options?.config && testConfig) {
+        // Resolve against the user-provided Vite root when present (falling
+        // back to cwd). Vitest projects with a non-cwd `root` would otherwise
+        // resolve a relative options.config against the wrong directory.
+        const configRoot = (testConfig.root as string | undefined) ?? config.root ?? process.cwd();
+        setConfigEnv(
+          testConfig,
+          rootSelectsTailorRuntime ? resolve(configRoot, options.config) : "",
+        );
+      }
+
+      // Normalize a user-provided string `setupFiles` into an array so Vite's
+      // array-concat merge sees both sides as arrays (the string form would
+      // otherwise be replaced rather than concatenated by some merge paths).
+      // Vite then concatenates the user's array with our [setupPath].
+      const rootSetupFiles = toFileList(testConfig?.setupFiles);
+      if (testConfig && typeof testConfig.setupFiles === "string") {
+        testConfig.setupFiles = rootSetupFiles;
+      }
+
+      // A re-run for an inline project already carries the setup file added
+      // in the first pass; returning it again would register it twice. This
+      // merges into the root-level test config only (nested projects were
+      // already handled above), so it stays gated on the root's own
+      // environment selection — an unconditional return here would force
+      // setup.ts (and its static "node:url" import) onto a root/standalone
+      // config whose environment cannot resolve Node builtins.
+      if (!rootSelectsTailorRuntime || rootSetupFiles.includes(setupPath)) return {};
+      return {
+        test: {
+          setupFiles: [setupPath],
+        },
+      };
+    },
+  };
+}

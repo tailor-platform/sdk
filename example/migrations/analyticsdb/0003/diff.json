@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "namespace": "analyticsdb",
+  "createdAt": "2026-07-16T00:07:50.902Z",
+  "changes": [
+    {
+      "kind": "permission_modified",
+      "typeName": "Event",
+      "reason": "record permission and GQL permission changed",
+      "before": {},
+      "after": {
+        "recordPermission": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gqlPermission": [
+          {
+            "conditions": [
+              [
+                {
+                  "user": "_loggedIn"
+                },
+                "eq",
+                true
+              ]
+            ],
+            "actions": ["read"],
+            "permit": "allow"
+          },
+          {
+            "conditions": [
+              [
+                {
+                  "user": "role"
+                },
+                "eq",
+                "MANAGER"
+              ]
+            ],
+            "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+            "permit": "allow"
+          }
+        ]
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": false
+}

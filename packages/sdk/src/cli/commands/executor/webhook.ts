@@ -1,0 +1,117 @@
+import { defineCommand } from "@politty/zod";
+import { z } from "zod";
+import {
+  type Order,
+  paginationArgs,
+  recoveryContextArgs,
+  toPageDirection,
+  workspaceArgs,
+} from "#/cli/shared/args";
+import { fetchPaged } from "#/cli/shared/client";
+import { defineAppCommand, runDefaultSubCommand } from "#/cli/shared/command";
+import { formatCopyableCommand } from "#/cli/shared/errors";
+import { logger, styles } from "#/cli/shared/logger";
+import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+
+export interface WebhookExecutorInfo {
+  name: string;
+  webhookUrl: string;
+  disabled: boolean;
+}
+
+export interface ListWebhookExecutorsOptions {
+  workspaceId?: string;
+  profile?: string;
+  order?: Order;
+  limit?: number;
+}
+
+/**
+ * List executors with incoming webhook triggers and return CLI-friendly info.
+ * @param options - Listing options
+ * @returns List of webhook executors with URLs
+ */
+export async function listWebhookExecutors(
+  options?: ListWebhookExecutorsOptions,
+): Promise<WebhookExecutorInfo[]> {
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: options?.profile,
+    workspaceId: options?.workspaceId,
+  });
+
+  const pageDirection = toPageDirection(options?.order);
+  const webhooks = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { webhooks, nextPageToken } = await client.listExecutorIncomingWebhooks({
+        workspaceId,
+        pageToken,
+        pageSize,
+        pageDirection,
+      });
+      return [webhooks, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
+
+  return webhooks.map((w) => ({
+    name: w.executorName,
+    webhookUrl: w.url,
+    disabled: w.disabled,
+  }));
+}
+
+const listWebhookCommand = defineAppCommand({
+  name: "list",
+  description: "List executors with incoming webhook triggers",
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
+  run: async (args) => {
+    const jsonOutput = logger.jsonMode;
+    const executors = await listWebhookExecutors({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      order: args.order,
+      limit: args.limit,
+    });
+
+    if (executors.length === 0) {
+      logger.info("No webhook executors found.");
+      if (jsonOutput) {
+        logger.out([]);
+      }
+      return;
+    }
+
+    logger.out(executors, {
+      display: {
+        disabled: (v) => (v ? styles.warning("true") : styles.dim("false")),
+      },
+    });
+
+    if (!jsonOutput) {
+      const trigger = formatCopyableCommand([
+        "tailor",
+        "executor",
+        "trigger",
+        "<name>",
+        "-d",
+        '{"key":"value"}',
+        ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+      ]);
+      logger.info(`To test a webhook, run: ${trigger}`);
+    }
+  },
+});
+
+export const webhookCommand = defineCommand({
+  name: "webhook",
+  description: "Manage executor webhooks",
+  subCommands: {
+    list: listWebhookCommand,
+  },
+  async run() {
+    await runDefaultSubCommand(listWebhookCommand);
+  },
+});

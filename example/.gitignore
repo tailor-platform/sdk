@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Tailor Platform SDK generated files
+.tailor/
+
+# Test fixtures (keep expected/ only)
+tests/fixtures/*
+!tests/fixtures/expected/
+
+# Cache
+.eslintcache
+.turbo/
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log

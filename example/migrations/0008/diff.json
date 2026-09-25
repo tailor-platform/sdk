@@ -1,0 +1,152 @@
+{
+  "version": 5,
+  "namespace": "tailordb",
+  "createdAt": "2026-08-28T07:49:09.197Z",
+  "changes": [
+    {
+      "kind": "table_added",
+      "tableName": "AuditTrail",
+      "after": {
+        "name": "AuditTrail",
+        "pluralForm": "AuditTrails",
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "action": {
+            "type": "string",
+            "required": true
+          },
+          "detail": {
+            "type": "string",
+            "required": true
+          },
+          "createdAt": {
+            "type": "datetime",
+            "required": true,
+            "description": "Record creation timestamp",
+            "default": "now"
+          },
+          "updatedAt": {
+            "type": "datetime",
+            "required": true,
+            "description": "Record update timestamp",
+            "hooks": {
+              "update": {
+                "expr": "(({ input, now }) => input ?? now)({ input: _value, oldValue: _oldValue, invoker: _principal, now: _now })"
+              }
+            },
+            "default": "now"
+          }
+        },
+        "settings": {},
+        "permissions": {
+          "record": {
+            "create": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "read": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              },
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "_loggedIn"
+                    },
+                    "eq",
+                    true
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "update": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "delete": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ]
+          },
+          "gql": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "actions": ["read"],
+              "permit": "allow"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": false
+}
