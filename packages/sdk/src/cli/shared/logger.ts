@@ -8,6 +8,14 @@ import { parseBoolean } from "./parse-boolean";
 /** Environment variable selecting JSON as the default output for every command. */
 export const JSON_OUTPUT_ENV_VAR = "TAILOR_JSON_OUTPUT";
 
+/**
+ * Whether the process is attached to an interactive terminal outside CI.
+ * @returns True when both stdin and stdout are TTYs and CI is not detected
+ */
+export function interactiveTerminal(): boolean {
+  return !isCI && process.stdin.isTTY === true && process.stdout.isTTY === true;
+}
+
 /** What selected JSON output: an explicit `--json`, the environment, or both. */
 export type JsonModeSource = "flag" | "env" | "both";
 
@@ -21,8 +29,6 @@ export type JsonModeSource = "flag" | "env" | "both";
  */
 export class CIPromptError extends Error {
   constructor(message?: string) {
-    const promptWouldOtherwiseBeAvailable =
-      !isCI && process.stdin.isTTY === true && process.stdout.isTTY === true;
     const remedy =
       _jsonModeSource === "flag"
         ? " JSON output is enabled by --json; drop it to restore prompts."
@@ -30,7 +36,7 @@ export class CIPromptError extends Error {
           ? ` JSON output is enabled by ${JSON_OUTPUT_ENV_VAR}; unset it to restore prompts.`
           : ` JSON output is enabled by --json and ${JSON_OUTPUT_ENV_VAR}; drop the flag and unset the variable to restore prompts.`;
     const reason =
-      _jsonMode && _jsonModeSource !== undefined && promptWouldOtherwiseBeAvailable ? remedy : "";
+      _jsonMode && _jsonModeSource !== undefined && interactiveTerminal() ? remedy : "";
     super(
       (message ??
         "Interactive prompts are not available in this environment. Provide the required options explicitly.") +
