@@ -73,9 +73,6 @@ function isBoundInScope(scope: Scope, name: string): boolean {
   return false;
 }
 
-const NEGATIVE_EQUALITY_OPERATORS = new Set(["!==", "!="]);
-const POSITIVE_EQUALITY_OPERATORS = new Set(["===", "=="]);
-
 /**
  * Read the static string value of a string literal or a template literal with
  * no interpolated expressions (e.g. `` `object` ``, which minifiers use in
@@ -93,51 +90,6 @@ function staticStringValue(node: Node): string | undefined {
     return node.quasis[0]?.value.cooked ?? undefined;
   }
   return undefined;
-}
-
-/**
- * If `expr` is a `typeof x === "..."` / `typeof x !== "..."` comparison that
- * is only true while `x` is declared, return `x`'s name. `typeof` never
- * throws on an undeclared identifier, so `typeof x !== "undefined" && x` (and
- * `typeof x === "<anything but undefined>" && x`) cannot actually reference
- * `x` when it is undeclared — this is the cross-environment global-detection
- * idiom used by es-toolkit, lodash, core-js, etc. The opposite direction —
- * `typeof x === "undefined" && x` or `typeof x !== "<anything but
- * undefined>" && x` — is true precisely when `x` is NOT safely usable (or
- * says nothing about it), so it must not be treated as a guard. Loose
- * equality (`==`/`!=`) is included because minifiers rewrite `===`/`!==`
- * against a `typeof` result to the loose form (the result is always a
- * string, so the two are equivalent there). Minifiers also rewrite
- * `typeof x !== "undefined"` to `typeof x < "u"`: `"undefined"` is the only
- * `typeof` result not ordered before `"u"`, so the relational form is only
- * true while `x` is declared.
- * @param expr - Candidate comparison AST node.
- * @returns The guarded identifier's name, or undefined if `expr` doesn't guard one.
- */
-function typeofGuardTarget(expr: Node): string | undefined {
-  if (expr.type !== "BinaryExpression") return undefined;
-  const { left, right, operator } = expr;
-  const [typeofSide, literalSide] =
-    left.type === "UnaryExpression" &&
-    left.operator === "typeof" &&
-    left.argument.type === "Identifier"
-      ? [left, right]
-      : right.type === "UnaryExpression" &&
-          right.operator === "typeof" &&
-          right.argument.type === "Identifier"
-        ? [right, left]
-        : [undefined, undefined];
-  if (!typeofSide) return undefined;
-  const literalValue = staticStringValue(literalSide);
-  if (literalValue === undefined) return undefined;
-  const comparesToUndefined = literalValue === "undefined";
-  const isTypeofLeft = typeofSide === left;
-  const isSafe =
-    (NEGATIVE_EQUALITY_OPERATORS.has(operator) && comparesToUndefined) ||
-    (POSITIVE_EQUALITY_OPERATORS.has(operator) && !comparesToUndefined) ||
-    (operator === (isTypeofLeft ? "<" : ">") && literalValue <= "undefined");
-  if (!isSafe) return undefined;
-  return (typeofSide.argument as { name: string }).name;
 }
 
 function compareStrings(operator: string, a: string, b: string): boolean | undefined {
@@ -192,12 +144,33 @@ function typeofComparison(expr: Node): { name: string; isTrueWhenUndeclared: boo
 }
 
 /**
+ * If `expr` is a `typeof x` comparison that is only true while `x` is
+ * declared, return `x`'s name. `typeof` never throws on an undeclared
+ * identifier, so `typeof x !== "undefined" && x` (and
+ * `typeof x === "<anything but undefined>" && x`) cannot actually reference
+ * `x` when it is undeclared — this is the cross-environment global-detection
+ * idiom used by es-toolkit, lodash, core-js, etc. The opposite direction —
+ * `typeof x === "undefined" && x` or `typeof x !== "<anything but
+ * undefined>" && x` — is true precisely when `x` is NOT safely usable (or
+ * says nothing about it), so it must not be treated as a guard. Minifiers
+ * rewrite these comparisons to loose equality (`==`/`!=`) and to
+ * `typeof x < "u"` (`"undefined"` is the only `typeof` result not ordered
+ * before `"u"`), which are evaluated the same way.
+ * @param expr - Candidate comparison AST node.
+ * @returns The guarded identifier's name, or undefined if `expr` doesn't guard one.
+ */
+function typeofGuardTarget(expr: Node): string | undefined {
+  const comparison = typeofComparison(expr);
+  return comparison && !comparison.isTrueWhenUndeclared ? comparison.name : undefined;
+}
+
+/**
  * Check whether `node` is `guardedName` itself, or a member-expression chain
  * rooted at it (`x.y`, `x.y[z]`), as in `typeof x !== "undefined" && x.y`.
  * Computed property expressions along the chain are still walked for their
  * own free variables (e.g. the `z` in `x.y[z]`) — only the guarded root
  * identifier is treated as safe.
- * @param node - Candidate right-hand side of a `typeof`-guarded `&&`, or consequent of a `typeof`-guarded ternary.
+ * @param node - Candidate right-hand side of a `typeof`-guarded `&&`, or branch of a `typeof`-guarded ternary.
  * @param guardedName - The identifier name the `typeof` check guards.
  * @param walk - The AST walker, used to visit computed property expressions.
  * @returns Whether `node` is entirely covered by the guard.
@@ -342,16 +315,15 @@ export function findUndefinedReferences(
       }
 
       case "ConditionalExpression": {
-        const guardedName = typeofGuardTarget(node.test);
+        const comparison = options?.includeGuardedReferences
+          ? undefined
+          : typeofComparison(node.test);
         walk(node.test);
         const isConsequentGuarded =
-          !options?.includeGuardedReferences &&
-          guardedName !== undefined &&
-          walkGuardedChain(node.consequent, guardedName, walk);
+          comparison?.isTrueWhenUndeclared === false &&
+          walkGuardedChain(node.consequent, comparison.name, walk);
         if (!isConsequentGuarded) walk(node.consequent);
-        const comparison = typeofComparison(node.test);
         const isAlternateGuarded =
-          !options?.includeGuardedReferences &&
           comparison?.isTrueWhenUndeclared === true &&
           walkGuardedChain(node.alternate, comparison.name, walk);
         if (!isAlternateGuarded) walk(node.alternate);
