@@ -68,7 +68,7 @@ function needsArgvRendering(argv: readonly string[]): boolean {
 export interface CommandHintRenderers {
   /** Wraps a command line quoted for the current platform's shell. */
   shell: (commandLine: string) => string;
-  /** Wraps an instruction naming the executable and its arguments as a JSON array, used when no shell quoting keeps every argument literal. */
+  /** Wraps an instruction that names the executable and lists its arguments as a JSON array, used when no shell quoting keeps every argument literal. */
   argv: (instruction: string) => string;
 }
 
