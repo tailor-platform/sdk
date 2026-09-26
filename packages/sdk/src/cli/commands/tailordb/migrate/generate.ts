@@ -12,7 +12,6 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import { configArg, confirmationArgs } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
@@ -190,8 +189,6 @@ async function handleInitOption(
  * @returns {Promise<void>} Promise that resolves when generation is complete
  */
 export async function generate(options: GenerateOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
-
   // Load configuration
   const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);

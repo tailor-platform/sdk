@@ -7,7 +7,6 @@ import { resourceTrn } from "#/cli/commands/deploy/label";
 import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { confirmationArgs, deploymentArgs, recoveryContextArgs } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError, formatNextAction } from "#/cli/shared/errors";
@@ -115,8 +114,6 @@ async function activateBaseline(
 }
 
 async function rebaseline(options: RebaselineOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
-
   const loaded = await loadConfig(options.configPath);
   const { config, plugins } = loaded;
   const configDir = path.dirname(config.path);

@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { fetchAll, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -231,8 +230,6 @@ async function assertMigrationsReproduceLocalTypes(
  * @param options - Command options
  */
 async function sync(options: SyncOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
-
   const targetVersion = parseMigrationNumberArg(options.number);
 
   const loaded = await loadConfig(options.configPath);
