@@ -5,6 +5,7 @@ import {
   applyFunctionRegistry,
   authHookFunctionName,
   collectFunctionEntries,
+  collectWorkflowJobStates,
   executorFunctionName,
   planFunctionRegistry,
   resolverFunctionName,
@@ -354,6 +355,20 @@ describe("planFunctionRegistry", () => {
 });
 
 describe("splitFunctionRegistryChanges", () => {
+  test("collects unchanged and SDK-version-forced workflow jobs from the plan", () => {
+    const states = collectWorkflowJobStates({
+      unchanged: [{ name: "workflow--check-inventory" }, { name: "executor--user-created" }],
+      updates: [
+        { name: "workflow--process-order", forcedBySdkVersion: true },
+        { name: "workflow--send-notification" },
+        { name: "resolver--my-resolver--add", forcedBySdkVersion: true },
+      ],
+    });
+
+    expect(states.unchanged).toEqual(new Set(["check-inventory"]));
+    expect(states.forcedBySdkVersion).toEqual(new Set(["process-order"]));
+  });
+
   test("separates workflow and resolver functions from other function registry entries", () => {
     const {
       workflowJobChanges,

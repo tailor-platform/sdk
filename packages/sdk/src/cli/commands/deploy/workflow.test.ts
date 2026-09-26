@@ -778,6 +778,7 @@ describe("planWorkflow", () => {
         sdkVersion?: string;
         mainJobFunctionName?: string;
         unchangedJobFunctions?: ReadonlySet<string>;
+        forcedJobFunctions?: ReadonlySet<string>;
         publishExecutionEvents?: boolean;
       }) {
         const jobFunctionLabels = Object.fromEntries(
@@ -821,11 +822,26 @@ describe("planWorkflow", () => {
                 jobExecution: { workflowNames: new Set(["sample-workflow"]) },
                 jobPublishEvents: new Map(),
               },
+          undefined,
+          options.forcedJobFunctions,
         );
       }
 
-      test("marks a workflow whose definition matches but whose sdk-version differs", async () => {
-        const result = await planSampleWorkflow({ sdkVersion: "v0-9-0" });
+      test.each([
+        {
+          name: "its sdk-version differs and its job functions are forced too",
+          options: { sdkVersion: "v0-9-0", forcedJobFunctions: new Set(jobNames) },
+        },
+        {
+          name: "its sdk-version differs and its job functions are unchanged",
+          options: { sdkVersion: "v0-9-0", unchangedJobFunctions: new Set(jobNames) },
+        },
+        {
+          name: "only its job functions are forced",
+          options: { forcedJobFunctions: new Set(jobNames) },
+        },
+      ])("marks a workflow whose definition matches when $name", async ({ options }) => {
+        const result = await planSampleWorkflow(options);
 
         expect(result.changeSet.updates).toHaveLength(1);
         expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(true);
@@ -843,6 +859,14 @@ describe("planWorkflow", () => {
         {
           name: "only its job functions changed while its sdk-version matches",
           options: {},
+        },
+        {
+          name: "its job functions are being registered",
+          options: { sdkVersion: "v0-9-0" },
+        },
+        {
+          name: "one of its job functions changed",
+          options: { sdkVersion: "v0-9-0", forcedJobFunctions: new Set(jobNames.slice(1)) },
         },
       ])("does not mark a workflow update when $name", async ({ options }) => {
         const result = await planSampleWorkflow(options);
@@ -1343,9 +1367,9 @@ describe("formatWorkflowChangeEntries", () => {
       functionChanges: { updates: [{ forced: false }] },
       expected: false,
     },
-    { name: "a create", functionChanges: { creates: [{}] }, expected: false },
+    { name: "a create on its own line", functionChanges: { creates: [{}] }, expected: true },
   ])(
-    "keeps a forced workflow update's marker only when its job function has $name",
+    "keeps a forced workflow update's marker: $expected, when its job function has $name",
     ({ functionChanges, expected }) => {
       const functionItems = (items: ReadonlyArray<{ forced?: boolean }> | undefined) =>
         (items ?? []).map(({ forced }) => ({

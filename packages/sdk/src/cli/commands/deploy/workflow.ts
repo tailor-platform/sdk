@@ -513,6 +513,7 @@ export interface PreviousWorkflowExisting {
  * @param eventPublishing - Executor subscriptions and explicit job flags driving execution event publishing
  * @param previousExisting - A prior call's fetched existing job functions/workflows, reused instead of
  *   re-querying the platform
+ * @param forcedJobFunctions - Job functions the function registry plan updates only because of the SDK version
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -525,6 +526,7 @@ export async function planWorkflow(
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
   eventPublishing: WorkflowEventPublishing = {},
   previousExisting?: PreviousWorkflowExisting,
+  forcedJobFunctions: ReadonlySet<string> = new Set<string>(),
 ) {
   const changeSet = createChangeSet<
     CreateWorkflow,
@@ -658,14 +660,18 @@ export async function planWorkflow(
           unchangedWorkflowJobNames.add(jobName);
         }
       } else {
-        // Job function content is judged by their own function registry updates.
+        const forcedBySdkVersion =
+          configUnchanged &&
+          usedJobNames.every(
+            (jobName) => unchangedJobFunctions.has(jobName) || forcedJobFunctions.has(jobName),
+          );
         changeSet.updates.push({
           name: workflow.name,
           workspaceId,
           workflow: desiredWorkflow,
           usedJobNames,
           metaRequest,
-          ...(configUnchanged && !sdkVersionMatches && { forcedBySdkVersion: true }),
+          ...(forcedBySdkVersion && { forcedBySdkVersion: true }),
         });
       }
       delete existingWorkflows[workflow.name];
