@@ -1,20 +1,21 @@
 # Executor Template
 
-Demonstrates all executor trigger types with supporting infrastructure.
+Demonstrates executor triggers with supporting infrastructure.
 
 ## Trigger Types
 
 - `recordCreatedTrigger` - React to new record creation (with condition)
 - `recordUpdatedTrigger` - React to record updates
+- `recordDeletedTrigger` - React to record deletion
 - `resolverExecutedTrigger` - React to resolver execution
 - `scheduleTrigger` - CRON-based scheduled execution
 - `incomingWebhookTrigger` - React to external webhook calls
+- `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - React to IdP user changes
+- `authAccessTokenIssuedTrigger` / `authAccessTokenRefreshedTrigger` / `authAccessTokenRevokedTrigger` - React to auth access token events
 
 ## Operation Kinds
 
 - `function` - Custom function body
-- `graphql` - Execute GraphQL mutations
-- `webhook` - Send HTTP requests
 - `workflow` - Trigger a workflow
 
 ## Getting Started

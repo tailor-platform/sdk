@@ -23,6 +23,7 @@
     "lint:fix": "oxlint --type-aware . --ignore-pattern \"templates/**\" --fix",
     "knip": "knip",
     "typecheck": "tsc --noEmit",
+    "test": "vitest",
     "prepublishOnly": "node scripts/prepare-templates.js && pnpm run build",
     "publint": "publint --strict"
   },
@@ -40,6 +41,7 @@
     "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2002",
     "tsdown": "0.23.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
   }
 }
