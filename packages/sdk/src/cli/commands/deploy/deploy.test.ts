@@ -933,20 +933,13 @@ describe("printPlanResults", () => {
 
   test("reports unmanaged resources and owner conflicts of every plan kind", () => {
     const results = emptyResults();
-    results.workflowExecutionPolicy.unmanaged = [
-      { resourceType: "Workflow execution policy", resourceName: "premium" },
-    ];
-    results.workflowExecutionPolicy.conflicts = [
-      {
-        resourceType: "Workflow execution policy",
-        resourceName: "tenant-api",
-        currentOwner: "other-app",
-      },
-    ];
-    results.app.unmanaged = [{ resourceType: "Application", resourceName: "my-app" }];
-    results.app.conflicts = [
-      { resourceType: "Application", resourceName: "shared-app", currentOwner: "other-app" },
-    ];
+    const kinds = Object.keys(results) as Array<keyof PlanResults>;
+    for (const kind of kinds) {
+      results[kind].unmanaged = [{ resourceType: kind, resourceName: `unmanaged-${kind}` }];
+      results[kind].conflicts = [
+        { resourceType: kind, resourceName: `conflict-${kind}`, currentOwner: "other-app" },
+      ];
+    }
 
     printPlanResults(results, { dryRun: true });
     const human = String(outSpy.mock.calls[0]?.[0]);
@@ -960,23 +953,18 @@ describe("printPlanResults", () => {
     };
 
     expect(payload.warnings).toEqual(
-      expect.arrayContaining([
-        { type: "unmanaged", resourceType: "Workflow execution policy", name: "premium" },
-        { type: "unmanaged", resourceType: "Application", name: "my-app" },
-      ]),
+      kinds.map((kind) => ({ type: "unmanaged", resourceType: kind, name: `unmanaged-${kind}` })),
     );
     expect(payload.conflicts).toEqual(
-      expect.arrayContaining([
-        {
-          resourceType: "Workflow execution policy",
-          name: "tenant-api",
-          currentOwner: "other-app",
-        },
-        { resourceType: "Application", name: "shared-app", currentOwner: "other-app" },
-      ]),
+      kinds.map((kind) => ({
+        resourceType: kind,
+        name: `conflict-${kind}`,
+        currentOwner: "other-app",
+      })),
     );
-    for (const name of ["premium", "my-app", "tenant-api", "shared-app"]) {
-      expect(human).toContain(`"${name}"`);
+    for (const kind of kinds) {
+      expect(human).toContain(`"unmanaged-${kind}"`);
+      expect(human).toContain(`"conflict-${kind}"`);
     }
   });
 

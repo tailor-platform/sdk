@@ -57,7 +57,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     results.pipeline.changeSet.resolver,
     results.functionRegistry.resolverFunctionChanges,
   );
-  const workflowEntries = formatWorkflowChangeEntries(
+  const workflowResourceEntries = formatWorkflowChangeEntries(
     results.workflow.changeSet,
     results.functionRegistry.workflowJobChanges,
   );
@@ -65,6 +65,10 @@ function buildPlanReport(results: PlanResults): PlanReport {
     results.workflowExecutionPolicy.changeSet,
     ["executionPolicy"],
   );
+  const workflowEntries: GroupedDisplayEntry[] = [
+    ...workflowResourceEntries,
+    ...workflowExecutionPolicyEntries,
+  ];
   const authHookEntries = formatAuthHookChangeEntries(
     results.auth.changeSet.authHook,
     results.functionRegistry.authHookFunctionChanges,
@@ -139,7 +143,6 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...pipelineEntries,
     ...executorEntries,
     ...workflowEntries,
-    ...workflowExecutionPolicyEntries,
     ...idpEntries,
     ...authEntries,
   ];
@@ -224,10 +227,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...buildGroupedDisplayLines("TailorDB", tailorDBEntries, tailorDBServiceActions),
     ...buildGroupedDisplayLines("Resolver", pipelineEntries, pipelineServiceActions),
     ...buildGroupedDisplayLines("Executor", executorEntries),
-    ...buildGroupedDisplayLines("Workflow", [
-      ...workflowEntries,
-      ...workflowExecutionPolicyEntries,
-    ]),
+    ...buildGroupedDisplayLines("Workflow", workflowEntries),
     ...buildGroupedDisplayLines("IdP", idpEntries, idpServiceActions),
     ...buildGroupedDisplayLines("Auth", authEntries, authServiceActions),
     ...results.secretManager.vaultChangeSet.lines(),
