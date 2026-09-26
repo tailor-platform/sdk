@@ -9,11 +9,13 @@ export type ShellCommandLines =
 const POSIX_BARE_ARG = /^[A-Za-z0-9_./:=@+-]+$/;
 const CMD_BARE_ARG = /^[A-Za-z0-9_./:=@+\\-]+$/;
 // PowerShell expands `$` and backtick escapes inside double quotes and reads `“ ” „` as `"`,
-// cmd.exe expands `%` even inside quotes, and a `"` or a trailing backslash changes where the
-// quoted argument ends.
-const WINDOWS_DOUBLE_QUOTE_UNSAFE = /[%$"`“”„\p{Cc}]|\\$/u;
-// Windows PowerShell 5.1 passes these to programs differently from PowerShell 7.3+.
-const POWERSHELL_VERSION_SENSITIVE = /"|\s.*\\$/;
+// cmd.exe expands `%` even inside quotes, a `"` or a trailing backslash changes where the
+// quoted argument ends, and a leading `~` is version-sensitive (below).
+const WINDOWS_DOUBLE_QUOTE_UNSAFE = /[%$"`“”„\p{Cc}]|\\$|^~(?:[\\/]|$)/u;
+// PowerShell versions pass these to programs differently: Windows PowerShell 5.1 and 7.3+
+// disagree on quotes and trailing backslashes, and 7.6+ expands a leading `~` inside the `.ps1`
+// shim however it was quoted.
+const POWERSHELL_VERSION_SENSITIVE = /"|\s.*\\$|^~(?:[\\/]|$)/;
 
 function quotePosixArg(value: string): string {
   if (POSIX_BARE_ARG.test(value)) return value;

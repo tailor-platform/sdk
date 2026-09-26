@@ -38,6 +38,9 @@ const SAMPLE_ARGS = [
   "C:\\Users\\Jane Doe\\tailor.config.ts",
   "C:\\Jane Doe\\",
   "C:\\work\\",
+  "~",
+  "~/fix.ts",
+  "~\\fix.ts",
   '{"key":"value"}',
   'say "hi" now',
   'a"&b',
@@ -348,6 +351,16 @@ describe("formatShellCommandLines", () => {
       kind: "perShell",
       powershell: `cmd /d /s /c 'tailor probe "a""b" "C:\\work\\\\"'`,
       cmd: 'tailor probe "a""b" "C:\\work\\\\"',
+    });
+  });
+
+  test("routes a leading tilde through cmd so PowerShell 7.6 does not expand it in the shim", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    expect(formatShellCommandLines(["tailor", "profile", "update", "--", "~"])).toEqual({
+      kind: "perShell",
+      powershell: `cmd /d /s /c 'tailor profile update -- "~"'`,
+      cmd: 'tailor profile update -- "~"',
     });
   });
 
