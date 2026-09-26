@@ -14,7 +14,6 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import { configArg } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
@@ -300,8 +299,6 @@ export function isPgliteAvailable(migrationsDir: string): boolean {
  * @param {ScriptOptions} options - Command options
  */
 async function script(options: ScriptOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
-
   const migrationNumber = parseMigrationNumberArg(options.number);
 
   if (migrationNumber === INITIAL_SCHEMA_NUMBER) {

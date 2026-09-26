@@ -3,7 +3,6 @@ import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { deploymentArgs } from "#/cli/shared/args";
-import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
@@ -237,8 +236,6 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
  * @param {StatusOptions} options - Command options
  */
 async function status(options: StatusOptions): Promise<void> {
-  logBetaWarning("tailordb migration");
-
   const rows = await collectMigrationStatuses(options);
   if (options.json) {
     logger.out(rows);
