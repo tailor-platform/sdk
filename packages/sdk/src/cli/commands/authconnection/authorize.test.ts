@@ -175,4 +175,41 @@ describe("authconnection authorize", () => {
       await new Promise<void>((resolve) => blocker.close(() => resolve()));
     }
   });
+
+  test("names a PowerShell and a cmd.exe Console fallback when the Windows shells quote the profile differently", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ authorization_endpoint: `${providerUrl}/authorize` }),
+    });
+    const blocker = net.createServer();
+    await new Promise<void>((resolve, reject) => {
+      blocker.once("error", reject);
+      blocker.listen(0, resolve);
+    });
+    const { port } = blocker.address() as net.AddressInfo;
+    using warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+
+    try {
+      const result = await runCommand(authorizeAuthConnectionCommand, [
+        "--name",
+        "my-connection",
+        "--port",
+        String(port),
+        "--profile",
+        "dev$1",
+        "--workspace-id",
+        "workspace-id",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `instead:\n  Run \`tailor authconnection open --workspace-id=workspace-id '--profile=dev$1'\` in PowerShell or \`tailor authconnection open --workspace-id=workspace-id "--profile=dev$1"\` in cmd.exe`,
+        ),
+      );
+    } finally {
+      await new Promise<void>((resolve) => blocker.close(() => resolve()));
+    }
+  });
 });

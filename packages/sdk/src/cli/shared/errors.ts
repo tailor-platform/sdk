@@ -1,4 +1,5 @@
 import { styles } from "./logger";
+import { formatShellCommandLines } from "./shell-quote";
 import type { Jsonifiable } from "type-fest";
 
 /**
@@ -46,42 +47,41 @@ type CLIErrorInternal = Error & {
   format(): string;
 };
 
-function shellQuote(value: string): string {
-  if (process.platform === "win32") {
-    if (/^[A-Za-z0-9_./:=@+\\-]+$/.test(value)) return value;
-    return `"${value.replaceAll('"', '\\"')}"`;
-  }
-  if (/^[A-Za-z0-9_./:=@+-]+$/.test(value)) return value;
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-function needsArgvRendering(argv: readonly string[]): boolean {
-  // cmd.exe/PowerShell expand %, $, and ! even inside double quotes, so no
-  // quoting can keep such values literal on Windows.
-  return process.platform === "win32" && argv.some((value) => /[%$!]/.test(value));
+/**
+ * Wording for a command hint. Both renderers are required because on Windows the hint may name
+ * a PowerShell and a cmd.exe command line, which reads differently from a single command.
+ */
+export interface CommandHintRenderers {
+  /** Wraps a command line that every shell on the current platform runs as shown. */
+  shell: (commandLine: string) => string;
+  /** Wraps an instruction naming a PowerShell and a cmd.exe command line, used on Windows when no single quoting suits both shells. */
+  perShell: (instruction: string) => string;
 }
 
 /**
- * Render an argv array as a copyable command line for the current platform's shell
- * @param {readonly string[]} argv - Executable name followed by its arguments
- * @returns {string} A shell-quoted command line, or an `argv [...]` JSON rendering when the platform shell cannot keep a value literal
+ * Render a command as a user-facing hint that can be copied into the current platform's shells
+ * @param {CLIErrorNextAction} action - Executable and arguments to suggest
+ * @param {CommandHintRenderers} renderers - Wording for one shared command line or one per shell
+ * @returns {string} The hint produced by the renderer that matches the command lines
  */
-export function formatCopyableCommand(argv: readonly string[]): string {
-  if (needsArgvRendering(argv)) {
-    return `argv ${JSON.stringify(argv)}`;
+export function formatCommandHint(
+  action: CLIErrorNextAction,
+  renderers: CommandHintRenderers,
+): string {
+  const commandLines = formatShellCommandLines([action.command, ...action.args]);
+  if (commandLines.kind === "shared") {
+    return renderers.shell(commandLines.commandLine);
   }
-  return argv.map(shellQuote).join(" ");
+  return renderers.perShell(
+    `\`${commandLines.powershell}\` in PowerShell or \`${commandLines.cmd}\` in cmd.exe`,
+  );
 }
 
-/**
- * Format an executable and argv as a shell-safe user-facing command.
- * @param next - Executable and arguments to format
- * @returns Shell command, or an argv representation when shell quoting is unsafe
- */
-export function formatNextAction(next: CLIErrorNextAction): string {
-  const argv = [next.command, ...next.args];
-  const rendered = formatCopyableCommand(argv);
-  return needsArgvRendering(argv) ? `with ${rendered}` : `\`${rendered}\``;
+function formatNextAction(next: CLIErrorNextAction): string {
+  return formatCommandHint(next, {
+    shell: (commandLine) => `Run \`${commandLine}\`.`,
+    perShell: (instruction) => `Run ${instruction}.`,
+  });
 }
 
 /**
@@ -109,7 +109,7 @@ function formatError(error: CLIError): string {
   }
 
   if (error.next) {
-    parts.push(`\n  ${styles.info("Next:")} Run ${formatNextAction(error.next)}.`);
+    parts.push(`\n  ${styles.info("Next:")} ${formatNextAction(error.next)}`);
   }
 
   return parts.join("");

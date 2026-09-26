@@ -28,7 +28,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
-import { CLIError, formatCopyableCommand, internalError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import {
   generateUnifiedKyselyTypes,
@@ -353,26 +353,36 @@ function schemaDriftError(
     `--workspace-id=${options.workspaceId}`,
     ...(options.profileArgValue !== undefined ? [`--profile=${options.profileArgValue}`] : []),
   ];
-  const rescaffold = formatCopyableCommand([
-    "tailor",
-    "function",
-    "script",
-    options.scriptArgValue,
-    ...(options.sidecar.source === "remote" ? ["--remote"] : []),
-    ...contextFlags,
-  ]);
-  const override = formatCopyableCommand([
-    "tailor",
-    "function",
-    "run",
-    options.scriptArgValue,
-    "--allow-schema-drift",
-    ...contextFlags,
-  ]);
+  const rescaffold = formatCommandHint(
+    {
+      command: "tailor",
+      args: [
+        "function",
+        "script",
+        options.scriptArgValue,
+        ...(options.sidecar.source === "remote" ? ["--remote"] : []),
+        ...contextFlags,
+      ],
+    },
+    {
+      shell: (commandLine) => `Refresh the generated types with ${commandLine}`,
+      perShell: (instruction) => `Refresh the generated types by running ${instruction}`,
+    },
+  );
+  const override = formatCommandHint(
+    {
+      command: "tailor",
+      args: ["function", "run", options.scriptArgValue, "--allow-schema-drift", ...contextFlags],
+    },
+    {
+      shell: (commandLine) => `run anyway with ${commandLine}`,
+      perShell: (instruction) => `run anyway by running ${instruction}`,
+    },
+  );
   return CLIError({
     code: "SCRIPT_SCHEMA_DRIFT",
     message: `Schema drift detected: ${SCRIPT_SNAPSHOT_FILE_NAME} next to the script no longer matches ${target}.`,
     details: formatMigrationDiff(diff),
-    suggestion: `Refresh the generated types with ${rescaffold}, or run anyway with ${override}.`,
+    suggestion: `${rescaffold}, or ${override}.`,
   });
 }

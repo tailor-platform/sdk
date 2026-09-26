@@ -9,7 +9,7 @@ import {
 } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { formatCopyableCommand } from "#/cli/shared/errors";
+import { formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 
@@ -91,16 +91,23 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (!jsonOutput) {
-      const trigger = formatCopyableCommand([
-        "tailor",
-        "executor",
-        "trigger",
-        "<name>",
-        "-d",
-        '{"key":"value"}',
-        ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
-      ]);
-      logger.info(`To test a webhook, run: ${trigger}`);
+      const trigger = {
+        command: "tailor",
+        args: [
+          "executor",
+          "trigger",
+          "<name>",
+          "-d",
+          '{"key":"value"}',
+          ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+        ],
+      };
+      logger.info(
+        formatCommandHint(trigger, {
+          shell: (commandLine) => `To test a webhook, run: ${commandLine}`,
+          perShell: (instruction) => `To test a webhook, run ${instruction}`,
+        }),
+      );
     }
   },
 });

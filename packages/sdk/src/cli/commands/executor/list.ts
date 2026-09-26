@@ -8,7 +8,7 @@ import {
 } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { formatCopyableCommand } from "#/cli/shared/errors";
+import { formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
@@ -82,14 +82,21 @@ export const listCommand = defineAppCommand({
     if (!jsonOutput) {
       const hasWebhook = executors.some((e) => e.triggerType === "webhook");
       if (hasWebhook) {
-        const listWebhooks = formatCopyableCommand([
-          "tailor",
-          "executor",
-          "webhook",
-          "list",
-          ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
-        ]);
-        logger.info(`To see webhook URLs, run: ${listWebhooks}`);
+        const listWebhooks = {
+          command: "tailor",
+          args: [
+            "executor",
+            "webhook",
+            "list",
+            ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+          ],
+        };
+        logger.info(
+          formatCommandHint(listWebhooks, {
+            shell: (commandLine) => `To see webhook URLs, run: ${commandLine}`,
+            perShell: (instruction) => `To see webhook URLs, run ${instruction}`,
+          }),
+        );
       }
     }
   },

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { recoveryContextArgs, workspaceArgs } from "#/cli/shared/args";
 import { fetchAll } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError, formatCopyableCommand, toError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -67,12 +67,20 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const consoleFallback = formatCopyableCommand([
-      "tailor",
-      "authconnection",
-      "open",
-      ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
-    ]);
+    const consoleFallback = formatCommandHint(
+      {
+        command: "tailor",
+        args: [
+          "authconnection",
+          "open",
+          ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+        ],
+      },
+      {
+        shell: (commandLine) => commandLine,
+        perShell: (instruction) => `Run ${instruction}`,
+      },
+    );
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],

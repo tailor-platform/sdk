@@ -1,9 +1,9 @@
 /**
- * Copyable command hints for migration remediation
+ * Command hints for migration remediation
  */
 
 import { formatConfigArg } from "#/cli/shared/args";
-import { formatCopyableCommand } from "#/cli/shared/errors";
+import { type CommandHintRenderers, formatCommandHint } from "#/cli/shared/errors";
 import { formatMigrationNumber } from "./migration-number";
 
 export interface MigrationScriptCommandOptions {
@@ -16,15 +16,18 @@ export interface MigrationScriptCommandOptions {
 }
 
 /**
- * Build the copyable `tailor tailordb migration script` command for
- * remediation hints, reproducing the current run's invocation context.
+ * Render the `tailor tailordb migration script` command as a remediation
+ * hint, reproducing the current run's invocation context.
  * @param {MigrationScriptCommandOptions} options - Target migration and invocation context
- * @returns {string} Command line quoted for the current platform's shell
+ * @param {CommandHintRenderers} renderers - Wording for one shared command line or one per shell
+ * @returns {string} The hint produced by the renderer that matches the command lines
  */
-export function formatMigrationScriptCommand(options: MigrationScriptCommandOptions): string {
+export function formatMigrationScriptHint(
+  options: MigrationScriptCommandOptions,
+  renderers: CommandHintRenderers,
+): string {
   const { migrationNumber, namespace, configPath, noScript } = options;
-  const argv = [
-    "tailor",
+  const args = [
     "tailordb",
     "migration",
     "script",
@@ -34,10 +37,10 @@ export function formatMigrationScriptCommand(options: MigrationScriptCommandOpti
   ];
   const configArg = formatConfigArg(configPath);
   if (configArg !== undefined) {
-    argv.push(configArg);
+    args.push(configArg);
   }
   if (noScript) {
-    argv.push("--no-script", "--reason", "<reason>");
+    args.push("--no-script", "--reason", "<reason>");
   }
-  return formatCopyableCommand(argv);
+  return formatCommandHint({ command: "tailor", args }, renderers);
 }

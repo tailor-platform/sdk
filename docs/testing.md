@@ -4,7 +4,7 @@
 
 Vitest is configured with several projects (see [`packages/sdk/vitest.config.ts`](../packages/sdk/vitest.config.ts)):
 
-- **unit / unit-core / unit-plugin** — Unit tests under `src/**` and `scripts/**`, split by isolation needs; the `unit*` glob selects all three
+- **unit / unit-core / unit-plugin / unit-shell** — Unit tests under `src/**` and `scripts/**`, split by isolation needs; the `unit*` glob selects all four, and the Windows CI job runs `unit-plugin` and `unit-shell`, whose tests spawn real launchers and shells
 - **integration** — Deploy fixture integration tests
 - **e2e** — Subprocess-driven e2e files in `e2e/**` (120-second test timeout); excluded from coverage CI because subprocess execution does not contribute coverage data
 - **e2e-coverage** — `e2e/deploy.test.ts`, which exercises `deploy()` in-process; the coverage CI job runs it, and `--project=e2e*` selects both e2e projects

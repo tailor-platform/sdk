@@ -18,7 +18,7 @@ import { workspaceArgs, configArg, DEFAULT_CONFIG_PATH } from "#/cli/shared/args
 import { defineAppCommand } from "#/cli/shared/command";
 import { extractAllNamespaces, extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
-import { CLIError, formatCopyableCommand } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -218,16 +218,16 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
     }
 
     const relScript = path.relative(process.cwd(), filePath);
-    const runArgv = ["tailor", "function", "run", relScript];
+    const runArgs = ["function", "run", relScript];
     if (args.config !== DEFAULT_CONFIG_PATH) {
-      runArgv.push(`--config=${args.config}`);
+      runArgs.push(`--config=${args.config}`);
     }
     const workspaceIdForHint = resolvedWorkspaceId ?? args["workspace-id"];
     if (workspaceIdForHint !== undefined) {
-      runArgv.push(`--workspace-id=${workspaceIdForHint}`);
+      runArgs.push(`--workspace-id=${workspaceIdForHint}`);
     }
     if (args.profile !== undefined) {
-      runArgv.push(`--profile=${args.profile}`);
+      runArgs.push(`--profile=${args.profile}`);
     }
 
     if (logger.jsonMode) {
@@ -246,7 +246,15 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
     for (const file of created) {
       logger.success(`Created ${styles.path(path.relative(process.cwd(), file))}`);
     }
-    logger.info(`Next: edit the script, then run ${formatCopyableCommand(runArgv)}`);
+    logger.info(
+      formatCommandHint(
+        { command: "tailor", args: runArgs },
+        {
+          shell: (commandLine) => `Next: edit the script, then run ${commandLine}`,
+          perShell: (instruction) => `Next: edit the script, then run ${instruction}`,
+        },
+      ),
+    );
   },
 });
 

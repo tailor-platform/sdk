@@ -16,7 +16,7 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, type CommandHintRenderers } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
@@ -39,7 +39,7 @@ import {
   type ExpandContractPlan,
 } from "./expand-contract";
 import { formatFieldShape, hasFieldShapeChange } from "./field-type-change";
-import { formatMigrationScriptCommand } from "./hints";
+import { formatMigrationScriptHint } from "./hints";
 import {
   dropSpecApplies,
   findNestedMemberRenameCandidates,
@@ -1456,12 +1456,14 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
   }
 
   const commandOptions = { migrationNumber, namespace, configPath };
+  const indentedHint: CommandHintRenderers = {
+    shell: (commandLine) => `  ${styles.bold(commandLine)}`,
+    perShell: (instruction) => `  ${instruction}`,
+  };
   logger.log("To add a custom migrate.ts, run:");
-  logger.log(`  ${styles.bold(formatMigrationScriptCommand(commandOptions))}`);
+  logger.log(formatMigrationScriptHint(commandOptions, indentedHint));
   logger.log("To record that this migration intentionally has no script, run:");
-  logger.log(
-    `  ${styles.bold(formatMigrationScriptCommand({ ...commandOptions, noScript: true }))}`,
-  );
+  logger.log(formatMigrationScriptHint({ ...commandOptions, noScript: true }, indentedHint));
 }
 
 /**

@@ -4,7 +4,7 @@ import { errorToJson, serializeError } from "./error-json";
 import {
   CLIError,
   errorSummary,
-  formatCopyableCommand,
+  formatCommandHint,
   internalError,
   isCLIError,
   toError,
@@ -155,41 +155,70 @@ describe("errorToJson", () => {
     );
   });
 
-  test("renders Windows arguments with shell expansions as an argv array", () => {
+  test("names a PowerShell and a cmd.exe next command when the Windows shells quote differently", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     const error = CLIError({
       code: "WORKSPACE_SELECTION_REQUIRED",
       message: "Choose a workspace.",
       next: {
         command: "tailor",
-        args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"],
+        args: ["deploy", "--config", "C:\\work\\%APPDATA%\\tailor.config.ts"],
       },
     });
 
     expect(error.format()).toContain(
-      'argv ["tailor","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
+      `Run \`tailor deploy --config 'C:\\work\\%APPDATA%\\tailor.config.ts'\` in PowerShell or \`tailor deploy --config "C:\\work\\%%cd:~,%APPDATA%%cd:~,%\\tailor.config.ts"\` in cmd.exe.`,
     );
   });
 
-  test("leaves shell-safe copyable command values unquoted", () => {
-    expect(formatCopyableCommand(["tailor", "deploy", "--config=custom.config.ts"])).toBe(
-      "tailor deploy --config=custom.config.ts",
-    );
-  });
+  const hintRenderers = {
+    shell: (commandLine: string) => `shell: ${commandLine}`,
+    perShell: (instruction: string) => `perShell: ${instruction}`,
+  };
 
-  test("single-quotes POSIX-unsafe copyable command values", () => {
+  test("leaves shell-safe command hint values unquoted", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
 
-    expect(formatCopyableCommand(["tailor", "deploy", "--config=weird $config.ts"])).toBe(
-      "tailor deploy '--config=weird $config.ts'",
-    );
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config=custom.config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe("shell: tailor deploy --config=custom.config.ts");
   });
 
-  test("renders copyable commands with Windows expansion characters as argv", () => {
+  test("single-quotes POSIX-unsafe command hint values", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config=weird $config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe("shell: tailor deploy '--config=weird $config.ts'");
+  });
+
+  test("keeps one Windows command line when both shells read the double-quoted arguments alike", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 
-    expect(formatCopyableCommand(["tailor", "deploy", "--config=%APPDATA%.config.ts"])).toBe(
-      'argv ["tailor","deploy","--config=%APPDATA%.config.ts"]',
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe('shell: tailor deploy --config "C:\\work\\!SECRET!\\tailor.config.ts"');
+  });
+
+  test("hands command hints to the per-shell renderer when the Windows shells quote differently", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    expect(
+      formatCommandHint(
+        { command: "tailor", args: ["deploy", "--config=%APPDATA%.config.ts"] },
+        hintRenderers,
+      ),
+    ).toBe(
+      `perShell: \`tailor deploy '--config=%APPDATA%.config.ts'\` in PowerShell or \`tailor deploy "--config=%%cd:~,%APPDATA%%cd:~,%.config.ts"\` in cmd.exe`,
     );
   });
 
