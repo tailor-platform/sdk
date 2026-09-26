@@ -18,6 +18,7 @@ import {
   type GroupedDisplayEntry,
   type NamespaceAction,
 } from "./grouped-display";
+import { collectOwnerConflicts, collectUnmanagedResources } from "./managed-resources";
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
@@ -56,7 +57,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     results.pipeline.changeSet.resolver,
     results.functionRegistry.resolverFunctionChanges,
   );
-  const workflowEntries = formatWorkflowChangeEntries(
+  const workflowResourceEntries = formatWorkflowChangeEntries(
     results.workflow.changeSet,
     results.functionRegistry.workflowJobChanges,
   );
@@ -64,6 +65,10 @@ function buildPlanReport(results: PlanResults): PlanReport {
     results.workflowExecutionPolicy.changeSet,
     ["executionPolicy"],
   );
+  const workflowEntries: GroupedDisplayEntry[] = [
+    ...workflowResourceEntries,
+    ...workflowExecutionPolicyEntries,
+  ];
   const authHookEntries = formatAuthHookChangeEntries(
     results.auth.changeSet.authHook,
     results.functionRegistry.authHookFunctionChanges,
@@ -138,7 +143,6 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...pipelineEntries,
     ...executorEntries,
     ...workflowEntries,
-    ...workflowExecutionPolicyEntries,
     ...idpEntries,
     ...authEntries,
   ];
@@ -150,30 +154,8 @@ function buildPlanReport(results: PlanResults): PlanReport {
   ];
   const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
 
-  const allUnmanaged = [
-    ...results.functionRegistry.unmanaged,
-    ...results.tailorDB.unmanaged,
-    ...results.staticWebsite.unmanaged,
-    ...results.aiGateway.unmanaged,
-    ...results.idp.unmanaged,
-    ...results.auth.unmanaged,
-    ...results.pipeline.unmanaged,
-    ...results.executor.unmanaged,
-    ...results.workflow.unmanaged,
-    ...results.secretManager.unmanaged,
-  ];
-  const allConflicts = [
-    ...results.functionRegistry.conflicts,
-    ...results.tailorDB.conflicts,
-    ...results.staticWebsite.conflicts,
-    ...results.aiGateway.conflicts,
-    ...results.idp.conflicts,
-    ...results.auth.conflicts,
-    ...results.pipeline.conflicts,
-    ...results.executor.conflicts,
-    ...results.workflow.conflicts,
-    ...results.secretManager.conflicts,
-  ];
+  const allUnmanaged = collectUnmanagedResources(results);
+  const allConflicts = collectOwnerConflicts(results);
 
   const allEntries = [
     ...allDisplayEntries,
