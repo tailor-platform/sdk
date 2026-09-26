@@ -18,6 +18,7 @@ import {
   type GroupedDisplayEntry,
   type NamespaceAction,
 } from "./grouped-display";
+import { collectOwnerConflicts, collectUnmanagedResources } from "./managed-resources";
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
@@ -150,30 +151,8 @@ function buildPlanReport(results: PlanResults): PlanReport {
   ];
   const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
 
-  const allUnmanaged = [
-    ...results.functionRegistry.unmanaged,
-    ...results.tailorDB.unmanaged,
-    ...results.staticWebsite.unmanaged,
-    ...results.aiGateway.unmanaged,
-    ...results.idp.unmanaged,
-    ...results.auth.unmanaged,
-    ...results.pipeline.unmanaged,
-    ...results.executor.unmanaged,
-    ...results.workflow.unmanaged,
-    ...results.secretManager.unmanaged,
-  ];
-  const allConflicts = [
-    ...results.functionRegistry.conflicts,
-    ...results.tailorDB.conflicts,
-    ...results.staticWebsite.conflicts,
-    ...results.aiGateway.conflicts,
-    ...results.idp.conflicts,
-    ...results.auth.conflicts,
-    ...results.pipeline.conflicts,
-    ...results.executor.conflicts,
-    ...results.workflow.conflicts,
-    ...results.secretManager.conflicts,
-  ];
+  const allUnmanaged = collectUnmanagedResources(results);
+  const allConflicts = collectOwnerConflicts(results);
 
   const allEntries = [
     ...allDisplayEntries,
@@ -245,7 +224,10 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...buildGroupedDisplayLines("TailorDB", tailorDBEntries, tailorDBServiceActions),
     ...buildGroupedDisplayLines("Resolver", pipelineEntries, pipelineServiceActions),
     ...buildGroupedDisplayLines("Executor", executorEntries),
-    ...buildGroupedDisplayLines("Workflow", workflowEntries),
+    ...buildGroupedDisplayLines("Workflow", [
+      ...workflowEntries,
+      ...workflowExecutionPolicyEntries,
+    ]),
     ...buildGroupedDisplayLines("IdP", idpEntries, idpServiceActions),
     ...buildGroupedDisplayLines("Auth", authEntries, authServiceActions),
     ...results.secretManager.vaultChangeSet.lines(),

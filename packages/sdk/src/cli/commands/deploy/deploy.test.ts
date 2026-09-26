@@ -1,5 +1,5 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { logger } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -916,6 +916,68 @@ describe("printPlanResults", () => {
     printPlanResults(results, { dryRun: true });
 
     expect(String(outSpy.mock.calls[0]?.[0])).toContain("migration checkpoint 0005 → 0000");
+  });
+
+  test("lists workflow execution policy changes in the Workflow section of human output", () => {
+    const results = emptyResults();
+    results.workflowExecutionPolicy.changeSet.updates.push({ name: "premium" } as never);
+    results.workflowExecutionPolicy.changeSet.replaces.push({ name: "tenant-api" } as never);
+
+    printPlanResults(results, { dryRun: true });
+
+    const lines = String(outSpy.mock.calls[0]?.[0]).split("\n");
+    const workflowSection = lines.slice(lines.findIndex((line) => line.includes("Workflow:")));
+    expect(workflowSection).toContain(`  ${symbols.update} premium (executionPolicy)`);
+    expect(workflowSection).toContain(`  ${symbols.replace} tenant-api (executionPolicy)`);
+  });
+
+  test("reports unmanaged resources and owner conflicts of every plan kind", () => {
+    const results = emptyResults();
+    results.workflowExecutionPolicy.unmanaged = [
+      { resourceType: "Workflow execution policy", resourceName: "premium" },
+    ];
+    results.workflowExecutionPolicy.conflicts = [
+      {
+        resourceType: "Workflow execution policy",
+        resourceName: "tenant-api",
+        currentOwner: "other-app",
+      },
+    ];
+    results.app.unmanaged = [{ resourceType: "Application", resourceName: "my-app" }];
+    results.app.conflicts = [
+      { resourceType: "Application", resourceName: "shared-app", currentOwner: "other-app" },
+    ];
+
+    printPlanResults(results, { dryRun: true });
+    const human = String(outSpy.mock.calls[0]?.[0]);
+    {
+      using _json = jsonMode();
+      printPlanResults(results, { dryRun: true });
+    }
+    const payload = outSpy.mock.calls[1]?.[0] as {
+      warnings: Array<{ type: string; resourceType: string; name: string }>;
+      conflicts: Array<{ resourceType: string; name: string; currentOwner: string }>;
+    };
+
+    expect(payload.warnings).toEqual(
+      expect.arrayContaining([
+        { type: "unmanaged", resourceType: "Workflow execution policy", name: "premium" },
+        { type: "unmanaged", resourceType: "Application", name: "my-app" },
+      ]),
+    );
+    expect(payload.conflicts).toEqual(
+      expect.arrayContaining([
+        {
+          resourceType: "Workflow execution policy",
+          name: "tenant-api",
+          currentOwner: "other-app",
+        },
+        { resourceType: "Application", name: "shared-app", currentOwner: "other-app" },
+      ]),
+    );
+    for (const name of ["premium", "my-app", "tenant-api", "shared-app"]) {
+      expect(human).toContain(`"${name}"`);
+    }
   });
 
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
