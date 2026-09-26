@@ -923,12 +923,13 @@ describe("printPlanResults", () => {
     results.workflowExecutionPolicy.changeSet.updates.push({ name: "premium" } as never);
     results.workflowExecutionPolicy.changeSet.replaces.push({ name: "tenant-api" } as never);
 
-    printPlanResults(results, { dryRun: true });
+    const summary = printPlanResults(results, { dryRun: true });
 
     const lines = String(outSpy.mock.calls[0]?.[0]).split("\n");
     const workflowSection = lines.slice(lines.findIndex((line) => line.includes("Workflow:")));
     expect(workflowSection).toContain(`  ${symbols.update} premium (executionPolicy)`);
     expect(workflowSection).toContain(`  ${symbols.replace} tenant-api (executionPolicy)`);
+    expect(summary).toMatchObject({ create: 0, update: 1, delete: 0, replace: 1 });
   });
 
   test("reports unmanaged resources and owner conflicts of every plan kind", () => {
