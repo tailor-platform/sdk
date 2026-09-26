@@ -63,9 +63,9 @@ import {
 import { planExecutor } from "./executor";
 import {
   collectFunctionEntries,
+  collectWorkflowJobStates,
   filterBundledWorkflowJobs,
   planFunctionRegistry,
-  WORKFLOW_PREFIX,
 } from "./function-registry";
 import { planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
@@ -489,11 +489,7 @@ async function planDeploymentTarget(
         previous?.functionRegistry.existingMap,
       ),
     );
-    const unchangedWorkflowJobs = new Set(
-      functionRegistry.changeSet.unchanged
-        .filter((entry) => entry.name.startsWith(WORKFLOW_PREFIX))
-        .map((entry) => entry.name.slice(WORKFLOW_PREFIX.length)),
-    );
+    const workflowJobStates = collectWorkflowJobStates(functionRegistry.changeSet);
     const [
       tailorDB,
       staticWebsite,
@@ -546,7 +542,7 @@ async function planDeploymentTarget(
           application.id,
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
-          unchangedWorkflowJobs,
+          workflowJobStates.unchanged,
           {
             ...subscribedWorkflows(owned),
             jobPublishEvents: collectWorkflowJobPublishEvents(target),
@@ -557,6 +553,7 @@ async function planDeploymentTarget(
             existingJobFunctions: previous.workflow.existingJobFunctions,
             existingWorkflows: previous.workflow.existingWorkflows,
           },
+          workflowJobStates.forcedBySdkVersion,
         ),
       ),
       skip?.has("workflowExecutionPolicy") && previous

@@ -198,13 +198,12 @@ export async function planWorkflowJobFunctionExecutionPolicy(
       const desiredKey = toPlatformExecutionPolicyKey(policy);
       const remoteConcurrency = normalizeComparableConcurrency(found.resource.concurrencyPolicy);
       const desiredConcurrency = normalizeComparableConcurrency(policy.concurrencyPolicy);
-      const unchanged =
+      const configUnchanged =
         owned &&
-        hasMatchingSdkVersion(found.allLabels, metaRequest.labels) &&
         remoteKey === desiredKey &&
         areNormalizedEqual(remoteConcurrency, desiredConcurrency);
 
-      if (unchanged) {
+      if (configUnchanged && hasMatchingSdkVersion(found.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: policy.name });
       } else if (remoteKey !== desiredKey) {
         // execution_policy_key is immutable after create; the platform requires
@@ -212,7 +211,13 @@ export async function planWorkflowJobFunctionExecutionPolicy(
         // (not delete + create) so the create phase does not race the delete.
         changeSet.replaces.push({ name: policy.name, workspaceId, policy, metaRequest });
       } else {
-        changeSet.updates.push({ name: policy.name, workspaceId, policy, metaRequest });
+        changeSet.updates.push({
+          name: policy.name,
+          workspaceId,
+          policy,
+          metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
+        });
       }
       delete existing[policy.name];
     } else {

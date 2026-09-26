@@ -227,6 +227,17 @@ describe("planApplication", () => {
       expect(result.updates[0]?.details).toEqual([`${symbols.create} erp-kit-version (metadata)`]);
     });
 
+    test("does not mark a metadata change as forced by the SDK version", async () => {
+      const client = createMockClient([{ ...matchingApplication, sdkVersion: "v0-9-0" }]);
+
+      const result = await planApplication(
+        createContext(client, createMockApplication({ metadata: { "erp-kit-version": "v1-2-3" } })),
+      );
+
+      expect(result.updates).toHaveLength(1);
+      expect(result.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+    });
+
     test("marks application updated when a metadata entry differs remotely", async () => {
       const client = createMockClient([
         { ...matchingApplication, extraLabels: { "erp-kit-version": "v1-0-0", tier: "gold" } },
@@ -347,6 +358,7 @@ describe("planApplication", () => {
     const result = await planApplication(createContext(client));
 
     expect(result.updates).toHaveLength(1);
+    expect(result.updates[0]).not.toHaveProperty("forcedBySdkVersion");
     expect(result.unchanged).toHaveLength(0);
   });
 
@@ -452,7 +464,29 @@ describe("planApplication", () => {
 
     expect(result.updates).toHaveLength(1);
     expect(result.updates[0]!.name).toBe(appName);
+    expect(result.updates[0]?.forcedBySdkVersion).toBe(true);
     expect(result.unchanged).toHaveLength(0);
+  });
+
+  test("does not mark an sdk-version update whose config also differs as forced", async () => {
+    const client = createMockClient([
+      {
+        name: appName,
+        authNamespace: "auth-a",
+        authIdpConfigName: "idp-a",
+        cors: ["https://a.example.com"],
+        allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+        disableIntrospection: true,
+        disabled: false,
+        subgraphs: matchingSubgraphs,
+        sdkVersion: "v0-9-0",
+      },
+    ]);
+
+    const result = await planApplication(createContext(client));
+
+    expect(result.updates).toHaveLength(1);
+    expect(result.updates[0]).not.toHaveProperty("forcedBySdkVersion");
   });
 
   test("creates application when it does not exist", async () => {

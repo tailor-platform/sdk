@@ -770,6 +770,112 @@ describe("planWorkflow", () => {
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
+    describe("SDK-version-forced updates", () => {
+      const jobNames = ["validate-order", "check-inventory", "process-payment"];
+      const mainJobDeps = { "validate-order": jobNames };
+
+      function planSampleWorkflow(options: {
+        sdkVersion?: string;
+        mainJobFunctionName?: string;
+        unchangedJobFunctions?: ReadonlySet<string>;
+        forcedJobFunctions?: ReadonlySet<string>;
+        publishExecutionEvents?: boolean;
+      }) {
+        const jobFunctionLabels = Object.fromEntries(
+          jobNames.map((jobName) => [
+            jobName,
+            {
+              label: appName,
+              sdkVersion: options.sdkVersion,
+              publishExecutionEvents: options.publishExecutionEvents,
+            },
+          ]),
+        );
+        const client = createMockClient(
+          [
+            {
+              id: "1",
+              name: "sample-workflow",
+              label: appName,
+              sdkVersion: options.sdkVersion,
+              resource: {
+                id: "1",
+                name: "sample-workflow",
+                mainJobFunctionName: options.mainJobFunctionName ?? "validate-order",
+                jobFunctions: Object.fromEntries(jobNames.map((jobName) => [jobName, "5"])),
+              },
+            },
+          ],
+          jobFunctionLabels,
+        );
+        return planWorkflow(
+          client,
+          workspaceId,
+          appName,
+          undefined,
+          { "sample-workflow": createMockWorkflow("sample-workflow", "validate-order") },
+          mainJobDeps,
+          options.unchangedJobFunctions ?? new Set(),
+          options.publishExecutionEvents === undefined
+            ? {}
+            : {
+                jobExecution: { workflowNames: new Set(["sample-workflow"]) },
+                jobPublishEvents: new Map(),
+              },
+          undefined,
+          options.forcedJobFunctions,
+        );
+      }
+
+      test.each([
+        {
+          name: "its sdk-version differs and its job functions are forced too",
+          options: { sdkVersion: "v0-9-0", forcedJobFunctions: new Set(jobNames) },
+        },
+        {
+          name: "its sdk-version differs and its job functions are unchanged",
+          options: { sdkVersion: "v0-9-0", unchangedJobFunctions: new Set(jobNames) },
+        },
+        {
+          name: "only its job functions are forced",
+          options: { forcedJobFunctions: new Set(jobNames) },
+        },
+      ])("marks a workflow whose definition matches when $name", async ({ options }) => {
+        const result = await planSampleWorkflow(options);
+
+        expect(result.changeSet.updates).toHaveLength(1);
+        expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(true);
+      });
+
+      test.each([
+        {
+          name: "its definition differs",
+          options: { sdkVersion: "v0-9-0", mainJobFunctionName: "check-inventory" },
+        },
+        {
+          name: "a job's publishing flag drifts",
+          options: { sdkVersion: "v0-9-0", publishExecutionEvents: false },
+        },
+        {
+          name: "only its job functions changed while its sdk-version matches",
+          options: {},
+        },
+        {
+          name: "its job functions are being registered",
+          options: { sdkVersion: "v0-9-0" },
+        },
+        {
+          name: "one of its job functions changed",
+          options: { sdkVersion: "v0-9-0", forcedJobFunctions: new Set(jobNames.slice(1)) },
+        },
+      ])("does not mark a workflow update when $name", async ({ options }) => {
+        const result = await planSampleWorkflow(options);
+
+        expect(result.changeSet.updates).toHaveLength(1);
+        expect(result.changeSet.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+      });
+    });
+
     test("workflow with retryPolicy is unchanged when remote bigint durations match local parsed durations", async () => {
       const client = createMockClient([
         {
@@ -1253,6 +1359,54 @@ describe("formatWorkflowChangeEntries", () => {
       },
     ]);
   });
+
+  test.each([
+    { name: "a forced update", functionChanges: { updates: [{ forced: true }] }, expected: true },
+    {
+      name: "an unforced update",
+      functionChanges: { updates: [{ forced: false }] },
+      expected: false,
+    },
+    { name: "a create on its own line", functionChanges: { creates: [{}] }, expected: true },
+  ])(
+    "keeps a forced workflow update's marker: $expected, when its job function has $name",
+    ({ functionChanges, expected }) => {
+      const functionItems = (items: ReadonlyArray<{ forced?: boolean }> | undefined) =>
+        (items ?? []).map(({ forced }) => ({
+          name: "workflow--process-order",
+          ...(forced && { forcedBySdkVersion: true as const }),
+        }));
+      const entries = formatWorkflowChangeEntries(
+        {
+          creates: [],
+          updates: [
+            {
+              name: "order-processing",
+              workspaceId: "ws",
+              workflow: {
+                name: "order-processing",
+                mainJob: { name: "process-order", body: () => {}, start: () => {} },
+              },
+              usedJobNames: ["process-order"],
+              metaRequest: { trn: "t", labels: {} },
+              forcedBySdkVersion: true,
+            },
+          ],
+          deletes: [],
+          replaces: [],
+        },
+        {
+          creates: functionItems("creates" in functionChanges ? functionChanges.creates : []),
+          updates: functionItems("updates" in functionChanges ? functionChanges.updates : []),
+          deletes: [],
+          replaces: [],
+        },
+      );
+
+      const workflowEntry = entries.find((entry) => entry.labels.includes("workflow"));
+      expect(workflowEntry?.forcedBySdkVersion).toBe(expected ? true : undefined);
+    },
+  );
 
   test("keeps unrelated workflow job function changes visible", () => {
     const entries = formatWorkflowChangeEntries(

@@ -167,10 +167,18 @@ Before applying changes, `deploy` shows a preview of the planned resource change
 - `-` means the resource will be deleted
 - `±` means the resource will be replaced
 
+An update marked `[forced by SDK version]` shows no configuration difference from what is deployed. It is applied again only because resources of this application were last deployed with a different SDK version.
+
 After the detailed list, a summary line is printed:
 
 ```text
 Plan: 5 to create, 3 to update, 1 to delete
+```
+
+When some updates are forced by the SDK version, the summary line also shows how many:
+
+```text
+Plan: 0 to create, 12 to update (11 forced by SDK version), 0 to delete
 ```
 
 Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
@@ -189,9 +197,16 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 ```json
 {
-  "summary": { "create": 2, "update": 1, "delete": 0, "replace": 0 },
+  "summary": { "create": 2, "update": 2, "delete": 0, "replace": 0, "forcedBySdkVersion": 1 },
   "changes": [
-    { "action": "create", "name": "Order", "labels": ["table"], "namespace": "tailordb" }
+    { "action": "create", "name": "Order", "labels": ["table"], "namespace": "tailordb" },
+    {
+      "action": "update",
+      "name": "Customer",
+      "labels": ["table"],
+      "namespace": "tailordb",
+      "forcedBySdkVersion": true
+    }
   ],
   "warnings": [
     { "type": "unmanaged", "resourceType": "tailorDB", "name": "LegacyType" },
@@ -201,15 +216,18 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 }
 ```
 
-- `summary` — counts of each change type.
-- `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`.
+- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`.
+- `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`) or secrets with missing values (`type: "skippedSecret"`). Unmanaged resources require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
 - `conflicts` — resources owned by another application that conflict with the current config. Require confirmation in apply mode; apply is cancelled if declined.
 
 **Apply** (`--json`): writes a JSON object to stdout:
 
 ```json
-{ "summary": { "create": 1, "update": 2, "delete": 0, "replace": 0 }, "status": "applied" }
+{
+  "summary": { "create": 1, "update": 2, "delete": 0, "replace": 0, "forcedBySdkVersion": 0 },
+  "status": "applied"
+}
 ```
 
 ## remove

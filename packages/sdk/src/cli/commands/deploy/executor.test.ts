@@ -422,6 +422,7 @@ describe("planExecutor", () => {
       // Should be updated
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0]!.name).toBe("existing-executor");
+      expect(result.changeSet.updates[0]).not.toHaveProperty("forcedBySdkVersion");
 
       // No creates or deletes
       expect(result.changeSet.creates).toHaveLength(0);
@@ -448,6 +449,28 @@ describe("planExecutor", () => {
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
       expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("existing executor update is forced by the SDK version when only its sdk-version differs", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+
+      const client = createMockClient([
+        {
+          name: "existing-executor",
+          label: appName,
+          sdkVersion: "v0-9-0",
+          resource: desiredExecutor,
+        },
+      ]);
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client }),
+      );
+
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(true);
     });
 
     test("existing executor is unchanged when a remote nested proto has an implicit default", async () => {
@@ -1495,6 +1518,69 @@ describe("formatExecutorChangeEntries", () => {
         symbol: symbols.update,
         name: "user-created",
         labels: ["executor", "function"],
+      },
+    ]);
+  });
+
+  test.each([
+    { name: "keeps", functionForced: true, expected: true },
+    { name: "drops", functionForced: false, expected: false },
+  ])(
+    "$name the forced marker when the grouped function update is forced: $functionForced",
+    ({ functionForced, expected }) => {
+      const entries = formatExecutorChangeEntries(
+        {
+          creates: [],
+          updates: [
+            {
+              name: "user-created",
+              request: { workspaceId: "ws", executor: { name: "user-created", targetType: 3 } },
+              metaRequest: { trn: "t", labels: {} },
+              forcedBySdkVersion: true,
+            },
+          ],
+          deletes: [],
+          replaces: [],
+        },
+        { "user-created": { name: "user-created", targetType: 3 } },
+        {
+          creates: [],
+          updates: [
+            {
+              name: "executor--user-created",
+              ...(functionForced && { forcedBySdkVersion: true }),
+            },
+          ],
+          deletes: [],
+          replaces: [],
+        },
+      );
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.labels).toEqual(["executor", "function"]);
+      expect(entries[0]?.forcedBySdkVersion).toBe(expected ? true : undefined);
+    },
+  );
+
+  test("keeps the forced marker on an ungrouped function registry update", () => {
+    const entries = formatExecutorChangeEntries(
+      { creates: [], updates: [], deletes: [], replaces: [] },
+      {},
+      {
+        creates: [],
+        updates: [{ name: "executor--user-created", forcedBySdkVersion: true }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: symbols.update,
+        name: "user-created",
+        labels: ["function"],
+        forcedBySdkVersion: true,
       },
     ]);
   });

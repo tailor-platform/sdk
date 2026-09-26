@@ -557,6 +557,7 @@ describe("planAuth", () => {
     });
 
     expect(result.changeSet.authHook.updates).toHaveLength(1);
+    expect(result.changeSet.authHook.updates[0]?.forcedBySdkVersion).toBe(true);
     expect(result.changeSet.authHook.unchanged).toHaveLength(0);
   });
 
@@ -596,11 +597,97 @@ describe("planAuth", () => {
     });
 
     expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.updates[0]?.forcedBySdkVersion).toBe(true);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(1);
+    expect(result.changeSet.machineUser.updates[0]?.forcedBySdkVersion).toBe(true);
     expect(result.changeSet.machineUser.unchanged).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(1);
+    expect(result.changeSet.oauth2Client.updates[0]?.forcedBySdkVersion).toBe(true);
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(0);
+  });
+
+  test("does not mark forceApplyAll updates whose config differs from remote", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      machineUsers: [{ ...managerMachineUserRemote, attributes: ["role"] }],
+      oauth2Clients: [
+        remoteOAuth2Client({
+          description: "Outdated description",
+          redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
+          accessTokenLifetime: { seconds: 86400n },
+          refreshTokenLifetime: { seconds: 604800n },
+        }),
+      ],
+      authHook: {
+        scriptRef: "auth-hook--auth-a--before-login",
+        invoker: { namespace: "auth-a", machineUserName: "another-machine-user" },
+      },
+    });
+
+    const result = await planAuth({ ...createContext(client), forceApplyAll: true });
+
+    for (const updates of [
+      result.changeSet.service.updates,
+      result.changeSet.machineUser.updates,
+      result.changeSet.oauth2Client.updates,
+      result.changeSet.authHook.updates,
+    ]) {
+      expect(updates).toHaveLength(1);
+      expect(updates[0]).not.toHaveProperty("forcedBySdkVersion");
+    }
+  });
+
+  test("does not mark a forceApplyAll auth service update that takes over ownership", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: "other-app" }],
+    });
+
+    const result = await planAuth({ ...createContext(client), forceApplyAll: true });
+
+    expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.updates[0]).not.toHaveProperty("forcedBySdkVersion");
+  });
+
+  test("marks forceApplyAll idpConfig, user profile, and tenant provider updates that match remote", async () => {
+    const application = createMockApplicationWithTenantProvider();
+    const samlApplication = createMockApplicationWithSamlIdP();
+    const profileApplication = createMockApplicationWithUserProfile({ includeAttributes: false });
+    const combined = {
+      ...application,
+      authService: {
+        ...profileApplication.authService,
+        config: {
+          ...application.authService?.config,
+          idProvider: samlApplication.authService?.config.idProvider,
+        },
+      },
+    } as unknown as Application;
+    const createResult = await planAuth(createContext(createMockClient(), combined));
+    const idpConfig = createResult.changeSet.idpConfig.creates[0]?.request.idpConfig;
+    const userProfile =
+      createResult.changeSet.userProfileConfig.creates[0]?.request.userProfileProviderConfig;
+    const tenant = createResult.changeSet.tenantConfig.creates[0]?.request.tenantProviderConfig;
+    expect(idpConfig && userProfile && tenant).toBeDefined();
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      authIdPConfigs: [create(AuthIDPConfigSchema, idpConfig)],
+      userProfileConfig: {
+        userProfileProviderConfig: create(UserProfileProviderConfigSchema, userProfile),
+      },
+      tenantConfig: { tenantProviderConfig: create(TenantProviderConfigSchema, tenant) },
+    });
+
+    const result = await planAuth({ ...createContext(client, combined), forceApplyAll: true });
+
+    for (const updates of [
+      result.changeSet.idpConfig.updates,
+      result.changeSet.userProfileConfig.updates,
+      result.changeSet.tenantConfig.updates,
+    ]) {
+      expect(updates).toHaveLength(1);
+      expect(updates[0]?.forcedBySdkVersion).toBe(true);
+    }
   });
 
   test("marks oauth2 client unchanged when custom token lifetimes match remote values", async () => {
@@ -774,6 +861,21 @@ describe("planAuth", () => {
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]?.name).toBe("default");
     expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
+  });
+
+  test("does not mark a forceApplyAll idpConfig update that has nothing to compare against", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      authIdPConfigs: [{ name: "default" }],
+    });
+
+    const result = await planAuth({
+      ...createContext(client, createMockApplicationWithBuiltInIdP()),
+      forceApplyAll: true,
+    });
+
+    expect(result.changeSet.idpConfig.updates).toHaveLength(1);
+    expect(result.changeSet.idpConfig.updates[0]).not.toHaveProperty("forcedBySdkVersion");
   });
 
   describe("OAuth2 redirect URI resolution on first deployment (issue #1030)", () => {

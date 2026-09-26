@@ -34,6 +34,7 @@ type MockWebsite = {
   description?: string;
   allowedIpAddresses?: string[];
   label?: string;
+  sdkVersion?: string;
   customDomains?: MockCustomDomain[];
 };
 
@@ -71,7 +72,9 @@ function createMockClient(websites: MockWebsite[]): OperatorClient {
         const website = websites.find((entry) => entry.name === name);
         return {
           metadata: {
-            labels: website?.label ? { "sdk-name": website.label, "sdk-version": sdkVersion } : {},
+            labels: website?.label
+              ? { "sdk-name": website.label, "sdk-version": website.sdkVersion ?? sdkVersion }
+              : {},
           },
         };
       }
@@ -197,6 +200,34 @@ describe("planStaticWebsite", () => {
     expect(result.unmanaged).toHaveLength(unmanaged);
     expect(result.conflicts).toHaveLength(conflicts);
   });
+
+  test.each([
+    { name: "only its sdk-version differs", overrides: { sdkVersion: "v0-9-0" }, forced: true },
+    {
+      name: "its config also differs",
+      overrides: { sdkVersion: "v0-9-0", description: "Old site" },
+      forced: false,
+    },
+    { name: "another app owns it", overrides: { label: "other-app" }, forced: false },
+  ])(
+    "marks a website update forced by the SDK version only when $name",
+    async ({ overrides, forced }) => {
+      const client = createMockClient([
+        {
+          name: "site-a",
+          description: "Marketing site",
+          allowedIpAddresses: ["2.2.2.2", "1.1.1.1"],
+          label: appName,
+          ...overrides,
+        },
+      ]);
+
+      const result = await planStaticWebsite(createContext(client));
+
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(forced ? true : undefined);
+    },
+  );
 
   test("creates website when it does not exist", async () => {
     const client = createMockClient([]);

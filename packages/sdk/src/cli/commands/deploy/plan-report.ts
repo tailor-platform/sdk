@@ -27,7 +27,9 @@ type PrintPlanOptions = {
 
 type JsonPlanPayload = {
   summary: PlanSummary;
-  changes: Array<Pick<GroupedDisplayEntry, "action" | "name" | "labels" | "namespace">>;
+  changes: Array<
+    Pick<GroupedDisplayEntry, "action" | "name" | "labels" | "namespace" | "forcedBySdkVersion">
+  >;
   warnings: Array<{
     type: "unmanaged" | "skippedSecret";
     resourceType: string;
@@ -175,32 +177,18 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...results.secretManager.conflicts,
   ];
 
+  const serviceEntries = (serviceActions: ReadonlyArray<NamespaceAction>, label: string) =>
+    serviceActions.map((serviceAction) => ({
+      ...serviceAction,
+      labels: [label],
+      namespace: undefined,
+    }));
   const allEntries = [
     ...allDisplayEntries,
-    ...tailorDBServiceActions.map(({ action, name }) => ({
-      action,
-      name,
-      labels: ["tailorDB"],
-      namespace: undefined,
-    })),
-    ...pipelineServiceActions.map(({ action, name }) => ({
-      action,
-      name,
-      labels: ["pipeline"],
-      namespace: undefined,
-    })),
-    ...idpServiceActions.map(({ action, name }) => ({
-      action,
-      name,
-      labels: ["idp"],
-      namespace: undefined,
-    })),
-    ...authServiceActions.map(({ action, name }) => ({
-      action,
-      name,
-      labels: ["auth"],
-      namespace: undefined,
-    })),
+    ...serviceEntries(tailorDBServiceActions, "tailorDB"),
+    ...serviceEntries(pipelineServiceActions, "pipeline"),
+    ...serviceEntries(idpServiceActions, "idp"),
+    ...serviceEntries(authServiceActions, "auth"),
     ...formatChangeSetEntries(otherFunctionRegistryChanges),
     ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
     ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
@@ -209,11 +197,12 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
     ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
   ];
-  const changes = allEntries.map(({ action, name, labels, namespace }) => ({
+  const changes = allEntries.map(({ action, name, labels, namespace, forcedBySdkVersion }) => ({
     action,
     name,
     labels,
     namespace,
+    ...(forcedBySdkVersion && { forcedBySdkVersion }),
   }));
   const warnings = [
     ...allUnmanaged.map(({ resourceType, resourceName }) => ({
@@ -322,16 +311,20 @@ export function summarizePlanResults(
   displayEntries: ReadonlyArray<GroupedDisplayEntry>,
   serviceActions: ReadonlyArray<NamespaceAction>,
 ): PlanSummary {
-  const summary: PlanSummary = { create: 0, update: 0, delete: 0, replace: 0 };
+  const summary: PlanSummary = {
+    create: 0,
+    update: 0,
+    delete: 0,
+    replace: 0,
+    forcedBySdkVersion: 0,
+  };
 
-  // Count grouped display entries
-  for (const entry of displayEntries) {
+  // Count grouped display entries and service-level actions (shown as namespace headers)
+  for (const entry of [...displayEntries, ...serviceActions]) {
     summary[entry.action] += 1;
-  }
-
-  // Count service-level actions (shown as namespace headers)
-  for (const sa of serviceActions) {
-    summary[sa.action] += 1;
+    if (entry.forcedBySdkVersion) {
+      summary.forcedBySdkVersion += 1;
+    }
   }
 
   // Count non-grouped changesets (staticWebsite, app, secretManager, functionRegistry other)
@@ -345,12 +338,8 @@ export function summarizePlanResults(
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
   ]);
-  summary.create += nonGrouped.create;
-  summary.update += nonGrouped.update;
-  summary.delete += nonGrouped.delete;
-  summary.replace += nonGrouped.replace;
 
-  return summary;
+  return sumPlanSummaries([summary, nonGrouped]);
 }
 function sumPlanSummaries(summaries: ReadonlyArray<PlanSummary>): PlanSummary {
   return summaries.reduce<PlanSummary>(
@@ -359,8 +348,9 @@ function sumPlanSummaries(summaries: ReadonlyArray<PlanSummary>): PlanSummary {
       update: acc.update + summary.update,
       delete: acc.delete + summary.delete,
       replace: acc.replace + summary.replace,
+      forcedBySdkVersion: acc.forcedBySdkVersion + summary.forcedBySdkVersion,
     }),
-    { create: 0, update: 0, delete: 0, replace: 0 },
+    { create: 0, update: 0, delete: 0, replace: 0, forcedBySdkVersion: 0 },
   );
 }
 

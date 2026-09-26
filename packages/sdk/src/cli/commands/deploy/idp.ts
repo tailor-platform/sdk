@@ -569,17 +569,15 @@ async function planServices(
         conflicts,
         unmanaged,
       });
-      if (
-        owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areIdPServicesEqual(existing.resource, desired)
-      ) {
+      const configUnchanged = owned && areIdPServicesEqual(existing.resource, desired);
+      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: namespaceName, metaRequest });
       } else {
         changeSet.updates.push({
           name: namespaceName,
           request,
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingServices[namespaceName];
@@ -672,6 +670,7 @@ async function planClients(
             workspaceId,
             namespaceName,
             clientSecret: existingNameMap.get(name) ?? "",
+            forcedBySdkVersion: true,
           });
         } else {
           changeSet.unchanged.push({

@@ -44,6 +44,7 @@ function createMockClient(
     authNamespace?: string;
     cors?: string[];
     label?: string;
+    sdkVersion?: string;
   }>,
 ): OperatorClient {
   return {
@@ -61,7 +62,9 @@ function createMockClient(
       const gateway = gateways.find((entry) => entry.name === name);
       return {
         metadata: {
-          labels: gateway?.label ? { "sdk-name": gateway.label, "sdk-version": sdkVersion } : {},
+          labels: gateway?.label
+            ? { "sdk-name": gateway.label, "sdk-version": gateway.sdkVersion ?? sdkVersion }
+            : {},
         },
       };
     }),
@@ -151,6 +154,35 @@ describe("planAIGateway", () => {
     expect(result.conflicts).toHaveLength(expected.conflicts);
     expect(result.unmanaged).toHaveLength(expected.unmanaged);
   });
+
+  test.each([
+    { name: "only its sdk-version differs", overrides: { sdkVersion: "v0-9-0" }, forced: true },
+    {
+      name: "its config also differs",
+      overrides: { sdkVersion: "v0-9-0", authNamespace: "old-namespace" },
+      forced: false,
+    },
+    { name: "it is unmanaged", overrides: { label: undefined }, forced: false },
+    { name: "another app owns it", overrides: { label: "other-app" }, forced: false },
+  ])(
+    "marks a gateway update forced by the SDK version only when $name",
+    async ({ overrides, forced }) => {
+      const client = createMockClient([
+        {
+          name: "gateway-a",
+          authNamespace: "default",
+          cors: ["https://app.example.com", "https://example.com"],
+          label: appName,
+          ...overrides,
+        },
+      ]);
+
+      const result = await planAIGateway(createContext(client));
+
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(forced ? true : undefined);
+    },
+  );
 
   test("resolves staticwebsite :url placeholder in cors against deployed URL", async () => {
     const client = createMockClient([

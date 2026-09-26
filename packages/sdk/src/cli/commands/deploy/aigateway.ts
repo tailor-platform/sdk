@@ -182,17 +182,15 @@ export async function planAIGateway(context: PlanContext) {
         unmanaged,
       });
 
-      if (
-        owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areAIGatewaysEqual(existing.resource, desired)
-      ) {
+      const configUnchanged = owned && areAIGatewaysEqual(existing.resource, desired);
+      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name });
       } else {
         changeSet.updates.push({
           name,
           request,
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
       delete existingGateways[name];

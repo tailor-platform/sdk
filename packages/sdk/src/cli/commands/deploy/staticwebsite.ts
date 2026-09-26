@@ -216,17 +216,15 @@ export async function planStaticWebsite(context: PlanContext) {
         unmanaged,
       });
 
-      if (
-        owned &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        areStaticWebsitesEqual(existing.resource, desired)
-      ) {
+      const configUnchanged = owned && areStaticWebsitesEqual(existing.resource, desired);
+      if (configUnchanged && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name });
       } else {
         changeSet.updates.push({
           name,
           request,
           metaRequest,
+          ...(configUnchanged && { forcedBySdkVersion: true }),
         });
       }
 
