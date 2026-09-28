@@ -229,6 +229,71 @@ export const mainJob = createWorkflowJob({
     }
   });
 
+  async function bundleEncodingJob(
+    packageName: string,
+    allowedRuntimeGlobals?: Record<string, string[]>,
+  ) {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-package-global-")));
+    const packageDir = path.join(tmpDir, "node_modules", packageName);
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageDir, "package.json"),
+      JSON.stringify({ name: packageName, type: "module", exports: { ".": "./index.js" } }),
+    );
+    fs.writeFileSync(
+      path.join(packageDir, "index.js"),
+      'export const encode = (text) => Buffer.from(text).toString("base64");\n',
+    );
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+import { encode } from "${packageName}";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => encode("hi"),
+});
+`,
+    );
+
+    try {
+      return await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        ["main-job"],
+        {},
+        { modules: new Map() },
+        tmpDir,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        allowedRuntimeGlobals,
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  test("warns instead of failing when only an installed package references a forbidden global", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const result = await bundleEncodingJob("job-buffer-lib");
+
+    expect(result.bundledCode.get("main-job")).toBeDefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("job-buffer-lib"));
+  });
+
+  test("does not warn about a global the installed package is allowed to reference", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await bundleEncodingJob("job-allowed-buffer-lib", { "job-allowed-buffer-lib": ["Buffer"] });
+
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("job-allowed-buffer-lib"));
+  });
+
   test("bundles a job that uses Web Standard globals", async () => {
     const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-web-standard-")));
     const sourceFile = path.join(tmpDir, "workflow.ts");
