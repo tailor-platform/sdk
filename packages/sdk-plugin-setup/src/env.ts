@@ -123,15 +123,17 @@ export function collectEnvironmentRequirements(lock: LockFile): EnvironmentRequi
 }
 
 /**
- * Render `gh` commands that create each environment and set its secrets and variables.
+ * Render `gh` commands that create each missing environment and set its secrets and variables.
  * @param environments - Requirements grouped by environment
  * @returns Shell script text
  */
 export function renderGhCommands(environments: EnvironmentRequirements[]): string {
   const blocks = environments.map(({ environment, targets, requirements }) => {
+    const endpoint = `"repos/{owner}/{repo}/environments/${encodeURIComponent(environment)}"`;
     const lines = [
       `# Environment "${environment}" (${targets.join(", ")})`,
-      `gh api -X PUT "repos/{owner}/{repo}/environments/${encodeURIComponent(environment)}"`,
+      // PUT also rewrites an existing environment and needs admin access, so only create a missing one.
+      `gh api ${endpoint} --silent 2>/dev/null || gh api -X PUT ${endpoint} --silent`,
     ];
     for (const { required, type, name, description } of requirements) {
       const command = `gh ${type} set ${name} --env ${environment}`;

@@ -320,7 +320,7 @@ the environment's protection rules no longer guard your deploys.
 
 `tailor setup ci env` reads `.github/tailor.lock` and prints, for every GitHub
 Environment the generated workflows use, the commands that create the
-environment and set its secrets and variables. It is read-only, so re-run it
+environment (only when it does not exist yet) and set its secrets and variables. It is read-only, so re-run it
 whenever you add a target.
 
 ```bash

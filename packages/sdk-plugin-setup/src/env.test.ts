@@ -172,10 +172,13 @@ describe("collectEnvironmentRequirements", () => {
 describe("renderGhCommands", () => {
   const envs = () => collectEnvironmentRequirements(lockOf(target("branch", "my-app", "stg/eu")));
 
-  test("creates the environment before setting its secrets and variables", () => {
+  test("creates the environment, only when it does not exist yet, before setting its secrets and variables", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
-    const create = lines.indexOf('gh api -X PUT "repos/{owner}/{repo}/environments/stg%2Feu"');
+    const create = lines.indexOf(
+      'gh api "repos/{owner}/{repo}/environments/stg%2Feu" --silent 2>/dev/null || ' +
+        'gh api -X PUT "repos/{owner}/{repo}/environments/stg%2Feu" --silent',
+    );
     const firstSecret = lines.findIndex((l) => l.startsWith("gh secret set"));
     expect(create).toBeGreaterThanOrEqual(0);
     expect(create).toBeLessThan(firstSecret);
