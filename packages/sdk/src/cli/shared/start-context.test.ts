@@ -155,6 +155,30 @@ await workflow.start();
     expect(result).toContain('tailor.workflow.startWorkflow("workflow-a", undefined)');
   });
 
+  test("binds a default export to the loaded workflow's name over the name written in the source", async () => {
+    const { tempDir } = await createDuplicateExportContext();
+    const workflowPath = path.join(tempDir, "workflow.ts");
+    writeFileSync(
+      workflowPath,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+const mainJob = createWorkflowJob({ name: "main-job", body: async () => "done" });
+export default createWorkflow({ name: "from-source", mainJob });
+`,
+    );
+    const context = await buildStartContext({ files: [workflowPath] }, undefined, tempDir, [
+      { workflow: { name: "from-runtime" }, sourceFile: workflowPath },
+    ]);
+    const source = `
+import workflow from "./workflow";
+await workflow.start();
+`;
+
+    const result = transform(source, path.join(tempDir, "caller.ts"), context);
+
+    expect(result).toContain('tailor.workflow.startWorkflow("from-runtime", undefined)');
+  });
+
   test("preserves a namespace import paired with a transformed default import", async () => {
     const { tempDir } = await createDuplicateExportContext();
     const workflowPath = path.join(tempDir, "workflow.ts");
