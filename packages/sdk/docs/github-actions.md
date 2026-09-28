@@ -172,10 +172,13 @@ Because the variable is scoped to a GitHub Environment, both the `plan` and
    ```
 
 2. Set the id as the Environment variable (the environment name is your
-   `--environment` value, or the workspace name when omitted):
+   `--environment` value, or the workspace name when omitted).
+   `tailor setup ci env` prints this command together with the other secrets
+   and variables each environment needs (see
+   [Setting secrets and variables](#setting-secrets-and-variables)):
 
    ```bash
-   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env my-app-stg
+   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env=my-app-stg
    ```
 
 If `TAILOR_PLATFORM_WORKSPACE_ID` is unset, `deploy` fails because the target
