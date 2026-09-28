@@ -1164,6 +1164,69 @@ export async function run() {
     });
   });
 
+  describe("undetectable workflow-file imports", () => {
+    const callerFile = path.resolve("src/resolvers/run.ts");
+    const syncFile = path.resolve("src/workflow/sync.ts");
+    const context: StartContext = {
+      modules: new Map([
+        [
+          normalizeFilePath(syncFile),
+          {
+            sourceFile: syncFile,
+            localBindings: new Map(),
+            exports: new Map([["syncStep", { kind: "job", name: "sync-step" }]]),
+          },
+        ],
+      ]),
+    };
+
+    test("throws when .start() is called on a named export the build cannot detect", () => {
+      const source = `
+import { syncWorkflow } from "../workflow/sync";
+
+export async function run() {
+  return await syncWorkflow.start({ id: 1 });
+}
+`;
+
+      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
+        "syncWorkflow.start() in " +
+          callerFile +
+          ' cannot be rewritten: "../workflow/sync" is a workflow file, but its export "syncWorkflow" is not a workflow or job the build can detect.',
+      );
+    });
+
+    test("throws when .start() is called through a namespace import of a workflow file", () => {
+      const source = `
+import * as sync from "../workflow/sync";
+
+export async function run() {
+  return await sync.default.start({ id: 1 });
+}
+`;
+
+      expect(() => transformStartCallsWithContext(source, context, callerFile)).toThrow(
+        "sync.default.start() in " +
+          callerFile +
+          ' cannot be rewritten: "../workflow/sync" is a workflow file imported as a namespace.',
+      );
+    });
+
+    test("does not throw when the undetectable import is shadowed by a local binding", () => {
+      const source = `
+import { syncWorkflow } from "../workflow/sync";
+
+export async function run(syncWorkflow: { start(input: unknown): Promise<string> }) {
+  return await syncWorkflow.start({ id: 1 });
+}
+`;
+
+      expect(transformStartCallsWithContext(source, context, callerFile)).toContain(
+        "syncWorkflow.start({ id: 1 })",
+      );
+    });
+  });
+
   describe("mixed workflow and job starts", () => {
     test("transforms both workflow and job starts in the same source", () => {
       const source = `

@@ -404,6 +404,50 @@ export default createWorkflow({ name: "workflow", mainJob });
       expect(result.bundledCode.get("main-job")).toMatch(/execJobFunction\([`'"]step-a/);
     });
 
+    test("throws when a job starts a workflow-file default export the build cannot detect", async () => {
+      const dir = createTempDir();
+      const syncFile = path.join(dir, "sync.ts");
+      const callerFile = path.join(dir, "caller.ts");
+      fs.writeFileSync(
+        syncFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+const defineSync = (mainJob: typeof syncStep) =>
+  createWorkflow({ name: "sync-gl-balances", mainJob });
+export const syncStep = createWorkflowJob({ name: "sync-step", body: async () => "synced" });
+export default defineSync(syncStep);
+`,
+      );
+      fs.writeFileSync(
+        callerFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import syncWorkflow from "./sync";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await syncWorkflow.start({}),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [syncFile, callerFile] });
+
+      await expect(
+        bundleWorkflowJobs(
+          [
+            { name: "sync-step", exportName: "syncStep", sourceFile: syncFile },
+            { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
+          ],
+          ["main-job"],
+          {},
+          context,
+          dir,
+        ),
+      ).rejects.toThrow(/syncWorkflow\.start\(\) .*cannot be rewritten/);
+    });
+
     test("does not include a job whose binding is shadowed by a parameter", async () => {
       const dir = createTempDir();
       const workflowFile = path.join(dir, "workflow.ts");
