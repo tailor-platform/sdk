@@ -205,7 +205,7 @@ describe("authconnection authorize", () => {
       expect(result.success).toBe(false);
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining(
-          `instead:\n  Run \`tailor authconnection open --workspace-id=workspace-id '--profile=dev$1'\` in PowerShell or \`tailor authconnection open --workspace-id=workspace-id "--profile=dev$1"\` in cmd.exe`,
+          `instead:\n  \`tailor authconnection open --workspace-id=workspace-id '--profile=dev$1'\` in PowerShell or \`tailor authconnection open --workspace-id=workspace-id "--profile=dev$1"\` in cmd.exe`,
         ),
       );
     } finally {

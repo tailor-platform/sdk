@@ -536,10 +536,10 @@ describe("tailordb migration validate", () => {
     const [report] = JSON.parse(stdout.output);
     expect(report.migrationFiles.error).toContain("0001, 0002");
     expect(report.migrationFiles.error).toContain(
-      "\n  tailor tailordb migration script 0001 --namespace tailordb\n",
+      "\n  `tailor tailordb migration script 0001 --namespace tailordb`\n",
     );
     expect(report.migrationFiles.error).toContain(
-      "\n  tailor tailordb migration script 0002 --namespace tailordb\n",
+      "\n  `tailor tailordb migration script 0002 --namespace tailordb`\n",
     );
   });
 
@@ -789,7 +789,7 @@ describe("tailordb migration validate", () => {
 
     expect(result.success).toBe(false);
     expect(stderr.output).toContain(
-      `Run \`tailor tailordb migration script '0001' --namespace tailordb '--config=%APPDATA%.config.ts' --no-script --reason '<reason>'\` in PowerShell or \`tailor tailordb migration script 0001 --namespace tailordb "--config=%%cd:~,%APPDATA%%cd:~,%.config.ts" --no-script --reason "<reason>"\` in cmd.exe`,
+      `  \`tailor tailordb migration script '0001' --namespace tailordb '--config=%APPDATA%.config.ts' --no-script --reason '<reason>'\` in PowerShell or \`tailor tailordb migration script 0001 --namespace tailordb "--config=%%cd:~,%APPDATA%%cd:~,%.config.ts" --no-script --reason "<reason>"\` in cmd.exe`,
     );
   });
 

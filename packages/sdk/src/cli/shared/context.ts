@@ -674,14 +674,10 @@ export async function loadMachineUserName(
         code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
         message: `Profile "${profile}" denies overriding the machine user.`,
         details,
-        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or ${formatCommandHint(
+        suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run ${formatCommandHint(
           {
             command: "tailor",
             args: profileUpdateArgs(profile, ["--machine-user-override", "allow"]),
-          },
-          {
-            shell: (commandLine) => `run \`${commandLine}\``,
-            perShell: (instruction) => `run ${instruction}`,
           },
         )}.`,
       });

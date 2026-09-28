@@ -102,12 +102,7 @@ const listWebhookCommand = defineAppCommand({
           ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
         ],
       };
-      logger.info(
-        formatCommandHint(trigger, {
-          shell: (commandLine) => `To test a webhook, run: ${commandLine}`,
-          perShell: (instruction) => `To test a webhook, run ${instruction}`,
-        }),
-      );
+      logger.info(`To test a webhook, run ${formatCommandHint(trigger)}`);
     }
   },
 });

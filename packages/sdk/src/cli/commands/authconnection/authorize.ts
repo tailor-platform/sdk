@@ -67,20 +67,14 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const consoleFallback = formatCommandHint(
-      {
-        command: "tailor",
-        args: [
-          "authconnection",
-          "open",
-          ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
-        ],
-      },
-      {
-        shell: (commandLine) => commandLine,
-        perShell: (instruction) => `Run ${instruction}`,
-      },
-    );
+    const consoleFallback = formatCommandHint({
+      command: "tailor",
+      args: [
+        "authconnection",
+        "open",
+        ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
+      ],
+    });
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],

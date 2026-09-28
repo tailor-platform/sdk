@@ -390,19 +390,13 @@ async function createWorkspace(
   );
   logger.success(`Created workspace: ${workspaceLabel(workspace)}`);
   logger.info(
-    formatCommandHint(
-      {
-        command: "tailor",
-        args: [
-          "deploy",
-          ...recoveryContextArgs({ workspaceId: workspace.id, profile: options.profile }),
-        ],
-      },
-      {
-        shell: (commandLine) => `Reuse this workspace with: ${commandLine}`,
-        perShell: (instruction) => `Reuse this workspace by running ${instruction}`,
-      },
-    ),
+    `Reuse this workspace by running ${formatCommandHint({
+      command: "tailor",
+      args: [
+        "deploy",
+        ...recoveryContextArgs({ workspaceId: workspace.id, profile: options.profile }),
+      ],
+    })}`,
   );
   logger.info(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${workspace.id}.`);
   return { client, workspaceId: workspace.id };

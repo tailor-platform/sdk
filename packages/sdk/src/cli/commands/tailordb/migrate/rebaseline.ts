@@ -124,13 +124,10 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     getNamespacesWithMigrations(config, configDir),
     options.namespace,
   );
-  const generateFirstSuggestion = formatCommandHint(
-    { command: "tailor", args: ["tailordb", "migration", "generate", "--config", config.path] },
-    {
-      shell: (commandLine) => `Run \`${commandLine}\` first.`,
-      perShell: (instruction) => `First run ${instruction}.`,
-    },
-  );
+  const generateFirstSuggestion = `First run ${formatCommandHint({
+    command: "tailor",
+    args: ["tailordb", "migration", "generate", "--config", config.path],
+  })}.`;
 
   assertValidMigrationFiles(target.migrationsDir, target.namespace);
   const latestSnapshot = reconstructSnapshotFromMigrations(target.migrationsDir);
@@ -199,33 +196,21 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     config.path,
     ...recoveryContextArgs({ workspaceId, profile: options.profile }),
   ];
-  const setBaselineSuggestion = formatCommandHint(
-    {
-      command: "tailor",
-      args: [
-        "tailordb",
-        "migration",
-        "set",
-        "0",
-        "--namespace",
-        target.namespace,
-        ...remoteContextArgs,
-      ],
-    },
-    {
-      shell: (commandLine) => `Run \`${commandLine}\``,
-      perShell: (instruction) => `Run ${instruction}`,
-    },
-  );
-  const deploySuggestion = formatCommandHint(
+  const setBaselineSuggestion = `Run ${formatCommandHint({
+    command: "tailor",
+    args: [
+      "tailordb",
+      "migration",
+      "set",
+      "0",
+      "--namespace",
+      target.namespace,
+      ...remoteContextArgs,
+    ],
+  })}`;
+  const deploySuggestion = `after resolving the connection error, deploy with schema checks enabled by running ${formatCommandHint(
     { command: "tailor", args: ["deploy", ...remoteContextArgs] },
-    {
-      shell: (commandLine) =>
-        `run \`${commandLine}\` with schema checks enabled after resolving the connection error.`,
-      perShell: (instruction) =>
-        `after resolving the connection error, deploy with schema checks enabled by running ${instruction}.`,
-    },
-  );
+  )}.`;
 
   const assertConnectedWorkspaceReady = async (
     expectedHistoryId: string | null,

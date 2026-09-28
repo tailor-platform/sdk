@@ -353,36 +353,24 @@ function schemaDriftError(
     `--workspace-id=${options.workspaceId}`,
     ...(options.profileArgValue !== undefined ? [`--profile=${options.profileArgValue}`] : []),
   ];
-  const rescaffold = formatCommandHint(
-    {
-      command: "tailor",
-      args: [
-        "function",
-        "script",
-        options.scriptArgValue,
-        ...(options.sidecar.source === "remote" ? ["--remote"] : []),
-        ...contextFlags,
-      ],
-    },
-    {
-      shell: (commandLine) => `Refresh the generated types with ${commandLine}`,
-      perShell: (instruction) => `Refresh the generated types by running ${instruction}`,
-    },
-  );
-  const override = formatCommandHint(
-    {
-      command: "tailor",
-      args: ["function", "run", options.scriptArgValue, "--allow-schema-drift", ...contextFlags],
-    },
-    {
-      shell: (commandLine) => `run anyway with ${commandLine}`,
-      perShell: (instruction) => `run anyway by running ${instruction}`,
-    },
-  );
+  const rescaffold = formatCommandHint({
+    command: "tailor",
+    args: [
+      "function",
+      "script",
+      options.scriptArgValue,
+      ...(options.sidecar.source === "remote" ? ["--remote"] : []),
+      ...contextFlags,
+    ],
+  });
+  const override = formatCommandHint({
+    command: "tailor",
+    args: ["function", "run", options.scriptArgValue, "--allow-schema-drift", ...contextFlags],
+  });
   return CLIError({
     code: "SCRIPT_SCHEMA_DRIFT",
     message: `Schema drift detected: ${SCRIPT_SNAPSHOT_FILE_NAME} next to the script no longer matches ${target}.`,
     details: formatMigrationDiff(diff),
-    suggestion: `${rescaffold}, or ${override}.`,
+    suggestion: `Refresh the generated types with ${rescaffold}, or run anyway with ${override}.`,
   });
 }

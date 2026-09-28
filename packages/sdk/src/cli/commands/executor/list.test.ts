@@ -49,7 +49,7 @@ describe("executor list", () => {
 
     expect(result.success).toBe(true);
     expect(info).toHaveBeenCalledWith(
-      `To see webhook URLs, run: tailor executor webhook list --workspace-id=${workspaceId} --profile=dev`,
+      `To see webhook URLs, run \`tailor executor webhook list --workspace-id=${workspaceId} --profile=dev\``,
     );
   });
 

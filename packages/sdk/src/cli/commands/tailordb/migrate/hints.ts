@@ -3,7 +3,7 @@
  */
 
 import { formatConfigArg } from "#/cli/shared/args";
-import { type CommandHintRenderers, formatCommandHint } from "#/cli/shared/errors";
+import { formatCommandHint } from "#/cli/shared/errors";
 import { formatMigrationNumber } from "./migration-number";
 
 export interface MigrationScriptCommandOptions {
@@ -19,13 +19,9 @@ export interface MigrationScriptCommandOptions {
  * Render the `tailor tailordb migration script` command as a remediation
  * hint, reproducing the current run's invocation context.
  * @param {MigrationScriptCommandOptions} options - Target migration and invocation context
- * @param {CommandHintRenderers} renderers - Wording for one shared command line or one per shell
- * @returns {string} The hint produced by the renderer that matches the command lines
+ * @returns {string} The command part of the hint, as rendered by `formatCommandHint`
  */
-export function formatMigrationScriptHint(
-  options: MigrationScriptCommandOptions,
-  renderers: CommandHintRenderers,
-): string {
+export function formatMigrationScriptHint(options: MigrationScriptCommandOptions): string {
   const { migrationNumber, namespace, configPath, noScript } = options;
   const args = [
     "tailordb",
@@ -42,5 +38,5 @@ export function formatMigrationScriptHint(
   if (noScript) {
     args.push("--no-script", "--reason", "<reason>");
   }
-  return formatCommandHint({ command: "tailor", args }, renderers);
+  return formatCommandHint({ command: "tailor", args });
 }

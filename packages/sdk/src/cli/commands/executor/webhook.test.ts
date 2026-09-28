@@ -38,7 +38,7 @@ describe("executor webhook list", () => {
 
     expect(result.success).toBe(true);
     expect(info).toHaveBeenCalledWith(
-      `To test a webhook, run: tailor executor trigger '<name>' -d '{"key":"value"}' --profile=dev`,
+      `To test a webhook, run \`tailor executor trigger '<name>' -d '{"key":"value"}' --profile=dev\``,
     );
   });
 
@@ -51,7 +51,7 @@ describe("executor webhook list", () => {
 
     expect(result.success).toBe(true);
     expect(info).toHaveBeenCalledWith(
-      `To test a webhook, run: tailor executor trigger '<name>' -d '{"key":"value"}'`,
+      `To test a webhook, run \`tailor executor trigger '<name>' -d '{"key":"value"}'\``,
     );
   });
 

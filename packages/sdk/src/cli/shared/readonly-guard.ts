@@ -39,14 +39,10 @@ export async function assertWritable(opts?: AssertWritableOptions): Promise<void
     message: `Profile "${profileName}" is read-only.`,
     details:
       "This profile blocks platform-state mutations (apply, create/update/delete, deploy, etc.). Application-data operations remain available because their permissions are governed by the machine user.",
-    suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or ${formatCommandHint(
+    suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run ${formatCommandHint(
       {
         command: "tailor",
         args: profileUpdateArgs(profileName, ["--permission", "write"]),
-      },
-      {
-        shell: (commandLine) => `run \`${commandLine}\``,
-        perShell: (instruction) => `run ${instruction}`,
       },
     )}.`,
   });

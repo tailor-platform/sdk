@@ -247,13 +247,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       logger.success(`Created ${styles.path(path.relative(process.cwd(), file))}`);
     }
     logger.info(
-      formatCommandHint(
-        { command: "tailor", args: runArgs },
-        {
-          shell: (commandLine) => `Next: edit the script, then run ${commandLine}`,
-          perShell: (instruction) => `Next: edit the script, then run ${instruction}`,
-        },
-      ),
+      `Next: edit the script, then run ${formatCommandHint({ command: "tailor", args: runArgs })}`,
     );
   },
 });

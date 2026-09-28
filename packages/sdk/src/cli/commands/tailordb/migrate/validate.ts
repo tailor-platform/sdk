@@ -7,7 +7,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError, type CommandHintRenderers, errorSummary } from "#/cli/shared/errors";
+import { CLIError, errorSummary } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { PluginManager } from "#/plugin/manager";
@@ -134,11 +134,6 @@ interface CollectedValidationReports {
   remoteError?: unknown;
 }
 
-const listedCommandHint: CommandHintRenderers = {
-  shell: (commandLine) => commandLine,
-  perShell: (instruction) => `Run ${instruction}`,
-};
-
 /**
  * Walk the local migration history once to assert that every required
  * migration script exists, no migration carries both a --no-script
@@ -192,7 +187,7 @@ function assertMigrationScriptsReady(
     const clearCommands = conflicting
       .map(
         (migrationNumber) =>
-          `  ${formatMigrationScriptHint({ migrationNumber, namespace, configPath }, listedCommandHint)}`,
+          `  ${formatMigrationScriptHint({ migrationNumber, namespace, configPath })}`,
       )
       .join("\n");
     throw CLIError({
@@ -535,15 +530,12 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
     for (const report of missingAcknowledgments) {
       for (const migration of report.warningAcknowledgments?.missing ?? []) {
         logger.info(
-          `  ${formatMigrationScriptHint(
-            {
-              migrationNumber: migration.migrationNumber,
-              namespace: report.namespace,
-              configPath,
-              noScript: true,
-            },
-            listedCommandHint,
-          )}`,
+          `  ${formatMigrationScriptHint({
+            migrationNumber: migration.migrationNumber,
+            namespace: report.namespace,
+            configPath,
+            noScript: true,
+          })}`,
           { mode: "plain" },
         );
       }

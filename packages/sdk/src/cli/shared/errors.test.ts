@@ -171,54 +171,40 @@ describe("errorToJson", () => {
     );
   });
 
-  const hintRenderers = {
-    shell: (commandLine: string) => `shell: ${commandLine}`,
-    perShell: (instruction: string) => `perShell: ${instruction}`,
-  };
-
   test("leaves shell-safe command hint values unquoted", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
 
     expect(
-      formatCommandHint(
-        { command: "tailor", args: ["deploy", "--config=custom.config.ts"] },
-        hintRenderers,
-      ),
-    ).toBe("shell: tailor deploy --config=custom.config.ts");
+      formatCommandHint({ command: "tailor", args: ["deploy", "--config=custom.config.ts"] }),
+    ).toBe("`tailor deploy --config=custom.config.ts`");
   });
 
   test("single-quotes POSIX-unsafe command hint values", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
 
     expect(
-      formatCommandHint(
-        { command: "tailor", args: ["deploy", "--config=weird $config.ts"] },
-        hintRenderers,
-      ),
-    ).toBe("shell: tailor deploy '--config=weird $config.ts'");
+      formatCommandHint({ command: "tailor", args: ["deploy", "--config=weird $config.ts"] }),
+    ).toBe("`tailor deploy '--config=weird $config.ts'`");
   });
 
   test("keeps one Windows command line when both shells read the double-quoted arguments alike", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 
     expect(
-      formatCommandHint(
-        { command: "tailor", args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"] },
-        hintRenderers,
-      ),
-    ).toBe('shell: tailor deploy --config "C:\\work\\!SECRET!\\tailor.config.ts"');
+      formatCommandHint({
+        command: "tailor",
+        args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"],
+      }),
+    ).toBe('`tailor deploy --config "C:\\work\\!SECRET!\\tailor.config.ts"`');
   });
 
-  test("hands command hints to the per-shell renderer when the Windows shells quote differently", () => {
+  test("names a PowerShell and a cmd.exe command line when the Windows shells quote differently", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 
     expect(
-      formatCommandHint(
-        { command: "tailor", args: ["deploy", "--config=%APPDATA%.config.ts"] },
-        hintRenderers,
-      ),
+      formatCommandHint({ command: "tailor", args: ["deploy", "--config=%APPDATA%.config.ts"] }),
     ).toBe(
-      `perShell: \`tailor deploy '--config=%APPDATA%.config.ts'\` in PowerShell or \`tailor deploy "--config=%%cd:~,%APPDATA%%cd:~,%.config.ts"\` in cmd.exe`,
+      `\`tailor deploy '--config=%APPDATA%.config.ts'\` in PowerShell or \`tailor deploy "--config=%%cd:~,%APPDATA%%cd:~,%.config.ts"\` in cmd.exe`,
     );
   });
 

@@ -48,40 +48,18 @@ type CLIErrorInternal = Error & {
 };
 
 /**
- * Wording for a command hint. Both renderers are required because on Windows the hint may name
- * a PowerShell and a cmd.exe command line, which reads differently from a single command.
- */
-export interface CommandHintRenderers {
-  /** Wraps a command line that every shell on the current platform runs as shown. */
-  shell: (commandLine: string) => string;
-  /** Wraps an instruction naming a PowerShell and a cmd.exe command line, used on Windows when no single quoting suits both shells. */
-  perShell: (instruction: string) => string;
-}
-
-/**
- * Render a command as a user-facing hint that can be copied into the current platform's shells
+ * Render a command as a user-facing hint that can be copied into the current platform's shells:
+ * one backticked command line, or on Windows, when no single quoting suits both shells, a
+ * PowerShell and a cmd.exe line (`` `…` in PowerShell or `…` in cmd.exe ``)
  * @param {CLIErrorNextAction} action - Executable and arguments to suggest
- * @param {CommandHintRenderers} renderers - Wording for one shared command line or one per shell
- * @returns {string} The hint produced by the renderer that matches the command lines
+ * @returns {string} The command part of the hint, to follow a verb such as "Run"
  */
-export function formatCommandHint(
-  action: CLIErrorNextAction,
-  renderers: CommandHintRenderers,
-): string {
+export function formatCommandHint(action: CLIErrorNextAction): string {
   const commandLines = formatShellCommandLines([action.command, ...action.args]);
   if (commandLines.kind === "shared") {
-    return renderers.shell(commandLines.commandLine);
+    return `\`${commandLines.commandLine}\``;
   }
-  return renderers.perShell(
-    `\`${commandLines.powershell}\` in PowerShell or \`${commandLines.cmd}\` in cmd.exe`,
-  );
-}
-
-function formatNextAction(next: CLIErrorNextAction): string {
-  return formatCommandHint(next, {
-    shell: (commandLine) => `Run \`${commandLine}\`.`,
-    perShell: (instruction) => `Run ${instruction}.`,
-  });
+  return `\`${commandLines.powershell}\` in PowerShell or \`${commandLines.cmd}\` in cmd.exe`;
 }
 
 /**
@@ -109,7 +87,7 @@ function formatError(error: CLIError): string {
   }
 
   if (error.next) {
-    parts.push(`\n  ${styles.info("Next:")} ${formatNextAction(error.next)}`);
+    parts.push(`\n  ${styles.info("Next:")} Run ${formatCommandHint(error.next)}.`);
   }
 
   return parts.join("");

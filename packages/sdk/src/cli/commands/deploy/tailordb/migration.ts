@@ -29,7 +29,7 @@ import {
   sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
 import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
-import { CLIError, type CommandHintRenderers } from "#/cli/shared/errors";
+import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { spinner } from "#/cli/shared/spinner";
 import { resourceTrn, writeMetadataLabelsDirect } from "../label";
@@ -78,11 +78,6 @@ interface ExecutionResult {
 // ============================================================================
 // Migration Detection
 // ============================================================================
-
-const inlineCommandHint: CommandHintRenderers = {
-  shell: (commandLine) => commandLine,
-  perShell: (instruction) => `run ${instruction}`,
-};
 
 /**
  * Get the current migration label from TailorDB Service metadata
@@ -169,7 +164,7 @@ export async function detectPendingMigrations(
         throw CLIError({
           code: "MIGRATION_SCRIPT_REQUIRED",
           message: `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.`,
-          suggestion: `Add a script: ${formatMigrationScriptHint(commandOptions, inlineCommandHint)}\nOr record that no script is needed: ${formatMigrationScriptHint({ ...commandOptions, noScript: true }, inlineCommandHint)}`,
+          suggestion: `Add a script: ${formatMigrationScriptHint(commandOptions)}\nOr record that no script is needed: ${formatMigrationScriptHint({ ...commandOptions, noScript: true })}`,
         });
       }
       if (diff.scriptSkipped) {
@@ -178,7 +173,7 @@ export async function detectPendingMigrations(
           throw CLIError({
             code: "MIGRATION_SCRIPT_SKIP_CONFLICT",
             message: `Migration ${migrationLabel} has both a --no-script skip acknowledgment and migrate.ts.`,
-            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber: file.number, namespace, configPath }, inlineCommandHint)}\nOr keep the skip: delete migrate.ts`,
+            suggestion: `Keep the script and clear the stale acknowledgment: ${formatMigrationScriptHint({ migrationNumber: file.number, namespace, configPath })}\nOr keep the skip: delete migrate.ts`,
           });
         }
         logger.info(

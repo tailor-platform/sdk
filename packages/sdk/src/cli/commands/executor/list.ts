@@ -91,12 +91,7 @@ export const listCommand = defineAppCommand({
             ...recoveryContextArgs({ profile: args.profile, workspaceId: args["workspace-id"] }),
           ],
         };
-        logger.info(
-          formatCommandHint(listWebhooks, {
-            shell: (commandLine) => `To see webhook URLs, run: ${commandLine}`,
-            perShell: (instruction) => `To see webhook URLs, run ${instruction}`,
-          }),
-        );
+        logger.info(`To see webhook URLs, run ${formatCommandHint(listWebhooks)}`);
       }
     }
   },
