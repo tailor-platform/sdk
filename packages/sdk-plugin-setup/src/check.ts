@@ -311,7 +311,8 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
         "TAILOR_PLATFORM_WORKSPACE_ID is not set. " +
           "Provision the workspace and set the variable:\n" +
           "  tailor workspace create   # if it does not exist yet; copy the id\n" +
-          "  tailor setup ci env       # prints the gh commands for each environment",
+          "  export TAILOR_PLATFORM_WORKSPACE_ID=<id>   # for this local check\n" +
+          "  tailor setup ci env       # prints the gh commands to set it on each GitHub Environment",
       );
     }
   }

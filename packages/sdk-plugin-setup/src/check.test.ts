@@ -548,6 +548,19 @@ describe("checkGitHub (integration)", () => {
       }
     });
 
+    test("explains how to pass WORKSPACE_ID to a local run when it is unset (local mode)", async () => {
+      await setupTarget(setupOptions({ workspaceName: "my-app" }));
+      const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+      delete process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
+      try {
+        await expect(
+          checkGitHub({ outputDir: testDir, gitRunner: () => "origin/main" }),
+        ).rejects.toThrow(/export TAILOR_PLATFORM_WORKSPACE_ID=<id>/);
+      } finally {
+        if (saved !== undefined) process.env["TAILOR_PLATFORM_WORKSPACE_ID"] = saved;
+      }
+    });
+
     test("points to `tailor setup ci env` when WORKSPACE_ID is unset (local mode)", async () => {
       await setupTarget(setupOptions({ workspaceName: "my-app" }));
       const saved = process.env["TAILOR_PLATFORM_WORKSPACE_ID"];
