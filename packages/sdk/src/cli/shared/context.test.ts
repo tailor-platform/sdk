@@ -495,7 +495,21 @@ describe("loadMachineUserName", () => {
       }).catch((e: unknown) => e);
 
       expect((err as { suggestion?: string }).suggestion).toBe(
-        "Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run `tailor profile update --machine-user-override allow -- 'locked$1'`.",
+        "Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run `tailor profile update 'locked$1' --machine-user-override allow`.",
+      );
+    });
+
+    test("passes a profile that starts with a dash after `--` in the override suggestion", async () => {
+      using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+      writeLockedProfile("-locked");
+
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "-locked",
+      }).catch((e: unknown) => e);
+
+      expect((err as { suggestion?: string }).suggestion).toBe(
+        "Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run `tailor profile update --machine-user-override allow -- -locked`.",
       );
     });
 
@@ -509,7 +523,7 @@ describe("loadMachineUserName", () => {
       }).catch((e: unknown) => e);
 
       expect((err as { suggestion?: string }).suggestion).toBe(
-        `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run \`tailor profile update --machine-user-override allow '--' 'locked$1'\` in PowerShell or \`tailor profile update --machine-user-override allow -- "locked$1"\` in cmd.exe.`,
+        `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run \`tailor profile update 'locked$1' --machine-user-override allow\` in PowerShell or \`tailor profile update "locked$1" --machine-user-override allow\` in cmd.exe.`,
       );
     });
 

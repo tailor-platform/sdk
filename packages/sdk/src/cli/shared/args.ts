@@ -307,6 +307,19 @@ export function recoveryContextArgs(context: RecoveryContext): readonly string[]
 }
 
 /**
+ * Arguments for a hinted `tailor profile update` command. The profile name
+ * comes first unless it starts with a hyphen, which only parses after `--`.
+ * @param {string} profile - Profile to update
+ * @param {readonly string[]} options - Options to set on the profile
+ * @returns {readonly string[]} Arguments following the `tailor` executable
+ */
+export function profileUpdateArgs(profile: string, options: readonly string[]): readonly string[] {
+  return profile.startsWith("-")
+    ? ["profile", "update", ...options, "--", profile]
+    : ["profile", "update", profile, ...options];
+}
+
+/**
  * Shared config arg for commands that accept a config file path
  */
 export const configArg = {

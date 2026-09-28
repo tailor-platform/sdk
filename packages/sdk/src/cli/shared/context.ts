@@ -7,7 +7,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
-import { type MachineUserInputSource, recoveryContextArgs } from "./args";
+import { type MachineUserInputSource, profileUpdateArgs, recoveryContextArgs } from "./args";
 import {
   defaultPlatformBaseUrl,
   fetchUserInfo,
@@ -677,7 +677,7 @@ export async function loadMachineUserName(
         suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or ${formatCommandHint(
           {
             command: "tailor",
-            args: ["profile", "update", "--machine-user-override", "allow", "--", profile],
+            args: profileUpdateArgs(profile, ["--machine-user-override", "allow"]),
           },
           {
             shell: (commandLine) => `run \`${commandLine}\``,

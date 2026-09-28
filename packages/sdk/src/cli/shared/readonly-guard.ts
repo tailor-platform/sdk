@@ -1,3 +1,4 @@
+import { profileUpdateArgs } from "./args";
 import { readPlatformConfig } from "./context";
 import { CLIError, formatCommandHint } from "./errors";
 
@@ -41,7 +42,7 @@ export async function assertWritable(opts?: AssertWritableOptions): Promise<void
     suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or ${formatCommandHint(
       {
         command: "tailor",
-        args: ["profile", "update", "--permission", "write", "--", profileName],
+        args: profileUpdateArgs(profileName, ["--permission", "write"]),
       },
       {
         shell: (commandLine) => `run \`${commandLine}\``,

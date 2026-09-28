@@ -221,6 +221,7 @@ describe("assertWritable", () => {
         rw: { user: "u@example.com", workspace_id: validUUID },
         ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
         ro$1: { user: "u@example.com", workspace_id: validUUID, readonly: true },
+        "-ro": { user: "u@example.com", workspace_id: validUUID, readonly: true },
         ro_false: { user: "u@example.com", workspace_id: validUUID, readonly: false },
       },
       current_user: null,
@@ -269,7 +270,16 @@ describe("assertWritable", () => {
 
     await expect(assertWritable({ profile: "ro$1" })).rejects.toMatchObject({
       suggestion:
-        "Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run `tailor profile update --permission write -- 'ro$1'`.",
+        "Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run `tailor profile update 'ro$1' --permission write`.",
+    });
+  });
+
+  test("passes a profile that starts with a dash after `--` in the profile update suggestion", async () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    await expect(assertWritable({ profile: "-ro" })).rejects.toMatchObject({
+      suggestion:
+        "Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run `tailor profile update --permission write -- -ro`.",
     });
   });
 
@@ -277,7 +287,7 @@ describe("assertWritable", () => {
     using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 
     await expect(assertWritable({ profile: "ro$1" })).rejects.toMatchObject({
-      suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run \`tailor profile update --permission write '--' 'ro$1'\` in PowerShell or \`tailor profile update --permission write -- "ro$1"\` in cmd.exe.`,
+      suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run \`tailor profile update 'ro$1' --permission write\` in PowerShell or \`tailor profile update "ro$1" --permission write\` in cmd.exe.`,
     });
   });
 });
