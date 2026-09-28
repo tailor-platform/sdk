@@ -162,6 +162,14 @@ describe("collectEnvironmentRequirements", () => {
     expect(envs.map((e) => e.environment)).toEqual(["production"]);
   });
 
+  test("treats environment names differing only in case as one environment, as GitHub does", () => {
+    const envs = collectEnvironmentRequirements(
+      lockOf(target("branch", "my-app", "production"), target("tag", "my-app", "Production")),
+    );
+
+    expect(envs.map((e) => e.environment)).toEqual(["production"]);
+  });
+
   test("rejects an environment name that is unsafe to embed in commands", () => {
     expect(() =>
       collectEnvironmentRequirements(lockOf(target("branch", "my-app", "stg; rm -rf /"))),
@@ -172,11 +180,11 @@ describe("collectEnvironmentRequirements", () => {
 describe("renderGhCommands", () => {
   const envs = () => collectEnvironmentRequirements(lockOf(target("branch", "my-app", "stg/eu")));
 
-  test("creates the environment, only when it does not exist yet, before setting its secrets and variables", () => {
+  test("creates the environment, only when GitHub reports it missing, before setting its secrets and variables", () => {
     const lines = renderGhCommands(envs()).split("\n");
 
     const create = lines.indexOf(
-      'gh api "repos/{owner}/{repo}/environments/stg%2Feu" --silent 2>/dev/null || ' +
+      'gh api -i "repos/{owner}/{repo}/environments/stg%2Feu" 2>/dev/null | head -n 1 | grep -q " 404 " && ' +
         'gh api -X PUT "repos/{owner}/{repo}/environments/stg%2Feu" --silent',
     );
     const firstSecret = lines.findIndex((l) => l.startsWith("gh secret set"));
@@ -277,6 +285,43 @@ describe("renderTerraform", () => {
     );
     expect(hcl).toMatch(
       /"production_tailor_slack_channel_id" \{\n {2}count {9}= var\.production_tailor_slack_channel_id != null \? 1 : 0\n/,
+    );
+  });
+
+  test("uses underscores in Terraform names so secrets can be passed as TF_VAR_ environment variables", () => {
+    const hcl = renderTerraform(
+      collectEnvironmentRequirements(lockOf(target("branch", "my-app", "my-app-stg"))),
+    );
+
+    expect(hcl).toContain('resource "github_repository_environment" "my_app_stg" {');
+    expect(hcl).toContain('variable "my_app_stg_tailor_platform_machine_user_client_id" {');
+  });
+
+  test("leaves the protection settings of an imported environment untouched", () => {
+    const hcl = renderTerraform(envs());
+
+    expect(hcl).toContain(
+      "    ignore_changes = [reviewers, wait_timer, deployment_branch_policy, prevent_self_review, can_admins_bypass]",
+    );
+  });
+
+  test("explains how to pass each secret without writing it to a file", () => {
+    const hcl = renderTerraform(envs());
+
+    expect(hcl).toContain(
+      "#   export TF_VAR_production_tailor_platform_machine_user_client_secret=",
+    );
+    expect(hcl).toContain("#   export TF_VAR_stg_eu_tailor_platform_machine_user_client_id=");
+  });
+
+  test("explains how to import each environment that already exists", () => {
+    const hcl = renderTerraform(envs());
+
+    expect(hcl).toContain(
+      "#   terraform import github_repository_environment.production <repository>:production",
+    );
+    expect(hcl).toContain(
+      "#   terraform import github_repository_environment.stg_eu <repository>:stg/eu",
     );
   });
 

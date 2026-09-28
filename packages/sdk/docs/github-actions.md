@@ -345,13 +345,21 @@ Composite actions (`setup ci action`) read nothing themselves; the coordinator
 that calls them does. Set `TAILOR_SLACK_BOT_TOKEN` and `TAILOR_SLACK_CHANNEL_ID`
 together to enable Slack deploy notifications.
 
-The `gh` output leaves optional entries commented out. Run the commands one at a
-time: each `gh secret set` / `gh variable set` prompts for its value. The
-Terraform output takes every value from an input variable (secrets are
+The `gh` output creates an environment only when GitHub reports it missing and
+leaves optional entries commented out. Run the commands one at a time: each
+`gh secret set` / `gh variable set` prompts for its value.
+
+The Terraform output takes every value from an input variable (secrets are
 `sensitive`) and creates an optional entry only when its variable is set, so no
-value is written to the output. If an environment already exists in the
-repository, import it before applying, for example
-`terraform import github_repository_environment.production my-repo:production`.
+value is written to the output. Its header lists the steps with the variable
+names for your environments: authenticate the provider, put non-secret values in
+`terraform.tfvars`, pass secrets as `TF_VAR_<name>` environment variables, and
+import each environment that already exists (for example
+`terraform import github_repository_environment.production my-repo:production`)
+before `terraform apply`. The generated environments ignore changes to their
+protection settings (reviewers, wait timer, branch policy), so importing an
+environment keeps the approval gate you configured; remove the `lifecycle` block
+to manage those settings in Terraform instead.
 
 ## GitHub Environments (approval gate)
 
